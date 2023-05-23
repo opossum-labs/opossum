@@ -1,6 +1,3 @@
 /target
 /.vscode
-graph.dot
 /book/book
-fyrox.log
-__pycache__

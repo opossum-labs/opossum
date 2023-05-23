@@ -1,0 +1,14 @@
+# Summary
+
+- [Introduction](./intro.md)
+  - [Goals](./goals.md)
+  - [Project plan](./plan.md)
+- [Existing Software](./existing_software.md)
+- [Modelling optical systems](./optical_model.md)
+  - [Nodes](./nodes.md)
+  - [Edges](./edges.md)
+  - [Materials](./materials.md)
+- [Model analysis](./model_analysis.md)
+  - [Analyzers](./analyzers.md)
+  - [Interfacing with external code](./interfacing.md)
+- [Open questions](./open_questions.md)
