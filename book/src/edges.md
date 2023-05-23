@@ -18,6 +18,6 @@ Possible types of data:
 
   - Time dependency
 
-    It is still not clear how to handle time-dependent phenomena...
+    It is still not clear how to [handle time-dependent phenomena](https://git.gsi.de/phelix/rust/opossum/-/issues/1)...
 
 Of course the above information can be stored simultaneously in an edge and transported through the graph.

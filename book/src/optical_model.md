@@ -20,7 +20,7 @@ A directed graph can also model optical resonators by forming loops. This works 
 
 One way out might be the introduction of *reference nodes*. A referenece node, as the name says, only contains a reference to another node. So this node exactly behaves like the node it references. This way, a linear resonator could be translated into a corresponding ring resonator.
 
-**Note**: Strictly speaking, light in a ring resonator can propagate in both directions (if not suppressed by optical components). Since we have a directed graph, only one direction can be modelled so far. Solutions need to be further investigated.
+**Note**: Strictly speaking, light in a ring resonator can propagate in both directions (if not suppressed by optical components). Since we have a directed graph, only one direction can be modelled so far. Solutions need to be further [investigated](https://git.gsi.de/phelix/rust/opossum/-/issues/2).
 
 ## Intermediate data format
 
