@@ -12,3 +12,4 @@
   - [Analyzers](./analyzers.md)
   - [Interfacing with external code](./interfacing.md)
 - [Open questions](./open_questions.md)
+- [Useful resources](./resources.md)
