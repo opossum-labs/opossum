@@ -40,9 +40,17 @@ In addition, nodes have a set of attributes which are common to all of them. How
 
 ### Common attributes for all nodes
 
+1. Node type
+
+   This defines node model such as basic node types (propagation, ideal lens, ideal filter etc..) as well as the type sequential / non-sequencial group node. Maybe this is not stricly an attribute but a given rust struct type.
+
 1. Node name
 
     While not strictly necessary it is strongly recommended to assign a name to a node for easier identification. In principle different nodes can have the same name but this might cause many confusions. Internally the model uses unique IDs for each node in order to distinguish them but these IDs are only internally handled.
+
+1. Component Database ID (optional)
+
+   If set, this could be a reference to a (local) component database. It should be considered to also include the database information while exporting the model to a file. If thie ID is not set, it would be a "manually configured" component.
 
 1. Material
 

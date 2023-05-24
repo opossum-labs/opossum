@@ -13,6 +13,7 @@ The analyzer is also responsible for deciding which nodes in a graph must be cal
 There might be different analyszers available such as:
 
   - geometric analysis (Matrix optics)
+  - Gauss mode propagation (also matrix based, see LaserCalc)
   - wavefront propagation (Fourier optics)
   - simple calculation of energy / power
   - ghost focus / back reflection analysis
