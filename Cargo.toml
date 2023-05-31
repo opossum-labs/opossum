@@ -11,4 +11,4 @@ categories = [ "science", "simulation"]
 publish = false
 
 [dependencies]
-petgraph = "0.6.3" # the graph library
+petgraph = {version="0.6.3", features = ["serde-1"]} # the graph library
