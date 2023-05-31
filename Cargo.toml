@@ -11,3 +11,4 @@ categories = [ "science", "simulation"]
 publish = false
 
 [dependencies]
+petgraph = "0.6.3" # the graph library
