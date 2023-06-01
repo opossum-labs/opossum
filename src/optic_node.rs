@@ -19,3 +19,24 @@ impl OpticNode {
         self.name.as_ref()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::OpticNode;
+    #[test]
+    fn new() {
+      let node = OpticNode::new("Test".into());
+      assert_eq!(node.name, "Test".to_owned());
+    }
+    #[test]
+    fn set_name() { 
+        let mut node = OpticNode::new("Test".into());
+        node.set_name("Test2".into());
+        assert_eq!(node.name, "Test2".to_owned())
+    }
+    #[test]
+    fn name() { 
+        let node = OpticNode::new("Test".into());
+        assert_eq!(node.name(), "Test".to_owned())
+    }
+}

@@ -41,3 +41,34 @@ impl OpticScenery {
         self.description.as_ref()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn new() {
+        let scenery= OpticScenery::new();
+        assert_eq!(scenery.description, "".to_owned());
+        assert_eq!(scenery.g.edge_count(),0);
+        assert_eq!(scenery.g.node_count(),0);
+    }
+    #[test]
+    fn to_dot() {
+        let mut scenery=OpticScenery::new();
+        scenery.set_description("Test".into());
+        assert_eq!(scenery.to_dot(),"digraph {\n  label=\"Test\"\n}");
+    }
+    #[test]
+    fn set_description() {
+        let mut scenery=OpticScenery::new();
+        scenery.set_description("Test".into());
+        assert_eq!(scenery.description, "Test".to_owned())
+    }
+    #[test]
+    fn description() {
+        let mut scenery=OpticScenery::new();
+        scenery.set_description("Test".into());
+        assert_eq!(scenery.description(), "Test".to_owned())
+    }
+
+}
