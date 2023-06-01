@@ -18,7 +18,7 @@ impl OpticNode {
     }
     /// Returns a string representation of the [`OpticNode`] in `graphviz` format.
     pub fn to_dot(&self) -> String {
-        format!("  {}\n", self.name)
+        format!("  \"{}\"\n", self.name)
     }
 }
 
@@ -44,6 +44,6 @@ mod test {
     #[test]
     fn to_dot() {
         let node = OpticNode::new("Test".into());
-        assert_eq!(node.to_dot(), "  Test\n".to_owned())
+        assert_eq!(node.to_dot(), "  \"Test\"\n".to_owned())
     }
 }
