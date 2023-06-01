@@ -53,6 +53,12 @@ mod test {
         assert_eq!(scenery.g.node_count(),0);
     }
     #[test]
+    fn add_node() {
+        let mut scenery= OpticScenery::new();
+        scenery.add_node(OpticNode::new("Test".into()));
+        assert_eq!(scenery.g.node_count(),1);
+    }
+    #[test]
     fn to_dot() {
         let mut scenery=OpticScenery::new();
         scenery.set_description("Test".into());
