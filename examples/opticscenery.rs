@@ -4,7 +4,8 @@ use std::io::Write;
 
 fn main() {
     println!("opticscenery example");
-    let scenery = OpticScenery::default();
+    let mut scenery = OpticScenery::default();
+    scenery.set_description("OpticScenery demo".into());
     println!("default opticscenery: {:?}", scenery);
     println!("export to `dot` format: {}", scenery.to_dot());
     let path = "graph.dot";

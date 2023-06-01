@@ -1,5 +1,4 @@
 use crate::optic_node::OpticNode;
-use petgraph::dot::Dot;
 use petgraph::prelude::{DiGraph, NodeIndex};
 
 /// Opticscenery represents the overall optical model and additional metatdata. All optical elements (OpticNodes) have to be added to this
@@ -24,7 +23,10 @@ impl OpticScenery {
     }
     /// Export the optic graph into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self) -> String {
-        format!("{:?}", Dot::new(&self.g))
+        let mut dot_string="digraph {\n".to_owned();
+        dot_string.push_str(&format!("  label=\"{}\"\n", self.description));
+        dot_string+="}";
+        dot_string
     }
     /// Analyze this [`OpticScenery`] using a given OpticAnalyzer.
     pub fn analyze(&self) {
