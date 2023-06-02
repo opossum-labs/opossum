@@ -137,6 +137,18 @@ mod test {
         );
     }
     #[test]
+    fn to_dot_with_edge() {
+        let mut scenery = OpticScenery::new();
+        scenery.set_description("SceneryTest".into());
+        let n1=scenery.add_node(OpticNode::new("Test1", Box::new(NodeDummy)));
+        let n2=scenery.add_node(OpticNode::new("Test2", Box::new(NodeDummy)));
+        scenery.connect_nodes(n1,n2);
+        assert_eq!(
+            scenery.to_dot(),
+            "digraph {\n  label=\"SceneryTest\"\n  \"Test1\"\n  \"Test2\"\n  \"Test1\" -> \"Test2\"\n}"
+        );
+    }
+    #[test]
     fn set_description() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into());
