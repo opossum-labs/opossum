@@ -82,12 +82,12 @@ mod test {
     fn set_description() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into());
-        assert_eq!(scenery.description, "Test".to_owned())
+        assert_eq!(scenery.description, "Test")
     }
     #[test]
     fn description() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into());
-        assert_eq!(scenery.description(), "Test".to_owned())
+        assert_eq!(scenery.description(), "Test")
     }
 }

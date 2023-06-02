@@ -11,7 +11,7 @@ fn main() {
     scenery.set_description("OpticScenery demo".into());
     println!("default opticscenery: {:?}", scenery);
     println!("export to `dot` format: {}", scenery.to_dot());
-    scenery.add_node(OpticNode::new("my optic".into(), Box::new(NodeDummy)));
+    scenery.add_node(OpticNode::new("my optic", Box::new(NodeDummy)));
     let path = "graph.dot";
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()).unwrap();

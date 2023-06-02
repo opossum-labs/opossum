@@ -15,10 +15,10 @@ impl OpticNode {
     /// use opossum::optic_node::OpticNode;
     /// use opossum::nodes::NodeDummy;
     ///
-    /// let node=OpticNode::new("My node".into(), Box::new(NodeDummy));
+    /// let node=OpticNode::new("My node", Box::new(NodeDummy));
     /// ```
-    pub fn new(name: String, node: Box<dyn Optical>) -> Self {
-        Self { name, node }
+    pub fn new(name: &str, node: Box<dyn Optical>) -> Self {
+        Self { name: name.into(), node }
     }
     /// Sets the name of this [`OpticNode`].
     pub fn set_name(&mut self, name: String) {
@@ -59,28 +59,28 @@ mod test {
     use crate::nodes::NodeDummy;
     #[test]
     fn new() {
-        let node = OpticNode::new("Test".into(), Box::new(NodeDummy));
-        assert_eq!(node.name, "Test".to_owned());
+        let node = OpticNode::new("Test", Box::new(NodeDummy));
+        assert_eq!(node.name, "Test");
     }
     #[test]
     fn set_name() {
-        let mut node = OpticNode::new("Test".into(), Box::new(NodeDummy));
+        let mut node = OpticNode::new("Test", Box::new(NodeDummy));
         node.set_name("Test2".into());
-        assert_eq!(node.name, "Test2".to_owned())
+        assert_eq!(node.name, "Test2")
     }
     #[test]
     fn name() {
-        let node = OpticNode::new("Test".into(), Box::new(NodeDummy));
-        assert_eq!(node.name(), "Test".to_owned())
+        let node = OpticNode::new("Test", Box::new(NodeDummy));
+        assert_eq!(node.name(), "Test")
     }
     #[test]
     fn to_dot() {
-        let node = OpticNode::new("Test".into(), Box::new(NodeDummy));
+        let node = OpticNode::new("Test", Box::new(NodeDummy));
         assert_eq!(node.to_dot(), "  \"Test\"\n".to_owned())
     }
     #[test]
     fn node_type() {
-        let node = OpticNode::new("Test".into(), Box::new(NodeDummy));
+        let node = OpticNode::new("Test", Box::new(NodeDummy));
         assert_eq!(node.node_type(), "dummy");
     }
 }
