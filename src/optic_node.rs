@@ -1,12 +1,13 @@
-#[derive(Debug, Default)]
+use std::fmt::Debug;
 pub struct OpticNode {
     name: String,
+    node: Box<dyn Optical>,
 }
 
 impl OpticNode {
     /// Creates a new [`OpticNode`].
-    pub fn new(name: String) -> Self {
-        Self { name }
+    pub fn new(name: String, node: Box<dyn Optical>) -> Self {
+        Self { name, node }
     }
     /// Sets the name of this [`OpticNode`].
     pub fn set_name(&mut self, name: String) {
@@ -22,28 +23,36 @@ impl OpticNode {
     }
 }
 
+impl Debug for OpticNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+pub trait Optical {}
+
 #[cfg(test)]
 mod test {
+    use crate::nodes::node_dummy::NodeDummy;
     use super::OpticNode;
     #[test]
     fn new() {
-      let node = OpticNode::new("Test".into());
-      assert_eq!(node.name, "Test".to_owned());
+        let node = OpticNode::new("Test".into(), Box::new(NodeDummy));
+        assert_eq!(node.name, "Test".to_owned());
     }
     #[test]
-    fn set_name() { 
-        let mut node = OpticNode::new("Test".into());
+    fn set_name() {
+        let mut node = OpticNode::new("Test".into(), Box::new(NodeDummy));
         node.set_name("Test2".into());
         assert_eq!(node.name, "Test2".to_owned())
     }
     #[test]
-    fn name() { 
-        let node = OpticNode::new("Test".into());
+    fn name() {
+        let node = OpticNode::new("Test".into(), Box::new(NodeDummy));
         assert_eq!(node.name(), "Test".to_owned())
     }
     #[test]
     fn to_dot() {
-        let node = OpticNode::new("Test".into());
+        let node = OpticNode::new("Test".into(), Box::new(NodeDummy));
         assert_eq!(node.to_dot(), "  \"Test\"\n".to_owned())
     }
 }

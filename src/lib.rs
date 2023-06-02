@@ -4,3 +4,5 @@
 pub mod optic_scenery;
 /// The basic structure representing an optical element
 pub mod optic_node;
+
+pub mod nodes;
