@@ -1,4 +1,4 @@
-# Intröduction
+# Introduction
 
 This book represents the project documentation of OPOSSUM (**OP**en **S**ource **O**ptics **S**imulation **S**ystem and **U**nified **M**odeller). The goal of this project is the development of a common software platform for simulating various aspects of optical systems in a holistic approach. It should be particularly useful for simulating and designing large-size, high-energy / intensity laser systems.
 
