@@ -1,8 +1,13 @@
 use crate::optic_node::OpticNode;
-use petgraph::prelude::{DiGraph, NodeIndex};
+use petgraph::algo::*;
+use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 
-/// Opticscenery represents the overall optical model and additional metatdata. All optical elements (OpticNodes) have to be added to this
-/// structure in order to be considered for an analysis.
+#[derive(Debug, Clone)]
+pub struct OpticSceneryError;
+type Result<T> = std::result::Result<T, OpticSceneryError>;
+
+/// [`OpticScenery`] represents the overall optical model and additional metatdata. All optical elements ([`OpticNode`]s) have
+/// to be added to this structure in order to be considered for an analysis.
 #[derive(Default, Debug)]
 pub struct OpticScenery {
     g: DiGraph<OpticNode, ()>,
@@ -10,7 +15,7 @@ pub struct OpticScenery {
 }
 
 impl OpticScenery {
-    /// Creates a new (default) [`OpticScenery`].
+    /// Creates a new (empty) [`OpticScenery`].
     pub fn new() -> Self {
         Self::default()
     }
@@ -21,6 +26,28 @@ impl OpticScenery {
     pub fn add_node(&mut self, node: OpticNode) -> NodeIndex {
         self.g.add_node(node)
     }
+    /// Connect to (already existing) nodes denoted by the respective `NodeIndex`.
+    ///
+    /// Both node indices must exist. Otherwise an [`OpticSceneryError`] is returned. In addition, connections are
+    /// rejected and an [`OpticSceneryError`] is returned, if the graph would form a cycle (loop in the graph).
+    pub fn connect_nodes(
+        &mut self,
+        src_node: NodeIndex,
+        target_node: NodeIndex,
+    ) -> Result<EdgeIndex> {
+        if self.g.node_weight(src_node).is_none() {
+            return Err(OpticSceneryError);
+        }
+        if self.g.node_weight(target_node).is_none() {
+            return Err(OpticSceneryError);
+        }
+        let edge_index = self.g.add_edge(src_node, target_node, ());
+        if is_cyclic_directed(&self.g) {
+            self.g.remove_edge(edge_index);
+            return Err(OpticSceneryError);
+        }
+        Ok(edge_index)
+    }
     /// Export the optic graph into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self) -> String {
         let mut dot_string = "digraph {\n".to_owned();
@@ -28,6 +55,10 @@ impl OpticScenery {
         for node in self.g.node_weights() {
             dot_string += &node.to_dot();
         }
+        dot_string += "\n";
+        // for edge in self.g.edge_indices() {
+        
+        // }
         dot_string += "}";
         dot_string
     }
@@ -47,8 +78,8 @@ impl OpticScenery {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::super::nodes::NodeDummy;
+    use super::*;
     #[test]
     fn new() {
         let scenery = OpticScenery::new();
@@ -59,8 +90,33 @@ mod test {
     #[test]
     fn add_node() {
         let mut scenery = OpticScenery::new();
-        scenery.add_node(OpticNode::new("Test".into(), Box::new(NodeDummy)));
+        scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
         assert_eq!(scenery.g.node_count(), 1);
+    }
+    #[test]
+    fn connect_nodes_ok() {
+        let mut scenery = OpticScenery::new();
+        let n1 = scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
+        let n2 = scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
+        assert!(scenery.connect_nodes(n1, n2).is_ok());
+        assert_eq!(scenery.g.edge_count(), 1);
+    }
+    #[test]
+    fn connect_nodes_failure() {
+        let mut scenery = OpticScenery::new();
+        let n1 = scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
+        let n2 = scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
+        assert!(scenery.connect_nodes(n1, NodeIndex::new(5)).is_err());
+        assert!(scenery.connect_nodes(NodeIndex::new(5), n2).is_err());
+    }
+    #[test]
+    fn connect_nodes_loop_error() {
+        let mut scenery = OpticScenery::new();
+        let n1 = scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
+        let n2 = scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
+        assert!(scenery.connect_nodes(n1, n2).is_ok());
+        assert!(scenery.connect_nodes(n2, n1).is_err());
+        assert_eq!(scenery.g.edge_count(), 1);
     }
     #[test]
     fn to_dot_empty() {
@@ -72,7 +128,7 @@ mod test {
     fn to_dot_with_node() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
-        scenery.add_node(OpticNode::new("Test".into(), Box::new(NodeDummy)));
+        scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
         assert_eq!(
             scenery.to_dot(),
             "digraph {\n  label=\"SceneryTest\"\n  \"Test\"\n}"
