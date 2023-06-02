@@ -55,10 +55,12 @@ impl OpticScenery {
         for node in self.g.node_weights() {
             dot_string += &node.to_dot();
         }
-        dot_string += "\n";
-        // for edge in self.g.edge_indices() {
-        
-        // }
+        for edge in self.g.edge_indices() {
+            let end_nodes = self.g.edge_endpoints(edge).unwrap();
+            let node1 = self.g.node_weight(end_nodes.0).unwrap();
+            let node2 = self.g.node_weight(end_nodes.1).unwrap();
+            dot_string.push_str(&format!("  \"{}\" -> \"{}\"\n", node1.name(), node2.name()));
+        }
         dot_string += "}";
         dot_string
     }
