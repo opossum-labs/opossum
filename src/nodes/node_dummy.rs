@@ -5,7 +5,7 @@ pub struct NodeDummy;
 
 impl Optical for NodeDummy {
     /// Returns "dummy" as node type.
-    fn node_type(&self) -> String {
-        "dummy".into()
+    fn node_type(&self) -> &str {
+        "dummy"
     }
 }

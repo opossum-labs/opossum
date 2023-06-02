@@ -28,12 +28,13 @@ impl OpticNode {
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
-    /// Returns a string representation of the [`OpticNode`] in `graphviz` format.
+    /// Returns a string representation of the [`OpticNode`] in `graphviz` format. This function is normally called by the top-level `to_dot`function within 
+    /// `OpticScenery`.
     pub fn to_dot(&self) -> String {
         format!("  \"{}\"\n", self.name)
     }
     /// Returns the concrete node type as string representation.
-    pub fn node_type(&self) -> String {
+    pub fn node_type(&self) -> &str {
         self.node.node_type()
     }
 }
@@ -47,8 +48,8 @@ impl Debug for OpticNode {
 /// This trait must be implemented by all concrete optical components.
 pub trait Optical {
     /// Return the type of the optical component (lens, filter, ...). The default implementation returns "undefined".
-    fn node_type(&self) -> String {
-        "undefined".into()
+    fn node_type(&self) -> &str {
+        "undefined"
     }
 }
 
@@ -76,5 +77,10 @@ mod test {
     fn to_dot() {
         let node = OpticNode::new("Test".into(), Box::new(NodeDummy));
         assert_eq!(node.to_dot(), "  \"Test\"\n".to_owned())
+    }
+    #[test]
+    fn node_type() {
+        let node = OpticNode::new("Test".into(), Box::new(NodeDummy));
+        assert_eq!(node.node_type(), "dummy");
     }
 }
