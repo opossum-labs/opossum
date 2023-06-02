@@ -32,6 +32,10 @@ impl OpticNode {
     pub fn to_dot(&self) -> String {
         format!("  \"{}\"\n", self.name)
     }
+    /// Returns the concrete node type as string representation.
+    pub fn node_type(&self) -> String {
+        self.node.node_type()
+    }
 }
 
 impl Debug for OpticNode {
@@ -39,7 +43,14 @@ impl Debug for OpticNode {
         write!(f, "{}", self.name)
     }
 }
-pub trait Optical {}
+
+/// This trait must be implemented by all concrete optical components.
+pub trait Optical {
+    /// Return the type of the optical component (lens, filter, ...). The default implementation returns "undefined".
+    fn node_type(&self) -> String {
+        "undefined".into()
+    }
+}
 
 #[cfg(test)]
 mod test {
