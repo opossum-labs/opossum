@@ -1,11 +1,22 @@
 use std::fmt::Debug;
+/// An [`OpticNode`] is the basic struct representing an optical component.
 pub struct OpticNode {
     name: String,
     node: Box<dyn Optical>,
 }
 
 impl OpticNode {
-    /// Creates a new [`OpticNode`].
+    /// Creates a new [`OpticNode`]. The concrete type of the component must be given while using the `new` function.
+    /// The node type ist a struct implementing the [`Optical`] trait. Since the size of the node type is not known at compile time it must be added as `Box<nodetype>`.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// use opossum::optic_node::OpticNode;
+    /// use opossum::nodes::NodeDummy;
+    ///
+    /// let node=OpticNode::new("My node".into(), Box::new(NodeDummy));
+    /// ```
     pub fn new(name: String, node: Box<dyn Optical>) -> Self {
         Self { name, node }
     }
@@ -32,8 +43,8 @@ pub trait Optical {}
 
 #[cfg(test)]
 mod test {
-    use crate::nodes::node_dummy::NodeDummy;
     use super::OpticNode;
+    use crate::nodes::NodeDummy;
     #[test]
     fn new() {
         let node = OpticNode::new("Test".into(), Box::new(NodeDummy));

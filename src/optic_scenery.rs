@@ -48,6 +48,7 @@ impl OpticScenery {
 #[cfg(test)]
 mod test {
     use super::*;
+    use super::super::nodes::NodeDummy;
     #[test]
     fn new() {
         let scenery = OpticScenery::new();
@@ -74,7 +75,7 @@ mod test {
         scenery.add_node(OpticNode::new("Test".into(), Box::new(NodeDummy)));
         assert_eq!(
             scenery.to_dot(),
-            "digraph {\n  label=\"SceneryTest\"\n  Test\n}"
+            "digraph {\n  label=\"SceneryTest\"\n  \"Test\"\n}"
         );
     }
     #[test]
