@@ -73,6 +73,7 @@ mod test {
     fn new() {
         let node = OpticNode::new("Test", Box::new(NodeDummy));
         assert_eq!(node.name, "Test");
+        assert_eq!(node.inverted, false);
     }
     #[test]
     fn set_name() {
@@ -84,6 +85,18 @@ mod test {
     fn name() {
         let node = OpticNode::new("Test", Box::new(NodeDummy));
         assert_eq!(node.name(), "Test")
+    }
+    #[test]
+    fn set_inverted() {
+        let mut node = OpticNode::new("Test", Box::new(NodeDummy));
+        node.set_inverted(true);
+        assert_eq!(node.inverted, true)
+    }
+    #[test]
+    fn inverted() {
+        let mut node = OpticNode::new("Test", Box::new(NodeDummy));
+        node.set_inverted(true);
+        assert_eq!(node.inverted(), true)
     }
     #[test]
     fn to_dot() {
