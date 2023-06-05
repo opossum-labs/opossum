@@ -3,7 +3,7 @@ use std::fmt::Debug;
 pub struct OpticNode {
     name: String,
     node: Box<dyn Optical>,
-
+    inverted: bool
 }
 
 impl OpticNode {
@@ -19,7 +19,7 @@ impl OpticNode {
     /// let node=OpticNode::new("My node", Box::new(NodeDummy));
     /// ```
     pub fn new(name: &str, node: Box<dyn Optical>) -> Self {
-        Self { name: name.into(), node}
+        Self { name: name.into(), node: node, inverted: false}
     }
     /// Sets the name of this [`OpticNode`].
     pub fn set_name(&mut self, name: String) {
@@ -32,11 +32,22 @@ impl OpticNode {
     /// Returns a string representation of the [`OpticNode`] in `graphviz` format. This function is normally called by the top-level `to_dot`function within 
     /// `OpticScenery`.
     pub fn to_dot(&self) -> String {
-        format!("[label=\"{}\"]\n", self.name)
+        let is_inverted= if self.inverted==true {" (inv)"} else {""};
+        format!("[label=\"{}{}\"]\n", self.name, is_inverted)
     }
     /// Returns the concrete node type as string representation.
     pub fn node_type(&self) -> &str {
         self.node.node_type()
+    }
+    /// Mark the [`OpticNode`] as inverted.
+    /// 
+    /// This means that the node is used in "reverse" direction. All output port become input parts and vice versa.
+    pub fn set_inverted(&mut self, inverted: bool) {
+        self.inverted = inverted;
+    }
+    /// Returns if the [`OpticNode`] is used in reversed direction.
+    pub fn inverted(&self) -> bool {
+        self.inverted
     }
 }
 
@@ -78,6 +89,12 @@ mod test {
     fn to_dot() {
         let node = OpticNode::new("Test", Box::new(NodeDummy));
         assert_eq!(node.to_dot(), "[label=\"Test\"]\n".to_owned())
+    }
+    #[test]
+    fn to_dot_inverted() {
+        let mut node = OpticNode::new("Test", Box::new(NodeDummy));
+        node.set_inverted(true);
+        assert_eq!(node.to_dot(), "[label=\"Test (inv)\"]\n".to_owned())
     }
     #[test]
     fn node_type() {
