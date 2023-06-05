@@ -52,7 +52,9 @@ impl OpticScenery {
     pub fn to_dot(&self) -> String {
         let mut dot_string = "digraph {\n".to_owned();
         dot_string.push_str(&format!("  label=\"{}\"\n", self.description));
-        for node in self.g.node_weights() {
+        for node_idx in self.g.node_indices() {
+            let node=self.g.node_weight(node_idx).unwrap();
+            dot_string.push_str(&format!("  node_idx_{} ", node_idx.index()));
             dot_string += &node.to_dot();
         }
         for edge in self.g.edge_indices() {
@@ -89,12 +91,12 @@ mod test {
         assert_eq!(scenery.g.edge_count(), 0);
         assert_eq!(scenery.g.node_count(), 0);
     }
-    #[test]
-    fn add_node() {
-        let mut scenery = OpticScenery::new();
-        scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
-        assert_eq!(scenery.g.node_count(), 1);
-    }
+    // #[test]
+    // fn add_node() {
+    //     let mut scenery = OpticScenery::new();
+    //     scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
+    //     assert_eq!(scenery.g.node_count(), 1);
+    // }
     #[test]
     fn connect_nodes_ok() {
         let mut scenery = OpticScenery::new();

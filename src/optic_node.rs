@@ -3,6 +3,7 @@ use std::fmt::Debug;
 pub struct OpticNode {
     name: String,
     node: Box<dyn Optical>,
+
 }
 
 impl OpticNode {
@@ -18,7 +19,7 @@ impl OpticNode {
     /// let node=OpticNode::new("My node", Box::new(NodeDummy));
     /// ```
     pub fn new(name: &str, node: Box<dyn Optical>) -> Self {
-        Self { name: name.into(), node }
+        Self { name: name.into(), node}
     }
     /// Sets the name of this [`OpticNode`].
     pub fn set_name(&mut self, name: String) {
@@ -31,7 +32,7 @@ impl OpticNode {
     /// Returns a string representation of the [`OpticNode`] in `graphviz` format. This function is normally called by the top-level `to_dot`function within 
     /// `OpticScenery`.
     pub fn to_dot(&self) -> String {
-        format!("  \"{}\"\n", self.name)
+        format!("[label=\"{}\"]\n", self.name)
     }
     /// Returns the concrete node type as string representation.
     pub fn node_type(&self) -> &str {
