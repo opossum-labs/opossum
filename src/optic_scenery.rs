@@ -91,12 +91,12 @@ mod test {
         assert_eq!(scenery.g.edge_count(), 0);
         assert_eq!(scenery.g.node_count(), 0);
     }
-    // #[test]
-    // fn add_node() {
-    //     let mut scenery = OpticScenery::new();
-    //     scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
-    //     assert_eq!(scenery.g.node_count(), 1);
-    // }
+    #[test]
+    fn add_node() {
+        let mut scenery = OpticScenery::new();
+        scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
+        assert_eq!(scenery.g.node_count(), 1);
+    }
     #[test]
     fn connect_nodes_ok() {
         let mut scenery = OpticScenery::new();
