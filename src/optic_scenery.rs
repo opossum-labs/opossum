@@ -135,7 +135,7 @@ mod test {
         scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
         assert_eq!(
             scenery.to_dot(),
-            "digraph {\n  label=\"SceneryTest\"\n  \"Test\"\n}"
+            "digraph {\n  label=\"SceneryTest\"\n  node_idx_0 [label=\"Test\"]\n}"
         );
     }
     #[test]

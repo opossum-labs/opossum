@@ -77,7 +77,7 @@ mod test {
     #[test]
     fn to_dot() {
         let node = OpticNode::new("Test", Box::new(NodeDummy));
-        assert_eq!(node.to_dot(), "  \"Test\"\n".to_owned())
+        assert_eq!(node.to_dot(), "[label=\"Test\"]\n".to_owned())
     }
     #[test]
     fn node_type() {
