@@ -1,4 +1,4 @@
-use opossum::nodes::NodeDummy;
+use opossum::nodes::{NodeDummy, NodeReference};
 use opossum::optic_node::OpticNode;
 use opossum::optic_scenery::OpticScenery;
 
@@ -12,6 +12,9 @@ fn main() {
     let n2 = scenery.add_node(OpticNode::new("19mm amp", Box::new(NodeDummy)));
     let n3 = scenery.add_node(OpticNode::new("Faraday", Box::new(NodeDummy)));
     let n4 = scenery.add_node(OpticNode::new("0° mirror", Box::new(NodeDummy)));
+
+
+    //let ref_node= NodeReference::new(&Box::new(NodeDummy));
 
     let mut node= OpticNode::new("Faraday", Box::new(NodeDummy));
     node.set_inverted(true);
