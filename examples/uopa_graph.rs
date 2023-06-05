@@ -13,8 +13,8 @@ fn main() {
     println!("default opticscenery: {:?}", scenery);
     println!("export to `dot` format: {}", scenery.to_dot());
 
-    let mira_node1          =scenery.add_node(OpticNode::new("mira1", Box::new(NodeDummy)));
-    // let qwp_node1           =scenery.add_node(OpticNode::new("Quarter Waveplate", Box::new(NodeDummy)));
+    let mira_node1          =scenery.add_node(OpticNode::new("Mira", Box::new(NodeDummy)));
+    let qwp_node1           =scenery.add_node(OpticNode::new("Quarter Wave Plate", Box::new(NodeDummy)));
     // let pol_node1           =scenery.add_node(OpticNode::new("Polarizer", Box::new(NodeDummy)));
     // let dichroic_node1      =scenery.add_node(OpticNode::new("Dichroic Mirror", Box::new(NodeDummy)));
     // let fiber_amp_node1     =scenery.add_node(OpticNode::new("Fiber Amplifier", Box::new(NodeDummy)));
@@ -29,7 +29,7 @@ fn main() {
     // let delay_node1         =scenery.add_node(OpticNode::new("Delay Stage", Box::new(NodeDummy)));
 
 
-    // scenery.connect_nodes(mira_node1, qwp_node1);
+    scenery.connect_nodes(mira_node1, qwp_node1);
     // scenery.connect_nodes(qwp_node1, pol_node1);
     // scenery.connect_nodes(pol_node1, dichroic_node1);
     // scenery.connect_nodes(pol_node1, fiber_amp_node1);
