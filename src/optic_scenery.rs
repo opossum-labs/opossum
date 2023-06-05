@@ -1,5 +1,6 @@
 use crate::optic_node::OpticNode;
 use petgraph::algo::*;
+use petgraph::data::DataMap;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 
 #[derive(Debug, Clone)]
