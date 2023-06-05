@@ -59,8 +59,6 @@ impl OpticScenery {
         }
         for edge in self.g.edge_indices() {
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
-            let node1 = self.g.node_weight(end_nodes.0).unwrap();
-            let node2 = self.g.node_weight(end_nodes.1).unwrap();
             dot_string.push_str(&format!("  idx_{} -> idx_{}\n", end_nodes.0.index(), end_nodes.1.index()));
         }
         dot_string += "}";
@@ -144,11 +142,14 @@ mod test {
         scenery.set_description("SceneryTest".into());
         let n1=scenery.add_node(OpticNode::new("Test1", Box::new(NodeDummy)));
         let n2=scenery.add_node(OpticNode::new("Test2", Box::new(NodeDummy)));
-        scenery.connect_nodes(n1,n2);
-        assert_eq!(
-            scenery.to_dot(),
-            "digraph {\n  label=\"SceneryTest\"\n  idx_0 [label=\"Test1\"]\n  idx_1 [label=\"Test2\"]\n  idx_0 -> idx_1\n}"
-        );
+        if let Ok(_)=scenery.connect_nodes(n1,n2) {
+            assert_eq!(
+                scenery.to_dot(),
+                "digraph {\n  label=\"SceneryTest\"\n  idx_0 [label=\"Test1\"]\n  idx_1 [label=\"Test2\"]\n  idx_0 -> idx_1\n}"
+            );
+        } else {
+            assert!(false);
+        }
     }
     #[test]
     fn set_description() {
