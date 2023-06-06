@@ -1,5 +1,5 @@
-use crate::optic_node::OpticNode;
 use crate::error::OpossumError;
+use crate::optic_node::OpticNode;
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 
@@ -61,13 +61,20 @@ impl OpticScenery {
     pub fn to_dot(&self) -> String {
         let mut dot_string = "digraph {\n".to_owned();
         dot_string.push_str(&format!("  label=\"{}\"\n", self.description));
+        dot_string.push_str("  fontname=\"Helvetica,Arial,sans-serif\"\n");
+        dot_string.push_str("  node [fontname=\"Helvetica,Arial,sans-serif\"]\n");
+        dot_string.push_str("  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n");
         for node_idx in self.g.node_indices() {
-            let node=self.g.node_weight(node_idx).unwrap();
+            let node = self.g.node_weight(node_idx).unwrap();
             dot_string += &node.to_dot(&format!("i{}", node_idx.index()));
         }
         for edge in self.g.edge_indices() {
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
-            dot_string.push_str(&format!("  i{} -> i{}\n", end_nodes.0.index(), end_nodes.1.index()));
+            dot_string.push_str(&format!(
+                "  i{} -> i{}\n",
+                end_nodes.0.index(),
+                end_nodes.1.index()
+            ));
         }
         dot_string += "}";
         dot_string
@@ -132,7 +139,7 @@ mod test {
     fn to_dot_empty() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into());
-        assert_eq!(scenery.to_dot(), "digraph {\n  label=\"Test\"\n}");
+        assert_eq!(scenery.to_dot(), "digraph {\n  label=\"Test\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n}");
     }
     #[test]
     fn to_dot_with_node() {
@@ -141,19 +148,19 @@ mod test {
         scenery.add_node(OpticNode::new("Test", Box::new(NodeDummy)));
         assert_eq!(
             scenery.to_dot(),
-            "digraph {\n  label=\"SceneryTest\"\n  i0 [label=\"Test\"]\n}"
+            "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test\"]\n}"
         );
     }
     #[test]
     fn to_dot_with_edge() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
-        let n1=scenery.add_node(OpticNode::new("Test1", Box::new(NodeDummy)));
-        let n2=scenery.add_node(OpticNode::new("Test2", Box::new(NodeDummy)));
-        if let Ok(_)=scenery.connect_nodes(n1,n2) {
+        let n1 = scenery.add_node(OpticNode::new("Test1", Box::new(NodeDummy)));
+        let n2 = scenery.add_node(OpticNode::new("Test2", Box::new(NodeDummy)));
+        if let Ok(_) = scenery.connect_nodes(n1, n2) {
             assert_eq!(
                 scenery.to_dot(),
-                "digraph {\n  label=\"SceneryTest\"\n  i0 [label=\"Test1\"]\n  i1 [label=\"Test2\"]\n  i0 -> i1\n}"
+                "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test1\"]\n  i1 [label=\"Test2\"]\n  i0 -> i1\n}"
             );
         } else {
             assert!(false);
