@@ -3,15 +3,15 @@ use std::fmt::Debug;
 pub struct OpticNode {
     name: String,
     node: Box<dyn Optical>,
-    inverted: bool
+    inverted: bool,
 }
 
 impl OpticNode {
     /// Creates a new [`OpticNode`]. The concrete type of the component must be given while using the `new` function.
     /// The node type ist a struct implementing the [`Optical`] trait. Since the size of the node type is not known at compile time it must be added as `Box<nodetype>`.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// use opossum::optic_node::OpticNode;
     /// use opossum::nodes::NodeDummy;
@@ -19,7 +19,11 @@ impl OpticNode {
     /// let node=OpticNode::new("My node", Box::new(NodeDummy));
     /// ```
     pub fn new(name: &str, node: Box<dyn Optical>) -> Self {
-        Self { name: name.into(), node: node, inverted: false}
+        Self {
+            name: name.into(),
+            node: node,
+            inverted: false,
+        }
     }
     /// Sets the name of this [`OpticNode`].
     pub fn set_name(&mut self, name: String) {
@@ -29,18 +33,17 @@ impl OpticNode {
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
-    /// Returns a string representation of the [`OpticNode`] in `graphviz` format. This function is normally called by the top-level `to_dot`function within 
+    /// Returns a string representation of the [`OpticNode`] in `graphviz` format. This function is normally called by the top-level `to_dot`function within
     /// `OpticScenery`.
-    pub fn to_dot(&self) -> String {
-        let is_inverted= if self.inverted==true {" (inv)"} else {""};
-        format!("[label=\"{}{}\"]\n", self.name, is_inverted)
+    pub fn to_dot(&self, node_index: &str) -> String {
+        self.node.to_dot(node_index, &self.name, self.inverted)
     }
     /// Returns the concrete node type as string representation.
     pub fn node_type(&self) -> &str {
         self.node.node_type()
     }
     /// Mark the [`OpticNode`] as inverted.
-    /// 
+    ///
     /// This means that the node is used in "reverse" direction. All output port become input parts and vice versa.
     pub fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;
@@ -64,8 +67,9 @@ pub trait Optical {
         "undefined"
     }
     /// Return component type specific code for `graphviz` visualization.
-    fn to_dot(&self) -> &str {
-        ""
+    fn to_dot(&self, node_index: &str, name: &str, inverted: bool) -> String {
+        let inv_string = if inverted { "(inv)" } else { "" };
+        format!("  {} [label=\"{}{}\"]\n", node_index, name, inv_string)
     }
 }
 
@@ -105,13 +109,13 @@ mod test {
     #[test]
     fn to_dot() {
         let node = OpticNode::new("Test", Box::new(NodeDummy));
-        assert_eq!(node.to_dot(), "[label=\"Test\"]\n".to_owned())
+        assert_eq!(node.to_dot("i0"), "  i0 [label=\"Test\"]\n".to_owned())
     }
     #[test]
     fn to_dot_inverted() {
         let mut node = OpticNode::new("Test", Box::new(NodeDummy));
         node.set_inverted(true);
-        assert_eq!(node.to_dot(), "[label=\"Test (inv)\"]\n".to_owned())
+        assert_eq!(node.to_dot("i0"), "  i0 [label=\"Test(inv)\"]\n".to_owned())
     }
     #[test]
     fn node_type() {

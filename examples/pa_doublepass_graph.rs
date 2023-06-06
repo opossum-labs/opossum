@@ -1,4 +1,4 @@
-use opossum::nodes::NodeDummy;
+use opossum::nodes::{NodeDummy, NodeGroup};
 use opossum::optic_node::OpticNode;
 use opossum::optic_scenery::OpticScenery;
 
@@ -35,6 +35,11 @@ fn main() {
     scenery.connect_nodes(n3i, n2i).unwrap();
     scenery.connect_nodes(n2i, n1i).unwrap();
 
+    let mut group=NodeGroup::new();
+    let g_n1=group.add_node(OpticNode::new("Beamsplitter", Box::new(NodeDummy)));
+    let g_n2=group.add_node(OpticNode::new("Lens", Box::new(NodeDummy)));
+    group.connect_nodes(g_n1,g_n2).unwrap();
+    scenery.add_node(OpticNode::new("CamBox", Box::new(group)));
     let path = "graph.dot";
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()).unwrap();
