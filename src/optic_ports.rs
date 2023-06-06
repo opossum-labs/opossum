@@ -12,12 +12,10 @@ impl OpticPorts {
         Self::default()
     }
     pub fn inputs(&self) -> Vec<String> {
-        let v = self.inputs.clone().into_iter().collect::<Vec<String>>();
-        v
+        self.inputs.clone().into_iter().collect::<Vec<String>>()
     }
     pub fn outputs(&self) -> Vec<String> {
-        let v = self.outputs.clone().into_iter().collect::<Vec<String>>();
-        v
+        self.outputs.clone().into_iter().collect::<Vec<String>>()
     }
     pub fn add_input(&mut self, name: &str) -> Result<(),OpossumError> {
         if self.inputs.insert(name.into()) {
