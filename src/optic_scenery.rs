@@ -1,6 +1,5 @@
 use crate::optic_node::OpticNode;
 use petgraph::algo::*;
-use petgraph::data::DataMap;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 
 #[derive(Debug, Clone)]
@@ -27,7 +26,17 @@ impl OpticScenery {
     pub fn add_node(&mut self, node: OpticNode) -> NodeIndex {
         self.g.add_node(node)
     }
-    /// Connect to (already existing) nodes denoted by the respective `NodeIndex`.
+    /// Get reference of [`OpticNode`].
+    ///
+    /// Get the reference of an previously added [`OpticNode`] denoted by a given `NodeIndex`. This function can be used as input while
+    /// constructing a `NodeReference`.
+    /// # Panics
+    ///
+    /// Panics if the given `NodeIndex` is not found in the graph.
+    pub fn node(&self, idx: NodeIndex) -> &OpticNode {
+        self.g.node_weight(idx).unwrap()
+    }
+    /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
     /// Both node indices must exist. Otherwise an [`OpticSceneryError`] is returned. In addition, connections are
     /// rejected and an [`OpticSceneryError`] is returned, if the graph would form a cycle (loop in the graph).

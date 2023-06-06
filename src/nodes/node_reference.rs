@@ -12,7 +12,6 @@ impl<'a> NodeReference<'a> {
 }
 
 impl<'a> Optical for NodeReference<'a> {
-    /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {
         "reference"
     }

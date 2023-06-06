@@ -1,4 +1,4 @@
-use opossum::nodes::{NodeDummy, NodeReference};
+use opossum::nodes::NodeDummy;
 use opossum::optic_node::OpticNode;
 use opossum::optic_scenery::OpticScenery;
 
@@ -13,11 +13,12 @@ fn main() {
     let n3 = scenery.add_node(OpticNode::new("Faraday", Box::new(NodeDummy)));
     let n4 = scenery.add_node(OpticNode::new("0° mirror", Box::new(NodeDummy)));
 
-    let mut node= OpticNode::new("Faraday", Box::new(NodeDummy));   
+    // let ref_node= NodeReference::new(scenery.node(n1));
+    // let n1r=scenery.add_node(OpticNode::new("ref", Box::new(ref_node)));
+
+    let mut node= OpticNode::new("Faraday", Box::new(NodeDummy));
     node.set_inverted(true);
-    let _ref_node= NodeReference::new(&node);
-    scenery.add_node(node);
-    //let n3i=scenery.add_node(OpticNode::new("ref", Box::new(ref_node)));
+    let n3i=scenery.add_node(node);
 
     let mut node= OpticNode::new("19mm amp", Box::new(NodeDummy));
     node.set_inverted(true);
@@ -30,8 +31,8 @@ fn main() {
     scenery.connect_nodes(n1, n2).unwrap();
     scenery.connect_nodes(n2, n3).unwrap();
     scenery.connect_nodes(n3, n4).unwrap();
-    // scenery.connect_nodes(n4, n3i).unwrap();
-    // scenery.connect_nodes(n3i, n2i).unwrap();
+    scenery.connect_nodes(n4, n3i).unwrap();
+    scenery.connect_nodes(n3i, n2i).unwrap();
     scenery.connect_nodes(n2i, n1i).unwrap();
 
     let path = "graph.dot";
