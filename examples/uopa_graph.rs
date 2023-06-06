@@ -33,11 +33,12 @@ fn main() {
     scenery.connect_nodes(pump_splitter_node, uOPA_2_node);
     
     let mut scenery_2 = OpticScenery::new();
-
     scenery_2.set_description("PHELIX uOPA Pump Pre-Amplifier".into());
 
     let spm_node            = scenery_2.add_node(OpticNode::new("SPM", Box::new(NodeDummy)));
-    let circ_node           = scenery_2.add_node(OpticNode::new("Circulator", Box::new(NodeDummy)));
+    let circ1_node          = scenery_2.add_node(OpticNode::new("Circulator Port 1", Box::new(NodeDummy)));
+    let circ2_node          = scenery_2.add_node(OpticNode::new("Circulator Port 2", Box::new(NodeDummy)));
+    let circ3_node          = scenery_2.add_node(OpticNode::new("Circulator Port 3", Box::new(NodeDummy)));
     let cfbg_node           = scenery_2.add_node(OpticNode::new("CFBG", Box::new(NodeDummy)));
     let isolator1_node      = scenery_2.add_node(OpticNode::new("FI", Box::new(NodeDummy)));
     let tap1_node           = scenery_2.add_node(OpticNode::new("Tap", Box::new(NodeDummy)));
@@ -50,9 +51,44 @@ fn main() {
     let yb_fiber2_node_node = scenery_2.add_node(OpticNode::new("Yb-Fiber 2", Box::new(NodeDummy)));
     let dichroic_node       = scenery_2.add_node(OpticNode::new("DCM", Box::new(NodeDummy)));
     let diode2_node         = scenery_2.add_node(OpticNode::new("Laser Diode", Box::new(NodeDummy)));
+    let monitor1_node       = scenery_2.add_node(OpticNode::new("Monitor", Box::new(NodeDummy)));
+    let monitor2_node       = scenery_2.add_node(OpticNode::new("Monitor", Box::new(NodeDummy)));
+    let monitor3_node       = scenery_2.add_node(OpticNode::new("Monitor", Box::new(NodeDummy)));
+    
+    scenery_2.connect_nodes(spm_node, circ1_node);
+    scenery_2.connect_nodes(circ1_node, circ2_node);
+    scenery_2.connect_nodes(circ2_node, cfbg_node);
+    scenery_2.connect_nodes(cfbg_node, circ3_node);
+    scenery_2.connect_nodes(cfbg_node, monitor1_node);
+    scenery_2.connect_nodes(circ3_node, isolator1_node);
+    scenery_2.connect_nodes(isolator1_node, tap1_node);
+    scenery_2.connect_nodes(tap1_node, monitor2_node);
+    scenery_2.connect_nodes(tap1_node, wdm_node);
+    scenery_2.connect_nodes(diode1_node, wdm_node);
+    scenery_2.connect_nodes(wdm_node, yb_fiber1_node);
+    scenery_2.connect_nodes(yb_fiber1_node, tap2_node);
+    scenery_2.connect_nodes(tap2_node, monitor3_node);
+    scenery_2.connect_nodes(tap2_node, aom_node);
+    scenery_2.connect_nodes(aom_node, isolator2_node);
+    scenery_2.connect_nodes(isolator2_node, yb_fiber2_node_node);
+    scenery_2.connect_nodes(yb_fiber2_node_node, dichroic_node);
+    scenery_2.connect_nodes(dichroic_node, dichroic_node);
+    scenery_2.connect_nodes(diode2_node, dichroic_node);
 
-    scenery_2.connect_nodes(spm_node, circ_node);
-    scenery_2.connect_nodes(circ_node, cfbg_node);
+
+    let mut scenery_3 = OpticScenery::new();
+    scenery_3.set_description("PHELIX uOPA Pump Regenerative Main-Amplifier".into());
+
+    let mut pol1_node            = scenery_2.add_node(OpticNode::new("Picker Polarizer", Box::new(NodeDummy)));
+    let mut pc1_node            = scenery_2.add_node(OpticNode::new("Pulse Picker PC", Box::new(NodeDummy)));
+    let mut pol2_node            = scenery_2.add_node(OpticNode::new("Cavity Polarizer", Box::new(NodeDummy)));
+    let mut yb_yag_node            = scenery_2.add_node(OpticNode::new("Yb:YAG", Box::new(NodeDummy)));
+    let mut pc2_node = scenery_2.add_node(OpticNode::new("Cavity PC", Box::new(NodeDummy)));
+    let mut qwp_node = scenery_2.add_node(OpticNode::new("Quarter Waveplate", Box::new(NodeDummy)));
+    let mut mirror1_node = scenery_2.add_node(OpticNode::new("Curved Mirror 1", Box::new(NodeDummy)));
+
+    
+    let mut mirror2_node = scenery_2.add_node(OpticNode::new("Curved Mirror 1", Box::new(NodeDummy)));
     // scenery_2.connect_nodes(spm_node, circ_node);
 
     // let mira_node1          =scenery.add_node(OpticNode::new("Mira", Box::new(NodeDummy)));
@@ -105,5 +141,9 @@ fn main() {
 
     let path = "uOPA.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}\n{}", scenery.to_dot()).unwrap();
+    write!(output, "{}", scenery.to_dot()).unwrap();
+
+    let path = "uOPA_PreAmp.dot";
+    let mut output = File::create(path).unwrap();
+    write!(output, "{}", scenery_2.to_dot()).unwrap();
 }
