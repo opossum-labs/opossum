@@ -1,10 +1,9 @@
 use crate::optic_node::OpticNode;
+use crate::error::OpossumError;
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 
-#[derive(Debug, Clone)]
-pub struct OpticSceneryError;
-type Result<T> = std::result::Result<T, OpticSceneryError>;
+type Result<T> = std::result::Result<T, OpossumError>;
 
 /// [`OpticScenery`] represents the overall optical model and additional metatdata. All optical elements ([`OpticNode`]s) have
 /// to be added to this structure in order to be considered for an analysis.
@@ -46,15 +45,15 @@ impl OpticScenery {
         target_node: NodeIndex,
     ) -> Result<EdgeIndex> {
         if self.g.node_weight(src_node).is_none() {
-            return Err(OpticSceneryError);
+            return Err(OpossumError);
         }
         if self.g.node_weight(target_node).is_none() {
-            return Err(OpticSceneryError);
+            return Err(OpossumError);
         }
         let edge_index = self.g.add_edge(src_node, target_node, ());
         if is_cyclic_directed(&self.g) {
             self.g.remove_edge(edge_index);
-            return Err(OpticSceneryError);
+            return Err(OpossumError);
         }
         Ok(edge_index)
     }

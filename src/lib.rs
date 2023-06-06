@@ -6,3 +6,5 @@ pub mod optic_scenery;
 pub mod optic_node;
 
 pub mod nodes;
+
+pub mod error;

@@ -63,6 +63,10 @@ pub trait Optical {
     fn node_type(&self) -> &str {
         "undefined"
     }
+    /// Return component type specific code for `graphviz` visualization.
+    fn to_dot(&self) -> &str {
+        ""
+    }
 }
 
 #[cfg(test)]
