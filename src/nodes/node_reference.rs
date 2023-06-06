@@ -2,11 +2,11 @@ use crate::optic_node::{OpticNode, Optical};
 
 /// A virtual component referring to another existing component. This node type is necessary in order to model resonators (loops) or double-pass systems.
 pub struct NodeReference<'a> {
-    reference: &'a Box<dyn Optical>,
+    reference: &'a OpticNode,
 }
 
 impl<'a> NodeReference<'a> {
-    pub fn new(node: &'a Box<dyn Optical>) -> Self {
+    pub fn new(node: &'a OpticNode) -> Self {
         Self { reference: node }
     }
 }
