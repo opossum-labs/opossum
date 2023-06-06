@@ -1,2 +1,6 @@
 #[derive(Debug, Clone)]
-pub struct OpossumError;
+pub enum OpossumError {
+  OpticScenery(String),
+  OpticGroup(String),
+  Other(String)
+}

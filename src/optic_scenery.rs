@@ -45,15 +45,15 @@ impl OpticScenery {
         target_node: NodeIndex,
     ) -> Result<EdgeIndex> {
         if self.g.node_weight(src_node).is_none() {
-            return Err(OpossumError);
+            return Err(OpossumError::OpticScenery("source node with gievn index does not exist".into()));
         }
         if self.g.node_weight(target_node).is_none() {
-            return Err(OpossumError);
+            return Err(OpossumError::OpticScenery("target node with given index does not exist".into()));
         }
         let edge_index = self.g.add_edge(src_node, target_node, ());
         if is_cyclic_directed(&self.g) {
             self.g.remove_edge(edge_index);
-            return Err(OpossumError);
+            return Err(OpossumError::OpticScenery("connecting the given nodes would form a loop".into()));
         }
         Ok(edge_index)
     }
