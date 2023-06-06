@@ -53,7 +53,7 @@ impl Optical for NodeGroup {
     fn to_dot(&self, node_index: &str, name: &str, inverted: bool) -> String {
         let inv_string = if inverted { "(inv)" } else { "" };
         let mut dot_string = format!(
-            "  subgraph \"cluster_{}\" {{\n    label=\"{}{}\"\n",
+            "  subgraph {} {{\n    label=\"{}{}\"\n    cluster=true\n",
             node_index, name, inv_string
         );
         for node_idx in self.g.node_indices() {
