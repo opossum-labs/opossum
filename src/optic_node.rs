@@ -1,9 +1,12 @@
 use std::fmt::Debug;
+
+use crate::optic_ports::OpticPorts;
 /// An [`OpticNode`] is the basic struct representing an optical component.
 pub struct OpticNode {
     name: String,
     node: Box<dyn Optical>,
     inverted: bool,
+    ports: OpticPorts
 }
 
 impl OpticNode {
@@ -18,11 +21,13 @@ impl OpticNode {
     ///
     /// let node=OpticNode::new("My node", Box::new(NodeDummy));
     /// ```
-    pub fn new(name: &str, node: Box<dyn Optical>) -> Self {
+    pub fn new(name: &str, node_type: Box<dyn Optical>) -> Self {
+        let ports=node_type.ports();
         Self {
             name: name.into(),
-            node: node,
+            node: node_type,
             inverted: false,
+            ports: ports
         }
     }
     /// Sets the name of this [`OpticNode`].
@@ -52,6 +57,10 @@ impl OpticNode {
     pub fn inverted(&self) -> bool {
         self.inverted
     }
+    /// Returns a reference to the [`OpticPorts`] of this [`OpticNode`].
+    pub fn ports(&self) -> &OpticPorts {
+        &self.ports
+    }
 }
 
 impl Debug for OpticNode {
@@ -70,6 +79,9 @@ pub trait Optical {
     fn to_dot(&self, node_index: &str, name: &str, inverted: bool) -> String {
         let inv_string = if inverted { "(inv)" } else { "" };
         format!("  {} [label=\"{}{}\"]\n", node_index, name, inv_string)
+    }
+    fn ports(&self) -> OpticPorts {
+        OpticPorts::default()
     }
 }
 
