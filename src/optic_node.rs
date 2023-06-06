@@ -27,7 +27,7 @@ impl OpticNode {
             name: name.into(),
             node: node_type,
             inverted: false,
-            ports: ports
+            ports
         }
     }
     /// Sets the name of this [`OpticNode`].

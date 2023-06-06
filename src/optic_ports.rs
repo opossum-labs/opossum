@@ -1,5 +1,5 @@
-use std::{collections::HashSet, mem::swap};
 use crate::error::OpossumError;
+use std::{collections::HashSet, mem::swap};
 
 #[derive(Default, Debug)]
 pub struct OpticPorts {
@@ -12,35 +12,39 @@ impl OpticPorts {
         Self::default()
     }
     pub fn inputs(&self) -> Vec<String> {
-        let v = self.inputs.clone().into_iter().collect::<Vec<String>>();
-        v
+        self.inputs.clone().into_iter().collect::<Vec<String>>()
     }
     pub fn outputs(&self) -> Vec<String> {
-        let v = self.outputs.clone().into_iter().collect::<Vec<String>>();
-        v
+        self.outputs.clone().into_iter().collect::<Vec<String>>()
     }
-    pub fn add_input(&mut self, name: &str) -> Result<(),OpossumError> {
+    pub fn add_input(&mut self, name: &str) -> Result<(), OpossumError> {
         if self.inputs.insert(name.into()) {
-            Ok(()) }
-            else {
-                Err(OpossumError::OpticPort(format!("input port with name {} already exists",name)))
-            }
+            Ok(())
+        } else {
+            Err(OpossumError::OpticPort(format!(
+                "input port with name {} already exists",
+                name
+            )))
+        }
     }
-    pub fn add_output(&mut self, name: &str) -> Result<(),OpossumError> {
+    pub fn add_output(&mut self, name: &str) -> Result<(), OpossumError> {
         if self.outputs.insert(name.into()) {
-            Ok(()) }
-            else {
-                Err(OpossumError::OpticPort(format!("output port with name {} already exists",name)))
-            }
+            Ok(())
+        } else {
+            Err(OpossumError::OpticPort(format!(
+                "output port with name {} already exists",
+                name
+            )))
+        }
     }
     pub fn invert(&mut self) {
-        swap(&mut self.inputs,&mut self.outputs);
+        swap(&mut self.inputs, &mut self.outputs);
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::optic_ports::{OpticPorts};
+    use crate::optic_ports::OpticPorts;
     #[test]
     fn new() {
         let ports = OpticPorts::new();
@@ -78,7 +82,7 @@ mod test {
         let mut ports = OpticPorts::new();
         ports.add_input("Test1").unwrap();
         ports.add_input("Test2").unwrap();
-        let mut v=ports.inputs();
+        let mut v = ports.inputs();
         v.sort();
         assert_eq!(v, vec!["Test1".to_string(), "Test2".to_string()]);
     }
@@ -87,7 +91,7 @@ mod test {
         let mut ports = OpticPorts::new();
         ports.add_output("Test1").unwrap();
         ports.add_output("Test2").unwrap();
-        let mut v=ports.outputs();
+        let mut v = ports.outputs();
         v.sort();
         assert_eq!(v, vec!["Test1".to_string(), "Test2".to_string()]);
     }
