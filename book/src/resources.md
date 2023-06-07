@@ -14,4 +14,4 @@ This is a list of programming and documentation resources in no particular order
     - [Rust design patterns](https://rust-unofficial.github.io/patterns/functional/lenses.html): Book of common rust desing patterns.
 
   - Physics
-    - [Hollistic simulation of optical systems](https://www.db-thueringen.de/receive/dbt_mods_00042053)
+    - [Holistic simulation of optical systems](https://www.db-thueringen.de/receive/dbt_mods_00042053)
