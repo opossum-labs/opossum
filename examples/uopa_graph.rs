@@ -1,5 +1,5 @@
 use opossum::optic_scenery::OpticScenery;
-use opossum::nodes::NodeDummy;
+use opossum::nodes::{NodeDummy, NodeBeamSplitter};
 
 use std::fs::File;
 use std::io::Write;
@@ -19,7 +19,7 @@ fn main() {
     let pump_main_amplifier_node = scenery.add_element("Pump Main-Amplifier", NodeDummy);
     let pump_compressor_node = scenery.add_element("Pump Compressor", NodeDummy);
     let pump_shg_node = scenery.add_element("Pump SHG", NodeDummy);
-    let pump_splitter_node = scenery.add_element("Pump Beam Splitter", NodeDummy);
+    let pump_splitter_node = scenery.add_element("Pump Beam Splitter", NodeBeamSplitter);
 
     scenery.connect_nodes(pulse_generation_split_node, uOPA_1_node);
     scenery.connect_nodes(pulse_generation_split_node, pump_pre_amplifier_node);
