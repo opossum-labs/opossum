@@ -42,9 +42,9 @@ fn main() {
     );
     scenery.connect_nodes(pump_compressor_node, "rear", pump_shg_node, "front");
     scenery.connect_nodes(pump_shg_node, "rear", pump_splitter_node, "front");
-    scenery.connect_nodes(pump_splitter_node, "rear", uOPA_1_node, "front");
+    scenery.connect_nodes(pump_splitter_node, "transmitted", uOPA_1_node, "front").unwrap();
     scenery.connect_nodes(uOPA_1_node, "rear", uOPA_2_node, "front");
-    scenery.connect_nodes(pump_splitter_node, "rear", uOPA_2_node, "front");
+    scenery.connect_nodes(pump_splitter_node, "reflected", uOPA_2_node, "front").unwrap();
 
     let mut scenery_2 = OpticScenery::new();
     scenery_2.set_description("PHELIX uOPA Pump Pre-Amplifier".into());

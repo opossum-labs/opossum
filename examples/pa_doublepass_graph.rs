@@ -31,9 +31,9 @@ fn main() {
     scenery.connect_nodes(n1, "rear", n2, "front").unwrap();
     scenery.connect_nodes(n2, "rear", n3, "front").unwrap();
     scenery.connect_nodes(n3, "rear", n4, "front").unwrap();
-    scenery.connect_nodes(n4, "rear", n3i, "front").unwrap();
-    scenery.connect_nodes(n3i, "rear", n2i, "front").unwrap();
-    scenery.connect_nodes(n2i, "rear", n1i, "front").unwrap();
+    scenery.connect_nodes(n4, "rear", n3i, "rear").unwrap();
+    scenery.connect_nodes(n3i, "front", n2i, "rear").unwrap();
+    scenery.connect_nodes(n2i, "front", n1i, "rear").unwrap();
 
     let mut group = NodeGroup::new();
     let g_n1 = group.add_node(OpticNode::new("Beamsplitter", NodeDummy));

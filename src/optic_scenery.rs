@@ -55,17 +55,33 @@ impl OpticScenery {
         target_node: NodeIndex,
         target_port: &str,
     ) -> Result<EdgeIndex> {
-        if self.g.node_weight(src_node).is_none() {
+        if let Some(source) = self.g.node_weight(src_node) {
+            if source.ports().outputs().contains(&src_port.into()) {
+
+            } else {
+                return Err(OpossumError::OpticScenery(
+                    format!("source node {} does not have a port {}", source.name(), src_port),
+                ));  
+            }
+        } else {
             return Err(OpossumError::OpticScenery(
-                "source node with gievn index does not exist".into(),
+                "source node with given index does not exist".into(),
             ));
         }
-        if self.g.node_weight(target_node).is_none() {
+        if let Some(target) = self.g.node_weight(target_node) {
+            if target.ports().inputs().contains(&target_port.into()) {
+
+            } else {
+                return Err(OpossumError::OpticScenery(
+                    format!("target node {} does not have a port {}", target.name(), target_port),
+                ));  
+            }
+        } else {
             return Err(OpossumError::OpticScenery(
                 "target node with given index does not exist".into(),
             ));
         }
-        let edge_index = self.g.add_edge(src_node, target_node, Light::default());
+        let edge_index = self.g.add_edge(src_node, target_node, Light::new("", ""));
         if is_cyclic_directed(&self.g) {
             self.g.remove_edge(edge_index);
             return Err(OpossumError::OpticScenery(
