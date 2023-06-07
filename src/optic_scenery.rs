@@ -56,12 +56,12 @@ impl OpticScenery {
         target_port: &str,
     ) -> Result<EdgeIndex> {
         if let Some(source) = self.g.node_weight(src_node) {
-            if source.ports().outputs().contains(&src_port.into()) {
-
-            } else {
-                return Err(OpossumError::OpticScenery(
-                    format!("source node {} does not have a port {}", source.name(), src_port),
-                ));  
+            if !source.ports().outputs().contains(&src_port.into()) {
+                return Err(OpossumError::OpticScenery(format!(
+                    "source node {} does not have a port {}",
+                    source.name(),
+                    src_port
+                )));
             }
         } else {
             return Err(OpossumError::OpticScenery(
@@ -69,19 +69,21 @@ impl OpticScenery {
             ));
         }
         if let Some(target) = self.g.node_weight(target_node) {
-            if target.ports().inputs().contains(&target_port.into()) {
-
-            } else {
-                return Err(OpossumError::OpticScenery(
-                    format!("target node {} does not have a port {}", target.name(), target_port),
-                ));  
+            if !target.ports().inputs().contains(&target_port.into()) {
+                return Err(OpossumError::OpticScenery(format!(
+                    "target node {} does not have a port {}",
+                    target.name(),
+                    target_port
+                )));
             }
         } else {
             return Err(OpossumError::OpticScenery(
                 "target node with given index does not exist".into(),
             ));
         }
-        let edge_index = self.g.add_edge(src_node, target_node, Light::new("", ""));
+        // TODO: Check if src_node,src_port combination already exists in the graph
+        // TODO: Checl if target_not/target_port combination already exists in the graph
+        let edge_index = self.g.add_edge(src_node, target_node, Light::new(src_port, target_port));
         if is_cyclic_directed(&self.g) {
             self.g.remove_edge(edge_index);
             return Err(OpossumError::OpticScenery(
