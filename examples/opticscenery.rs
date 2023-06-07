@@ -12,7 +12,7 @@ fn main() {
     println!("export to `dot` format: {}", scenery.to_dot());
     let node1 = scenery.add_element("my optic", NodeDummy);
     let node2 = scenery.add_element("my other optic", NodeDummy);
-    if let Ok(_) = scenery.connect_nodes(node1, node2) {
+    if let Ok(_) = scenery.connect_nodes(node1, "rear", node2, "front") {
         let path = "graph.dot";
         let mut output = File::create(path).unwrap();
         write!(output, "{}", scenery.to_dot()).unwrap();

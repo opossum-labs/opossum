@@ -1,4 +1,5 @@
 use crate::error::OpossumError;
+use crate::light::Light;
 use crate::optic_node::{OpticNode, Optical};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
@@ -9,7 +10,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// to be added to this structure in order to be considered for an analysis.
 #[derive(Default, Debug)]
 pub struct OpticScenery {
-    g: DiGraph<OpticNode, ()>,
+    g: DiGraph<OpticNode, Light>,
     description: String,
 }
 
@@ -50,7 +51,9 @@ impl OpticScenery {
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
+        src_port: &str,
         target_node: NodeIndex,
+        target_port: &str,
     ) -> Result<EdgeIndex> {
         if self.g.node_weight(src_node).is_none() {
             return Err(OpossumError::OpticScenery(
@@ -62,7 +65,7 @@ impl OpticScenery {
                 "target node with given index does not exist".into(),
             ));
         }
-        let edge_index = self.g.add_edge(src_node, target_node, ());
+        let edge_index = self.g.add_edge(src_node, target_node, Light::default());
         if is_cyclic_directed(&self.g) {
             self.g.remove_edge(edge_index);
             return Err(OpossumError::OpticScenery(
@@ -135,7 +138,7 @@ mod test {
         let mut scenery = OpticScenery::new();
         let n1 = scenery.add_element("Test", NodeDummy);
         let n2 = scenery.add_element("Test", NodeDummy);
-        assert!(scenery.connect_nodes(n1, n2).is_ok());
+        assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
         assert_eq!(scenery.g.edge_count(), 1);
     }
     #[test]
@@ -143,16 +146,20 @@ mod test {
         let mut scenery = OpticScenery::new();
         let n1 = scenery.add_element("Test", NodeDummy);
         let n2 = scenery.add_element("Test", NodeDummy);
-        assert!(scenery.connect_nodes(n1, NodeIndex::new(5)).is_err());
-        assert!(scenery.connect_nodes(NodeIndex::new(5), n2).is_err());
+        assert!(scenery
+            .connect_nodes(n1, "rear", NodeIndex::new(5), "front")
+            .is_err());
+        assert!(scenery
+            .connect_nodes(NodeIndex::new(5), "rear", n2, "front")
+            .is_err());
     }
     #[test]
     fn connect_nodes_loop_error() {
         let mut scenery = OpticScenery::new();
         let n1 = scenery.add_element("Test", NodeDummy);
         let n2 = scenery.add_element("Test", NodeDummy);
-        assert!(scenery.connect_nodes(n1, n2).is_ok());
-        assert!(scenery.connect_nodes(n2, n1).is_err());
+        assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
+        assert!(scenery.connect_nodes(n2, "rear", n1, "front").is_err());
         assert_eq!(scenery.g.edge_count(), 1);
     }
     #[test]
@@ -175,9 +182,9 @@ mod test {
     fn to_dot_with_edge() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
-        let n1 =  scenery.add_element("Test1", NodeDummy);
-        let n2 =  scenery.add_element("Test2", NodeDummy);
-        if let Ok(_) = scenery.connect_nodes(n1, n2) {
+        let n1 = scenery.add_element("Test1", NodeDummy);
+        let n2 = scenery.add_element("Test2", NodeDummy);
+        if let Ok(_) = scenery.connect_nodes(n1, "rear", n2, "front") {
             assert_eq!(
                 scenery.to_dot(),
                 "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test1\"]\n  i1 [label=\"Test2\"]\n  i0 -> i1\n}"
