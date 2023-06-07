@@ -1,5 +1,5 @@
 use crate::error::OpossumError;
-use std::{collections::HashSet, mem::swap};
+use std::collections::HashSet;
 
 #[derive(Default, Debug)]
 pub struct OpticPorts {

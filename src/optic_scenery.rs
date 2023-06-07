@@ -1,7 +1,6 @@
 use crate::error::OpossumError;
 use crate::optic_node::{OpticNode, Optical};
 use petgraph::algo::*;
-use petgraph::data::Build;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 
 type Result<T> = std::result::Result<T, OpossumError>;

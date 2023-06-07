@@ -1,6 +1,5 @@
-use opossum::nodes::NodeDummy;
-use opossum::optic_node::OpticNode;
 use opossum::optic_scenery::OpticScenery;
+use opossum::nodes::NodeDummy;
 
 use std::fs::File;
 use std::io::Write;
