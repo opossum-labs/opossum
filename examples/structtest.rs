@@ -1,4 +1,3 @@
-use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 struct OpticDummy;
 
 struct OpticIdealLens {

@@ -1,10 +1,9 @@
-use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
+use petgraph::prelude::DiGraph;
 trait Optical {
   fn analyze(&self) {
     println!("generic analyze");
   }
 }
-struct OpticDummy;
 
 struct OpticIdealLens {
   focal_length: f64,
@@ -57,5 +56,5 @@ fn main() {
   let node=OpticNode::new("Test2",NodeType::SimpleElement(1.23));
   node.analyze();
 
-  let p:DiGraph<OpticNode,()> = DiGraph::new();
+  let _p:DiGraph<OpticNode,()> = DiGraph::new();
 }
