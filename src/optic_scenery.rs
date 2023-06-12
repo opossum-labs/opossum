@@ -82,16 +82,20 @@ impl OpticScenery {
             ));
         }
         if self.src_node_port_exists(src_node, src_port) {
-            return Err(OpossumError::OpticScenery(
-                format!("src node with given port {} is already connected", src_port)
-            ))
+            return Err(OpossumError::OpticScenery(format!(
+                "src node with given port {} is already connected",
+                src_port
+            )));
         }
         if self.target_node_port_exists(src_node, src_port) {
-            return Err(OpossumError::OpticScenery(
-                format!("target node with given port {} is already connected",target_port)
-            ))
+            return Err(OpossumError::OpticScenery(format!(
+                "target node with given port {} is already connected",
+                target_port
+            )));
         }
-        let edge_index = self.g.add_edge(src_node, target_node, Light::new(src_port, target_port));
+        let edge_index = self
+            .g
+            .add_edge(src_node, target_node, Light::new(src_port, target_port));
         if is_cyclic_directed(&self.g) {
             self.g.remove_edge(edge_index);
             return Err(OpossumError::OpticScenery(
@@ -101,24 +105,14 @@ impl OpticScenery {
         Ok(edge_index)
     }
     fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
-        let mut exists=false;
-        for edge in self.g.edges_directed(src_node, petgraph::Direction::Outgoing) {
-            if edge.weight().src_port()==src_port {
-                exists=true;
-                break;
-            }
-        }
-        exists
+        self.g
+            .edges_directed(src_node, petgraph::Direction::Outgoing)
+            .any(|e| e.weight().src_port() == src_port)
     }
     fn target_node_port_exists(&self, target_node: NodeIndex, target_port: &str) -> bool {
-        let mut exists=false;
-        for edge in self.g.edges_directed(target_node, petgraph::Direction::Incoming) {
-            if edge.weight().target_port()==target_port {
-                exists=true;
-                break;
-            }
-        }
-        exists
+        self.g
+            .edges_directed(target_node, petgraph::Direction::Incoming)
+            .any(|e| e.weight().target_port() == target_port)
     }
     /// Export the optic graph into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self) -> String {
