@@ -11,4 +11,13 @@ impl Light {
             target_port: target_port.into(),
         }
     }
+
+    pub fn src_port(&self) -> &str {
+        self.src_port.as_ref()
+    }
+    
+
+    pub fn target_port(&self) -> &str {
+        self.target_port.as_ref()
+    }
 }
