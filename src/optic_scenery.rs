@@ -126,11 +126,14 @@ impl OpticScenery {
             dot_string += &node.to_dot(&format!("i{}", node_idx.index()));
         }
         for edge in self.g.edge_indices() {
+            let light=self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
             dot_string.push_str(&format!(
-                "  i{} -> i{}\n",
+                "  i{} -> i{} [label=\"{}->{}\"]\n",
                 end_nodes.0.index(),
-                end_nodes.1.index()
+                end_nodes.1.index(),
+                light.src_port(),
+                light.target_port()
             ));
         }
         dot_string += "}";

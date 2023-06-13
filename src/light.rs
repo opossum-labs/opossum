@@ -31,12 +31,29 @@ mod test {
     #[test]
     fn new() {
         let light = Light::new("test1", "test2");
-        assert_eq!(light.src_port, "test1".to_owned());
-        assert_eq!(light.target_port, "test2".to_owned());
+        assert_eq!(light.src_port, "test1");
+        assert_eq!(light.target_port, "test2");
     }
     #[test]
     fn src_port() {
         let light = Light::new("test1", "test2");
-        assert_eq!(light.src_port(), "test1".to_owned());
+        assert_eq!(light.src_port(), "test1");
+    }
+    #[test]
+    fn target_port() {
+        let light = Light::new("test1", "test2");
+        assert_eq!(light.target_port(), "test2");
+    }
+    #[test]
+    fn set_src_port() {
+        let mut light = Light::new("test1", "test2");
+        light.set_src_port("test3".into());
+        assert_eq!(light.src_port, "test3");
+    }
+    #[test]
+    fn set_target_port() {
+        let mut light = Light::new("test1", "test2");
+        light.set_target_port("test3".into());
+        assert_eq!(light.target_port, "test3");
     }
 }
