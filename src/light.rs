@@ -11,13 +11,32 @@ impl Light {
             target_port: target_port.into(),
         }
     }
-
     pub fn src_port(&self) -> &str {
         self.src_port.as_ref()
     }
-    
-
     pub fn target_port(&self) -> &str {
         self.target_port.as_ref()
+    }
+    pub fn set_src_port(&mut self, src_port: String) {
+        self.src_port = src_port;
+    }
+    pub fn set_target_port(&mut self, target_port: String) {
+        self.target_port = target_port;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn new() {
+        let light = Light::new("test1", "test2");
+        assert_eq!(light.src_port, "test1".to_owned());
+        assert_eq!(light.target_port, "test2".to_owned());
+    }
+    #[test]
+    fn src_port() {
+        let light = Light::new("test1", "test2");
+        assert_eq!(light.src_port(), "test1".to_owned());
     }
 }
