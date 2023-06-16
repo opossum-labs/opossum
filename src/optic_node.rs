@@ -1,10 +1,10 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc};
 
 use crate::optic_ports::OpticPorts;
 /// An [`OpticNode`] is the basic struct representing an optical component.
 pub struct OpticNode {
     name: String,
-    node: Box<dyn Optical>,
+    node: Rc<dyn Optical>,
     ports: OpticPorts
 }
 
@@ -24,7 +24,7 @@ impl OpticNode {
         let ports=node_type.ports();
         Self {
             name: name.into(),
-            node: Box::new(node_type),
+            node: Rc::new(node_type),
             ports
         }
     }
@@ -58,6 +58,9 @@ impl OpticNode {
     /// Returns a reference to the [`OpticPorts`] of this [`OpticNode`].
     pub fn ports(&self) -> &OpticPorts {
         &self.ports
+    }
+    pub fn node_ref(&self) -> Rc<dyn Optical> {
+        self.node.clone()
     }
 }
 
