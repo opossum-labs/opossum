@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::optic_node::{OpticNode, Optical};
@@ -10,7 +12,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// to be added to this structure in order to be considered for an analysis.
 #[derive(Default, Debug)]
 pub struct OpticScenery {
-    g: DiGraph<OpticNode, Light>,
+    g: DiGraph<Rc<OpticNode>, Light>,
     description: String,
 }
 
@@ -24,7 +26,7 @@ impl OpticScenery {
     /// This command just adds an [`OpticNode`] to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`].
     pub fn add_node(&mut self, node: OpticNode) -> NodeIndex {
-        self.g.add_node(node)
+        self.g.add_node(Rc::new(node))
     }
     /// Add a given optical element to the graph of this [`OpticScenery`].
     ///
@@ -32,7 +34,7 @@ impl OpticScenery {
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`]. Internally the corresponding [`OpticNode`] is
     /// automatically generated. It serves as a short-cut to the `add_node` function.
     pub fn add_element<T: Optical + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
-        self.g.add_node(OpticNode::new(name, t))
+        self.g.add_node(Rc::new(OpticNode::new(name, t)))
     }
     /// Get reference of [`OpticNode`].
     ///
