@@ -116,6 +116,20 @@ impl OpticScenery {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
+    /// Return a reference to the [`OpticNode`] specifiec by the node index.
+    /// 
+    /// This function is mainly useful for setting up a reference node.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the node does not exist.
+    pub fn node_ref(&self, node: NodeIndex) ->Result<Rc<OpticNode>> {
+        if let Some(node) = self.g.node_weight(node) {
+            Ok(node.to_owned())
+        } else {
+            Err(OpossumError::OpticScenery("node index does not exist".into()))
+        }
+    }
     /// Export the optic graph into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self) -> String {
         let mut dot_string = "digraph {\n".to_owned();
@@ -232,7 +246,7 @@ mod test {
         if let Ok(_) = scenery.connect_nodes(n1, "rear", n2, "front") {
             assert_eq!(
                 scenery.to_dot(),
-                "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test1\"]\n  i1 [label=\"Test2\"]\n  i0 -> i1\n}"
+                "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test1\"]\n  i1 [label=\"Test2\"]\n  i0 -> i1 [label=\"rear->front\"]\n}"
             );
         } else {
             assert!(false);
