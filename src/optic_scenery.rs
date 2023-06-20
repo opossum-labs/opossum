@@ -1,4 +1,7 @@
+use std::rc::Rc;
+
 use crate::error::OpossumError;
+use crate::light::Light;
 use crate::optic_node::{OpticNode, Optical};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
@@ -9,7 +12,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// to be added to this structure in order to be considered for an analysis.
 #[derive(Default, Debug)]
 pub struct OpticScenery {
-    g: DiGraph<OpticNode, ()>,
+    g: DiGraph<Rc<OpticNode>, Light>,
     description: String,
 }
 
@@ -23,7 +26,7 @@ impl OpticScenery {
     /// This command just adds an [`OpticNode`] to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`].
     pub fn add_node(&mut self, node: OpticNode) -> NodeIndex {
-        self.g.add_node(node)
+        self.g.add_node(Rc::new(node))
     }
     /// Add a given optical element to the graph of this [`OpticScenery`].
     ///
@@ -31,7 +34,7 @@ impl OpticScenery {
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`]. Internally the corresponding [`OpticNode`] is
     /// automatically generated. It serves as a short-cut to the `add_node` function.
     pub fn add_element<T: Optical + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
-        self.g.add_node(OpticNode::new(name, t))
+        self.g.add_node(Rc::new(OpticNode::new(name, t)))
     }
     /// Get reference of [`OpticNode`].
     ///
@@ -50,19 +53,51 @@ impl OpticScenery {
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
+        src_port: &str,
         target_node: NodeIndex,
+        target_port: &str,
     ) -> Result<EdgeIndex> {
-        if self.g.node_weight(src_node).is_none() {
+        if let Some(source) = self.g.node_weight(src_node) {
+            if !source.ports().outputs().contains(&src_port.into()) {
+                return Err(OpossumError::OpticScenery(format!(
+                    "source node {} does not have a port {}",
+                    source.name(),
+                    src_port
+                )));
+            }
+        } else {
             return Err(OpossumError::OpticScenery(
-                "source node with gievn index does not exist".into(),
+                "source node with given index does not exist".into(),
             ));
         }
-        if self.g.node_weight(target_node).is_none() {
+        if let Some(target) = self.g.node_weight(target_node) {
+            if !target.ports().inputs().contains(&target_port.into()) {
+                return Err(OpossumError::OpticScenery(format!(
+                    "target node {} does not have a port {}",
+                    target.name(),
+                    target_port
+                )));
+            }
+        } else {
             return Err(OpossumError::OpticScenery(
                 "target node with given index does not exist".into(),
             ));
         }
-        let edge_index = self.g.add_edge(src_node, target_node, ());
+        if self.src_node_port_exists(src_node, src_port) {
+            return Err(OpossumError::OpticScenery(format!(
+                "src node with given port {} is already connected",
+                src_port
+            )));
+        }
+        if self.target_node_port_exists(src_node, src_port) {
+            return Err(OpossumError::OpticScenery(format!(
+                "target node with given port {} is already connected",
+                target_port
+            )));
+        }
+        let edge_index = self
+            .g
+            .add_edge(src_node, target_node, Light::new(src_port, target_port));
         if is_cyclic_directed(&self.g) {
             self.g.remove_edge(edge_index);
             return Err(OpossumError::OpticScenery(
@@ -70,6 +105,30 @@ impl OpticScenery {
             ));
         }
         Ok(edge_index)
+    }
+    fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
+        self.g
+            .edges_directed(src_node, petgraph::Direction::Outgoing)
+            .any(|e| e.weight().src_port() == src_port)
+    }
+    fn target_node_port_exists(&self, target_node: NodeIndex, target_port: &str) -> bool {
+        self.g
+            .edges_directed(target_node, petgraph::Direction::Incoming)
+            .any(|e| e.weight().target_port() == target_port)
+    }
+    /// Return a reference to the [`OpticNode`] specifiec by the node index.
+    /// 
+    /// This function is mainly useful for setting up a reference node.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the node does not exist.
+    pub fn node_ref(&self, node: NodeIndex) ->Result<Rc<OpticNode>> {
+        if let Some(node) = self.g.node_weight(node) {
+            Ok(node.to_owned())
+        } else {
+            Err(OpossumError::OpticScenery("node index does not exist".into()))
+        }
     }
     /// Export the optic graph into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self) -> String {
@@ -83,11 +142,14 @@ impl OpticScenery {
             dot_string += &node.to_dot(&format!("i{}", node_idx.index()));
         }
         for edge in self.g.edge_indices() {
+            let light=self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
             dot_string.push_str(&format!(
-                "  i{} -> i{}\n",
+                "  i{} -> i{} [label=\"{}->{}\"]\n",
                 end_nodes.0.index(),
-                end_nodes.1.index()
+                end_nodes.1.index(),
+                light.src_port(),
+                light.target_port()
             ));
         }
         dot_string += "}";
@@ -135,7 +197,7 @@ mod test {
         let mut scenery = OpticScenery::new();
         let n1 = scenery.add_element("Test", NodeDummy);
         let n2 = scenery.add_element("Test", NodeDummy);
-        assert!(scenery.connect_nodes(n1, n2).is_ok());
+        assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
         assert_eq!(scenery.g.edge_count(), 1);
     }
     #[test]
@@ -143,16 +205,20 @@ mod test {
         let mut scenery = OpticScenery::new();
         let n1 = scenery.add_element("Test", NodeDummy);
         let n2 = scenery.add_element("Test", NodeDummy);
-        assert!(scenery.connect_nodes(n1, NodeIndex::new(5)).is_err());
-        assert!(scenery.connect_nodes(NodeIndex::new(5), n2).is_err());
+        assert!(scenery
+            .connect_nodes(n1, "rear", NodeIndex::new(5), "front")
+            .is_err());
+        assert!(scenery
+            .connect_nodes(NodeIndex::new(5), "rear", n2, "front")
+            .is_err());
     }
     #[test]
     fn connect_nodes_loop_error() {
         let mut scenery = OpticScenery::new();
         let n1 = scenery.add_element("Test", NodeDummy);
         let n2 = scenery.add_element("Test", NodeDummy);
-        assert!(scenery.connect_nodes(n1, n2).is_ok());
-        assert!(scenery.connect_nodes(n2, n1).is_err());
+        assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
+        assert!(scenery.connect_nodes(n2, "rear", n1, "front").is_err());
         assert_eq!(scenery.g.edge_count(), 1);
     }
     #[test]
@@ -175,12 +241,12 @@ mod test {
     fn to_dot_with_edge() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
-        let n1 =  scenery.add_element("Test1", NodeDummy);
-        let n2 =  scenery.add_element("Test2", NodeDummy);
-        if let Ok(_) = scenery.connect_nodes(n1, n2) {
+        let n1 = scenery.add_element("Test1", NodeDummy);
+        let n2 = scenery.add_element("Test2", NodeDummy);
+        if let Ok(_) = scenery.connect_nodes(n1, "rear", n2, "front") {
             assert_eq!(
                 scenery.to_dot(),
-                "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test1\"]\n  i1 [label=\"Test2\"]\n  i0 -> i1\n}"
+                "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test1\"]\n  i1 [label=\"Test2\"]\n  i0 -> i1 [label=\"rear->front\"]\n}"
             );
         } else {
             assert!(false);
