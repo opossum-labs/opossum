@@ -1,7 +1,7 @@
 use crate::error::OpossumError;
 use std::collections::HashSet;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct OpticPorts {
     inputs: HashSet<String>,
     outputs: HashSet<String>,

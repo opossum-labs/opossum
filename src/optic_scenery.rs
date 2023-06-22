@@ -36,16 +36,6 @@ impl OpticScenery {
     pub fn add_element<T: Optical + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
         self.g.add_node(Rc::new(OpticNode::new(name, t)))
     }
-    /// Get reference of [`OpticNode`].
-    ///
-    /// Get the reference of an previously added [`OpticNode`] denoted by a given `NodeIndex`. This function can be used as input while
-    /// constructing a `NodeReference`.
-    /// # Panics
-    ///
-    /// Panics if the given `NodeIndex` is not found in the graph.
-    pub fn node(&self, idx: NodeIndex) -> &OpticNode {
-        self.g.node_weight(idx).unwrap()
-    }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
     /// Both node indices must exist. Otherwise an [`OpticSceneryError`] is returned. In addition, connections are
