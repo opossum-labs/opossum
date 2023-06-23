@@ -5,12 +5,13 @@ use crate::light::Light;
 use crate::optic_node::{OpticNode, Optical};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
+use petgraph::algo::toposort;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
 /// [`OpticScenery`] represents the overall optical model and additional metatdata. All optical elements ([`OpticNode`]s) have
 /// to be added to this structure in order to be considered for an analysis.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct OpticScenery {
     g: DiGraph<Rc<OpticNode>, Light>,
     description: String,
@@ -145,10 +146,6 @@ impl OpticScenery {
         dot_string += "}";
         dot_string
     }
-    /// Analyze this [`OpticScenery`] using a given OpticAnalyzer.
-    pub fn analyze(&self) {
-        todo!();
-    }
     /// Sets the description of this [`OpticScenery`].
     pub fn set_description(&mut self, description: String) {
         self.description = description;
@@ -156,6 +153,23 @@ impl OpticScenery {
     /// Returns a reference to the description of this [`OpticScenery`].
     pub fn description(&self) -> &str {
         self.description.as_ref()
+    }
+    pub fn nodes_topological(&self) -> Result<Vec<Rc<OpticNode>>> {
+        let sorted=toposort(&self.g, None);
+        if let Ok(sorted) = sorted {
+            let node=sorted.into_iter()
+            .map(|idx| self.g.node_weight(idx).unwrap().to_owned()).collect();
+            Ok(node)
+        } else {
+            Err(OpossumError::OpticScenery("Analyis: topological sort failed".into()))
+        }
+    }
+    pub fn nodes_unordered(&self) -> Vec<NodeIndex> {
+        self.g.node_indices().collect::<Vec<NodeIndex>>()
+    }
+    pub fn incoming_edges(&self, idx: NodeIndex) -> Vec<Light> {
+        let edges= self.g.edges_directed(idx, petgraph::Direction::Incoming);
+        edges.into_iter().map(|e| e.weight().to_owned()).collect::<Vec<Light>>()
     }
 }
 

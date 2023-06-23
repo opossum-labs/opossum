@@ -1,3 +1,4 @@
+use opossum::analyzer::AnalyzerEnergy;
 use opossum::nodes::{NodeBeamSplitter, NodeDummy};
 use opossum::optic_scenery::OpticScenery;
 
@@ -155,4 +156,7 @@ fn main() {
     let path = "uOPA_PreAmp.dot";
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery_2.to_dot()).unwrap();
+
+    let analyzer=AnalyzerEnergy::new(&scenery);
+    analyzer.analyze();
 }

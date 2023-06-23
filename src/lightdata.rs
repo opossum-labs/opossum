@@ -1,16 +1,16 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum LightData {
-  Energy(LightDataEnergy),
-  Geometric(LightDataGeometric),
-  Fourier
+    Energy(LightDataEnergy),
+    Geometric(LightDataGeometric),
+    Fourier,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct LightDataEnergy {
-  energy: f32
+    energy: f32,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct LightDataGeometric {
-  ray: i32
+    ray: i32,
 }

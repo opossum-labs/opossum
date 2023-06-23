@@ -1,6 +1,6 @@
 use crate::lightdata::LightData;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Light {
     src_port: String,
     target_port: String,

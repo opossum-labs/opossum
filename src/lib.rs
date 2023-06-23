@@ -11,4 +11,6 @@ pub mod optic_ports;
 
 pub mod nodes;
 
+pub mod analyzer;
+
 pub mod error;

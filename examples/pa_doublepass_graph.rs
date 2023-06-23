@@ -1,7 +1,7 @@
 use opossum::nodes::{NodeDummy, NodeGroup, NodeReference};
 use opossum::optic_node::OpticNode;
 use opossum::optic_scenery::OpticScenery;
-
+use opossum::analyzer::AnalyzerEnergy;
 use std::fs::File;
 use std::io::Write;
 
@@ -43,4 +43,7 @@ fn main() {
     let path = "graph.dot";
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()).unwrap();
+
+    let analyzer=AnalyzerEnergy::new(&scenery);
+    analyzer.analyze();
 }
