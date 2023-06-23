@@ -18,21 +18,22 @@ fn main() {
     node.set_inverted(true);
     let n1r=scenery.add_node(node);
     
-
-    let mut node = OpticNode::new("Faraday", NodeDummy);
+    let ref_node= NodeReference::new(scenery.node_ref(n3).unwrap());
+    let mut node = OpticNode::new("Ref", ref_node);
     node.set_inverted(true);
-    let n3i = scenery.add_node(node);
+    let n3r = scenery.add_node(node);
 
-    let mut node = OpticNode::new("19mm amp", NodeDummy);
+    let ref_node= NodeReference::new(scenery.node_ref(n2).unwrap());
+    let mut node = OpticNode::new("Ref", ref_node);
     node.set_inverted(true);
-    let n2i = scenery.add_node(node);
+    let n2r = scenery.add_node(node);
 
     scenery.connect_nodes(n1, "rear", n2, "front").unwrap();
     scenery.connect_nodes(n2, "rear", n3, "front").unwrap();
     scenery.connect_nodes(n3, "rear", n4, "front").unwrap();
-    scenery.connect_nodes(n4, "rear", n3i, "rear").unwrap();
-    scenery.connect_nodes(n3i, "front", n2i, "rear").unwrap();
-    scenery.connect_nodes(n2i, "front", n1r, "rear").unwrap();
+    scenery.connect_nodes(n4, "rear", n3r, "rear").unwrap();
+    scenery.connect_nodes(n3r, "front", n2r, "rear").unwrap();
+    scenery.connect_nodes(n2r, "front", n1r, "rear").unwrap();
 
     let mut group = NodeGroup::new();
     let g_n1 = group.add_node(OpticNode::new("Beamsplitter", NodeDummy));
