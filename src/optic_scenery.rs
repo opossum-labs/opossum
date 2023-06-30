@@ -146,6 +146,41 @@ impl OpticScenery {
         dot_string += "}";
         dot_string
     }
+
+    fn add_dot_header(&self) -> String{
+        let mut dot_string = "digraph {\n\tfontsize = 8\n".to_owned();
+        dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description));
+        dot_string.push_str("\tfontname=\"Helvetica,Arial,sans-serif\"\n");
+        dot_string.push_str("\tnode [fontname=\"Helvetica,Arial,sans-serif\" fontsize = 10]\n");
+        dot_string.push_str("\tedge [fontname=\"Helvetica,Arial,sans-serif\"]\n\n");
+        dot_string
+    }
+    /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
+    pub fn to_dot_w_ports(&self) -> String {
+        let mut dot_string = self.add_dot_header();
+
+        for node_idx in self.g.node_indices() {
+            let node = self.g.node_weight(node_idx).unwrap();
+            dot_string += &node.to_dot_w_ports(&format!("{}", node_idx.index()));
+        }
+        for edge in self.g.edge_indices() {
+            let light=self.g.edge_weight(edge).unwrap();
+            let end_nodes = self.g.edge_endpoints(edge).unwrap();
+            dot_string.push_str(&format!(
+                "  i{}:{} -> i{}:{} \n",
+                end_nodes.0.index(),
+                light.src_port(),
+                end_nodes.1.index(),
+                light.target_port()
+            ));
+        }
+        dot_string += "}";
+        dot_string
+    }
+    /// Analyze this [`OpticScenery`] using a given OpticAnalyzer.
+    pub fn analyze(&self) {
+        todo!();
+    }
     /// Sets the description of this [`OpticScenery`].
     pub fn set_description(&mut self, description: String) {
         self.description = description;
