@@ -43,4 +43,5 @@ fn main() {
     let path = "graph.dot";
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()).unwrap();
+    // write!(output, "{}", scenery.to_dot_w_ports()).unwrap();
 }
