@@ -65,7 +65,7 @@ impl OpticNode {
 
 impl Debug for OpticNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
+        write!(f, "{} - {:?}", self.name, self.node)
     }
 }
 
@@ -199,8 +199,8 @@ pub trait Dottable {
     }
 }
 
-pub trait OpticComponent: Optical + Dottable {}
-impl<T: Optical + Dottable> OpticComponent for T {}
+pub trait OpticComponent: Optical + Dottable + Debug {}
+impl<T: Optical + Dottable + Debug> OpticComponent for T {}
 
 
 #[cfg(test)]

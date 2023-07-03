@@ -1,6 +1,7 @@
 use crate::optic_node::{Optical,Dottable};
 use crate::optic_ports::OpticPorts;
 
+#[derive(Debug)]
 /// A fake / dummy component without any functions. It is mainly used for development and debugging purposes.
 pub struct NodeDummy;
 
