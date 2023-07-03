@@ -1,4 +1,4 @@
-use crate::{optic_node::Optical, optic_ports::OpticPorts};
+use crate::{optic_node::{Optical, DotScenery}, optic_ports::OpticPorts};
 
 pub struct NodeBeamSplitter;
 
@@ -17,3 +17,4 @@ impl Optical for NodeBeamSplitter {
   
 }
 
+impl DotScenery for NodeBeamSplitter{}

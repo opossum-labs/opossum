@@ -1,4 +1,4 @@
-use crate::optic_node::Optical;
+use crate::optic_node::{Optical,DotScenery};
 use crate::optic_ports::OpticPorts;
 
 /// A fake / dummy component without any functions. It is mainly used for development and debugging purposes.
@@ -16,3 +16,5 @@ impl Optical for NodeDummy {
         ports
     }
 }
+
+impl DotScenery for NodeDummy{}

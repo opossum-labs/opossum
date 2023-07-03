@@ -4,7 +4,7 @@ use crate::optic_ports::OpticPorts;
 /// An [`OpticNode`] is the basic struct representing an optical component.
 pub struct OpticNode {
     name: String,
-    node: Box<dyn Optical>,
+    node: Box<dyn OpticalDot>,
     ports: OpticPorts
 }
 
@@ -20,7 +20,7 @@ impl OpticNode {
     ///
     /// let node=OpticNode::new("My node", NodeDummy);
     /// ```
-    pub fn new<T: Optical+ 'static>(name: &str, node_type: T) -> Self {
+    pub fn new<T: OpticalDot+ 'static>(name: &str, node_type: T) -> Self {
         let ports=node_type.ports();
         Self {
             name: name.into(),
@@ -36,122 +36,13 @@ impl OpticNode {
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
-    /// Returns a string representation of the [`OpticNode`] in `graphviz` format. This function is normally called by the top-level `to_dot`function within
-    /// `OpticScenery`.
-    pub fn to_dot(&self, node_index: &str) -> String {
-        self.node.to_dot(node_index, &self.name, self.inverted())
+
+    /// Returns a string representation of the [`OpticNode`] in `graphviz` format including port visualization. 
+    /// This function is normally called by the top-level `to_dot`function within `OpticScenery`.
+    pub fn to_dot(&self, node_index: &str) -> String{
+        self.node.to_dot(node_index, &self.name, self.inverted(), &self.node.ports())
     }
 
-    pub fn to_dot_w_ports(&self, node_index: &str) -> String{
-        self.node.to_dot_w_ports(node_index, &self.name, self.inverted(), &self.node.ports())
-    }
-
-    // fn add_table_cell_container(&self, inner_str: &str, border_flag: bool, indent_level: &mut i32) -> String {
-    //     if inner_str =="" {
-    //         format!("{}<TD BORDER=\"{}\">{}</TD>\n", "\t".repeat(*indent_level as usize), border_flag, inner_str)
-    //     }
-    //     else{
-    //         format!("{}<TD BORDER=\"{}\">{}{}{}</TD>\n", 
-    //         "\t".repeat(*indent_level as usize), border_flag, 
-    //         inner_str, "\t".repeat((*indent_level+1) as usize ), "\t".repeat(*indent_level as usize))
-    //     }
-    // }
-    // fn create_port_cell_str(&self, port_name: &str, input_flag:bool, port_index: usize, indent_level: &mut i32) -> String {
-    //     let color_str = if input_flag {"\"lightgreen\""} else {"\"lightblue\""};
-    //     let in_out_str = if input_flag {"Input port"} else {"Output port"};
-    //     format!("{}<TD PORT=\"{}\" BORDER=\"1\" BGCOLOR={} HREF=\"\" TOOLTIP=\"{} {}: {}\">{}</TD>\n", 
-    //             "\t".repeat(*indent_level as usize),
-    //             port_name, color_str, 
-    //             in_out_str, port_index, 
-    //             port_name, port_index)
-    // }   
-
-    // fn create_port_cells_str(&self, input_flag:bool, indent_level: &mut i32, indent_incr: i32) -> String{
-    //     let mut ports = if input_flag {self.ports.inputs()} else {self.ports.outputs()};
-    //     ports.sort();
-    //     let mut dot_str = self.create_html_like_container("row",   indent_level, true, 1);
-
-    //     dot_str.push_str(&self.create_html_like_container("cell",  indent_level, true, 1));
-    //     dot_str.push_str(&self.create_html_like_container("table", indent_level, true, 1));
-    //     dot_str.push_str(&self.create_html_like_container("row",   indent_level, true, 1));
-
-    //     dot_str.push_str(&self.add_table_cell_container("", false, indent_level));
-
-    //     // for (port_index, port) in ports.iter().enumerate(){
-    //     //     dot_str.push_str(&self.create_port_cell_str(port, input_flag, port_index+1, indent_level));
-    //     //     dot_str.push_str(&self.add_table_cell_container("", false, indent_level));
-    //     // };
-    //     let mut port_index = 1;
-    //     for port in ports{
-    //         dot_str.push_str(&self.create_port_cell_str(&port, input_flag, port_index, indent_level));
-    //         dot_str.push_str(&self.add_table_cell_container("", false, indent_level));
-    //         port_index += 1;
-    //     };
-    //     *indent_level -= 1;
-
-    //     dot_str.push_str(&self.create_html_like_container("row",   indent_level, false,-1));
-    //     dot_str.push_str(&self.create_html_like_container("table", indent_level, false,-1));
-    //     dot_str.push_str(&self.create_html_like_container("cell",  indent_level, false,-1));
-    //     dot_str.push_str(&self.create_html_like_container("row",   indent_level, false,indent_incr));
-    //     dot_str
-    // }
-
-    // fn create_main_node_row_str(&self, node_name: &str, indent_level: &mut i32)->String {
-    //     let mut dot_str = self.create_html_like_container("row",   indent_level, true, 1);
-    //     dot_str.push_str(&format!("{}<TD BORDER=\"1\" BGCOLOR=\"lightgray\" WIDTH=\"80\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level as usize), node_name));
-    //     *indent_level -= 1;
-    //     dot_str.push_str(&self.create_html_like_container("row",   indent_level, false, 0));
-
-    //     dot_str
-    // }
-
-    // fn create_html_like_container(&self, container_str: &str, indent_level: &mut i32, start_flag:bool, indent_incr: i32) -> String{
-    //     let container = match container_str{
-    //         "row"       => if start_flag{"<TR>"} else {"</TR>"},
-    //         "cell"      => if start_flag{"<TD BORDER=\"0\">"} else {"</TD>"},
-    //         "table"     => if start_flag{"<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"0\">"} else {"</TABLE>"},
-    //         _           => "Invalid container string!",
-    //     };
-
-    //     let new_str = "\t".repeat(*indent_level as usize) + container + "\n";
-    //     *indent_level += indent_incr;
-
-    //     new_str
-    // }
-
-    // fn add_html_like_labels(&self, node_name: &str, indent_level: &mut i32) -> String{
-    //     let mut dot_str = "\t\tlabel=<\n".to_owned();
-
-    //     // Start Table environment
-    //     dot_str.push_str(&self.create_html_like_container("table", indent_level, true, 1));
-
-    //     // add row containing the input ports
-    //     dot_str.push_str(&self.create_port_cells_str(true, indent_level, 0));
-
-    //     // add row containing the node main
-    //     dot_str.push_str(&self.create_main_node_row_str(node_name, indent_level));        
-
-    //     // add row containing the output ports
-    //     dot_str.push_str(&self.create_port_cells_str(false, indent_level, -1));
-
-    //     //end table environment
-    //     dot_str.push_str(&self.create_html_like_container("table", indent_level, false, -1));
-
-    //     //end node-shape description
-    //     dot_str.push_str(&format!("{}>];\n","\t".repeat(*indent_level as usize) ));
-    //     dot_str
-
-    // }
-    
-
-    // pub fn to_dot_w_ports(&self, node_index: &str) -> String{
-    //     let inv_string = if self.inverted() { "(inv)" } else { "" };
-    //     let node_name = format!("{}{}", &self.name, inv_string);        
-    //     let mut dot_str = format!("\ti{} [\n\t\tshape=plaintext\n", node_index);
-    //     let mut indent_level = 2;
-    //     dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level));
-    //     dot_str
-    // }
     /// Returns the concrete node type as string representation.
     pub fn node_type(&self) -> &str {
         self.node.node_type()
@@ -184,15 +75,25 @@ pub trait Optical {
     fn node_type(&self) -> &str {
         "undefined"
     }
-    /// Return component type specific code for `graphviz` visualization.
-    fn to_dot(&self, node_index: &str, name: &str, inverted: bool) -> String {
-        let inv_string = if inverted { "(inv)" } else { "" };
-        format!("  {} [label=\"{}{}\"]\n", node_index, name, inv_string)
-    }
+
     fn ports(&self) -> OpticPorts {
         OpticPorts::default()
     }
+}
 
+//this trait deals with the translation of the OpticScenery-graph structure to the dot-file format which is needed to visualize the graphs
+pub trait DotScenery {
+    /// Return component type specific code in 'dot' format for `graphviz` visualization.
+    fn to_dot(&self, node_index: &str, name: &str, inverted: bool, ports: &OpticPorts) -> String{
+        let inv_string = if inverted { "(inv)" } else { "" };
+        let node_name = format!("{}{}", name, inv_string);        
+        let mut dot_str = format!("\ti{} [\n\t\tshape=plaintext\n", node_index);
+        let mut indent_level = 2;
+        dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports, inverted));
+        dot_str
+    }
+
+    // creates a table-cell wrapper around an "inner" string
     fn add_table_cell_container(&self, inner_str: &str, border_flag: bool, indent_level: &mut i32) -> String {
         if inner_str =="" {
             format!("{}<TD BORDER=\"{}\">{}</TD>\n", "\t".repeat(*indent_level as usize), border_flag, inner_str)
@@ -203,8 +104,12 @@ pub trait Optical {
             inner_str, "\t".repeat((*indent_level+1) as usize ), "\t".repeat(*indent_level as usize))
         }
     }
+
+    /// create the dot-string of each port
     fn create_port_cell_str(&self, port_name: &str, input_flag:bool, port_index: usize, indent_level: &mut i32) -> String {
+        // inputs marked as green, outputs as blue
         let color_str = if input_flag {"\"lightgreen\""} else {"\"lightblue\""};
+        // part of the tooltip that describes if the port is an input or output
         let in_out_str = if input_flag {"Input port"} else {"Output port"};
         format!("{}<TD PORT=\"{}\" BORDER=\"1\" BGCOLOR={} HREF=\"\" TOOLTIP=\"{} {}: {}\">{}</TD>\n", 
                 "\t".repeat(*indent_level as usize),
@@ -213,6 +118,7 @@ pub trait Optical {
                 port_name, port_index)
     }   
 
+    /// create the dot-string that describes the ports, including their row/table/cell wrappers
     fn create_port_cells_str(&self, input_flag:bool, indent_level: &mut i32, indent_incr: i32, ports: &OpticPorts) -> String{
         let mut ports = if input_flag {ports.inputs()} else {ports.outputs()};
         ports.sort();
@@ -224,10 +130,6 @@ pub trait Optical {
 
         dot_str.push_str(&self.add_table_cell_container("", false, indent_level));
 
-        // for (port_index, port) in ports.iter().enumerate(){
-        //     dot_str.push_str(&self.create_port_cell_str(port, input_flag, port_index+1, indent_level));
-        //     dot_str.push_str(&self.add_table_cell_container("", false, indent_level));
-        // };
         let mut port_index = 1;
         for port in ports{
             dot_str.push_str(&self.create_port_cell_str(&port, input_flag, port_index, indent_level));
@@ -252,6 +154,7 @@ pub trait Optical {
         dot_str
     }
 
+    /// starts or ends an html-like container
     fn create_html_like_container(&self, container_str: &str, indent_level: &mut i32, start_flag:bool, indent_incr: i32) -> String{
         let container = match container_str{
             "row"       => if start_flag{"<TR>"} else {"</TR>"},
@@ -266,20 +169,21 @@ pub trait Optical {
         new_str
     }
 
-    fn add_html_like_labels(&self, node_name: &str, indent_level: &mut i32, ports: &OpticPorts) -> String{
+    /// creates the node label defined by html-like strings
+    fn add_html_like_labels(&self, node_name: &str, indent_level: &mut i32, ports: &OpticPorts, inverted: bool) -> String{
         let mut dot_str = "\t\tlabel=<\n".to_owned();
 
         // Start Table environment
         dot_str.push_str(&self.create_html_like_container("table", indent_level, true, 1));
 
         // add row containing the input ports
-        dot_str.push_str(&self.create_port_cells_str(true, indent_level, 0, ports));
+        dot_str.push_str(&self.create_port_cells_str(if inverted {false} else {true}, indent_level, 0, ports));
 
         // add row containing the node main
         dot_str.push_str(&self.create_main_node_row_str(node_name, indent_level));        
 
         // add row containing the output ports
-        dot_str.push_str(&self.create_port_cells_str(false, indent_level, -1, ports));
+        dot_str.push_str(&self.create_port_cells_str(if inverted {true} else {false}, indent_level, -1, ports));
 
         //end table environment
         dot_str.push_str(&self.create_html_like_container("table", indent_level, false, -1));
@@ -289,16 +193,11 @@ pub trait Optical {
         dot_str
 
     }
-
-    fn to_dot_w_ports(&self, node_index: &str, name: &str, inverted: bool, ports: &OpticPorts) -> String{
-        let inv_string = if inverted { "(inv)" } else { "" };
-        let node_name = format!("{}{}", name, inv_string);        
-        let mut dot_str = format!("\ti{} [\n\t\tshape=plaintext\n", node_index);
-        let mut indent_level = 2;
-        dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports));
-        dot_str
-    }
 }
+
+pub trait OpticalDot: Optical + DotScenery {}
+impl<T: Optical + DotScenery> OpticalDot for T {}
+
 
 #[cfg(test)]
 mod test {

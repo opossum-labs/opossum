@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::error::OpossumError;
 use crate::light::Light;
-use crate::optic_node::{OpticNode, Optical};
+use crate::optic_node::{OpticNode, Optical, DotScenery, OpticalDot};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::algo::toposort;
@@ -34,7 +34,7 @@ impl OpticScenery {
     /// This command just adds an optical element (a struct implementing the [`Optical`] trait such as `OpticDummy` ) to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`]. Internally the corresponding [`OpticNode`] is
     /// automatically generated. It serves as a short-cut to the `add_node` function.
-    pub fn add_element<T: Optical + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
+    pub fn add_element<T: OpticalDot + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
         self.g.add_node(Rc::new(OpticNode::new(name, t)))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
@@ -121,32 +121,8 @@ impl OpticScenery {
             Err(OpossumError::OpticScenery("node index does not exist".into()))
         }
     }
-    /// Export the optic graph into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
-    pub fn to_dot(&self) -> String {
-        let mut dot_string = "digraph {\n".to_owned();
-        dot_string.push_str(&format!("  label=\"{}\"\n", self.description));
-        dot_string.push_str("  fontname=\"Helvetica,Arial,sans-serif\"\n");
-        dot_string.push_str("  node [fontname=\"Helvetica,Arial,sans-serif\"]\n");
-        dot_string.push_str("  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n");
-        for node_idx in self.g.node_indices() {
-            let node = self.g.node_weight(node_idx).unwrap();
-            dot_string += &node.to_dot(&format!("i{}", node_idx.index()));
-        }
-        for edge in self.g.edge_indices() {
-            let light=self.g.edge_weight(edge).unwrap();
-            let end_nodes = self.g.edge_endpoints(edge).unwrap();
-            dot_string.push_str(&format!(
-                "  i{} -> i{} [label=\"{}->{}\"]\n",
-                end_nodes.0.index(),
-                end_nodes.1.index(),
-                light.src_port(),
-                light.target_port()
-            ));
-        }
-        dot_string += "}";
-        dot_string
-    }
 
+    /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self) -> String{
         let mut dot_string = "digraph {\n\tfontsize = 8\n".to_owned();
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description));
@@ -156,15 +132,15 @@ impl OpticScenery {
         dot_string
     }
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
-    pub fn to_dot_w_ports(&self) -> String {
+    pub fn to_dot(&self) -> String {
         let mut dot_string = self.add_dot_header();
 
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
-            dot_string += &node.to_dot_w_ports(&format!("{}", node_idx.index()));
+            dot_string += &node.to_dot(&format!("{}", node_idx.index()));
         }
         for edge in self.g.edge_indices() {
-            let light=self.g.edge_weight(edge).unwrap();
+            let light: &Light=self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
             dot_string.push_str(&format!(
                 "  i{}:{} -> i{}:{} \n",
@@ -189,6 +165,15 @@ impl OpticScenery {
     pub fn description(&self) -> &str {
         self.description.as_ref()
     }
+    /// Returns the nodes topological of this [`OpticScenery`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
     pub fn nodes_topological(&self) -> Result<Vec<Rc<OpticNode>>> {
         let sorted=toposort(&self.g, None);
         if let Ok(sorted) = sorted {
@@ -199,6 +184,7 @@ impl OpticScenery {
             Err(OpossumError::OpticScenery("Analyis: topological sort failed".into()))
         }
     }
+    /// Returns the nodes unordered of this [`OpticScenery`].
     pub fn nodes_unordered(&self) -> Vec<NodeIndex> {
         self.g.node_indices().collect::<Vec<NodeIndex>>()
     }

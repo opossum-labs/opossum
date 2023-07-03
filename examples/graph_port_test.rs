@@ -28,5 +28,5 @@ fn main() {
 
     let path = "graph_w_ports.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot_w_ports()).unwrap();
+    write!(output, "{}", scenery.to_dot()).unwrap();
 }

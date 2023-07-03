@@ -38,11 +38,14 @@ fn main() {
     let mut group = NodeGroup::new();
     let g_n1 = group.add_node(OpticNode::new("Beamsplitter", NodeDummy));
     let g_n2 = group.add_node(OpticNode::new("Lens", NodeDummy));
-    group.connect_nodes(g_n1, g_n2).unwrap();
+    let g_n3 = group.add_node(OpticNode::new("Lens2", NodeDummy));
+    group.connect_nodes(g_n1, "rear", g_n2, "front").unwrap();
+    group.connect_nodes(g_n2, "rear", g_n3, "front").unwrap();
     scenery.add_node(OpticNode::new("CamBox", group));
     let path = "graph.dot";
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()).unwrap();
+    // write!(output, "{}", scenery.to_dot()).unwrap();
 
     let analyzer=AnalyzerEnergy::new(&scenery);
     analyzer.analyze();
