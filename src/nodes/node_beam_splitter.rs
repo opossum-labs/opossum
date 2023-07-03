@@ -1,5 +1,6 @@
 use crate::{optic_node::{Optical, Dottable}, optic_ports::OpticPorts};
 
+#[derive(Debug)]
 pub struct NodeBeamSplitter;
 
 impl Optical for NodeBeamSplitter {

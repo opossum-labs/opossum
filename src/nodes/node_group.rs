@@ -7,7 +7,7 @@ use crate::light::Light;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct NodeGroup {
     g: DiGraph<OpticNode, Light>,
 }
