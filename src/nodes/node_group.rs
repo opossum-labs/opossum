@@ -1,5 +1,5 @@
 use crate::error::OpossumError;
-use crate::optic_node::DotScenery;
+use crate::optic_node::Dottable;
 use crate::{optic_node::{OpticNode, Optical}, optic_ports::OpticPorts};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
@@ -128,7 +128,7 @@ impl Optical for NodeGroup {
 
 }
 
-impl DotScenery for NodeGroup{
+impl Dottable for NodeGroup{
     fn to_dot(&self, node_index: &str, name: &str, inverted: bool, ports: &OpticPorts) -> String {
         let inv_string = if inverted { "(inv)" } else { "" };
         let mut dot_string = format!(

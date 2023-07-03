@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::error::OpossumError;
 use crate::light::Light;
-use crate::optic_node::{OpticNode, Optical, DotScenery, OpticalDot};
+use crate::optic_node::{OpticNode, Optical, Dottable, OpticalDot};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::algo::toposort;

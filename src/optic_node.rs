@@ -82,7 +82,7 @@ pub trait Optical {
 }
 
 //this trait deals with the translation of the OpticScenery-graph structure to the dot-file format which is needed to visualize the graphs
-pub trait DotScenery {
+pub trait Dottable {
     /// Return component type specific code in 'dot' format for `graphviz` visualization.
     fn to_dot(&self, node_index: &str, name: &str, inverted: bool, ports: &OpticPorts) -> String{
         let inv_string = if inverted { "(inv)" } else { "" };
@@ -195,8 +195,8 @@ pub trait DotScenery {
     }
 }
 
-pub trait OpticalDot: Optical + DotScenery {}
-impl<T: Optical + DotScenery> OpticalDot for T {}
+pub trait OpticalDot: Optical + Dottable {}
+impl<T: Optical + Dottable> OpticalDot for T {}
 
 
 #[cfg(test)]
