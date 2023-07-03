@@ -1,5 +1,7 @@
-use std::{fmt::Debug, rc::Rc};
+use std::fmt::Debug;
+use crate::analyzer::{Analyzer, AnalyzerEnergy};
 
+use crate::nodes::NodeDummy;
 use crate::optic_ports::OpticPorts;
 /// An [`OpticNode`] is the basic struct representing an optical component.
 pub struct OpticNode {
