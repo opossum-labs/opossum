@@ -9,10 +9,12 @@ pub struct NodeReference {
 }
 
 impl NodeReference {
-    pub fn new(node: Rc<OpticNode>) -> Self {
-        Self { reference: Rc::downgrade(&node) }
+    pub fn new(node: Rc<OpticNode>) -> OpticNode {
+        let node_ref = Self { reference: Rc::downgrade(&node) };
+        OpticNode::new(&format!("Ref: \"{}\"", &node.name()), node_ref)
     }
 }
+
 
 impl Optical for NodeReference {
     fn node_type(&self) -> &str {
@@ -24,4 +26,8 @@ impl Optical for NodeReference {
     }
 }
 
-impl Dottable for NodeReference{}
+impl Dottable for NodeReference{
+    fn node_color(&self) -> &str {
+        "lightsalmon3"
+      }
+}

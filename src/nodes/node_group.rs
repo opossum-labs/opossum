@@ -99,33 +99,6 @@ impl Optical for NodeGroup {
     fn node_type(&self) -> &str {
         "group"
     }
-
-    // fn to_dot(&self, node_index: &str, name: &str, inverted: bool) -> String {
-    //     let inv_string = if inverted { "(inv)" } else { "" };
-    //     let mut dot_string = format!(
-    //         "  subgraph {} {{\n    label=\"{}{}\"\n    cluster=true\n",
-    //         node_index, name, inv_string
-    //     );
-    //     for node_idx in self.g.node_indices() {
-    //         let node = self.g.node_weight(node_idx).unwrap();
-    //         dot_string += &node.to_dot(&format!("    {}_i{}", node_index, node_idx.index()));
-    //     }
-    //     for edge in self.g.edge_indices() {
-    //         let end_nodes = self.g.edge_endpoints(edge).unwrap();
-    //         dot_string.push_str(&format!(
-    //             "      {}_i{} -> {}_i{}\n",
-    //             node_index,
-    //             end_nodes.0.index(),
-    //             node_index,
-    //             end_nodes.1.index()
-    //         ));
-    //     }
-    //     dot_string += "  }\n";
-    //     dot_string
-    // }
-
-
-
 }
 
 impl Dottable for NodeGroup{
@@ -156,4 +129,8 @@ impl Dottable for NodeGroup{
         dot_string
 
     }
+
+    fn node_color(&self) -> &str {
+        "yellow"
+      }
 }

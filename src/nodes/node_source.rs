@@ -14,4 +14,8 @@ impl Optical for NodeSource {
   
 }
 
-impl Dottable for NodeSource{}
+impl Dottable for NodeSource{
+  fn node_color(&self) -> &str {
+    "slateblue"
+  }
+}

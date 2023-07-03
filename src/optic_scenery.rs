@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::error::OpossumError;
 use crate::light::Light;
-use crate::optic_node::{OpticNode, Optical, Dottable, OpticalDot};
+use crate::optic_node::{OpticNode, Optical, Dottable, OpticComponent};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::algo::toposort;
@@ -34,7 +34,7 @@ impl OpticScenery {
     /// This command just adds an optical element (a struct implementing the [`Optical`] trait such as `OpticDummy` ) to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`]. Internally the corresponding [`OpticNode`] is
     /// automatically generated. It serves as a short-cut to the `add_node` function.
-    pub fn add_element<T: OpticalDot + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
+    pub fn add_element<T: OpticComponent + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
         self.g.add_node(Rc::new(OpticNode::new(name, t)))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.

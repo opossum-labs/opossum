@@ -4,7 +4,7 @@ use crate::optic_ports::OpticPorts;
 /// An [`OpticNode`] is the basic struct representing an optical component.
 pub struct OpticNode {
     name: String,
-    node: Box<dyn OpticalDot>,
+    node: Box<dyn OpticComponent>,
     ports: OpticPorts
 }
 
@@ -20,7 +20,7 @@ impl OpticNode {
     ///
     /// let node=OpticNode::new("My node", NodeDummy);
     /// ```
-    pub fn new<T: OpticalDot+ 'static>(name: &str, node_type: T) -> Self {
+    pub fn new<T: OpticComponent+ 'static>(name: &str, node_type: T) -> Self {
         let ports=node_type.ports();
         Self {
             name: name.into(),
@@ -85,7 +85,7 @@ pub trait Optical {
 pub trait Dottable {
     /// Return component type specific code in 'dot' format for `graphviz` visualization.
     fn to_dot(&self, node_index: &str, name: &str, inverted: bool, ports: &OpticPorts) -> String{
-        let inv_string = if inverted { "(inv)" } else { "" };
+        let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);        
         let mut dot_str = format!("\ti{} [\n\t\tshape=plaintext\n", node_index);
         let mut indent_level = 2;
@@ -145,9 +145,13 @@ pub trait Dottable {
         dot_str
     }
 
+    fn node_color(&self) -> &str {
+        "lightgray"
+      }
+
     fn create_main_node_row_str(&self, node_name: &str, indent_level: &mut i32)->String {
         let mut dot_str = self.create_html_like_container("row",   indent_level, true, 1);
-        dot_str.push_str(&format!("{}<TD BORDER=\"1\" BGCOLOR=\"lightgray\" WIDTH=\"80\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level as usize), node_name));
+        dot_str.push_str(&format!("{}<TD BORDER=\"1\" BGCOLOR=\"{}\" WIDTH=\"80\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level as usize), self.node_color(), node_name));
         *indent_level -= 1;
         dot_str.push_str(&self.create_html_like_container("row",   indent_level, false, 0));
 
@@ -195,8 +199,8 @@ pub trait Dottable {
     }
 }
 
-pub trait OpticalDot: Optical + Dottable {}
-impl<T: Optical + Dottable> OpticalDot for T {}
+pub trait OpticComponent: Optical + Dottable {}
+impl<T: Optical + Dottable> OpticComponent for T {}
 
 
 #[cfg(test)]

@@ -14,4 +14,9 @@ impl Optical for NodeDetector {
   
 }
 
-impl Dottable for NodeDetector{}
+impl Dottable for NodeDetector{
+    fn node_color(&self) -> &str {
+        "lemonchiffon"
+      }
+}
+

@@ -17,4 +17,8 @@ impl Optical for NodeBeamSplitter {
   
 }
 
-impl Dottable for NodeBeamSplitter{}
+impl Dottable for NodeBeamSplitter{
+  fn node_color(&self) -> &str {
+    "lightpink"
+  }
+}
