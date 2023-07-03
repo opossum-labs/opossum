@@ -105,7 +105,7 @@ impl Dottable for NodeGroup{
     fn to_dot(&self, node_index: &str, name: &str, inverted: bool, ports: &OpticPorts) -> String {
         let inv_string = if inverted { "(inv)" } else { "" };
         let mut dot_string = format!(
-            "  subgraph i{} {{\n    label=\"{}{}\"\n    cluster=true\n",
+            "  subgraph i{} {{\n\tlabel=\"{}{}\"\n\tfontsize=15\n\tcluster=true\n\t",
             node_index, name, inv_string
         );
         for node_idx in self.g.node_indices() {
