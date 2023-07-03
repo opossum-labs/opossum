@@ -151,7 +151,7 @@ pub trait Dottable {
 
     fn create_main_node_row_str(&self, node_name: &str, indent_level: &mut i32)->String {
         let mut dot_str = self.create_html_like_container("row",   indent_level, true, 1);
-        dot_str.push_str(&format!("{}<TD BORDER=\"1\" BGCOLOR=\"{}\" WIDTH=\"80\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level as usize), self.node_color(), node_name));
+        dot_str.push_str(&format!("{}<TD BORDER=\"1\" BGCOLOR=\"{}\" ALIGN=\"CENTER\" WIDTH=\"80\" CELLPADDING=\"10\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level as usize), self.node_color(), node_name));
         *indent_level -= 1;
         dot_str.push_str(&self.create_html_like_container("row",   indent_level, false, 0));
 
@@ -163,7 +163,7 @@ pub trait Dottable {
         let container = match container_str{
             "row"       => if start_flag{"<TR>"} else {"</TR>"},
             "cell"      => if start_flag{"<TD BORDER=\"0\">"} else {"</TD>"},
-            "table"     => if start_flag{"<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"0\">"} else {"</TABLE>"},
+            "table"     => if start_flag{"<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"0\" ALIGN=\"CENTER\">"} else {"</TABLE>"},
             _           => "Invalid container string!",
         };
 

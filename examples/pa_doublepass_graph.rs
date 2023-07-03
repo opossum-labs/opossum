@@ -1,4 +1,4 @@
-use opossum::nodes::{NodeDummy, NodeGroup, NodeReference, NodeSource, NodeDetector};
+use opossum::nodes::{NodeDummy, NodeGroup, NodeReference, NodeSource, NodeDetector, NodeBeamSplitter};
 use opossum::optic_node::OpticNode;
 use opossum::optic_scenery::OpticScenery;
 use opossum::analyzer::AnalyzerEnergy;
