@@ -6,7 +6,7 @@ pub enum AnalyzerType {
 }
 
 trait Analyzer {
-    fn analyze(&self, scenery: &Scenery) {
+    fn analyze(&self, _scenery: &Scenery) {
         println!("No implemented");
     }
 }
@@ -31,7 +31,7 @@ impl Analyzer for AnalyzerRay {
 }
 }
 trait Optical {
-    fn analyze(&self, anatype: AnalyzerType) {
+    fn analyze(&self, _anatype: AnalyzerType) {
         println!("Default");
     }
 }

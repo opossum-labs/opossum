@@ -12,9 +12,9 @@ impl AnalyzerEnergy {
         }
     }
     pub fn analyze(&self) {
-        for node in self.scene.nodes_topological().unwrap() {
-            print!("Node: {}: ", node.name());
-            node.analyze(AnalyzerType::Energy);
+        for node_edges in self.scene.nodes_topological().unwrap() {
+            print!("Node: {}: ", node_edges.0.name());
+            node_edges.0.analyze(node_edges.1,AnalyzerType::Energy);
             println!("");
         }
     }

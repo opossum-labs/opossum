@@ -102,7 +102,7 @@ impl Optical for NodeGroup {
 }
 
 impl Dottable for NodeGroup{
-    fn to_dot(&self, node_index: &str, name: &str, inverted: bool, ports: &OpticPorts) -> String {
+    fn to_dot(&self, node_index: &str, name: &str, inverted: bool, _ports: &OpticPorts) -> String {
         let inv_string = if inverted { "(inv)" } else { "" };
         let mut dot_string = format!(
             "  subgraph i{} {{\n\tlabel=\"{}{}\"\n\tfontsize=15\n\tcluster=true\n\t",

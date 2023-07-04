@@ -14,38 +14,66 @@ fn main() {
     println!("export to `dot` format: {}", scenery.to_dot());
 
     let pulse_generation_split_node = scenery.add_element("Pulse Generation", NodeDummy);
-    let uOPA_1_node = scenery.add_element("uOPA Stage 1", NodeDummy);
-    let uOPA_2_node = scenery.add_element("uOPA Stage 2", NodeDummy);
+    let u_opa_1_node = scenery.add_element("uOPA Stage 1", NodeDummy);
+    let u_opa_2_node = scenery.add_element("uOPA Stage 2", NodeDummy);
     let pump_pre_amplifier_node = scenery.add_element("Pump Pre-Amplifier", NodeDummy);
     let pump_main_amplifier_node = scenery.add_element("Pump Main-Amplifier", NodeDummy);
     let pump_compressor_node = scenery.add_element("Pump Compressor", NodeDummy);
     let pump_shg_node = scenery.add_element("Pump SHG", NodeDummy);
     let pump_splitter_node = scenery.add_element("Pump Beam Splitter", NodeBeamSplitter);
 
-    scenery.connect_nodes(pulse_generation_split_node, "rear", uOPA_1_node, "front");
-    scenery.connect_nodes(
-        pulse_generation_split_node,
-        "rear",
-        pump_pre_amplifier_node,
-        "front",
-    );
-    scenery.connect_nodes(
-        pump_pre_amplifier_node,
-        "rear",
-        pump_main_amplifier_node,
-        "front",
-    );
-    scenery.connect_nodes(
-        pump_main_amplifier_node,
-        "rear",
-        pump_compressor_node,
-        "front",
-    );
-    scenery.connect_nodes(pump_compressor_node, "rear", pump_shg_node, "front");
-    scenery.connect_nodes(pump_shg_node, "rear", pump_splitter_node, "front");
-    scenery.connect_nodes(pump_splitter_node, "out1_trans1_refl2", uOPA_1_node, "front").unwrap();
-    scenery.connect_nodes(uOPA_1_node, "rear", uOPA_2_node, "front");
-    scenery.connect_nodes(pump_splitter_node, "out2_trans2_refl1", uOPA_2_node, "front").unwrap();
+    scenery
+        .connect_nodes(pulse_generation_split_node, "rear", u_opa_1_node, "front")
+        .unwrap();
+    scenery
+        .connect_nodes(
+            pulse_generation_split_node,
+            "rear",
+            pump_pre_amplifier_node,
+            "front",
+        )
+        .unwrap();
+    scenery
+        .connect_nodes(
+            pump_pre_amplifier_node,
+            "rear",
+            pump_main_amplifier_node,
+            "front",
+        )
+        .unwrap();
+    scenery
+        .connect_nodes(
+            pump_main_amplifier_node,
+            "rear",
+            pump_compressor_node,
+            "front",
+        )
+        .unwrap();
+    scenery
+        .connect_nodes(pump_compressor_node, "rear", pump_shg_node, "front")
+        .unwrap();
+    scenery
+        .connect_nodes(pump_shg_node, "rear", pump_splitter_node, "front")
+        .unwrap();
+    scenery
+        .connect_nodes(
+            pump_splitter_node,
+            "out1_trans1_refl2",
+            u_opa_1_node,
+            "front",
+        )
+        .unwrap();
+    scenery
+        .connect_nodes(u_opa_1_node, "rear", u_opa_2_node, "front")
+        .unwrap();
+    scenery
+        .connect_nodes(
+            pump_splitter_node,
+            "out2_trans2_refl1",
+            u_opa_2_node,
+            "front",
+        )
+        .unwrap();
 
     let mut scenery_2 = OpticScenery::new();
     scenery_2.set_description("PHELIX uOPA Pump Pre-Amplifier".into());
@@ -70,37 +98,75 @@ fn main() {
     let monitor2_node = scenery_2.add_element("Monitor", NodeDummy);
     let monitor3_node = scenery_2.add_element("Monitor", NodeDummy);
 
-    scenery_2.connect_nodes(spm_node, "rear", circ1_node, "front");
-    scenery_2.connect_nodes(circ1_node, "rear", circ2_node, "front");
-    scenery_2.connect_nodes(circ2_node, "rear", cfbg_node, "front");
-    scenery_2.connect_nodes(cfbg_node, "rear", circ3_node, "front");
-    scenery_2.connect_nodes(cfbg_node, "rear", monitor1_node, "front");
-    scenery_2.connect_nodes(circ3_node, "rear", isolator1_node, "front");
-    scenery_2.connect_nodes(isolator1_node, "rear", tap1_node, "front");
-    scenery_2.connect_nodes(tap1_node, "rear", monitor2_node, "front");
-    scenery_2.connect_nodes(tap1_node, "rear", wdm_node, "front");
-    scenery_2.connect_nodes(diode1_node, "rear", wdm_node, "front");
-    scenery_2.connect_nodes(wdm_node, "rear", yb_fiber1_node, "front");
-    scenery_2.connect_nodes(yb_fiber1_node, "rear", tap2_node, "front");
-    scenery_2.connect_nodes(tap2_node, "rear", monitor3_node, "front");
-    scenery_2.connect_nodes(tap2_node, "rear", aom_node, "front");
-    scenery_2.connect_nodes(aom_node, "rear", isolator2_node, "front");
-    scenery_2.connect_nodes(isolator2_node, "rear", yb_fiber2_node_node, "front");
-    scenery_2.connect_nodes(yb_fiber2_node_node, "rear", dichroic_node, "front");
-    scenery_2.connect_nodes(dichroic_node, "rear", dichroic_node, "front");
-    scenery_2.connect_nodes(diode2_node, "rear", dichroic_node, "front");
+    scenery_2
+        .connect_nodes(spm_node, "rear", circ1_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(circ1_node, "rear", circ2_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(circ2_node, "rear", cfbg_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(cfbg_node, "rear", circ3_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(cfbg_node, "rear", monitor1_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(circ3_node, "rear", isolator1_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(isolator1_node, "rear", tap1_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(tap1_node, "rear", monitor2_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(tap1_node, "rear", wdm_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(diode1_node, "rear", wdm_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(wdm_node, "rear", yb_fiber1_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(yb_fiber1_node, "rear", tap2_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(tap2_node, "rear", monitor3_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(tap2_node, "rear", aom_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(aom_node, "rear", isolator2_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(isolator2_node, "rear", yb_fiber2_node_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(yb_fiber2_node_node, "rear", dichroic_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(dichroic_node, "rear", dichroic_node, "front")
+        .unwrap();
+    scenery_2
+        .connect_nodes(diode2_node, "rear", dichroic_node, "front")
+        .unwrap();
 
     let mut scenery_3 = OpticScenery::new();
     scenery_3.set_description("PHELIX uOPA Pump Regenerative Main-Amplifier".into());
 
-    let mut pol1_node = scenery_2.add_element("Picker Polarizer", NodeDummy);
-    let mut pc1_node = scenery_2.add_element("Pulse Picker PC", NodeDummy);
-    let mut pol2_node = scenery_2.add_element("Cavity Polarizer", NodeDummy);
-    let mut yb_yag_node = scenery_2.add_element("Yb:YAG", NodeDummy);
-    let mut pc2_node = scenery_2.add_element("Cavity PC", NodeDummy);
-    let mut qwp_node = scenery_2.add_element("Quarter Waveplate", NodeDummy);
-    let mut mirror1_node = scenery_2.add_element("Curved Mirror 1", NodeDummy);
-    let mut mirror2_node = scenery_2.add_element("Curved Mirror 1", NodeDummy);
+    let _pol1_node = scenery_2.add_element("Picker Polarizer", NodeDummy);
+    let _pc1_node = scenery_2.add_element("Pulse Picker PC", NodeDummy);
+    let _pol2_node = scenery_2.add_element("Cavity Polarizer", NodeDummy);
+    let _yb_yag_node = scenery_2.add_element("Yb:YAG", NodeDummy);
+    let _pc2_node = scenery_2.add_element("Cavity PC", NodeDummy);
+    let _qwp_node = scenery_2.add_element("Quarter Waveplate", NodeDummy);
+    let _mirror1_node = scenery_2.add_element("Curved Mirror 1", NodeDummy);
+    let _mirror2_node = scenery_2.add_element("Curved Mirror 1", NodeDummy);
     // scenery_2.connect_nodes(spm_node, circ_node);
 
     // let mira_node1          =scenery.add_node(OpticNode::new("Mira", Box::new(NodeDummy)));
@@ -157,6 +223,6 @@ fn main() {
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery_2.to_dot()).unwrap();
 
-    let analyzer=AnalyzerEnergy::new(&scenery);
+    let analyzer = AnalyzerEnergy::new(&scenery);
     analyzer.analyze();
 }

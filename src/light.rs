@@ -30,6 +30,9 @@ impl Light {
     pub fn data(&self) -> Option<&LightData> {
         self.data.as_ref()
     }
+    pub fn set_data(&mut self, data: LightData) {
+        self.data = Some(data);
+    }
 }
 
 #[cfg(test)]

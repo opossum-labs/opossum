@@ -2,10 +2,12 @@ use std::rc::Rc;
 
 use crate::error::OpossumError;
 use crate::light::Light;
-use crate::optic_node::{OpticNode, Optical, Dottable, OpticComponent};
+use crate::lightdata::LightData;
+use crate::optic_node::{OpticComponent, OpticNode};
+use petgraph::algo::toposort;
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
-use petgraph::algo::toposort;
+use petgraph::visit::EdgeRef;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -108,22 +110,24 @@ impl OpticScenery {
             .any(|e| e.weight().target_port() == target_port)
     }
     /// Return a reference to the [`OpticNode`] specifiec by the node index.
-    /// 
+    ///
     /// This function is mainly useful for setting up a reference node.
     ///
     /// # Errors
     ///
     /// This function will return an error if the node does not exist.
-    pub fn node_ref(&self, node: NodeIndex) ->Result<Rc<OpticNode>> {
+    pub fn node_ref(&self, node: NodeIndex) -> Result<Rc<OpticNode>> {
         if let Some(node) = self.g.node_weight(node) {
             Ok(node.to_owned())
         } else {
-            Err(OpossumError::OpticScenery("node index does not exist".into()))
+            Err(OpossumError::OpticScenery(
+                "node index does not exist".into(),
+            ))
         }
     }
 
     /// Returns the dot-file header of this [`OpticScenery`] graph.
-    fn add_dot_header(&self) -> String{
+    fn add_dot_header(&self) -> String {
         let mut dot_string = "digraph {\n\tfontsize = 8\n".to_owned();
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description));
         dot_string.push_str("\tfontname=\"Helvetica,Arial,sans-serif\"\n");
@@ -140,7 +144,7 @@ impl OpticScenery {
             dot_string += &node.to_dot(&format!("{}", node_idx.index()));
         }
         for edge in self.g.edge_indices() {
-            let light: &Light=self.g.edge_weight(edge).unwrap();
+            let light: &Light = self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
             dot_string.push_str(&format!(
                 "  i{}:{} -> i{}:{} \n",
@@ -174,14 +178,23 @@ impl OpticScenery {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub fn nodes_topological(&self) -> Result<Vec<Rc<OpticNode>>> {
-        let sorted=toposort(&self.g, None);
+    pub fn nodes_topological(&self) -> Result<Vec<(Rc<OpticNode>, Vec<Light>)>> {
+        let sorted = toposort(&self.g, None);
         if let Ok(sorted) = sorted {
-            let node=sorted.into_iter()
-            .map(|idx| self.g.node_weight(idx).unwrap().to_owned()).collect();
-            Ok(node)
+            let nodes_edges = sorted
+                .into_iter()
+                .map(|idx| {
+                    (
+                        self.g.node_weight(idx).unwrap().to_owned(),
+                        self.incoming_edges(idx),
+                    )
+                })
+                .collect();
+            Ok(nodes_edges)
         } else {
-            Err(OpossumError::OpticScenery("Analyis: topological sort failed".into()))
+            Err(OpossumError::OpticScenery(
+                "Analyis: topological sort failed".into(),
+            ))
         }
     }
     /// Returns the nodes unordered of this [`OpticScenery`].
@@ -189,8 +202,27 @@ impl OpticScenery {
         self.g.node_indices().collect::<Vec<NodeIndex>>()
     }
     pub fn incoming_edges(&self, idx: NodeIndex) -> Vec<Light> {
-        let edges= self.g.edges_directed(idx, petgraph::Direction::Incoming);
-        edges.into_iter().map(|e| e.weight().to_owned()).collect::<Vec<Light>>()
+        let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
+        edges
+            .into_iter()
+            .map(|e| e.weight().to_owned())
+            .collect::<Vec<Light>>()
+    }
+    pub fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: LightData) {
+        let edges = self.g.edges_directed(idx, petgraph::Direction::Outgoing);
+        let edge_ref = edges
+            .into_iter()
+            .filter(|idx| idx.weight().src_port() == port)
+            .last();
+        if let Some(edge_ref)=edge_ref {
+            let edge_idx=edge_ref.id();
+            let light=self.g.edge_weight_mut(edge_idx);
+            if let Some(light)=light {
+                light.set_data(data);
+            }
+        } else {
+            println!("No outgoing edge found with given port name");
+        }
     }
 }
 

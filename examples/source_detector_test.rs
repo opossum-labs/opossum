@@ -4,7 +4,7 @@ use std::io::Write;
 use opossum::{
     lightdata::{LightData, LightDataEnergy},
     nodes::{NodeDetector, NodeSource},
-    optic_scenery::OpticScenery,
+    optic_scenery::OpticScenery, analyzer::AnalyzerEnergy,
 };
 
 fn main() {
@@ -23,4 +23,8 @@ fn main() {
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()).unwrap();
     println!("{:?}", scenery.node_ref(i_s).unwrap());
+    println!("{:?}", scenery.node_ref(i_d).unwrap());
+
+    let analyzer=AnalyzerEnergy::new(&scenery);
+    analyzer.analyze();
 }

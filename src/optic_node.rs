@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use crate::analyzer::AnalyzerType;
+use crate::light::Light;
 use crate::optic_ports::OpticPorts;
 
 /// An [`OpticNode`] is the basic struct representing an optical component.
@@ -62,7 +63,7 @@ impl OpticNode {
     pub fn ports(&self) -> &OpticPorts {
         &self.ports
     }
-    pub fn analyze(&self, analyzer_type: AnalyzerType) {
+    pub fn analyze(&self, _incoming_edges: Vec<Light>, analyzer_type: AnalyzerType) {
         self.node.analyze(analyzer_type);
     }
 }
