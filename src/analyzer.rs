@@ -1,7 +1,5 @@
 use crate::optic_scenery::OpticScenery;
 
-pub trait Analyzer {}
-
 #[derive(Debug)]
 pub struct AnalyzerEnergy {
     scene: OpticScenery,
@@ -15,9 +13,13 @@ impl AnalyzerEnergy {
     }
     pub fn analyze(&self) {
         for node in self.scene.nodes_topological().unwrap() {
-            println!("Node: {}", node.name())
+            print!("Node: {}: ", node.name());
+            node.analyze(AnalyzerType::Energy);
+            println!("");
         }
     }
 }
 
-impl Analyzer for AnalyzerEnergy {}
+pub enum AnalyzerType {
+    Energy
+}

@@ -27,6 +27,9 @@ impl Light {
     pub fn set_target_port(&mut self, target_port: String) {
         self.target_port = target_port;
     }
+    pub fn data(&self) -> Option<&LightData> {
+        self.data.as_ref()
+    }
 }
 
 #[cfg(test)]
