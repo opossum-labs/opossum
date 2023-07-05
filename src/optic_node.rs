@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 use crate::analyzer::AnalyzerType;
-use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
 
@@ -108,7 +107,7 @@ pub trait Dottable {
 
     // creates a table-cell wrapper around an "inner" string
     fn add_table_cell_container(&self, inner_str: &str, border_flag: bool, indent_level: &mut i32) -> String {
-        if inner_str =="" {
+        if inner_str.is_empty() {
             format!("{}<TD BORDER=\"{}\">{}</TD>\n", "\t".repeat(*indent_level as usize), border_flag, inner_str)
         }
         else{
@@ -194,13 +193,13 @@ pub trait Dottable {
         dot_str.push_str(&self.create_html_like_container("table", indent_level, true, 1));
 
         // add row containing the input ports
-        dot_str.push_str(&self.create_port_cells_str(if inverted {false} else {true}, indent_level, 0, ports));
+        dot_str.push_str(&self.create_port_cells_str(!inverted, indent_level, 0, ports));
 
         // add row containing the node main
         dot_str.push_str(&self.create_main_node_row_str(node_name, indent_level));        
 
         // add row containing the output ports
-        dot_str.push_str(&self.create_port_cells_str(if inverted {true} else {false}, indent_level, -1, ports));
+        dot_str.push_str(&self.create_port_cells_str(!inverted, indent_level, -1, ports));
 
         //end table environment
         dot_str.push_str(&self.create_html_like_container("table", indent_level, false, -1));

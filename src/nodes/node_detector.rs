@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use crate::{optic_node::{Optical, Dottable, LightResult}, optic_ports::OpticPorts};
 use crate::lightdata::LightData;
 
