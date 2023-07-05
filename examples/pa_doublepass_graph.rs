@@ -49,6 +49,6 @@ fn main() {
     write!(output, "{}", scenery.to_dot()).unwrap();
     // write!(output, "{}", scenery.to_dot()).unwrap();
 
-    let analyzer=AnalyzerEnergy::new(&scenery);
+    let mut analyzer=AnalyzerEnergy::new(&scenery);
     analyzer.analyze();
 }

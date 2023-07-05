@@ -25,6 +25,8 @@ fn main() {
     println!("{:?}", scenery.node_ref(i_s).unwrap());
     println!("{:?}", scenery.node_ref(i_d).unwrap());
 
-    let analyzer=AnalyzerEnergy::new(&scenery);
+    let mut analyzer=AnalyzerEnergy::new(&scenery);
     analyzer.analyze();
+    println!("Analyze...");
+    println!("{:?}", scenery.node_ref(i_d).unwrap());
 }

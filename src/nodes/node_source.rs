@@ -1,6 +1,6 @@
 use crate::{
     lightdata::LightData,
-    optic_node::{Dottable, Optical},
+    optic_node::{Dottable, Optical, LightResult},
     optic_ports::OpticPorts,
 };
 
@@ -32,6 +32,12 @@ impl Optical for NodeSource {
         let mut ports = OpticPorts::new();
         ports.add_output("out1").unwrap();
         ports
+    }
+
+    fn analyze(&mut self, _incoming_edges: LightResult, _analyzer_type: &crate::analyzer::AnalyzerType) -> LightResult {
+        let data=self.light_data.clone();
+        let result:LightResult =vec![("out1".into(), data.unwrap())];
+        result
     }
 }
 

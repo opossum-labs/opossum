@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{optic_node::{Optical, Dottable}, optic_ports::OpticPorts};
+use crate::{optic_node::{Optical, Dottable, LightResult}, optic_ports::OpticPorts};
 use crate::lightdata::LightData;
 
 #[derive(Debug, Default)]
@@ -17,18 +17,13 @@ impl Optical for NodeDetector {
       ports.add_input("in1").unwrap();
       ports
   }
-  
-}
-
-impl Display for NodeDetector {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-      write!(f, "Detector: ").unwrap();
-      if self.light_data.is_none() {
-        write!(f,"no data available")
-      } else {
-        write!(f, "{:?}", self.light_data)
-      }
+  fn analyze(&mut self, incoming_data: LightResult, _analyzer_type: &crate::analyzer::AnalyzerType) -> LightResult {
+    let data=incoming_data.into_iter().filter(|data| data.0=="in1").last();
+    if let Some(data)=data {
+      self.light_data=Some(data.1);
     }
+    LightResult::default()
+}
 }
 
 impl Dottable for NodeDetector{

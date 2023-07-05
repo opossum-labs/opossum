@@ -1,7 +1,10 @@
 use std::fmt::Debug;
 use crate::analyzer::AnalyzerType;
 use crate::light::Light;
+use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
+
+pub type LightResult=Vec<(String,LightData)>;
 
 /// An [`OpticNode`] is the basic struct representing an optical component.
 pub struct OpticNode {
@@ -63,8 +66,8 @@ impl OpticNode {
     pub fn ports(&self) -> &OpticPorts {
         &self.ports
     }
-    pub fn analyze(&self, _incoming_edges: Vec<Light>, analyzer_type: AnalyzerType) {
-        self.node.analyze(analyzer_type);
+    pub fn analyze(&mut self, incoming_data: LightResult, analyzer_type: &AnalyzerType) -> LightResult {
+        self.node.analyze(incoming_data, analyzer_type)
     }
 }
 
@@ -85,8 +88,9 @@ pub trait Optical {
         OpticPorts::default()
     }
 
-    fn analyze(&self, _analyzer_type: AnalyzerType) {
+    fn analyze(&mut self, _incoming_data: LightResult, _analyzer_type: &AnalyzerType) -> LightResult {
         print!("{}: No analyze function defined.", self.node_type());
+        LightResult::default()
     }
 }
 

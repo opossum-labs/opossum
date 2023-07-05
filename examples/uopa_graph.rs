@@ -223,6 +223,6 @@ fn main() {
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery_2.to_dot()).unwrap();
 
-    let analyzer = AnalyzerEnergy::new(&scenery);
+    let mut analyzer = AnalyzerEnergy::new(&scenery);
     analyzer.analyze();
 }

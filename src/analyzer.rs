@@ -11,12 +11,8 @@ impl AnalyzerEnergy {
             scene: (*scenery).to_owned(),
         }
     }
-    pub fn analyze(&self) {
-        for node_edges in self.scene.nodes_topological().unwrap() {
-            print!("Node: {}: ", node_edges.0.name());
-            node_edges.0.analyze(node_edges.1,AnalyzerType::Energy);
-            println!("");
-        }
+    pub fn analyze(&mut self) {
+       self.scene.analyze(&AnalyzerType::Energy).unwrap();
     }
 }
 
