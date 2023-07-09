@@ -36,7 +36,7 @@ impl OpticScenery {
     }
     /// Add a given optical element to the graph of this [`OpticScenery`].
     ///
-    /// This command just adds an optical element (a struct implementing the [`Optical`] trait such as `OpticDummy` ) to the graph. It does not connect
+    /// This command just adds an optical element (a struct implementing the [`Optical`](crate::optic_node::Optical) trait such as [`crate::nodes::Dummy`] ) to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`]. Internally the corresponding [`OpticNode`] is
     /// automatically generated. It serves as a short-cut to the `add_node` function.
     pub fn add_element<T: OpticComponent + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
@@ -45,8 +45,8 @@ impl OpticScenery {
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
-    /// Both node indices must exist. Otherwise an [`OpticSceneryError`] is returned. In addition, connections are
-    /// rejected and an [`OpticSceneryError`] is returned, if the graph would form a cycle (loop in the graph).
+    /// Both node indices must exist. Otherwise an [`OpossumError::OpticScenery`] is returned. In addition, connections are
+    /// rejected and an [`OpossumError::OpticScenery`] is returned, if the graph would form a cycle (loop in the graph).
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
@@ -229,7 +229,7 @@ impl OpticScenery {
 
 #[cfg(test)]
 mod test {
-    use super::super::nodes::NodeDummy;
+    use super::super::nodes::Dummy;
     use super::*;
     #[test]
     fn new() {
@@ -241,28 +241,28 @@ mod test {
     #[test]
     fn add_node() {
         let mut scenery = OpticScenery::new();
-        scenery.add_node(OpticNode::new("Test", NodeDummy));
+        scenery.add_node(OpticNode::new("Test", Dummy));
         assert_eq!(scenery.g.node_count(), 1);
     }
     #[test]
     fn add_element() {
         let mut scenery = OpticScenery::new();
-        scenery.add_element("Test", NodeDummy);
+        scenery.add_element("Test", Dummy);
         assert_eq!(scenery.g.node_count(), 1);
     }
     #[test]
     fn connect_nodes_ok() {
         let mut scenery = OpticScenery::new();
-        let n1 = scenery.add_element("Test", NodeDummy);
-        let n2 = scenery.add_element("Test", NodeDummy);
+        let n1 = scenery.add_element("Test", Dummy);
+        let n2 = scenery.add_element("Test", Dummy);
         assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
         assert_eq!(scenery.g.edge_count(), 1);
     }
     #[test]
     fn connect_nodes_failure() {
         let mut scenery = OpticScenery::new();
-        let n1 = scenery.add_element("Test", NodeDummy);
-        let n2 = scenery.add_element("Test", NodeDummy);
+        let n1 = scenery.add_element("Test", Dummy);
+        let n2 = scenery.add_element("Test", Dummy);
         assert!(scenery
             .connect_nodes(n1, "rear", NodeIndex::new(5), "front")
             .is_err());
@@ -273,8 +273,8 @@ mod test {
     #[test]
     fn connect_nodes_loop_error() {
         let mut scenery = OpticScenery::new();
-        let n1 = scenery.add_element("Test", NodeDummy);
-        let n2 = scenery.add_element("Test", NodeDummy);
+        let n1 = scenery.add_element("Test", Dummy);
+        let n2 = scenery.add_element("Test", Dummy);
         assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
         assert!(scenery.connect_nodes(n2, "rear", n1, "front").is_err());
         assert_eq!(scenery.g.edge_count(), 1);
@@ -289,7 +289,7 @@ mod test {
     fn to_dot_with_node() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
-        scenery.add_element("Test", NodeDummy);
+        scenery.add_element("Test", Dummy);
         assert_eq!(
             scenery.to_dot(),
             "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test\"]\n}"
@@ -299,8 +299,8 @@ mod test {
     fn to_dot_with_edge() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
-        let n1 = scenery.add_element("Test1", NodeDummy);
-        let n2 = scenery.add_element("Test2", NodeDummy);
+        let n1 = scenery.add_element("Test1", Dummy);
+        let n2 = scenery.add_element("Test2", Dummy);
         if let Ok(_) = scenery.connect_nodes(n1, "rear", n2, "front") {
             assert_eq!(
                 scenery.to_dot(),

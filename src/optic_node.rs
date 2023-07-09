@@ -221,50 +221,50 @@ impl<T: Optical + Dottable + Debug> OpticComponent for T {}
 #[cfg(test)]
 mod test {
     use super::OpticNode;
-    use crate::nodes::NodeDummy;
+    use crate::nodes::Dummy;
     #[test]
     fn new() {
-        let node = OpticNode::new("Test", NodeDummy);
+        let node = OpticNode::new("Test", Dummy);
         assert_eq!(node.name, "Test");
         assert_eq!(node.inverted(), false);
     }
     #[test]
     fn set_name() {
-        let mut node = OpticNode::new("Test", NodeDummy);
+        let mut node = OpticNode::new("Test", Dummy);
         node.set_name("Test2".into());
         assert_eq!(node.name, "Test2")
     }
     #[test]
     fn name() {
-        let node = OpticNode::new("Test", NodeDummy);
+        let node = OpticNode::new("Test", Dummy);
         assert_eq!(node.name(), "Test")
     }
     #[test]
     fn set_inverted() {
-        let mut node = OpticNode::new("Test", NodeDummy);
+        let mut node = OpticNode::new("Test", Dummy);
         node.set_inverted(true);
         assert_eq!(node.inverted(), true)
     }
     #[test]
     fn inverted() {
-        let mut node = OpticNode::new("Test", NodeDummy);
+        let mut node = OpticNode::new("Test", Dummy);
         node.set_inverted(true);
         assert_eq!(node.inverted(), true)
     }
     #[test]
     fn to_dot() {
-        let node = OpticNode::new("Test", NodeDummy);
+        let node = OpticNode::new("Test", Dummy);
         assert_eq!(node.to_dot("i0"), "  i0 [label=\"Test\"]\n".to_owned())
     }
     #[test]
     fn to_dot_inverted() {
-        let mut node = OpticNode::new("Test", NodeDummy);
+        let mut node = OpticNode::new("Test", Dummy);
         node.set_inverted(true);
         assert_eq!(node.to_dot("i0"), "  i0 [label=\"Test(inv)\"]\n".to_owned())
     }
     #[test]
     fn node_type() {
-        let node = OpticNode::new("Test", NodeDummy);
+        let node = OpticNode::new("Test", Dummy);
         assert_eq!(node.node_type(), "dummy");
     }
 }

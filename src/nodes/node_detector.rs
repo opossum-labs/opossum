@@ -10,11 +10,11 @@ type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Default)]
 /// This node rerpresents an universal detector. Any [`LightData`] coming in will be stored internally for later display / export. So far it only has one input (in1).
-pub struct NodeDetector {
+pub struct Detector {
     light_data: Option<LightData>,
 }
 
-impl Optical for NodeDetector {
+impl Optical for Detector {
     fn node_type(&self) -> &str {
         "light sink: detector"
     }
@@ -39,7 +39,7 @@ impl Optical for NodeDetector {
     }
 }
 
-impl Debug for NodeDetector {
+impl Debug for Detector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
             Some(data) => write!(f,"{}",data),
@@ -47,7 +47,7 @@ impl Debug for NodeDetector {
         }
     }
 }
-impl Dottable for NodeDetector {
+impl Dottable for Detector {
     fn node_color(&self) -> &str {
         "lemonchiffon"
     }

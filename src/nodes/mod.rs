@@ -6,9 +6,9 @@ mod node_beam_splitter;
 mod node_source;
 mod node_detector;
 
-pub use node_dummy::NodeDummy;
+pub use node_dummy::Dummy;
 pub use node_reference::NodeReference;
 pub use node_group::NodeGroup;
-pub use node_beam_splitter::NodeBeamSplitter;
-pub use node_source::NodeSource;
-pub use node_detector::NodeDetector;
+pub use node_beam_splitter::BeamSplitter;
+pub use node_source::Source;
+pub use node_detector::Detector;

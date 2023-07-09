@@ -12,22 +12,22 @@ type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Debug)]
 /// An ideal beamsplitter node with a given splitting ratio.
-pub struct NodeBeamSplitter {
+pub struct BeamSplitter {
     ratio: f32,
 }
 
-impl NodeBeamSplitter {
-    /// Creates a new [`NodeBeamSplitter`] with a given splitting ratio.
+impl BeamSplitter {
+    /// Creates a new [`BeamSplitter`] with a given splitting ratio.
     pub fn new(ratio: f32) -> Self {
         Self { ratio }
     }
 
-    /// Returns the splitting ratio of this [`NodeBeamSplitter`].
+    /// Returns the splitting ratio of this [`BeamSplitter`].
     pub fn ratio(&self) -> f32 {
         self.ratio
     }
 
-    /// Sets the splitting ratio of this [`NodeBeamSplitter`].
+    /// Sets the splitting ratio of this [`BeamSplitter`].
     pub fn set_ratio(&mut self, ratio: f32) {
         self.ratio = ratio;
     }
@@ -63,13 +63,13 @@ impl NodeBeamSplitter {
     }
 }
 
-impl Default for NodeBeamSplitter {
+impl Default for BeamSplitter {
     /// Create a 50:50 beamsplitter.
     fn default() -> Self {
         Self { ratio: 0.5 }
     }
 }
-impl Optical for NodeBeamSplitter {
+impl Optical for BeamSplitter {
     fn node_type(&self) -> &str {
         "ideal beam splitter"
     }
@@ -93,7 +93,7 @@ impl Optical for NodeBeamSplitter {
     }
 }
 
-impl Dottable for NodeBeamSplitter {
+impl Dottable for BeamSplitter {
     fn node_color(&self) -> &str {
         "lightpink"
     }

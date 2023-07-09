@@ -10,29 +10,29 @@ type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This node represents a source of light. Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an optic scenery.
 #[derive(Debug, Default)]
-pub struct NodeSource {
+pub struct Source {
     light_data: Option<LightData>,
 }
 
-impl NodeSource {
-    /// Creates a new [`NodeSource`].
+impl Source {
+    /// Creates a new [`Source`].
     pub fn new(light: LightData) -> Self {
-        NodeSource {
+        Source {
             light_data: Some(light),
         }
     }
 
-    /// Returns the light data of this [`NodeSource`].
+    /// Returns the light data of this [`Source`].
     pub fn light_data(&self) -> Option<&LightData> {
         self.light_data.as_ref()
     }
 
-    /// Sets the light data of this [`NodeSource`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
+    /// Sets the light data of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
     pub fn set_light_data(&mut self, light_data: LightData) {
         self.light_data = Some(light_data);
     }
 }
-impl Optical for NodeSource {
+impl Optical for Source {
     fn node_type(&self) -> &str {
         "light source"
     }
@@ -52,7 +52,7 @@ impl Optical for NodeSource {
     }
 }
 
-impl Dottable for NodeSource {
+impl Dottable for Source {
     fn node_color(&self) -> &str {
         "slateblue"
     }

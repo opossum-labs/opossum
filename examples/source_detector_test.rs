@@ -3,7 +3,7 @@ use std::io::Write;
 
 use opossum::{
     lightdata::{LightData, LightDataEnergy},
-    nodes::{NodeDetector, NodeSource, NodeBeamSplitter},
+    nodes::{Detector, Source, BeamSplitter},
     optic_scenery::OpticScenery, analyzer::AnalyzerEnergy,
 };
 
@@ -13,11 +13,11 @@ fn main() {
 
     let i_s = scenery.add_element(
         "Source",
-        NodeSource::new(LightData::Energy(LightDataEnergy { energy: 1.0 })),
+        Source::new(LightData::Energy(LightDataEnergy { energy: 1.0 })),
     );
-    let i_bs=scenery.add_element("Beam splitter", NodeBeamSplitter::new(0.6));
-    let i_d1 = scenery.add_element("Detector 1", NodeDetector::default());
-    let i_d2 = scenery.add_element("Detector 2", NodeDetector::default());
+    let i_bs=scenery.add_element("Beam splitter", BeamSplitter::new(0.6));
+    let i_d1 = scenery.add_element("Detector 1", Detector::default());
+    let i_d2 = scenery.add_element("Detector 2", Detector::default());
 
     scenery.connect_nodes(i_s, "out1", i_bs, "input1").unwrap();
 

@@ -3,9 +3,9 @@ use crate::optic_ports::OpticPorts;
 
 #[derive(Debug)]
 /// A fake / dummy component without any functions. It is mainly used for development and debugging purposes.
-pub struct NodeDummy;
+pub struct Dummy;
 
-impl Optical for NodeDummy {
+impl Optical for Dummy {
     /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {
         "dummy"
@@ -18,4 +18,4 @@ impl Optical for NodeDummy {
     }
 }
 
-impl Dottable for NodeDummy{}
+impl Dottable for Dummy{}

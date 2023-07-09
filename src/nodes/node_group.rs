@@ -29,8 +29,8 @@ impl NodeGroup {
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
-    /// Both node indices must exist. Otherwise an [`OpticSceneryError`] is returned. In addition, connections are
-    /// rejected and an [`OpticSceneryError`] is returned, if the graph would form a cycle (loop in the graph).
+    /// Both node indices must exist. Otherwise an [`OpossumError::OpticScenery`] is returned. In addition, connections are
+    /// rejected and an [`OpossumError::OpticScenery`] is returned, if the graph would form a cycle (loop in the graph).
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
