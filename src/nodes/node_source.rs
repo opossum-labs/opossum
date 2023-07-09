@@ -47,7 +47,7 @@ impl Optical for NodeSource {
         if data.is_some() {
             Ok(HashMap::from([("out1".into(), data)]))
         } else {
-            Err(OpossumError::Analysis(format!("no input data available")))
+            Err(OpossumError::Analysis("no input data available".into()))
         }
     }
 }

@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use crate::{
     analyzer::AnalyzerType,
     error::OpossumError,
+    lightdata::{LightData, LightDataEnergy},
     optic_node::{Dottable, LightResult, Optical},
-    optic_ports::OpticPorts, lightdata::{LightData, LightDataEnergy},
+    optic_ports::OpticPorts,
 };
 
 type Result<T> = std::result::Result<T, OpossumError>;
@@ -31,31 +32,34 @@ impl NodeBeamSplitter {
         self.ratio = ratio;
     }
     pub fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
-        let in1=incoming_data.get("input1");
-        let in2=incoming_data.get("input2");
+        let in1 = incoming_data.get("input1");
+        let in2 = incoming_data.get("input2");
 
-        let mut in1_energy=0.0;
-        let mut in2_energy=0.0;
+        let mut in1_energy = 0.0;
+        let mut in2_energy = 0.0;
 
-        if let Some(in1)=in1 {
-            if let Some(in1)=in1 {
-                match in1 {
-                    LightData::Energy(e) => in1_energy=e.energy,
-                    _ => return Err(OpossumError::Analysis("expected energy value".into()))
-                } 
+        if let Some(Some(in1)) = in1 {
+            match in1 {
+                LightData::Energy(e) => in1_energy = e.energy,
+                _ => return Err(OpossumError::Analysis("expected energy value".into())),
             }
         }
-        if let Some(in2)=in2 {
-            if let Some(in2)=in2 {
-                match in2 {
-                    LightData::Energy(e) => in2_energy=e.energy,
-                    _ => return Err(OpossumError::Analysis("expected energy value".into()))
-                }
+        if let Some(Some(in2)) = in2 {
+            match in2 {
+                LightData::Energy(e) => in2_energy = e.energy,
+                _ => return Err(OpossumError::Analysis("expected energy value".into())),
             }
         }
-        let out1_energy=Some(LightData::Energy(LightDataEnergy{energy: in1_energy*self.ratio+in2_energy*(1.0-self.ratio)}));
-        let out2_energy =Some(LightData::Energy(LightDataEnergy{energy: in1_energy*(1.0-self.ratio) + in2_energy*self.ratio}));
-        Ok(HashMap::from([("out1_trans1_refl2".into(),out1_energy),("out2_trans2_refl1".into(),out2_energy)]))
+        let out1_energy = Some(LightData::Energy(LightDataEnergy {
+            energy: in1_energy * self.ratio + in2_energy * (1.0 - self.ratio),
+        }));
+        let out2_energy = Some(LightData::Energy(LightDataEnergy {
+            energy: in1_energy * (1.0 - self.ratio) + in2_energy * self.ratio,
+        }));
+        Ok(HashMap::from([
+            ("out1_trans1_refl2".into(), out1_energy),
+            ("out2_trans2_refl1".into(), out2_energy),
+        ]))
     }
 }
 
