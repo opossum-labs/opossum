@@ -11,8 +11,8 @@ fn main() {
 
     let in1 = scenery.add_node(OpticNode::new("Input", NodeDummy));
     let out1 = scenery.add_node(OpticNode::new("Output", NodeDummy));
-    let bs1 = scenery.add_node(OpticNode::new("Beamsplitter 1", NodeBeamSplitter));
-    let bs2 = scenery.add_node(OpticNode::new("Beamsplitter 2", NodeBeamSplitter));
+    let bs1 = scenery.add_node(OpticNode::new("Beamsplitter 1", NodeBeamSplitter::default()));
+    let bs2 = scenery.add_node(OpticNode::new("Beamsplitter 2", NodeBeamSplitter::default()));
     let m1 = scenery.add_node(OpticNode::new("Mirror 1", NodeDummy));
     let m2 = scenery.add_node(OpticNode::new("Mirror 2", NodeDummy));
     

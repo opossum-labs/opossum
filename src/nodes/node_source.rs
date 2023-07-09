@@ -4,22 +4,26 @@ use crate::{
     optic_ports::OpticPorts,
 };
 
+/// This node represents a source of light. Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an optic scenery.
 #[derive(Debug, Default)]
 pub struct NodeSource {
     light_data: Option<LightData>,
 }
 
 impl NodeSource {
+    /// Creates a new [`NodeSource`].
     pub fn new(light: LightData) -> Self {
         NodeSource {
             light_data: Some(light),
         }
     }
 
+    /// Returns the light data of this [`NodeSource`].
     pub fn light_data(&self) -> Option<&LightData> {
         self.light_data.as_ref()
     }
 
+    /// Sets the light data of this [`NodeSource`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
     pub fn set_light_data(&mut self, light_data: LightData) {
         self.light_data = Some(light_data);
     }

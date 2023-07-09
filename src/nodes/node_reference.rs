@@ -17,7 +17,6 @@ impl NodeReference {
     }
 }
 
-
 impl Optical for NodeReference {
     fn node_type(&self) -> &str {
         "reference"

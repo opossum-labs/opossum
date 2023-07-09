@@ -2,6 +2,7 @@ use crate::{optic_node::{Optical, Dottable, LightResult}, optic_ports::OpticPort
 use crate::lightdata::LightData;
 
 #[derive(Debug, Default)]
+/// This node rerpresents an universal detector. Any [`LightData`] coming in will be stored internally for later display / export. So far it only has one input (in1).
 pub struct NodeDetector {
   light_data: Option<LightData>
 }

@@ -1,13 +1,17 @@
 use crate::error::OpossumError;
+use crate::light::Light;
 use crate::optic_node::Dottable;
-use crate::{optic_node::{OpticNode, Optical}, optic_ports::OpticPorts};
+use crate::{
+    optic_node::{OpticNode, Optical},
+    optic_ports::OpticPorts,
+};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
-use crate::light::Light;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Default, Debug)]
+/// A node that represents a group of other [`OpticNode`]s. These subnodes are arranged in its own subgraph. All unconnected input and output ports of this subgraph form the ports of this [`NodeGroup`].
 pub struct NodeGroup {
     g: DiGraph<OpticNode, Light>,
 }
@@ -16,7 +20,7 @@ impl NodeGroup {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Add a given [`OpticNode`] to the graph of this [`NodeGroup`].
+    /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
     ///
     /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is
     /// consumed (owned) by the [`NodeGroup`].
@@ -101,7 +105,7 @@ impl Optical for NodeGroup {
     }
 }
 
-impl Dottable for NodeGroup{
+impl Dottable for NodeGroup {
     fn to_dot(&self, node_index: &str, name: &str, inverted: bool, _ports: &OpticPorts) -> String {
         let inv_string = if inverted { "(inv)" } else { "" };
         let mut dot_string = format!(
@@ -127,10 +131,9 @@ impl Dottable for NodeGroup{
         }
         dot_string += "}";
         dot_string
-
     }
 
     fn node_color(&self) -> &str {
         "yellow"
-      }
+    }
 }

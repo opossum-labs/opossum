@@ -20,7 +20,7 @@ fn main() {
     let pump_main_amplifier_node = scenery.add_element("Pump Main-Amplifier", NodeDummy);
     let pump_compressor_node = scenery.add_element("Pump Compressor", NodeDummy);
     let pump_shg_node = scenery.add_element("Pump SHG", NodeDummy);
-    let pump_splitter_node = scenery.add_element("Pump Beam Splitter", NodeBeamSplitter);
+    let pump_splitter_node = scenery.add_element("Pump Beam Splitter", NodeBeamSplitter::default());
 
     scenery
         .connect_nodes(pulse_generation_split_node, "rear", u_opa_1_node, "front")
