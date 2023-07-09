@@ -5,7 +5,7 @@ use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
-use crate::optic_node::{OpticComponent, OpticNode, LightResult};
+use crate::optic_node::{LightResult, OpticComponent, OpticNode};
 use petgraph::algo::toposort;
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
@@ -39,7 +39,8 @@ impl OpticScenery {
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`]. Internally the corresponding [`OpticNode`] is
     /// automatically generated. It serves as a short-cut to the `add_node` function.
     pub fn add_element<T: OpticComponent + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
-        self.g.add_node(Rc::new(RefCell::new(OpticNode::new(name, t))))
+        self.g
+            .add_node(Rc::new(RefCell::new(OpticNode::new(name, t))))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -66,7 +67,12 @@ impl OpticScenery {
             ));
         }
         if let Some(target) = self.g.node_weight(target_node) {
-            if !target.borrow().ports().inputs().contains(&target_port.into()) {
+            if !target
+                .borrow()
+                .ports()
+                .inputs()
+                .contains(&target_port.into())
+            {
                 return Err(OpossumError::OpticScenery(format!(
                     "target node {} does not have a port {}",
                     target.borrow().name(),
@@ -164,9 +170,10 @@ impl OpticScenery {
         let sorted = toposort(&self.g, None);
         if let Ok(sorted) = sorted {
             for idx in sorted {
-                let node=self.g.node_weight(idx).unwrap();
-                let incoming_edges= self.incoming_edges(idx);
-                let outgoing_edges= node.borrow_mut().analyze(incoming_edges, analyzer_type);
+                let node = self.g.node_weight(idx).unwrap();
+                let incoming_edges = self.incoming_edges(idx);
+                let checked_edges=OpticScenery::check_incoming_edges_for_node(node, &incoming_edges)?;
+                let outgoing_edges = node.borrow_mut().analyze(checked_edges, analyzer_type);
                 for outgoing_edge in outgoing_edges {
                     self.set_outgoing_edge_data(idx, outgoing_edge.0, outgoing_edge.1)
                 }
@@ -176,6 +183,32 @@ impl OpticScenery {
             Err(OpossumError::OpticScenery(
                 "Analyis: topological sort failed".into(),
             ))
+        }
+    }
+    fn check_incoming_edges_for_node(
+        node: &Rc<RefCell<OpticNode>>,
+        incoming_edges: &Vec<(String, Option<LightData>)>,
+    ) -> Result<LightResult> {
+        let ports = node.borrow().ports().inputs();
+        let edge_ports = incoming_edges
+            .into_iter()
+            .map(|edge| edge.0.clone())
+            .collect::<Vec<String>>();
+        let all_ports_connected = ports
+            .into_iter()
+            .all(|input_port_name| edge_ports.contains(&input_port_name));
+        if !all_ports_connected {
+            return Err(OpossumError::OpticScenery(format!("not all ports coneected to node <{}>",node.borrow().name())));
+        }
+        else {
+            for edge in incoming_edges.iter()
+            {
+                if edge.1.is_none() {
+                    return Err(OpossumError::OpticScenery(format!("input port <{}> of node <{}> has no light data set",edge.0, node.borrow().name())));
+                }
+            }
+            let unwrapped_edged= incoming_edges.into_iter().map(|edge| (edge.0.clone(),edge.1.as_ref().unwrap().clone())).collect::<LightResult>();
+            Ok(unwrapped_edged)
         }
     }
     /// Sets the description of this [`OpticScenery`].
@@ -218,12 +251,17 @@ impl OpticScenery {
     pub fn nodes_unordered(&self) -> Vec<NodeIndex> {
         self.g.node_indices().collect::<Vec<NodeIndex>>()
     }
-    pub fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
+    pub fn incoming_edges(&self, idx: NodeIndex) -> Vec<(String, Option<LightData>)> {
         let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
         edges
             .into_iter()
-            .map(|e| (e.weight().target_port().to_owned(),e.weight().data().unwrap().to_owned()))
-            .collect::<LightResult>()
+            .map(|e| {
+                (
+                    e.weight().target_port().to_owned(),
+                    e.weight().data().cloned(),
+                )
+            })
+            .collect::<Vec<(String, Option<LightData>)>>()
     }
     pub fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: LightData) {
         let edges = self.g.edges_directed(idx, petgraph::Direction::Outgoing);
@@ -231,10 +269,10 @@ impl OpticScenery {
             .into_iter()
             .filter(|idx| idx.weight().src_port() == port)
             .last();
-        if let Some(edge_ref)=edge_ref {
-            let edge_idx=edge_ref.id();
-            let light=self.g.edge_weight_mut(edge_idx);
-            if let Some(light)=light {
+        if let Some(edge_ref) = edge_ref {
+            let edge_idx = edge_ref.id();
+            let light = self.g.edge_weight_mut(edge_idx);
+            if let Some(light) = light {
                 light.set_data(data);
             }
         } else {

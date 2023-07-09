@@ -1,5 +1,6 @@
-use crate::optic_scenery::OpticScenery;
+use crate::{optic_scenery::OpticScenery, error::OpossumError};
 
+type Result<T> = std::result::Result<T, OpossumError>;
 #[derive(Debug)]
 pub struct AnalyzerEnergy {
     scene: OpticScenery,
@@ -11,8 +12,8 @@ impl AnalyzerEnergy {
             scene: (*scenery).to_owned(),
         }
     }
-    pub fn analyze(&mut self) {
-       self.scene.analyze(&AnalyzerType::Energy).unwrap();
+    pub fn analyze(&mut self) -> Result<()> {
+       self.scene.analyze(&AnalyzerType::Energy)
     }
 }
 

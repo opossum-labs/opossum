@@ -25,14 +25,14 @@ fn main() {
     scenery
         .connect_nodes(pulse_generation_split_node, "rear", u_opa_1_node, "front")
         .unwrap();
-    scenery
-        .connect_nodes(
-            pulse_generation_split_node,
-            "rear",
-            pump_pre_amplifier_node,
-            "front",
-        )
-        .unwrap();
+    // scenery
+    //     .connect_nodes(
+    //         pulse_generation_split_node,
+    //         "rear",
+    //         pump_pre_amplifier_node,
+    //         "front",
+    //     )
+    //     .unwrap();
     scenery
         .connect_nodes(
             pump_pre_amplifier_node,
@@ -53,7 +53,7 @@ fn main() {
         .connect_nodes(pump_compressor_node, "rear", pump_shg_node, "front")
         .unwrap();
     scenery
-        .connect_nodes(pump_shg_node, "rear", pump_splitter_node, "front")
+        .connect_nodes(pump_shg_node, "rear", pump_splitter_node, "input1")
         .unwrap();
     scenery
         .connect_nodes(
@@ -110,9 +110,9 @@ fn main() {
     scenery_2
         .connect_nodes(cfbg_node, "rear", circ3_node, "front")
         .unwrap();
-    scenery_2
-        .connect_nodes(cfbg_node, "rear", monitor1_node, "front")
-        .unwrap();
+    // scenery_2
+    //     .connect_nodes(cfbg_node, "rear", monitor1_node, "front")
+    //     .unwrap();
     scenery_2
         .connect_nodes(circ3_node, "rear", isolator1_node, "front")
         .unwrap();
@@ -122,9 +122,9 @@ fn main() {
     scenery_2
         .connect_nodes(tap1_node, "rear", monitor2_node, "front")
         .unwrap();
-    scenery_2
-        .connect_nodes(tap1_node, "rear", wdm_node, "front")
-        .unwrap();
+    // scenery_2
+    //     .connect_nodes(tap1_node, "rear", wdm_node, "front")
+    //     .unwrap();
     scenery_2
         .connect_nodes(diode1_node, "rear", wdm_node, "front")
         .unwrap();
@@ -137,9 +137,9 @@ fn main() {
     scenery_2
         .connect_nodes(tap2_node, "rear", monitor3_node, "front")
         .unwrap();
-    scenery_2
-        .connect_nodes(tap2_node, "rear", aom_node, "front")
-        .unwrap();
+    // scenery_2
+    //     .connect_nodes(tap2_node, "rear", aom_node, "front")
+    //     .unwrap();
     scenery_2
         .connect_nodes(aom_node, "rear", isolator2_node, "front")
         .unwrap();
@@ -149,9 +149,9 @@ fn main() {
     scenery_2
         .connect_nodes(yb_fiber2_node_node, "rear", dichroic_node, "front")
         .unwrap();
-    scenery_2
-        .connect_nodes(dichroic_node, "rear", dichroic_node, "front")
-        .unwrap();
+    // scenery_2
+    //     .connect_nodes(dichroic_node, "rear", dichroic_node, "front")
+    //     .unwrap();
     scenery_2
         .connect_nodes(diode2_node, "rear", dichroic_node, "front")
         .unwrap();
@@ -224,5 +224,5 @@ fn main() {
     write!(output, "{}", scenery_2.to_dot()).unwrap();
 
     let mut analyzer = AnalyzerEnergy::new(&scenery);
-    analyzer.analyze();
+    analyzer.analyze().unwrap();
 }
