@@ -29,6 +29,7 @@ fn main() {
     write!(output, "{}", scenery.to_dot()).unwrap();
     println!("{:?}", scenery.node_ref(i_s).unwrap());
     println!("{:?}", scenery.node_ref(i_d1).unwrap());
+    println!("{:?}", scenery.node_ref(i_d2).unwrap());
 
     let mut analyzer=AnalyzerEnergy::new(&scenery);
     print!("Analyze...");
@@ -37,4 +38,5 @@ fn main() {
         Err(e) => println!("Error: {}",e)
     }
     println!("{:?}", scenery.node_ref(i_d1).unwrap());
+    println!("{:?}", scenery.node_ref(i_d2).unwrap());
 }

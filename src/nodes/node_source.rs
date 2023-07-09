@@ -1,8 +1,10 @@
 use crate::{
     lightdata::LightData,
     optic_node::{Dottable, Optical, LightResult},
-    optic_ports::OpticPorts,
+    optic_ports::OpticPorts, error::OpossumError,
 };
+
+type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This node represents a source of light. Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an optic scenery.
 #[derive(Debug, Default)]
@@ -38,10 +40,13 @@ impl Optical for NodeSource {
         ports
     }
 
-    fn analyze(&mut self, _incoming_edges: LightResult, _analyzer_type: &crate::analyzer::AnalyzerType) -> LightResult {
+    fn analyze(&mut self, _incoming_edges: LightResult, _analyzer_type: &crate::analyzer::AnalyzerType) -> Result<LightResult> {
         let data=self.light_data.clone();
-        let result:LightResult =vec![("out1".into(), data.unwrap())];
-        result
+        if data.is_some() {
+            Ok(vec![("out1".into(), data)])
+        } else {
+            Err(OpossumError::Analysis(format!("no input data available")))
+        }
     }
 }
 

@@ -1,5 +1,7 @@
-use crate::{optic_node::{Optical, Dottable, LightResult}, optic_ports::OpticPorts};
+use crate::{optic_node::{Optical, Dottable, LightResult}, optic_ports::OpticPorts, error::OpossumError};
 use crate::lightdata::LightData;
+
+type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Debug, Default)]
 /// This node rerpresents an universal detector. Any [`LightData`] coming in will be stored internally for later display / export. So far it only has one input (in1).
@@ -16,12 +18,12 @@ impl Optical for NodeDetector {
       ports.add_input("in1").unwrap();
       ports
   }
-  fn analyze(&mut self, incoming_data: LightResult, _analyzer_type: &crate::analyzer::AnalyzerType) -> LightResult {
+  fn analyze(&mut self, incoming_data: LightResult, _analyzer_type: &crate::analyzer::AnalyzerType) -> Result<LightResult> {
     let data=incoming_data.into_iter().filter(|data| data.0=="in1").last();
     if let Some(data)=data {
-      self.light_data=Some(data.1);
+      self.light_data=data.1;
     }
-    LightResult::default()
+    Ok(LightResult::default())
 }
 }
 
