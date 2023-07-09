@@ -50,5 +50,9 @@ fn main() {
     // write!(output, "{}", scenery.to_dot()).unwrap();
 
     let mut analyzer=AnalyzerEnergy::new(&scenery);
-    analyzer.analyze();
+    print!("Analyze...");
+    match analyzer.analyze() {
+        Ok(_) => println!("Sucessful"),
+        Err(e) => println!("Error: {}",e)
+    }
 }
