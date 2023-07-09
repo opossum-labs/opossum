@@ -15,7 +15,7 @@ fn main() {
         "Source",
         NodeSource::new(LightData::Energy(LightDataEnergy { energy: 1.0 })),
     );
-    let i_bs=scenery.add_element("Beam splitter", NodeBeamSplitter::default());
+    let i_bs=scenery.add_element("Beam splitter", NodeBeamSplitter::new(0.6));
     let i_d1 = scenery.add_element("Detector 1", NodeDetector::default());
     let i_d2 = scenery.add_element("Detector 2", NodeDetector::default());
 

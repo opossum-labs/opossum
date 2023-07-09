@@ -1,11 +1,12 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
-use crate::optic_node::{OpticComponent, OpticNode};
+use crate::optic_node::{OpticComponent, OpticNode, LightResult};
 use petgraph::algo::toposort;
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
@@ -196,7 +197,7 @@ impl OpticScenery {
     pub fn nodes_unordered(&self) -> Vec<NodeIndex> {
         self.g.node_indices().collect::<Vec<NodeIndex>>()
     }
-    pub fn incoming_edges(&self, idx: NodeIndex) -> Vec<(String, Option<LightData>)> {
+    pub fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
         let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
         edges
             .into_iter()
@@ -206,7 +207,7 @@ impl OpticScenery {
                     e.weight().data().cloned(),
                 )
             })
-            .collect::<Vec<(String, Option<LightData>)>>()
+            .collect::<HashMap<String, Option<LightData>>>()
     }
     pub fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: Option<LightData>) {
         let edges = self.g.edges_directed(idx, petgraph::Direction::Outgoing);

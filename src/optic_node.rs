@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use crate::analyzer::AnalyzerType;
 use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
 use crate::error::OpossumError;
 
-pub type LightResult=Vec<(String,Option<LightData>)>;
+pub type LightResult=HashMap<String,Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 /// An [`OpticNode`] is the basic struct representing an optical component.

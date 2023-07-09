@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     lightdata::LightData,
     optic_node::{Dottable, Optical, LightResult},
@@ -43,7 +45,7 @@ impl Optical for NodeSource {
     fn analyze(&mut self, _incoming_edges: LightResult, _analyzer_type: &crate::analyzer::AnalyzerType) -> Result<LightResult> {
         let data=self.light_data.clone();
         if data.is_some() {
-            Ok(vec![("out1".into(), data)])
+            Ok(HashMap::from([("out1".into(), data)]))
         } else {
             Err(OpossumError::Analysis(format!("no input data available")))
         }
