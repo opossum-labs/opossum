@@ -31,7 +31,7 @@ impl BeamSplitter {
     pub fn set_ratio(&mut self, ratio: f64) {
         self.ratio = ratio;
     }
-    pub fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
+    fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
         let in1 = incoming_data.get("input1");
         let in2 = incoming_data.get("input2");
 

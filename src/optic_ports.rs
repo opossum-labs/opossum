@@ -1,7 +1,7 @@
 use crate::error::OpossumError;
 use std::collections::HashSet;
 
-/// Structure defining the optical ports (input / output terminals) of an [`OpticNode`].
+/// Structure defining the optical ports (input / output terminals) of an [`OpticNode`](crate::optic_node::OpticNode).
 #[derive(Default, Debug, Clone)]
 pub struct OpticPorts {
     inputs: HashSet<String>,
