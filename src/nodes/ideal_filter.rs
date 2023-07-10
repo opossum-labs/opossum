@@ -1,6 +1,6 @@
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
-use crate::lightdata::{LightData, LightDataEnergy};
+use crate::lightdata::{LightData, DataEnergy};
 use crate::optic_node::{Dottable, LightResult, Optical};
 use crate::optic_ports::OpticPorts;
 use std::collections::HashMap;
@@ -73,7 +73,7 @@ impl IdealFilter {
                 _ => return Err(OpossumError::Analysis("expected energy value".into())),
             }
         }
-        let output_energy = Some(LightData::Energy(LightDataEnergy {
+        let output_energy = Some(LightData::Energy(DataEnergy {
             energy: input_energy * self.transmission,
         }));
         Ok(HashMap::from([("rear".into(), output_energy)]))

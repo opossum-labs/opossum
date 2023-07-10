@@ -4,7 +4,7 @@ use uom::{si::f64::Energy, num_traits::Zero};
 use crate::{
     analyzer::AnalyzerType,
     error::OpossumError,
-    lightdata::{LightData, LightDataEnergy},
+    lightdata::{LightData, DataEnergy},
     optic_node::{Dottable, LightResult, Optical},
     optic_ports::OpticPorts,
 };
@@ -51,10 +51,10 @@ impl BeamSplitter {
                 _ => return Err(OpossumError::Analysis("expected energy value".into())),
             }
         }
-        let out1_energy = Some(LightData::Energy(LightDataEnergy {
+        let out1_energy = Some(LightData::Energy(DataEnergy {
             energy: in1_energy * self.ratio + in2_energy * (1.0 - self.ratio),
         }));
-        let out2_energy = Some(LightData::Energy(LightDataEnergy {
+        let out2_energy = Some(LightData::Energy(DataEnergy {
             energy: in1_energy * (1.0 - self.ratio) + in2_energy * self.ratio,
         }));
         Ok(HashMap::from([

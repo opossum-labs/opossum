@@ -4,8 +4,8 @@ use uom::fmt::DisplayStyle::Abbreviation;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum LightData {
-    Energy(LightDataEnergy),
-    Geometric(LightDataGeometric),
+    Energy(DataEnergy),
+    Geometric(DataGeometric),
     Fourier,
 }
 
@@ -22,11 +22,11 @@ impl Display for LightData {
     }
 }
 #[derive(Debug, PartialEq, Clone)]
-pub struct LightDataEnergy {
+pub struct DataEnergy {
     pub energy: Energy,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct LightDataGeometric {
+pub struct DataGeometric {
     ray: i32,
 }
