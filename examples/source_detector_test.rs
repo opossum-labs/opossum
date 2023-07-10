@@ -3,7 +3,7 @@ use std::io::Write;
 
 use opossum::{
     lightdata::{LightData, LightDataEnergy},
-    nodes::{Detector, Source, BeamSplitter},
+    nodes::{Detector, Source, BeamSplitter, IdealFilter},
     optic_scenery::OpticScenery, analyzer::AnalyzerEnergy,
 };
 
@@ -16,13 +16,15 @@ fn main() {
         Source::new(LightData::Energy(LightDataEnergy { energy: 1.0 })),
     );
     let i_bs=scenery.add_element("Beam splitter", BeamSplitter::new(0.6));
+    let i_f=scenery.add_element("Filter", IdealFilter::new(0.5).unwrap());
     let i_d1 = scenery.add_element("Detector 1", Detector::default());
     let i_d2 = scenery.add_element("Detector 2", Detector::default());
 
     scenery.connect_nodes(i_s, "out1", i_bs, "input1").unwrap();
 
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1").unwrap();
-    scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1").unwrap();
+    scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front").unwrap();
+    scenery.connect_nodes(i_f, "rear", i_d2, "in1").unwrap();
     
     let path = "src_detector.dot";
     let mut output = File::create(path).unwrap();
