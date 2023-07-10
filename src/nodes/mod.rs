@@ -5,6 +5,7 @@ mod node_group;
 mod node_beam_splitter;
 mod node_source;
 mod node_detector;
+mod ideal_filter;
 
 pub use node_dummy::Dummy;
 pub use node_reference::NodeReference;
@@ -12,3 +13,4 @@ pub use node_group::NodeGroup;
 pub use node_beam_splitter::BeamSplitter;
 pub use node_source::Source;
 pub use node_detector::Detector;
+pub use ideal_filter::IdealFilter;
