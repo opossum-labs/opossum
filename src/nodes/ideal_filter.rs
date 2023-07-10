@@ -4,13 +4,15 @@ use crate::lightdata::{LightData, LightDataEnergy};
 use crate::optic_node::{Dottable, LightResult, Optical};
 use crate::optic_ports::OpticPorts;
 use std::collections::HashMap;
+use uom::num_traits::Zero;
+use uom::si::f64::Energy;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Debug)]
 /// An ideal filter with given transmission or optical density.
 pub struct IdealFilter {
-    transmission: f64,
+    transmission: f64
 }
 
 impl IdealFilter {
@@ -63,7 +65,7 @@ impl IdealFilter {
     fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
         let input = incoming_data.get("front");
 
-        let mut input_energy = 0.0;
+        let mut input_energy = Energy::zero();
 
         if let Some(Some(input)) = input {
             match input {

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use uom::{si::f64::Energy, num_traits::Zero};
 
 use crate::{
     analyzer::AnalyzerType,
@@ -35,8 +36,8 @@ impl BeamSplitter {
         let in1 = incoming_data.get("input1");
         let in2 = incoming_data.get("input2");
 
-        let mut in1_energy = 0.0;
-        let mut in2_energy = 0.0;
+        let mut in1_energy = Energy::zero();
+        let mut in2_energy = Energy::zero();
 
         if let Some(Some(in1)) = in1 {
             match in1 {

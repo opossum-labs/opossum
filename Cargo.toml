@@ -12,3 +12,4 @@ publish = false
 
 [dependencies]
 petgraph = {version="0.6.3", features = ["serde-1"]} # the graph library
+uom = "0"

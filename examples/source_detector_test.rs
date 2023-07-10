@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::Write;
+use uom::si::{f64::Energy, energy::joule};
 
 use opossum::{
     lightdata::{LightData, LightDataEnergy},
@@ -13,7 +14,7 @@ fn main() {
 
     let i_s = scenery.add_element(
         "Source",
-        Source::new(LightData::Energy(LightDataEnergy { energy: 1.0 })),
+        Source::new(LightData::Energy(LightDataEnergy { energy: Energy::new::<joule>(1.0) })),
     );
     let i_bs=scenery.add_element("Beam splitter", BeamSplitter::new(0.6));
     let i_f=scenery.add_element("Filter", IdealFilter::new(0.5).unwrap());
