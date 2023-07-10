@@ -17,7 +17,7 @@ impl Display for LightData {
 }
 #[derive(Debug, PartialEq, Clone)]
 pub struct LightDataEnergy {
-    pub energy: f32,
+    pub energy: f64,
 }
 
 #[derive(Debug, PartialEq, Clone)]

@@ -13,22 +13,22 @@ type Result<T> = std::result::Result<T, OpossumError>;
 #[derive(Debug)]
 /// An ideal beamsplitter node with a given splitting ratio.
 pub struct BeamSplitter {
-    ratio: f32,
+    ratio: f64,
 }
 
 impl BeamSplitter {
     /// Creates a new [`BeamSplitter`] with a given splitting ratio.
-    pub fn new(ratio: f32) -> Self {
+    pub fn new(ratio: f64) -> Self {
         Self { ratio }
     }
 
     /// Returns the splitting ratio of this [`BeamSplitter`].
-    pub fn ratio(&self) -> f32 {
+    pub fn ratio(&self) -> f64 {
         self.ratio
     }
 
     /// Sets the splitting ratio of this [`BeamSplitter`].
-    pub fn set_ratio(&mut self, ratio: f32) {
+    pub fn set_ratio(&mut self, ratio: f64) {
         self.ratio = ratio;
     }
     pub fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
