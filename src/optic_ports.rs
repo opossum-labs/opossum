@@ -1,6 +1,8 @@
 use crate::error::OpossumError;
 use std::collections::HashSet;
+use crate::optic_node::OpticNode;
 
+/// Structure defining the optical ports (input / output terminals) of an [`OpticNode`].
 #[derive(Default, Debug, Clone)]
 pub struct OpticPorts {
     inputs: HashSet<String>,
@@ -26,9 +28,9 @@ impl OpticPorts {
             self.outputs.clone().into_iter().collect::<Vec<String>>()
         }
     }
-    pub fn add_input(&mut self, name: &str) -> Result<(), OpossumError> {
+    pub fn add_input(&mut self, name: &str) -> Result<Vec<String>, OpossumError> {
         if self.inputs.insert(name.into()) {
-            Ok(())
+            Ok(self.inputs())
         } else {
             Err(OpossumError::OpticPort(format!(
                 "input port with name {} already exists",
@@ -36,9 +38,9 @@ impl OpticPorts {
             )))
         }
     }
-    pub fn add_output(&mut self, name: &str) -> Result<(), OpossumError> {
+    pub fn add_output(&mut self, name: &str) -> Result<Vec<String>, OpossumError> {
         if self.outputs.insert(name.into()) {
-            Ok(())
+            Ok(self.outputs())
         } else {
             Err(OpossumError::OpticPort(format!(
                 "output port with name {} already exists",
@@ -75,14 +77,14 @@ mod test {
     #[test]
     fn add_input_twice() {
         let mut ports = OpticPorts::new();
-        assert!(ports.add_input("Test").is_ok());
+        assert_eq!(ports.add_input("Test").unwrap(), vec!["Test"]);
         assert!(ports.add_input("Test").is_err());
         assert_eq!(ports.inputs.len(), 1);
     }
     #[test]
     fn add_output_ok() {
         let mut ports = OpticPorts::new();
-        assert!(ports.add_output("Test").is_ok());
+        assert_eq!(ports.add_output("Test").unwrap(), vec!["Test"]);
         assert_eq!(ports.outputs.len(), 1);
     }
     #[test]
