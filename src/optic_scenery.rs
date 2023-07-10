@@ -7,6 +7,7 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::optic_node::{OpticComponent, OpticNode, LightResult};
+use petgraph::Direction::{Incoming, Outgoing};
 use petgraph::algo::toposort;
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
@@ -118,14 +119,14 @@ impl OpticScenery {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
-    /// Return a reference to the [`OpticNode`] specifiec by the node index.
+    /// Return a reference to the [`OpticNode`] specified by its node index.
     ///
     /// This function is mainly useful for setting up a reference node.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the node does not exist.
-    pub fn node_ref(&self, node: NodeIndex) -> Result<Rc<RefCell<OpticNode>>> {
+    /// This function will return [`OpossumError::OpticScenery`]if the node does not exist.
+    pub fn node(&self, node: NodeIndex) -> Result<Rc<RefCell<OpticNode>>> {
         if let Some(node) = self.g.node_weight(node) {
             Ok(node.to_owned())
         } else {
@@ -224,6 +225,18 @@ impl OpticScenery {
         } else {
             println!("No outgoing edge found with given port name");
         }
+    }
+    pub fn report(&self) {
+        let src_nodes=&self.g.externals(Incoming);
+        let sink_nodes=&self.g.externals(Outgoing);
+        println!("Sources:");
+        for idx in src_nodes.clone().into_iter() {
+            println!("{:?}", self.node(idx).unwrap().borrow());
+        }
+        println!("Sinks:");
+        for idx in sink_nodes.clone().into_iter() {
+            println!("{:?}", self.node(idx).unwrap().borrow());
+        }   
     }
 }
 

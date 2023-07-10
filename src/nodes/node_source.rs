@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 use crate::{
     lightdata::LightData,
@@ -9,7 +10,7 @@ use crate::{
 type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This node represents a source of light. Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an optic scenery.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Source {
     light_data: Option<LightData>,
 }
@@ -32,6 +33,16 @@ impl Source {
         self.light_data = Some(light_data);
     }
 }
+
+impl Debug for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.light_data {
+            Some(data) => write!(f,"{}",data),
+            None => write!(f, "no data"),
+        }
+    }
+}
+
 impl Optical for Source {
     fn node_type(&self) -> &str {
         "light source"

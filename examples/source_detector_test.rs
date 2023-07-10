@@ -27,16 +27,15 @@ fn main() {
     let path = "src_detector.dot";
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()).unwrap();
-    println!("{:?}", scenery.node_ref(i_s).unwrap());
-    println!("{:?}", scenery.node_ref(i_d1).unwrap());
-    println!("{:?}", scenery.node_ref(i_d2).unwrap());
 
+    scenery.report();
+    println!("");
     let mut analyzer=AnalyzerEnergy::new(&scenery);
     print!("Analyze...");
     match analyzer.analyze() {
         Ok(_) => println!("Sucessful"),
         Err(e) => println!("Error: {}",e)
     }
-    println!("{:?}", scenery.node_ref(i_d1).unwrap());
-    println!("{:?}", scenery.node_ref(i_d2).unwrap());
+    println!("");
+    scenery.report();
 }

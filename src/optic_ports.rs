@@ -1,6 +1,5 @@
 use crate::error::OpossumError;
 use std::collections::HashSet;
-use crate::optic_node::OpticNode;
 
 /// Structure defining the optical ports (input / output terminals) of an [`OpticNode`].
 #[derive(Default, Debug, Clone)]

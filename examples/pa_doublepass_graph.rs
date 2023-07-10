@@ -14,15 +14,15 @@ fn main() {
     let n3 = scenery.add_element("Faraday", Dummy);
     let n4 = scenery.add_element("0° mirror", Dummy);
 
-    let mut node= NodeReference::new(scenery.node_ref(n1).unwrap());
+    let mut node= NodeReference::new(scenery.node(n1).unwrap());
     node.set_inverted(true);
     let n1r=scenery.add_node(node);
     
-    let mut node= NodeReference::new(scenery.node_ref(n3).unwrap());
+    let mut node= NodeReference::new(scenery.node(n3).unwrap());
     node.set_inverted(true);
     let n3r = scenery.add_node(node);
 
-    let mut node= NodeReference::new(scenery.node_ref(n2).unwrap());
+    let mut node= NodeReference::new(scenery.node(n2).unwrap());
     node.set_inverted(true);
     let n2r = scenery.add_node(node);
 
