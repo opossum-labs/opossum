@@ -202,7 +202,7 @@ pub trait Dottable {
         dot_str.push_str(&self.create_main_node_row_str(node_name, indent_level));        
 
         // add row containing the output ports
-        dot_str.push_str(&self.create_port_cells_str(!inverted, indent_level, -1, ports));
+        dot_str.push_str(&self.create_port_cells_str(inverted, indent_level, -1, ports));
 
         //end table environment
         dot_str.push_str(&self.create_html_like_container("table", indent_level, false, -1));
