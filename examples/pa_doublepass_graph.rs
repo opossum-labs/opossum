@@ -8,30 +8,30 @@ use std::io::Write;
 fn main() {
     let mut scenery = OpticScenery::new();
     scenery.set_description("PreAmp Doublepass section".into());
-    let n0 = scenery.add_element("LightSource", Source::default());
+    //let n0 = scenery.add_element("LightSource", Source::default());
     let n1 = scenery.add_element("TFP", Dummy);
     let n2 = scenery.add_element("19mm amp", Dummy);
-    let n3 = scenery.add_element("Faraday", Dummy);
+    //let n3 = scenery.add_element("Faraday", Dummy);
     let n4 = scenery.add_element("0° mirror", Dummy);
 
     let mut node= NodeReference::new(scenery.node(n1).unwrap());
     node.set_inverted(true);
     let n1r=scenery.add_node(node);
     
-    let mut node= NodeReference::new(scenery.node(n3).unwrap());
-    node.set_inverted(true);
-    let n3r = scenery.add_node(node);
+   // let mut node= NodeReference::new(scenery.node(n3).unwrap());
+   // node.set_inverted(true);
+   // let n3r = scenery.add_node(node);
 
     let mut node= NodeReference::new(scenery.node(n2).unwrap());
     node.set_inverted(true);
     let n2r = scenery.add_node(node);
 
-    scenery.connect_nodes(n0, "out1", n1, "front").unwrap();
+   // scenery.connect_nodes(n0, "out1", n1, "front").unwrap();
     scenery.connect_nodes(n1, "rear", n2, "front").unwrap();
-    scenery.connect_nodes(n2, "rear", n3, "front").unwrap();
-    scenery.connect_nodes(n3, "rear", n4, "front").unwrap();
-    scenery.connect_nodes(n4, "rear", n3r, "rear").unwrap();
-    scenery.connect_nodes(n3r, "front", n2r, "rear").unwrap();
+    scenery.connect_nodes(n2, "rear", n4, "front").unwrap();
+  //  scenery.connect_nodes(n3, "rear", n4, "front").unwrap();
+    scenery.connect_nodes(n4, "rear", n2r, "rear").unwrap();
+   // scenery.connect_nodes(n3r, "front", n2r, "rear").unwrap();
     scenery.connect_nodes(n2r, "front", n1r, "rear").unwrap();
 
     // let mut group = NodeGroup::new();
