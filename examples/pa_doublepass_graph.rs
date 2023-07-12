@@ -34,16 +34,16 @@ fn main() {
     scenery.connect_nodes(n3r, "front", n2r, "rear").unwrap();
     scenery.connect_nodes(n2r, "front", n1r, "rear").unwrap();
 
-    let mut group = NodeGroup::new();
-    let g_n1 = group.add_node(OpticNode::new("Beamsplitter", Dummy));
-    let g_n2 = group.add_node(OpticNode::new("Lens", Dummy));
-    let g_n3 = group.add_node(OpticNode::new("Lens2", Dummy));
-    let g_n4  = group.add_node(OpticNode::new("Det", Detector::default()));
+    // let mut group = NodeGroup::new();
+    // let g_n1 = group.add_node(OpticNode::new("Beamsplitter", Dummy));
+    // let g_n2 = group.add_node(OpticNode::new("Lens", Dummy));
+    // let g_n3 = group.add_node(OpticNode::new("Lens2", Dummy));
+    // let g_n4  = group.add_node(OpticNode::new("Det", Detector::default()));
 
-    group.connect_nodes(g_n1, "rear", g_n2, "front").unwrap();
-    group.connect_nodes(g_n2, "rear", g_n3, "front").unwrap();
-    group.connect_nodes(g_n3, "rear", g_n4, "in1").unwrap();
-    scenery.add_node(OpticNode::new("CamBox", group));
+    // group.connect_nodes(g_n1, "rear", g_n2, "front").unwrap();
+    // group.connect_nodes(g_n2, "rear", g_n3, "front").unwrap();
+    // group.connect_nodes(g_n3, "rear", g_n4, "in1").unwrap();
+    // scenery.add_node(OpticNode::new("CamBox", group));
     let path = "graph.dot";
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()).unwrap();
