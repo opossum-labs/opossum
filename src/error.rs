@@ -6,6 +6,7 @@ pub enum OpossumError {
     OpticGroup(String),
     OpticPort(String),
     Analysis(String),
+    Spectrum(String),
     Other(String),
 }
 
@@ -23,6 +24,9 @@ impl Display for OpossumError {
             }
             OpossumError::Analysis(m) => {
                 write!(f, "Opossum Error::Analysis::{}", m)
+            }
+            OpossumError::Spectrum(m) => {
+                write!(f, "Opossum Spectrum::{}", m)
             }
             OpossumError::Other(m) => write!(f, "Opossum Error::Other::{}", m),
         }
