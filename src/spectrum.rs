@@ -82,6 +82,15 @@ impl Spectrum {
         }
         total_energy
     }
+    pub fn scale_vertical(&mut self, factor: f64) -> Result<()> {
+        if factor < 0.0 {
+            return Err(OpossumError::Spectrum(
+                "scaling factor mus be >= 0.0".into(),
+            ));
+        }
+        self.data = &self.data * factor;
+        Ok(())
+    }
 }
 
 impl Display for Spectrum {
@@ -236,7 +245,39 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s.set_single_peak(Length::new::<meter>(2.0), Energy::new::<joule>(1.0)).unwrap();
-        assert_eq!(s.total_energy(),Energy::new::<joule>(1.0));
+        s.set_single_peak(Length::new::<meter>(2.0), Energy::new::<joule>(1.0))
+            .unwrap();
+        assert_eq!(s.total_energy(), Energy::new::<joule>(1.0));
+    }
+    #[test]
+    fn scale_vertical() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        s.set_single_peak(Length::new::<meter>(2.5), Energy::new::<joule>(1.0))
+            .unwrap();
+        assert_eq!(s.scale_vertical(0.5).is_ok(), true);
+        assert_eq!(
+            s.data,
+            array![
+                Energy::zero(),
+                Energy::new::<joule>(0.25),
+                Energy::new::<joule>(0.25),
+                Energy::zero()
+            ]
+        );
+    }
+    #[test]
+    fn scale_vertical_negative() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        s.set_single_peak(Length::new::<meter>(2.5), Energy::new::<joule>(1.0))
+            .unwrap();
+        assert_eq!(s.scale_vertical(-0.5).is_ok(), false);
     }
 }
