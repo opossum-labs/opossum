@@ -1,10 +1,11 @@
-use opossum::nodes::{Dummy, NodeReference };
-use opossum::optic_scenery::OpticScenery;
 use opossum::analyzer::AnalyzerEnergy;
+use opossum::error::OpossumError;
+use opossum::nodes::{Dummy, NodeReference};
+use opossum::optic_scenery::OpticScenery;
 use std::fs::File;
 use std::io::Write;
 
-fn main() {
+fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("PreAmp Doublepass section".into());
     //let n0 = scenery.add_element("LightSource", Source::default());
@@ -13,25 +14,25 @@ fn main() {
     //let n3 = scenery.add_element("Faraday", Dummy);
     let n4 = scenery.add_element("0° mirror", Dummy);
 
-    let mut node= NodeReference::new(scenery.node(n1).unwrap());
+    let mut node = NodeReference::new(scenery.node(n1).unwrap());
     node.set_inverted(true);
-    let n1r=scenery.add_node(node);
-    
-   // let mut node= NodeReference::new(scenery.node(n3).unwrap());
-   // node.set_inverted(true);
-   // let n3r = scenery.add_node(node);
+    let n1r = scenery.add_node(node);
 
-    let mut node= NodeReference::new(scenery.node(n2).unwrap());
+    // let mut node= NodeReference::new(scenery.node(n3).unwrap());
+    // node.set_inverted(true);
+    // let n3r = scenery.add_node(node);
+
+    let mut node = NodeReference::new(scenery.node(n2)?);
     node.set_inverted(true);
     let n2r = scenery.add_node(node);
 
-   // scenery.connect_nodes(n0, "out1", n1, "front").unwrap();
-    scenery.connect_nodes(n1, "rear", n2, "front").unwrap();
-    scenery.connect_nodes(n2, "rear", n4, "front").unwrap();
-  //  scenery.connect_nodes(n3, "rear", n4, "front").unwrap();
-    scenery.connect_nodes(n4, "rear", n2r, "rear").unwrap();
-   // scenery.connect_nodes(n3r, "front", n2r, "rear").unwrap();
-    scenery.connect_nodes(n2r, "front", n1r, "rear").unwrap();
+    // scenery.connect_nodes(n0, "out1", n1, "front").unwrap();
+    scenery.connect_nodes(n1, "rear", n2, "front")?;
+    scenery.connect_nodes(n2, "rear", n4, "front")?;
+    //  scenery.connect_nodes(n3, "rear", n4, "front").unwrap();
+    scenery.connect_nodes(n4, "rear", n2r, "rear")?;
+    // scenery.connect_nodes(n3r, "front", n2r, "rear").unwrap();
+    scenery.connect_nodes(n2r, "front", n1r, "rear")?;
 
     // let mut group = NodeGroup::new();
     // let g_n1 = group.add_node(OpticNode::new("Beamsplitter", Dummy));
@@ -48,10 +49,10 @@ fn main() {
     write!(output, "{}", scenery.to_dot()).unwrap();
     // write!(output, "{}", scenery.to_dot()).unwrap();
 
-    let mut analyzer=AnalyzerEnergy::new(&scenery);
+    let mut analyzer = AnalyzerEnergy::new(&scenery);
     print!("Analyze...");
-    match analyzer.analyze() {
-        Ok(_) => println!("Sucessful"),
-        Err(e) => println!("Error: {}",e)
-    }
+    analyzer.analyze()?;
+    println!("Sucessful");
+
+    Ok(())
 }
