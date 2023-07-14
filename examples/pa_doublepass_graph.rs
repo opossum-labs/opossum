@@ -1,5 +1,4 @@
-use opossum::nodes::{Dummy, NodeGroup, NodeReference, Source, Detector };
-use opossum::optic_node::OpticNode;
+use opossum::nodes::{Dummy, NodeReference };
 use opossum::optic_scenery::OpticScenery;
 use opossum::analyzer::AnalyzerEnergy;
 use std::fs::File;

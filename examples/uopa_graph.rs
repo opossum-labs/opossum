@@ -94,7 +94,7 @@ fn main() {
     let yb_fiber2_node_node = scenery_2.add_element("Yb-Fiber 2", Dummy);
     let dichroic_node = scenery_2.add_element("DCM", Dummy);
     let diode2_node = scenery_2.add_element("Laser Diode", Dummy);
-    let monitor1_node = scenery_2.add_element("Monitor", Dummy);
+    // let monitor1_node = scenery_2.add_element("Monitor", Dummy);
     let monitor2_node = scenery_2.add_element("Monitor", Dummy);
     let monitor3_node = scenery_2.add_element("Monitor", Dummy);
 
