@@ -1,3 +1,4 @@
+use crate::error::OpossumError;
 use ndarray::Array1;
 use std::fmt::Display;
 use std::ops::Range;
@@ -5,7 +6,6 @@ use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
 use uom::si::length::meter;
 use uom::si::{f64::Length, length::nanometer};
-use crate::error::OpossumError;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 pub struct Spectrum {
@@ -84,6 +84,9 @@ impl Spectrum {
             ));
         }
         self.data = &self.data * factor;
+        Ok(())
+    }
+    pub fn resample(&mut self, spectrum: &Spectrum) -> Result<()> {
         Ok(())
     }
     pub fn filter(&mut self, spectrum: &Spectrum) -> Result<()> {
