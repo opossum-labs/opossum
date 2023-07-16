@@ -3,18 +3,13 @@ use std::fmt::Display;
 use std::ops::Range;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
-use uom::si::energy::joule;
 use uom::si::length::meter;
-use uom::si::{
-    f64::{Energy, Length},
-    length::nanometer,
-};
-
+use uom::si::{f64::Length, length::nanometer};
 use crate::error::OpossumError;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 pub struct Spectrum {
-    data: Array1<Energy>,
+    data: Array1<f64>,
     lambdas: Array1<f64>,
 }
 
@@ -44,14 +39,14 @@ impl Spectrum {
             data: Array1::zeros(length),
         })
     }
-    pub fn set_single_peak(&mut self, wavelength: Length, energy: Energy) -> Result<()> {
+    pub fn set_single_peak(&mut self, wavelength: Length, value: f64) -> Result<()> {
         let spectrum_range = self.lambdas.first().unwrap()..self.lambdas.last().unwrap();
         if !spectrum_range.contains(&&wavelength.get::<meter>()) {
             return Err(OpossumError::Spectrum(
                 "wavelength is not in spectrum range".into(),
             ));
         }
-        if energy.is_sign_negative() {
+        if value < 0.0 {
             return Err(OpossumError::Spectrum("energy must be positive".into()));
         }
         let wavelength_in_meters = wavelength.get::<meter>();
@@ -62,21 +57,21 @@ impl Spectrum {
             .position(|w| w >= wavelength_in_meters);
         if let Some(idx) = idx {
             if idx == 0 {
-                self.data[0] = energy;
+                self.data[0] = value;
             } else {
                 let lower_lambda = self.lambdas.get(idx - 1).unwrap();
                 let upper_lambda = self.lambdas.get(idx).unwrap();
                 let delta = upper_lambda - lower_lambda;
-                self.data[idx - 1] = energy * (1.0 - (wavelength_in_meters - lower_lambda) / delta);
-                self.data[idx] = energy * (wavelength_in_meters - lower_lambda) / delta;
+                self.data[idx - 1] = value * (1.0 - (wavelength_in_meters - lower_lambda) / delta);
+                self.data[idx] = value * (wavelength_in_meters - lower_lambda) / delta;
             }
             Ok(())
         } else {
             Err(OpossumError::Spectrum("insertion point not found".into()))
         }
     }
-    pub fn total_energy(&self) -> Energy {
-        let mut total_energy = Energy::zero();
+    pub fn total_energy(&self) -> f64 {
+        let mut total_energy = 0.0;
         for data in self.data.iter() {
             total_energy += *data;
         }
@@ -91,28 +86,27 @@ impl Spectrum {
         self.data = &self.data * factor;
         Ok(())
     }
+    pub fn filter(&mut self, spectrum: &Spectrum) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl Display for Spectrum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_length = Length::format_args(nanometer, Abbreviation);
-        let fmt_energy = Energy::format_args(joule, Abbreviation);
         for value in self.data.iter().enumerate() {
             write!(
                 f,
                 "{:7.2} -> {}\n",
                 fmt_length.with(Length::new::<meter>(self.lambdas[value.0])),
-                fmt_energy.with(*value.1)
+                *value.1
             )
             .unwrap();
         }
-        write!(
-            f,
-            "\nTotal energy: {}",
-            fmt_energy.with(self.total_energy())
-        )
+        write!(f, "\nTotal energy: {}", self.total_energy())
     }
 }
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -128,17 +122,7 @@ mod test {
             s.as_ref().unwrap().lambdas,
             array![1.0, 1.5, 2.0, 2.5, 3.0, 3.5]
         );
-        assert_eq!(
-            s.unwrap().data,
-            array![
-                Energy::zero(),
-                Energy::zero(),
-                Energy::zero(),
-                Energy::zero(),
-                Energy::zero(),
-                Energy::zero()
-            ]
-        );
+        assert_eq!(s.unwrap().data, array![0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
     }
     #[test]
     fn new_negative_resolution() {
@@ -172,11 +156,10 @@ mod test {
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(2.0), Energy::new::<joule>(1.0))
-                .is_ok(),
+            s.set_single_peak(Length::new::<meter>(2.0), 1.0).is_ok(),
             true
         );
-        assert_eq!(s.data[1].get::<joule>(), 1.0);
+        assert_eq!(s.data[1], 1.0);
     }
     #[test]
     fn set_single_peak_interpolated() {
@@ -186,12 +169,11 @@ mod test {
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(2.5), Energy::new::<joule>(1.0))
-                .is_ok(),
+            s.set_single_peak(Length::new::<meter>(2.5), 1.0).is_ok(),
             true
         );
-        assert_eq!(s.data[1].get::<joule>(), 0.5);
-        assert_eq!(s.data[2].get::<joule>(), 0.5);
+        assert_eq!(s.data[1], 0.5);
+        assert_eq!(s.data[2], 0.5);
     }
     #[test]
     fn set_single_peak_lower_bound() {
@@ -201,11 +183,10 @@ mod test {
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(1.0), Energy::new::<joule>(1.0))
-                .is_ok(),
+            s.set_single_peak(Length::new::<meter>(1.0), 1.0).is_ok(),
             true
         );
-        assert_eq!(s.data[0].get::<joule>(), 1.0);
+        assert_eq!(s.data[0], 1.0);
     }
     #[test]
     fn set_single_peak_out_of_limit() {
@@ -215,13 +196,11 @@ mod test {
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(0.5), Energy::new::<joule>(1.0))
-                .is_ok(),
+            s.set_single_peak(Length::new::<meter>(0.5), 1.0).is_ok(),
             false
         );
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(4.0), Energy::new::<joule>(1.0))
-                .is_ok(),
+            s.set_single_peak(Length::new::<meter>(4.0), 1.0).is_ok(),
             false
         );
     }
@@ -233,8 +212,7 @@ mod test {
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(1.5), Energy::new::<joule>(-1.0))
-                .is_ok(),
+            s.set_single_peak(Length::new::<meter>(1.5), -1.0).is_ok(),
             false
         );
     }
@@ -245,9 +223,8 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s.set_single_peak(Length::new::<meter>(2.0), Energy::new::<joule>(1.0))
-            .unwrap();
-        assert_eq!(s.total_energy(), Energy::new::<joule>(1.0));
+        s.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        assert_eq!(s.total_energy(), 1.0);
     }
     #[test]
     fn scale_vertical() {
@@ -256,18 +233,9 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s.set_single_peak(Length::new::<meter>(2.5), Energy::new::<joule>(1.0))
-            .unwrap();
+        s.set_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
         assert_eq!(s.scale_vertical(0.5).is_ok(), true);
-        assert_eq!(
-            s.data,
-            array![
-                Energy::zero(),
-                Energy::new::<joule>(0.25),
-                Energy::new::<joule>(0.25),
-                Energy::zero()
-            ]
-        );
+        assert_eq!(s.data, array![0.0, 0.25, 0.25, 0.0]);
     }
     #[test]
     fn scale_vertical_negative() {
@@ -276,8 +244,7 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s.set_single_peak(Length::new::<meter>(2.5), Energy::new::<joule>(1.0))
-            .unwrap();
+        s.set_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
         assert_eq!(s.scale_vertical(-0.5).is_ok(), false);
     }
 }
