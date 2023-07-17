@@ -1,5 +1,7 @@
 use crate::error::OpossumError;
 use ndarray::Array1;
+use ndarray_interp::Interp1DBuilder;
+use ndarray_interp::Interp1DStrategy::Linear;
 use std::fmt::Display;
 use std::ops::Range;
 use uom::fmt::DisplayStyle::Abbreviation;
@@ -9,8 +11,8 @@ use uom::si::{f64::Length, length::nanometer};
 type Result<T> = std::result::Result<T, OpossumError>;
 
 pub struct Spectrum {
-    data: Array1<f64>,
-    lambdas: Array1<f64>,
+    data: Array1<f64>,    // data in 1/meters
+    lambdas: Array1<f64>, // wavelength in meters
 }
 
 impl Spectrum {
@@ -57,13 +59,15 @@ impl Spectrum {
             .position(|w| w >= wavelength_in_meters);
         if let Some(idx) = idx {
             if idx == 0 {
-                self.data[0] = value;
+                let delta = self.lambdas.get(1).unwrap() - self.lambdas.get(0).unwrap();
+                self.data[0] = value / delta;
             } else {
                 let lower_lambda = self.lambdas.get(idx - 1).unwrap();
                 let upper_lambda = self.lambdas.get(idx).unwrap();
                 let delta = upper_lambda - lower_lambda;
-                self.data[idx - 1] = value * (1.0 - (wavelength_in_meters - lower_lambda) / delta);
-                self.data[idx] = value * (wavelength_in_meters - lower_lambda) / delta;
+                self.data[idx - 1] =
+                    value * (1.0 - (wavelength_in_meters - lower_lambda) / delta) / delta;
+                self.data[idx] = value * (wavelength_in_meters - lower_lambda) / delta / delta;
             }
             Ok(())
         } else {
@@ -72,8 +76,12 @@ impl Spectrum {
     }
     pub fn total_energy(&self) -> f64 {
         let mut total_energy = 0.0;
-        for data in self.data.iter() {
-            total_energy += *data;
+        for data in self.data.iter().enumerate() {
+            if data.0 < self.data.len() - 1 {
+                let delta =
+                    self.lambdas.get(data.0 + 1).unwrap() - self.lambdas.get(data.0).unwrap();
+                total_energy += *data.1 * delta;
+            }
         }
         total_energy
     }
@@ -87,9 +95,33 @@ impl Spectrum {
         Ok(())
     }
     pub fn resample(&mut self, spectrum: &Spectrum) -> Result<()> {
+        let data = spectrum.data.clone();
+        let x = spectrum.lambdas.clone();
+        let interpolator = Interp1DBuilder::new(data)
+            .x(x)
+            .strategy(Linear { extrapolate: false })
+            .build()
+            .unwrap();
+        let max_idx= self.data.len();
+        let integration_step_size=0.05;
+        for x in self.data.iter_mut().enumerate() {
+            if x.0 < max_idx-1 {
+                let lower_bound= *self.lambdas.get(x.0).unwrap();
+                let upper_bound = *self.lambdas.get(x.0+1).unwrap();
+                let integration_x=Array1::range(lower_bound, upper_bound, integration_step_size);
+                println!("integrate at: {}",integration_x);
+                let mut integration_sum=0.0;
+                for i_x in integration_x.iter() {
+                    integration_sum+=interpolator.interp_scalar(*i_x).unwrap();
+                }
+                *x.1=integration_sum*integration_step_size;
+                println!("sum={}", *x.1);
+            }
+        }
+        //self.data = interpolator.interp_array(&query).unwrap();
         Ok(())
     }
-    pub fn filter(&mut self, spectrum: &Spectrum) -> Result<()> {
+    pub fn filter(&mut self, _spectrum: &Spectrum) -> Result<()> {
         Ok(())
     }
 }
@@ -155,41 +187,41 @@ mod test {
     fn set_single_peak() {
         let mut s = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(1.0),
+            Length::new::<meter>(0.5),
         )
         .unwrap();
         assert_eq!(
             s.set_single_peak(Length::new::<meter>(2.0), 1.0).is_ok(),
             true
         );
-        assert_eq!(s.data[1], 1.0);
+        assert_eq!(s.data[2], 2.0);
     }
     #[test]
     fn set_single_peak_interpolated() {
         let mut s = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(1.0),
+            Length::new::<meter>(0.5),
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(2.5), 1.0).is_ok(),
+            s.set_single_peak(Length::new::<meter>(2.25), 1.0).is_ok(),
             true
         );
-        assert_eq!(s.data[1], 0.5);
-        assert_eq!(s.data[2], 0.5);
+        assert_eq!(s.data[2], 1.0);
+        assert_eq!(s.data[3], 1.0);
     }
     #[test]
     fn set_single_peak_lower_bound() {
         let mut s = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(1.0),
+            Length::new::<meter>(0.5),
         )
         .unwrap();
         assert_eq!(
             s.set_single_peak(Length::new::<meter>(1.0), 1.0).is_ok(),
             true
         );
-        assert_eq!(s.data[0], 1.0);
+        assert_eq!(s.data[0], 2.0);
     }
     #[test]
     fn set_single_peak_out_of_limit() {
@@ -208,7 +240,7 @@ mod test {
         );
     }
     #[test]
-    fn set_single_peak_ngative_energy() {
+    fn set_single_peak_negative_energy() {
         let mut s = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
             Length::new::<meter>(1.0),
@@ -223,7 +255,7 @@ mod test {
     fn total_energy() {
         let mut s = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(1.0),
+            Length::new::<meter>(0.5),
         )
         .unwrap();
         s.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
@@ -249,5 +281,38 @@ mod test {
         .unwrap();
         s.set_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
         assert_eq!(s.scale_vertical(-0.5).is_ok(), false);
+    }
+    // #[test]
+    // fn resample() {
+    //     let mut s1 = Spectrum::new(
+    //         Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+    //         Length::new::<meter>(1.0),
+    //     )
+    //     .unwrap();
+    //     s1.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+    //     let s2 = Spectrum::new(
+    //         Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+    //         Length::new::<meter>(1.0),
+    //     )
+    //     .unwrap();
+    //     s1.resample(&s2).unwrap();
+    //     assert_eq!(s1.data, s2.data);
+    // }
+    #[test]
+    fn resample_interp() {
+        let mut s1 = Spectrum::new(
+            Length::new::<meter>(1.5)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let mut s2 = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(6.0),
+            Length::new::<meter>(0.5),
+        )
+        .unwrap();
+        s2.set_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
+        println!("s2: {}", s2);
+        s1.resample(&s2).unwrap();
+        assert_eq!(s1.data, array![0.0, 0.5, 0.5, 0.0]);
     }
 }
