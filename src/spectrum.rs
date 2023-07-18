@@ -95,43 +95,42 @@ impl Spectrum {
         self.data = &self.data * factor;
         Ok(())
     }
-    fn nearest_value(self, x: f64) -> f64 {
-        let idx = self
-            .lambdas
+    fn enclosing_interval(&self, x_lower: f64, x_upper: f64) -> Vec<usize> {
+        let mut res = self
             .clone()
+            .lambdas
             .into_iter()
-            .position(|w| w >= x).unwrap();
-        if idx>0 {
-            return *self.data.get(idx-1).unwrap()
+            .enumerate()
+            .filter(|x| x.1 < x_upper && x.1 > x_lower)
+            .map(|x| x.0)
+            .collect::<Vec<usize>>();
+        if res.is_empty() {
+            let mut lower_idx = self.clone().lambdas.into_iter().position(|x| x >= x_lower).unwrap();
+            let upper_idx = self.clone().lambdas.into_iter().position(|x| x >= x_upper).unwrap();
+            if lower_idx>0 && self.lambdas[lower_idx]> x_lower {
+                lower_idx-=1;
+            }
+            res = vec![lower_idx, upper_idx];
         } else {
-            return *self.data.get(0).unwrap()
+            let first = *res.first().unwrap();
+            let last = *res.last().unwrap();
+            if first > 0 {
+                res.insert(0, first - 1);
+            }
+            if last < self.lambdas.len() - 1 {
+                res.push(last + 1)
+            }
         }
-       
+        res
     }
     pub fn resample(&mut self, spectrum: &Spectrum) -> Result<()> {
-        let data = spectrum.data.clone();
-        let x = spectrum.lambdas.clone();
-        let interpolator = Interp1DBuilder::new(data)
-            .x(x)
-            .strategy(Linear { extrapolate: false })
-            .build()
-            .unwrap();
-        let max_idx= self.data.len();
-        let integration_steps_size=0.00005;
-        for x in self.data.iter_mut().enumerate() {
-            if x.0 < max_idx-1 {
-                let lower_bound= *self.lambdas.get(x.0).unwrap();
-                let upper_bound = *self.lambdas.get(x.0+1).unwrap();
-                let integration_x=Array1::range(lower_bound, upper_bound, integration_steps_size);
-                println!("integrate at: {} - {}",integration_x.first().unwrap(),integration_x.last().unwrap());
-                let mut integration_sum=0.0;
-                for i_x in integration_x.iter() {
-                    //integration_sum+=interpolator.interp_scalar(*i_x).unwrap();
-                    integration_sum+=spectrum.clone().nearest_value(*i_x);
-                }
-                *x.1=integration_sum*integration_steps_size;
-                println!("sum={}", *x.1);
-            }
+        let _data = spectrum.data.clone();
+        let _x = spectrum.lambdas.clone();
+        let max_idx = self.data.len() - 1;
+        for x in self.data.iter_mut().enumerate().filter(|x| x.0 < max_idx) {
+            let lower_bound = *self.lambdas.get(x.0).unwrap();
+            let upper_bound = *self.lambdas.get(x.0 + 1).unwrap();
+            let interval = spectrum.enclosing_interval(lower_bound, upper_bound);
         }
         Ok(())
     }
@@ -296,6 +295,61 @@ mod test {
         s.set_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
         assert_eq!(s.scale_vertical(-0.5).is_ok(), false);
     }
+    #[test]
+    fn enclosing_interval() {
+        let s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let v = s.enclosing_interval(2.1, 3.9);
+        let l = v.into_iter().map(|i| s.lambdas[i]).collect::<Vec<f64>>();
+        assert_eq!(l, vec![2.0, 3.0, 4.0]);
+    }
+    #[test]
+    fn enclosing_interval_exact() {
+        let s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let v = s.enclosing_interval(2.0, 4.0);
+        let l = v.into_iter().map(|i| s.lambdas[i]).collect::<Vec<f64>>();
+        assert_eq!(l, vec![2.0, 3.0, 4.0]);
+    }
+    #[test]
+    fn enclosing_interval_upper_bound() {
+        let s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let v = s.enclosing_interval(3.0, 5.0);
+        let l = v.into_iter().map(|i| s.lambdas[i]).collect::<Vec<f64>>();
+        assert_eq!(l, vec![3.0, 4.0]); // ranges are exclusive upper bound !
+    }
+    #[test]
+    fn enclosing_interval_lower_bound() {
+        let s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let v = s.enclosing_interval(1.0, 3.0);
+        let l = v.into_iter().map(|i| s.lambdas[i]).collect::<Vec<f64>>();
+        assert_eq!(l, vec![1.0, 2.0, 3.0]);
+    }
+    #[test]
+    fn enclosing_interval_small_range() {
+        let s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let v = s.enclosing_interval(2.6, 2.9);
+        let l = v.into_iter().map(|i| s.lambdas[i]).collect::<Vec<f64>>();
+        assert_eq!(l, vec![2.0, 3.0]);
+    }
     // #[test]
     // fn resample() {
     //     let mut s1 = Spectrum::new(
@@ -316,12 +370,12 @@ mod test {
     fn resample_interp() {
         let mut s1 = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(0.5),
+            Length::new::<meter>(1.0),
         )
         .unwrap();
         let mut s2 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(6.0),
-            Length::new::<meter>(1.0),
+            Length::new::<meter>(0.9)..Length::new::<meter>(6.0),
+            Length::new::<meter>(0.5),
         )
         .unwrap();
         s2.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
