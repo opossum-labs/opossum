@@ -133,7 +133,6 @@ impl Spectrum {
         }
         res
     }
-
     
     pub fn resample(&mut self, spectrum: &Spectrum) -> Result<()> {
         let _data = spectrum.data.clone();
@@ -143,6 +142,14 @@ impl Spectrum {
             let lower_bound = *self.lambdas.get(x.0).unwrap();
             let upper_bound = *self.lambdas.get(x.0 + 1).unwrap();
             let interval = spectrum.enclosing_interval(lower_bound, upper_bound);
+            let mut bucket_value=0.0;
+            for src_idx in interval.windows(2) {
+                let source_left=spectrum.lambdas[src_idx[0]];
+                let source_right=spectrum.lambdas[src_idx[1]];
+                let ratio=calc_ratio(lower_bound, upper_bound, source_left, source_right);
+                bucket_value+=spectrum.data[src_idx[0]]*ratio;
+            }
+            *x.1=bucket_value;
         }
         Ok(())
     }
@@ -413,12 +420,12 @@ mod test {
     fn resample_interp() {
         let mut s1 = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(1.0),
+            Length::new::<meter>(0.5),
         )
         .unwrap();
         let mut s2 = Spectrum::new(
-            Length::new::<meter>(0.9)..Length::new::<meter>(6.0),
-            Length::new::<meter>(0.5),
+            Length::new::<meter>(1.0)..Length::new::<meter>(6.0),
+            Length::new::<meter>(1.0),
         )
         .unwrap();
         s2.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
