@@ -10,6 +10,7 @@ use uom::si::length::meter;
 use uom::si::{f64::Length, length::nanometer};
 type Result<T> = std::result::Result<T, OpossumError>;
 
+#[derive(Clone)]
 pub struct Spectrum {
     data: Array1<f64>,    // data in 1/meters
     lambdas: Array1<f64>, // wavelength in meters
@@ -94,6 +95,19 @@ impl Spectrum {
         self.data = &self.data * factor;
         Ok(())
     }
+    fn nearest_value(self, x: f64) -> f64 {
+        let idx = self
+            .lambdas
+            .clone()
+            .into_iter()
+            .position(|w| w >= x).unwrap();
+        if idx>0 {
+            return *self.data.get(idx-1).unwrap()
+        } else {
+            return *self.data.get(0).unwrap()
+        }
+       
+    }
     pub fn resample(&mut self, spectrum: &Spectrum) -> Result<()> {
         let data = spectrum.data.clone();
         let x = spectrum.lambdas.clone();
@@ -103,22 +117,22 @@ impl Spectrum {
             .build()
             .unwrap();
         let max_idx= self.data.len();
-        let integration_step_size=0.05;
+        let integration_steps_size=0.00005;
         for x in self.data.iter_mut().enumerate() {
             if x.0 < max_idx-1 {
                 let lower_bound= *self.lambdas.get(x.0).unwrap();
                 let upper_bound = *self.lambdas.get(x.0+1).unwrap();
-                let integration_x=Array1::range(lower_bound, upper_bound, integration_step_size);
-                println!("integrate at: {}",integration_x);
+                let integration_x=Array1::range(lower_bound, upper_bound, integration_steps_size);
+                println!("integrate at: {} - {}",integration_x.first().unwrap(),integration_x.last().unwrap());
                 let mut integration_sum=0.0;
                 for i_x in integration_x.iter() {
-                    integration_sum+=interpolator.interp_scalar(*i_x).unwrap();
+                    //integration_sum+=interpolator.interp_scalar(*i_x).unwrap();
+                    integration_sum+=spectrum.clone().nearest_value(*i_x);
                 }
-                *x.1=integration_sum*integration_step_size;
+                *x.1=integration_sum*integration_steps_size;
                 println!("sum={}", *x.1);
             }
         }
-        //self.data = interpolator.interp_array(&query).unwrap();
         Ok(())
     }
     pub fn filter(&mut self, _spectrum: &Spectrum) -> Result<()> {
@@ -301,16 +315,16 @@ mod test {
     #[test]
     fn resample_interp() {
         let mut s1 = Spectrum::new(
-            Length::new::<meter>(1.5)..Length::new::<meter>(5.0),
-            Length::new::<meter>(1.0),
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(0.5),
         )
         .unwrap();
         let mut s2 = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(6.0),
-            Length::new::<meter>(0.5),
+            Length::new::<meter>(1.0),
         )
         .unwrap();
-        s2.set_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
+        s2.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         println!("s2: {}", s2);
         s1.resample(&s2).unwrap();
         assert_eq!(s1.data, array![0.0, 0.5, 0.5, 0.0]);
