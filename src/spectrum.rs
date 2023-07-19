@@ -1,5 +1,6 @@
 use crate::error::OpossumError;
 use ndarray::Array1;
+use std::f64::consts::PI;
 use std::fmt::Display;
 use std::ops::Range;
 use uom::fmt::DisplayStyle::Abbreviation;
@@ -8,6 +9,10 @@ use uom::si::length::meter;
 use uom::si::{f64::Length, length::nanometer};
 type Result<T> = std::result::Result<T, OpossumError>;
 
+/// Structure for handling spectral data.
+///
+/// This structure handles an array of values over a given wavelength range. Although the interface
+/// is still limited. The structure is prepared for handling non-equidistant wavelength slots.  
 #[derive(Clone)]
 pub struct Spectrum {
     data: Array1<f64>,    // data in 1/meters
@@ -15,6 +20,14 @@ pub struct Spectrum {
 }
 
 impl Spectrum {
+    /// Create a new (empty) spectrum of a given wavelength range and (equidistant) resolution.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OpossumError::Spectrum`] if
+    ///   - the wavelength range is not in ascending order
+    ///   - the wavelength limits are not both positive
+    ///   - the resolution is not positive
     pub fn new(range: Range<Length>, resolution: Length) -> Result<Self> {
         if resolution <= Length::zero() {
             return Err(OpossumError::Spectrum("resolution must be positive".into()));
@@ -40,7 +53,18 @@ impl Spectrum {
             data: Array1::zeros(length),
         })
     }
-    pub fn set_single_peak(&mut self, wavelength: Length, value: f64) -> Result<()> {
+    /// Add a single peak to the given [`Spectrum`].
+    ///
+    /// This functions adds a single (resolution limited) peak to the [`Spectrum`] at the given wavelength and
+    /// the given energy / intensity. If the given wavelength does not exactly match a spectrum slot the energy is distributed
+    /// over neighboring slots such that the total energy matches the given energy.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OpossumError::Spectrum`] if
+    ///   - the wavelength i s outside the spectrum range
+    ///   - the energy is negative
+    pub fn add_single_peak(&mut self, wavelength: Length, value: f64) -> Result<()> {
         let spectrum_range = self.lambdas.first().unwrap()..self.lambdas.last().unwrap();
         if !spectrum_range.contains(&&wavelength.get::<meter>()) {
             return Err(OpossumError::Spectrum(
@@ -59,20 +83,63 @@ impl Spectrum {
         if let Some(idx) = idx {
             if idx == 0 {
                 let delta = self.lambdas.get(1).unwrap() - self.lambdas.get(0).unwrap();
-                self.data[0] = value / delta;
+                self.data[0] += value / delta;
             } else {
                 let lower_lambda = self.lambdas.get(idx - 1).unwrap();
                 let upper_lambda = self.lambdas.get(idx).unwrap();
                 let delta = upper_lambda - lower_lambda;
-                self.data[idx - 1] =
+                self.data[idx - 1] +=
                     value * (1.0 - (wavelength_in_meters - lower_lambda) / delta) / delta;
-                self.data[idx] = value * (wavelength_in_meters - lower_lambda) / delta / delta;
+                self.data[idx] += value * (wavelength_in_meters - lower_lambda) / delta / delta;
             }
             Ok(())
         } else {
             Err(OpossumError::Spectrum("insertion point not found".into()))
         }
     }
+
+    /// Adds an emission line to this [`Spectrum`].
+    ///
+    /// This function adds a laser line (following a [Lorentzian](https://en.wikipedia.org/wiki/Cauchy_distribution) function) with a given 
+    /// center wavelength, width and energy to the spectrum. **Note**: Due to rounding errors (discrete wavelength bins, upper/lower spectrum
+    /// limits) the total energy is not exactly the given value.  
+    /// # Errors
+    ///
+    /// This function will return an [`OpossumError::Spectrum`] if
+    ///   - the center wavelength in negative
+    ///   - the width is negative
+    ///   - the energy is negative
+    pub fn add_lorentzian_peak(
+        &mut self,
+        center: Length,
+        width: Length,
+        energy: f64,
+    ) -> Result<()> {
+        if center.is_sign_negative() {
+            return Err(OpossumError::Spectrum(
+                "center wavelength must be positive".into(),
+            ));
+        }
+        if width.is_sign_negative() {
+            return Err(OpossumError::Spectrum("line width must be positive".into()));
+        }
+        if energy < 0.0 {
+            return Err(OpossumError::Spectrum("energy must be positive".into()));
+        }
+        let wavelength_in_meters = center.get::<meter>();
+        let width_in_meters = width.get::<meter>();
+        let spectrum_data: Array1<f64> = self
+            .lambdas
+            .iter_mut()
+            .map(|x| lorentz(wavelength_in_meters, width_in_meters, *x))
+            .collect();
+        self.data = &self.data + (spectrum_data * energy);
+        Ok(())
+    }
+    /// Returns the total energy of this [`Spectrum`].
+    ///
+    /// This function sums the values over all wavelength slots weighted with the individual slot widths. This
+    /// way it also works for non-equidistant spectra.
     pub fn total_energy(&self) -> f64 {
         let lambda_deltas: Vec<f64> = self
             .lambdas
@@ -87,6 +154,11 @@ impl Spectrum {
             .sum();
         total_energy
     }
+    /// Scale the spectrum by a constant factor.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OpossumError::Spectrum`] if the scaling factor is < 0.0.
     pub fn scale_vertical(&mut self, factor: f64) -> Result<()> {
         if factor < 0.0 {
             return Err(OpossumError::Spectrum(
@@ -136,7 +208,15 @@ impl Spectrum {
         res
     }
 
-    pub fn resample(&mut self, spectrum: &Spectrum) -> Result<()> {
+    /// Resample a provided [`Spectrum`] to match the given one.
+    ///
+    /// This function maps values and wavelengths of a provided spectrum to the structure of self. This function conserves the toal
+    /// energy if the the given interval is fully contained in self. This does not necessarily conserve peak widths or positions.  
+    ///
+    /// # Panics
+    ///
+    /// Panics if ???.
+    pub fn resample(&mut self, spectrum: &Spectrum) {
         let _data = spectrum.data.clone();
         let _x = spectrum.lambdas.clone();
         let max_idx = self.data.len() - 1;
@@ -144,15 +224,12 @@ impl Spectrum {
             let lower_bound = *self.lambdas.get(x.0).unwrap();
             let upper_bound = *self.lambdas.get(x.0 + 1).unwrap();
             let interval = spectrum.enclosing_interval(lower_bound, upper_bound);
-            //println!("bucket: [{},{}[", lower_bound, upper_bound);
             let mut bucket_value = 0.0;
             for src_idx in interval.windows(2) {
                 if (*src_idx)[0].is_some() && (*src_idx)[1].is_some() {
                     let source_left = spectrum.lambdas[src_idx[0].unwrap()];
                     let source_right = spectrum.lambdas[src_idx[1].unwrap()];
-                    //print!("   source: [{},{}] -> ratio: ", source_left, source_right);
                     let ratio = calc_ratio(lower_bound, upper_bound, source_left, source_right);
-                    //println!("{}", ratio);
                     bucket_value +=
                         spectrum.data[src_idx[0].unwrap()] * ratio * (source_right - source_left)
                             / (upper_bound - lower_bound);
@@ -160,10 +237,17 @@ impl Spectrum {
             }
             *x.1 = bucket_value;
         }
-        Ok(())
     }
-    pub fn filter(&mut self, _spectrum: &Spectrum) -> Result<()> {
-        Ok(())
+    /// Filter the spectrum with another given spectrum by multiplying the data values. The given spectrum is resampled before the multiplication.
+    pub fn filter(&mut self, filter_spectrum: &Spectrum) {
+        let mut resampled_spec = self.clone();
+        resampled_spec.resample(filter_spectrum);
+        self.data = self
+            .data
+            .iter()
+            .zip(resampled_spec.data.iter())
+            .map(|d| d.0 * d.1)
+            .collect();
     }
 }
 impl Display for Spectrum {
@@ -200,6 +284,10 @@ fn calc_ratio(bucket_left: f64, bucket_right: f64, source_left: f64, source_righ
         return (source_right - bucket_left) / (source_right - source_left);
     }
     0.0
+}
+
+fn lorentz(center: f64, width: f64, x: f64) -> f64 {
+    0.5 / PI * width / ((0.25 * width * width) + (x - center) * (x - center))
 }
 
 #[cfg(test)]
@@ -251,7 +339,7 @@ mod test {
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(2.0), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<meter>(2.0), 1.0).is_ok(),
             true
         );
         assert_eq!(s.data[2], 2.0);
@@ -264,10 +352,33 @@ mod test {
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(2.25), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<meter>(2.25), 1.0).is_ok(),
             true
         );
         assert_eq!(s.data[2], 1.0);
+        assert_eq!(s.data[3], 1.0);
+    }
+    #[test]
+    fn set_single_peak_additive() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(0.5),
+        )
+        .unwrap();
+        s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        assert_eq!(s.data[2], 4.0);
+    }
+    #[test]
+    fn set_single_peak_interp_additive() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(0.5),
+        )
+        .unwrap();
+        s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s.add_single_peak(Length::new::<meter>(2.25), 1.0).unwrap();
+        assert_eq!(s.data[2], 3.0);
         assert_eq!(s.data[3], 1.0);
     }
     #[test]
@@ -278,7 +389,7 @@ mod test {
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(1.0), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<meter>(1.0), 1.0).is_ok(),
             true
         );
         assert_eq!(s.data[0], 2.0);
@@ -291,11 +402,11 @@ mod test {
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(0.5), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<meter>(0.5), 1.0).is_ok(),
             false
         );
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(4.0), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<meter>(4.0), 1.0).is_ok(),
             false
         );
     }
@@ -307,9 +418,46 @@ mod test {
         )
         .unwrap();
         assert_eq!(
-            s.set_single_peak(Length::new::<meter>(1.5), -1.0).is_ok(),
+            s.add_single_peak(Length::new::<meter>(1.5), -1.0).is_ok(),
             false
         );
+    }
+    #[test]
+    fn add_lorentzian() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(50.0),
+            Length::new::<meter>(0.1),
+        )
+        .unwrap();
+        assert!(s.add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(0.5), 2.0).is_ok());
+        assert!(f64::abs(s.total_energy() - 2.0) < 0.1)
+    }
+    #[test]
+    fn add_lorentzian_neg_center() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(50.0),
+            Length::new::<meter>(0.1),
+        )
+        .unwrap();
+        assert!(s.add_lorentzian_peak(Length::new::<meter>(-25.0), Length::new::<meter>(0.5), 2.0).is_err());
+    }
+    #[test]
+    fn add_lorentzian_neg_width() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(50.0),
+            Length::new::<meter>(0.1),
+        )
+        .unwrap();
+        assert!(s.add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(-0.5), 2.0).is_err());
+    }
+    #[test]
+    fn add_lorentzian_neg_energy() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(50.0),
+            Length::new::<meter>(0.1),
+        )
+        .unwrap();
+        assert!(s.add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(0.5), -2.0).is_err());
     }
     #[test]
     fn total_energy() {
@@ -318,7 +466,7 @@ mod test {
             Length::new::<meter>(0.5),
         )
         .unwrap();
-        s.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         assert_eq!(s.total_energy(), 1.0);
     }
     #[test]
@@ -328,7 +476,7 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s.set_single_peak(Length::new::<meter>(1.5), 1.0).unwrap();
+        s.add_single_peak(Length::new::<meter>(1.5), 1.0).unwrap();
         assert_eq!(s.total_energy(), 1.0);
     }
     #[test]
@@ -338,7 +486,7 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s.set_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
+        s.add_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
         assert_eq!(s.scale_vertical(0.5).is_ok(), true);
         assert_eq!(s.data, array![0.0, 0.25, 0.25, 0.0]);
     }
@@ -349,7 +497,7 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s.set_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
+        s.add_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
         assert_eq!(s.scale_vertical(-0.5).is_ok(), false);
     }
     #[test]
@@ -462,13 +610,13 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s1.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s1.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         let s2 = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s1.resample(&s2).unwrap();
+        s1.resample(&s2);
         assert_eq!(s1.data, s2.data);
         assert_eq!(s1.total_energy(), s2.total_energy());
     }
@@ -484,8 +632,8 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s2.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
-        s1.resample(&s2).unwrap();
+        s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s1.resample(&s2);
         assert_eq!(s1.data, array![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
     }
@@ -501,8 +649,8 @@ mod test {
             Length::new::<meter>(0.5),
         )
         .unwrap();
-        s2.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
-        s1.resample(&s2).unwrap();
+        s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s1.resample(&s2);
         assert_eq!(s1.data, array![0.0, 1.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
     }
@@ -518,8 +666,8 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s2.set_single_peak(Length::new::<meter>(4.0), 1.0).unwrap();
-        s1.resample(&s2).unwrap();
+        s2.add_single_peak(Length::new::<meter>(4.0), 1.0).unwrap();
+        s1.resample(&s2);
         assert_eq!(s1.data, array![0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
     }
@@ -535,8 +683,8 @@ mod test {
             Length::new::<meter>(1.0),
         )
         .unwrap();
-        s2.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
-        s1.resample(&s2).unwrap();
+        s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s1.resample(&s2);
         assert_eq!(s1.data, array![0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
     }
