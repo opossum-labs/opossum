@@ -1,5 +1,6 @@
 use crate::error::OpossumError;
 use ndarray::Array1;
+use ndarray_stats::QuantileExt;
 use std::f64::consts::PI;
 use std::fmt::Display;
 use std::ops::Range;
@@ -8,6 +9,7 @@ use uom::num_traits::Zero;
 use uom::si::length::meter;
 use uom::si::{f64::Length, length::nanometer};
 type Result<T> = std::result::Result<T, OpossumError>;
+use plotters::prelude::*;
 
 /// Structure for handling spectral data.
 ///
@@ -100,7 +102,7 @@ impl Spectrum {
 
     /// Adds an emission line to this [`Spectrum`].
     ///
-    /// This function adds a laser line (following a [Lorentzian](https://en.wikipedia.org/wiki/Cauchy_distribution) function) with a given 
+    /// This function adds a laser line (following a [Lorentzian](https://en.wikipedia.org/wiki/Cauchy_distribution) function) with a given
     /// center wavelength, width and energy to the spectrum. **Note**: Due to rounding errors (discrete wavelength bins, upper/lower spectrum
     /// limits) the total energy is not exactly the given value.  
     /// # Errors
@@ -248,6 +250,55 @@ impl Spectrum {
             .zip(resampled_spec.data.iter())
             .map(|d| d.0 * d.1)
             .collect();
+    }
+    /// Add a given spectrum.
+    /// 
+    /// The given spectrum might be resampled in order to match self.
+    pub fn add(&mut self, spectrum_to_be_added: &Spectrum) {
+        let mut resampled_spec = self.clone();
+        resampled_spec.resample(spectrum_to_be_added);
+        self.data = self
+            .data
+            .iter()
+            .zip(resampled_spec.data.iter())
+            .map(|d| d.0 + d.1)
+            .collect();
+    }
+    pub fn sub(&mut self, spectrum_to_be_subtracted: &Spectrum) {
+        let mut resampled_spec = self.clone();
+        resampled_spec.resample(spectrum_to_be_subtracted);
+        self.data = self
+            .data
+            .iter()
+            .zip(resampled_spec.data.iter())
+            .map(|d| (d.0 - d.1).clamp(0.0, f64::abs(d.0-d.1)))
+            .collect();
+    }
+    pub fn to_plot(&self, filename: &str) {
+        let root = SVGBackend::new(filename, (640, 480)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let x_left = *self.lambdas.first().unwrap();
+        let x_right = *self.lambdas.last().unwrap();
+        let y_top=*self.data.max_skipnan();
+        let mut chart = ChartBuilder::on(&root)
+            .margin(5)
+            .x_label_area_size(30)
+            .y_label_area_size(30)
+            .build_cartesian_2d(x_left..x_right, 0.0..y_top)
+            .unwrap();
+
+        chart.configure_mesh().draw().unwrap();
+
+        chart
+            .draw_series(LineSeries::new(
+                self.lambdas
+                    .iter()
+                    .zip(self.data.iter())
+                    .map(|x| (*x.0, *x.1)),
+                &RED,
+            ))
+            .unwrap();
+        root.present().unwrap();
     }
 }
 impl Display for Spectrum {
@@ -429,7 +480,9 @@ mod test {
             Length::new::<meter>(0.1),
         )
         .unwrap();
-        assert!(s.add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(0.5), 2.0).is_ok());
+        assert!(s
+            .add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(0.5), 2.0)
+            .is_ok());
         assert!(f64::abs(s.total_energy() - 2.0) < 0.1)
     }
     #[test]
@@ -439,7 +492,9 @@ mod test {
             Length::new::<meter>(0.1),
         )
         .unwrap();
-        assert!(s.add_lorentzian_peak(Length::new::<meter>(-25.0), Length::new::<meter>(0.5), 2.0).is_err());
+        assert!(s
+            .add_lorentzian_peak(Length::new::<meter>(-25.0), Length::new::<meter>(0.5), 2.0)
+            .is_err());
     }
     #[test]
     fn add_lorentzian_neg_width() {
@@ -448,7 +503,9 @@ mod test {
             Length::new::<meter>(0.1),
         )
         .unwrap();
-        assert!(s.add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(-0.5), 2.0).is_err());
+        assert!(s
+            .add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(-0.5), 2.0)
+            .is_err());
     }
     #[test]
     fn add_lorentzian_neg_energy() {
@@ -457,7 +514,9 @@ mod test {
             Length::new::<meter>(0.1),
         )
         .unwrap();
-        assert!(s.add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(0.5), -2.0).is_err());
+        assert!(s
+            .add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(0.5), -2.0)
+            .is_err());
     }
     #[test]
     fn total_energy() {
