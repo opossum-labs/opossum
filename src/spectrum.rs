@@ -142,11 +142,14 @@ impl Spectrum {
             let lower_bound = *self.lambdas.get(x.0).unwrap();
             let upper_bound = *self.lambdas.get(x.0 + 1).unwrap();
             let interval = spectrum.enclosing_interval(lower_bound, upper_bound);
+            println!("bucket: [{},{}[", lower_bound, upper_bound);
             let mut bucket_value=0.0;
             for src_idx in interval.windows(2) {
                 let source_left=spectrum.lambdas[src_idx[0]];
                 let source_right=spectrum.lambdas[src_idx[1]];
+                print!("   source: [{},{}] -> ratio: ", source_left, source_right);
                 let ratio=calc_ratio(lower_bound, upper_bound, source_left, source_right);
+                println!("{}",ratio);
                 bucket_value+=spectrum.data[src_idx[0]]*ratio;
             }
             *x.1=bucket_value;
@@ -182,7 +185,7 @@ fn calc_ratio(bucket_left: f64, bucket_right: f64, source_left: f64, source_righ
         // bucket contains source
         return 1.0;
     }
-    if bucket_left > source_left && bucket_right < source_right {
+    if bucket_left >= source_left && bucket_right <= source_right {
         // bucket is part of source
         return (bucket_right - bucket_left) / (source_right - source_left);
     }
@@ -393,12 +396,13 @@ mod test {
         assert_eq!(calc_ratio(1.0,2.0,3.0,4.0),0.0); // bucket completely outside
         assert_eq!(calc_ratio(1.0, 4.0, 2.0, 3.0),1.0); // bucket contains source
         assert_eq!(calc_ratio(2.0,3.0,0.0,4.0),0.25); // bucket is part of source
+        assert_eq!(calc_ratio(0.0,1.0,0.0,2.0),0.5); // bucket is part of source (matching left)
+        assert_eq!(calc_ratio(1.0,2.0,0.0,2.0),0.5); // bucket is part of source (matching right)
         assert_eq!(calc_ratio(0.0,2.0,1.0,3.0),0.5); // bucket is left outside source
         assert_eq!(calc_ratio(0.0,2.0,1.0,2.0),1.0); // bucket is left outside source (matching)
         assert_eq!(calc_ratio(2.0,4.0, 1.0,3.0),0.5); // bucket is right outside source
         assert_eq!(calc_ratio(1.0,4.0, 1.0,3.0),1.0); // bucket is right outside source (matching)
-        assert_eq!(calc_ratio(1.0,2.0,1.0,2.0), 1.0); // bucket matches source
-       
+        assert_eq!(calc_ratio(1.0,2.0,1.0,2.0), 1.0); // bucket matches source   
     }
     #[test]
     fn resample() {
@@ -420,7 +424,7 @@ mod test {
     fn resample_interp() {
         let mut s1 = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(0.5),
+            Length::new::<meter>(1.0),
         )
         .unwrap();
         let mut s2 = Spectrum::new(
