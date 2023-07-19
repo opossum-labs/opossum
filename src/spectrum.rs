@@ -1,7 +1,5 @@
 use crate::error::OpossumError;
 use ndarray::Array1;
-use ndarray_interp::Interp1DBuilder;
-use ndarray_interp::Interp1DStrategy::Linear;
 use std::fmt::Display;
 use std::ops::Range;
 use uom::fmt::DisplayStyle::Abbreviation;
@@ -76,14 +74,17 @@ impl Spectrum {
         }
     }
     pub fn total_energy(&self) -> f64 {
-        let mut total_energy = 0.0;
-        for data in self.data.iter().enumerate() {
-            if data.0 < self.data.len() - 1 {
-                let delta =
-                    self.lambdas.get(data.0 + 1).unwrap() - self.lambdas.get(data.0).unwrap();
-                total_energy += *data.1 * delta;
-            }
-        }
+        let lambda_deltas: Vec<f64> = self
+            .lambdas
+            .windows(2)
+            .into_iter()
+            .map(|l| l[1] - l[0])
+            .collect();
+        let total_energy = lambda_deltas
+            .into_iter()
+            .zip(self.data.iter())
+            .map(|d| d.0 * *d.1)
+            .sum();
         total_energy
     }
     pub fn scale_vertical(&mut self, factor: f64) -> Result<()> {
@@ -95,45 +96,46 @@ impl Spectrum {
         self.data = &self.data * factor;
         Ok(())
     }
-    fn enclosing_interval(&self, x_lower: f64, x_upper: f64) -> Vec<usize> {
+    fn enclosing_interval(&self, x_lower: f64, x_upper: f64) -> Vec<Option<usize>> {
         let mut res = self
             .clone()
             .lambdas
             .into_iter()
             .enumerate()
             .filter(|x| x.1 < x_upper && x.1 > x_lower)
-            .map(|x| x.0)
-            .collect::<Vec<usize>>();
+            .map(|x| Some(x.0))
+            .collect::<Vec<Option<usize>>>();
         if res.is_empty() {
-            let mut lower_idx = self
-                .clone()
-                .lambdas
-                .into_iter()
-                .position(|x| x >= x_lower)
-                .unwrap();
-            let upper_idx = self
-                .clone()
-                .lambdas
-                .into_iter()
-                .position(|x| x >= x_upper)
-                .unwrap();
-            if lower_idx > 0 && self.lambdas[lower_idx] > x_lower {
-                lower_idx -= 1;
+            let mut lower_idx = self.clone().lambdas.into_iter().position(|x| x >= x_lower);
+            let upper_idx = self.clone().lambdas.into_iter().position(|x| x >= x_upper);
+            if let Some(l_i) = lower_idx {
+                if l_i > 0 && self.lambdas[l_i] > x_lower {
+                    lower_idx = Some(l_i - 1);
+                }
             }
-            res = vec![lower_idx, upper_idx];
+            if lower_idx == upper_idx {
+                res = vec![None, None];
+            } else {
+                res = vec![lower_idx, upper_idx];
+            }
         } else {
-            let first = *res.first().unwrap();
-            let last = *res.last().unwrap();
-            if first > 0 {
-                res.insert(0, first - 1);
+            let res_cp = res.clone();
+            let first = res_cp.first().unwrap();
+            let last = res_cp.last().unwrap();
+            if let Some(first) = first {
+                if *first > 0 {
+                    res.insert(0, Some(first - 1));
+                }
             }
-            if last < self.lambdas.len() - 1 {
-                res.push(last + 1)
+            if let Some(last) = last {
+                if *last < self.lambdas.len() - 1 {
+                    res.push(Some(last + 1))
+                }
             }
         }
         res
     }
-    
+
     pub fn resample(&mut self, spectrum: &Spectrum) -> Result<()> {
         let _data = spectrum.data.clone();
         let _x = spectrum.lambdas.clone();
@@ -142,17 +144,21 @@ impl Spectrum {
             let lower_bound = *self.lambdas.get(x.0).unwrap();
             let upper_bound = *self.lambdas.get(x.0 + 1).unwrap();
             let interval = spectrum.enclosing_interval(lower_bound, upper_bound);
-            println!("bucket: [{},{}[", lower_bound, upper_bound);
-            let mut bucket_value=0.0;
+            //println!("bucket: [{},{}[", lower_bound, upper_bound);
+            let mut bucket_value = 0.0;
             for src_idx in interval.windows(2) {
-                let source_left=spectrum.lambdas[src_idx[0]];
-                let source_right=spectrum.lambdas[src_idx[1]];
-                print!("   source: [{},{}] -> ratio: ", source_left, source_right);
-                let ratio=calc_ratio(lower_bound, upper_bound, source_left, source_right);
-                println!("{}",ratio);
-                bucket_value+=spectrum.data[src_idx[0]]*ratio;
+                if (*src_idx)[0].is_some() && (*src_idx)[1].is_some() {
+                    let source_left = spectrum.lambdas[src_idx[0].unwrap()];
+                    let source_right = spectrum.lambdas[src_idx[1].unwrap()];
+                    //print!("   source: [{},{}] -> ratio: ", source_left, source_right);
+                    let ratio = calc_ratio(lower_bound, upper_bound, source_left, source_right);
+                    //println!("{}", ratio);
+                    bucket_value +=
+                        spectrum.data[src_idx[0].unwrap()] * ratio * (source_right - source_left)
+                            / (upper_bound - lower_bound);
+                }
             }
-            *x.1=bucket_value;
+            *x.1 = bucket_value;
         }
         Ok(())
     }
@@ -164,9 +170,9 @@ impl Display for Spectrum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_length = Length::format_args(nanometer, Abbreviation);
         for value in self.data.iter().enumerate() {
-            write!(
+            writeln!(
                 f,
-                "{:7.2} -> {}\n",
+                "{:7.2} -> {}",
                 fmt_length.with(Length::new::<meter>(self.lambdas[value.0])),
                 *value.1
             )
@@ -193,7 +199,7 @@ fn calc_ratio(bucket_left: f64, bucket_right: f64, source_left: f64, source_righ
         // bucket is right partly outside source
         return (source_right - bucket_left) / (source_right - source_left);
     }
-    return 0.0;
+    0.0
 }
 
 #[cfg(test)]
@@ -316,6 +322,16 @@ mod test {
         assert_eq!(s.total_energy(), 1.0);
     }
     #[test]
+    fn total_energy2() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        s.set_single_peak(Length::new::<meter>(1.5), 1.0).unwrap();
+        assert_eq!(s.total_energy(), 1.0);
+    }
+    #[test]
     fn scale_vertical() {
         let mut s = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
@@ -344,8 +360,7 @@ mod test {
         )
         .unwrap();
         let v = s.enclosing_interval(2.1, 3.9);
-        let l = v.into_iter().map(|i| s.lambdas[i]).collect::<Vec<f64>>();
-        assert_eq!(l, vec![2.0, 3.0, 4.0]);
+        assert_eq!(v, vec![Some(1), Some(2), Some(3)]);
     }
     #[test]
     fn enclosing_interval_exact() {
@@ -355,8 +370,7 @@ mod test {
         )
         .unwrap();
         let v = s.enclosing_interval(2.0, 4.0);
-        let l = v.into_iter().map(|i| s.lambdas[i]).collect::<Vec<f64>>();
-        assert_eq!(l, vec![2.0, 3.0, 4.0]);
+        assert_eq!(v, vec![Some(1), Some(2), Some(3)]);
     }
     #[test]
     fn enclosing_interval_upper_bound() {
@@ -366,8 +380,7 @@ mod test {
         )
         .unwrap();
         let v = s.enclosing_interval(3.0, 5.0);
-        let l = v.into_iter().map(|i| s.lambdas[i]).collect::<Vec<f64>>();
-        assert_eq!(l, vec![3.0, 4.0]); // ranges are exclusive upper bound !
+        assert_eq!(v, vec![Some(2), Some(3)]); // ranges are exclusive upper bound !
     }
     #[test]
     fn enclosing_interval_lower_bound() {
@@ -377,8 +390,7 @@ mod test {
         )
         .unwrap();
         let v = s.enclosing_interval(1.0, 3.0);
-        let l = v.into_iter().map(|i| s.lambdas[i]).collect::<Vec<f64>>();
-        assert_eq!(l, vec![1.0, 2.0, 3.0]);
+        assert_eq!(v, vec![Some(0), Some(1), Some(2)]);
     }
     #[test]
     fn enclosing_interval_small_range() {
@@ -388,21 +400,60 @@ mod test {
         )
         .unwrap();
         let v = s.enclosing_interval(2.6, 2.9);
-        let l = v.into_iter().map(|i| s.lambdas[i]).collect::<Vec<f64>>();
-        assert_eq!(l, vec![2.0, 3.0]);
+        assert_eq!(v, vec![Some(1), Some(2)]);
+    }
+    #[test]
+    fn enclosing_interval_right_outside() {
+        let s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let v = s.enclosing_interval(5.1, 7.0);
+        assert_eq!(v, vec![None, None]);
+    }
+    #[test]
+    fn enclosing_interval_right_partly_outside() {
+        let s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let v = s.enclosing_interval(2.1, 7.0);
+        assert_eq!(v, vec![Some(1), Some(2), Some(3)]);
+    }
+    #[test]
+    fn enclosing_interval_left_outside() {
+        let s = Spectrum::new(
+            Length::new::<meter>(5.0)..Length::new::<meter>(10.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let v = s.enclosing_interval(1.0, 4.9);
+        assert_eq!(v, vec![None, None]);
+    }
+    #[test]
+    fn enclosing_interval_left_partly_outside() {
+        let s = Spectrum::new(
+            Length::new::<meter>(5.0)..Length::new::<meter>(10.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let v = s.enclosing_interval(2.1, 6.5);
+        assert_eq!(v, vec![Some(0), Some(1), Some(2)]);
     }
     #[test]
     fn calc_ratio_test() {
-        assert_eq!(calc_ratio(1.0,2.0,3.0,4.0),0.0); // bucket completely outside
-        assert_eq!(calc_ratio(1.0, 4.0, 2.0, 3.0),1.0); // bucket contains source
-        assert_eq!(calc_ratio(2.0,3.0,0.0,4.0),0.25); // bucket is part of source
-        assert_eq!(calc_ratio(0.0,1.0,0.0,2.0),0.5); // bucket is part of source (matching left)
-        assert_eq!(calc_ratio(1.0,2.0,0.0,2.0),0.5); // bucket is part of source (matching right)
-        assert_eq!(calc_ratio(0.0,2.0,1.0,3.0),0.5); // bucket is left outside source
-        assert_eq!(calc_ratio(0.0,2.0,1.0,2.0),1.0); // bucket is left outside source (matching)
-        assert_eq!(calc_ratio(2.0,4.0, 1.0,3.0),0.5); // bucket is right outside source
-        assert_eq!(calc_ratio(1.0,4.0, 1.0,3.0),1.0); // bucket is right outside source (matching)
-        assert_eq!(calc_ratio(1.0,2.0,1.0,2.0), 1.0); // bucket matches source   
+        assert_eq!(calc_ratio(1.0, 2.0, 3.0, 4.0), 0.0); // bucket completely outside
+        assert_eq!(calc_ratio(1.0, 4.0, 2.0, 3.0), 1.0); // bucket contains source
+        assert_eq!(calc_ratio(2.0, 3.0, 0.0, 4.0), 0.25); // bucket is part of source
+        assert_eq!(calc_ratio(0.0, 1.0, 0.0, 2.0), 0.5); // bucket is part of source (matching left)
+        assert_eq!(calc_ratio(1.0, 2.0, 0.0, 2.0), 0.5); // bucket is part of source (matching right)
+        assert_eq!(calc_ratio(0.0, 2.0, 1.0, 3.0), 0.5); // bucket is left outside source
+        assert_eq!(calc_ratio(0.0, 2.0, 1.0, 2.0), 1.0); // bucket is left outside source (matching)
+        assert_eq!(calc_ratio(2.0, 4.0, 1.0, 3.0), 0.5); // bucket is right outside source
+        assert_eq!(calc_ratio(1.0, 4.0, 1.0, 3.0), 1.0); // bucket is right outside source (matching)
+        assert_eq!(calc_ratio(1.0, 2.0, 1.0, 2.0), 1.0); // bucket matches source
     }
     #[test]
     fn resample() {
@@ -419,12 +470,13 @@ mod test {
         .unwrap();
         s1.resample(&s2).unwrap();
         assert_eq!(s1.data, s2.data);
+        assert_eq!(s1.total_energy(), s2.total_energy());
     }
     #[test]
     fn resample_interp() {
         let mut s1 = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(1.0),
+            Length::new::<meter>(0.5),
         )
         .unwrap();
         let mut s2 = Spectrum::new(
@@ -433,8 +485,59 @@ mod test {
         )
         .unwrap();
         s2.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
-        println!("s2: {}", s2);
         s1.resample(&s2).unwrap();
-        assert_eq!(s1.data, array![0.0, 0.5, 0.5, 0.0]);
+        assert_eq!(s1.data, array![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(s1.total_energy(), s2.total_energy());
+    }
+    #[test]
+    fn resample_interp2() {
+        let mut s1 = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let mut s2 = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(6.0),
+            Length::new::<meter>(0.5),
+        )
+        .unwrap();
+        s2.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s1.resample(&s2).unwrap();
+        assert_eq!(s1.data, array![0.0, 1.0, 0.0, 0.0]);
+        assert_eq!(s1.total_energy(), s2.total_energy());
+    }
+    #[test]
+    fn resample_right_outside() {
+        let mut s1 = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let mut s2 = Spectrum::new(
+            Length::new::<meter>(4.0)..Length::new::<meter>(6.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        s2.set_single_peak(Length::new::<meter>(4.0), 1.0).unwrap();
+        s1.resample(&s2).unwrap();
+        assert_eq!(s1.data, array![0.0, 0.0, 0.0]);
+        assert_eq!(s1.total_energy(), 0.0);
+    }
+    #[test]
+    fn resample_left_outside() {
+        let mut s1 = Spectrum::new(
+            Length::new::<meter>(4.0)..Length::new::<meter>(6.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        let mut s2 = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        s2.set_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s1.resample(&s2).unwrap();
+        assert_eq!(s1.data, array![0.0, 0.0]);
+        assert_eq!(s1.total_energy(), 0.0);
     }
 }
