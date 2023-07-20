@@ -61,9 +61,14 @@ impl Spectrum {
     pub fn from_csv() {
          // Read an array back from the file
         let file = File::open("NE03B.csv").unwrap();
-        let mut reader = ReaderBuilder::new().has_headers(true).from_reader(file);
+        let mut reader = ReaderBuilder::new().has_headers(false).delimiter(b';').from_reader(file);
+        for record in reader.records() {
+            if let Ok(record)=record {
+              println!("{:?} {:?}",record.get(0), record.get(1));
+            }
+        }
         //let array_read: Array2<u64> = reader.deserialize_array2((2, 3)).unwrap();
-        println!("{:?}",reader);
+        //println!("{:?}",array_read);
     }
     /// Returns the wavelength range of this [`Spectrum`].
     pub fn range(&self) -> Range<Length> {
