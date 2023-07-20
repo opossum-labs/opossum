@@ -252,7 +252,7 @@ impl Spectrum {
             .collect();
     }
     /// Add a given spectrum.
-    /// 
+    ///
     /// The given spectrum might be resampled in order to match self.
     pub fn add(&mut self, spectrum_to_be_added: &Spectrum) {
         let mut resampled_spec = self.clone();
@@ -271,7 +271,7 @@ impl Spectrum {
             .data
             .iter()
             .zip(resampled_spec.data.iter())
-            .map(|d| (d.0 - d.1).clamp(0.0, f64::abs(d.0-d.1)))
+            .map(|d| (d.0 - d.1).clamp(0.0, f64::abs(d.0 - d.1)))
             .collect();
     }
     pub fn to_plot(&self, filename: &str) {
@@ -279,7 +279,7 @@ impl Spectrum {
         root.fill(&WHITE).unwrap();
         let x_left = *self.lambdas.first().unwrap();
         let x_right = *self.lambdas.last().unwrap();
-        let y_top=*self.data.max_skipnan();
+        let y_top = *self.data.max_skipnan();
         let mut chart = ChartBuilder::on(&root)
             .margin(5)
             .x_label_area_size(30)
@@ -345,13 +345,20 @@ fn lorentz(center: f64, width: f64, x: f64) -> f64 {
 mod test {
     use super::*;
     use ndarray::array;
+    fn prep() -> Spectrum {
+        Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(0.5),
+        )
+        .unwrap()
+    }
     #[test]
     fn new() {
         let s = Spectrum::new(
             Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
             Length::new::<meter>(0.5),
         );
-        assert_eq!(s.is_ok(), true);
+        assert!(s.is_ok());
         assert_eq!(
             s.as_ref().unwrap().lambdas,
             array![1.0, 1.5, 2.0, 2.5, 3.0, 3.5]
@@ -364,7 +371,7 @@ mod test {
             Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
             Length::new::<meter>(-0.5),
         );
-        assert_eq!(s.is_ok(), false);
+        assert!(s.is_err());
     }
     #[test]
     fn new_wrong_range() {
@@ -372,7 +379,7 @@ mod test {
             Length::new::<meter>(4.0)..Length::new::<meter>(1.0),
             Length::new::<meter>(0.5),
         );
-        assert_eq!(s.is_ok(), false);
+        assert!(s.is_err());
     }
     #[test]
     fn new_negative_range() {
@@ -380,15 +387,11 @@ mod test {
             Length::new::<meter>(-1.0)..Length::new::<meter>(4.0),
             Length::new::<meter>(0.5),
         );
-        assert_eq!(s.is_ok(), false);
+        assert!(s.is_err());
     }
     #[test]
     fn set_single_peak() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(0.5),
-        )
-        .unwrap();
+        let mut s = prep();
         assert_eq!(
             s.add_single_peak(Length::new::<meter>(2.0), 1.0).is_ok(),
             true
@@ -397,11 +400,7 @@ mod test {
     }
     #[test]
     fn set_single_peak_interpolated() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(0.5),
-        )
-        .unwrap();
+        let mut s = prep();
         assert_eq!(
             s.add_single_peak(Length::new::<meter>(2.25), 1.0).is_ok(),
             true
@@ -411,22 +410,14 @@ mod test {
     }
     #[test]
     fn set_single_peak_additive() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(0.5),
-        )
-        .unwrap();
+        let mut s = prep();
         s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         assert_eq!(s.data[2], 4.0);
     }
     #[test]
     fn set_single_peak_interp_additive() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(0.5),
-        )
-        .unwrap();
+        let mut s = prep();
         s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         s.add_single_peak(Length::new::<meter>(2.25), 1.0).unwrap();
         assert_eq!(s.data[2], 3.0);
@@ -434,11 +425,7 @@ mod test {
     }
     #[test]
     fn set_single_peak_lower_bound() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(0.5),
-        )
-        .unwrap();
+        let mut s = prep();
         assert_eq!(
             s.add_single_peak(Length::new::<meter>(1.0), 1.0).is_ok(),
             true
@@ -446,32 +433,11 @@ mod test {
         assert_eq!(s.data[0], 2.0);
     }
     #[test]
-    fn set_single_peak_out_of_limit() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(1.0),
-        )
-        .unwrap();
-        assert_eq!(
-            s.add_single_peak(Length::new::<meter>(0.5), 1.0).is_ok(),
-            false
-        );
-        assert_eq!(
-            s.add_single_peak(Length::new::<meter>(4.0), 1.0).is_ok(),
-            false
-        );
-    }
-    #[test]
-    fn set_single_peak_negative_energy() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(1.0),
-        )
-        .unwrap();
-        assert_eq!(
-            s.add_single_peak(Length::new::<meter>(1.5), -1.0).is_ok(),
-            false
-        );
+    fn set_single_peak_wrong_params() {
+        let mut s = prep();
+        assert!(s.add_single_peak(Length::new::<meter>(0.5), 1.0).is_err());
+        assert!(s.add_single_peak(Length::new::<meter>(4.0), 1.0).is_err());
+        assert!(s.add_single_peak(Length::new::<meter>(1.5), -1.0).is_err());
     }
     #[test]
     fn add_lorentzian() {
@@ -486,45 +452,21 @@ mod test {
         assert!(f64::abs(s.total_energy() - 2.0) < 0.1)
     }
     #[test]
-    fn add_lorentzian_neg_center() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(50.0),
-            Length::new::<meter>(0.1),
-        )
-        .unwrap();
+    fn add_lorentzian_wrong_params() {
+        let mut s = prep();
         assert!(s
-            .add_lorentzian_peak(Length::new::<meter>(-25.0), Length::new::<meter>(0.5), 2.0)
+            .add_lorentzian_peak(Length::new::<meter>(-5.0), Length::new::<meter>(0.5), 2.0)
             .is_err());
-    }
-    #[test]
-    fn add_lorentzian_neg_width() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(50.0),
-            Length::new::<meter>(0.1),
-        )
-        .unwrap();
         assert!(s
-            .add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(-0.5), 2.0)
+            .add_lorentzian_peak(Length::new::<meter>(2.0), Length::new::<meter>(-0.5), 2.0)
             .is_err());
-    }
-    #[test]
-    fn add_lorentzian_neg_energy() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(50.0),
-            Length::new::<meter>(0.1),
-        )
-        .unwrap();
         assert!(s
-            .add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(0.5), -2.0)
+            .add_lorentzian_peak(Length::new::<meter>(2.0), Length::new::<meter>(0.5), -2.0)
             .is_err());
     }
     #[test]
     fn total_energy() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(0.5),
-        )
-        .unwrap();
+        let mut s = prep();
         s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         assert_eq!(s.total_energy(), 1.0);
     }
@@ -546,18 +488,13 @@ mod test {
         )
         .unwrap();
         s.add_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
-        assert_eq!(s.scale_vertical(0.5).is_ok(), true);
+        assert!(s.scale_vertical(0.5).is_ok());
         assert_eq!(s.data, array![0.0, 0.25, 0.25, 0.0]);
     }
     #[test]
     fn scale_vertical_negative() {
-        let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(1.0),
-        )
-        .unwrap();
-        s.add_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
-        assert_eq!(s.scale_vertical(-0.5).is_ok(), false);
+        let mut s = prep();
+        assert!(s.scale_vertical(-0.5).is_err());
     }
     #[test]
     fn enclosing_interval() {
@@ -746,5 +683,23 @@ mod test {
         s1.resample(&s2);
         assert_eq!(s1.data, array![0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
+    }
+    #[test]
+    fn add() {
+        let mut s=prep();
+        s.add_single_peak(Length::new::<meter>(1.75), 1.0).unwrap();
+        let mut s2=prep();
+        s2.add_single_peak(Length::new::<meter>(2.25), 0.5).unwrap();
+        s.add(&s2);
+        assert_eq!(s.data, array![0.0, 1.0, 1.5, 0.5, 0.0, 0.0]);
+    }
+    #[test]
+    fn sub() {
+        let mut s=prep();
+        s.add_single_peak(Length::new::<meter>(1.75), 1.0).unwrap();
+        let mut s2=prep();
+        s2.add_single_peak(Length::new::<meter>(2.25), 0.5).unwrap();
+        s.sub(&s2);
+        assert_eq!(s.data, array![0.0, 1.0, 0.5, 0.0, 0.0, 0.0]);
     }
 }
