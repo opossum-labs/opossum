@@ -1,8 +1,9 @@
+//! Module for handling optical spectra
 use crate::error::OpossumError;
 use ndarray::Array1;
 use ndarray_stats::QuantileExt;
 use std::f64::consts::PI;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::ops::Range;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
@@ -20,7 +21,6 @@ pub struct Spectrum {
     data: Array1<f64>,    // data in 1/meters
     lambdas: Array1<f64>, // wavelength in meters
 }
-
 impl Spectrum {
     /// Create a new (empty) spectrum of a given wavelength range and (equidistant) resolution.
     ///
@@ -54,6 +54,11 @@ impl Spectrum {
             lambdas: l,
             data: Array1::zeros(length),
         })
+    }
+    /// Returns the wavelength range of this [`Spectrum`].
+    pub fn range(&self) -> Range<Length> {
+        Length::new::<meter>(*self.lambdas.first().unwrap())
+            ..Length::new::<meter>(*self.lambdas.last().unwrap())
     }
     /// Add a single peak to the given [`Spectrum`].
     ///
@@ -264,6 +269,10 @@ impl Spectrum {
             .map(|d| d.0 + d.1)
             .collect();
     }
+    /// Subtract a given spectrum.
+    ///
+    /// The given spectrum might be resampled in order to match self. **Note**: Negative values as result from the subtraction will be
+    /// clamped to 0.0 (negative spectrum values are not allowed).
     pub fn sub(&mut self, spectrum_to_be_subtracted: &Spectrum) {
         let mut resampled_spec = self.clone();
         resampled_spec.resample(spectrum_to_be_subtracted);
@@ -317,6 +326,21 @@ impl Display for Spectrum {
     }
 }
 
+impl Debug for Spectrum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let fmt_length = Length::format_args(nanometer, Abbreviation);
+        for value in self.data.iter().enumerate() {
+            writeln!(
+                f,
+                "{:7.2} -> {}",
+                fmt_length.with(Length::new::<meter>(self.lambdas[value.0])),
+                *value.1
+            )
+            .unwrap();
+        }
+        Ok(())
+    }
+}
 fn calc_ratio(bucket_left: f64, bucket_right: f64, source_left: f64, source_right: f64) -> f64 {
     if bucket_left < source_left && bucket_right > source_left && bucket_right < source_right {
         // bucket is left partly outside source
@@ -341,6 +365,46 @@ fn lorentz(center: f64, width: f64, x: f64) -> f64 {
     0.5 / PI * width / ((0.25 * width * width) + (x - center) * (x - center))
 }
 
+/// Helper function for generating a visible spectrum.
+///
+/// This function generates an empty spectrum in the visible range (350 - 750 nm) with a resolution
+/// of 0.1 nm. 
+pub fn create_visible_spectrum() -> Spectrum {
+    Spectrum::new(
+        Length::new::<nanometer>(380.0)..Length::new::<nanometer>(750.0),
+        Length::new::<nanometer>(0.1),
+    )
+    .unwrap()
+}
+/// Helper function for generating a near infrared spectrum.
+///
+/// This function generates an empty spectrum in the near infrared range (800 - 2500 nm) with a resolution
+/// of 0.1 nm. 
+pub fn create_nir_spectrum() -> Spectrum {
+    Spectrum::new(
+        Length::new::<nanometer>(800.0)..Length::new::<nanometer>(2500.0),
+        Length::new::<nanometer>(0.1),
+    )
+    .unwrap()
+}
+/// Helper function for generating a spectrum of a narrow-band HeNe laser.
+///
+/// This function generates an spectrum in the visible range (350 - 750 nm) with a resolution
+/// of 0.1 nm and a (spectrum resolution limited) laser line at 632.816 nm.
+pub fn create_he_ne_spectrum(energy: f64) -> Spectrum {
+    let mut s=create_visible_spectrum();
+    s.add_single_peak(Length::new::<nanometer>(632.816), energy).unwrap();
+    s
+}
+/// Helper function for generating a spectrum of a narrow-band Nd:glass laser.
+///
+/// This function generates an spectrum in the near infrared range (800 - 2500 nm) with a resolution
+/// of 0.1 nm and a (Lorentzian) laser line at 1054 nm with a width of 0.5 nm.
+pub fn create_yb_yag_spectrum(energy: f64) -> Spectrum {
+    let mut s=create_nir_spectrum();
+    s.add_lorentzian_peak(Length::new::<nanometer>(1054.0), Length::new::<nanometer>(0.5), energy).unwrap();
+    s
+}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -388,6 +452,14 @@ mod test {
             Length::new::<meter>(0.5),
         );
         assert!(s.is_err());
+    }
+    #[test]
+    fn range() {
+        let s = prep();
+        assert_eq!(
+            s.range(),
+            Length::new::<meter>(1.0)..Length::new::<meter>(3.5)
+        )
     }
     #[test]
     fn set_single_peak() {
@@ -686,18 +758,18 @@ mod test {
     }
     #[test]
     fn add() {
-        let mut s=prep();
+        let mut s = prep();
         s.add_single_peak(Length::new::<meter>(1.75), 1.0).unwrap();
-        let mut s2=prep();
+        let mut s2 = prep();
         s2.add_single_peak(Length::new::<meter>(2.25), 0.5).unwrap();
         s.add(&s2);
         assert_eq!(s.data, array![0.0, 1.0, 1.5, 0.5, 0.0, 0.0]);
     }
     #[test]
     fn sub() {
-        let mut s=prep();
+        let mut s = prep();
         s.add_single_peak(Length::new::<meter>(1.75), 1.0).unwrap();
-        let mut s2=prep();
+        let mut s2 = prep();
         s2.add_single_peak(Length::new::<meter>(2.25), 0.5).unwrap();
         s.sub(&s2);
         assert_eq!(s.data, array![0.0, 1.0, 0.5, 0.0, 0.0, 0.0]);
