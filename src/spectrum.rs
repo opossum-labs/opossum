@@ -1,7 +1,9 @@
 //! Module for handling optical spectra
 use crate::error::OpossumError;
-use ndarray::Array1;
+use ndarray::{Array1,Array2};
 use ndarray_stats::QuantileExt;
+use ndarray_csv::Array2Reader;
+use csv::ReaderBuilder;
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
 use std::ops::Range;
@@ -11,6 +13,7 @@ use uom::si::length::meter;
 use uom::si::{f64::Length, length::nanometer};
 type Result<T> = std::result::Result<T, OpossumError>;
 use plotters::prelude::*;
+use std::fs::File;
 
 /// Structure for handling spectral data.
 ///
@@ -54,6 +57,13 @@ impl Spectrum {
             lambdas: l,
             data: Array1::zeros(length),
         })
+    }
+    pub fn from_csv() {
+         // Read an array back from the file
+        let file = File::open("NE03B.csv").unwrap();
+        let mut reader = ReaderBuilder::new().has_headers(true).from_reader(file);
+        //let array_read: Array2<u64> = reader.deserialize_array2((2, 3)).unwrap();
+        println!("{:?}",reader);
     }
     /// Returns the wavelength range of this [`Spectrum`].
     pub fn range(&self) -> Range<Length> {
@@ -452,6 +462,10 @@ mod test {
             Length::new::<meter>(0.5),
         );
         assert!(s.is_err());
+    }
+    #[test]
+    fn from_csv() {
+        Spectrum::from_csv();
     }
     #[test]
     fn range() {
