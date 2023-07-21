@@ -19,27 +19,40 @@ pub struct Spectrum {
 }
 
 impl Spectrum {
-    pub fn new(range: Range<Length>, resolution: Length) -> Self {
+    pub fn new(range: Range<Length>, resolution: Length) -> Result<Self> {
+        if resolution <= Length::zero() {
+            return Err(OpossumError::Spectrum("resolution must be positive".into()));
+        }
+        if range.start >= range.end {
+            return Err(OpossumError::Spectrum(
+                "wavelength range must be in ascending order".into(),
+            ));
+        }
+        if range.start <= Length::zero() || range.end <= Length::zero() {
+            return Err(OpossumError::Spectrum(
+                "wavelength range limits must both be positive".into(),
+            ));
+        }
         let l = Array1::range(
             range.start.get::<meter>(),
             range.end.get::<meter>(),
             resolution.get::<meter>(),
         );
         let length = l.len();
-        Self {
+        Ok(Self {
             lambdas: l,
             data: Array1::zeros(length),
-        }
+        })
     }
     pub fn set_single_peak(&mut self, wavelength: Length, energy: Energy) -> Result<()> {
         let spectrum_range = self.lambdas.first().unwrap()..self.lambdas.last().unwrap();
         if !spectrum_range.contains(&&wavelength.get::<meter>()) {
-            return Err(OpossumError::Other(
+            return Err(OpossumError::Spectrum(
                 "wavelength is not in spectrum range".into(),
             ));
         }
         if energy.is_sign_negative() {
-            return Err(OpossumError::Other("energy must be positive".into()));
+            return Err(OpossumError::Spectrum("energy must be positive".into()));
         }
         let wavelength_in_meters = wavelength.get::<meter>();
         let idx = self
@@ -59,7 +72,7 @@ impl Spectrum {
             }
             Ok(())
         } else {
-            Err(OpossumError::Other("insertion point not found".into()))
+            Err(OpossumError::Spectrum("insertion point not found".into()))
         }
     }
     pub fn total_energy(&self) -> Energy {
@@ -68,6 +81,15 @@ impl Spectrum {
             total_energy += *data;
         }
         total_energy
+    }
+    pub fn scale_vertical(&mut self, factor: f64) -> Result<()> {
+        if factor < 0.0 {
+            return Err(OpossumError::Spectrum(
+                "scaling factor mus be >= 0.0".into(),
+            ));
+        }
+        self.data = &self.data * factor;
+        Ok(())
     }
 }
 
@@ -89,5 +111,173 @@ impl Display for Spectrum {
             "\nTotal energy: {}",
             fmt_energy.with(self.total_energy())
         )
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use ndarray::array;
+    #[test]
+    fn new() {
+        let s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(0.5),
+        );
+        assert_eq!(s.is_ok(), true);
+        assert_eq!(
+            s.as_ref().unwrap().lambdas,
+            array![1.0, 1.5, 2.0, 2.5, 3.0, 3.5]
+        );
+        assert_eq!(
+            s.unwrap().data,
+            array![
+                Energy::zero(),
+                Energy::zero(),
+                Energy::zero(),
+                Energy::zero(),
+                Energy::zero(),
+                Energy::zero()
+            ]
+        );
+    }
+    #[test]
+    fn new_negative_resolution() {
+        let s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(-0.5),
+        );
+        assert_eq!(s.is_ok(), false);
+    }
+    #[test]
+    fn new_wrong_range() {
+        let s = Spectrum::new(
+            Length::new::<meter>(4.0)..Length::new::<meter>(1.0),
+            Length::new::<meter>(0.5),
+        );
+        assert_eq!(s.is_ok(), false);
+    }
+    #[test]
+    fn new_negative_range() {
+        let s = Spectrum::new(
+            Length::new::<meter>(-1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(0.5),
+        );
+        assert_eq!(s.is_ok(), false);
+    }
+    #[test]
+    fn set_single_peak() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.set_single_peak(Length::new::<meter>(2.0), Energy::new::<joule>(1.0))
+                .is_ok(),
+            true
+        );
+        assert_eq!(s.data[1].get::<joule>(), 1.0);
+    }
+    #[test]
+    fn set_single_peak_interpolated() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.set_single_peak(Length::new::<meter>(2.5), Energy::new::<joule>(1.0))
+                .is_ok(),
+            true
+        );
+        assert_eq!(s.data[1].get::<joule>(), 0.5);
+        assert_eq!(s.data[2].get::<joule>(), 0.5);
+    }
+    #[test]
+    fn set_single_peak_lower_bound() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.set_single_peak(Length::new::<meter>(1.0), Energy::new::<joule>(1.0))
+                .is_ok(),
+            true
+        );
+        assert_eq!(s.data[0].get::<joule>(), 1.0);
+    }
+    #[test]
+    fn set_single_peak_out_of_limit() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.set_single_peak(Length::new::<meter>(0.5), Energy::new::<joule>(1.0))
+                .is_ok(),
+            false
+        );
+        assert_eq!(
+            s.set_single_peak(Length::new::<meter>(4.0), Energy::new::<joule>(1.0))
+                .is_ok(),
+            false
+        );
+    }
+    #[test]
+    fn set_single_peak_ngative_energy() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.set_single_peak(Length::new::<meter>(1.5), Energy::new::<joule>(-1.0))
+                .is_ok(),
+            false
+        );
+    }
+    #[test]
+    fn total_energy() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        s.set_single_peak(Length::new::<meter>(2.0), Energy::new::<joule>(1.0))
+            .unwrap();
+        assert_eq!(s.total_energy(), Energy::new::<joule>(1.0));
+    }
+    #[test]
+    fn scale_vertical() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        s.set_single_peak(Length::new::<meter>(2.5), Energy::new::<joule>(1.0))
+            .unwrap();
+        assert_eq!(s.scale_vertical(0.5).is_ok(), true);
+        assert_eq!(
+            s.data,
+            array![
+                Energy::zero(),
+                Energy::new::<joule>(0.25),
+                Energy::new::<joule>(0.25),
+                Energy::zero()
+            ]
+        );
+    }
+    #[test]
+    fn scale_vertical_negative() {
+        let mut s = Spectrum::new(
+            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
+            Length::new::<meter>(1.0),
+        )
+        .unwrap();
+        s.set_single_peak(Length::new::<meter>(2.5), Energy::new::<joule>(1.0))
+            .unwrap();
+        assert_eq!(s.scale_vertical(-0.5).is_ok(), false);
     }
 }
