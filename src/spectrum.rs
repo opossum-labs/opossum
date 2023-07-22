@@ -58,17 +58,21 @@ impl Spectrum {
             data: Array1::zeros(length),
         })
     }
-    pub fn from_csv() {
-         // Read an array back from the file
-        let file = File::open("NE03B.csv").unwrap();
+    pub fn from_csv(path: &str) -> Result<Self >{
+        let file = File::open(path).map_err(|e| OpossumError::Spectrum(e.to_string()))?;
         let mut reader = ReaderBuilder::new().has_headers(false).delimiter(b';').from_reader(file);
+        let mut lambdas: Vec<f64>=Vec::new();
+        let mut datas: Vec<f64>=Vec::new();
         for record in reader.records() {
             if let Ok(record)=record {
-              println!("{:?} {:?}",record.get(0), record.get(1));
+                let lambda=record.get(0).unwrap().parse::<f64>().unwrap();
+                let data=record.get(1).unwrap().parse::<f64>().unwrap();
+                lambdas.push(lambda* 1.0E-9); // nanometers -> meters
+                datas.push(data*0.01); // percent -> transmisison
+              println!("{} {:?}",lambda, data);
             }
         }
-        //let array_read: Array2<u64> = reader.deserialize_array2((2, 3)).unwrap();
-        //println!("{:?}",array_read);
+        Ok(Self{ data: Array1::from_vec(datas), lambdas: Array1::from_vec(lambdas) })
     }
     /// Returns the wavelength range of this [`Spectrum`].
     pub fn range(&self) -> Range<Length> {
@@ -470,7 +474,7 @@ mod test {
     }
     #[test]
     fn from_csv() {
-        Spectrum::from_csv();
+        Spectrum::from_csv("NE03B.csv");
     }
     #[test]
     fn range() {

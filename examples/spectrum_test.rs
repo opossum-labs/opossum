@@ -1,4 +1,4 @@
-use opossum::error::OpossumError;
+use opossum::{error::OpossumError, spectrum::create_visible_spectrum};
 use opossum::spectrum::Spectrum;
 use uom::si::{f64::Length, length::meter};
 
@@ -23,5 +23,11 @@ fn main() -> Result<(), OpossumError> {
     s3.add_lorentzian_peak(Length::new::<meter>(420.0), Length::new::<meter>(0.3), 0.02)?;
     s.sub(&s3);
     s.to_plot("spectrum.svg");
+
+    let s4=Spectrum::from_csv("NE03B.csv")?;
+    println!("{:?}",s4.range());
+    let mut s5=create_visible_spectrum();
+    s5.resample(&s4);
+    s5.to_plot("ne03b.svg");
     Ok(())
 } 
