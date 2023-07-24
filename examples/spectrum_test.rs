@@ -1,5 +1,5 @@
-use opossum::{error::OpossumError, spectrum::create_visible_spectrum};
-use opossum::spectrum::Spectrum;
+use opossum::error::OpossumError;
+use opossum::spectrum::{Spectrum, create_visible_spectrum};
 use uom::si::{f64::Length, length::nanometer};
 
 fn main() -> Result<(), OpossumError> {
@@ -25,7 +25,7 @@ fn main() -> Result<(), OpossumError> {
     s.to_plot("spectrum.svg");
 
     let s4=Spectrum::from_csv("NE03B.csv")?;
-    println!("{:?}",s4.range());
+    s4.to_plot("ne03b_raw.svg");
     let mut s5=create_visible_spectrum();
     s5.resample(&s4);
     s5.to_plot("ne03b.svg");

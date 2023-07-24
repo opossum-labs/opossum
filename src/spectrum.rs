@@ -66,12 +66,22 @@ impl Spectrum {
         let mut lambdas: Vec<f64> = Vec::new();
         let mut datas: Vec<f64> = Vec::new();
         for record in reader.records() {
-            if let Ok(record) = record {
-                let lambda = record.get(0).unwrap().parse::<f64>().unwrap();
-                let data = record.get(1).unwrap().parse::<f64>().unwrap();
-                lambdas.push(lambda * 1.0E-9); // nanometers -> meters
-                datas.push(data * 0.01); // percent -> transmisison
-            }
+            let record = record.map_err(|e| OpossumError::Spectrum(e.to_string()))?;
+            let lambda = record
+                .get(0)
+                .unwrap()
+                .parse::<f64>()
+                .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
+            let data = record
+                .get(1)
+                .unwrap()
+                .parse::<f64>()
+                .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
+            lambdas.push(lambda * 1.0E-9); // nanometers -> meters
+            datas.push(data * 0.01); // percent -> transmisison
+        }
+        if lambdas.is_empty() {
+            return Err(OpossumError::Spectrum("no csv data was found in file".into()));
         }
         Ok(Self {
             data: Array1::from_vec(datas),
@@ -316,17 +326,21 @@ impl Spectrum {
             .margin(5)
             .x_label_area_size(30)
             .y_label_area_size(30)
-            .build_cartesian_2d(x_left*1.0E9..x_right*1.0E9, 0.0..y_top)
+            .build_cartesian_2d(x_left * 1.0E9..x_right * 1.0E9, 0.0..y_top)
             .unwrap();
 
-        chart.configure_mesh().x_desc("wavelength (nm)").draw().unwrap();
+        chart
+            .configure_mesh()
+            .x_desc("wavelength (nm)")
+            .draw()
+            .unwrap();
 
         chart
             .draw_series(LineSeries::new(
                 self.lambdas
                     .iter()
                     .zip(self.data.iter())
-                    .map(|x| (*x.0*1.0E9, *x.1)),
+                    .map(|x| (*x.0 * 1.0E9, *x.1)),
                 &RED,
             ))
             .unwrap();
@@ -483,8 +497,27 @@ mod test {
         assert!(s.is_err());
     }
     #[test]
-    fn from_csv() {
-        assert!(Spectrum::from_csv("NE03B.csv").is_ok());
+    fn from_csv_ok() {
+        let s = Spectrum::from_csv("spectrum_test/spec_to_csv_test_01.csv");
+        assert!(s.is_ok());
+        let lambdas = s.unwrap().lambdas;
+        assert!(lambdas
+            .into_iter()
+            .zip(array![500.0E-9, 501.0E-9, 502.0E-9, 503.0E-9, 504.0E-9, 505.0E-9].iter())
+            .all(|x| f64::abs(x.0 - *x.1) < 1.0E-16));
+        let s = Spectrum::from_csv("spectrum_test/spec_to_csv_test_01.csv");
+        let datas = s.unwrap().data;
+        assert!(datas
+            .into_iter()
+            .zip(array![5.0E-01, 4.981E-01, 4.982E-01, 4.984E-01, 4.996E-01, 5.010E-01].iter())
+            .all(|x| f64::abs(x.0 - *x.1) < 1.0E-16))
+    }
+    #[test]
+    fn from_csv_err() {
+        assert!(Spectrum::from_csv("wrong_path.csv").is_err());
+        assert!(Spectrum::from_csv("spectrum_test/spec_to_csv_test_02.csv").is_err());
+        assert!(Spectrum::from_csv("spectrum_test/spec_to_csv_test_03.csv").is_err());
+        assert!(Spectrum::from_csv("spectrum_test/spec_to_csv_test_04.csv").is_err());
     }
     #[test]
     fn range() {
