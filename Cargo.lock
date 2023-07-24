@@ -496,18 +496,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ndarray-csv"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2956dbaf15d46593bfddfdb88901cb35299f3a58390c7328ac4f58932800b8f8"
-dependencies = [
- "csv",
- "either",
- "ndarray",
- "serde",
-]
-
-[[package]]
 name = "ndarray-stats"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -582,7 +570,6 @@ version = "0.1.0"
 dependencies = [
  "csv",
  "ndarray",
- "ndarray-csv",
  "ndarray-stats",
  "petgraph",
  "plotters",

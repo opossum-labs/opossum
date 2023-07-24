@@ -1,9 +1,8 @@
 //! Module for handling optical spectra
 use crate::error::OpossumError;
-use ndarray::{Array1,Array2};
-use ndarray_stats::QuantileExt;
-use ndarray_csv::Array2Reader;
 use csv::ReaderBuilder;
+use ndarray::Array1;
+use ndarray_stats::QuantileExt;
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
 use std::ops::Range;
@@ -58,21 +57,26 @@ impl Spectrum {
             data: Array1::zeros(length),
         })
     }
-    pub fn from_csv(path: &str) -> Result<Self >{
+    pub fn from_csv(path: &str) -> Result<Self> {
         let file = File::open(path).map_err(|e| OpossumError::Spectrum(e.to_string()))?;
-        let mut reader = ReaderBuilder::new().has_headers(false).delimiter(b';').from_reader(file);
-        let mut lambdas: Vec<f64>=Vec::new();
-        let mut datas: Vec<f64>=Vec::new();
+        let mut reader = ReaderBuilder::new()
+            .has_headers(false)
+            .delimiter(b';')
+            .from_reader(file);
+        let mut lambdas: Vec<f64> = Vec::new();
+        let mut datas: Vec<f64> = Vec::new();
         for record in reader.records() {
-            if let Ok(record)=record {
-                let lambda=record.get(0).unwrap().parse::<f64>().unwrap();
-                let data=record.get(1).unwrap().parse::<f64>().unwrap();
-                lambdas.push(lambda* 1.0E-9); // nanometers -> meters
-                datas.push(data*0.01); // percent -> transmisison
-              println!("{} {:?}",lambda, data);
+            if let Ok(record) = record {
+                let lambda = record.get(0).unwrap().parse::<f64>().unwrap();
+                let data = record.get(1).unwrap().parse::<f64>().unwrap();
+                lambdas.push(lambda * 1.0E-9); // nanometers -> meters
+                datas.push(data * 0.01); // percent -> transmisison
             }
         }
-        Ok(Self{ data: Array1::from_vec(datas), lambdas: Array1::from_vec(lambdas) })
+        Ok(Self {
+            data: Array1::from_vec(datas),
+            lambdas: Array1::from_vec(lambdas),
+        })
     }
     /// Returns the wavelength range of this [`Spectrum`].
     pub fn range(&self) -> Range<Length> {
@@ -312,17 +316,17 @@ impl Spectrum {
             .margin(5)
             .x_label_area_size(30)
             .y_label_area_size(30)
-            .build_cartesian_2d(x_left..x_right, 0.0..y_top)
+            .build_cartesian_2d(x_left*1.0E9..x_right*1.0E9, 0.0..y_top)
             .unwrap();
 
-        chart.configure_mesh().draw().unwrap();
+        chart.configure_mesh().x_desc("wavelength (nm)").draw().unwrap();
 
         chart
             .draw_series(LineSeries::new(
                 self.lambdas
                     .iter()
                     .zip(self.data.iter())
-                    .map(|x| (*x.0, *x.1)),
+                    .map(|x| (*x.0*1.0E9, *x.1)),
                 &RED,
             ))
             .unwrap();
@@ -387,7 +391,7 @@ fn lorentz(center: f64, width: f64, x: f64) -> f64 {
 /// Helper function for generating a visible spectrum.
 ///
 /// This function generates an empty spectrum in the visible range (350 - 750 nm) with a resolution
-/// of 0.1 nm. 
+/// of 0.1 nm.
 pub fn create_visible_spectrum() -> Spectrum {
     Spectrum::new(
         Length::new::<nanometer>(380.0)..Length::new::<nanometer>(750.0),
@@ -398,7 +402,7 @@ pub fn create_visible_spectrum() -> Spectrum {
 /// Helper function for generating a near infrared spectrum.
 ///
 /// This function generates an empty spectrum in the near infrared range (800 - 2500 nm) with a resolution
-/// of 0.1 nm. 
+/// of 0.1 nm.
 pub fn create_nir_spectrum() -> Spectrum {
     Spectrum::new(
         Length::new::<nanometer>(800.0)..Length::new::<nanometer>(2500.0),
@@ -411,8 +415,9 @@ pub fn create_nir_spectrum() -> Spectrum {
 /// This function generates an spectrum in the visible range (350 - 750 nm) with a resolution
 /// of 0.1 nm and a (spectrum resolution limited) laser line at 632.816 nm.
 pub fn create_he_ne_spectrum(energy: f64) -> Spectrum {
-    let mut s=create_visible_spectrum();
-    s.add_single_peak(Length::new::<nanometer>(632.816), energy).unwrap();
+    let mut s = create_visible_spectrum();
+    s.add_single_peak(Length::new::<nanometer>(632.816), energy)
+        .unwrap();
     s
 }
 /// Helper function for generating a spectrum of a narrow-band Nd:glass laser.
@@ -420,8 +425,13 @@ pub fn create_he_ne_spectrum(energy: f64) -> Spectrum {
 /// This function generates an spectrum in the near infrared range (800 - 2500 nm) with a resolution
 /// of 0.1 nm and a (Lorentzian) laser line at 1054 nm with a width of 0.5 nm.
 pub fn create_yb_yag_spectrum(energy: f64) -> Spectrum {
-    let mut s=create_nir_spectrum();
-    s.add_lorentzian_peak(Length::new::<nanometer>(1054.0), Length::new::<nanometer>(0.5), energy).unwrap();
+    let mut s = create_nir_spectrum();
+    s.add_lorentzian_peak(
+        Length::new::<nanometer>(1054.0),
+        Length::new::<nanometer>(0.5),
+        energy,
+    )
+    .unwrap();
     s
 }
 #[cfg(test)]
@@ -474,7 +484,7 @@ mod test {
     }
     #[test]
     fn from_csv() {
-        Spectrum::from_csv("NE03B.csv");
+        assert!(Spectrum::from_csv("NE03B.csv").is_ok());
     }
     #[test]
     fn range() {
