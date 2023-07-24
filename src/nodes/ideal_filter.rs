@@ -1,18 +1,16 @@
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
-use crate::lightdata::{LightData, DataEnergy};
+use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_node::{Dottable, LightResult, Optical};
 use crate::optic_ports::OpticPorts;
 use std::collections::HashMap;
-use uom::num_traits::Zero;
-use uom::si::f64::Energy;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Debug)]
 /// An ideal filter with given transmission or optical density.
 pub struct IdealFilter {
-    transmission: f64
+    transmission: f64,
 }
 
 impl IdealFilter {
@@ -64,19 +62,21 @@ impl IdealFilter {
     }
     fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
         let input = incoming_data.get("front");
-
-        let mut input_energy = Energy::zero();
-
         if let Some(Some(input)) = input {
             match input {
-                LightData::Energy(e) => input_energy = e.energy,
+                LightData::Energy(e) => {
+                    let mut out_spec=e.spectrum.clone();
+                    if out_spec.scale_vertical(self.transmission).is_ok() {
+                        let light_data = Some(LightData::Energy(DataEnergy {
+                            spectrum: out_spec,
+                        }));
+                        return Ok(HashMap::from([("rear".into(), light_data)]));
+                    }
+                }
                 _ => return Err(OpossumError::Analysis("expected energy value".into())),
             }
         }
-        let output_energy = Some(LightData::Energy(DataEnergy {
-            energy: input_energy * self.transmission,
-        }));
-        Ok(HashMap::from([("rear".into(), output_energy)]))
+        Err(OpossumError::Analysis("error in analysis".into()))
     }
 }
 

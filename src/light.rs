@@ -43,7 +43,7 @@ mod test {
         let light = Light::new("test1", "test2");
         assert_eq!(light.src_port, "test1");
         assert_eq!(light.target_port, "test2");
-        assert_eq!(light.data, None);
+        assert!(light.data.is_none());
     }
     #[test]
     fn src_port() {
