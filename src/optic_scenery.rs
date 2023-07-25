@@ -231,11 +231,15 @@ impl OpticScenery {
         let sink_nodes=&self.g.externals(Outgoing);
         println!("Sources:");
         for idx in src_nodes.clone() {
-            println!("{:?}", self.node(idx).unwrap().borrow());
+            let node=self.node(idx).unwrap();
+            println!("{:?}", node.borrow());
+            node.borrow().export_data();
         }
         println!("Sinks:");
         for idx in sink_nodes.clone() {
-            println!("{:?}", self.node(idx).unwrap().borrow());
+            let node=self.node(idx).unwrap();
+            println!("{:?}", node.borrow());
+            node.borrow().export_data();
         }   
     }
 }

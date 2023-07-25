@@ -95,10 +95,13 @@ impl Spectrum {
         Length::new::<meter>(*self.lambdas.first().unwrap())
             ..Length::new::<meter>(*self.lambdas.last().unwrap())
     }
-    pub fn estimate_resolution(&self) -> Length {
+    /// Returns the average wavelenth resolution of this [`Spectrum`].
+    ///
+    /// The function estimates the spectral resolution from the bandwidth divided by the number of points.
+    pub fn average_resolution(&self) -> Length {
         let r = self.range();
         let bandwidth = r.end - r.start;
-        bandwidth / (self.lambdas.len() as f64)
+        bandwidth / (self.lambdas.len() as f64 - 1.0)
     }
     /// Add a single peak to the given [`Spectrum`].
     ///
@@ -470,8 +473,8 @@ pub fn unify_spectrum(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spec
         let resolution = s1
             .as_ref()
             .unwrap()
-            .estimate_resolution()
-            .min(s2.as_ref().unwrap().estimate_resolution());
+            .average_resolution()
+            .min(s2.as_ref().unwrap().average_resolution());
         let mut s_out = Spectrum::new(minimum..maximum, resolution).unwrap();
         s_out.resample(&s1.unwrap());
         s_out.add(&s2.unwrap());
@@ -559,7 +562,7 @@ mod test {
     }
     #[test]
     fn estimate_resolution() {
-        todo!()
+        assert_eq!(prep().average_resolution().get::<meter>(), 0.5);
     }
     #[test]
     fn set_single_peak() {

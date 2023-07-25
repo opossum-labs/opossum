@@ -10,7 +10,16 @@ pub enum LightData {
     Geometric(DataGeometric),
     Fourier,
 }
-
+impl LightData {
+    pub fn export(&self, file_name: &str) {
+        match self {
+            LightData::Energy(d) => {
+                d.spectrum.to_plot(file_name);
+            },
+           _ => println!("no export function defined for this type of LightData")
+        }
+    }
+}
 impl Display for LightData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
