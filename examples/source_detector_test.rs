@@ -6,7 +6,7 @@ use opossum::{
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, Detector, IdealFilter, Source, FilterType},
-    optic_scenery::OpticScenery, spectrum::create_he_ne_spectrum,
+    optic_scenery::OpticScenery, spectrum::{create_he_ne_spectrum, Spectrum},
 };
 
 fn main() -> Result<(), OpossumError> {
@@ -20,7 +20,8 @@ fn main() -> Result<(), OpossumError> {
         })),
     );
     let i_bs = scenery.add_element("Beam splitter", BeamSplitter::new(0.6));
-    let i_f = scenery.add_element("Filter", IdealFilter::new(FilterType::Constant(0.5))?);
+    let filter_spectrum=Spectrum::from_csv("NE03B.csv")?;
+    let i_f = scenery.add_element("Filter", IdealFilter::new(FilterType::Spectrum(filter_spectrum))?);
     let i_d1 = scenery.add_element("Detector 1", Detector::default());
     let i_d2 = scenery.add_element("Detector 2", Detector::default());
 
