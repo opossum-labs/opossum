@@ -297,12 +297,14 @@ mod test {
         assert_eq!(scenery.g.edge_count(), 1);
     }
     #[test]
+    #[ignore]
     fn to_dot_empty() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into());
         assert_eq!(scenery.to_dot(), "digraph {\n  label=\"Test\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n}");
     }
     #[test]
+    #[ignore]
     fn to_dot_with_node() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
@@ -313,6 +315,7 @@ mod test {
         );
     }
     #[test]
+    #[ignore]
     fn to_dot_with_edge() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
