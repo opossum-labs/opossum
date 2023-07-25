@@ -220,16 +220,15 @@ impl Spectrum {
     }
     fn enclosing_interval(&self, x_lower: f64, x_upper: f64) -> Vec<Option<usize>> {
         let mut res = self
-            .clone()
             .lambdas
-            .into_iter()
+            .iter()
             .enumerate()
-            .filter(|x| x.1 < x_upper && x.1 > x_lower)
+            .filter(|x| *x.1 < x_upper && *x.1 > x_lower)
             .map(|x| Some(x.0))
             .collect::<Vec<Option<usize>>>();
         if res.is_empty() {
-            let mut lower_idx = self.clone().lambdas.into_iter().position(|x| x >= x_lower);
-            let upper_idx = self.clone().lambdas.into_iter().position(|x| x >= x_upper);
+            let mut lower_idx = self.lambdas.iter().position(|x| *x >= x_lower);
+            let upper_idx = self.lambdas.iter().position(|x| *x >= x_upper);
             if let Some(l_i) = lower_idx {
                 if l_i > 0 && self.lambdas[l_i] > x_lower {
                     lower_idx = Some(l_i - 1);
@@ -260,15 +259,13 @@ impl Spectrum {
 
     /// Resample a provided [`Spectrum`] to match the given one.
     ///
-    /// This function maps values and wavelengths of a provided spectrum to the structure of self. This function conserves the toal
+    /// This function maps values and wavelengths of a provided spectrum to the structure of self. This function conserves the total
     /// energy if the the given interval is fully contained in self. This does not necessarily conserve peak widths or positions.  
     ///
     /// # Panics
     ///
     /// Panics if ???.
     pub fn resample(&mut self, spectrum: &Spectrum) {
-        let _data = spectrum.data.clone();
-        let _x = spectrum.lambdas.clone();
         let max_idx = self.data.len() - 1;
         for x in self.data.iter_mut().enumerate().filter(|x| x.0 < max_idx) {
             let lower_bound = *self.lambdas.get(x.0).unwrap();
