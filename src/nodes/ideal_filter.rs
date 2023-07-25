@@ -3,14 +3,20 @@ use crate::error::OpossumError;
 use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_node::{Dottable, LightResult, Optical};
 use crate::optic_ports::OpticPorts;
+use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
+#[derive(Debug, Clone)]
+pub enum FilterType {
+    Constant(f64),
+    Spectrum(Spectrum),
+}
 #[derive(Debug)]
 /// An ideal filter with given transmission or optical density.
 pub struct IdealFilter {
-    transmission: f64,
+    filter_type: FilterType,
 }
 
 impl IdealFilter {
@@ -19,16 +25,22 @@ impl IdealFilter {
     /// # Errors
     ///
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
-    pub fn new(transmission: f64) -> Result<Self> {
-        if transmission <= 1.0 {
-            Ok(Self { transmission })
-        } else {
-            Err(OpossumError::Other("attenuation must be <= 1.0".into()))
+    pub fn new(filter_type: FilterType) -> Result<Self> {
+        match filter_type {
+            FilterType::Constant(transmission) => {
+                if transmission < 0.0 || transmission > 1.0 {
+                    return Err(OpossumError::Other("attenuation must be <= 1.0".into()))
+                }
+            },
+            _ => ()
         }
+        Ok(Self {
+            filter_type,
+        })
     }
-    /// Returns the transmission factor of this [`IdealFilter`].
-    pub fn transmission(&self) -> f64 {
-        self.transmission
+    /// Returns the filter type of this [`IdealFilter`].
+    pub fn filter_type(&self) -> FilterType {
+        self.filter_type.clone()
     }
     /// Sets the transmission of this [`IdealFilter`].
     ///
@@ -37,7 +49,7 @@ impl IdealFilter {
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
     pub fn set_transmission(&mut self, transmission: f64) -> Result<()> {
         if transmission <= 1.0 {
-            self.transmission = transmission;
+            self.filter_type = FilterType::Constant(transmission);
             Ok(())
         } else {
             Err(OpossumError::Other("attenuation must be <=1.0".into()))
@@ -50,27 +62,41 @@ impl IdealFilter {
     /// This function will return an error if an optical density < 0.0 was given.
     pub fn set_optical_density(&mut self, density: f64) -> Result<()> {
         if density >= 0.0 {
-            self.transmission = f64::powf(10.0, -1.0 * density);
+            self.filter_type = FilterType::Constant(f64::powf(10.0, -1.0 * density));
             Ok(())
         } else {
             Err(OpossumError::Other("optical densitiy must be >=0".into()))
         }
     }
-    /// Returns the transmission facotr of this [`IdealFilter`] expressed as optical density.
-    pub fn optical_density(&self) -> f64 {
-        -1.0 * f64::log10(self.transmission)
+    /// Returns the transmission factor of this [`IdealFilter`] expressed as optical density for the [`FilterType::Constant`].
+    ///
+    /// This functions `None` if the filter type is not [`FilterType::Constant`].
+    pub fn optical_density(&self) -> Option<f64> {
+        match self.filter_type {
+            FilterType::Constant(t) => Some(-1.0 * f64::log10(t)),
+            _ => None,
+        }
     }
     fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
         let input = incoming_data.get("front");
         if let Some(Some(input)) = input {
             match input {
                 LightData::Energy(e) => {
-                    let mut out_spec=e.spectrum.clone();
-                    if out_spec.scale_vertical(self.transmission).is_ok() {
-                        let light_data = Some(LightData::Energy(DataEnergy {
-                            spectrum: out_spec,
-                        }));
-                        return Ok(HashMap::from([("rear".into(), light_data)]));
+                    let mut out_spec = e.spectrum.clone();
+                    match &self.filter_type {
+                        FilterType::Constant(t) => {
+                            if out_spec.scale_vertical(*t).is_ok() {
+                                let light_data =
+                                    Some(LightData::Energy(DataEnergy { spectrum: out_spec }));
+                                return Ok(HashMap::from([("rear".into(), light_data)]));
+                            }
+                        }
+                        FilterType::Spectrum(s) => {
+                            out_spec.filter(&s);
+                            let light_data =
+                                    Some(LightData::Energy(DataEnergy { spectrum: out_spec }));
+                                return Ok(HashMap::from([("rear".into(), light_data)]));
+                        },
                     }
                 }
                 _ => return Err(OpossumError::Analysis("expected energy value".into())),

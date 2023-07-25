@@ -14,3 +14,4 @@ pub use node_beam_splitter::BeamSplitter;
 pub use node_source::Source;
 pub use node_detector::Detector;
 pub use ideal_filter::IdealFilter;
+pub use ideal_filter::FilterType;
