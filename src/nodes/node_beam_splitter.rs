@@ -6,9 +6,8 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_node::{Dottable, LightResult, Optical},
     optic_ports::OpticPorts,
-    spectrum::Spectrum,
+    spectrum::{Spectrum, unify_spectrum}
 };
-use crate::spectrum::unify_spectrum;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 

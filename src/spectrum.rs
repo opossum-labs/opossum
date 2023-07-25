@@ -448,7 +448,7 @@ pub fn create_he_ne_spectrum(energy: f64) -> Spectrum {
 ///
 /// This function generates an spectrum in the near infrared range (800 - 2500 nm) with a resolution
 /// of 0.1 nm and a (Lorentzian) laser line at 1054 nm with a width of 0.5 nm.
-pub fn create_yb_yag_spectrum(energy: f64) -> Spectrum {
+pub fn create_nd_glass_spectrum(energy: f64) -> Spectrum {
     let mut s = create_nir_spectrum();
     s.add_lorentzian_peak(
         Length::new::<nanometer>(1054.0),
@@ -475,8 +475,11 @@ pub fn unify_spectrum(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spec
             .unwrap()
             .average_resolution()
             .min(s2.as_ref().unwrap().average_resolution());
+        println!("min={}, max={}, res={}", minimum.get::<nanometer>(), maximum.get::<nanometer>(), resolution.get::<nanometer>());
         let mut s_out = Spectrum::new(minimum..maximum, resolution).unwrap();
+        println!("resampling...");
         s_out.resample(&s1.unwrap());
+        println!("adding");
         s_out.add(&s2.unwrap());
         Some(s_out)
     }
