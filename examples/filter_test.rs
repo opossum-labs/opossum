@@ -11,7 +11,7 @@ use opossum::{
 
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
-    scenery.set_description("src - detector demo".into());
+    scenery.set_description("filter system demo");
 
     let i_s = scenery.add_element(
         "Source",

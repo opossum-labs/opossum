@@ -187,8 +187,8 @@ impl OpticScenery {
         }
     }
     /// Sets the description of this [`OpticScenery`].
-    pub fn set_description(&mut self, description: String) {
-        self.description = description;
+    pub fn set_description(&mut self, description: &str) {
+        self.description = description.into();
     }
     /// Returns a reference to the description of this [`OpticScenery`].
     pub fn description(&self) -> &str {

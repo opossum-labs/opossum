@@ -8,7 +8,7 @@ use std::io::Write;
 
 fn main() -> Result <(), OpossumError> {
     let mut scenery = OpticScenery::new();
-    scenery.set_description("Fancy Graph with Ports".into());
+    scenery.set_description("Fancy Graph with Ports");
 
     let in1 = scenery.add_node(OpticNode::new("Input", Dummy));
     let out1 = scenery.add_node(OpticNode::new("Output", Dummy));

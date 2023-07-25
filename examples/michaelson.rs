@@ -7,7 +7,7 @@ use std::io::Write;
 
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
-    scenery.set_description("Michaelson interferomater".into());
+    scenery.set_description("Michaelson interferomater");
     let src = scenery.add_element("Source", Source::default());
     let bs = scenery.add_element("Beamspliiter", BeamSplitter::default());
     let sample = scenery.add_element("sample", Dummy);
