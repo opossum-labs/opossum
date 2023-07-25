@@ -1,13 +1,12 @@
 use std::fs::File;
 use std::io::Write;
-use uom::si::{energy::joule, f64::Energy};
 
 use opossum::{
     analyzer::AnalyzerEnergy,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, Detector, IdealFilter, Source},
-    optic_scenery::OpticScenery,
+    optic_scenery::OpticScenery, spectrum::create_he_ne_spectrum,
 };
 
 fn main() -> Result<(), OpossumError> {
@@ -17,7 +16,7 @@ fn main() -> Result<(), OpossumError> {
     let i_s = scenery.add_element(
         "Source",
         Source::new(LightData::Energy(DataEnergy {
-            energy: Energy::new::<joule>(1.0),
+            spectrum: create_he_ne_spectrum(1.0),
         })),
     );
     let i_bs = scenery.add_element("Beam splitter", BeamSplitter::new(0.6));

@@ -33,5 +33,5 @@ pub struct DataEnergy {
 
 #[derive(Debug, Clone)]
 pub struct DataGeometric {
-    ray: i32,
+    _ray: i32,
 }

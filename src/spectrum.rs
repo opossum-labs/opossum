@@ -81,7 +81,9 @@ impl Spectrum {
             datas.push(data * 0.01); // percent -> transmisison
         }
         if lambdas.is_empty() {
-            return Err(OpossumError::Spectrum("no csv data was found in file".into()));
+            return Err(OpossumError::Spectrum(
+                "no csv data was found in file".into(),
+            ));
         }
         Ok(Self {
             data: Array1::from_vec(datas),
@@ -92,6 +94,11 @@ impl Spectrum {
     pub fn range(&self) -> Range<Length> {
         Length::new::<meter>(*self.lambdas.first().unwrap())
             ..Length::new::<meter>(*self.lambdas.last().unwrap())
+    }
+    pub fn estimate_resolution(&self) -> Length {
+        let r = self.range();
+        let bandwidth = r.end - r.start;
+        bandwidth / (self.lambdas.len() as f64)
     }
     /// Add a single peak to the given [`Spectrum`].
     ///
@@ -448,6 +455,29 @@ pub fn create_yb_yag_spectrum(energy: f64) -> Spectrum {
     .unwrap();
     s
 }
+pub fn unify_spectrum(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spectrum> {
+    if s1.is_none() && s2.is_none() {
+        None
+    } else if s1.is_some() && s2.is_none() {
+        s1
+    } else if s1.is_none() && s2.is_some() {
+        s2
+    } else {
+        let s1_range = s1.as_ref().unwrap().range();
+        let s2_range = s2.as_ref().unwrap().range();
+        let minimum = s1_range.start.min(s2_range.start);
+        let maximum = s1_range.end.max(s2_range.end);
+        let resolution = s1
+            .as_ref()
+            .unwrap()
+            .estimate_resolution()
+            .min(s2.as_ref().unwrap().estimate_resolution());
+        let mut s_out = Spectrum::new(minimum..maximum, resolution).unwrap();
+        s_out.resample(&s1.unwrap());
+        s_out.add(&s2.unwrap());
+        Some(s_out)
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -526,6 +556,10 @@ mod test {
             s.range(),
             Length::new::<meter>(1.0)..Length::new::<meter>(3.5)
         )
+    }
+    #[test]
+    fn estimate_resolution() {
+        todo!()
     }
     #[test]
     fn set_single_peak() {

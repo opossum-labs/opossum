@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use uom::{num_traits::Zero, si::f64::Energy};
 
 use crate::{
     analyzer::AnalyzerType,
@@ -9,6 +8,7 @@ use crate::{
     optic_ports::OpticPorts,
     spectrum::Spectrum,
 };
+use crate::spectrum::unify_spectrum;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -37,30 +37,50 @@ impl BeamSplitter {
         let in1 = incoming_data.get("input1");
         let in2 = incoming_data.get("input2");
 
-        let mut in1_spectrum: Option<Spectrum> = None;
-        let mut in2_spectrum: Option<Spectrum> = None;
+        let mut out1_1_spectrum: Option<Spectrum> = None;
+        let mut out1_2_spectrum: Option<Spectrum> = None;
+        let mut out2_1_spectrum: Option<Spectrum> = None;
+        let mut out2_2_spectrum: Option<Spectrum> = None;
 
         if let Some(Some(in1)) = in1 {
             match in1 {
-                LightData::Energy(e) => in1_spectrum = Some(e.spectrum.clone()),
+                LightData::Energy(e) => { 
+                    let mut s=e.spectrum.clone();
+                    s.scale_vertical(self.ratio).unwrap();
+                    out1_1_spectrum = Some(s);
+                    let mut s=e.spectrum.clone();
+                    s.scale_vertical(1.0-self.ratio).unwrap();
+                    out1_2_spectrum=Some(s);
+                }
                 _ => return Err(OpossumError::Analysis("expected DataEnergy value".into())),
             }
         }
         if let Some(Some(in2)) = in2 {
             match in2 {
-                LightData::Energy(e) => in2_spectrum = Some(e.spectrum.clone()),
+                LightData::Energy(e) => { 
+                    let mut s=e.spectrum.clone();
+                    s.scale_vertical(self.ratio).unwrap();
+                    out2_1_spectrum = Some(s);
+                    let mut s=e.spectrum.clone();
+                    s.scale_vertical(1.0-self.ratio).unwrap();
+                    out2_2_spectrum=Some(s);
+                },
                 _ => return Err(OpossumError::Analysis("expected DataEnergy value".into())),
             }
         }
-        // let out1_energy = Some(LightData::Energy(DataEnergy {
-        //     energy: in1_energy * self.ratio + in2_energy * (1.0 - self.ratio),
-        // }));
-        // let out2_energy = Some(LightData::Energy(DataEnergy {
-        //     energy: in1_energy * (1.0 - self.ratio) + in2_energy * self.ratio,
-        // }));
+        let out1_spec= unify_spectrum(out1_1_spectrum, out2_2_spectrum);
+        let out2_spec= unify_spectrum(out1_2_spectrum, out2_1_spectrum);
+        let mut out1_data: Option<LightData>=None;
+        let mut out2_data: Option<LightData>=None;
+        if let Some(out1_spec)=out1_spec {
+            out1_data=Some(LightData::Energy(DataEnergy { spectrum: out1_spec }))
+        }
+        if let Some(out2_spec)=out2_spec {
+            out2_data=Some(LightData::Energy(DataEnergy { spectrum: out2_spec }))
+        }
         Ok(HashMap::from([
-            ("out1_trans1_refl2".into(), None), //out1_energy),
-            ("out2_trans2_refl1".into(), None), //out2_energy),
+            ("out1_trans1_refl2".into(), out1_data),
+            ("out2_trans2_refl1".into(), out2_data),
         ]))
     }
 }
