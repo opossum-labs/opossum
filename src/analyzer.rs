@@ -1,4 +1,4 @@
-use crate::{optic_scenery::OpticScenery, error::OpossumError};
+use crate::{error::OpossumError, optic_scenery::OpticScenery};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 #[derive(Debug)]
@@ -13,10 +13,10 @@ impl AnalyzerEnergy {
         }
     }
     pub fn analyze(&mut self) -> Result<()> {
-       self.scene.analyze(&AnalyzerType::Energy)
+        self.scene.analyze(&AnalyzerType::Energy)
     }
 }
 
 pub enum AnalyzerType {
-    Energy
+    Energy,
 }

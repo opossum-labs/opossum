@@ -4,7 +4,7 @@ use crate::lightdata::LightData;
 pub struct Light {
     src_port: String,
     target_port: String,
-    data: Option<LightData>
+    data: Option<LightData>,
 }
 
 impl Light {
@@ -12,7 +12,7 @@ impl Light {
         Self {
             src_port: src_port.into(),
             target_port: target_port.into(),
-            data: None
+            data: None,
         }
     }
     pub fn src_port(&self) -> &str {

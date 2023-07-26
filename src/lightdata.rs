@@ -15,8 +15,8 @@ impl LightData {
         match self {
             LightData::Energy(d) => {
                 d.spectrum.to_plot(file_name);
-            },
-           _ => println!("no export function defined for this type of LightData")
+            }
+            _ => println!("no export function defined for this type of LightData"),
         }
     }
 }

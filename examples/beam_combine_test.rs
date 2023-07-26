@@ -5,8 +5,9 @@ use opossum::{
     analyzer::AnalyzerEnergy,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
-    nodes::{BeamSplitter, Detector, IdealFilter, Source, FilterType},
-    optic_scenery::OpticScenery, spectrum::{create_he_ne_spectrum, Spectrum, create_nd_glass_spectrum},
+    nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source},
+    optic_scenery::OpticScenery,
+    spectrum::{create_he_ne_spectrum, create_nd_glass_spectrum, Spectrum},
 };
 
 fn main() -> Result<(), OpossumError> {
@@ -33,7 +34,7 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(i_s1, "out1", i_bs, "input1")?;
     scenery.connect_nodes(i_s2, "out1", i_bs, "input2")?;
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1")?;
-   
+
     let path = "beam_combiner.dot";
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()).unwrap();

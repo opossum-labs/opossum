@@ -37,8 +37,8 @@ impl Optical for Detector {
         Ok(LightResult::default())
     }
     fn export_data(&self, file_name: &str) {
-        if let Some(data)=&self.light_data {
-           data.export(file_name)
+        if let Some(data) = &self.light_data {
+            data.export(file_name)
         }
     }
 }
@@ -46,7 +46,7 @@ impl Optical for Detector {
 impl Debug for Detector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
-            Some(data) => write!(f,"{}",data),
+            Some(data) => write!(f, "{}", data),
             None => write!(f, "no data"),
         }
     }

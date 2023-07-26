@@ -77,7 +77,7 @@ impl OpticNode {
         self.node.analyze(incoming_data, analyzer_type)
     }
     pub fn export_data(&self) {
-        let file_name=self.name.to_owned() +".svg";
+        let file_name = self.name.to_owned() + ".svg";
         self.node.export_data(&file_name);
     }
 }

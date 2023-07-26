@@ -26,17 +26,12 @@ impl IdealFilter {
     ///
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
     pub fn new(filter_type: FilterType) -> Result<Self> {
-        match filter_type {
-            FilterType::Constant(transmission) => {
-                if transmission < 0.0 || transmission > 1.0 {
-                    return Err(OpossumError::Other("attenuation must be <= 1.0".into()))
-                }
-            },
-            _ => ()
+        if let FilterType::Constant(transmission) = filter_type {
+            if !(0.0..=1.0).contains(&transmission) {
+                return Err(OpossumError::Other("attenuation must be <= 1.0".into()));
+            }
         }
-        Ok(Self {
-            filter_type,
-        })
+        Ok(Self { filter_type })
     }
     /// Returns the filter type of this [`IdealFilter`].
     pub fn filter_type(&self) -> FilterType {
@@ -92,11 +87,11 @@ impl IdealFilter {
                             }
                         }
                         FilterType::Spectrum(s) => {
-                            out_spec.filter(&s);
+                            out_spec.filter(s);
                             let light_data =
-                                    Some(LightData::Energy(DataEnergy { spectrum: out_spec }));
-                                return Ok(HashMap::from([("rear".into(), light_data)]));
-                        },
+                                Some(LightData::Energy(DataEnergy { spectrum: out_spec }));
+                            return Ok(HashMap::from([("rear".into(), light_data)]));
+                        }
                     }
                 }
                 _ => return Err(OpossumError::Analysis("expected energy value".into())),

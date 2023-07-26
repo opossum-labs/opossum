@@ -6,12 +6,12 @@ use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
-use crate::optic_node::{OpticComponent, OpticNode, LightResult};
-use petgraph::Direction::{Incoming, Outgoing};
+use crate::optic_node::{LightResult, OpticComponent, OpticNode};
 use petgraph::algo::toposort;
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
+use petgraph::Direction::{Incoming, Outgoing};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -210,7 +210,12 @@ impl OpticScenery {
             })
             .collect::<HashMap<String, Option<LightData>>>()
     }
-    pub fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: Option<LightData>) {
+    pub fn set_outgoing_edge_data(
+        &mut self,
+        idx: NodeIndex,
+        port: String,
+        data: Option<LightData>,
+    ) {
         let edges = self.g.edges_directed(idx, petgraph::Direction::Outgoing);
         let edge_ref = edges
             .into_iter()
@@ -227,20 +232,20 @@ impl OpticScenery {
         }
     }
     pub fn report(&self) {
-        let src_nodes=&self.g.externals(Incoming);
-        let sink_nodes=&self.g.externals(Outgoing);
+        let src_nodes = &self.g.externals(Incoming);
+        let sink_nodes = &self.g.externals(Outgoing);
         println!("Sources:");
         for idx in src_nodes.clone() {
-            let node=self.node(idx).unwrap();
+            let node = self.node(idx).unwrap();
             println!("{:?}", node.borrow());
             node.borrow().export_data();
         }
         println!("Sinks:");
         for idx in sink_nodes.clone() {
-            let node=self.node(idx).unwrap();
+            let node = self.node(idx).unwrap();
             println!("{:?}", node.borrow());
             node.borrow().export_data();
-        }   
+        }
     }
 }
 
