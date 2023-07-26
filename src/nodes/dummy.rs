@@ -1,8 +1,17 @@
-use crate::optic_node::{Dottable, Optical};
+use std::collections::HashMap;
+
+use crate::analyzer::AnalyzerType;
+use crate::error::OpossumError;
+use crate::optic_node::{Dottable, LightResult, Optical};
 use crate::optic_ports::OpticPorts;
 
+type Result<T> = std::result::Result<T, OpossumError>;
+
 #[derive(Debug)]
-/// A fake / dummy component without any functions. It is mainly used for development and debugging purposes.
+/// A fake / dummy component without any functions.
+///
+/// Any [`LightResult`] is directly forwarded without any modification. It is mainly used for
+/// development and debugging purposes.
 pub struct Dummy;
 
 impl Optical for Dummy {
@@ -15,6 +24,18 @@ impl Optical for Dummy {
         ports.add_input("front").unwrap();
         ports.add_output("rear").unwrap();
         ports
+    }
+
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        _analyzer_type: &AnalyzerType,
+    ) -> Result<LightResult> {
+        if let Some(data) = incoming_data.get("front") {
+            Ok(HashMap::from([("rear".into(), data.clone())]))
+        } else {
+            Ok(HashMap::from([("rear".into(), None)]))
+        }
     }
 }
 

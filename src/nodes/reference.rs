@@ -11,7 +11,7 @@ pub struct NodeReference {
 }
 
 impl NodeReference {
-    pub fn new(node: Rc<RefCell<OpticNode>>) -> OpticNode {
+    pub fn from_node(node: Rc<RefCell<OpticNode>>) -> OpticNode {
         let node_ref = Self {
             reference: Rc::downgrade(&node),
         };

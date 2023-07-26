@@ -14,7 +14,7 @@ fn main() -> Result<(), OpossumError> {
     //let n3 = scenery.add_element("Faraday", Dummy);
     let n4 = scenery.add_element("0° mirror", Dummy);
 
-    let mut node = NodeReference::new(scenery.node(n1).unwrap());
+    let mut node = NodeReference::from_node(scenery.node(n1).unwrap());
     node.set_inverted(true);
     let n1r = scenery.add_node(node);
 
@@ -22,7 +22,7 @@ fn main() -> Result<(), OpossumError> {
     // node.set_inverted(true);
     // let n3r = scenery.add_node(node);
 
-    let mut node = NodeReference::new(scenery.node(n2)?);
+    let mut node = NodeReference::from_node(scenery.node(n2)?);
     node.set_inverted(true);
     let n2r = scenery.add_node(node);
 

@@ -4,7 +4,7 @@ use std::{error::Error, fmt::Display};
 #[derive(Debug, Clone)]
 pub enum OpossumError {
     /// error while setting up an `OpticScenery`
-    OpticScenery(String), 
+    OpticScenery(String),
     /// error while setting up an `OpticGroup`. The reasons are similar to [`OpossumError::OpticScenery`]
     OpticGroup(String),
     OpticPort(String),
@@ -12,7 +12,7 @@ pub enum OpossumError {
     Analysis(String),
     /// errors while handling optical spectra
     Spectrum(String),
-     /// errors not falling in one of the categories above
+    /// errors not falling in one of the categories above
     Other(String),
 }
 

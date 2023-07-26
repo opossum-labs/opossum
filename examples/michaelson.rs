@@ -12,11 +12,11 @@ fn main() -> Result<(), OpossumError> {
     let src = scenery.add_element("Source", Source::default());
     let bs = scenery.add_element("Beamspliiter", BeamSplitter::default());
     let sample = scenery.add_element("sample", Dummy);
-    let rf = NodeReference::new(scenery.node(sample)?);
+    let rf = NodeReference::from_node(scenery.node(sample)?);
     let r_sample = scenery.add_node(rf);
     let m1 = scenery.add_element("Mirror", Dummy);
     let m2 = scenery.add_element("Mirror", Dummy);
-    let rf = NodeReference::new(scenery.node(bs)?);
+    let rf = NodeReference::from_node(scenery.node(bs)?);
     let r_bs = scenery.add_node(rf);
     let det = scenery.add_element("Detector", Detector::default());
 
