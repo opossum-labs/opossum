@@ -1,10 +1,9 @@
-use opossum::{
-    error::OpossumError,
-    //nodes::{RealLens, Source, Detector},
-    optic_scenery::OpticScenery,
-};
-use std::fs::File;
-use std::io::Write;
+// use opossum::{Detector,
+//     optic_scenery::OpticScenery
+// };
+// use std::io::Write;
+
+use opossum::error::OpossumError;
 
 fn main() -> Result<(), OpossumError> {
     // let mut scenery = OpticScenery::new();
