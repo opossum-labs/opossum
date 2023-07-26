@@ -61,7 +61,7 @@ impl Display for OpticPorts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "inputs:").unwrap();
         if !&self.inputs.is_empty() {
-            let mut ports=self.inputs();
+            let mut ports = self.inputs();
             ports.sort();
             for port in ports {
                 writeln!(f, "  <{}>", port).unwrap();
@@ -71,7 +71,7 @@ impl Display for OpticPorts {
         }
         writeln!(f, "output:").unwrap();
         if !&self.outputs.is_empty() {
-            let mut ports=self.outputs();
+            let mut ports = self.outputs();
             ports.sort();
             for port in ports {
                 writeln!(f, "  <{}>", port).unwrap();
@@ -182,7 +182,10 @@ mod test {
     #[test]
     fn display_empty() {
         let ports = OpticPorts::new();
-        assert_eq!(ports.to_string(), "inputs:\n  None\noutput:\n  None\n".to_owned());
+        assert_eq!(
+            ports.to_string(),
+            "inputs:\n  None\noutput:\n  None\n".to_owned()
+        );
     }
     #[test]
     fn display_entries() {
@@ -191,7 +194,10 @@ mod test {
         ports.add_input("test2").unwrap();
         ports.add_output("test3").unwrap();
         ports.add_output("test4").unwrap();
-        assert_eq!(ports.to_string(), "inputs:\n  <test1>\n  <test2>\noutput:\n  <test3>\n  <test4>\n".to_owned());
+        assert_eq!(
+            ports.to_string(),
+            "inputs:\n  <test1>\n  <test2>\noutput:\n  <test3>\n  <test4>\n".to_owned()
+        );
     }
     #[test]
     fn display_entries_inverted() {
@@ -201,6 +207,10 @@ mod test {
         ports.add_output("test3").unwrap();
         ports.add_output("test4").unwrap();
         ports.set_inverted(true);
-        assert_eq!(ports.to_string(), "inputs:\n  <test3>\n  <test4>\noutput:\n  <test1>\n  <test2>\nports are inverted\n".to_owned());
+        assert_eq!(
+            ports.to_string(),
+            "inputs:\n  <test3>\n  <test4>\noutput:\n  <test1>\n  <test2>\nports are inverted\n"
+                .to_owned()
+        );
     }
 }
