@@ -1,16 +1,23 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
-use crate::optic_node::{Dottable, OpticNode, Optical};
+use crate::analyzer::AnalyzerType;
+use crate::error::OpossumError;
+use crate::optic_node::{Dottable, LightResult, OpticNode, Optical};
 use crate::optic_ports::OpticPorts;
 
+type Result<T> = std::result::Result<T, OpossumError>;
+
 #[derive(Debug)]
-/// A virtual component referring to another existing component. This node type is necessary in order to model resonators (loops) or double-pass systems.
+/// A virtual component referring to another existing component.
+///
+/// This node type is necessary in order to model resonators (loops) or double-pass systems.
 pub struct NodeReference {
     reference: Weak<RefCell<OpticNode>>,
 }
 
 impl NodeReference {
+    /// Create new [`OpticNode`] (of type [`NodeReference`]) from another existing [`OpticNode`].
     pub fn from_node(node: Rc<RefCell<OpticNode>>) -> OpticNode {
         let node_ref = Self {
             reference: Rc::downgrade(&node),
@@ -26,6 +33,18 @@ impl Optical for NodeReference {
 
     fn ports(&self) -> OpticPorts {
         self.reference.upgrade().unwrap().borrow().ports().clone()
+    }
+
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        analyzer_type: &AnalyzerType,
+    ) -> Result<LightResult> {
+        self.reference
+            .upgrade()
+            .unwrap()
+            .borrow_mut()
+            .analyze(incoming_data, analyzer_type)
     }
 }
 

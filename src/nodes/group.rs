@@ -11,7 +11,9 @@ use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Default, Debug)]
-/// A node that represents a group of other [`OpticNode`]s. These subnodes are arranged in its own subgraph. All unconnected input and output ports of this subgraph form the ports of this [`NodeGroup`].
+/// A node that represents a group of other [`OpticNode`]s arranges in a subgraph.
+///
+/// All unconnected input and output ports of this subgraph form the ports of this [`NodeGroup`].
 pub struct NodeGroup {
     g: DiGraph<OpticNode, Light>,
 }

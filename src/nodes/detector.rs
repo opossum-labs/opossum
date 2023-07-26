@@ -9,7 +9,9 @@ use std::fmt::Debug;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Default)]
-/// This node rerpresents an universal detector. Any [`LightData`] coming in will be stored internally for later display / export. So far it only has one input (in1).
+/// This node represents an universal detector.
+///
+/// Any [`LightData`] coming in will be stored internally for later display / export. So far it only has one input (in1).
 pub struct Detector {
     light_data: Option<LightData>,
 }

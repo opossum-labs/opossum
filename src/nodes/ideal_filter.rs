@@ -8,9 +8,12 @@ use std::collections::HashMap;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
+/// Config data for an [`IdealFilter`].
 #[derive(Debug, Clone)]
 pub enum FilterType {
+    /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0
     Constant(f64),
+    /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
 }
 #[derive(Debug)]
@@ -20,15 +23,18 @@ pub struct IdealFilter {
 }
 
 impl IdealFilter {
-    /// Creates a new [`IdealFilter`] with a given energy transmission factor.
+    /// Creates a new [`IdealFilter`] with a given [`FilterType`].
     ///
     /// # Errors
     ///
-    /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
+    /// This function will return an [`OpossumError::Other`] if the filter type is
+    /// [`FilterType::Constant`] and the transmission factor is outside the interval [0.0; 1.0].
     pub fn new(filter_type: FilterType) -> Result<Self> {
         if let FilterType::Constant(transmission) = filter_type {
             if !(0.0..=1.0).contains(&transmission) {
-                return Err(OpossumError::Other("attenuation must be <= 1.0".into()));
+                return Err(OpossumError::Other(
+                    "attenuation must be in interval [0.0; 1.0]".into(),
+                ));
             }
         }
         Ok(Self { filter_type })
@@ -37,21 +43,25 @@ impl IdealFilter {
     pub fn filter_type(&self) -> FilterType {
         self.filter_type.clone()
     }
-    /// Sets the transmission of this [`IdealFilter`].
+    /// Sets a constant transmission value for this [`IdealFilter`].
     ///
+    /// This implicitly sets the filter type to [`FilterType::Constant`].
     /// # Errors
     ///
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
     pub fn set_transmission(&mut self, transmission: f64) -> Result<()> {
-        if transmission <= 1.0 {
+        if (0.0..=1.0).contains(&transmission) {
             self.filter_type = FilterType::Constant(transmission);
             Ok(())
         } else {
-            Err(OpossumError::Other("attenuation must be <=1.0".into()))
+            Err(OpossumError::Other(
+                "attenuation must be in interval [0.0; 1.0]".into(),
+            ))
         }
     }
     /// Sets the transmission of this [`IdealFilter`] expressed as optical density.
     ///
+    /// This implicitly sets the filter type to [`FilterType::Constant`].
     /// # Errors
     ///
     /// This function will return an error if an optical density < 0.0 was given.
@@ -102,7 +112,6 @@ impl IdealFilter {
 }
 
 impl Optical for IdealFilter {
-    /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {
         "ideal filter"
     }

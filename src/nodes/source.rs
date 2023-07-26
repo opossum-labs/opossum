@@ -10,7 +10,9 @@ use crate::{
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-/// This node represents a source of light. Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an optic scenery.
+/// This node represents a source of light.
+///
+/// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an optic scenery.
 #[derive(Default)]
 pub struct Source {
     light_data: Option<LightData>,
