@@ -19,4 +19,5 @@ impl AnalyzerEnergy {
 
 pub enum AnalyzerType {
     Energy,
+    ParAxialRayTrace,
 }
