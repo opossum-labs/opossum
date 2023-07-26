@@ -59,7 +59,7 @@ impl Spectrum {
         })
     }
     /// Create a new [`Spectrum`] from a CSV (comma-separated values) file.
-    /// 
+    ///
     /// Currently this function is relatively limited. The CSV file must have a specific format in
     /// order to be successfully parsed. It must be a file with two columns and `;` as separator.
     /// The first column corresponds to the wavelength in nm, the second columns represent values in
@@ -476,7 +476,7 @@ pub fn create_nd_glass_spectrum(energy: f64) -> Spectrum {
 }
 /// Helper function for adding two spectra.
 ///
-/// This function allows for adding two (maybe non-existing = None) spectra with different bandwidth. 
+/// This function allows for adding two (maybe non-existing = None) spectra with different bandwidth.
 /// The resulting spectum is created such that both spectra are contained. The resolution corresponds
 /// to the highest (average) resolution of both spectra. If one spectrum is `None` the other spectrum is
 /// returned respectively. If both spectra a `None` then also `None`is returned.
