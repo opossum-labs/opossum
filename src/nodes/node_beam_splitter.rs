@@ -6,7 +6,7 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_node::{Dottable, LightResult, Optical},
     optic_ports::OpticPorts,
-    spectrum::{unify_spectrum, Spectrum},
+    spectrum::{merge_spectra, Spectrum},
 };
 
 type Result<T> = std::result::Result<T, OpossumError>;
@@ -67,8 +67,8 @@ impl BeamSplitter {
                 _ => return Err(OpossumError::Analysis("expected DataEnergy value".into())),
             }
         }
-        let out1_spec = unify_spectrum(out1_1_spectrum, out2_2_spectrum);
-        let out2_spec = unify_spectrum(out1_2_spectrum, out2_1_spectrum);
+        let out1_spec = merge_spectra(out1_1_spectrum, out2_2_spectrum);
+        let out2_spec = merge_spectra(out1_2_spectrum, out2_1_spectrum);
         let mut out1_data: Option<LightData> = None;
         let mut out2_data: Option<LightData> = None;
         if let Some(out1_spec) = out1_spec {

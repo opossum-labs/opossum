@@ -210,12 +210,7 @@ impl OpticScenery {
             })
             .collect::<HashMap<String, Option<LightData>>>()
     }
-    fn set_outgoing_edge_data(
-        &mut self,
-        idx: NodeIndex,
-        port: String,
-        data: Option<LightData>,
-    ) {
+    fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: Option<LightData>) {
         let edges = self.g.edges_directed(idx, petgraph::Direction::Outgoing);
         let edge_ref = edges
             .into_iter()

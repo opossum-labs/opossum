@@ -38,7 +38,7 @@ impl Spectrum {
         }
         if range.start >= range.end {
             return Err(OpossumError::Spectrum(
-                "wavelength range must be in ascending order".into(),
+                "wavelength range must be in ascending order and not empty".into(),
             ));
         }
         if range.start <= Length::zero() || range.end <= Length::zero() {
@@ -316,6 +316,13 @@ impl Spectrum {
             .map(|d| (d.0 - d.1).clamp(0.0, f64::abs(d.0 - d.1)))
             .collect();
     }
+    /// Generate a plot of this [`Spectrum`].
+    ///
+    /// Generate a x/y spectrum plot as SVG graphics with the given filename. This function is meant mainly for debugging purposes.
+    ///
+    /// # Panics
+    ///
+    /// ???
     pub fn to_plot(&self, filename: &str) {
         let root = SVGBackend::new(filename, (800, 600)).into_drawing_area();
         root.fill(&WHITE).unwrap();
@@ -326,7 +333,7 @@ impl Spectrum {
             .margin(5)
             .x_label_area_size(40)
             .y_label_area_size(40)
-            .build_cartesian_2d(x_left * 1.0E9..x_right * 1.0E9, 0.0..y_top*1E-9)
+            .build_cartesian_2d(x_left * 1.0E9..x_right * 1.0E9, 0.0..y_top * 1E-9)
             .unwrap();
 
         chart
@@ -341,7 +348,7 @@ impl Spectrum {
                 self.lambdas
                     .iter()
                     .zip(self.data.iter())
-                    .map(|x| (*x.0 * 1.0E9, *x.1 *1E-9)), // y values are displayed in 1/nm
+                    .map(|x| (*x.0 * 1.0E9, *x.1 * 1E-9)), // y values are displayed in 1/nm
                 &RED,
             ))
             .unwrap();
@@ -449,7 +456,13 @@ pub fn create_nd_glass_spectrum(energy: f64) -> Spectrum {
     .unwrap();
     s
 }
-pub fn unify_spectrum(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spectrum> {
+/// Helper function for adding two spectra.
+///
+/// This function allows for adding two (maybe non-existing = None) spectra with different bandwidth. 
+/// The resulting spectum is created such that both spectra are contained. The resolution corresponds
+/// to the highest (average) resolution of both spectra. If one spectrum is `None` the other spectrum is
+/// returned respectively. If both spectra a `None` then also `None`is returned.
+pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spectrum> {
     if s1.is_none() && s2.is_none() {
         None
     } else if s1.is_some() && s2.is_none() {
