@@ -317,21 +317,22 @@ impl Spectrum {
             .collect();
     }
     pub fn to_plot(&self, filename: &str) {
-        let root = SVGBackend::new(filename, (640, 480)).into_drawing_area();
+        let root = SVGBackend::new(filename, (800, 600)).into_drawing_area();
         root.fill(&WHITE).unwrap();
         let x_left = *self.lambdas.first().unwrap();
         let x_right = *self.lambdas.last().unwrap();
         let y_top = *self.data.max_skipnan();
         let mut chart = ChartBuilder::on(&root)
             .margin(5)
-            .x_label_area_size(30)
-            .y_label_area_size(30)
-            .build_cartesian_2d(x_left * 1.0E9..x_right * 1.0E9, 0.0..y_top)
+            .x_label_area_size(40)
+            .y_label_area_size(40)
+            .build_cartesian_2d(x_left * 1.0E9..x_right * 1.0E9, 0.0..y_top*1E-9)
             .unwrap();
 
         chart
             .configure_mesh()
             .x_desc("wavelength (nm)")
+            .y_desc("value (1/nm)")
             .draw()
             .unwrap();
 
@@ -340,7 +341,7 @@ impl Spectrum {
                 self.lambdas
                     .iter()
                     .zip(self.data.iter())
-                    .map(|x| (*x.0 * 1.0E9, *x.1)),
+                    .map(|x| (*x.0 * 1.0E9, *x.1 *1E-9)), // y values are displayed in 1/nm
                 &RED,
             ))
             .unwrap();
@@ -465,16 +466,8 @@ pub fn unify_spectrum(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spec
             .unwrap()
             .average_resolution()
             .min(s2.as_ref().unwrap().average_resolution());
-        println!(
-            "min={}, max={}, res={}",
-            minimum.get::<nanometer>(),
-            maximum.get::<nanometer>(),
-            resolution.get::<nanometer>()
-        );
         let mut s_out = Spectrum::new(minimum..maximum, resolution).unwrap();
-        println!("resampling...");
         s_out.resample(&s1.unwrap());
-        println!("adding");
         s_out.add(&s2.unwrap());
         Some(s_out)
     }

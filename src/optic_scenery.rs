@@ -210,7 +210,7 @@ impl OpticScenery {
             })
             .collect::<HashMap<String, Option<LightData>>>()
     }
-    pub fn set_outgoing_edge_data(
+    fn set_outgoing_edge_data(
         &mut self,
         idx: NodeIndex,
         port: String,
@@ -227,9 +227,7 @@ impl OpticScenery {
             if let Some(light) = light {
                 light.set_data(data);
             }
-        } else {
-            println!("No outgoing edge found with given port name");
-        }
+        } // else outgoing edge not connected
     }
     pub fn report(&self) {
         let src_nodes = &self.g.externals(Incoming);
