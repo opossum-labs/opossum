@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Module for handling optical spectra
 use crate::error::OpossumError;
 use csv::ReaderBuilder;
@@ -17,7 +18,7 @@ use std::fs::File;
 /// Structure for handling spectral data.
 ///
 /// This structure handles an array of values over a given wavelength range. Although the interface
-/// is still limited. The structure is prepared for handling non-equidistant wavelength slots.  
+/// is still limited. The structure is prepared for handling also non-equidistant wavelength slots.  
 #[derive(Clone)]
 pub struct Spectrum {
     data: Array1<f64>,    // data in 1/meters
@@ -57,6 +58,23 @@ impl Spectrum {
             data: Array1::zeros(length),
         })
     }
+    /// Create a new [`Spectrum`] from a CSV (comma-separated values) file.
+    /// 
+    /// Currently this function is relatively limited. The CSV file must have a specific format in
+    /// order to be successfully parsed. It must be a file with two columns and `;` as separator.
+    /// The first column corresponds to the wavelength in nm, the second columns represent values in
+    /// percent. This file format corresponds to the CSV export format from an transmission (Excel) file
+    /// as provided by Thorlabs.
+    /// # Panics
+    ///
+    /// Panics if ???
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OpossumError::Spectrum`] if
+    ///   - the file path is not found or could not be read.
+    ///   - the file is empty.
+    ///   - the file could not be parsed.
     pub fn from_csv(path: &str) -> Result<Self> {
         let file = File::open(path).map_err(|e| OpossumError::Spectrum(e.to_string()))?;
         let mut reader = ReaderBuilder::new()
