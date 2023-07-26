@@ -16,4 +16,6 @@ uom = "0"
 
 # for spectrum
 ndarray="0"
-ndarray-interp="0"
+ndarray-stats="0"
+csv="1"
+plotters="0"

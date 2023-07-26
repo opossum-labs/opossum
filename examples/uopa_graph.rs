@@ -10,7 +10,7 @@ fn main() -> Result<(), OpossumError> {
     println!("PHELIX uOPA opticscenery example");
     let mut scenery = OpticScenery::new();
 
-    scenery.set_description("PHELIX uOPA".into());
+    scenery.set_description("PHELIX uOPA");
     println!("default opticscenery: {:?}", scenery);
     println!("export to `dot` format: {}", scenery.to_dot());
 

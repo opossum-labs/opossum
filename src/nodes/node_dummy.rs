@@ -1,4 +1,4 @@
-use crate::optic_node::{Optical,Dottable};
+use crate::optic_node::{Dottable, Optical};
 use crate::optic_ports::OpticPorts;
 
 #[derive(Debug)]
@@ -11,11 +11,11 @@ impl Optical for Dummy {
         "dummy"
     }
     fn ports(&self) -> OpticPorts {
-        let mut ports=OpticPorts::new();
+        let mut ports = OpticPorts::new();
         ports.add_input("front").unwrap();
         ports.add_output("rear").unwrap();
         ports
     }
 }
 
-impl Dottable for Dummy{}
+impl Dottable for Dummy {}

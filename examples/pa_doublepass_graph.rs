@@ -7,7 +7,7 @@ use std::io::Write;
 
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
-    scenery.set_description("PreAmp Doublepass section".into());
+    scenery.set_description("PreAmp Doublepass section");
     //let n0 = scenery.add_element("LightSource", Source::default());
     let n1 = scenery.add_element("TFP", Dummy);
     let n2 = scenery.add_element("19mm amp", Dummy);
