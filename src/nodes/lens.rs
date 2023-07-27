@@ -30,11 +30,11 @@ impl RealLens {
         refractive_index: f64,
     ) -> Self {
         Self {
-            aperture: aperture,
+            aperture,
             curvatures: array![front_curvature, rear_curvature],
-            center_thickness: center_thickness,
-            z_pos: z_pos,
-            refractive_index: refractive_index,
+            center_thickness,
+            z_pos,
+            refractive_index,
         }
     }
 

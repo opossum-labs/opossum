@@ -7,6 +7,7 @@ use crate::{
 };
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
+use std::collections::HashMap;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -16,6 +17,8 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// All unconnected input and output ports of this subgraph form the ports of this [`NodeGroup`].
 pub struct NodeGroup {
     g: DiGraph<OpticNode, Light>,
+    input_port_map: HashMap<String, (NodeIndex, String)>,
+    output_port_map: HashMap<String, (NodeIndex, String)>,
 }
 
 impl NodeGroup {
@@ -99,11 +102,100 @@ impl NodeGroup {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
+    pub fn map_input_port(
+        &mut self,
+        input_node: NodeIndex,
+        internal_name: &str,
+        external_name: &str,
+    ) -> Result<()> {
+        if self.input_port_map.contains_key(external_name) {
+            return Err(OpossumError::OpticGroup(
+                "external input port name already assigned".into(),
+            ));
+        }
+        if let Some(node) = self.g.node_weight(input_node) {
+            if !node.ports().inputs().contains(&(internal_name.to_string())) {
+                return Err(OpossumError::OpticGroup(
+                    "internal input port name not found".into(),
+                ));
+            }
+        } else {
+            return Err(OpossumError::OpticGroup(
+                "internal node index not found".into(),
+            ));
+        }
+
+        if !(self
+            .g
+            .externals(petgraph::Direction::Incoming)
+            .any(|i| i == input_node))
+        {
+            return Err(OpossumError::OpticGroup(
+                "node to be mapped is not an input node of the group".into(),
+            ));
+        }
+        self.input_port_map.insert(
+            external_name.to_string(),
+            (input_node, internal_name.to_string()),
+        );
+        Ok(())
+    }
+    pub fn map_output_port(
+        &mut self,
+        output_node: NodeIndex,
+        internal_name: &str,
+        external_name: &str,
+    ) -> Result<()> {
+        if self.output_port_map.contains_key(external_name) {
+            return Err(OpossumError::OpticGroup(
+                "external output port name already assigned".into(),
+            ));
+        }
+        if let Some(node) = self.g.node_weight(output_node) {
+            if !node
+                .ports()
+                .outputs()
+                .contains(&(internal_name.to_string()))
+            {
+                return Err(OpossumError::OpticGroup(
+                    "internal output port name not found".into(),
+                ));
+            }
+        } else {
+            return Err(OpossumError::OpticGroup(
+                "internal node index not found".into(),
+            ));
+        }
+        if !(self
+            .g
+            .externals(petgraph::Direction::Outgoing)
+            .any(|i| i == output_node))
+        {
+            return Err(OpossumError::OpticGroup(
+                "node to be mapped is not an output node of the group".into(),
+            ));
+        }
+        self.output_port_map.insert(
+            external_name.to_string(),
+            (output_node, internal_name.to_string()),
+        );
+        Ok(())
+    }
 }
 
 impl Optical for NodeGroup {
     fn node_type(&self) -> &str {
         "group"
+    }
+    fn ports(&self) -> OpticPorts {
+        let mut ports = OpticPorts::new();
+        for p in self.input_port_map.iter() {
+            ports.add_input(p.0).unwrap();
+        }
+        for p in self.output_port_map.iter() {
+            ports.add_output(p.0).unwrap();
+        }
+        ports
     }
 }
 
@@ -137,5 +229,115 @@ impl Dottable for NodeGroup {
 
     fn node_color(&self) -> &str {
         "yellow"
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::NodeGroup;
+    use crate::{
+        nodes::Dummy,
+        optic_node::{OpticNode, Optical},
+    };
+    #[test]
+    fn new() {
+        let og = NodeGroup::new();
+        assert_eq!(og.g.node_count(), 0);
+        assert_eq!(og.g.edge_count(), 0);
+        assert!(og.input_port_map.is_empty());
+        assert!(og.output_port_map.is_empty());
+    }
+    #[test]
+    fn add_node() {
+        let mut og = NodeGroup::new();
+        let sub_node = OpticNode::new("test", Dummy);
+        og.add_node(sub_node);
+        assert_eq!(og.g.node_count(), 1);
+    }
+    #[test]
+    fn connect_nodes() {
+        let mut og = NodeGroup::new();
+        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sn1_i = og.add_node(sub_node1);
+        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sn2_i = og.add_node(sub_node2);
+        // wrong port names
+        assert!(og.connect_nodes(sn1_i, "wrong", sn2_i, "front").is_err());
+        assert_eq!(og.g.edge_count(), 0);
+        assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "wrong").is_err());
+        assert_eq!(og.g.edge_count(), 0);
+        // wrong node index
+        assert!(og.connect_nodes(5.into(), "rear", sn2_i, "front").is_err());
+        assert_eq!(og.g.edge_count(), 0);
+        assert!(og.connect_nodes(sn1_i, "rear", 5.into(), "front").is_err());
+        assert_eq!(og.g.edge_count(), 0);
+        // correct usage
+        assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "front").is_ok());
+        assert_eq!(og.g.edge_count(), 1);
+    }
+    #[test]
+    fn map_input_port() {
+        let mut og = NodeGroup::new();
+        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sn1_i = og.add_node(sub_node1);
+        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sn2_i = og.add_node(sub_node2);
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+
+        // wrong port name
+        assert!(og.map_input_port(sn1_i, "wrong", "input").is_err());
+        assert!(og.input_port_map.is_empty());
+        // wrong node index
+        assert!(og.map_input_port(5.into(), "front", "input").is_err());
+        assert!(og.input_port_map.is_empty());
+        // map output port
+        assert!(og.map_input_port(sn2_i, "rear", "input").is_err());
+        assert!(og.input_port_map.is_empty());
+        // map internal node
+        assert!(og.map_input_port(sn2_i, "front", "input").is_err());
+        assert!(og.input_port_map.is_empty());
+        // correct usage
+        assert!(og.map_input_port(sn1_i, "front", "input").is_ok());
+        assert_eq!(og.input_port_map.len(), 1);
+    }
+    #[test]
+    fn map_output_port() {
+        let mut og = NodeGroup::new();
+        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sn1_i = og.add_node(sub_node1);
+        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sn2_i = og.add_node(sub_node2);
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+
+        // wrong port name
+        assert!(og.map_output_port(sn2_i, "wrong", "output").is_err());
+        assert!(og.output_port_map.is_empty());
+        // wrong node index
+        assert!(og.map_output_port(5.into(), "rear", "output").is_err());
+        assert!(og.output_port_map.is_empty());
+        // map input port
+        assert!(og.map_output_port(sn1_i, "front", "output").is_err());
+        assert!(og.output_port_map.is_empty());
+        // map internal node
+        assert!(og.map_output_port(sn1_i, "rear", "output").is_err());
+        assert!(og.output_port_map.is_empty());
+        // correct usage
+        assert!(og.map_output_port(sn2_i, "rear", "output").is_ok());
+        assert_eq!(og.output_port_map.len(), 1);
+    }
+    #[test]
+    fn ports() {
+        let mut og = NodeGroup::new();
+        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sn1_i = og.add_node(sub_node1);
+        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sn2_i = og.add_node(sub_node2);
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+        assert!(og.ports().inputs().is_empty());
+        assert!(og.ports().outputs().is_empty());
+        og.map_input_port(sn1_i, "front", "input").unwrap();
+        assert!(og.ports().inputs().contains(&("input".to_string())));
+        og.map_output_port(sn2_i, "rear", "output").unwrap();
+        assert!(og.ports().outputs().contains(&("output".to_string())));
     }
 }

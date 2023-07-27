@@ -114,11 +114,9 @@ impl Optical for BeamSplitter {
     ) -> Result<LightResult> {
         match analyzer_type {
             AnalyzerType::Energy => self.analyze_energy(incoming_data),
-            _ => {
-                return Err(OpossumError::Analysis(
-                    "analysis type not yet implemented".into(),
-                ))
-            }
+            _ => Err(OpossumError::Analysis(
+                "analysis type not yet implemented".into(),
+            )),
         }
     }
 }
