@@ -1,24 +1,33 @@
+use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
 use crate::light::Light;
-use crate::optic_node::Dottable;
+use crate::lightdata::LightData;
+use crate::optic_node::{Dottable, LightResult};
 use crate::{
     optic_node::{OpticNode, Optical},
     optic_ports::OpticPorts,
 };
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
+use petgraph::visit::EdgeRef;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
+
+use super::Source;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 /// A node that represents a group of other [`OpticNode`]s arranges in a subgraph.
 ///
 /// All unconnected input and output ports of this subgraph form the ports of this [`NodeGroup`].
 pub struct NodeGroup {
-    g: DiGraph<OpticNode, Light>,
+    g: DiGraph<Rc<RefCell<OpticNode>>, Light>,
     input_port_map: HashMap<String, (NodeIndex, String)>,
     output_port_map: HashMap<String, (NodeIndex, String)>,
+    tmp_sources: Vec<NodeIndex>,
+    tmp_detectors: Vec<NodeIndex>,
 }
 
 impl NodeGroup {
@@ -30,7 +39,7 @@ impl NodeGroup {
     /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node(&mut self, node: OpticNode) -> NodeIndex {
-        self.g.add_node(node)
+        self.g.add_node(Rc::new(RefCell::new(node)))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -44,10 +53,10 @@ impl NodeGroup {
         target_port: &str,
     ) -> Result<EdgeIndex> {
         if let Some(source) = self.g.node_weight(src_node) {
-            if !source.ports().outputs().contains(&src_port.into()) {
+            if !source.borrow().ports().outputs().contains(&src_port.into()) {
                 return Err(OpossumError::OpticScenery(format!(
                     "source node {} does not have a port {}",
-                    source.name(),
+                    source.borrow().name(),
                     src_port
                 )));
             }
@@ -57,10 +66,15 @@ impl NodeGroup {
             ));
         }
         if let Some(target) = self.g.node_weight(target_node) {
-            if !target.ports().inputs().contains(&target_port.into()) {
+            if !target
+                .borrow()
+                .ports()
+                .inputs()
+                .contains(&target_port.into())
+            {
                 return Err(OpossumError::OpticScenery(format!(
                     "target node {} does not have a port {}",
-                    target.name(),
+                    target.borrow().name(),
                     target_port
                 )));
             }
@@ -114,7 +128,12 @@ impl NodeGroup {
             ));
         }
         if let Some(node) = self.g.node_weight(input_node) {
-            if !node.ports().inputs().contains(&(internal_name.to_string())) {
+            if !node
+                .borrow()
+                .ports()
+                .inputs()
+                .contains(&(internal_name.to_string()))
+            {
                 return Err(OpossumError::OpticGroup(
                     "internal input port name not found".into(),
                 ));
@@ -153,6 +172,7 @@ impl NodeGroup {
         }
         if let Some(node) = self.g.node_weight(output_node) {
             if !node
+                .borrow()
                 .ports()
                 .outputs()
                 .contains(&(internal_name.to_string()))
@@ -179,6 +199,75 @@ impl NodeGroup {
             external_name.to_string(),
             (output_node, internal_name.to_string()),
         );
+        Ok(())
+    }
+    fn assign_input_data(&mut self, incoming_data: LightResult) {
+        for in_data in incoming_data {
+            let internal_port = self.input_port_map.get(&in_data.0).unwrap().clone();
+            let src_node = OpticNode::new(&in_data.0, Source::new(in_data.1.unwrap()));
+            let src_idx = self.add_node(src_node);
+            self.connect_nodes(src_idx, "out1", internal_port.0, &internal_port.1)
+                .unwrap();
+            self.tmp_sources.push(src_idx);
+        }
+    }
+    fn clean_up_tmp(&mut self) {
+        for src in self.tmp_sources.iter() {
+            self.g.remove_node(*src);
+        }
+        self.tmp_sources.clear();
+        for src in self.tmp_detectors.iter() {
+            self.g.remove_node(*src);
+        }
+        self.tmp_detectors.clear();
+    }
+    fn compile_output_data(&self) -> LightResult {
+        LightResult::default()
+    }
+    pub fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
+        let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
+        edges
+            .into_iter()
+            .map(|e| {
+                (
+                    e.weight().target_port().to_owned(),
+                    e.weight().data().cloned(),
+                )
+            })
+            .collect::<HashMap<String, Option<LightData>>>()
+    }
+    fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: Option<LightData>) {
+        let edges = self.g.edges_directed(idx, petgraph::Direction::Outgoing);
+        let edge_ref = edges
+            .into_iter()
+            .filter(|idx| idx.weight().src_port() == port)
+            .last();
+        if let Some(edge_ref) = edge_ref {
+            let edge_idx = edge_ref.id();
+            let light = self.g.edge_weight_mut(edge_idx);
+            if let Some(light) = light {
+                light.set_data(data);
+            }
+        } // else outgoing edge not connected -> data dropped
+    }
+    pub fn analyze_group(
+        &mut self,
+        incoming_data: LightResult,
+        analyzer_type: &AnalyzerType,
+    ) -> Result<()> {
+        self.assign_input_data(incoming_data);
+        let sorted = toposort(&self.g, None);
+        if let Ok(sorted) = sorted {
+            for idx in sorted {
+                let incoming_edges: LightResult = self.incoming_edges(idx);
+                let node = self.g.node_weight(idx).unwrap();
+                let outgoing_edges = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
+                for outgoing_edge in outgoing_edges {
+                    self.set_outgoing_edge_data(idx, outgoing_edge.0, outgoing_edge.1)
+                }
+            }
+        }
+        self.clean_up_tmp();
         Ok(())
     }
 }
@@ -208,7 +297,9 @@ impl Dottable for NodeGroup {
         );
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
-            dot_string += &node.to_dot(&format!("{}_i{}", node_index, node_idx.index()));
+            dot_string += &node
+                .borrow()
+                .to_dot(&format!("{}_i{}", node_index, node_idx.index()));
         }
         for edge in self.g.edge_indices() {
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
