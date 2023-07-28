@@ -7,14 +7,12 @@ use crate::{
     optic_node::{OpticNode, Optical},
     optic_ports::OpticPorts,
 };
-use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
+use petgraph::{algo::*, Direction};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-
-use super::Source;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -26,8 +24,6 @@ pub struct NodeGroup {
     g: DiGraph<Rc<RefCell<OpticNode>>, Light>,
     input_port_map: HashMap<String, (NodeIndex, String)>,
     output_port_map: HashMap<String, (NodeIndex, String)>,
-    tmp_sources: Vec<NodeIndex>,
-    tmp_detectors: Vec<NodeIndex>,
 }
 
 impl NodeGroup {
@@ -201,31 +197,8 @@ impl NodeGroup {
         );
         Ok(())
     }
-    fn assign_input_data(&mut self, incoming_data: LightResult) {
-        for in_data in incoming_data {
-            let internal_port = self.input_port_map.get(&in_data.0).unwrap().clone();
-            let src_node = OpticNode::new(&in_data.0, Source::new(in_data.1.unwrap()));
-            let src_idx = self.add_node(src_node);
-            self.connect_nodes(src_idx, "out1", internal_port.0, &internal_port.1)
-                .unwrap();
-            self.tmp_sources.push(src_idx);
-        }
-    }
-    fn clean_up_tmp(&mut self) {
-        for src in self.tmp_sources.iter() {
-            self.g.remove_node(*src);
-        }
-        self.tmp_sources.clear();
-        for src in self.tmp_detectors.iter() {
-            self.g.remove_node(*src);
-        }
-        self.tmp_detectors.clear();
-    }
-    fn compile_output_data(&self) -> LightResult {
-        LightResult::default()
-    }
     pub fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
-        let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
+        let edges = self.g.edges_directed(idx, Direction::Incoming);
         edges
             .into_iter()
             .map(|e| {
@@ -237,7 +210,7 @@ impl NodeGroup {
             .collect::<HashMap<String, Option<LightData>>>()
     }
     fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: Option<LightData>) {
-        let edges = self.g.edges_directed(idx, petgraph::Direction::Outgoing);
+        let edges = self.g.edges_directed(idx, Direction::Outgoing);
         let edge_ref = edges
             .into_iter()
             .filter(|idx| idx.weight().src_port() == port)
@@ -254,21 +227,46 @@ impl NodeGroup {
         &mut self,
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
-    ) -> Result<()> {
-        self.assign_input_data(incoming_data);
-        let sorted = toposort(&self.g, None);
-        if let Ok(sorted) = sorted {
-            for idx in sorted {
-                let incoming_edges: LightResult = self.incoming_edges(idx);
-                let node = self.g.node_weight(idx).unwrap();
-                let outgoing_edges = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
+    ) -> Result<LightResult> {
+        let g_clone = self.g.clone();
+        let mut group_srcs = g_clone.externals(Direction::Incoming);
+        let mut light_result = LightResult::default();
+        let sorted = toposort(&self.g, None).unwrap();
+        for idx in sorted {
+            // Check if node is group src node
+            let incoming_edges = if group_srcs.any(|gs| gs == idx) {
+                // get from incoming_data
+                let assigned_ports = self.input_port_map.iter().filter(|p| p.1 .0 == idx);
+                let mut incoming = LightResult::default();
+                for port in assigned_ports {
+                    incoming.insert(
+                        port.1 .1.to_owned(),
+                        incoming_data.get(port.0).unwrap().clone(),
+                    );
+                }
+                incoming
+            } else {
+                self.incoming_edges(idx)
+            };
+            let node = self.g.node_weight(idx).unwrap();
+            let outgoing_edges = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
+            let mut group_sinks = self.g.externals(Direction::Outgoing);
+            // Check if node is group sink node
+            if group_sinks.any(|gs| gs == idx) {
+                let assigned_ports = self.output_port_map.iter().filter(|p| p.1 .0 == idx);
+                for port in assigned_ports {
+                    light_result.insert(
+                        port.0.to_owned(),
+                        outgoing_edges.get(&port.1 .1).unwrap().clone(),
+                    );
+                }
+            } else {
                 for outgoing_edge in outgoing_edges {
                     self.set_outgoing_edge_data(idx, outgoing_edge.0, outgoing_edge.1)
                 }
             }
         }
-        self.clean_up_tmp();
-        Ok(())
+        Ok(light_result)
     }
 }
 
@@ -285,6 +283,13 @@ impl Optical for NodeGroup {
             ports.add_output(p.0).unwrap();
         }
         ports
+    }
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        analyzer_type: &AnalyzerType,
+    ) -> Result<LightResult> {
+        self.analyze_group(incoming_data, analyzer_type)
     }
 }
 
