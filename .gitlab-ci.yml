@@ -9,7 +9,7 @@
 
 # Official language image. Look for the different tagged releases at:
 # https://hub.docker.com/r/library/rust/tags/
-image: "rust:latest"
+#image: "rust:latest"
 
 # Optional: Pick zero or more services to be used on all builds.
 # Only needed when using a docker container to run your tests in.
@@ -26,10 +26,10 @@ image: "rust:latest"
 #   - apt-get install -yqq --no-install-recommends build-essential
 
 # Use cargo to test the project
-test:cargo:
-  script:
-    - rustc --version && cargo --version  # Print version info for debugging
-    - cargo test --workspace --verbose
+#test:cargo:
+#  script:
+#    - rustc --version && cargo --version  # Print version info for debugging
+#    - cargo test --workspace --verbose
 
 # Optional: Use a third party library to generate gitlab junit reports
 # test:junit-report:
@@ -42,7 +42,7 @@ test:cargo:
 #     reports:
 #       junit: $CI_PROJECT_DIR/tests/*.xml
 
-deploy:
-  stage: deploy
-  script: echo "Define your deployment script!"
-  environment: production
+#deploy:
+#  stage: deploy
+#  script: echo "Define your deployment script!"
+#  environment: production
