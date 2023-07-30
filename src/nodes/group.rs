@@ -8,7 +8,7 @@ use crate::{
     optic_ports::OpticPorts,
 };
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
-use petgraph::visit::EdgeRef;
+use petgraph::visit::{EdgeRef, IntoEdgesDirected, IntoNodeReferences};
 use petgraph::{algo::*, Direction};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -111,6 +111,42 @@ impl NodeGroup {
         self.g
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
+    }
+    fn input_nodes(&self) -> Vec<NodeIndex> {
+        let mut input_nodes: Vec<NodeIndex> = Vec::default();
+        for node_idx in self.g.node_indices() {
+            let incoming_edges = self.g.edges_directed(node_idx, Direction::Incoming).count();
+            let input_ports = self
+                .g
+                .node_weight(node_idx)
+                .unwrap()
+                .borrow()
+                .ports()
+                .inputs()
+                .len();
+            if input_ports != incoming_edges {
+                input_nodes.push(node_idx);
+            }
+        }
+        input_nodes
+    }
+    fn output_nodes(&self) -> Vec<NodeIndex> {
+        let mut output_nodes: Vec<NodeIndex> = Vec::default();
+        for node_idx in self.g.node_indices() {
+            let outgoing_edges = self.g.edges_directed(node_idx, Direction::Outgoing).count();
+            let output_ports = self
+                .g
+                .node_weight(node_idx)
+                .unwrap()
+                .borrow()
+                .ports()
+                .outputs()
+                .len();
+            if output_ports != outgoing_edges {
+                output_nodes.push(node_idx);
+            }
+        }
+        output_nodes
     }
     pub fn map_input_port(
         &mut self,
@@ -332,7 +368,7 @@ impl Dottable for NodeGroup {
 mod test {
     use super::NodeGroup;
     use crate::{
-        nodes::Dummy,
+        nodes::{BeamSplitter, Dummy},
         optic_node::{OpticNode, Optical},
     };
     #[test]
@@ -370,6 +406,32 @@ mod test {
         // correct usage
         assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "front").is_ok());
         assert_eq!(og.g.edge_count(), 1);
+    }
+    #[test]
+    fn input_nodes() {
+        let mut og = NodeGroup::new();
+        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sn1_i = og.add_node(sub_node1);
+        let sub_node1 = OpticNode::new("test2", Dummy);
+        let sn2_i = og.add_node(sub_node1);
+        let sub_node3 = OpticNode::new("test3", BeamSplitter::new(0.5));
+        let sn3_i = og.add_node(sub_node3);
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+        og.connect_nodes(sn2_i, "rear", sn3_i, "input1").unwrap();
+        assert_eq!(og.input_nodes(),vec![0.into(),2.into()])
+    }
+    #[test]
+    fn output_nodes() {
+        let mut og = NodeGroup::new();
+        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sn1_i = og.add_node(sub_node1);
+        let sub_node1 = OpticNode::new("test2", BeamSplitter::new(0.5));
+        let sn2_i = og.add_node(sub_node1);
+        let sub_node3 = OpticNode::new("test3", Dummy);
+        let sn3_i = og.add_node(sub_node3);
+        og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
+        og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front").unwrap();
+        assert_eq!(og.input_nodes(),vec![0.into(),1.into()])
     }
     #[test]
     fn map_input_port() {
