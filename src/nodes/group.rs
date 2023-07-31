@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
 use crate::light::Light;
@@ -27,6 +28,7 @@ pub struct NodeGroup {
 }
 
 impl NodeGroup {
+    /// Creates a new (empty) [`NodeGroup`].
     pub fn new() -> Self {
         Self::default()
     }
@@ -40,7 +42,9 @@ impl NodeGroup {
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
     /// Both node indices must exist. Otherwise an [`OpossumError::OpticScenery`] is returned. In addition, connections are
-    /// rejected and an [`OpossumError::OpticScenery`] is returned, if the graph would form a cycle (loop in the graph).
+    /// rejected and an [`OpossumError::OpticScenery`] is returned, if the graph would form a cycle (loop in the graph). **Note**:
+    /// The connection of two internal nodes might affect external port mappings (see [`map_input_port`](NodeGroup::map_input_port())
+    /// & [`map_output_port`](NodeGroup::map_output_port()) functions). In this case no longer valid mappings will be deleted.
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
@@ -162,6 +166,17 @@ impl NodeGroup {
         }
         output_nodes
     }
+    /// Map an input port of an internal node to an external port of the group.
+    ///
+    /// In oder to use a [`NodeGroup`] from the outside, internal nodes / ports must be mapped to be visible. The
+    /// corresponding [`ports`](NodeGroup::ports()) function only returns ports that have been mapped before.
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///   - an external input port name has already been assigned.
+    ///   - the `input_node` / `internal_name` does not exist.
+    ///   - the specified `input_node` is not an input node of the group (i.e. fully connected to other internal nodes).
+    ///   - the `input_node` has an input port with the specified `internal_name` but is already internally connected.
     pub fn map_input_port(
         &mut self,
         input_node: NodeIndex,
@@ -210,6 +225,17 @@ impl NodeGroup {
         );
         Ok(())
     }
+    /// Map an output port of an internal node to an external port of the group.
+    ///
+    /// In oder to use a [`NodeGroup`] from the outside, internal nodes / ports must be mapped to be visible. The
+    /// corresponding [`ports`](NodeGroup::ports()) function only returns ports that have been mapped before.
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///   - an external output port name has already been assigned.
+    ///   - the `output_node` / `internal_name` does not exist.
+    ///   - the specified `output_node` is not an output node of the group (i.e. fully connected to other internal nodes).
+    ///   - the `output_node` has an output port with the specified `internal_name` but is already internally connected.
     pub fn map_output_port(
         &mut self,
         output_node: NodeIndex,
@@ -258,7 +284,7 @@ impl NodeGroup {
         );
         Ok(())
     }
-    pub fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
+    fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
         let edges = self.g.edges_directed(idx, Direction::Incoming);
         edges
             .into_iter()
@@ -284,7 +310,7 @@ impl NodeGroup {
             }
         } // else outgoing edge not connected -> data dropped
     }
-    pub fn analyze_group(
+    fn analyze_group(
         &mut self,
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
