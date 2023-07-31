@@ -12,6 +12,12 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// A virtual component referring to another existing component.
 ///
 /// This node type is necessary in order to model resonators (loops) or double-pass systems.
+///
+/// ## Optical Ports
+///   - Inputs
+///     - input ports of the referenced [`OpticNode`]
+///   - Outputs
+///     - output ports of the referenced [`OpticNode`]
 pub struct NodeReference {
     reference: Weak<RefCell<OpticNode>>,
 }

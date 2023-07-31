@@ -8,7 +8,7 @@ use crate::spectrum::Spectrum;
 /// Data structure defining the light properties. The actuals data type used depends on the
 /// [`AnalyzerType`](crate::analyzer::AnalyzerType). For example, an energy analysis ([`LightData::Energy`]) only
 /// contains a [`Spectrum`] information, while a geometric analysis ([`LightData::Geometric]) constains a set of optical
-/// ray data. 
+/// ray data.
 #[derive(Debug, Clone)]
 pub enum LightData {
     /// data type used for energy analysis.

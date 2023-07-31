@@ -1,5 +1,5 @@
 //! Data structure for the graph edges.
-//! 
+//!
 //! [`Light`] represents the information / data flowing from one node to another node. It contains information about
 //! the respective source an target port names this edge connects as well as the actual light information (stored as
 //! [`LightData`]).

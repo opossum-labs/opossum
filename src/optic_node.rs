@@ -99,7 +99,7 @@ pub trait Optical {
         OpticPorts::default()
     }
     /// Perform an analysis of this element. The type of analysis is given by an [`AnalyzerType`].
-    /// 
+    ///
     /// This function is normally only called by [`OpticScenery::analyze()`](crate::optic_scenery::OpticScenery::analyze()).
     ///
     /// # Errors

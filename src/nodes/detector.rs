@@ -12,6 +12,12 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// This node represents an universal detector.
 ///
 /// Any [`LightData`] coming in will be stored internally for later display / export. So far it only has one input (in1).
+///
+/// ## Optical Ports
+///   - Inputs
+///     - `in1`
+///   - Outputs
+///     - none
 pub struct Detector {
     light_data: Option<LightData>,
 }

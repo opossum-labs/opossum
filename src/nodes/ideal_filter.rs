@@ -18,6 +18,12 @@ pub enum FilterType {
 }
 #[derive(Debug)]
 /// An ideal filter with given transmission or optical density.
+///
+/// ## Optical Ports
+///   - Inputs
+///     - `front`
+///   - Outputs
+///     - `rear`
 pub struct IdealFilter {
     filter_type: FilterType,
 }

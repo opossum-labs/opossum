@@ -20,7 +20,14 @@ type Result<T> = std::result::Result<T, OpossumError>;
 #[derive(Default, Debug, Clone)]
 /// A node that represents a group of other [`OpticNode`]s arranges in a subgraph.
 ///
-/// All unconnected input and output ports of this subgraph form the ports of this [`NodeGroup`].
+/// All unconnected input and output ports of this subgraph could be used as ports of
+/// this [`NodeGroup`]. For this, port mapping is neccessary (see below).
+///
+/// ## Optical Ports
+///   - Inputs
+///     - defined by [`map_input_port`](NodeGroup::map_input_port()) function.
+///   - Outputs
+///     - defined by [`map_output_port`](NodeGroup::map_output_port()) function.
 pub struct NodeGroup {
     g: DiGraph<Rc<RefCell<OpticNode>>, Light>,
     input_port_map: HashMap<String, (NodeIndex, String)>,

@@ -6,8 +6,8 @@ use opossum::{
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source},
-    OpticScenery,
     spectrum::{create_he_ne_spectrum, Spectrum},
+    OpticScenery,
 };
 
 fn main() -> Result<(), OpossumError> {

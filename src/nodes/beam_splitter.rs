@@ -13,6 +13,14 @@ type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Debug)]
 /// An ideal beamsplitter node with a given splitting ratio.
+///
+/// ## Optical Ports
+///   - Inputs
+///     - `input1`
+///     - `input2`
+///   - Outputs
+///     - `out1_trans1_refl2`
+///     - `out2_trans2_refl1`
 pub struct BeamSplitter {
     ratio: f64,
 }

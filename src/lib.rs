@@ -1,4 +1,5 @@
-//! This is the documentation for the OPOSSUM software package. OPOSSUM stands for OPen-source Optics Simulation Software and Unified Modeller.
+//! This is the documentation for the **OPOSSUM** software package. **OPOSSUM** stands for
+//! **Op**en-source **O**ptics **S**imulation **S**oftware and **U**nified **M**odeller.
 //!
 mod light;
 pub mod lightdata;

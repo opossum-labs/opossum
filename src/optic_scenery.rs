@@ -16,7 +16,7 @@ use petgraph::Direction::{Incoming, Outgoing};
 type Result<T> = std::result::Result<T, OpossumError>;
 
 /// Overall optical model and additional metatdata.
-/// 
+///
 /// All optical elements ([`OpticNode`]s) have to be added to this structure in order
 /// to be considered for an analysis.
 #[derive(Default, Debug, Clone)]

@@ -8,10 +8,16 @@ use crate::optic_ports::OpticPorts;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Debug)]
-/// A fake / dummy component without any functions.
+/// A fake / dummy component without any optical functionality.
 ///
 /// Any [`LightResult`] is directly forwarded without any modification. It is mainly used for
 /// development and debugging purposes.
+///
+/// ## Optical Ports
+///   - Inputs
+///     - `front`
+///   - Outputs
+///     - `rear`
 pub struct Dummy;
 
 impl Optical for Dummy {

@@ -1,3 +1,4 @@
+//! Optical Analyzers
 use crate::{error::OpossumError, optic_scenery::OpticScenery};
 
 type Result<T> = std::result::Result<T, OpossumError>;
