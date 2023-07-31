@@ -100,6 +100,20 @@ impl NodeGroup {
                 "connecting the given nodes would form a loop".into(),
             ));
         }
+        let in_map = self.input_port_map.clone();
+        let invalid_mapping = in_map
+            .iter()
+            .find(|m| m.1 .0 == target_node && m.1 .1 == target_port);
+        if let Some(input) = invalid_mapping {
+            self.input_port_map.remove(input.0);
+        }
+        let out_map = self.output_port_map.clone();
+        let invalid_mapping = out_map
+            .iter()
+            .find(|m| m.1 .0 == src_node && m.1 .1 == src_port);
+        if let Some(input) = invalid_mapping {
+            self.output_port_map.remove(input.0);
+        }
         Ok(edge_index)
     }
     fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
@@ -417,6 +431,23 @@ mod test {
         // correct usage
         assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "front").is_ok());
         assert_eq!(og.g.edge_count(), 1);
+    }
+    #[test]
+    fn connect_nodes_update_port_mapping() {
+        let mut og = NodeGroup::new();
+        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sn1_i = og.add_node(sub_node1);
+        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sn2_i = og.add_node(sub_node2);
+
+        og.map_input_port(sn2_i, "front", "input").unwrap();
+        og.map_output_port(sn1_i, "rear", "output").unwrap();
+        assert_eq!(og.input_port_map.len(), 1);
+        assert_eq!(og.output_port_map.len(), 1);
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+        // delete no longer valid port mapping
+        assert_eq!(og.input_port_map.len(), 0);
+        assert_eq!(og.output_port_map.len(), 0);
     }
     #[test]
     fn input_nodes() {
