@@ -6,7 +6,7 @@ use opossum::{
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source},
-    optic_scenery::OpticScenery,
+    OpticScenery,
     spectrum::{create_he_ne_spectrum, create_nd_glass_spectrum, Spectrum},
 };
 

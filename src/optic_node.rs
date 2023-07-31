@@ -94,9 +94,17 @@ pub trait Optical {
     fn node_type(&self) -> &str {
         "undefined"
     }
+    /// Return the available (input & output) ports of this element.
     fn ports(&self) -> OpticPorts {
         OpticPorts::default()
     }
+    /// Perform an analysis of this element. The type of analysis is given by an [`AnalyzerType`].
+    /// 
+    /// This function is normally only called by [`OpticScenery::analyze()`](crate::optic_scenery::OpticScenery::analyze()).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if internal element-specific errors occur and the analysis cannot be performed.
     fn analyze(
         &mut self,
         _incoming_data: LightResult,
@@ -110,7 +118,7 @@ pub trait Optical {
     }
 }
 
-//this trait deals with the translation of the OpticScenery-graph structure to the dot-file format which is needed to visualize the graphs
+/// This trait deals with the translation of the OpticScenery-graph structure to the dot-file format which is needed to visualize the graphs
 pub trait Dottable {
     /// Return component type specific code in 'dot' format for `graphviz` visualization.
     fn to_dot(&self, node_index: &str, name: &str, inverted: bool, ports: &OpticPorts) -> String {
@@ -127,7 +135,7 @@ pub trait Dottable {
         dot_str
     }
 
-    // creates a table-cell wrapper around an "inner" string
+    /// creates a table-cell wrapper around an "inner" string
     fn add_table_cell_container(
         &self,
         inner_str: &str,
@@ -227,6 +235,7 @@ pub trait Dottable {
         dot_str
     }
 
+    /// Returns the color of the node.
     fn node_color(&self) -> &str {
         "lightgray"
     }

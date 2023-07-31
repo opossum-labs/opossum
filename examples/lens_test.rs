@@ -1,5 +1,5 @@
 use opossum::nodes::{RealLens, Source};
-use opossum::{nodes::Detector, optic_scenery::OpticScenery};
+use opossum::{nodes::Detector, OpticScenery};
 use std::fs::File;
 use std::io::Write;
 

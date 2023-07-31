@@ -1,6 +1,6 @@
 use opossum::error::OpossumError;
 use opossum::nodes::Dummy;
-use opossum::optic_scenery::OpticScenery;
+use opossum::OpticScenery;
 
 use std::fs::File;
 use std::io::Write;

@@ -1,7 +1,7 @@
 use opossum::{
     error::OpossumError,
     nodes::{BeamSplitter, Detector, Dummy, NodeReference, Source},
-    optic_scenery::OpticScenery,
+    OpticScenery,
 };
 use std::fs::File;
 use std::io::Write;

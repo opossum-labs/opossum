@@ -7,7 +7,7 @@ use opossum::{
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, Detector, Dummy, NodeGroup, Source},
     optic_node::OpticNode,
-    optic_scenery::OpticScenery,
+    OpticScenery,
     spectrum::create_he_ne_spectrum,
 };
 

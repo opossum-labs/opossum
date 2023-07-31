@@ -15,8 +15,10 @@ use petgraph::Direction::{Incoming, Outgoing};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-/// [`OpticScenery`] represents the overall optical model and additional metatdata. All optical elements ([`OpticNode`]s) have
-/// to be added to this structure in order to be considered for an analysis.
+/// Overall optical model and additional metatdata.
+/// 
+/// All optical elements ([`OpticNode`]s) have to be added to this structure in order
+/// to be considered for an analysis.
 #[derive(Default, Debug, Clone)]
 pub struct OpticScenery {
     g: DiGraph<Rc<RefCell<OpticNode>>, Light>,
