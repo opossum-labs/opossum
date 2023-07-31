@@ -8,7 +8,7 @@ use crate::{
     optic_ports::OpticPorts,
 };
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
-use petgraph::visit::{EdgeRef, IntoEdgesDirected, IntoNodeReferences};
+use petgraph::visit::EdgeRef;
 use petgraph::{algo::*, Direction};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -175,14 +175,19 @@ impl NodeGroup {
                 "internal node index not found".into(),
             ));
         }
-
-        if !(self
-            .g
-            .externals(petgraph::Direction::Incoming)
-            .any(|i| i == input_node))
-        {
+        if !self.input_nodes().contains(&input_node) {
             return Err(OpossumError::OpticGroup(
                 "node to be mapped is not an input node of the group".into(),
+            ));
+        }
+        let incoming_edge_connected = self
+            .g
+            .edges_directed(input_node, Direction::Incoming)
+            .map(|e| e.weight().target_port())
+            .any(|p| p == internal_name);
+        if incoming_edge_connected {
+            return Err(OpossumError::OpticGroup(
+                "port of input node is already internally connected".into(),
             ));
         }
         self.input_port_map.insert(
@@ -218,13 +223,19 @@ impl NodeGroup {
                 "internal node index not found".into(),
             ));
         }
-        if !(self
-            .g
-            .externals(petgraph::Direction::Outgoing)
-            .any(|i| i == output_node))
-        {
+        if !self.output_nodes().contains(&output_node) {
             return Err(OpossumError::OpticGroup(
                 "node to be mapped is not an output node of the group".into(),
+            ));
+        }
+        let outgoing_edge_connected = self
+            .g
+            .edges_directed(output_node, Direction::Outgoing)
+            .map(|e| e.weight().src_port())
+            .any(|p| p == internal_name);
+        if outgoing_edge_connected {
+            return Err(OpossumError::OpticGroup(
+                "port of output node is already internally connected".into(),
             ));
         }
         self.output_port_map.insert(
@@ -418,7 +429,7 @@ mod test {
         let sn3_i = og.add_node(sub_node3);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         og.connect_nodes(sn2_i, "rear", sn3_i, "input1").unwrap();
-        assert_eq!(og.input_nodes(),vec![0.into(),2.into()])
+        assert_eq!(og.input_nodes(), vec![0.into(), 2.into()])
     }
     #[test]
     fn output_nodes() {
@@ -430,8 +441,9 @@ mod test {
         let sub_node3 = OpticNode::new("test3", Dummy);
         let sn3_i = og.add_node(sub_node3);
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
-        og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front").unwrap();
-        assert_eq!(og.input_nodes(),vec![0.into(),1.into()])
+        og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front")
+            .unwrap();
+        assert_eq!(og.input_nodes(), vec![0.into(), 1.into()])
     }
     #[test]
     fn map_input_port() {
@@ -459,6 +471,23 @@ mod test {
         assert_eq!(og.input_port_map.len(), 1);
     }
     #[test]
+    fn map_input_port_half_connected_nodes() {
+        let mut og = NodeGroup::new();
+        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sn1_i = og.add_node(sub_node1);
+        let sub_node2 = OpticNode::new("test2", BeamSplitter::default());
+        let sn2_i = og.add_node(sub_node2);
+        og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
+
+        // node port already internally connected
+        assert!(og.map_input_port(sn2_i, "input1", "bs_input").is_err());
+
+        // correct usage
+        assert!(og.map_input_port(sn1_i, "front", "input").is_ok());
+        assert!(og.map_input_port(sn2_i, "input2", "bs_input").is_ok());
+        assert_eq!(og.input_port_map.len(), 2);
+    }
+    #[test]
     fn map_output_port() {
         let mut og = NodeGroup::new();
         let sub_node1 = OpticNode::new("test1", Dummy);
@@ -482,6 +511,28 @@ mod test {
         // correct usage
         assert!(og.map_output_port(sn2_i, "rear", "output").is_ok());
         assert_eq!(og.output_port_map.len(), 1);
+    }
+    #[test]
+    fn map_output_port_half_connected_nodes() {
+        let mut og = NodeGroup::new();
+        let sub_node1 = OpticNode::new("test1", BeamSplitter::default());
+        let sn1_i = og.add_node(sub_node1);
+        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sn2_i = og.add_node(sub_node2);
+        og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "front")
+            .unwrap();
+
+        // node port already internally connected
+        assert!(og
+            .map_output_port(sn1_i, "out1_trans1_refl2", "bs_output")
+            .is_err());
+
+        // correct usage
+        assert!(og
+            .map_output_port(sn1_i, "out2_trans2_refl1", "bs_output")
+            .is_ok());
+        assert!(og.map_output_port(sn2_i, "rear", "output").is_ok());
+        assert_eq!(og.output_port_map.len(), 2);
     }
     #[test]
     fn ports() {
