@@ -26,10 +26,10 @@ image: "rust:latest"
 #   - apt-get install -yqq --no-install-recommends build-essential
 
 # Use cargo to test the project
-#test:cargo:
-#  script:
-#    - rustc --version && cargo --version  # Print version info for debugging
-#    - cargo test --workspace --verbose
+test:cargo:
+  script:
+    - rustc --version && cargo --version  # Print version info for debugging
+    - cargo test --workspace --verbose
 
 # Optional: Use a third party library to generate gitlab junit reports
 # test:junit-report:
