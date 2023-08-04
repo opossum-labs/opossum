@@ -2,8 +2,10 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use crate::analyzer::AnalyzerType;
 use crate::lightdata::LightData;
+use crate::nodes::NodeGroup;
 use crate::optic_ports::OpticPorts;
 use crate::error::OpossumError;
+use std::any::Any;
 
 pub type LightResult=HashMap<String,Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
@@ -46,8 +48,8 @@ impl OpticNode {
 
     /// Returns a string representation of the [`OpticNode`] in `graphviz` format including port visualization. 
     /// This function is normally called by the top-level `to_dot`function within `OpticScenery`.
-    pub fn to_dot(&self, node_index: &str) -> String{
-        self.node.to_dot(node_index, &self.name, self.inverted(), &self.node.ports())
+    pub fn to_dot(&self, node_index: &str, parent_identifier: String) -> Result<String>{
+        self.node.to_dot(node_index, &self.name, self.inverted(), &self.node.ports(), parent_identifier)
     }
 
     /// Returns the concrete node type as string representation.
@@ -71,6 +73,13 @@ impl OpticNode {
     pub fn analyze(&mut self, incoming_data: LightResult, analyzer_type: &AnalyzerType) -> Result<LightResult> {
         self.node.analyze(incoming_data, analyzer_type)
     }
+
+    pub fn node(&self)->&Box<(dyn OpticComponent + 'static)>{
+        &self.node
+    }
+
+
+
 }
 
 impl Debug for OpticNode {
@@ -99,13 +108,14 @@ pub trait Optical {
 //this trait deals with the translation of the OpticScenery-graph structure to the dot-file format which is needed to visualize the graphs
 pub trait Dottable {
     /// Return component type specific code in 'dot' format for `graphviz` visualization.
-    fn to_dot(&self, node_index: &str, name: &str, inverted: bool, ports: &OpticPorts) -> String{
+    fn to_dot(&self, node_index: &str, name: &str, inverted: bool, ports: &OpticPorts, mut parent_identifier: String) -> Result<String>{
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);        
-        let mut dot_str = format!("\ti{} [\n\t\tshape=plaintext\n", node_index);
+        parent_identifier = if parent_identifier == "" {format!("i{}", node_index)} else {format!("{}_i{}", &parent_identifier, node_index)};
+        let mut dot_str = format!("\t{} [\n\t\tshape=plaintext\n", &parent_identifier);
         let mut indent_level = 2;
         dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports, inverted));
-        dot_str
+        Ok(dot_str)
     }
 
     // creates a table-cell wrapper around an "inner" string
@@ -214,8 +224,25 @@ pub trait Dottable {
     }
 }
 
-pub trait OpticComponent: Optical + Dottable + Debug {}
-impl<T: Optical + Dottable + Debug> OpticComponent for T {}
+
+
+pub trait OpticComponent: Optical + Dottable + Debug + Any + 'static  {
+    fn upcast_any_ref(self: &'_ Self) -> &'_ dyn Any;
+}
+impl<T: Optical + Dottable + Debug + Any + 'static > OpticComponent for T {
+    #[inline]
+    fn upcast_any_ref(self: &'_ Self) -> &'_ dyn Any{
+        self
+    }
+}
+
+
+impl dyn OpticComponent + 'static {
+    #[inline]
+    pub fn downcast_ref<T : 'static> (self: &'_ Self) -> Option<&'_ T>{
+        self.upcast_any_ref().downcast_ref::<T>()
+    }
+}
 
 
 #[cfg(test)]
@@ -254,13 +281,13 @@ mod test {
     #[test]
     fn to_dot() {
         let node = OpticNode::new("Test", Dummy);
-        assert_eq!(node.to_dot("i0"), "  i0 [label=\"Test\"]\n".to_owned())
+        assert_eq!(node.to_dot("i0", "".to_owned()).unwrap(), "  i0 [label=\"Test\"]\n".to_owned())
     }
     #[test]
     fn to_dot_inverted() {
         let mut node = OpticNode::new("Test", Dummy);
         node.set_inverted(true);
-        assert_eq!(node.to_dot("i0"), "  i0 [label=\"Test(inv)\"]\n".to_owned())
+        assert_eq!(node.to_dot("i0", "".to_owned()).unwrap(), "  i0 [label=\"Test(inv)\"]\n".to_owned())
     }
     #[test]
     fn node_type() {

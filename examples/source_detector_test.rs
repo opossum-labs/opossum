@@ -33,7 +33,7 @@ fn main() -> Result<(), OpossumError> {
 
     let path = "src_detector.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()).unwrap();
+    write!(output, "{}", scenery.to_dot()?).unwrap();
 
     scenery.report();
     println!("");

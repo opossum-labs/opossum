@@ -12,7 +12,7 @@ fn main() -> Result<(), OpossumError> {
 
     scenery.set_description("PHELIX uOPA".into());
     println!("default opticscenery: {:?}", scenery);
-    println!("export to `dot` format: {}", scenery.to_dot());
+    println!("export to `dot` format: {}", scenery.to_dot()?);
 
     let pulse_generation_split_node = scenery.add_element("Pulse Generation", Dummy);
     let u_opa_1_node = scenery.add_element("uOPA Stage 1", Dummy);
@@ -164,11 +164,11 @@ fn main() -> Result<(), OpossumError> {
 
     let path = "uOPA.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()).unwrap();
+    write!(output, "{}", scenery.to_dot()?).unwrap();
 
     let path = "uOPA_PreAmp.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery_2.to_dot()).unwrap();
+    write!(output, "{}", scenery_2.to_dot()?).unwrap();
 
     let mut analyzer = AnalyzerEnergy::new(&scenery);
     analyzer.analyze()?;

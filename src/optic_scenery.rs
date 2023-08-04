@@ -1,11 +1,14 @@
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
+// use core::cell::Ref;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::any::{Any, TypeId};
 
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
+use crate::nodes::NodeGroup;
 use crate::optic_node::{OpticComponent, OpticNode, LightResult};
 use petgraph::Direction::{Incoming, Outgoing};
 use petgraph::algo::toposort;
@@ -139,33 +142,76 @@ impl OpticScenery {
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self) -> String {
         let mut dot_string = "digraph {\n\tfontsize = 8\n".to_owned();
+        dot_string.push_str("\tcompound = true;\n");
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description));
         dot_string.push_str("\tfontname=\"Helvetica,Arial,sans-serif\"\n");
         dot_string.push_str("\tnode [fontname=\"Helvetica,Arial,sans-serif\" fontsize = 10]\n");
         dot_string.push_str("\tedge [fontname=\"Helvetica,Arial,sans-serif\"]\n\n");
         dot_string
     }
+
+    fn cast_node_to_group<'a>(&self, ref_node:  &'a Ref<'_, OpticNode>) -> Result<&'a  NodeGroup>{
+        let node_boxed = (&*ref_node).node();
+        let downcasted_node = node_boxed.downcast_ref::<NodeGroup>().unwrap();
+        match downcasted_node {
+            i => Ok(i),
+            _ => Err(OpossumError::OpticScenery(
+                "can not cast OpticNode to specific type of NodeGroup!".into(),
+            )),
+        }
+    }
+    fn check_if_group(&self, node_ref:  &OpticNode) -> bool{
+        if node_ref.node_type() == "group"{
+            true
+        }
+        else{
+            false
+        }
+    }
+
+    fn define_node_edge_str(&self, end_node: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<Vec<String>>{
+        let mut edge_str = Vec::<String>::new();
+        let node = self.g.node_weight(end_node).unwrap().borrow();
+        parent_identifier = if parent_identifier == "" {format!("i{}", end_node.index())} else {format!("{}_i{}", &parent_identifier, end_node.index())};
+
+        if self.check_if_group(&node){
+            let group_node = self.cast_node_to_group(&node)?;
+            edge_str = group_node.get_linked_port_str(light_port, end_node.index(), parent_identifier)?;            
+        }
+        else{
+            edge_str.push(format!("i{}:{}", end_node.index(), light_port));
+        }
+        Ok(edge_str)
+    }
+
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
-    pub fn to_dot(&self) -> String {
+    pub fn to_dot(&self) -> Result<String> {
         let mut dot_string = self.add_dot_header();
+        let mut src_edge_str = Vec::<String>::new();
+        let mut target_edge_str = Vec::<String>::new();
+        let mut parent_identifier = "".to_owned();
 
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
-            dot_string += &node.borrow().to_dot(&format!("{}", node_idx.index()));
+            dot_string += &node.borrow().to_dot(&format!("{}", node_idx.index()), "".to_owned())?;
         }
         for edge in self.g.edge_indices() {
             let light: &Light = self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
-            dot_string.push_str(&format!(
-                "  i{}:{} -> i{}:{} \n",
-                end_nodes.0.index(),
-                light.src_port(),
-                end_nodes.1.index(),
-                light.target_port()
-            ));
+
+            src_edge_str = self.define_node_edge_str(end_nodes.0, light.src_port(), parent_identifier.clone())?;
+            target_edge_str = self.define_node_edge_str(end_nodes.1, light.target_port(), parent_identifier.clone())?;
+
+            for src in src_edge_str.iter(){
+                println!("{}", src);
+                for target in target_edge_str.iter(){
+                    println!("{}", target);
+                    dot_string.push_str(&format!("  {} -> {} \n", src, target));
+                };
+            };
         }
         dot_string += "}";
-        dot_string
+        Ok(dot_string)
     }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> Result<()> {
@@ -296,7 +342,7 @@ mod test {
     fn to_dot_empty() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into());
-        assert_eq!(scenery.to_dot(), "digraph {\n  label=\"Test\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n}");
+        assert_eq!(scenery.to_dot().unwrap(), "digraph {\n  label=\"Test\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n}");
     }
     #[test]
     fn to_dot_with_node() {
@@ -304,7 +350,7 @@ mod test {
         scenery.set_description("SceneryTest".into());
         scenery.add_element("Test", Dummy);
         assert_eq!(
-            scenery.to_dot(),
+            scenery.to_dot().unwrap(),
             "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test\"]\n}"
         );
     }
@@ -316,7 +362,7 @@ mod test {
         let n2 = scenery.add_element("Test2", Dummy);
         if let Ok(_) = scenery.connect_nodes(n1, "rear", n2, "front") {
             assert_eq!(
-                scenery.to_dot(),
+                scenery.to_dot().unwrap(),
                 "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test1\"]\n  i1 [label=\"Test2\"]\n  i0 -> i1 [label=\"rear->front\"]\n}"
             );
         } else {
