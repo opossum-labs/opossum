@@ -1,16 +1,18 @@
 //! This module contains the concrete node types (lenses, filters, etc...)
-mod node_dummy;
-mod node_reference;
-mod node_group;
-mod node_beam_splitter;
-mod node_source;
-mod node_detector;
+mod beam_splitter;
+mod detector;
+mod dummy;
+mod group;
 mod ideal_filter;
+mod lens;
+mod reference;
+mod source;
 
-pub use node_dummy::Dummy;
-pub use node_reference::NodeReference;
-pub use node_group::NodeGroup;
-pub use node_beam_splitter::BeamSplitter;
-pub use node_source::Source;
-pub use node_detector::Detector;
-pub use ideal_filter::IdealFilter;
+pub use beam_splitter::BeamSplitter;
+pub use detector::Detector;
+pub use dummy::Dummy;
+pub use group::NodeGroup;
+pub use ideal_filter::{FilterType, IdealFilter};
+pub use lens::{IdealLens, RealLens};
+pub use reference::NodeReference;
+pub use source::Source;

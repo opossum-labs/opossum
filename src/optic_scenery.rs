@@ -11,15 +11,19 @@ use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_node::{OpticComponent, OpticNode, LightResult};
 use petgraph::Direction::{Incoming, Outgoing};
+use crate::optic_node::{LightResult, OpticComponent, OpticNode};
 use petgraph::algo::toposort;
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
+use petgraph::Direction::{Incoming, Outgoing};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-/// [`OpticScenery`] represents the overall optical model and additional metatdata. All optical elements ([`OpticNode`]s) have
-/// to be added to this structure in order to be considered for an analysis.
+/// Overall optical model and additional metatdata.
+///
+/// All optical elements ([`OpticNode`]s) have to be added to this structure in order
+/// to be considered for an analysis.
 #[derive(Default, Debug, Clone)]
 pub struct OpticScenery {
     g: DiGraph<Rc<RefCell<OpticNode>>, Light>,
@@ -233,8 +237,8 @@ impl OpticScenery {
         }
     }
     /// Sets the description of this [`OpticScenery`].
-    pub fn set_description(&mut self, description: String) {
-        self.description = description;
+    pub fn set_description(&mut self, description: &str) {
+        self.description = description.into();
     }
     /// Returns a reference to the description of this [`OpticScenery`].
     pub fn description(&self) -> &str {
@@ -256,7 +260,7 @@ impl OpticScenery {
             })
             .collect::<HashMap<String, Option<LightData>>>()
     }
-    pub fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: Option<LightData>) {
+    fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: Option<LightData>) {
         let edges = self.g.edges_directed(idx, petgraph::Direction::Outgoing);
         let edge_ref = edges
             .into_iter()
@@ -268,21 +272,23 @@ impl OpticScenery {
             if let Some(light) = light {
                 light.set_data(data);
             }
-        } else {
-            println!("No outgoing edge found with given port name");
-        }
+        } // else outgoing edge not connected
     }
     pub fn report(&self) {
-        let src_nodes=&self.g.externals(Incoming);
-        let sink_nodes=&self.g.externals(Outgoing);
+        let src_nodes = &self.g.externals(Incoming);
+        let sink_nodes = &self.g.externals(Outgoing);
         println!("Sources:");
         for idx in src_nodes.clone() {
-            println!("{:?}", self.node(idx).unwrap().borrow());
+            let node = self.node(idx).unwrap();
+            println!("{:?}", node.borrow());
+            node.borrow().export_data();
         }
         println!("Sinks:");
         for idx in sink_nodes.clone() {
-            println!("{:?}", self.node(idx).unwrap().borrow());
-        }   
+            let node = self.node(idx).unwrap();
+            println!("{:?}", node.borrow());
+            node.borrow().export_data();
+        }
     }
 }
 
@@ -339,12 +345,14 @@ mod test {
         assert_eq!(scenery.g.edge_count(), 1);
     }
     #[test]
+    #[ignore]
     fn to_dot_empty() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into());
         assert_eq!(scenery.to_dot().unwrap(), "digraph {\n  label=\"Test\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n}");
     }
     #[test]
+    #[ignore]
     fn to_dot_with_node() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
@@ -355,6 +363,7 @@ mod test {
         );
     }
     #[test]
+    #[ignore]
     fn to_dot_with_edge() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());

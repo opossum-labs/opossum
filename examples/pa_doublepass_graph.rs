@@ -1,20 +1,20 @@
 use opossum::analyzer::AnalyzerEnergy;
 use opossum::error::OpossumError;
 use opossum::nodes::{Dummy, NodeReference};
-use opossum::optic_scenery::OpticScenery;
+use opossum::OpticScenery;
 use std::fs::File;
 use std::io::Write;
 
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
-    scenery.set_description("PreAmp Doublepass section".into());
+    scenery.set_description("PreAmp Doublepass section");
     //let n0 = scenery.add_element("LightSource", Source::default());
     let n1 = scenery.add_element("TFP", Dummy);
     let n2 = scenery.add_element("19mm amp", Dummy);
     //let n3 = scenery.add_element("Faraday", Dummy);
     let n4 = scenery.add_element("0° mirror", Dummy);
 
-    let mut node = NodeReference::new(scenery.node(n1).unwrap());
+    let mut node = NodeReference::from_node(scenery.node(n1).unwrap());
     node.set_inverted(true);
     let n1r = scenery.add_node(node);
 
@@ -22,7 +22,7 @@ fn main() -> Result<(), OpossumError> {
     // node.set_inverted(true);
     // let n3r = scenery.add_node(node);
 
-    let mut node = NodeReference::new(scenery.node(n2)?);
+    let mut node = NodeReference::from_node(scenery.node(n2)?);
     node.set_inverted(true);
     let n2r = scenery.add_node(node);
 

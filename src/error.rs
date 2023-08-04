@@ -1,12 +1,20 @@
+//! Opossum specfic error structures
 use std::{error::Error, fmt::Display};
 
+/// Errors that can be returned by various OPOSSUM functions.
 #[derive(Debug, Clone)]
 pub enum OpossumError {
+    /// error while setting up an `OpticScenery`
     OpticScenery(String),
+    /// error while setting up an `OpticGroup`. The reasons are similar to [`OpossumError::OpticScenery`]
     OpticGroup(String),
+    /// (mostly internal) errors while dealing with optical ports.
     OpticPort(String),
+    /// mostly runtime errors occuring during the analysis of a scenery
     Analysis(String),
+    /// errors while handling optical spectra
     Spectrum(String),
+    /// errors not falling in one of the categories above
     Other(String),
 }
 

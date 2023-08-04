@@ -1,6 +1,6 @@
 use opossum::error::OpossumError;
 use opossum::nodes::Dummy;
-use opossum::optic_scenery::OpticScenery;
+use opossum::OpticScenery;
 
 use std::fs::File;
 use std::io::Write;
@@ -8,7 +8,7 @@ use std::io::Write;
 fn main() -> Result<(), OpossumError> {
     println!("opticscenery example");
     let mut scenery = OpticScenery::new();
-    scenery.set_description("OpticScenery demo".into());
+    scenery.set_description("OpticScenery demo");
     println!("default opticscenery: {:?}", scenery);
     println!("export to `dot` format: {}", scenery.to_dot()?);
     let node1 = scenery.add_element("my optic", Dummy);

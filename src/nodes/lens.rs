@@ -1,43 +1,44 @@
-use std::collections::HashMap;
-use uom::{si::f64::{Energy, Length}, si::length::meter, num_traits::Zero};
-use ndarray::{Array1, Array2, array};
-
-type Result<T> = std::result::Result<T, OpossumError>;
-
-
 use crate::{
     analyzer::AnalyzerType,
     error::OpossumError,
-    lightdata::{LightData, DataEnergy, RayDataParaxial},
+    lightdata::LightData,
     optic_node::{Dottable, LightResult, Optical},
     optic_ports::OpticPorts,
 };
+use ndarray::{array, Array1};
+use uom::{si::f64::Length, si::length::meter};
+type Result<T> = std::result::Result<T, OpossumError>;
 
-pub struct IdealLens {
-    focal_length: f64,
-    aperture: f64
-}
+pub struct IdealLens;
+
 #[derive(Debug)]
 pub struct RealLens {
     aperture: Length,
     curvatures: Array1<Length>,
     center_thickness: Length,
-    z_pos: Length,    
+    z_pos: Length,
     refractive_index: f64,
 }
 
-
 impl RealLens {
-    pub fn new(aperture: Length, front_curvature: Length, rear_curvature: Length, center_thickness: Length, z_pos: Length, refractive_index: f64) -> Self {
-        Self{   aperture: aperture,
-                curvatures: array![front_curvature,rear_curvature],
-                center_thickness: center_thickness,
-                z_pos: z_pos,   
-                refractive_index: refractive_index,
+    pub fn new(
+        aperture: Length,
+        front_curvature: Length,
+        rear_curvature: Length,
+        center_thickness: Length,
+        z_pos: Length,
+        refractive_index: f64,
+    ) -> Self {
+        Self {
+            aperture,
+            curvatures: array![front_curvature, rear_curvature],
+            center_thickness,
+            z_pos,
+            refractive_index,
         }
     }
 
-    pub fn get_aperture(&self) -> Length{
+    pub fn get_aperture(&self) -> Length {
         self.aperture
     }
 
@@ -45,15 +46,18 @@ impl RealLens {
         self.aperture = Length::new::<meter>(aperture);
     }
 
-    pub fn get_curvatures(&self) -> &Array1<Length>{
+    pub fn get_curvatures(&self) -> &Array1<Length> {
         &self.curvatures
-    }    
-
-    pub fn set_curvatures(&mut self, curvature_1: f64, curvature_2: f64) {
-        self.curvatures = array![Length::new::<meter>(curvature_1),Length::new::<meter>(curvature_2)];
     }
 
-    pub fn get_thickness(&self) -> Length{
+    pub fn set_curvatures(&mut self, curvature_1: f64, curvature_2: f64) {
+        self.curvatures = array![
+            Length::new::<meter>(curvature_1),
+            Length::new::<meter>(curvature_2)
+        ];
+    }
+
+    pub fn get_thickness(&self) -> Length {
         self.center_thickness
     }
 
@@ -61,7 +65,7 @@ impl RealLens {
         self.center_thickness = Length::new::<meter>(thickness);
     }
 
-    pub fn get_position(&self) -> Length{
+    pub fn get_position(&self) -> Length {
         self.z_pos
     }
 
@@ -69,7 +73,7 @@ impl RealLens {
         self.z_pos = Length::new::<meter>(position);
     }
 
-    pub fn get_refractve_index(&self) -> f64{
+    pub fn get_refractve_index(&self) -> f64 {
         self.refractive_index
     }
 
@@ -78,7 +82,7 @@ impl RealLens {
     }
 
     fn analyze_ray_trace(&mut self, incoming_data: LightResult) -> Result<LightResult> {
-        let in1: Option<&Option<LightData>> = incoming_data.get("in1");
+        let _in1: Option<&Option<LightData>> = incoming_data.get("in1");
         Ok(incoming_data)
 
         // let mut in_rays: Vec<RayDataParaxial> = Vec::new();
@@ -112,17 +116,21 @@ impl RealLens {
     //     bounce_lvl: usize,
     //     max_bounces: usize,
     // }
-
 }
 
 impl Default for RealLens {
     /// Create a 100mm focal lengths lens. LA1251-B from thorlabs. refractive inde hardcoded for n-bk7 at 1054 nm
     fn default() -> Self {
-        Self {  aperture: Length::new::<meter>(25e-3),
-                curvatures: array![Length::new::<meter>(51.5e-3),Length::new::<meter>(f64::INFINITY)],
-                center_thickness: Length::new::<meter>(3.6e-3),
-                z_pos: Length::new::<meter>(0.0),   
-                refractive_index: 1.5068}
+        Self {
+            aperture: Length::new::<meter>(25e-3),
+            curvatures: array![
+                Length::new::<meter>(51.5e-3),
+                Length::new::<meter>(f64::INFINITY)
+            ],
+            center_thickness: Length::new::<meter>(3.6e-3),
+            z_pos: Length::new::<meter>(0.0),
+            refractive_index: 1.5068,
+        }
     }
 }
 
@@ -137,14 +145,19 @@ impl Optical for RealLens {
         ports
     }
 
-    fn analyze(&mut self, incoming_data: LightResult, analyzer_type: &AnalyzerType) -> Result<LightResult> {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        analyzer_type: &AnalyzerType,
+    ) -> Result<LightResult> {
         match analyzer_type {
-            AnalyzerType::Energy => Err(OpossumError::Analysis("Energy Analysis is not yet implemented for Lens Nodes".into())),
+            AnalyzerType::Energy => Err(OpossumError::Analysis(
+                "Energy Analysis is not yet implemented for Lens Nodes".into(),
+            )),
             AnalyzerType::ParAxialRayTrace => self.analyze_ray_trace(incoming_data),
         }
-    }    
+    }
 }
-
 
 impl Dottable for RealLens {
     fn node_color(&self) -> &str {

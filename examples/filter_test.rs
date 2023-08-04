@@ -1,27 +1,31 @@
 use std::fs::File;
 use std::io::Write;
-use uom::si::{energy::joule, f64::Energy};
 
 use opossum::{
     analyzer::AnalyzerEnergy,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
-    nodes::{BeamSplitter, Detector, IdealFilter, Source},
-    optic_scenery::OpticScenery,
+    nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source},
+    spectrum::{create_he_ne_spectrum, Spectrum},
+    OpticScenery,
 };
 
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
-    scenery.set_description("src - detector demo".into());
+    scenery.set_description("filter system demo");
 
     let i_s = scenery.add_element(
         "Source",
         Source::new(LightData::Energy(DataEnergy {
-            energy: Energy::new::<joule>(1.0),
+            spectrum: create_he_ne_spectrum(1.0),
         })),
     );
     let i_bs = scenery.add_element("Beam splitter", BeamSplitter::new(0.6));
-    let i_f = scenery.add_element("Filter", IdealFilter::new(0.5)?);
+    let filter_spectrum = Spectrum::from_csv("NE03B.csv")?;
+    let i_f = scenery.add_element(
+        "Filter",
+        IdealFilter::new(FilterType::Spectrum(filter_spectrum))?,
+    );
     let i_d1 = scenery.add_element("Detector 1", Detector::default());
     let i_d2 = scenery.add_element("Detector 2", Detector::default());
 

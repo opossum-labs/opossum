@@ -2,14 +2,23 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 
 use crate::{
+    error::OpossumError,
     lightdata::LightData,
-    optic_node::{Dottable, Optical, LightResult},
-    optic_ports::OpticPorts, error::OpossumError,
+    optic_node::{Dottable, LightResult, Optical},
+    optic_ports::OpticPorts,
 };
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-/// This node represents a source of light. Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an optic scenery.
+/// This node represents a source of light.
+///
+/// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an optic scenery.
+///
+/// ## Optical Ports
+///   - Inputs
+///     - none
+///   - Outputs
+///     - `out1`
 #[derive(Default)]
 pub struct Source {
     light_data: Option<LightData>,
@@ -37,7 +46,7 @@ impl Source {
 impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
-            Some(data) => write!(f,"{}",data),
+            Some(data) => write!(f, "{}", data),
             None => write!(f, "no data"),
         }
     }
@@ -53,8 +62,12 @@ impl Optical for Source {
         ports
     }
 
-    fn analyze(&mut self, _incoming_edges: LightResult, _analyzer_type: &crate::analyzer::AnalyzerType) -> Result<LightResult> {
-        let data=self.light_data.clone();
+    fn analyze(
+        &mut self,
+        _incoming_edges: LightResult,
+        _analyzer_type: &crate::analyzer::AnalyzerType,
+    ) -> Result<LightResult> {
+        let data = self.light_data.clone();
         if data.is_some() {
             Ok(HashMap::from([("out1".into(), data)]))
         } else {
