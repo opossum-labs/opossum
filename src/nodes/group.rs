@@ -1,6 +1,5 @@
 #![warn(missing_docs)]
 use crate::analyzer::AnalyzerType;
-use std::cell::Ref;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
@@ -36,6 +35,7 @@ pub struct NodeGroup {
 }
 
 impl NodeGroup {
+    /// Creates a new [`NodeGroup`].
     pub fn new() -> Self {
         Self{
             expand_view: false,
@@ -381,7 +381,7 @@ impl NodeGroup {
     /// - parent_identifier:    String that contains the hierarchical structure: parentidx_childidx_childofchildidx ...
     /// 
     /// Error, if the port is not mapped as input or output
-    pub fn get_mapped_port_str(&self, port_name: &str, mut parent_identifier: String) -> Result<String> {
+    pub fn get_mapped_port_str(&self, port_name: &str, parent_identifier: String) -> Result<String> {
         
         if self.shall_expand() {
             if self.input_port_map.contains_key(port_name){
@@ -421,9 +421,10 @@ impl NodeGroup {
     /// Error, if the OpticNode can not be casted to the type of NodeGroup
     fn cast_node_to_group<'a>(&self, ref_node:  &'a OpticNode) -> Result<&'a  NodeGroup>{
         let node_boxed = (&*ref_node).node();
-        let downcasted_node = node_boxed.downcast_ref::<NodeGroup>().unwrap();
+        let downcasted_node = node_boxed.downcast_ref::<NodeGroup>();
+
         match downcasted_node {
-            i => Ok(i),
+            Some(i) => Ok(i),
             _ => Err(OpossumError::OpticScenery(
                 "can not cast OpticNode to specific type of NodeGroup!".into(),
             )),
@@ -451,19 +452,17 @@ impl NodeGroup {
     /// 
     /// Returns the result of the edge strnig for the dot format
     fn create_node_edge_str(&self, end_node_idx: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<String>{
-        let mut edge_str = "".to_owned();
         let node = self.g.node_weight(end_node_idx).unwrap().borrow();
 
         parent_identifier = if parent_identifier == "" {format!("i{}", end_node_idx.index())} else {format!("{}_i{}", &parent_identifier, end_node_idx.index())};
 
         if self.check_if_group(&node){
             let group_node = self.cast_node_to_group(&node)?;
-            edge_str = group_node.get_mapped_port_str(light_port, parent_identifier)?;            
+            Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)       
         }
         else{
-            edge_str = format!("{}:{}", parent_identifier, light_port);
+            Ok(format!("{}:{}", parent_identifier, light_port))
         }
-        Ok(edge_str)
     }
 
     /// creates the dot format of the group node in its expanded view
@@ -481,8 +480,6 @@ impl NodeGroup {
             "  subgraph {} {{\n\tlabel=\"{}{}\"\n\tfontsize=15\n\tcluster=true\n\t",
             parent_identifier, name, inv_string
         );
-        let mut src_edge_str    = "".to_owned();
-        let mut target_edge_str = "".to_owned();
 
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
@@ -492,8 +489,8 @@ impl NodeGroup {
             let light: &Light = self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
 
-            src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port(), parent_identifier.clone())?;
-            target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port(), parent_identifier.clone())?;
+            let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port(), parent_identifier.clone())?;
+            let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port(), parent_identifier.clone())?;
 
             dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
             // needed when multiple ports can be assigned

@@ -1,9 +1,8 @@
-use std::collections::{HashMap,HashSet};
+use std::collections::HashMap;
 use core::fmt::Debug;
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
 use crate::lightdata::LightData;
-use crate::nodes::NodeGroup;
 use crate::optic_ports::OpticPorts;
 use std::any::Any;
 

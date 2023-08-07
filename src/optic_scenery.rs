@@ -152,9 +152,10 @@ impl OpticScenery {
 
     fn cast_node_to_group<'a>(&self, ref_node:  &'a Ref<'_, OpticNode>) -> Result<&'a  NodeGroup>{
         let node_boxed = (&*ref_node).node();
-        let downcasted_node = node_boxed.downcast_ref::<NodeGroup>().unwrap();
+        let downcasted_node = node_boxed.downcast_ref::<NodeGroup>();
+
         match downcasted_node {
-            i => Ok(i),
+            Some(i) => Ok(i),
             _ => Err(OpossumError::OpticScenery(
                 "can not cast OpticNode to specific type of NodeGroup!".into(),
             )),
@@ -170,27 +171,22 @@ impl OpticScenery {
     }
 
     fn create_node_edge_str(&self, end_node: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<String>{
-        let mut edge_str = "".to_owned();
         let node = self.g.node_weight(end_node).unwrap().borrow();
         parent_identifier = if parent_identifier == "" {format!("i{}", end_node.index())} else {format!("{}_i{}", &parent_identifier, end_node.index())};
 
         if self.check_if_group(&node){
             let group_node: &NodeGroup = self.cast_node_to_group(&node)?;
-            edge_str = group_node.get_mapped_port_str(light_port, parent_identifier)?;            
+            Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)            
         }
         else{
-            edge_str = format!("i{}:{}", end_node.index(), light_port);
+            Ok(format!("i{}:{}", end_node.index(), light_port))
         }
-        Ok(edge_str)
     }
 
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self) -> Result<String> {
         let mut dot_string = self.add_dot_header();
-        let mut src_edge_str    = "".to_owned();
-        let mut target_edge_str = "".to_owned();
-        let mut parent_identifier = "".to_owned();
-
+        
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
             dot_string += &node.borrow().to_dot(&format!("{}", node_idx.index()), "".to_owned())?;
@@ -199,8 +195,8 @@ impl OpticScenery {
             let light: &Light = self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
 
-            src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port(), parent_identifier.clone())?;
-            target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port(), parent_identifier.clone())?;
+            let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port(), "".to_owned())?;
+            let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port(), "".to_owned())?;
 
             dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
             // for src in src_edge_str.iter(){

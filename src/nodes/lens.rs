@@ -20,6 +20,7 @@ pub struct RealLens {
     refractive_index: f64,
 }
 
+
 impl RealLens {
     pub fn new(
         aperture: Length,
