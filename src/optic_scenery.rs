@@ -169,14 +169,14 @@ impl OpticScenery {
         }
     }
 
-    fn define_node_edge_str(&self, end_node: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<String>{
+    fn create_node_edge_str(&self, end_node: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<String>{
         let mut edge_str = "".to_owned();
         let node = self.g.node_weight(end_node).unwrap().borrow();
         parent_identifier = if parent_identifier == "" {format!("i{}", end_node.index())} else {format!("{}_i{}", &parent_identifier, end_node.index())};
 
         if self.check_if_group(&node){
             let group_node: &NodeGroup = self.cast_node_to_group(&node)?;
-            edge_str = group_node.get_linked_port_str(light_port, end_node.index(), parent_identifier)?;            
+            edge_str = group_node.get_mapped_port_str(light_port, parent_identifier)?;            
         }
         else{
             edge_str = format!("i{}:{}", end_node.index(), light_port);
@@ -199,8 +199,8 @@ impl OpticScenery {
             let light: &Light = self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
 
-            src_edge_str = self.define_node_edge_str(end_nodes.0, light.src_port(), parent_identifier.clone())?;
-            target_edge_str = self.define_node_edge_str(end_nodes.1, light.target_port(), parent_identifier.clone())?;
+            src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port(), parent_identifier.clone())?;
+            target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port(), parent_identifier.clone())?;
 
             dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
             // for src in src_edge_str.iter(){

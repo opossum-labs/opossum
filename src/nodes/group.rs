@@ -35,12 +35,6 @@ pub struct NodeGroup {
     output_port_map: HashMap<String, (NodeIndex, String)>,
 }
 
-#[derive(Default, Debug, Clone)]
-pub struct port_link{
-    pub port_name: String,
-    pub node_idx: NodeIndex,
-}
-
 impl NodeGroup {
     pub fn new() -> Self {
         Self{
@@ -374,11 +368,20 @@ impl NodeGroup {
     }
 
 
+    /// Sets the expansion flag of this [`NodeGroup`].  
+    /// If true, the group expands and the internal nodes of this group are displayed in the dot format.
+    /// If false, only the group node itself is displayed and the internal setup is not shown
     pub fn shall_expand(&self) -> bool{
         self.expand_view
     }
 
-    pub fn get_linked_port_str(&self, port_name: &str, group_node_index_str: usize, mut parent_identifier: String) -> Result<String> {
+    /// Defines and returns the node/port identifier to connect the edges in the dot format
+    /// parameters:
+    /// - port_name:            name of the external port of the group
+    /// - parent_identifier:    String that contains the hierarchical structure: parentidx_childidx_childofchildidx ...
+    /// 
+    /// Error, if the port is not mapped as input or output
+    pub fn get_mapped_port_str(&self, port_name: &str, mut parent_identifier: String) -> Result<String> {
         
         if self.shall_expand() {
             if self.input_port_map.contains_key(port_name){
@@ -396,7 +399,7 @@ impl NodeGroup {
                 Ok(format!("{}_i{}:{}", parent_identifier, port.0.index(), port.1))
             }
             else{
-                Err(OpossumError::OpticGroup(format!("port {} is not linked", port_name)))
+                Err(OpossumError::OpticGroup(format!("port {} is not mapped", port_name)))
             }
         }
         else{
@@ -404,10 +407,18 @@ impl NodeGroup {
         }
     }
 
+    /// returns the boolean which defines whether the group expands or not.
     pub fn expand_view(&mut self, expand_view:bool){
         self.expand_view = expand_view;
     }
 
+    /// downcasts this "OpticNode" with trait "OpicComponent" to its actual struct format "NodeGroup"
+    /// parameters:
+    /// - ref_node:     reference to the borrowed node of a graph
+    /// 
+    /// Returns a reference to the NodeGroup struct
+    /// 
+    /// Error, if the OpticNode can not be casted to the type of NodeGroup
     fn cast_node_to_group<'a>(&self, ref_node:  &'a OpticNode) -> Result<&'a  NodeGroup>{
         let node_boxed = (&*ref_node).node();
         let downcasted_node = node_boxed.downcast_ref::<NodeGroup>().unwrap();
@@ -418,6 +429,11 @@ impl NodeGroup {
             )),
         }
     }
+
+
+    /// checks if the contained node is a group_node itself. 
+    /// Returns true, if the node is a group
+    /// Returns false otherwise
     fn check_if_group(&self, node_ref:  &OpticNode) -> bool{
         if node_ref.node_type() == "group"{
             true
@@ -427,15 +443,22 @@ impl NodeGroup {
         }
     }
 
-    fn define_node_edge_str(&self, end_node: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<String>{
+    /// Creates the dot-format string which describes the edge that connects two nodes
+    /// parameters:
+    /// - end_node_idx:         NodeIndex of the node that should be connected
+    /// - light_port:           port name that should be connected
+    /// - parent_identifier:    String that contains the hierarchical structure: parentidx_childidx_childofchildidx ...
+    /// 
+    /// Returns the result of the edge strnig for the dot format
+    fn create_node_edge_str(&self, end_node_idx: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<String>{
         let mut edge_str = "".to_owned();
-        let node = self.g.node_weight(end_node).unwrap().borrow();
+        let node = self.g.node_weight(end_node_idx).unwrap().borrow();
 
-        parent_identifier = if parent_identifier == "" {format!("i{}", end_node.index())} else {format!("{}_i{}", &parent_identifier, end_node.index())};
+        parent_identifier = if parent_identifier == "" {format!("i{}", end_node_idx.index())} else {format!("{}_i{}", &parent_identifier, end_node_idx.index())};
 
         if self.check_if_group(&node){
             let group_node = self.cast_node_to_group(&node)?;
-            edge_str = group_node.get_linked_port_str(light_port, end_node.index(), parent_identifier)?;            
+            edge_str = group_node.get_mapped_port_str(light_port, parent_identifier)?;            
         }
         else{
             edge_str = format!("{}:{}", parent_identifier, light_port);
@@ -443,7 +466,15 @@ impl NodeGroup {
         Ok(edge_str)
     }
 
-    fn to_dot_expanded_view(&self,node_index: &str, name: &str, inverted: bool, _ports: &OpticPorts, mut parent_identifier: String) -> Result<String>{
+    /// creates the dot format of the group node in its expanded view
+    /// parameters:
+    /// - node_index:           NodeIndex of the group
+    /// - name:                 name of the node
+    /// - inverted:             boolean that descries wether the node is inverted or not
+    /// - parent_identifier:    String that contains the hierarchical structure: parentidx_childidx_childofchildidx ...
+    /// 
+    /// Returns the result of the dot string that describes this node
+    fn to_dot_expanded_view(&self,node_index: &str, name: &str, inverted: bool, mut parent_identifier: String) -> Result<String>{
         let inv_string = if inverted { "(inv)" } else { "" };
         parent_identifier = if parent_identifier == "" {format!("i{}", node_index)} else {format!("{}_i{}", &parent_identifier, node_index)};
         let mut dot_string = format!(
@@ -461,8 +492,8 @@ impl NodeGroup {
             let light: &Light = self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
 
-            src_edge_str = self.define_node_edge_str(end_nodes.0, light.src_port(), parent_identifier.clone())?;
-            target_edge_str = self.define_node_edge_str(end_nodes.1, light.target_port(), parent_identifier.clone())?;
+            src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port(), parent_identifier.clone())?;
+            target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port(), parent_identifier.clone())?;
 
             dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
             // needed when multiple ports can be assigned
@@ -478,7 +509,16 @@ impl NodeGroup {
         Ok(dot_string)
     }
 
-    fn to_dot_contracted_view(&self,node_index: &str, name: &str, inverted: bool, _ports: &OpticPorts, mut parent_identifier: String) -> Result<String>{
+    /// creates the dot format of the group node in its collapsed view
+    /// parameters:
+    /// - node_index:           NodeIndex of the group
+    /// - name:                 name of the node
+    /// - inverted:             boolean that descries wether the node is inverted or not
+    /// - _ports:               
+    /// - parent_identifier:    String that contains the hierarchical structure: parentidx_childidx_childofchildidx ...
+    /// 
+    /// Returns the result of the dot string that describes this node
+    fn to_dot_collapsed_view(&self,node_index: &str, name: &str, inverted: bool, _ports: &OpticPorts, mut parent_identifier: String) -> Result<String>{
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);        
         parent_identifier = if parent_identifier == "" {format!("i{}", node_index)} else {format!("{}_i{}", &parent_identifier, node_index)};
@@ -493,12 +533,7 @@ impl Optical for NodeGroup {
     fn node_type(&self) -> &str {
         "group"
     }
-    // fn ports(&self) -> OpticPorts {
-    //     let mut ports = OpticPorts::new();
-    //     ports.add_input("in1").unwrap();
-    //     ports.add_output("out1").unwrap();
-    //     ports
-    // }
+
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         for p in self.input_port_map.iter() {
@@ -522,10 +557,10 @@ impl Dottable for NodeGroup {
     fn to_dot(&self, node_index: &str, name: &str, inverted: bool, _ports: &OpticPorts, parent_identifier: String) -> Result<String> {
 
         if self.expand_view {
-            self.to_dot_expanded_view(node_index, name, inverted, _ports, parent_identifier)
+            self.to_dot_expanded_view(node_index, name, inverted, parent_identifier)
         }
         else{
-            self.to_dot_contracted_view(node_index, name, inverted, _ports, parent_identifier)
+            self.to_dot_collapsed_view(node_index, name, inverted, _ports, parent_identifier)
         }
     }
 
