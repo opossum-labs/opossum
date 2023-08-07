@@ -1,9 +1,10 @@
+use std::collections::{HashMap,HashSet};
+use core::fmt::Debug;
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_ports::OpticPorts;
-use crate::error::OpossumError;
 use std::any::Any;
 
 pub type LightResult = HashMap<String, Option<LightData>>;

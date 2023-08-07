@@ -215,25 +215,6 @@ impl NodeGroup {
         }
         dot_string += "}";
         Ok(dot_string)
-        // for node_idx in self.g.node_indices() {
-        //     let node = self.g.node_weight(node_idx).unwrap();
-        //     dot_string += &node.to_dot(&format!("{}_i{}", node_index, node_idx.index()));
-        // }
-        // for edge in self.g.edge_indices() {
-        //     let end_nodes = self.g.edge_endpoints(edge).unwrap();
-        //     let light = self.g.edge_weight(edge).unwrap();
-        //     dot_string.push_str(&format!(
-        //         "      i{}_i{}:{} -> i{}_i{}:{}\n",
-        //         node_index,
-        //         end_nodes.0.index(),
-        //         light.src_port(),
-        //         node_index,
-        //         end_nodes.1.index(),
-        //         light.target_port()
-        //     ));
-        // }
-        // dot_string += "}";
-        // dot_string
     }
 
     fn to_dot_contracted_view(&self,node_index: &str, name: &str, inverted: bool, _ports: &OpticPorts, mut parent_identifier: String) -> Result<String>{

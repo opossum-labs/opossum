@@ -2,7 +2,6 @@ use std::cell::{Ref, RefCell};
 // use core::cell::Ref;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::any::{Any, TypeId};
 
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
@@ -11,12 +10,9 @@ use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_node::{OpticComponent, OpticNode, LightResult};
 use petgraph::Direction::{Incoming, Outgoing};
-use crate::optic_node::{LightResult, OpticComponent, OpticNode};
-use petgraph::algo::toposort;
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
-use petgraph::Direction::{Incoming, Outgoing};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -173,17 +169,17 @@ impl OpticScenery {
         }
     }
 
-    fn define_node_edge_str(&self, end_node: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<Vec<String>>{
-        let mut edge_str = Vec::<String>::new();
+    fn define_node_edge_str(&self, end_node: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<String>{
+        let mut edge_str = "".to_owned();
         let node = self.g.node_weight(end_node).unwrap().borrow();
         parent_identifier = if parent_identifier == "" {format!("i{}", end_node.index())} else {format!("{}_i{}", &parent_identifier, end_node.index())};
 
         if self.check_if_group(&node){
-            let group_node = self.cast_node_to_group(&node)?;
+            let group_node: &NodeGroup = self.cast_node_to_group(&node)?;
             edge_str = group_node.get_linked_port_str(light_port, end_node.index(), parent_identifier)?;            
         }
         else{
-            edge_str.push(format!("i{}:{}", end_node.index(), light_port));
+            edge_str = format!("i{}:{}", end_node.index(), light_port);
         }
         Ok(edge_str)
     }
@@ -191,8 +187,8 @@ impl OpticScenery {
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self) -> Result<String> {
         let mut dot_string = self.add_dot_header();
-        let mut src_edge_str = Vec::<String>::new();
-        let mut target_edge_str = Vec::<String>::new();
+        let mut src_edge_str    = "".to_owned();
+        let mut target_edge_str = "".to_owned();
         let mut parent_identifier = "".to_owned();
 
         for node_idx in self.g.node_indices() {
@@ -206,13 +202,14 @@ impl OpticScenery {
             src_edge_str = self.define_node_edge_str(end_nodes.0, light.src_port(), parent_identifier.clone())?;
             target_edge_str = self.define_node_edge_str(end_nodes.1, light.target_port(), parent_identifier.clone())?;
 
-            for src in src_edge_str.iter(){
-                println!("{}", src);
-                for target in target_edge_str.iter(){
-                    println!("{}", target);
-                    dot_string.push_str(&format!("  {} -> {} \n", src, target));
-                };
-            };
+            dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
+            // for src in src_edge_str.iter(){
+            //     println!("{}", src);
+            //     for target in target_edge_str.iter(){
+            //         println!("{}", target);
+            //         dot_string.push_str(&format!("  {} -> {} \n", src, target));
+            //     };
+            // };
         }
         dot_string += "}";
         Ok(dot_string)
