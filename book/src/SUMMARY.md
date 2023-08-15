@@ -16,5 +16,6 @@
   - [OpticScenery](./opticscenery.md)
   - [OpticNode](./opticnode.md)
   - [OpticAnalyzer](./opticanalyzer.md)
+- [Usage](./usage.md)
 - [Open questions](./open_questions.md)
 - [Useful resources](./resources.md)
