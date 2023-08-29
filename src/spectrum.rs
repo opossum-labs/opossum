@@ -4,6 +4,7 @@ use crate::error::OpossumError;
 use csv::ReaderBuilder;
 use ndarray::Array1;
 use ndarray_stats::QuantileExt;
+use serde_derive::Serialize;
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
 use std::ops::Range;
@@ -19,7 +20,7 @@ use std::fs::File;
 ///
 /// This structure handles an array of values over a given wavelength range. Although the interface
 /// is still limited. The structure is prepared for handling also non-equidistant wavelength slots.  
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct Spectrum {
     data: Array1<f64>,    // data in 1/meters
     lambdas: Array1<f64>, // wavelength in meters
