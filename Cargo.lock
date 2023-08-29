@@ -576,6 +576,8 @@ dependencies = [
  "ndarray-stats",
  "petgraph",
  "plotters",
+ "serde",
+ "serde_derive",
  "uom",
 ]
 
