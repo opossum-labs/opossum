@@ -12,9 +12,9 @@ fn main() -> Result<(), OpossumError> {
         Length::new::<nanometer>(3.2),
         2.0,
     )?;
-    let yaml = serde_yaml::to_string(&s).unwrap();
+    let yaml = serde_yaml::to_string(&s).map_err(|e| OpossumError::Other(e.to_string()))?;
     println!("{}", yaml);
-    
+
     let mut s2 = Spectrum::new(
         Length::new::<nanometer>(400.0)..Length::new::<nanometer>(450.0),
         Length::new::<nanometer>(2.1),
