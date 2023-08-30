@@ -843,4 +843,28 @@ mod test {
         let data=s.data.map(|data| data.1);
         assert_eq!(data, array![0.0, 1.0, 0.5, 0.0, 0.0, 0.0]);
     }
+    #[test]
+    fn serialize() {
+        let s = prep();
+        let s_yaml=serde_yaml::to_string(&s);
+        assert!(s_yaml.is_ok());
+        assert_eq!(s_yaml.unwrap(),
+        "data:\n  v: 1\n  dim:\n  - 6\n  data:\n  - - 1.0\n    - 0.0\n  - - 1.5\n    - 0.0\n  - - 2.0\n    - 0.0\n  - - 2.5\n    - 0.0\n  - - 3.0\n    - 0.0\n  - - 3.5\n    - 0.0\n".to_string());
+    }
+    #[test]
+    fn deserialize() {
+        let s: std::result::Result<Spectrum, serde_yaml::Error>=serde_yaml::from_str("data:\n  v: 1\n  dim:\n  - 6\n  data:\n  - - 1.0\n    - 0.1\n  - - 1.5\n    - 0.2\n  - - 2.0\n    - 0.3\n  - - 2.5\n    - 0.4\n  - - 3.0\n    - 0.5\n  - - 3.5\n    - 0.6\n");
+        assert!(s.is_ok());
+        assert_eq!(
+            s.unwrap().data,
+            array![
+                (1.0, 0.1),
+                (1.5, 0.2),
+                (2.0, 0.3),
+                (2.5, 0.4),
+                (3.0, 0.5),
+                (3.5, 0.6)
+            ]
+        );
+    }
 }
