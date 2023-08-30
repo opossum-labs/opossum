@@ -356,7 +356,6 @@ impl Spectrum {
             .y_desc("value (1/nm)")
             .draw()
             .unwrap();
-        let lambdas = self.data.map(|data| data.0);
         chart
             .draw_series(LineSeries::new(
                 self.data.map(|data| (data.0 * 1.0E9, data.1* 1.0E-9)), &RED)
