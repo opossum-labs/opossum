@@ -49,6 +49,9 @@ impl Optical for Detector {
             data.export(file_name)
         }
     }
+    fn is_detector(&self) -> bool {
+        true
+    }
 }
 
 impl Debug for Detector {
