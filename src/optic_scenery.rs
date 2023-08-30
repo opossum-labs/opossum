@@ -1,5 +1,4 @@
 use std::cell::{Ref, RefCell};
-// use core::cell::Ref;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -8,11 +7,11 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
-use crate::optic_node::{OpticComponent, OpticNode, LightResult};
-use petgraph::Direction::{Incoming, Outgoing};
+use crate::optic_node::{LightResult, OpticComponent, OpticNode};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
+use petgraph::Direction::Incoming;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -150,7 +149,7 @@ impl OpticScenery {
         dot_string
     }
 
-    fn cast_node_to_group<'a>(&self, ref_node:  &'a Ref<'_, OpticNode>) -> Result<&'a  NodeGroup>{
+    fn cast_node_to_group<'a>(&self, ref_node: &'a Ref<'_, OpticNode>) -> Result<&'a NodeGroup> {
         let node_boxed = (&*ref_node).node();
         let downcasted_node = node_boxed.downcast_ref::<NodeGroup>();
 
@@ -161,24 +160,31 @@ impl OpticScenery {
             )),
         }
     }
-    fn check_if_group(&self, node_ref:  &OpticNode) -> bool{
-        if node_ref.node_type() == "group"{
+    fn check_if_group(&self, node_ref: &OpticNode) -> bool {
+        if node_ref.node_type() == "group" {
             true
-        }
-        else{
+        } else {
             false
         }
     }
 
-    fn create_node_edge_str(&self, end_node: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<String>{
+    fn create_node_edge_str(
+        &self,
+        end_node: NodeIndex,
+        light_port: &str,
+        mut parent_identifier: String,
+    ) -> Result<String> {
         let node = self.g.node_weight(end_node).unwrap().borrow();
-        parent_identifier = if parent_identifier == "" {format!("i{}", end_node.index())} else {format!("{}_i{}", &parent_identifier, end_node.index())};
+        parent_identifier = if parent_identifier == "" {
+            format!("i{}", end_node.index())
+        } else {
+            format!("{}_i{}", &parent_identifier, end_node.index())
+        };
 
-        if self.check_if_group(&node){
+        if self.check_if_group(&node) {
             let group_node: &NodeGroup = self.cast_node_to_group(&node)?;
-            Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)            
-        }
-        else{
+            Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
+        } else {
             Ok(format!("i{}:{}", end_node.index(), light_port))
         }
     }
@@ -186,17 +192,21 @@ impl OpticScenery {
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self) -> Result<String> {
         let mut dot_string = self.add_dot_header();
-        
+
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
-            dot_string += &node.borrow().to_dot(&format!("{}", node_idx.index()), "".to_owned())?;
+            dot_string += &node
+                .borrow()
+                .to_dot(&format!("{}", node_idx.index()), "".to_owned())?;
         }
         for edge in self.g.edge_indices() {
             let light: &Light = self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
 
-            let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port(), "".to_owned())?;
-            let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port(), "".to_owned())?;
+            let src_edge_str =
+                self.create_node_edge_str(end_nodes.0, light.src_port(), "".to_owned())?;
+            let target_edge_str =
+                self.create_node_edge_str(end_nodes.1, light.target_port(), "".to_owned())?;
 
             dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
             // for src in src_edge_str.iter(){
@@ -269,16 +279,18 @@ impl OpticScenery {
     }
     pub fn report(&self) {
         let src_nodes = &self.g.externals(Incoming);
-        let sink_nodes = &self.g.externals(Outgoing);
+        let detector_nodes = self
+            .g
+            .node_weights()
+            .filter(|node| node.borrow().is_detector());
         println!("Sources:");
         for idx in src_nodes.clone() {
             let node = self.node(idx).unwrap();
             println!("{:?}", node.borrow());
             node.borrow().export_data();
         }
-        println!("Sinks:");
-        for idx in sink_nodes.clone() {
-            let node = self.node(idx).unwrap();
+        println!("Detectors:");
+        for node in detector_nodes {
             println!("{:?}", node.borrow());
             node.borrow().export_data();
         }
