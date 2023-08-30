@@ -504,6 +504,7 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
 #[cfg(test)]
 mod test {
     use super::*;
+    use approx::AbsDiffEq;
     use ndarray::array;
     fn prep() -> Spectrum {
         Spectrum::new(
@@ -563,7 +564,7 @@ mod test {
         assert!(lambdas
              .into_iter()
              .zip(array![500.0E-9, 501.0E-9, 502.0E-9, 503.0E-9, 504.0E-9, 505.0E-9].iter())
-             .all(|x| f64::abs(x.0 - *x.1) < 1.0E-16));
+             .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
         let datas = s.unwrap().data.map(|data| data.1);
         assert!(datas
              .into_iter()
@@ -573,7 +574,7 @@ mod test {
              4.984E-01,
              4.996E-01,
              5.010E-01].iter())
-             .all(|x| f64::abs(x.0 - *x.1) < 1.0E-16))
+             .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
     }
     #[test]
     fn from_csv_err() {
@@ -654,7 +655,7 @@ mod test {
         assert!(s
             .add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(0.5), 2.0)
             .is_ok());
-        assert!(f64::abs(s.total_energy() - 2.0) < 0.1)
+        assert!(s.total_energy().abs_diff_eq(&2.0, 0.1));
     }
     #[test]
     fn add_lorentzian_wrong_params() {

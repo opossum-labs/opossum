@@ -22,3 +22,5 @@ ndarray= { version="0", features= ["serde"]}
 ndarray-stats="0"
 csv="1"
 plotters="0"
+
+approx = "0" # assert macros for comparison of floats with tolerance
