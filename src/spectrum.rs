@@ -2,9 +2,9 @@
 //! Module for handling optical spectra
 use crate::error::OpossumError;
 use csv::ReaderBuilder;
-use ndarray::{array, Array1};
+use ndarray::Array1;
 use ndarray_stats::QuantileExt;
-use serde_derive::Serialize;
+use serde_derive::{Serialize, Deserialize};
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
 use std::ops::Range;
@@ -19,8 +19,8 @@ use std::fs::File;
 /// Structure for handling spectral data.
 ///
 /// This structure handles an array of values over a given wavelength range. Although the interface
-/// is still limited. The structure is prepared for handling also non-equidistant wavelength slots.  
-#[derive(Clone, Serialize)]
+/// is still limited, the structure is prepared for handling also non-equidistant wavelength slots.  
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Spectrum {
     data: Array1<(f64, f64)>, // (wavelength in meters, data in 1/meters)
 }
@@ -128,7 +128,7 @@ impl Spectrum {
     ///   - the energy is negative
     pub fn add_single_peak(&mut self, wavelength: Length, value: f64) -> Result<()> {
         let spectrum_range = self.data.first().unwrap().0..self.data.last().unwrap().0;
-        if !spectrum_range.contains(&&wavelength.get::<meter>()) {
+        if !spectrum_range.contains(&wavelength.get::<meter>()) {
             return Err(OpossumError::Spectrum(
                 "wavelength is not in spectrum range".into(),
             ));
@@ -187,7 +187,6 @@ impl Spectrum {
         }
         let wavelength_in_meters = center.get::<meter>();
         let width_in_meters = width.get::<meter>();
-        let lambdas = self.data.map(|data| data.0);
         self.data.mapv_inplace(|data| {
             (
                 data.0,
