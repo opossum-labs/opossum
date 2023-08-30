@@ -359,12 +359,8 @@ impl Spectrum {
         let lambdas = self.data.map(|data| data.0);
         chart
             .draw_series(LineSeries::new(
-                lambdas
-                    .iter()
-                    .zip(self.data.iter())
-                    .map(|x| (*x.0 * 1.0E9, x.1 .1 * 1E-9)), // y values are displayed in 1/nm
-                &RED,
-            ))
+                self.data.map(|data| (data.0 * 1.0E9, data.1* 1.0E-9)), &RED)
+            )
             .unwrap();
         root.present().unwrap();
     }
