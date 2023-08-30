@@ -200,11 +200,10 @@ impl Spectrum {
     /// This function sums the values over all wavelength slots weighted with the individual slot widths. This
     /// way it also works for non-equidistant spectra.
     pub fn total_energy(&self) -> f64 {
-        let lambdas = self.data.map(|data| data.0);
-        let lambda_deltas: Vec<f64> = lambdas
+        let lambda_deltas: Vec<f64> = self.data
             .windows(2)
             .into_iter()
-            .map(|l| l[1] - l[0])
+            .map(|l| l[1].0 - l[0].0)
             .collect();
         let total_energy = lambda_deltas
             .into_iter()
@@ -236,14 +235,13 @@ impl Spectrum {
     ///
     /// Panics if ???.
     pub fn resample(&mut self, spectrum: &Spectrum) {
-        let lambdas = spectrum.data.map(|data| data.0);
-        let mut src_it = lambdas.windows(2).into_iter();
+        let mut src_it = spectrum.data.windows(2).into_iter();
         let src_interval = src_it.next();
         if src_interval.is_none() {
             return;
         }
-        let mut src_lower = src_interval.unwrap()[0];
-        let mut src_upper = src_interval.unwrap()[1];
+        let mut src_lower = src_interval.unwrap()[0].0;
+        let mut src_upper = src_interval.unwrap()[1].0;
         let mut src_idx: usize = 0;
         let lambdas_s = self.data.map(|data| data.0);
         let mut bucket_it = lambdas_s.windows(2).into_iter();
@@ -257,8 +255,8 @@ impl Spectrum {
         self.data[bucket_idx].1 = 0.0;
         while src_upper < bucket_lower {
             if let Some(src_interval) = src_it.next() {
-                src_lower = src_interval[0];
-                src_upper = src_interval[1];
+                src_lower = src_interval[0].0;
+                src_upper = src_interval[1].0;
                 src_idx += 1;
             } else {
                 break;
@@ -271,8 +269,8 @@ impl Spectrum {
             self.data[bucket_idx].1 += bucket_value;
             if src_upper < bucket_upper {
                 if let Some(src_interval) = src_it.next() {
-                    src_lower = src_interval[0];
-                    src_upper = src_interval[1];
+                    src_lower = src_interval[0].0;
+                    src_upper = src_interval[1].0;
                     src_idx += 1;
                     continue;
                 } else {
