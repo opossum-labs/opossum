@@ -2,7 +2,7 @@
 //! Module for handling optical spectra
 use crate::error::OpossumError;
 use csv::ReaderBuilder;
-use ndarray::Array1;
+use ndarray::{array, Array1};
 use ndarray_stats::QuantileExt;
 use serde_derive::Serialize;
 use std::f64::consts::PI;
@@ -22,8 +22,7 @@ use std::fs::File;
 /// is still limited. The structure is prepared for handling also non-equidistant wavelength slots.  
 #[derive(Clone, Serialize)]
 pub struct Spectrum {
-    data: Array1<f64>,    // data in 1/meters
-    lambdas: Array1<f64>, // wavelength in meters
+    data: Array1<(f64, f64)>, // (wavelength in meters, data in 1/meters)
 }
 impl Spectrum {
     /// Create a new (empty) spectrum of a given wavelength range and (equidistant) resolution.
@@ -48,16 +47,13 @@ impl Spectrum {
                 "wavelength range limits must both be positive".into(),
             ));
         }
-        let l = Array1::range(
+        let lambdas = Array1::range(
             range.start.get::<meter>(),
             range.end.get::<meter>(),
             resolution.get::<meter>(),
         );
-        let length = l.len();
-        Ok(Self {
-            lambdas: l,
-            data: Array1::zeros(length),
-        })
+        let data = lambdas.map(|lambda| (*lambda, 0.0));
+        Ok(Self { data })
     }
     /// Create a new [`Spectrum`] from a CSV (comma-separated values) file.
     ///
@@ -82,8 +78,7 @@ impl Spectrum {
             .has_headers(false)
             .delimiter(b';')
             .from_reader(file);
-        let mut lambdas: Vec<f64> = Vec::new();
-        let mut datas: Vec<f64> = Vec::new();
+        let mut datas: Vec<(f64, f64)> = Vec::new();
         for record in reader.records() {
             let record = record.map_err(|e| OpossumError::Spectrum(e.to_string()))?;
             let lambda = record
@@ -96,23 +91,21 @@ impl Spectrum {
                 .unwrap()
                 .parse::<f64>()
                 .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
-            lambdas.push(lambda * 1.0E-9); // nanometers -> meters
-            datas.push(data * 0.01); // percent -> transmisison
+            datas.push((lambda * 1.0E-9, data * 0.01)); // (nanometers -> meters, percent -> transmisison)
         }
-        if lambdas.is_empty() {
+        if datas.is_empty() {
             return Err(OpossumError::Spectrum(
                 "no csv data was found in file".into(),
             ));
         }
         Ok(Self {
             data: Array1::from_vec(datas),
-            lambdas: Array1::from_vec(lambdas),
         })
     }
     /// Returns the wavelength range of this [`Spectrum`].
     pub fn range(&self) -> Range<Length> {
-        Length::new::<meter>(*self.lambdas.first().unwrap())
-            ..Length::new::<meter>(*self.lambdas.last().unwrap())
+        Length::new::<meter>(self.data.first().unwrap().0)
+            ..Length::new::<meter>(self.data.last().unwrap().0)
     }
     /// Returns the average wavelenth resolution of this [`Spectrum`].
     ///
@@ -120,7 +113,7 @@ impl Spectrum {
     pub fn average_resolution(&self) -> Length {
         let r = self.range();
         let bandwidth = r.end - r.start;
-        bandwidth / (self.lambdas.len() as f64 - 1.0)
+        bandwidth / (self.data.len() as f64 - 1.0)
     }
     /// Add a single peak to the given [`Spectrum`].
     ///
@@ -134,7 +127,7 @@ impl Spectrum {
     ///   - the wavelength i s outside the spectrum range
     ///   - the energy is negative
     pub fn add_single_peak(&mut self, wavelength: Length, value: f64) -> Result<()> {
-        let spectrum_range = self.lambdas.first().unwrap()..self.lambdas.last().unwrap();
+        let spectrum_range = self.data.first().unwrap().0..self.data.last().unwrap().0;
         if !spectrum_range.contains(&&wavelength.get::<meter>()) {
             return Err(OpossumError::Spectrum(
                 "wavelength is not in spectrum range".into(),
@@ -144,22 +137,19 @@ impl Spectrum {
             return Err(OpossumError::Spectrum("energy must be positive".into()));
         }
         let wavelength_in_meters = wavelength.get::<meter>();
-        let idx = self
-            .lambdas
-            .clone()
-            .into_iter()
-            .position(|w| w >= wavelength_in_meters);
+        let lambdas = self.data.map(|data| data.0);
+        let idx = lambdas.iter().position(|w| *w >= wavelength_in_meters);
         if let Some(idx) = idx {
             if idx == 0 {
-                let delta = self.lambdas.get(1).unwrap() - self.lambdas.get(0).unwrap();
-                self.data[0] += value / delta;
+                let delta = lambdas.get(1).unwrap() - lambdas.get(0).unwrap();
+                self.data[0].1 += value / delta;
             } else {
-                let lower_lambda = self.lambdas.get(idx - 1).unwrap();
-                let upper_lambda = self.lambdas.get(idx).unwrap();
+                let lower_lambda = lambdas.get(idx - 1).unwrap();
+                let upper_lambda = lambdas.get(idx).unwrap();
                 let delta = upper_lambda - lower_lambda;
-                self.data[idx - 1] +=
+                self.data[idx - 1].1 +=
                     value * (1.0 - (wavelength_in_meters - lower_lambda) / delta) / delta;
-                self.data[idx] += value * (wavelength_in_meters - lower_lambda) / delta / delta;
+                self.data[idx].1 += value * (wavelength_in_meters - lower_lambda) / delta / delta;
             }
             Ok(())
         } else {
@@ -197,12 +187,13 @@ impl Spectrum {
         }
         let wavelength_in_meters = center.get::<meter>();
         let width_in_meters = width.get::<meter>();
-        let spectrum_data: Array1<f64> = self
-            .lambdas
-            .iter_mut()
-            .map(|x| lorentz(wavelength_in_meters, width_in_meters, *x))
-            .collect();
-        self.data = &self.data + (spectrum_data * energy);
+        let lambdas = self.data.map(|data| data.0);
+        self.data.mapv_inplace(|data| {
+            (
+                data.0,
+                data.1 + energy * lorentz(wavelength_in_meters, width_in_meters, data.0),
+            )
+        });
         Ok(())
     }
     /// Returns the total energy of this [`Spectrum`].
@@ -210,8 +201,8 @@ impl Spectrum {
     /// This function sums the values over all wavelength slots weighted with the individual slot widths. This
     /// way it also works for non-equidistant spectra.
     pub fn total_energy(&self) -> f64 {
-        let lambda_deltas: Vec<f64> = self
-            .lambdas
+        let lambdas = self.data.map(|data| data.0);
+        let lambda_deltas: Vec<f64> = lambdas
             .windows(2)
             .into_iter()
             .map(|l| l[1] - l[0])
@@ -219,7 +210,7 @@ impl Spectrum {
         let total_energy = lambda_deltas
             .into_iter()
             .zip(self.data.iter())
-            .map(|d| d.0 * *d.1)
+            .map(|d| d.0 * d.1 .1)
             .sum();
         total_energy
     }
@@ -234,7 +225,7 @@ impl Spectrum {
                 "scaling factor mus be >= 0.0".into(),
             ));
         }
-        self.data = &self.data * factor;
+        self.data.mapv_inplace(|data| (data.0, data.1 * factor));
         Ok(())
     }
     /// Resample a provided [`Spectrum`] to match the given one.
@@ -246,7 +237,8 @@ impl Spectrum {
     ///
     /// Panics if ???.
     pub fn resample(&mut self, spectrum: &Spectrum) {
-        let mut src_it = spectrum.lambdas.windows(2).into_iter();
+        let lambdas = spectrum.data.map(|data| data.0);
+        let mut src_it = lambdas.windows(2).into_iter();
         let src_interval = src_it.next();
         if src_interval.is_none() {
             return;
@@ -254,7 +246,8 @@ impl Spectrum {
         let mut src_lower = src_interval.unwrap()[0];
         let mut src_upper = src_interval.unwrap()[1];
         let mut src_idx: usize = 0;
-        let mut bucket_it = self.lambdas.windows(2).into_iter();
+        let lambdas_s = self.data.map(|data| data.0);
+        let mut bucket_it = lambdas_s.windows(2).into_iter();
         let bucket_interval = bucket_it.next();
         if bucket_interval.is_none() {
             return;
@@ -262,7 +255,7 @@ impl Spectrum {
         let mut bucket_lower = bucket_interval.unwrap()[0];
         let mut bucket_upper = bucket_interval.unwrap()[1];
         let mut bucket_idx: usize = 0;
-        self.data[bucket_idx] = 0.0;
+        self.data[bucket_idx].1 = 0.0;
         while src_upper < bucket_lower {
             if let Some(src_interval) = src_it.next() {
                 src_lower = src_interval[0];
@@ -274,9 +267,9 @@ impl Spectrum {
         }
         loop {
             let ratio = calc_ratio(bucket_lower, bucket_upper, src_lower, src_upper);
-            let bucket_value = spectrum.data[src_idx] * ratio * (src_upper - src_lower)
+            let bucket_value = spectrum.data[src_idx].1 * ratio * (src_upper - src_lower)
                 / (bucket_upper - bucket_lower);
-            self.data[bucket_idx] += bucket_value;
+            self.data[bucket_idx].1 += bucket_value;
             if src_upper < bucket_upper {
                 if let Some(src_interval) = src_it.next() {
                     src_lower = src_interval[0];
@@ -290,7 +283,7 @@ impl Spectrum {
                 bucket_lower = bucket_interval[0];
                 bucket_upper = bucket_interval[1];
                 bucket_idx += 1;
-                self.data[bucket_idx] = 0.0;
+                self.data[bucket_idx].1 = 0.0;
                 continue;
             } else {
                 break;
@@ -305,7 +298,7 @@ impl Spectrum {
             .data
             .iter()
             .zip(resampled_spec.data.iter())
-            .map(|d| d.0 * d.1)
+            .map(|d| (d.0 .0, d.0 .1 * d.1 .1))
             .collect();
     }
     /// Add a given spectrum.
@@ -318,7 +311,7 @@ impl Spectrum {
             .data
             .iter()
             .zip(resampled_spec.data.iter())
-            .map(|d| d.0 + d.1)
+            .map(|d| (d.0 .0, d.0 .1 + d.1 .1))
             .collect();
     }
     /// Subtract a given spectrum.
@@ -332,7 +325,12 @@ impl Spectrum {
             .data
             .iter()
             .zip(resampled_spec.data.iter())
-            .map(|d| (d.0 - d.1).clamp(0.0, f64::abs(d.0 - d.1)))
+            .map(|d| {
+                (
+                    d.0 .0,
+                    (d.0 .1 - d.1 .1).clamp(0.0, f64::abs(d.0 .1 - d.1 .1)),
+                )
+            })
             .collect();
     }
     /// Generate a plot of this [`Spectrum`].
@@ -345,9 +343,9 @@ impl Spectrum {
     pub fn to_plot(&self, filename: &str) {
         let root = SVGBackend::new(filename, (800, 600)).into_drawing_area();
         root.fill(&WHITE).unwrap();
-        let x_left = *self.lambdas.first().unwrap();
-        let x_right = *self.lambdas.last().unwrap();
-        let y_top = *self.data.max_skipnan();
+        let x_left = self.data.first().unwrap().0;
+        let x_right = self.data.last().unwrap().0;
+        let y_top = *self.data.map(|data| data.1).max_skipnan();
         let mut chart = ChartBuilder::on(&root)
             .margin(5)
             .x_label_area_size(40)
@@ -361,13 +359,13 @@ impl Spectrum {
             .y_desc("value (1/nm)")
             .draw()
             .unwrap();
-
+        let lambdas = self.data.map(|data| data.0);
         chart
             .draw_series(LineSeries::new(
-                self.lambdas
+                lambdas
                     .iter()
                     .zip(self.data.iter())
-                    .map(|x| (*x.0 * 1.0E9, *x.1 * 1E-9)), // y values are displayed in 1/nm
+                    .map(|x| (*x.0 * 1.0E9, x.1 .1 * 1E-9)), // y values are displayed in 1/nm
                 &RED,
             ))
             .unwrap();
@@ -377,12 +375,12 @@ impl Spectrum {
 impl Display for Spectrum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_length = Length::format_args(nanometer, Abbreviation);
-        for value in self.data.iter().enumerate() {
+        for value in self.data.iter() {
             writeln!(
                 f,
                 "{:7.2} -> {}",
-                fmt_length.with(Length::new::<meter>(self.lambdas[value.0])),
-                *value.1
+                fmt_length.with(Length::new::<meter>(value.0)),
+                value.1
             )
             .unwrap();
         }
@@ -393,12 +391,12 @@ impl Display for Spectrum {
 impl Debug for Spectrum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_length = Length::format_args(nanometer, Abbreviation);
-        for value in self.data.iter().enumerate() {
+        for value in self.data.iter() {
             writeln!(
                 f,
                 "{:7.2} -> {}",
-                fmt_length.with(Length::new::<meter>(self.lambdas[value.0])),
-                *value.1
+                fmt_length.with(Length::new::<meter>(value.0)),
+                value.1
             )
             .unwrap();
         }
@@ -523,10 +521,16 @@ mod test {
         );
         assert!(s.is_ok());
         assert_eq!(
-            s.as_ref().unwrap().lambdas,
-            array![1.0, 1.5, 2.0, 2.5, 3.0, 3.5]
+            s.as_ref().unwrap().data,
+            array![
+                (1.0, 0.0),
+                (1.5, 0.0),
+                (2.0, 0.0),
+                (2.5, 0.0),
+                (3.0, 0.0),
+                (3.5, 0.0)
+            ]
         );
-        assert_eq!(s.unwrap().data, array![0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
     }
     #[test]
     fn new_negative_resolution() {
@@ -556,17 +560,21 @@ mod test {
     fn from_csv_ok() {
         let s = Spectrum::from_csv("spectrum_test/spec_to_csv_test_01.csv");
         assert!(s.is_ok());
-        let lambdas = s.unwrap().lambdas;
+        let lambdas = s.clone().unwrap().data.map(|data| data.0);
         assert!(lambdas
-            .into_iter()
-            .zip(array![500.0E-9, 501.0E-9, 502.0E-9, 503.0E-9, 504.0E-9, 505.0E-9].iter())
-            .all(|x| f64::abs(x.0 - *x.1) < 1.0E-16));
-        let s = Spectrum::from_csv("spectrum_test/spec_to_csv_test_01.csv");
-        let datas = s.unwrap().data;
+             .into_iter()
+             .zip(array![500.0E-9, 501.0E-9, 502.0E-9, 503.0E-9, 504.0E-9, 505.0E-9].iter())
+             .all(|x| f64::abs(x.0 - *x.1) < 1.0E-16));
+        let datas = s.unwrap().data.map(|data| data.1);
         assert!(datas
-            .into_iter()
-            .zip(array![5.0E-01, 4.981E-01, 4.982E-01, 4.984E-01, 4.996E-01, 5.010E-01].iter())
-            .all(|x| f64::abs(x.0 - *x.1) < 1.0E-16))
+             .into_iter()
+             .zip(array![5.0E-01,
+             4.981E-01,
+             4.982E-01,
+             4.984E-01,
+             4.996E-01,
+             5.010E-01].iter())
+             .all(|x| f64::abs(x.0 - *x.1) < 1.0E-16))
     }
     #[test]
     fn from_csv_err() {
@@ -594,7 +602,7 @@ mod test {
             s.add_single_peak(Length::new::<meter>(2.0), 1.0).is_ok(),
             true
         );
-        assert_eq!(s.data[2], 2.0);
+        assert_eq!(s.data[2].1, 2.0);
     }
     #[test]
     fn set_single_peak_interpolated() {
@@ -603,23 +611,23 @@ mod test {
             s.add_single_peak(Length::new::<meter>(2.25), 1.0).is_ok(),
             true
         );
-        assert_eq!(s.data[2], 1.0);
-        assert_eq!(s.data[3], 1.0);
+        assert_eq!(s.data[2].1, 1.0);
+        assert_eq!(s.data[3].1, 1.0);
     }
     #[test]
     fn set_single_peak_additive() {
         let mut s = prep();
         s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
-        assert_eq!(s.data[2], 4.0);
+        assert_eq!(s.data[2].1, 4.0);
     }
     #[test]
     fn set_single_peak_interp_additive() {
         let mut s = prep();
         s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         s.add_single_peak(Length::new::<meter>(2.25), 1.0).unwrap();
-        assert_eq!(s.data[2], 3.0);
-        assert_eq!(s.data[3], 1.0);
+        assert_eq!(s.data[2].1, 3.0);
+        assert_eq!(s.data[3].1, 1.0);
     }
     #[test]
     fn set_single_peak_lower_bound() {
@@ -628,7 +636,7 @@ mod test {
             s.add_single_peak(Length::new::<meter>(1.0), 1.0).is_ok(),
             true
         );
-        assert_eq!(s.data[0], 2.0);
+        assert_eq!(s.data[0].1, 2.0);
     }
     #[test]
     fn set_single_peak_wrong_params() {
@@ -687,7 +695,8 @@ mod test {
         .unwrap();
         s.add_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
         assert!(s.scale_vertical(0.5).is_ok());
-        assert_eq!(s.data, array![0.0, 0.25, 0.25, 0.0]);
+        let data=s.data.map(|data| data.1);
+        assert_eq!(data, array![0.0, 0.25, 0.25, 0.0]);
     }
     #[test]
     fn scale_vertical_negative() {
@@ -756,7 +765,8 @@ mod test {
         .unwrap();
         s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         s1.resample(&s2);
-        assert_eq!(s1.data, array![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]);
+        let data=s1.data.map(|data| data.1);
+        assert_eq!(data, array![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
     }
     #[test]
@@ -773,7 +783,8 @@ mod test {
         .unwrap();
         s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         s1.resample(&s2);
-        assert_eq!(s1.data, array![0.0, 1.0, 0.0, 0.0]);
+        let data=s1.data.map(|data| data.1);
+        assert_eq!(data, array![0.0, 1.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
     }
     #[test]
@@ -790,7 +801,8 @@ mod test {
         .unwrap();
         s2.add_single_peak(Length::new::<meter>(4.0), 1.0).unwrap();
         s1.resample(&s2);
-        assert_eq!(s1.data, array![0.0, 0.0, 0.0]);
+        let data=s1.data.map(|data| data.1);
+        assert_eq!(data, array![0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
     }
     #[test]
@@ -807,7 +819,8 @@ mod test {
         .unwrap();
         s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         s1.resample(&s2);
-        assert_eq!(s1.data, array![0.0, 0.0]);
+        let data=s1.data.map(|data| data.1);
+        assert_eq!(data, array![0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
     }
     #[test]
@@ -817,7 +830,8 @@ mod test {
         let mut s2 = prep();
         s2.add_single_peak(Length::new::<meter>(2.25), 0.5).unwrap();
         s.add(&s2);
-        assert_eq!(s.data, array![0.0, 1.0, 1.5, 0.5, 0.0, 0.0]);
+        let data=s.data.map(|data| data.1);
+        assert_eq!(data, array![0.0, 1.0, 1.5, 0.5, 0.0, 0.0]);
     }
     #[test]
     fn sub() {
@@ -826,6 +840,7 @@ mod test {
         let mut s2 = prep();
         s2.add_single_peak(Length::new::<meter>(2.25), 0.5).unwrap();
         s.sub(&s2);
-        assert_eq!(s.data, array![0.0, 1.0, 0.5, 0.0, 0.0, 0.0]);
+        let data=s.data.map(|data| data.1);
+        assert_eq!(data, array![0.0, 1.0, 0.5, 0.0, 0.0, 0.0]);
     }
 }
