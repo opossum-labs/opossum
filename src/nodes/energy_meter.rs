@@ -9,10 +9,24 @@ use std::fmt::Debug;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
+#[non_exhaustive]
+#[derive(Debug)]
+/// Type of the [`EnergyMeter`]. This is currently not used.
+pub enum Metertype {
+    /// an ideal energy meter
+    IdealEnergyMeter,
+    /// an ideal power meter
+    IdealPowerMeter
+}
+ impl Default for Metertype {
+    fn default() -> Self {
+      Metertype::IdealEnergyMeter
+    }
+}
 #[derive(Default)]
-/// This node represents an universal detector (so far for test / debugging purposes).
-///
-/// Any [`LightData`] coming in will be stored internally for later display / export.
+/// (ideal) energy / power meter.
+/// 
+/// It normally measures the total energy of the incoming light regardless of the wavelength, position, angle, polarization etc...
 ///
 /// ## Optical Ports
 ///   - Inputs
@@ -22,12 +36,30 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// 
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way, 
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
-pub struct Detector {
+pub struct EnergyMeter {
     light_data: Option<LightData>,
+    meter_type: Metertype
 }
-impl Optical for Detector {
+impl EnergyMeter {
+    /// Creates a new [`EnergyMeter`] of the given [`Metertype`].
+    pub fn new(meter_type:Metertype) -> Self {
+        EnergyMeter {
+            light_data: None,
+            meter_type: meter_type
+        }
+    }
+    /// Returns a reference to the meter type of this [`EnergyMeter`].
+    pub fn meter_type(&self) -> &Metertype {
+        &self.meter_type
+    }
+    /// Sets the meter type of this [`EnergyMeter`].
+    pub fn set_meter_type(&mut self, meter_type: Metertype) {
+        self.meter_type = meter_type;
+    }
+}
+impl Optical for EnergyMeter {
     fn node_type(&self) -> &str {
-        "detector"
+        "energy meter"
     }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
@@ -57,16 +89,16 @@ impl Optical for Detector {
     }
 }
 
-impl Debug for Detector {
+impl Debug for EnergyMeter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
-            Some(data) => write!(f, "{}", data),
+            Some(data) => write!(f, "{} - Type: {:?}", data, self.meter_type()),
             None => write!(f, "no data"),
         }
     }
 }
-impl Dottable for Detector {
+impl Dottable for EnergyMeter {
     fn node_color(&self) -> &str {
-        "lemonchiffon"
+        "lightblue"
     }
 }

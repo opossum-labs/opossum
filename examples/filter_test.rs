@@ -5,7 +5,7 @@ use opossum::{
     analyzer::AnalyzerEnergy,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
-    nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source},
+    nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source, EnergyMeter},
     spectrum::{create_he_ne_spectrum, Spectrum},
     OpticScenery,
 };
@@ -28,7 +28,7 @@ fn main() -> Result<(), OpossumError> {
     );
     let i_d1 = scenery.add_element("Detector 1", Detector::default());
     let i_d2 = scenery.add_element("Detector 2", Detector::default());
-    let i_d3 = scenery.add_element("Detector 3", Detector::default());
+    let i_d3 = scenery.add_element("Detector 3", EnergyMeter::default());
 
     scenery.connect_nodes(i_s, "out1", i_bs, "input1")?;
 
