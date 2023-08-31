@@ -10,9 +10,9 @@ use std::fmt::Debug;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Default)]
-/// This node represents an universal detector.
+/// This node represents an universal detector (so far for test / debugging purposes).
 ///
-/// Any [`LightData`] coming in will be stored internally for later display / export. So far it only has one input (in1).
+/// Any [`LightData`] coming in will be stored internally for later display / export.
 ///
 /// ## Optical Ports
 ///   - Inputs
