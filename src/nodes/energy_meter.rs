@@ -88,7 +88,7 @@ impl Optical for EnergyMeter {
 impl Debug for EnergyMeter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
-            Some(data) => write!(f, "{} - Type: {:?}", data, self.meter_type),
+            Some(data) => write!(f, "{} (Type: {:?})", data, self.meter_type),
             None => write!(f, "no data"),
         }
     }
@@ -101,6 +101,8 @@ impl Dottable for EnergyMeter {
 
 #[cfg(test)]
 mod test {
+    use crate::{lightdata::DataEnergy, spectrum::create_he_ne_spectrum, analyzer::AnalyzerType};
+
     use super::*;
     #[test]
     fn new() {
@@ -131,8 +133,21 @@ mod test {
     #[test]
     fn ports() {
         let meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
-        let ports=meter.ports();
+        let ports = meter.ports();
         assert_eq!(ports.inputs(), vec!["in1"]);
         assert_eq!(ports.outputs(), vec!["out1"]);
+    }
+    #[test]
+    fn analyze() {
+        let mut meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
+        let mut input = LightResult::default();
+        input.insert(
+            "in1".into(),
+            Some(LightData::Energy(DataEnergy {
+                spectrum: create_he_ne_spectrum(1.0),
+            })),
+        );
+        let result=meter.analyze(input, &AnalyzerType::Energy);
+        assert!(result.is_ok());
     }
 }
