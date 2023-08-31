@@ -10,22 +10,18 @@ use std::fmt::Debug;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[non_exhaustive]
-#[derive(Debug)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 /// Type of the [`EnergyMeter`]. This is currently not used.
 pub enum Metertype {
     /// an ideal energy meter
+    #[default]
     IdealEnergyMeter,
     /// an ideal power meter
-    IdealPowerMeter
-}
- impl Default for Metertype {
-    fn default() -> Self {
-      Metertype::IdealEnergyMeter
-    }
+    IdealPowerMeter,
 }
 #[derive(Default)]
 /// (ideal) energy / power meter.
-/// 
+///
 /// It normally measures the total energy of the incoming light regardless of the wavelength, position, angle, polarization etc...
 ///
 /// ## Optical Ports
@@ -33,24 +29,24 @@ pub enum Metertype {
 ///     - `in1`
 ///   - Outputs
 ///     - `out1`
-/// 
-/// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way, 
+///
+/// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct EnergyMeter {
     light_data: Option<LightData>,
-    meter_type: Metertype
+    meter_type: Metertype,
 }
 impl EnergyMeter {
     /// Creates a new [`EnergyMeter`] of the given [`Metertype`].
-    pub fn new(meter_type:Metertype) -> Self {
+    pub fn new(meter_type: Metertype) -> Self {
         EnergyMeter {
             light_data: None,
-            meter_type: meter_type
+            meter_type: meter_type,
         }
     }
-    /// Returns a reference to the meter type of this [`EnergyMeter`].
-    pub fn meter_type(&self) -> &Metertype {
-        &self.meter_type
+    /// Returns the meter type of this [`EnergyMeter`].
+    pub fn meter_type(&self) -> Metertype {
+        self.meter_type
     }
     /// Sets the meter type of this [`EnergyMeter`].
     pub fn set_meter_type(&mut self, meter_type: Metertype) {
@@ -92,7 +88,7 @@ impl Optical for EnergyMeter {
 impl Debug for EnergyMeter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
-            Some(data) => write!(f, "{} - Type: {:?}", data, self.meter_type()),
+            Some(data) => write!(f, "{} - Type: {:?}", data, self.meter_type),
             None => write!(f, "no data"),
         }
     }
@@ -100,5 +96,43 @@ impl Debug for EnergyMeter {
 impl Dottable for EnergyMeter {
     fn node_color(&self) -> &str {
         "lightblue"
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn new() {
+        let meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
+        assert!(meter.light_data.is_none());
+        assert_eq!(meter.meter_type, Metertype::IdealEnergyMeter);
+    }
+    #[test]
+    fn default() {
+        let meter = EnergyMeter::default();
+        assert!(meter.light_data.is_none());
+        assert_eq!(meter.meter_type, Metertype::IdealEnergyMeter);
+        assert_eq!(meter.node_type(), "energy meter");
+        assert_eq!(meter.is_detector(), true);
+        assert_eq!(meter.node_color(), "lightblue");
+    }
+    #[test]
+    fn meter_type() {
+        let meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
+        assert_eq!(meter.meter_type(), Metertype::IdealEnergyMeter);
+    }
+    #[test]
+    fn set_meter_type() {
+        let mut meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
+        meter.set_meter_type(Metertype::IdealPowerMeter);
+        assert_eq!(meter.meter_type, Metertype::IdealPowerMeter);
+    }
+    #[test]
+    fn ports() {
+        let meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
+        let ports=meter.ports();
+        assert_eq!(ports.inputs(), vec!["in1"]);
+        assert_eq!(ports.outputs(), vec!["out1"]);
     }
 }
