@@ -366,7 +366,7 @@ impl dyn OpticComponent + 'static {
 #[cfg(test)]
 mod test {
     use super::OpticNode;
-    use crate::nodes::Dummy;
+    use crate::nodes::{Dummy, Detector};
     #[test]
     fn new() {
         let node = OpticNode::new("Test", Dummy);
@@ -395,6 +395,13 @@ mod test {
         let mut node = OpticNode::new("Test", Dummy);
         node.set_inverted(true);
         assert_eq!(node.inverted(), true)
+    }
+    #[test]
+    fn is_detector() {
+        let node = OpticNode::new("Test", Dummy);
+        assert_eq!(node.is_detector(), false);
+        let node = OpticNode::new("Test", Detector::default());
+        assert_eq!(node.is_detector(), true)
     }
     #[test]
     #[ignore]
