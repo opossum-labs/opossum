@@ -28,12 +28,14 @@ fn main() -> Result<(), OpossumError> {
     );
     let i_d1 = scenery.add_element("Detector 1", Detector::default());
     let i_d2 = scenery.add_element("Detector 2", Detector::default());
+    let i_d3 = scenery.add_element("Detector 3", Detector::default());
 
     scenery.connect_nodes(i_s, "out1", i_bs, "input1")?;
 
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1")?;
     scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front")?;
     scenery.connect_nodes(i_f, "rear", i_d2, "in1")?;
+    scenery.connect_nodes(i_d2, "out1", i_d3, "in1")?;
 
     let path = "src_detector.dot";
     let mut output = File::create(path).unwrap();
