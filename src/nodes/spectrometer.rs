@@ -1,3 +1,5 @@
+use uom::si::length::nanometer;
+
 use crate::lightdata::LightData;
 use crate::{
     error::OpossumError,
@@ -88,20 +90,32 @@ impl Optical for Spectrometer {
 impl Debug for Spectrometer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
-            Some(data) => write!(f, "{} (Type: {:?})", data, self.spectrometer_type),
+            Some(data) => match data {
+                LightData::Energy(data_energy) => {
+                    let spectrum_range = data_energy.spectrum.range();
+                    write!(
+                        f,
+                        "Spectrum {:.3} - {:.3} nm (Type: {:?})",
+                        spectrum_range.start.get::<nanometer>(),
+                        spectrum_range.end.get::<nanometer>(),
+                        self.spectrometer_type
+                    )
+                }
+                _ => write!(f, "no spectrum data to display"),
+            },
             None => write!(f, "no data"),
         }
     }
 }
 impl Dottable for Spectrometer {
     fn node_color(&self) -> &str {
-        "lightblue"
+        "lightseagreen"
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{lightdata::DataEnergy, spectrum::create_he_ne_spectrum, analyzer::AnalyzerType};
+    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
 
     use super::*;
     #[test]
@@ -117,12 +131,15 @@ mod test {
         assert_eq!(meter.spectrometer_type, SpectrometerType::IdealSpectrometer);
         assert_eq!(meter.node_type(), "spectrometer");
         assert_eq!(meter.is_detector(), true);
-        assert_eq!(meter.node_color(), "XXX");
+        assert_eq!(meter.node_color(), "lightseagreen");
     }
     #[test]
     fn meter_type() {
         let meter = Spectrometer::new(SpectrometerType::IdealSpectrometer);
-        assert_eq!(meter.spectrometer_type(), SpectrometerType::IdealSpectrometer);
+        assert_eq!(
+            meter.spectrometer_type(),
+            SpectrometerType::IdealSpectrometer
+        );
     }
     #[test]
     fn set_meter_type() {
@@ -147,7 +164,7 @@ mod test {
                 spectrum: create_he_ne_spectrum(1.0),
             })),
         );
-        let result=meter.analyze(input, &AnalyzerType::Energy);
+        let result = meter.analyze(input, &AnalyzerType::Energy);
         assert!(result.is_ok());
     }
 }
