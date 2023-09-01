@@ -8,6 +8,7 @@ mod lens;
 mod reference;
 mod source;
 mod energy_meter;
+mod spectrometer;
 
 pub use beam_splitter::BeamSplitter;
 pub use detector::Detector;
@@ -17,5 +18,9 @@ pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::{IdealLens, RealLens};
 pub use reference::NodeReference;
 pub use source::Source;
+
 pub use energy_meter::EnergyMeter;
 pub use energy_meter::Metertype;
+
+pub use spectrometer::Spectrometer;
+pub use spectrometer::SpectrometerType;
