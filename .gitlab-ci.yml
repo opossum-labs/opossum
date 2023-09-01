@@ -28,6 +28,10 @@ image: "rust:latest"
 # Use cargo to test the project
 test:cargo:
   script:
+    - export HTTPS_PROXY=lxproxy01.gsi.de:3128
+    - export HTTP_PROXY=lxproxy01.gsi.de:3128
+    - export https_proxy=lxproxy01.gsi.de:3128
+    - export http_proxy=lxproxy01.gsi.de:3128
     - rustc --version && cargo --version  # Print version info for debugging
     - cargo test --workspace --verbose
 
