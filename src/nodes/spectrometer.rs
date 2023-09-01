@@ -13,7 +13,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 
 #[non_exhaustive]
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
-/// Type of the [`EnergyMeter`]. This is currently not used.
+/// Type of the [`Spectrometer`]. This is currently not used.
 pub enum SpectrometerType {
     /// an ideal energy meter
     #[default]
@@ -24,7 +24,7 @@ pub enum SpectrometerType {
 #[derive(Default)]
 /// (ideal) spectrometer
 ///
-/// It normally measures the total energy of the incoming light regardless of the wavelength, position, angle, polarization etc...
+/// It normally measures / displays the spectrum of the incoming light.
 ///
 /// ## Optical Ports
 ///   - Inputs
@@ -33,7 +33,7 @@ pub enum SpectrometerType {
 ///     - `out1`
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
-/// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
+/// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 pub struct Spectrometer {
     light_data: Option<LightData>,
     spectrometer_type: SpectrometerType,
@@ -50,7 +50,7 @@ impl Spectrometer {
     pub fn spectrometer_type(&self) -> SpectrometerType {
         self.spectrometer_type
     }
-    /// Sets the meter type of this [`EnergyMeter`].
+    /// Sets the meter type of this [`Spectrometer`].
     pub fn set_spectrometer_type(&mut self, meter_type: SpectrometerType) {
         self.spectrometer_type = meter_type;
     }
