@@ -45,16 +45,14 @@ impl Optical for Dummy {
             } else {
                 Ok(HashMap::from([("rear".into(), None)]))
             }
+        } else if let Some(data) = incoming_data.get("rear") {
+            Ok(HashMap::from([("front".into(), data.clone())]))
         } else {
-            if let Some(data) = incoming_data.get("rear") {
-                Ok(HashMap::from([("front".into(), data.clone())]))
-            } else {
-                Ok(HashMap::from([("front".into(), None)]))
-            }
+            Ok(HashMap::from([("front".into(), None)]))
         }
     }
     fn set_inverted(&mut self, inverted: bool) {
-        self.is_inverted=true;
+        self.is_inverted = inverted;
     }
 }
 

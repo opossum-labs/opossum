@@ -26,7 +26,7 @@ impl OpticNode {
     /// use opossum::optic_node::OpticNode;
     /// use opossum::nodes::Dummy;
     ///
-    /// let node=OpticNode::new("My node", Dummy);
+    /// let node=OpticNode::new("My node", Dummy::default());
     /// ```
     pub fn new<T: OpticComponent + 'static>(name: &str, node_type: T) -> Self {
         let ports = node_type.ports();
