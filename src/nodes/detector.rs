@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use crate::lightdata::LightData;
 use crate::{
     error::OpossumError,

@@ -349,10 +349,7 @@ impl NodeGroup {
                 self.incoming_edges(idx)
             };
             let node = self.g.node_weight(idx).unwrap();
-            // println!("Analyzing node {}", node.borrow().name());
-            // println!("Incoming edges {:?}", incoming_edges);
             let outgoing_edges = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
-            // println!("Outgoing edges: {:?}", outgoing_edges);
             let mut group_sinks = self.g.externals(Direction::Outgoing);
             // Check if node is group sink node
             if group_sinks.any(|gs| gs == idx) {

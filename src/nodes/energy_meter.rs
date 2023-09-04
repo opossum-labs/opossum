@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use crate::lightdata::LightData;
 use crate::{
     error::OpossumError,
@@ -16,7 +17,7 @@ pub enum Metertype {
     /// an ideal energy meter
     #[default]
     IdealEnergyMeter,
-    /// an ideal power meter
+    /// an ideal power meter (currently not used)
     IdealPowerMeter,
 }
 #[derive(Default)]

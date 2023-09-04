@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -12,7 +13,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This node represents a source of light.
 ///
-/// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an optic scenery.
+/// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an [`OpticScenery`](crate::OpticScenery).
 ///
 /// ## Optical Ports
 ///   - Inputs
@@ -26,6 +27,19 @@ pub struct Source {
 
 impl Source {
     /// Creates a new [`Source`].
+    /// 
+    /// The light to be emitted from this source is defined in a [`LightData`] structure.
+    /// 
+    /// ## Example
+    /// 
+    /// ```rust
+    /// use opossum::{
+    /// lightdata::{DataEnergy, LightData},
+    /// nodes::Source,
+    /// spectrum::create_he_ne_spectrum};
+    /// 
+    /// let source=Source::new(LightData::Energy(DataEnergy {spectrum: create_he_ne_spectrum(1.0)}));
+    /// ```
     pub fn new(light: LightData) -> Self {
         Source {
             light_data: Some(light),

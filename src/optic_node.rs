@@ -22,7 +22,7 @@ impl OpticNode {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust
     /// use opossum::optic_node::OpticNode;
     /// use opossum::nodes::Dummy;
     ///
