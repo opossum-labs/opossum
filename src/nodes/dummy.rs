@@ -7,7 +7,7 @@ use crate::optic_ports::OpticPorts;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 /// A fake / dummy component without any optical functionality.
 ///
 /// Any [`LightResult`] is directly forwarded without any modification. It is mainly used for
@@ -18,7 +18,9 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - `front`
 ///   - Outputs
 ///     - `rear`
-pub struct Dummy;
+pub struct Dummy {
+    is_inverted: bool,
+}
 
 impl Optical for Dummy {
     /// Returns "dummy" as node type.
@@ -37,11 +39,22 @@ impl Optical for Dummy {
         incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
     ) -> Result<LightResult> {
-        if let Some(data) = incoming_data.get("front") {
-            Ok(HashMap::from([("rear".into(), data.clone())]))
+        if !self.is_inverted {
+            if let Some(data) = incoming_data.get("front") {
+                Ok(HashMap::from([("rear".into(), data.clone())]))
+            } else {
+                Ok(HashMap::from([("rear".into(), None)]))
+            }
         } else {
-            Ok(HashMap::from([("rear".into(), None)]))
+            if let Some(data) = incoming_data.get("rear") {
+                Ok(HashMap::from([("front".into(), data.clone())]))
+            } else {
+                Ok(HashMap::from([("front".into(), None)]))
+            }
         }
+    }
+    fn set_inverted(&mut self, inverted: bool) {
+        self.is_inverted=true;
     }
 }
 

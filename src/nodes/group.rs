@@ -349,14 +349,15 @@ impl NodeGroup {
                 self.incoming_edges(idx)
             };
             let node = self.g.node_weight(idx).unwrap();
-            println!("Analyzing node {}", node.borrow().name());
-            println!("Incoming edges {:?}", incoming_edges);
+            // println!("Analyzing node {}", node.borrow().name());
+            // println!("Incoming edges {:?}", incoming_edges);
             let outgoing_edges = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
-            println!("Outgoing edges: {:?}", outgoing_edges);
+            // println!("Outgoing edges: {:?}", outgoing_edges);
             let mut group_sinks = self.g.externals(Direction::Outgoing);
             // Check if node is group sink node
             if group_sinks.any(|gs| gs == idx) {
-                let assigned_ports = self.output_port_map.iter().filter(|p| p.1 .0 == idx);
+                let portmap = if self.is_inverted { &self.input_port_map} else { &self.output_port_map};
+                let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
                 for port in assigned_ports {
                     light_result.insert(
                         port.0.to_owned(),
@@ -659,16 +660,16 @@ mod test {
     #[test]
     fn add_node() {
         let mut og = NodeGroup::new();
-        let sub_node = OpticNode::new("test", Dummy);
+        let sub_node = OpticNode::new("test", Dummy::default());
         og.add_node(sub_node);
         assert_eq!(og.g.node_count(), 1);
     }
     #[test]
     fn connect_nodes() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
         // wrong port names
         assert!(og.connect_nodes(sn1_i, "wrong", sn2_i, "front").is_err());
@@ -687,9 +688,9 @@ mod test {
     #[test]
     fn connect_nodes_update_port_mapping() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
 
         og.map_input_port(sn2_i, "front", "input").unwrap();
@@ -704,9 +705,9 @@ mod test {
     #[test]
     fn input_nodes() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node1 = OpticNode::new("test2", Dummy);
+        let sub_node1 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node1);
         let sub_node3 = OpticNode::new("test3", BeamSplitter::new(0.5));
         let sn3_i = og.add_node(sub_node3);
@@ -717,11 +718,11 @@ mod test {
     #[test]
     fn output_nodes() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
         let sub_node1 = OpticNode::new("test2", BeamSplitter::new(0.5));
         let sn2_i = og.add_node(sub_node1);
-        let sub_node3 = OpticNode::new("test3", Dummy);
+        let sub_node3 = OpticNode::new("test3", Dummy::default());
         let sn3_i = og.add_node(sub_node3);
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
         og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front")
@@ -731,9 +732,9 @@ mod test {
     #[test]
     fn map_input_port() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
 
@@ -756,7 +757,7 @@ mod test {
     #[test]
     fn map_input_port_half_connected_nodes() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
         let sub_node2 = OpticNode::new("test2", BeamSplitter::default());
         let sn2_i = og.add_node(sub_node2);
@@ -773,9 +774,9 @@ mod test {
     #[test]
     fn map_output_port() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
 
@@ -800,7 +801,7 @@ mod test {
         let mut og = NodeGroup::new();
         let sub_node1 = OpticNode::new("test1", BeamSplitter::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
         og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "front")
             .unwrap();
@@ -820,9 +821,9 @@ mod test {
     #[test]
     fn ports() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         assert!(og.ports().inputs().is_empty());
