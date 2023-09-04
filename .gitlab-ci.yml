@@ -59,8 +59,16 @@ test:cargo:
     - export HTTP_PROXY=lxproxy01.gsi.de:3128
     - export https_proxy=lxproxy01.gsi.de:3128
     - export http_proxy=lxproxy01.gsi.de:3128
+    - rustup defualt nightly
+    - cargo install junitify
     - rustc --version && cargo --version # Print version info for debugging
-    - cargo test --workspace
+    # - cargo test --workspace
+    - cargo test -- --format=json -Z unstable-options --report-time | junitify --out $CI_PROJECT_DIR/tests/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/tests/*.xml
+
 test:clippy:
   stage: test
   tags:
