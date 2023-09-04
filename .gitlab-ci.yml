@@ -35,9 +35,6 @@ build-main:
     - cargo build
   dependencies:
     - test:cargo
-  artifacts:
-    paths:
-      - target/
 
 # Build API documentation
 build-doc:
@@ -52,9 +49,6 @@ build-doc:
     - cargo doc --no-deps
   dependencies:
     - test:cargo
-  artifacts:
-    paths:
-      - target/
 # Use cargo to test the project
 test:cargo:
   stage: test
@@ -67,9 +61,6 @@ test:cargo:
     - export http_proxy=lxproxy01.gsi.de:3128
     - rustc --version && cargo --version # Print version info for debugging
     - cargo test --workspace
-  artifacts:
-    paths:
-      - target/
 test:clippy:
   stage: test
   tags:
