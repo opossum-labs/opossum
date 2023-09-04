@@ -25,25 +25,41 @@ stages:
 # Build the main application (currently mostly useless)
 build-main:
   stage: build
+  tags:
+    - opossum
   script:
     - export HTTPS_PROXY=lxproxy01.gsi.de:3128
     - export HTTP_PROXY=lxproxy01.gsi.de:3128
     - export https_proxy=lxproxy01.gsi.de:3128
     - export http_proxy=lxproxy01.gsi.de:3128
     - cargo build
+  dependencies:
+    - test:cargo
+  artifacts:
+    paths:
+      - target/
 
 # Build API documentation
 build-doc:
   stage: build
+  tags:
+    - opossum
   script:
     - export HTTPS_PROXY=lxproxy01.gsi.de:3128
     - export HTTP_PROXY=lxproxy01.gsi.de:3128
     - export https_proxy=lxproxy01.gsi.de:3128
     - export http_proxy=lxproxy01.gsi.de:3128
     - cargo doc --no-deps
+  dependencies:
+    - test:cargo
+  artifacts:
+    paths:
+      - target/
 # Use cargo to test the project
 test:cargo:
   stage: test
+  tags:
+    - opossum
   script:
     - export HTTPS_PROXY=lxproxy01.gsi.de:3128
     - export HTTP_PROXY=lxproxy01.gsi.de:3128
@@ -51,8 +67,13 @@ test:cargo:
     - export http_proxy=lxproxy01.gsi.de:3128
     - rustc --version && cargo --version # Print version info for debugging
     - cargo test --workspace
+  artifacts:
+    paths:
+      - target/
 test:clippy:
   stage: test
+  tags:
+    - opossum
   script:
     - export HTTPS_PROXY=lxproxy01.gsi.de:3128
     - export HTTP_PROXY=lxproxy01.gsi.de:3128
@@ -60,6 +81,8 @@ test:clippy:
     - export http_proxy=lxproxy01.gsi.de:3128
     - cargo clippy --workspace
   allow_failure: true
+  dependencies:
+    - test:cargo
 # Optional: Use a third party library to generate gitlab junit reports
 # test:junit-report:
 #   script:
