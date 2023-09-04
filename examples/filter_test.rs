@@ -26,9 +26,9 @@ fn main() -> Result<(), OpossumError> {
         "Filter",
         IdealFilter::new(FilterType::Spectrum(filter_spectrum))?,
     );
-    let i_d1 = scenery.add_element("Detector 1", Detector::default());
-    let i_d2 = scenery.add_element("Detector 2", Spectrometer::default());
-    let i_d3 = scenery.add_element("Detector 3", EnergyMeter::default());
+    let i_d1 = scenery.add_element("Energy meter 1", Detector::default());
+    let i_d2 = scenery.add_element("Spectrometer", Spectrometer::default());
+    let i_d3 = scenery.add_element("Energy meter 2", EnergyMeter::default());
 
     scenery.connect_nodes(i_s, "out1", i_bs, "input1")?;
 
