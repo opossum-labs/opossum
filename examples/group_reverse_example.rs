@@ -6,10 +6,9 @@ use opossum::{
     lightdata::{DataEnergy, LightData},
     nodes::{Detector, Dummy, NodeGroup, Source},
     optic_node::OpticNode,
-    spectrum::{create_he_ne_spectrum, Spectrum},
+    spectrum::create_he_ne_spectrum,
     OpticScenery, analyzer::AnalyzerEnergy,
 };
-use uom::si::length::{Length, nanometer};
 
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
@@ -21,15 +20,6 @@ fn main() -> Result<(), OpossumError> {
             spectrum: create_he_ne_spectrum(1.0),
         })),
     );
-
-    // let i_s = scenery.add_element(
-    //     "Source",
-    //     Source::new(LightData::Energy(DataEnergy {
-    //         spectrum: Spectrum::new(
-    //             Length::new::<nanometer>(500.0)..Length::new::<nanometer>(503.0),
-    //             Length::new::<nanometer>(1.0)).unwrap()}),
-    //     ),
-    // );
 
     let mut group = NodeGroup::new();
     group.expand_view(true);

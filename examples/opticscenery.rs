@@ -11,8 +11,8 @@ fn main() -> Result<(), OpossumError> {
     scenery.set_description("OpticScenery demo");
     println!("default opticscenery: {:?}", scenery);
     println!("export to `dot` format: {}", scenery.to_dot()?);
-    let node1 = scenery.add_element("my optic", Dummy);
-    let node2 = scenery.add_element("my other optic", Dummy);
+    let node1 = scenery.add_element("my optic", Dummy::default());
+    let node2 = scenery.add_element("my other optic", Dummy::default());
     scenery.connect_nodes(node1, "rear", node2, "front")?;
     let path = "graph.dot";
     let mut output = File::create(path).unwrap();

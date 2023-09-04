@@ -9,10 +9,10 @@ fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("PreAmp Doublepass section");
     //let n0 = scenery.add_element("LightSource", Source::default());
-    let n1 = scenery.add_element("TFP", Dummy);
-    let n2 = scenery.add_element("19mm amp", Dummy);
+    let n1 = scenery.add_element("TFP", Dummy::default());
+    let n2 = scenery.add_element("19mm amp", Dummy::default());
     //let n3 = scenery.add_element("Faraday", Dummy);
-    let n4 = scenery.add_element("0° mirror", Dummy);
+    let n4 = scenery.add_element("0° mirror", Dummy::default());
 
     let mut node = NodeReference::from_node(scenery.node(n1).unwrap());
     node.set_inverted(true);
