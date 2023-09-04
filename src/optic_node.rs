@@ -65,7 +65,8 @@ impl OpticNode {
     ///
     /// This means that the node is used in "reverse" direction. All output port become input parts and vice versa.
     pub fn set_inverted(&mut self, inverted: bool) {
-        self.ports.set_inverted(inverted)
+        self.ports.set_inverted(inverted);
+        self.node.set_inverted(inverted);
     }
     /// Returns if the [`OpticNode`] is used in reversed direction.
     pub fn inverted(&self) -> bool {
@@ -126,11 +127,12 @@ pub trait Optical {
         Ok(LightResult::default())
     }
     fn export_data(&self, _file_name: &str) {
-        println!("no export_data function implemented")
+        println!("no export_data function implemented for nodetype <{}>", self.node_type())
     }
     fn is_detector(&self) -> bool {
         false
     }
+    fn set_inverted(&mut self, _inverted: bool) {}
 }
 
 /// This trait deals with the translation of the OpticScenery-graph structure to the dot-file format which is needed to visualize the graphs
@@ -366,7 +368,7 @@ impl dyn OpticComponent + 'static {
 #[cfg(test)]
 mod test {
     use super::OpticNode;
-    use crate::nodes::{Dummy, Detector};
+    use crate::nodes::{Detector, Dummy};
     #[test]
     fn new() {
         let node = OpticNode::new("Test", Dummy);

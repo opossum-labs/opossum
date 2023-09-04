@@ -3,6 +3,7 @@
 //! [`Light`] represents the information / data flowing from one node to another node. It contains information about
 //! the respective source an target port names this edge connects as well as the actual light information (stored as
 //! [`LightData`]).
+
 use crate::lightdata::LightData;
 
 #[derive(Debug, Clone)]
@@ -31,6 +32,11 @@ impl Light {
     }
     pub fn set_data(&mut self, data: Option<LightData>) {
         self.data = data;
+    }
+    pub fn inverse(&mut self) {
+        let tmp=self.src_port.clone();
+        self.src_port=self.target_port.clone();
+        self.target_port=tmp;
     }
 }
 
