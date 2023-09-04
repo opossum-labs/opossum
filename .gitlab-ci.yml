@@ -59,7 +59,7 @@ test:cargo:
     - export HTTP_PROXY=lxproxy01.gsi.de:3128
     - export https_proxy=lxproxy01.gsi.de:3128
     - export http_proxy=lxproxy01.gsi.de:3128
-    - rustup defualt nightly
+    - rustup default nightly
     - cargo install junitify
     - rustc --version && cargo --version # Print version info for debugging
     # - cargo test --workspace
