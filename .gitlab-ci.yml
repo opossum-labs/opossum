@@ -78,6 +78,7 @@ test:clippy:
     - export HTTP_PROXY=lxproxy01.gsi.de:3128
     - export https_proxy=lxproxy01.gsi.de:3128
     - export http_proxy=lxproxy01.gsi.de:3128
+    - rustup component add clippy
     - cargo clippy --workspace
   allow_failure: true
   dependencies:
