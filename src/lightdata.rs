@@ -1,5 +1,6 @@
 //! Data structures containing the light information flowing between [`OpticNodes`](crate::optic_node::OpticNode).
 use std::fmt::Display;
+use serde_derive::Serialize;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
@@ -9,7 +10,7 @@ use crate::spectrum::Spectrum;
 /// [`AnalyzerType`](crate::analyzer::AnalyzerType). For example, an energy analysis ([`LightData::Energy`]) only
 /// contains a [`Spectrum`] information, while a geometric analysis ([`LightData::Geometric]) constains a set of optical
 /// ray data.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum LightData {
     /// data type used for energy analysis.
     Energy(DataEnergy),
@@ -43,12 +44,12 @@ impl Display for LightData {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DataEnergy {
     pub spectrum: Spectrum,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DataGeometric {
     _ray: i32,
 }

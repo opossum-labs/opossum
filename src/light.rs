@@ -4,12 +4,14 @@
 //! the respective source an target port names this edge connects as well as the actual light information (stored as
 //! [`LightData`]).
 
+use serde_derive::Serialize;
 use crate::lightdata::LightData;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,Serialize)]
 pub struct Light {
     src_port: String,
     target_port: String,
+    #[serde(skip)]
     data: Option<LightData>,
 }
 
