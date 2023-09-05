@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
 use crate::lightdata::{DataEnergy, LightData};

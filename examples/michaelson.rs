@@ -11,11 +11,11 @@ fn main() -> Result<(), OpossumError> {
     scenery.set_description("Michaelson interferomater");
     let src = scenery.add_element("Source", Source::default());
     let bs = scenery.add_element("Beamspliiter", BeamSplitter::default());
-    let sample = scenery.add_element("sample", Dummy);
+    let sample = scenery.add_element("sample", Dummy::default());
     let rf = NodeReference::from_node(scenery.node(sample)?);
     let r_sample = scenery.add_node(rf);
-    let m1 = scenery.add_element("Mirror", Dummy);
-    let m2 = scenery.add_element("Mirror", Dummy);
+    let m1 = scenery.add_element("Mirror", Dummy::default());
+    let m2 = scenery.add_element("Mirror", Dummy::default());
     let rf = NodeReference::from_node(scenery.node(bs)?);
     let r_bs = scenery.add_node(rf);
     let det = scenery.add_element("Detector", Detector::default());

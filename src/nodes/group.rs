@@ -32,12 +32,13 @@ pub struct NodeGroup {
     expand_view: bool,
     input_port_map: HashMap<String, (NodeIndex, String)>,
     output_port_map: HashMap<String, (NodeIndex, String)>,
+    is_inverted: bool,
 }
 
 impl NodeGroup {
     /// Creates a new [`NodeGroup`].
     pub fn new() -> Self {
-        Self{
+        Self {
             expand_view: false,
             ..Default::default()
         }
@@ -80,7 +81,7 @@ impl NodeGroup {
                 .borrow()
                 .ports()
                 .inputs()
-                .contains(&target_port.into()) 
+                .contains(&target_port.into())
             {
                 return Err(OpossumError::OpticScenery(format!(
                     "target node {} does not have a port {}",
@@ -326,15 +327,17 @@ impl NodeGroup {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> Result<LightResult> {
+        if self.is_inverted {self.invert_graph();}
         let g_clone = self.g.clone();
         let mut group_srcs = g_clone.externals(Direction::Incoming);
         let mut light_result = LightResult::default();
-        let sorted = toposort(&self.g, None).unwrap();
+        let sorted = toposort(&g_clone, None).unwrap();
         for idx in sorted {
             // Check if node is group src node
             let incoming_edges = if group_srcs.any(|gs| gs == idx) {
                 // get from incoming_data
-                let assigned_ports = self.input_port_map.iter().filter(|p| p.1 .0 == idx);
+                let portmap = if self.is_inverted { &self.output_port_map} else { &self.input_port_map};
+                let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
                 let mut incoming = LightResult::default();
                 for port in assigned_ports {
                     incoming.insert(
@@ -346,12 +349,13 @@ impl NodeGroup {
             } else {
                 self.incoming_edges(idx)
             };
-            let node = self.g.node_weight(idx).unwrap();
+            let node = g_clone.node_weight(idx).unwrap();
             let outgoing_edges = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
-            let mut group_sinks = self.g.externals(Direction::Outgoing);
+            let mut group_sinks = g_clone.externals(Direction::Outgoing);
             // Check if node is group sink node
             if group_sinks.any(|gs| gs == idx) {
-                let assigned_ports = self.output_port_map.iter().filter(|p| p.1 .0 == idx);
+                let portmap = if self.is_inverted { &self.input_port_map} else { &self.output_port_map};
+                let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
                 for port in assigned_ports {
                     light_result.insert(
                         port.0.to_owned(),
@@ -364,14 +368,14 @@ impl NodeGroup {
                 }
             }
         }
+        if self.is_inverted {self.invert_graph();} // revert initial inversion (if necessary)
         Ok(light_result)
     }
-
 
     /// Sets the expansion flag of this [`NodeGroup`].  
     /// If true, the group expands and the internal nodes of this group are displayed in the dot format.
     /// If false, only the group node itself is displayed and the internal setup is not shown
-    pub fn shall_expand(&self) -> bool{
+    pub fn shall_expand(&self) -> bool {
         self.expand_view
     }
 
@@ -379,47 +383,56 @@ impl NodeGroup {
     /// parameters:
     /// - port_name:            name of the external port of the group
     /// - parent_identifier:    String that contains the hierarchical structure: parentidx_childidx_childofchildidx ...
-    /// 
+    ///
     /// Error, if the port is not mapped as input or output
-    pub fn get_mapped_port_str(&self, port_name: &str, parent_identifier: String) -> Result<String> {
-        
+    pub fn get_mapped_port_str(
+        &self,
+        port_name: &str,
+        parent_identifier: String,
+    ) -> Result<String> {
         if self.shall_expand() {
-            if self.input_port_map.contains_key(port_name){
-                let port = self.input_port_map
-                    .get(port_name)
-                    .unwrap();
+            if self.input_port_map.contains_key(port_name) {
+                let port = self.input_port_map.get(port_name).unwrap();
 
-                Ok(format!("{}_i{}:{}", parent_identifier, port.0.index(), port.1))
-            }
-            else if  self.output_port_map.contains_key(port_name){
-                let port = self.output_port_map
-                    .get(port_name)
-                    .unwrap();
+                Ok(format!(
+                    "{}_i{}:{}",
+                    parent_identifier,
+                    port.0.index(),
+                    port.1
+                ))
+            } else if self.output_port_map.contains_key(port_name) {
+                let port = self.output_port_map.get(port_name).unwrap();
 
-                Ok(format!("{}_i{}:{}", parent_identifier, port.0.index(), port.1))
+                Ok(format!(
+                    "{}_i{}:{}",
+                    parent_identifier,
+                    port.0.index(),
+                    port.1
+                ))
+            } else {
+                Err(OpossumError::OpticGroup(format!(
+                    "port {} is not mapped",
+                    port_name
+                )))
             }
-            else{
-                Err(OpossumError::OpticGroup(format!("port {} is not mapped", port_name)))
-            }
-        }
-        else{
+        } else {
             Ok(format!("{}:{}", parent_identifier, port_name))
         }
     }
 
     /// returns the boolean which defines whether the group expands or not.
-    pub fn expand_view(&mut self, expand_view:bool){
+    pub fn expand_view(&mut self, expand_view: bool) {
         self.expand_view = expand_view;
     }
 
     /// downcasts this "OpticNode" with trait "OpicComponent" to its actual struct format "NodeGroup"
     /// parameters:
     /// - ref_node:     reference to the borrowed node of a graph
-    /// 
+    ///
     /// Returns a reference to the NodeGroup struct
-    /// 
+    ///
     /// Error, if the OpticNode can not be casted to the type of NodeGroup
-    fn cast_node_to_group<'a>(&self, ref_node:  &'a OpticNode) -> Result<&'a  NodeGroup>{
+    fn cast_node_to_group<'a>(&self, ref_node: &'a OpticNode) -> Result<&'a NodeGroup> {
         let node_boxed = (&*ref_node).node();
         let downcasted_node = node_boxed.downcast_ref::<NodeGroup>();
 
@@ -431,15 +444,13 @@ impl NodeGroup {
         }
     }
 
-
-    /// checks if the contained node is a group_node itself. 
+    /// checks if the contained node is a group_node itself.
     /// Returns true, if the node is a group
     /// Returns false otherwise
-    fn check_if_group(&self, node_ref:  &OpticNode) -> bool{
-        if node_ref.node_type() == "group"{
+    fn check_if_group(&self, node_ref: &OpticNode) -> bool {
+        if node_ref.node_type() == "group" {
             true
-        }
-        else{
+        } else {
             false
         }
     }
@@ -449,18 +460,26 @@ impl NodeGroup {
     /// - end_node_idx:         NodeIndex of the node that should be connected
     /// - light_port:           port name that should be connected
     /// - parent_identifier:    String that contains the hierarchical structure: parentidx_childidx_childofchildidx ...
-    /// 
+    ///
     /// Returns the result of the edge strnig for the dot format
-    fn create_node_edge_str(&self, end_node_idx: NodeIndex, light_port: &str, mut parent_identifier: String) -> Result<String>{
+    fn create_node_edge_str(
+        &self,
+        end_node_idx: NodeIndex,
+        light_port: &str,
+        mut parent_identifier: String,
+    ) -> Result<String> {
         let node = self.g.node_weight(end_node_idx).unwrap().borrow();
 
-        parent_identifier = if parent_identifier == "" {format!("i{}", end_node_idx.index())} else {format!("{}_i{}", &parent_identifier, end_node_idx.index())};
+        parent_identifier = if parent_identifier == "" {
+            format!("i{}", end_node_idx.index())
+        } else {
+            format!("{}_i{}", &parent_identifier, end_node_idx.index())
+        };
 
-        if self.check_if_group(&node){
+        if self.check_if_group(&node) {
             let group_node = self.cast_node_to_group(&node)?;
-            Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)       
-        }
-        else{
+            Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
+        } else {
             Ok(format!("{}:{}", parent_identifier, light_port))
         }
     }
@@ -471,11 +490,21 @@ impl NodeGroup {
     /// - name:                 name of the node
     /// - inverted:             boolean that descries wether the node is inverted or not
     /// - parent_identifier:    String that contains the hierarchical structure: parentidx_childidx_childofchildidx ...
-    /// 
+    ///
     /// Returns the result of the dot string that describes this node
-    fn to_dot_expanded_view(&self,node_index: &str, name: &str, inverted: bool, mut parent_identifier: String) -> Result<String>{
+    fn to_dot_expanded_view(
+        &self,
+        node_index: &str,
+        name: &str,
+        inverted: bool,
+        mut parent_identifier: String,
+    ) -> Result<String> {
         let inv_string = if inverted { "(inv)" } else { "" };
-        parent_identifier = if parent_identifier == "" {format!("i{}", node_index)} else {format!("{}_i{}", &parent_identifier, node_index)};
+        parent_identifier = if parent_identifier == "" {
+            format!("i{}", node_index)
+        } else {
+            format!("{}_i{}", &parent_identifier, node_index)
+        };
         let mut dot_string = format!(
             "  subgraph {} {{\n\tlabel=\"{}{}\"\n\tfontsize=15\n\tcluster=true\n\t",
             parent_identifier, name, inv_string
@@ -483,14 +512,24 @@ impl NodeGroup {
 
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
-            dot_string += &node.borrow().to_dot(&format!("{}", node_idx.index()), parent_identifier.clone())?;
+            dot_string += &node
+                .borrow()
+                .to_dot(&format!("{}", node_idx.index()), parent_identifier.clone())?;
         }
         for edge in self.g.edge_indices() {
             let light: &Light = self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
 
-            let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port(), parent_identifier.clone())?;
-            let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port(), parent_identifier.clone())?;
+            let src_edge_str = self.create_node_edge_str(
+                end_nodes.0,
+                light.src_port(),
+                parent_identifier.clone(),
+            )?;
+            let target_edge_str = self.create_node_edge_str(
+                end_nodes.1,
+                light.target_port(),
+                parent_identifier.clone(),
+            )?;
 
             dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
             // needed when multiple ports can be assigned
@@ -513,16 +552,41 @@ impl NodeGroup {
     /// - inverted:             boolean that descries wether the node is inverted or not
     /// - _ports:               
     /// - parent_identifier:    String that contains the hierarchical structure: parentidx_childidx_childofchildidx ...
-    /// 
+    ///
     /// Returns the result of the dot string that describes this node
-    fn to_dot_collapsed_view(&self,node_index: &str, name: &str, inverted: bool, _ports: &OpticPorts, mut parent_identifier: String) -> Result<String>{
+    fn to_dot_collapsed_view(
+        &self,
+        node_index: &str,
+        name: &str,
+        inverted: bool,
+        _ports: &OpticPorts,
+        mut parent_identifier: String,
+    ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
-        let node_name = format!("{}{}", name, inv_string);        
-        parent_identifier = if parent_identifier == "" {format!("i{}", node_index)} else {format!("{}_i{}", &parent_identifier, node_index)};
+        let node_name = format!("{}{}", name, inv_string);
+        parent_identifier = if parent_identifier == "" {
+            format!("i{}", node_index)
+        } else {
+            format!("{}_i{}", &parent_identifier, node_index)
+        };
         let mut dot_str = format!("\t{} [\n\t\tshape=plaintext\n", parent_identifier);
         let mut indent_level = 2;
-        dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, _ports, inverted));
+        dot_str.push_str(&self.add_html_like_labels(
+            &node_name,
+            &mut indent_level,
+            _ports,
+            inverted,
+        ));
         Ok(dot_str)
+    }
+    fn invert_graph(&mut self) {
+        for node in self.g.node_weights_mut() {
+            node.borrow_mut().set_inverted(true);
+        }
+        for edge in self.g.edge_weights_mut() {
+            edge.inverse();
+        }
+        self.g.reverse();
     }
 }
 
@@ -548,16 +612,26 @@ impl Optical for NodeGroup {
     ) -> Result<LightResult> {
         self.analyze_group(incoming_data, analyzer_type)
     }
+    fn set_inverted(&mut self, inverted: bool) {
+        self.is_inverted = inverted;
+    }
 }
 
 impl Dottable for NodeGroup {
-    fn to_dot(&self, node_index: &str, name: &str, inverted: bool, _ports: &OpticPorts, parent_identifier: String) -> Result<String> {
-
+    fn to_dot(
+        &self,
+        node_index: &str,
+        name: &str,
+        inverted: bool,
+        _ports: &OpticPorts,
+        parent_identifier: String,
+    ) -> Result<String> {
+        let mut cloned_self=self.clone();
+        if self.is_inverted {cloned_self.invert_graph();}
         if self.expand_view {
-            self.to_dot_expanded_view(node_index, name, inverted, parent_identifier)
-        }
-        else{
-            self.to_dot_collapsed_view(node_index, name, inverted, _ports, parent_identifier)
+            cloned_self.to_dot_expanded_view(node_index, name, inverted, parent_identifier)
+        } else {
+            cloned_self.to_dot_collapsed_view(node_index, name, inverted, _ports, parent_identifier)
         }
     }
 
@@ -565,7 +639,6 @@ impl Dottable for NodeGroup {
         "yellow"
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -585,16 +658,16 @@ mod test {
     #[test]
     fn add_node() {
         let mut og = NodeGroup::new();
-        let sub_node = OpticNode::new("test", Dummy);
+        let sub_node = OpticNode::new("test", Dummy::default());
         og.add_node(sub_node);
         assert_eq!(og.g.node_count(), 1);
     }
     #[test]
     fn connect_nodes() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
         // wrong port names
         assert!(og.connect_nodes(sn1_i, "wrong", sn2_i, "front").is_err());
@@ -613,9 +686,9 @@ mod test {
     #[test]
     fn connect_nodes_update_port_mapping() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
 
         og.map_input_port(sn2_i, "front", "input").unwrap();
@@ -630,9 +703,9 @@ mod test {
     #[test]
     fn input_nodes() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node1 = OpticNode::new("test2", Dummy);
+        let sub_node1 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node1);
         let sub_node3 = OpticNode::new("test3", BeamSplitter::new(0.5));
         let sn3_i = og.add_node(sub_node3);
@@ -643,11 +716,11 @@ mod test {
     #[test]
     fn output_nodes() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
         let sub_node1 = OpticNode::new("test2", BeamSplitter::new(0.5));
         let sn2_i = og.add_node(sub_node1);
-        let sub_node3 = OpticNode::new("test3", Dummy);
+        let sub_node3 = OpticNode::new("test3", Dummy::default());
         let sn3_i = og.add_node(sub_node3);
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
         og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front")
@@ -657,9 +730,9 @@ mod test {
     #[test]
     fn map_input_port() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
 
@@ -682,7 +755,7 @@ mod test {
     #[test]
     fn map_input_port_half_connected_nodes() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
         let sub_node2 = OpticNode::new("test2", BeamSplitter::default());
         let sn2_i = og.add_node(sub_node2);
@@ -699,9 +772,9 @@ mod test {
     #[test]
     fn map_output_port() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
 
@@ -726,7 +799,7 @@ mod test {
         let mut og = NodeGroup::new();
         let sub_node1 = OpticNode::new("test1", BeamSplitter::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
         og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "front")
             .unwrap();
@@ -746,9 +819,9 @@ mod test {
     #[test]
     fn ports() {
         let mut og = NodeGroup::new();
-        let sub_node1 = OpticNode::new("test1", Dummy);
+        let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node2 = OpticNode::new("test2", Dummy);
+        let sub_node2 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node2);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         assert!(og.ports().inputs().is_empty());

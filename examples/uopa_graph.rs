@@ -14,13 +14,13 @@ fn main() -> Result<(), OpossumError> {
     println!("default opticscenery: {:?}", scenery);
     println!("export to `dot` format: {}", scenery.to_dot()?);
 
-    let pulse_generation_split_node = scenery.add_element("Pulse Generation", Dummy);
-    let u_opa_1_node = scenery.add_element("uOPA Stage 1", Dummy);
-    let u_opa_2_node = scenery.add_element("uOPA Stage 2", Dummy);
-    let pump_pre_amplifier_node = scenery.add_element("Pump Pre-Amplifier", Dummy);
-    let pump_main_amplifier_node = scenery.add_element("Pump Main-Amplifier", Dummy);
-    let pump_compressor_node = scenery.add_element("Pump Compressor", Dummy);
-    let pump_shg_node = scenery.add_element("Pump SHG", Dummy);
+    let pulse_generation_split_node = scenery.add_element("Pulse Generation", Dummy::default());
+    let u_opa_1_node = scenery.add_element("uOPA Stage 1", Dummy::default());
+    let u_opa_2_node = scenery.add_element("uOPA Stage 2", Dummy::default());
+    let pump_pre_amplifier_node = scenery.add_element("Pump Pre-Amplifier", Dummy::default());
+    let pump_main_amplifier_node = scenery.add_element("Pump Main-Amplifier", Dummy::default());
+    let pump_compressor_node = scenery.add_element("Pump Compressor", Dummy::default());
+    let pump_shg_node = scenery.add_element("Pump SHG", Dummy::default());
     let pump_splitter_node = scenery.add_element("Pump Beam Splitter", BeamSplitter::default());
 
     scenery.connect_nodes(pulse_generation_split_node, "rear", u_opa_1_node, "front")?;
@@ -63,25 +63,25 @@ fn main() -> Result<(), OpossumError> {
     let mut scenery_2 = OpticScenery::new();
     scenery_2.set_description("PHELIX uOPA Pump Pre-Amplifier".into());
 
-    let spm_node = scenery_2.add_element("SPM", Dummy);
-    let circ1_node = scenery_2.add_element("Circulator Port 1", Dummy);
-    let circ2_node = scenery_2.add_element("Circulator Port 2", Dummy);
-    let circ3_node = scenery_2.add_element("Circulator Port 3", Dummy);
-    let cfbg_node = scenery_2.add_element("CFBG", Dummy);
-    let isolator1_node = scenery_2.add_element("FI", Dummy);
-    let tap1_node = scenery_2.add_element("Tap", Dummy);
-    let diode1_node = scenery_2.add_element("Laser Diode", Dummy);
-    let wdm_node = scenery_2.add_element("WDM", Dummy);
-    let yb_fiber1_node = scenery_2.add_element("Yb-Fiber 1", Dummy);
-    let tap2_node = scenery_2.add_element("Tap", Dummy);
-    let aom_node = scenery_2.add_element("AOM", Dummy);
-    let isolator2_node = scenery_2.add_element("FI", Dummy);
-    let yb_fiber2_node_node = scenery_2.add_element("Yb-Fiber 2", Dummy);
-    let dichroic_node = scenery_2.add_element("DCM", Dummy);
-    let diode2_node = scenery_2.add_element("Laser Diode", Dummy);
+    let spm_node = scenery_2.add_element("SPM", Dummy::default());
+    let circ1_node = scenery_2.add_element("Circulator Port 1", Dummy::default());
+    let circ2_node = scenery_2.add_element("Circulator Port 2", Dummy::default());
+    let circ3_node = scenery_2.add_element("Circulator Port 3", Dummy::default());
+    let cfbg_node = scenery_2.add_element("CFBG", Dummy::default());
+    let isolator1_node = scenery_2.add_element("FI", Dummy::default());
+    let tap1_node = scenery_2.add_element("Tap", Dummy::default());
+    let diode1_node = scenery_2.add_element("Laser Diode", Dummy::default());
+    let wdm_node = scenery_2.add_element("WDM", Dummy::default());
+    let yb_fiber1_node = scenery_2.add_element("Yb-Fiber 1", Dummy::default());
+    let tap2_node = scenery_2.add_element("Tap", Dummy::default());
+    let aom_node = scenery_2.add_element("AOM", Dummy::default());
+    let isolator2_node = scenery_2.add_element("FI", Dummy::default());
+    let yb_fiber2_node_node = scenery_2.add_element("Yb-Fiber 2", Dummy::default());
+    let dichroic_node = scenery_2.add_element("DCM", Dummy::default());
+    let diode2_node = scenery_2.add_element("Laser Diode", Dummy::default());
     // let monitor1_node = scenery_2.add_element("Monitor", Dummy);
-    let monitor2_node = scenery_2.add_element("Monitor", Dummy);
-    let monitor3_node = scenery_2.add_element("Monitor", Dummy);
+    let monitor2_node = scenery_2.add_element("Monitor", Dummy::default());
+    let monitor3_node = scenery_2.add_element("Monitor", Dummy::default());
 
     scenery_2.connect_nodes(spm_node, "rear", circ1_node, "front")?;
     scenery_2.connect_nodes(circ1_node, "rear", circ2_node, "front")?;
@@ -106,14 +106,14 @@ fn main() -> Result<(), OpossumError> {
     let mut scenery_3 = OpticScenery::new();
     scenery_3.set_description("PHELIX uOPA Pump Regenerative Main-Amplifier".into());
 
-    let _pol1_node = scenery_2.add_element("Picker Polarizer", Dummy);
-    let _pc1_node = scenery_2.add_element("Pulse Picker PC", Dummy);
-    let _pol2_node = scenery_2.add_element("Cavity Polarizer", Dummy);
-    let _yb_yag_node = scenery_2.add_element("Yb:YAG", Dummy);
-    let _pc2_node = scenery_2.add_element("Cavity PC", Dummy);
-    let _qwp_node = scenery_2.add_element("Quarter Waveplate", Dummy);
-    let _mirror1_node = scenery_2.add_element("Curved Mirror 1", Dummy);
-    let _mirror2_node = scenery_2.add_element("Curved Mirror 1", Dummy);
+    let _pol1_node = scenery_2.add_element("Picker Polarizer", Dummy::default());
+    let _pc1_node = scenery_2.add_element("Pulse Picker PC", Dummy::default());
+    let _pol2_node = scenery_2.add_element("Cavity Polarizer", Dummy::default());
+    let _yb_yag_node = scenery_2.add_element("Yb:YAG", Dummy::default());
+    let _pc2_node = scenery_2.add_element("Cavity PC", Dummy::default());
+    let _qwp_node = scenery_2.add_element("Quarter Waveplate", Dummy::default());
+    let _mirror1_node = scenery_2.add_element("Curved Mirror 1", Dummy::default());
+    let _mirror2_node = scenery_2.add_element("Curved Mirror 1", Dummy::default());
     // scenery_2.connect_nodes(spm_node, circ_node);
 
     // let mira_node1          =scenery.add_node(OpticNode::new("Mira", Box::new(NodeDummy)));

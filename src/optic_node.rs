@@ -22,11 +22,11 @@ impl OpticNode {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust
     /// use opossum::optic_node::OpticNode;
     /// use opossum::nodes::Dummy;
     ///
-    /// let node=OpticNode::new("My node", Dummy);
+    /// let node=OpticNode::new("My node", Dummy::default());
     /// ```
     pub fn new<T: OpticComponent + 'static>(name: &str, node_type: T) -> Self {
         let ports = node_type.ports();
@@ -65,7 +65,8 @@ impl OpticNode {
     ///
     /// This means that the node is used in "reverse" direction. All output port become input parts and vice versa.
     pub fn set_inverted(&mut self, inverted: bool) {
-        self.ports.set_inverted(inverted)
+        self.ports.set_inverted(inverted);
+        self.node.set_inverted(inverted);
     }
     /// Returns if the [`OpticNode`] is used in reversed direction.
     pub fn inverted(&self) -> bool {
@@ -126,11 +127,12 @@ pub trait Optical {
         Ok(LightResult::default())
     }
     fn export_data(&self, _file_name: &str) {
-        println!("no export_data function implemented")
+        println!("no export_data function implemented for nodetype <{}>", self.node_type())
     }
     fn is_detector(&self) -> bool {
         false
     }
+    fn set_inverted(&mut self, _inverted: bool) {}
 }
 
 /// This trait deals with the translation of the OpticScenery-graph structure to the dot-file format which is needed to visualize the graphs
@@ -366,39 +368,39 @@ impl dyn OpticComponent + 'static {
 #[cfg(test)]
 mod test {
     use super::OpticNode;
-    use crate::nodes::{Dummy, Detector};
+    use crate::nodes::{Detector, Dummy};
     #[test]
     fn new() {
-        let node = OpticNode::new("Test", Dummy);
+        let node = OpticNode::new("Test", Dummy::default());
         assert_eq!(node.name, "Test");
         assert_eq!(node.inverted(), false);
     }
     #[test]
     fn set_name() {
-        let mut node = OpticNode::new("Test", Dummy);
+        let mut node = OpticNode::new("Test", Dummy::default());
         node.set_name("Test2".into());
         assert_eq!(node.name, "Test2")
     }
     #[test]
     fn name() {
-        let node = OpticNode::new("Test", Dummy);
+        let node = OpticNode::new("Test", Dummy::default());
         assert_eq!(node.name(), "Test")
     }
     #[test]
     fn set_inverted() {
-        let mut node = OpticNode::new("Test", Dummy);
+        let mut node = OpticNode::new("Test", Dummy::default());
         node.set_inverted(true);
         assert_eq!(node.inverted(), true)
     }
     #[test]
     fn inverted() {
-        let mut node = OpticNode::new("Test", Dummy);
+        let mut node = OpticNode::new("Test", Dummy::default());
         node.set_inverted(true);
         assert_eq!(node.inverted(), true)
     }
     #[test]
     fn is_detector() {
-        let node = OpticNode::new("Test", Dummy);
+        let node = OpticNode::new("Test", Dummy::default());
         assert_eq!(node.is_detector(), false);
         let node = OpticNode::new("Test", Detector::default());
         assert_eq!(node.is_detector(), true)
@@ -406,7 +408,7 @@ mod test {
     #[test]
     #[ignore]
     fn to_dot() {
-        let node = OpticNode::new("Test", Dummy);
+        let node = OpticNode::new("Test", Dummy::default());
         assert_eq!(
             node.to_dot("i0", "".to_owned()).unwrap(),
             "  i0 [label=\"Test\"]\n".to_owned()
@@ -415,7 +417,7 @@ mod test {
     #[test]
     #[ignore]
     fn to_dot_inverted() {
-        let mut node = OpticNode::new("Test", Dummy);
+        let mut node = OpticNode::new("Test", Dummy::default());
         node.set_inverted(true);
         assert_eq!(
             node.to_dot("i0", "".to_owned()).unwrap(),
@@ -424,7 +426,7 @@ mod test {
     }
     #[test]
     fn node_type() {
-        let node = OpticNode::new("Test", Dummy);
+        let node = OpticNode::new("Test", Dummy::default());
         assert_eq!(node.node_type(), "dummy");
     }
 }

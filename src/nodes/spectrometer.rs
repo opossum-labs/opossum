@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use uom::si::length::nanometer;
 
 use crate::lightdata::LightData;
