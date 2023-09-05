@@ -28,8 +28,14 @@ pub struct BeamSplitter {
 
 impl BeamSplitter {
     /// Creates a new [`BeamSplitter`] with a given splitting ratio.
-    pub fn new(ratio: f64) -> Self {
-        Self { ratio }
+    pub fn new(ratio: f64) -> Result<Self> {
+        if (0.0..1.0).contains(&ratio) {
+            Ok(Self { ratio })
+        } else {
+            Err(OpossumError::Other(
+                "splitting ration must be within (0.0..1.0)".into(),
+            ))
+        }
     }
 
     /// Returns the splitting ratio of this [`BeamSplitter`].
@@ -38,8 +44,15 @@ impl BeamSplitter {
     }
 
     /// Sets the splitting ratio of this [`BeamSplitter`].
-    pub fn set_ratio(&mut self, ratio: f64) {
-        self.ratio = ratio;
+    pub fn set_ratio(&mut self, ratio: f64) -> Result<()> {
+        if (0.0..1.0).contains(&ratio) {
+            self.ratio = ratio;
+            Ok(())
+        } else {
+            Err(OpossumError::Other(
+                "splitting ration must be within (0.0..1.0)".into(),
+            ))
+        }
     }
     fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
         let in1 = incoming_data.get("input1");
@@ -135,4 +148,3 @@ impl Dottable for BeamSplitter {
         "lightpink"
     }
 }
-
