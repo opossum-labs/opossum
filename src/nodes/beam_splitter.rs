@@ -29,7 +29,7 @@ pub struct BeamSplitter {
 impl BeamSplitter {
     /// Creates a new [`BeamSplitter`] with a given splitting ratio.
     pub fn new(ratio: f64) -> Result<Self> {
-        if (0.0..1.0).contains(&ratio) {
+        if (0.0..=1.0).contains(&ratio) {
             Ok(Self { ratio })
         } else {
             Err(OpossumError::Other(
@@ -45,7 +45,7 @@ impl BeamSplitter {
 
     /// Sets the splitting ratio of this [`BeamSplitter`].
     pub fn set_ratio(&mut self, ratio: f64) -> Result<()> {
-        if (0.0..1.0).contains(&ratio) {
+        if (0.0..=1.0).contains(&ratio) {
             self.ratio = ratio;
             Ok(())
         } else {
@@ -118,7 +118,7 @@ impl Default for BeamSplitter {
 }
 impl Optical for BeamSplitter {
     fn node_type(&self) -> &str {
-        "ideal beam splitter"
+        "beam splitter"
     }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
@@ -146,5 +146,46 @@ impl Optical for BeamSplitter {
 impl Dottable for BeamSplitter {
     fn node_color(&self) -> &str {
         "lightpink"
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn new() {
+        let splitter=BeamSplitter::new(0.5);
+        assert!(splitter.is_ok());
+        assert_eq!(splitter.unwrap().ratio, 0.5);
+        assert!(BeamSplitter::new(-0.01).is_err());
+        assert!(BeamSplitter::new(1.01).is_err());
+    }
+    #[test]
+    fn default() {
+        let splitter=BeamSplitter::default();
+        assert_eq!(splitter.ratio, 0.5);
+    }
+    #[test]
+    fn ratio() {
+        let splitter=BeamSplitter::new(0.5).unwrap();
+        assert_eq!(splitter.ratio(), 0.5);
+    }
+    #[test]
+    fn set_ratio() {
+        let mut splitter=BeamSplitter::new(0.0).unwrap();
+        assert!(splitter.set_ratio(1.0).is_ok());
+        assert_eq!(splitter.ratio, 1.0);
+        assert!(splitter.set_ratio(-0.1).is_err());
+        assert!(splitter.set_ratio(1.1).is_err());
+    }
+    #[test]
+    fn node_type() {
+        let splitter=BeamSplitter::new(0.0).unwrap();
+        assert_eq!(splitter.node_type(), "beam splitter");
+    }
+    #[test]
+    fn node_color() {
+        let splitter=BeamSplitter::new(0.0).unwrap();
+        assert_eq!(splitter.node_color(), "lightpink");
     }
 }
