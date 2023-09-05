@@ -707,7 +707,7 @@ mod test {
         let sn1_i = og.add_node(sub_node1);
         let sub_node1 = OpticNode::new("test2", Dummy::default());
         let sn2_i = og.add_node(sub_node1);
-        let sub_node3 = OpticNode::new("test3", BeamSplitter::new(0.5));
+        let sub_node3 = OpticNode::new("test3", BeamSplitter::new(0.5).unwrap());
         let sn3_i = og.add_node(sub_node3);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         og.connect_nodes(sn2_i, "rear", sn3_i, "input1").unwrap();
@@ -718,7 +718,7 @@ mod test {
         let mut og = NodeGroup::new();
         let sub_node1 = OpticNode::new("test1", Dummy::default());
         let sn1_i = og.add_node(sub_node1);
-        let sub_node1 = OpticNode::new("test2", BeamSplitter::new(0.5));
+        let sub_node1 = OpticNode::new("test2", BeamSplitter::new(0.5).unwrap());
         let sn2_i = og.add_node(sub_node1);
         let sub_node3 = OpticNode::new("test3", Dummy::default());
         let sn3_i = og.add_node(sub_node3);
