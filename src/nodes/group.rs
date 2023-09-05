@@ -327,10 +327,11 @@ impl NodeGroup {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> Result<LightResult> {
+        if self.is_inverted {self.invert_graph();}
         let g_clone = self.g.clone();
         let mut group_srcs = g_clone.externals(Direction::Incoming);
         let mut light_result = LightResult::default();
-        let sorted = toposort(&self.g, None).unwrap();
+        let sorted = toposort(&g_clone, None).unwrap();
         for idx in sorted {
             // Check if node is group src node
             let incoming_edges = if group_srcs.any(|gs| gs == idx) {
@@ -348,9 +349,9 @@ impl NodeGroup {
             } else {
                 self.incoming_edges(idx)
             };
-            let node = self.g.node_weight(idx).unwrap();
+            let node = g_clone.node_weight(idx).unwrap();
             let outgoing_edges = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
-            let mut group_sinks = self.g.externals(Direction::Outgoing);
+            let mut group_sinks = g_clone.externals(Direction::Outgoing);
             // Check if node is group sink node
             if group_sinks.any(|gs| gs == idx) {
                 let portmap = if self.is_inverted { &self.input_port_map} else { &self.output_port_map};
@@ -367,6 +368,7 @@ impl NodeGroup {
                 }
             }
         }
+        if self.is_inverted {self.invert_graph();} // revert initial inversion (if necessary)
         Ok(light_result)
     }
 
@@ -611,9 +613,6 @@ impl Optical for NodeGroup {
         self.analyze_group(incoming_data, analyzer_type)
     }
     fn set_inverted(&mut self, inverted: bool) {
-        if inverted {
-            self.invert_graph();
-        }
         self.is_inverted = inverted;
     }
 }
@@ -627,10 +626,12 @@ impl Dottable for NodeGroup {
         _ports: &OpticPorts,
         parent_identifier: String,
     ) -> Result<String> {
+        let mut cloned_self=self.clone();
+        if self.is_inverted {cloned_self.invert_graph();}
         if self.expand_view {
-            self.to_dot_expanded_view(node_index, name, inverted, parent_identifier)
+            cloned_self.to_dot_expanded_view(node_index, name, inverted, parent_identifier)
         } else {
-            self.to_dot_collapsed_view(node_index, name, inverted, _ports, parent_identifier)
+            cloned_self.to_dot_collapsed_view(node_index, name, inverted, _ports, parent_identifier)
         }
     }
 
