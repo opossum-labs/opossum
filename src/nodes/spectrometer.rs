@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+use serde_derive::Serialize;
 use uom::si::length::nanometer;
 
 use crate::lightdata::LightData;
@@ -13,7 +14,7 @@ use std::fmt::Debug;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[non_exhaustive]
-#[derive(Debug, Default, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Clone, Copy, Serialize)]
 /// Type of the [`Spectrometer`]. This is currently not used.
 pub enum SpectrometerType {
     /// an ideal energy meter
@@ -22,7 +23,7 @@ pub enum SpectrometerType {
     /// Ocean Optics HR2000
     HR2000,
 }
-#[derive(Default)]
+#[derive(Default, Serialize)]
 /// (ideal) spectrometer
 ///
 /// It normally measures / displays the spectrum of the incoming light.
@@ -36,6 +37,7 @@ pub enum SpectrometerType {
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 pub struct Spectrometer {
+    #[serde(skip)]
     light_data: Option<LightData>,
     spectrometer_type: SpectrometerType,
 }

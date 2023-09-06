@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use std::collections::HashMap;
+use serde_derive::Serialize;
 
 use crate::{
     analyzer::AnalyzerType,
@@ -12,7 +13,7 @@ use crate::{
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Debug)]
+#[derive(Debug,Serialize)]
 /// An ideal beamsplitter node with a given splitting ratio.
 ///
 /// ## Optical Ports

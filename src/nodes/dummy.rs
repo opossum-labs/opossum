@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use std::collections::HashMap;
+use serde_derive::Serialize;
 
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
@@ -8,7 +9,7 @@ use crate::optic_ports::OpticPorts;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
 /// A fake / dummy component without any optical functionality.
 ///
 /// Any [`LightResult`] is directly forwarded without any modification. It is mainly used for

@@ -2,6 +2,8 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use serde_derive::Serialize;
+
 use crate::{
     error::OpossumError,
     lightdata::LightData,
@@ -20,7 +22,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - none
 ///   - Outputs
 ///     - `out1`
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct Source {
     light_data: Option<LightData>,
 }

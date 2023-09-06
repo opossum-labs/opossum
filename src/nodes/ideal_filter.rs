@@ -1,4 +1,6 @@
 #![warn(missing_docs)]
+use serde_derive::Serialize;
+
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
 use crate::lightdata::{DataEnergy, LightData};
@@ -10,7 +12,7 @@ use std::collections::HashMap;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 /// Config data for an [`IdealFilter`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum FilterType {
     /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0
     Constant(f64),

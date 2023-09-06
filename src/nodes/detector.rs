@@ -1,4 +1,6 @@
 #![warn(missing_docs)]
+use serde_derive::Serialize;
+
 use crate::lightdata::LightData;
 use crate::{
     error::OpossumError,
@@ -10,7 +12,7 @@ use std::fmt::Debug;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Default)]
+#[derive(Default, Serialize)]
 /// This node represents an universal detector (so far for test / debugging purposes).
 ///
 /// Any [`LightData`] coming in will be stored internally for later display / export.

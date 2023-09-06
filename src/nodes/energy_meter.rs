@@ -1,4 +1,6 @@
 #![warn(missing_docs)]
+use serde_derive::Serialize;
+
 use crate::lightdata::LightData;
 use crate::{
     error::OpossumError,
@@ -11,7 +13,7 @@ use std::fmt::Debug;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[non_exhaustive]
-#[derive(Debug, Default, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Clone, Copy, Serialize)]
 /// Type of the [`EnergyMeter`]. This is currently not used.
 pub enum Metertype {
     /// an ideal energy meter
@@ -20,7 +22,7 @@ pub enum Metertype {
     /// an ideal power meter (currently not used)
     IdealPowerMeter,
 }
-#[derive(Default)]
+#[derive(Default, Serialize)]
 /// (ideal) energy / power meter.
 ///
 /// It normally measures the total energy of the incoming light regardless of the wavelength, position, angle, polarization etc...
@@ -102,7 +104,7 @@ impl Dottable for EnergyMeter {
 
 #[cfg(test)]
 mod test {
-    use crate::{lightdata::DataEnergy, spectrum::create_he_ne_spectrum, analyzer::AnalyzerType};
+    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
 
     use super::*;
     #[test]
@@ -148,7 +150,7 @@ mod test {
                 spectrum: create_he_ne_spectrum(1.0),
             })),
         );
-        let result=meter.analyze(input, &AnalyzerType::Energy);
+        let result = meter.analyze(input, &AnalyzerType::Energy);
         assert!(result.is_ok());
     }
 }
