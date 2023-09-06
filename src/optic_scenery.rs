@@ -1,3 +1,4 @@
+use std::borrow::BorrowMut;
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -7,7 +8,7 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
-use crate::optic_node::{LightResult, OpticComponent, OpticNode};
+use crate::optic_node::{LightResult, OpticComponent, OpticNode, Optical};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
@@ -21,7 +22,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// to be considered for an analysis.
 #[derive(Default, Debug, Clone)]
 pub struct OpticScenery {
-    g: DiGraph<Rc<RefCell<OpticNode>>, Light>,
+    g: DiGraph<Rc<RefCell<dyn Optical>>, Light>,
     description: String,
 }
 
@@ -34,7 +35,7 @@ impl OpticScenery {
     ///
     /// This command just adds an [`OpticNode`] to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`].
-    pub fn add_node(&mut self, node: OpticNode) -> NodeIndex {
+    pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         self.g.add_node(Rc::new(RefCell::new(node)))
     }
     /// Add a given optical element to the graph of this [`OpticScenery`].
@@ -44,7 +45,7 @@ impl OpticScenery {
     /// automatically generated. It serves as a short-cut to the `add_node` function.
     pub fn add_element<T: OpticComponent + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
         self.g
-            .add_node(Rc::new(RefCell::new(OpticNode::new(name, t))))
+            .add_node(Rc::new(RefCell::new(t)))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -128,15 +129,15 @@ impl OpticScenery {
     /// # Errors
     ///
     /// This function will return [`OpossumError::OpticScenery`]if the node does not exist.
-    pub fn node(&self, node: NodeIndex) -> Result<Rc<RefCell<OpticNode>>> {
-        if let Some(node) = self.g.node_weight(node) {
-            Ok(node.to_owned())
-        } else {
-            Err(OpossumError::OpticScenery(
-                "node index does not exist".into(),
-            ))
-        }
-    }
+    // pub fn node(&self, node: NodeIndex) -> Result<Rc<RefCell<dyn Optical>>> {
+    //     if let Some(node) = self.g.node_weight(node) {
+    //         Ok(*node)
+    //     } else {
+    //         Err(OpossumError::OpticScenery(
+    //             "node index does not exist".into(),
+    //         ))
+    //     }
+    // }
 
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self) -> String {
@@ -160,7 +161,7 @@ impl OpticScenery {
             )),
         }
     }
-    fn check_if_group(&self, node_ref: &OpticNode) -> bool {
+    fn check_if_group<T: Optical>(&self, node_ref: T) -> bool {
         if node_ref.node_type() == "group" {
             true
         } else {
@@ -181,24 +182,24 @@ impl OpticScenery {
             format!("{}_i{}", &parent_identifier, end_node.index())
         };
 
-        if self.check_if_group(&node) {
-            let group_node: &NodeGroup = self.cast_node_to_group(&node)?;
-            Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
-        } else {
+        // if self.check_if_group(node) {
+        //     let group_node: &NodeGroup = self.cast_node_to_group(&node)?;
+        //     Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
+        // } else {
             Ok(format!("i{}:{}", end_node.index(), light_port))
-        }
+        // }
     }
 
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self) -> Result<String> {
         let mut dot_string = self.add_dot_header();
 
-        for node_idx in self.g.node_indices() {
-            let node = self.g.node_weight(node_idx).unwrap();
-            dot_string += &node
-                .borrow()
-                .to_dot(&format!("{}", node_idx.index()), "".to_owned())?;
-        }
+        // for node_idx in self.g.node_indices() {
+        //     let node = self.g.node_weight(node_idx).unwrap();
+        //     dot_string += &node
+        //         .borrow()
+        //         .to_dot(&format!("{}", node_idx.index()), "".to_owned())?;
+        // }
         for edge in self.g.edge_indices() {
             let light: &Light = self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
@@ -226,8 +227,11 @@ impl OpticScenery {
         if let Ok(sorted) = sorted {
             for idx in sorted {
                 let node = self.g.node_weight(idx).unwrap();
-                let incoming_edges = self.incoming_edges(idx);
-                let outgoing_edges = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
+                let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
+                let outgoing_edges: HashMap<String, Option<LightData>> = HashMap::new();
+                
+                // node.borrow_mut()
+                // .analyze(incoming_edges, analyzer_type)?;
                 for outgoing_edge in outgoing_edges {
                     self.set_outgoing_edge_data(idx, outgoing_edge.0, outgoing_edge.1)
                 }
@@ -285,14 +289,16 @@ impl OpticScenery {
             .filter(|node| node.borrow().is_detector());
         println!("Sources:");
         for idx in src_nodes.clone() {
-            let node = self.node(idx).unwrap();
+            let node = self.g.node_weight(idx).unwrap();
             println!("{:?}", node.borrow());
-            node.borrow().export_data();
+            let file_name = node.borrow().name().to_owned() + ".svg";
+            node.borrow().export_data(&file_name);
         }
         println!("Detectors:");
         for node in detector_nodes {
             println!("{:?}", node.borrow());
-            node.borrow().export_data();
+            let file_name = node.borrow().name().to_owned() + ".svg";
+            node.borrow().export_data(&file_name);
         }
     }
 }
@@ -311,7 +317,7 @@ mod test {
     #[test]
     fn add_node() {
         let mut scenery = OpticScenery::new();
-        scenery.add_node(OpticNode::new("Test", Dummy::default()));
+        scenery.add_node(Dummy::default());
         assert_eq!(scenery.g.node_count(), 1);
     }
     #[test]

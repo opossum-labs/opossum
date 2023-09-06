@@ -9,6 +9,11 @@ use std::collections::HashMap;
 pub type LightResult = HashMap<String, Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
 
+pub struct OpticNodeCommon {
+    pub name: String,
+    pub ports: OpticPorts,
+}
+
 /// An [`OpticNode`] is the basic struct representing an optical component.
 pub struct OpticNode {
     name: String,
@@ -76,13 +81,13 @@ impl OpticNode {
     pub fn ports(&self) -> &OpticPorts {
         &self.ports
     }
-    pub fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> Result<LightResult> {
-        self.node.analyze(incoming_data, analyzer_type)
-    }
+    // pub fn analyze(
+    //     &mut self,
+    //     incoming_data: LightResult,
+    //     analyzer_type: &AnalyzerType,
+    // ) -> Result<LightResult> {
+    //     self.node.analyze(incoming_data, analyzer_type)
+    // }
     pub fn export_data(&self) {
         let file_name = self.name.to_owned() + ".svg";
         self.node.export_data(&file_name);
@@ -102,7 +107,10 @@ impl Debug for OpticNode {
 }
 
 /// This trait must be implemented by all concrete optical components.
-pub trait Optical {
+pub trait Optical: Dottable {
+    fn name(&self) -> &str {
+        "unknown"
+    }
     /// Return the type of the optical component (lens, filter, ...). The default implementation returns "undefined".
     fn node_type(&self) -> &str {
         "undefined"
@@ -127,14 +135,25 @@ pub trait Optical {
         Ok(LightResult::default())
     }
     fn export_data(&self, _file_name: &str) {
-        println!("no export_data function implemented for nodetype <{}>", self.node_type())
+        println!(
+            "no export_data function implemented for nodetype <{}>",
+            self.node_type()
+        )
     }
     fn is_detector(&self) -> bool {
         false
     }
     fn set_inverted(&mut self, _inverted: bool) {}
+    fn inverted(&self) -> bool {
+        false
+    }
 }
 
+impl Debug for dyn Optical {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} - {}", self.name(), self.node_type())
+    }
+}
 /// This trait deals with the translation of the OpticScenery-graph structure to the dot-file format which is needed to visualize the graphs
 pub trait Dottable {
     /// Return component type specific code in 'dot' format for `graphviz` visualization.

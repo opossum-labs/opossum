@@ -19,17 +19,17 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///   - Outputs
 ///     - output ports of the referenced [`OpticNode`]
 pub struct NodeReference {
-    reference: Weak<RefCell<OpticNode>>,
+    reference: Weak<RefCell<dyn Optical>>,
 }
 
 impl NodeReference {
-    /// Create new [`OpticNode`] (of type [`NodeReference`]) from another existing [`OpticNode`].
-    pub fn from_node(node: Rc<RefCell<OpticNode>>) -> OpticNode {
-        let node_ref = Self {
-            reference: Rc::downgrade(&node),
-        };
-        OpticNode::new(&format!("Ref: \"{}\"", &node.borrow().name()), node_ref)
-    }
+    // Create new [`OpticNode`] (of type [`NodeReference`]) from another existing [`OpticNode`].
+    // pub fn from_node(node: Rc<RefCell<OpticNode>>) -> OpticNode {
+    //     let node_ref = Self {
+    //         reference: Rc::downgrade(&node),
+    //     };
+    //     OpticNode::new(&format!("Ref: \"{}\"", &node.borrow().name()), node_ref)
+    // }
 }
 
 impl Optical for NodeReference {
