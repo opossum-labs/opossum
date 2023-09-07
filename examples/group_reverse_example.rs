@@ -5,9 +5,8 @@ use opossum::{
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
     nodes::{Detector, Dummy, NodeGroup, Source},
-    optic_node::OpticNode,
     spectrum::create_he_ne_spectrum,
-    OpticScenery, analyzer::AnalyzerEnergy,
+    OpticScenery, analyzer::AnalyzerEnergy, optic_node::Optical,
 };
 
 fn main() -> Result<(), OpossumError> {
@@ -23,16 +22,15 @@ fn main() -> Result<(), OpossumError> {
 
     let mut group = NodeGroup::new();
     group.expand_view(true);
-    let g_n1 = group.add_node(OpticNode::new("A", Dummy::default()));
-    let g_n2 = group.add_node(OpticNode::new("B", Dummy::default()));
+    let g_n1 = group.add_node(Dummy::default());
+    let g_n2 = group.add_node(Dummy::default());
 
     group.connect_nodes(g_n1, "rear", g_n2, "front")?;
     group.map_input_port(g_n1, "front", "in1")?;
     group.map_output_port(g_n2, "rear", "out1")?;
-    let mut groupnode=OpticNode::new("group", group);
-    groupnode.set_inverted(true);
+    group.set_inverted(true);
 
-    let i_g = scenery.add_node(groupnode);
+    let i_g = scenery.add_node(group);
 
     let i_d = scenery.add_element("Detector", Detector::default());
 

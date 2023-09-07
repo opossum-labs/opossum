@@ -1,6 +1,6 @@
 use opossum::error::OpossumError;
 use opossum::nodes::{BeamSplitter, Dummy};
-use opossum::optic_node::OpticNode;
+
 use opossum::OpticScenery;
 
 use std::fs::File;
@@ -10,12 +10,12 @@ fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Fancy Graph with Ports");
 
-    let in1 = scenery.add_node(OpticNode::new("Input", Dummy::default()));
-    let out1 = scenery.add_node(OpticNode::new("Output", Dummy::default()));
-    let bs1 = scenery.add_node(OpticNode::new("Beamsplitter 1", BeamSplitter::default()));
-    let bs2 = scenery.add_node(OpticNode::new("Beamsplitter 2", BeamSplitter::default()));
-    let m1 = scenery.add_node(OpticNode::new("Mirror 1", Dummy::default()));
-    let m2 = scenery.add_node(OpticNode::new("Mirror 2", Dummy::default()));
+    let in1 = scenery.add_node(Dummy::default());
+    let out1 = scenery.add_node(Dummy::default());
+    let bs1 = scenery.add_node(BeamSplitter::default());
+    let bs2 = scenery.add_node(BeamSplitter::default());
+    let m1 = scenery.add_node(Dummy::default());
+    let m2 = scenery.add_node(Dummy::default());
 
     scenery.connect_nodes(in1, "rear", bs1, "input1")?;
     scenery.connect_nodes(bs1, "out1_trans1_refl2", m1, "front")?;

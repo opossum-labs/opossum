@@ -1,4 +1,4 @@
-use std::borrow::BorrowMut;
+
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -8,7 +8,7 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
-use crate::optic_node::{LightResult, OpticComponent, OpticNode, Optical};
+use crate::optic_node::{LightResult, OpticComponent, Optical};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
@@ -129,15 +129,15 @@ impl OpticScenery {
     /// # Errors
     ///
     /// This function will return [`OpossumError::OpticScenery`]if the node does not exist.
-    // pub fn node(&self, node: NodeIndex) -> Result<Rc<RefCell<dyn Optical>>> {
-    //     if let Some(node) = self.g.node_weight(node) {
-    //         Ok(*node)
-    //     } else {
-    //         Err(OpossumError::OpticScenery(
-    //             "node index does not exist".into(),
-    //         ))
-    //     }
-    // }
+    pub fn node(&self, node: NodeIndex) -> Result<Rc<RefCell<dyn Optical>>> {
+        if let Some(node) = self.g.node_weight(node) {
+            Ok(node.clone())
+        } else {
+            Err(OpossumError::OpticScenery(
+                "node index does not exist".into(),
+            ))
+        }
+    }
 
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self) -> String {
@@ -150,17 +150,17 @@ impl OpticScenery {
         dot_string
     }
 
-    fn cast_node_to_group<'a>(&self, ref_node: &'a Ref<'_, OpticNode>) -> Result<&'a NodeGroup> {
-        let node_boxed = (&*ref_node).node();
-        let downcasted_node = node_boxed.downcast_ref::<NodeGroup>();
+    // fn cast_node_to_group<'a>(&self, ref_node: &'a Ref<'_, dyn Optical>) -> Result<&'a NodeGroup> {
+    //     let node_boxed = &*ref_node;
+    //     let downcasted_node = node_boxed.    .downcast_ref::<NodeGroup>();
 
-        match downcasted_node {
-            Some(i) => Ok(i),
-            _ => Err(OpossumError::OpticScenery(
-                "can not cast OpticNode to specific type of NodeGroup!".into(),
-            )),
-        }
-    }
+    //     match downcasted_node {
+    //         Some(i) => Ok(i),
+    //         _ => Err(OpossumError::OpticScenery(
+    //             "can not cast OpticNode to specific type of NodeGroup!".into(),
+    //         )),
+    //     }
+    // }
     fn check_if_group<T: Optical>(&self, node_ref: T) -> bool {
         if node_ref.node_type() == "group" {
             true
