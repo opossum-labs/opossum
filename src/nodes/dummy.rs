@@ -10,7 +10,7 @@ use crate::optic_ports::OpticPorts;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Serialize)]
 /// A fake / dummy component without any optical functionality.
 ///
 /// Any [`LightResult`] is directly forwarded without any modification. It is mainly used for

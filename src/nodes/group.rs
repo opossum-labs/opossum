@@ -661,14 +661,14 @@ mod test {
     #[test]
     fn add_node() {
         let mut og = NodeGroup::new();
-        og.add_node(Dummy::default());
+        og.add_node(Dummy::new("n1"));
         assert_eq!(og.g.node_count(), 1);
     }
     #[test]
     fn connect_nodes() {
         let mut og = NodeGroup::new();
-        let sn1_i = og.add_node(Dummy::default());
-        let sn2_i = og.add_node(Dummy::default());
+        let sn1_i = og.add_node(Dummy::new("n1"));
+        let sn2_i = og.add_node(Dummy::new("n2"));
         // wrong port names
         assert!(og.connect_nodes(sn1_i, "wrong", sn2_i, "front").is_err());
         assert_eq!(og.g.edge_count(), 0);
@@ -686,8 +686,8 @@ mod test {
     #[test]
     fn connect_nodes_update_port_mapping() {
         let mut og = NodeGroup::new();
-        let sn1_i = og.add_node(Dummy::default());
-        let sn2_i = og.add_node(Dummy::default());
+        let sn1_i = og.add_node(Dummy::new("n1"));
+        let sn2_i = og.add_node(Dummy::new("n2"));
 
         og.map_input_port(sn2_i, "front", "input").unwrap();
         og.map_output_port(sn1_i, "rear", "output").unwrap();
@@ -701,8 +701,8 @@ mod test {
     #[test]
     fn input_nodes() {
         let mut og = NodeGroup::new();
-        let sn1_i = og.add_node(Dummy::default());
-        let sn2_i = og.add_node(Dummy::default());
+        let sn1_i = og.add_node(Dummy::new("n1"));
+        let sn2_i = og.add_node(Dummy::new("n2"));
         let sub_node3 = BeamSplitter::new(0.5).unwrap();
         let sn3_i = og.add_node(sub_node3);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
@@ -712,10 +712,10 @@ mod test {
     #[test]
     fn output_nodes() {
         let mut og = NodeGroup::new();
-        let sn1_i = og.add_node(Dummy::default());
+        let sn1_i = og.add_node(Dummy::new("n1"));
         let sub_node1 = BeamSplitter::new(0.5).unwrap();
         let sn2_i = og.add_node(sub_node1);
-        let sn3_i = og.add_node(Dummy::default());
+        let sn3_i = og.add_node(Dummy::new("n3"));
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
         og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front")
             .unwrap();
@@ -724,8 +724,8 @@ mod test {
     #[test]
     fn map_input_port() {
         let mut og = NodeGroup::new();
-        let sn1_i = og.add_node(Dummy::default());
-        let sn2_i = og.add_node(Dummy::default());
+        let sn1_i = og.add_node(Dummy::new("n1"));
+        let sn2_i = og.add_node(Dummy::new("n2"));
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
 
         // wrong port name
@@ -747,8 +747,8 @@ mod test {
     #[test]
     fn map_input_port_half_connected_nodes() {
         let mut og = NodeGroup::new();
-        let sn1_i = og.add_node(Dummy::default());
-        let sn2_i = og.add_node(Dummy::default());
+        let sn1_i = og.add_node(Dummy::new("n1"));
+        let sn2_i = og.add_node(Dummy::new("n2"));
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
 
         // node port already internally connected
@@ -762,8 +762,8 @@ mod test {
     #[test]
     fn map_output_port() {
         let mut og = NodeGroup::new();
-        let sn1_i = og.add_node(Dummy::default());
-        let sn2_i = og.add_node(Dummy::default());
+        let sn1_i = og.add_node(Dummy::new("n1"));
+        let sn2_i = og.add_node(Dummy::new("n2"));
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
 
         // wrong port name
@@ -786,7 +786,7 @@ mod test {
     fn map_output_port_half_connected_nodes() {
         let mut og = NodeGroup::new();
         let sn1_i = og.add_node(BeamSplitter::default());
-        let sn2_i = og.add_node(Dummy::default());
+        let sn2_i = og.add_node(Dummy::new("n2"));
         og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "front")
             .unwrap();
 
@@ -805,8 +805,8 @@ mod test {
     #[test]
     fn ports() {
         let mut og = NodeGroup::new();
-        let sn1_i = og.add_node(Dummy::default());
-        let sn2_i = og.add_node(Dummy::default());
+        let sn1_i = og.add_node(Dummy::new("n1"));
+        let sn2_i = og.add_node(Dummy::new("n2"));
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         assert!(og.ports().inputs().is_empty());
         assert!(og.ports().outputs().is_empty());
