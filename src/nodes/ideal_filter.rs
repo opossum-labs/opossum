@@ -2,10 +2,11 @@
 use serde_derive::Serialize;
 
 use crate::analyzer::AnalyzerType;
+use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::lightdata::{DataEnergy, LightData};
-use crate::optic_node::{Dottable, LightResult, Optical};
 use crate::optic_ports::OpticPorts;
+use crate::optical::{LightResult, Optical};
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
@@ -132,9 +133,9 @@ impl Optical for IdealFilter {
     }
     fn analyze(
         &mut self,
-        incoming_data: crate::optic_node::LightResult,
+        incoming_data: crate::optical::LightResult,
         analyzer_type: &crate::analyzer::AnalyzerType,
-    ) -> Result<crate::optic_node::LightResult> {
+    ) -> Result<crate::optical::LightResult> {
         match analyzer_type {
             AnalyzerType::Energy => self.analyze_energy(incoming_data),
             _ => Err(OpossumError::Analysis(

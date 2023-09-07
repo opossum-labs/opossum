@@ -7,8 +7,8 @@ use serde_derive::Serialize;
 use crate::{
     error::OpossumError,
     lightdata::LightData,
-    optic_node::{Dottable, LightResult, Optical},
-    optic_ports::OpticPorts,
+    optical::{LightResult, Optical},
+    optic_ports::OpticPorts, dottable::Dottable,
 };
 
 type Result<T> = std::result::Result<T, OpossumError>;

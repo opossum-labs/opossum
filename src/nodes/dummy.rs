@@ -4,7 +4,8 @@ use serde_derive::Serialize;
 
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
-use crate::optic_node::{Dottable, LightResult, Optical};
+use crate::optical::{LightResult, Optical};
+use crate::dottable::Dottable;
 use crate::optic_ports::OpticPorts;
 
 type Result<T> = std::result::Result<T, OpossumError>;

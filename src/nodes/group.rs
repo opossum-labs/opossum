@@ -1,11 +1,12 @@
 #![warn(missing_docs)]
 use crate::analyzer::AnalyzerType;
+use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
-use crate::optic_node::{Dottable, LightResult};
+use crate::optical::{LightResult};
 use crate::{
-    optic_node::{Optical},
+    optical::Optical,
     optic_ports::OpticPorts,
 };
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
@@ -647,7 +648,7 @@ mod test {
     use super::NodeGroup;
     use crate::{
         nodes::{BeamSplitter, Dummy},
-        optic_node::Optical,
+        optical::Optical,
     };
     #[test]
     fn new() {

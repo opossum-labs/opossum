@@ -6,7 +6,7 @@ use opossum::{
     lightdata::{DataEnergy, LightData},
     nodes::{Detector, Dummy, NodeGroup, Source},
     spectrum::create_he_ne_spectrum,
-    OpticScenery, analyzer::AnalyzerEnergy, optic_node::Optical,
+    OpticScenery, analyzer::AnalyzerEnergy, optical::Optical,
 };
 
 fn main() -> Result<(), OpossumError> {

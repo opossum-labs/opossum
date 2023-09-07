@@ -6,7 +6,8 @@ use crate::{
     analyzer::AnalyzerType,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
-    optic_node::{Dottable, LightResult, Optical},
+    optical::{LightResult, Optical},
+    dottable::Dottable,
     optic_ports::OpticPorts,
     spectrum::{merge_spectra, Spectrum},
 };

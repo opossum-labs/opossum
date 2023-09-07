@@ -1,10 +1,11 @@
 #![warn(missing_docs)]
 use serde_derive::Serialize;
 
+use crate::dottable::Dottable;
 use crate::lightdata::LightData;
 use crate::{
     error::OpossumError,
-    optic_node::{Dottable, LightResult, Optical},
+    optical::{LightResult, Optical},
     optic_ports::OpticPorts,
 };
 use std::collections::HashMap;

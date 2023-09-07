@@ -8,7 +8,7 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
-use crate::optic_node::{LightResult, OpticComponent, Optical};
+use crate::optical::{LightResult, OpticComponent, Optical};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;

@@ -4,7 +4,8 @@ use serde_derive::Serialize;
 use crate::lightdata::LightData;
 use crate::{
     error::OpossumError,
-    optic_node::{Dottable, LightResult, Optical},
+    optical::{LightResult, Optical},
+    dottable::Dottable,
     optic_ports::OpticPorts,
 };
 use std::collections::HashMap;

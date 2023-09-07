@@ -4,7 +4,10 @@
 mod light;
 pub mod lightdata;
 /// The basic structure representing an optical element
-pub mod optic_node;
+pub mod optical;
+
+pub mod dottable;
+
 /// The basic structure containing the entire optical model
 mod optic_scenery;
 

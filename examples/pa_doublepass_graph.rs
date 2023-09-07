@@ -2,7 +2,7 @@ use opossum::analyzer::AnalyzerEnergy;
 use opossum::error::OpossumError;
 use opossum::nodes::{Dummy, NodeReference};
 use opossum::OpticScenery;
-use opossum::optic_node::Optical;
+use opossum::optical::Optical;
 use std::fs::File;
 use std::io::Write;
 

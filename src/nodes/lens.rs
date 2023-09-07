@@ -2,8 +2,8 @@ use crate::{
     analyzer::AnalyzerType,
     error::OpossumError,
     lightdata::LightData,
-    optic_node::{Dottable, LightResult, Optical},
     optic_ports::OpticPorts,
+    optical::{LightResult, Optical}, dottable::Dottable,
 };
 use ndarray::{array, Array1};
 use uom::{si::f64::Length, si::length::meter};
@@ -19,7 +19,6 @@ pub struct RealLens {
     z_pos: Length,
     refractive_index: f64,
 }
-
 
 impl RealLens {
     pub fn new(
