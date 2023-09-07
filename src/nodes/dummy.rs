@@ -23,9 +23,22 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - `rear`
 pub struct Dummy {
     is_inverted: bool,
+    name: String
 }
 
+impl Dummy {
+    /// Creates a new [`Dummy`] with a given name.
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            is_inverted: false
+        }
+    }
+}
 impl Optical for Dummy {
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_owned()
+    }
     /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {
         "dummy"

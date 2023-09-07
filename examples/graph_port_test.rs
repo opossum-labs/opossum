@@ -10,12 +10,12 @@ fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Fancy Graph with Ports");
 
-    let in1 = scenery.add_node(Dummy::default());
-    let out1 = scenery.add_node(Dummy::default());
+    let in1 = scenery.add_node(Dummy::new("test1"));
+    let out1 = scenery.add_node(Dummy::new("test2"));
     let bs1 = scenery.add_node(BeamSplitter::default());
     let bs2 = scenery.add_node(BeamSplitter::default());
-    let m1 = scenery.add_node(Dummy::default());
-    let m2 = scenery.add_node(Dummy::default());
+    let m1 = scenery.add_node(Dummy::new("test4"));
+    let m2 = scenery.add_node(Dummy::new("test5"));
 
     scenery.connect_nodes(in1, "rear", bs1, "input1")?;
     scenery.connect_nodes(bs1, "out1_trans1_refl2", m1, "front")?;

@@ -22,8 +22,8 @@ fn main() -> Result<(), OpossumError> {
 
     let mut group = NodeGroup::new();
     group.expand_view(true);
-    let g_n1 = group.add_node(Dummy::default());
-    let g_n2 = group.add_node(Dummy::default());
+    let g_n1 = group.add_node(Dummy::new("node1"));
+    let g_n2 = group.add_node(Dummy::new("node2"));
 
     group.connect_nodes(g_n1, "rear", g_n2, "front")?;
     group.map_input_port(g_n1, "front", "in1")?;

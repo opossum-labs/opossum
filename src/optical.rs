@@ -10,19 +10,6 @@ use std::collections::HashMap;
 pub type LightResult = HashMap<String, Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
 
-pub struct OpticNodeCommon {
-    pub name: String,
-    pub ports: OpticPorts,
-}
-
-/// An [`OpticNode`] is the basic struct representing an optical component.
-// pub struct OpticNode {
-//     name: String,
-//     node: Box<dyn OpticComponent>,
-//     ports: OpticPorts,
-// }
-
-// impl OpticNode {
 //     /// Creates a new [`OpticNode`]. The concrete type of the component must be given while using the `new` function.
 //     /// The node type ist a struct implementing the [`Optical`] trait. Since the size of the node type is not known at compile time it must be added as `Box<nodetype>`.
 //     ///
@@ -34,43 +21,6 @@ pub struct OpticNodeCommon {
 //     ///
 //     /// let node=OpticNode::new("My node", Dummy::default());
 //     /// ```
-//     pub fn new<T: OpticComponent + 'static>(name: &str, node_type: T) -> Self {
-//         let ports = node_type.ports();
-//         Self {
-//             name: name.into(),
-//             node: Box::new(node_type),
-//             ports,
-//         }
-//     }
-//     /// Returns a string representation of the [`OpticNode`] in `graphviz` format including port visualization.
-//     /// This function is normally called by the top-level `to_dot`function within `OpticScenery`.
-//     pub fn to_dot(&self, node_index: &str, parent_identifier: String) -> Result<String> {
-//         self.node.to_dot(
-//             node_index,
-//             &self.name,
-//             self.inverted(),
-//             &self.node.ports(),
-//             parent_identifier,
-//         )
-//     }
-//     // pub fn analyze(
-//     //     &mut self,
-//     //     incoming_data: LightResult,
-//     //     analyzer_type: &AnalyzerType,
-//     // ) -> Result<LightResult> {
-//     //     self.node.analyze(incoming_data, analyzer_type)
-//     // }
-//     pub fn export_data(&self) {
-//         let file_name = self.name.to_owned() + ".svg";
-//         self.node.export_data(&file_name);
-//     }
-// }
-
-// impl Debug for OpticNode {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{} - {:?}", self.name, self.node)
-//     }
-// }
 
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait Optical: Dottable {
@@ -103,6 +53,7 @@ pub trait Optical: Dottable {
         print!("{}: No analyze function defined.", self.node_type());
         Ok(LightResult::default())
     }
+    /// Export analysis data to file with the given name.
     fn export_data(&self, _file_name: &str) {
         println!(
             "no export_data function implemented for nodetype <{}>",
@@ -126,7 +77,7 @@ pub trait Optical: Dottable {
 
 impl Debug for dyn Optical {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} - {}", self.name(), self.node_type())
+        write!(f, "{} ({}) - {:?}", self.name(), self.node_type(), self)
     }
 }
 
@@ -150,8 +101,7 @@ impl dyn OpticComponent + 'static {
 
 #[cfg(test)]
 mod test {
-    //use super::OpticNode;
-    use crate::nodes::{Detector, Dummy};
+    // use crate::nodes::{Detector, Dummy};
     // #[test]
     // fn new() {
     //     let node = OpticNode::new("Test", Dummy::default());
