@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::analyzer::AnalyzerType;
+use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
@@ -136,7 +137,41 @@ impl OpticScenery {
             ))
         }
     }
+    /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
+    pub fn to_dot(&self) -> Result<String> {
+        let mut dot_string = self.add_dot_header();
 
+        for node_idx in self.g.node_indices() {
+            let node = self.g.node_weight(node_idx).unwrap();
+            dot_string += &node.borrow().to_dot(
+                &format!("{}", node_idx.index()),
+                node.borrow().name(),
+                &node.borrow().ports(),
+                "".to_owned(),
+                node.borrow().inverted(),
+            )?;
+        }
+        for edge in self.g.edge_indices() {
+            let light: &Light = self.g.edge_weight(edge).unwrap();
+            let end_nodes = self.g.edge_endpoints(edge).unwrap();
+
+            let src_edge_str =
+                self.create_node_edge_str(end_nodes.0, light.src_port(), "".to_owned())?;
+            let target_edge_str =
+                self.create_node_edge_str(end_nodes.1, light.target_port(), "".to_owned())?;
+
+            dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
+            // for src in src_edge_str.iter(){
+            //     println!("{}", src);
+            //     for target in target_edge_str.iter(){
+            //         println!("{}", target);
+            //         dot_string.push_str(&format!("  {} -> {} \n", src, target));
+            //     };
+            //};
+        }
+        dot_string += "}";
+        Ok(dot_string)
+    }
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self) -> String {
         let mut dot_string = "digraph {\n\tfontsize = 8\n".to_owned();
@@ -147,7 +182,6 @@ impl OpticScenery {
         dot_string.push_str("\tedge [fontname=\"Helvetica,Arial,sans-serif\"]\n\n");
         dot_string
     }
-
     // fn cast_node_to_group<'a>(&self, ref_node: &'a Ref<'_, dyn Optical>) -> Result<&'a NodeGroup> {
     //     let node_boxed = &*ref_node;
     //     let downcasted_node = node_boxed.    .downcast_ref::<NodeGroup>();
@@ -166,7 +200,6 @@ impl OpticScenery {
             false
         }
     }
-
     fn create_node_edge_str(
         &self,
         end_node: NodeIndex,
@@ -186,38 +219,6 @@ impl OpticScenery {
         // } else {
         Ok(format!("i{}:{}", end_node.index(), light_port))
         // }
-    }
-
-    /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
-    pub fn to_dot(&self) -> Result<String> {
-        let mut dot_string = self.add_dot_header();
-
-        // for node_idx in self.g.node_indices() {
-        //     let node = self.g.node_weight(node_idx).unwrap();
-        //     dot_string += &node
-        //         .borrow()
-        //         .to_dot(&format!("{}", node_idx.index()), "".to_owned())?;
-        // }
-        for edge in self.g.edge_indices() {
-            let light: &Light = self.g.edge_weight(edge).unwrap();
-            let end_nodes = self.g.edge_endpoints(edge).unwrap();
-
-            let src_edge_str =
-                self.create_node_edge_str(end_nodes.0, light.src_port(), "".to_owned())?;
-            let target_edge_str =
-                self.create_node_edge_str(end_nodes.1, light.target_port(), "".to_owned())?;
-
-            dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
-            // for src in src_edge_str.iter(){
-            //     println!("{}", src);
-            //     for target in target_edge_str.iter(){
-            //         println!("{}", target);
-            //         dot_string.push_str(&format!("  {} -> {} \n", src, target));
-            //     };
-            // };
-        }
-        dot_string += "}";
-        Ok(dot_string)
     }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> Result<()> {
@@ -250,7 +251,7 @@ impl OpticScenery {
     pub fn nodes_unordered(&self) -> Vec<NodeIndex> {
         self.g.node_indices().collect::<Vec<NodeIndex>>()
     }
-    pub fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
+    fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
         let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
         edges
             .into_iter()

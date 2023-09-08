@@ -28,7 +28,7 @@ pub trait Optical: Dottable {
     fn set_name(&mut self, _name: &str) {}
     /// Returns a reference to the name of this [`Optical`].
     fn name(&self) -> &str {
-        "unknown"
+        self.node_type()
     }
     /// Return the type of the optical component (lens, filter, ...). The default implementation returns "undefined".
     fn node_type(&self) -> &str {
@@ -69,7 +69,7 @@ pub trait Optical: Dottable {
         // self.ports.set_inverted(inverted);
         // self.node.set_inverted(inverted);
     }
-    /// Returns `true` if this [`Optical`] is inverted. 
+    /// Returns `true` if this [`Optical`] is inverted.
     fn inverted(&self) -> bool {
         false
     }
@@ -80,7 +80,6 @@ impl Debug for dyn Optical {
         write!(f, "{} ({}) - {:?}", self.name(), self.node_type(), self)
     }
 }
-
 
 pub trait OpticComponent: Optical + Debug + Any + 'static {
     fn upcast_any_ref(self: &'_ Self) -> &'_ dyn Any;

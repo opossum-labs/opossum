@@ -1,5 +1,5 @@
-use crate::optic_ports::OpticPorts;
 use crate::error::OpossumError;
+use crate::optic_ports::OpticPorts;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -10,9 +10,9 @@ pub trait Dottable {
         &self,
         node_index: &str,
         name: &str,
-        inverted: bool,
         ports: &OpticPorts,
         mut parent_identifier: String,
+        inverted: bool,
     ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);

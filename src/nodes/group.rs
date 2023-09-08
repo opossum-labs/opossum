@@ -625,9 +625,9 @@ impl Dottable for NodeGroup {
         &self,
         node_index: &str,
         name: &str,
-        inverted: bool,
         _ports: &OpticPorts,
         parent_identifier: String,
+        inverted: bool,
     ) -> Result<String> {
         let mut cloned_self=self.clone();
         if self.is_inverted {cloned_self.invert_graph();}
