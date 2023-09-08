@@ -351,9 +351,7 @@ impl NodeGroup {
                 self.incoming_edges(idx)
             };
             let node = g_clone.node_weight(idx).unwrap();
-            let outgoing_edges: HashMap<String, Option<LightData>> = HashMap::new();
-            
-            //node.borrow().analyze(incoming_edges, analyzer_type)?;
+            let outgoing_edges: HashMap<String, Option<LightData>> = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
             let mut group_sinks = g_clone.externals(Direction::Outgoing);
             // Check if node is group sink node
             if group_sinks.any(|gs| gs == idx) {
@@ -617,6 +615,9 @@ impl Optical for NodeGroup {
     }
     fn set_inverted(&mut self, inverted: bool) {
         self.is_inverted = inverted;
+    }
+    fn as_group(&self) -> Result<&NodeGroup> {
+        Ok(&self)
     }
 }
 

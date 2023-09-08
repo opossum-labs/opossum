@@ -1,9 +1,8 @@
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
@@ -43,7 +42,7 @@ impl OpticScenery {
     /// This command just adds an optical element (a struct implementing the [`Optical`](crate::optic_node::Optical) trait such as [`crate::nodes::Dummy`] ) to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`]. Internally the corresponding [`OpticNode`] is
     /// automatically generated. It serves as a short-cut to the `add_node` function.
-    pub fn add_element<T: OpticComponent + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
+    pub fn add_element<T: OpticComponent + 'static>(&mut self, _name: &str, t: T) -> NodeIndex {
         self.g.add_node(Rc::new(RefCell::new(t)))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
@@ -182,24 +181,6 @@ impl OpticScenery {
         dot_string.push_str("\tedge [fontname=\"Helvetica,Arial,sans-serif\"]\n\n");
         dot_string
     }
-    // fn cast_node_to_group<'a>(&self, ref_node: &'a Ref<'_, dyn Optical>) -> Result<&'a NodeGroup> {
-    //     let node_boxed = &*ref_node;
-    //     let downcasted_node = node_boxed.    .downcast_ref::<NodeGroup>();
-
-    //     match downcasted_node {
-    //         Some(i) => Ok(i),
-    //         _ => Err(OpossumError::OpticScenery(
-    //             "can not cast OpticNode to specific type of NodeGroup!".into(),
-    //         )),
-    //     }
-    // }
-    fn check_if_group<T: Optical>(&self, node_ref: T) -> bool {
-        if node_ref.node_type() == "group" {
-            true
-        } else {
-            false
-        }
-    }
     fn create_node_edge_str(
         &self,
         end_node: NodeIndex,
@@ -213,12 +194,12 @@ impl OpticScenery {
             format!("{}_i{}", &parent_identifier, end_node.index())
         };
 
-        // if self.check_if_group(node) {
-        //     let group_node: &NodeGroup = self.cast_node_to_group(&node)?;
-        //     Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
-        // } else {
+        if node.node_type()=="group" {
+             let group_node: &NodeGroup = node.as_group()?;
+             Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
+        } else {
         Ok(format!("i{}:{}", end_node.index(), light_port))
-        // }
+        }
     }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> Result<()> {

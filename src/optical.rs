@@ -2,6 +2,7 @@ use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::lightdata::LightData;
+use crate::nodes::NodeGroup;
 use crate::optic_ports::OpticPorts;
 use core::fmt::Debug;
 use std::any::Any;
@@ -73,6 +74,10 @@ pub trait Optical: Dottable {
     fn inverted(&self) -> bool {
         false
     }
+    fn as_group(&self) -> Result<&NodeGroup> {
+        Err(OpossumError::Other("cannot cast to group".into()))
+    }
+
 }
 
 impl Debug for dyn Optical {
