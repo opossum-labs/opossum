@@ -14,7 +14,7 @@ publish = false
 petgraph = {version="0.6.3", features = ["serde-1"]} # the graph library
 uom = "0"
 erased-serde = "0.3"
-serde = "1"
+serde = { version="1", features= ["rc"]}
 serde_derive = "1"
 serde_yaml = "0"
 

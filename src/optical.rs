@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
@@ -5,8 +7,9 @@ use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_ports::OpticPorts;
 use core::fmt::Debug;
+use std::cell::RefCell;
 use std::collections::HashMap;
-
+use std::rc::Rc;
 pub type LightResult = HashMap<String, Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -72,6 +75,17 @@ impl Debug for dyn Optical {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct OpticRef(pub Rc<RefCell<dyn Optical>>);
+
+impl Serialize for OpticRef {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        serializer.serialize_str(self.0.borrow().name())
+    }
+}
+
 #[cfg(test)]
 mod test {
     // #[test]
@@ -93,9 +107,5 @@ mod test {
     //         "  i0 [label=\"Test(inv)\"]\n".to_owned()
     //     )
     // }
-    // #[test]
-    // fn node_type() {
-    //     let node = OpticNode::new("Test", Dummy::default());
-    //     assert_eq!(node.node_type(), "dummy");
-    // }
 }
+

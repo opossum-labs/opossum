@@ -5,16 +5,19 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::optical::LightResult;
-use crate::{optic_ports::OpticPorts, optical::Optical};
+use crate::{optic_ports::OpticPorts, optical::Optical, optical::OpticRef};
+use serde::Serialize;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::{algo::*, Direction};
+use serde::ser::SerializeStruct;
+use serde_derive::Serialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize)]
 /// A node that represents a group of other [`Optical`]s arranges in a subgraph.
 ///
 /// All unconnected input and output ports of this subgraph could be used as ports of
@@ -26,12 +29,25 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///   - Outputs
 ///     - defined by [`map_output_port`](NodeGroup::map_output_port()) function.
 pub struct NodeGroup {
-    g: DiGraph<Rc<RefCell<dyn Optical>>, Light>,
+    g: DiGraph<OpticRef, Light>,
     expand_view: bool,
     input_port_map: HashMap<String, (NodeIndex, String)>,
     output_port_map: HashMap<String, (NodeIndex, String)>,
     is_inverted: bool,
 }
+
+// impl Serialize for NodeGroup {
+//     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer {
+//         let mut group=serializer.serialize_struct("node_group",4)?;
+//         group.serialize_field("is_inverted", &self.is_inverted)?;
+//         group.serialize_field("exapnd_view", &self.expand_view)?;
+//         group.serialize_field("input_port_map", &self.input_port_map)?;
+//         group.serialize_field("output_port_map", &self.output_port_map)?;
+//         group.end()
+//     }
+// }
 
 impl NodeGroup {
     /// Creates a new [`NodeGroup`].
@@ -46,7 +62,7 @@ impl NodeGroup {
     /// This command just adds an [`Optical`] but does not connect it to existing nodes in the (sub-)graph. The given node is
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        self.g.add_node(Rc::new(RefCell::new(node)))
+        self.g.add_node(OpticRef(Rc::new(RefCell::new(node))))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -62,10 +78,10 @@ impl NodeGroup {
         target_port: &str,
     ) -> Result<EdgeIndex> {
         if let Some(source) = self.g.node_weight(src_node) {
-            if !source.borrow().ports().outputs().contains(&src_port.into()) {
+            if !source.0.borrow().ports().outputs().contains(&src_port.into()) {
                 return Err(OpossumError::OpticScenery(format!(
                     "source node {} does not have a port {}",
-                    source.borrow().name(),
+                    source.0.borrow().name(),
                     src_port
                 )));
             }
@@ -75,7 +91,7 @@ impl NodeGroup {
             ));
         }
         if let Some(target) = self.g.node_weight(target_node) {
-            if !target
+            if !target.0
                 .borrow()
                 .ports()
                 .inputs()
@@ -83,7 +99,7 @@ impl NodeGroup {
             {
                 return Err(OpossumError::OpticScenery(format!(
                     "target node {} does not have a port {}",
-                    target.borrow().name(),
+                    target.0.borrow().name(),
                     target_port
                 )));
             }
@@ -146,7 +162,7 @@ impl NodeGroup {
             let input_ports = self
                 .g
                 .node_weight(node_idx)
-                .unwrap()
+                .unwrap().0
                 .borrow()
                 .ports()
                 .inputs()
@@ -164,7 +180,7 @@ impl NodeGroup {
             let output_ports = self
                 .g
                 .node_weight(node_idx)
-                .unwrap()
+                .unwrap().0
                 .borrow()
                 .ports()
                 .outputs()
@@ -198,7 +214,7 @@ impl NodeGroup {
             ));
         }
         if let Some(node) = self.g.node_weight(input_node) {
-            if !node
+            if !node.0
                 .borrow()
                 .ports()
                 .inputs()
@@ -258,7 +274,7 @@ impl NodeGroup {
             ));
         }
         if let Some(node) = self.g.node_weight(output_node) {
-            if !node
+            if !node.0
                 .borrow()
                 .ports()
                 .outputs()
@@ -355,7 +371,7 @@ impl NodeGroup {
             };
             let node = g_clone.node_weight(idx).unwrap();
             let outgoing_edges: HashMap<String, Option<LightData>> =
-                node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
+                node.0.borrow_mut().analyze(incoming_edges, analyzer_type)?;
             let mut group_sinks = g_clone.externals(Direction::Outgoing);
             // Check if node is group sink node
             if group_sinks.any(|gs| gs == idx) {
@@ -448,7 +464,7 @@ impl NodeGroup {
         light_port: &str,
         mut parent_identifier: String,
     ) -> Result<String> {
-        let node = self.g.node_weight(end_node_idx).unwrap().borrow();
+        let node = self.g.node_weight(end_node_idx).unwrap().0.borrow();
 
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node_idx.index())
@@ -491,12 +507,12 @@ impl NodeGroup {
 
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
-            dot_string += &node.borrow().to_dot(
+            dot_string += &node.0.borrow().to_dot(
                 &format!("{}", node_idx.index()),
-                node.borrow().name(),
-                &node.borrow().ports(),
+                node.0.borrow().name(),
+                &node.0.borrow().ports(),
                 parent_identifier.clone(),
-                node.borrow().inverted(),
+                node.0.borrow().inverted(),
             )?;
         }
         for edge in self.g.edge_indices() {
@@ -564,7 +580,7 @@ impl NodeGroup {
     }
     fn invert_graph(&mut self) {
         for node in self.g.node_weights_mut() {
-            node.borrow_mut().set_inverted(true);
+            node.0.borrow_mut().set_inverted(true);
         }
         for edge in self.g.edge_weights_mut() {
             edge.inverse();

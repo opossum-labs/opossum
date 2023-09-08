@@ -23,6 +23,8 @@ fn main() -> Result<(), OpossumError> {
     nested_group.map_input_port(nested_g_n1, "front", "in1")?;
     nested_group.map_output_port(nested_g_n2, "rear", "out1")?;
 
+    println!("{}", serde_yaml::to_string(&group1).unwrap());
+
     let nested_group_index = group1.add_node(nested_group);
     group1.connect_nodes(nested_group_index, "out1", g1_n1, "front")?;
 
