@@ -42,7 +42,7 @@ impl Source {
     /// nodes::Source,
     /// spectrum::create_he_ne_spectrum};
     ///
-    /// let source=Source::new(LightData::Energy(DataEnergy {spectrum: create_he_ne_spectrum(1.0)}));
+    /// let source=Source::new("My Source", LightData::Energy(DataEnergy {spectrum: create_he_ne_spectrum(1.0)}));
     /// ```
     pub fn new(name: &str, light: LightData) -> Self {
         Source {

@@ -26,6 +26,11 @@ pub struct Dummy {
     name: String,
 }
 
+impl Default for Dummy {
+    fn default() -> Self {
+        Self { is_inverted: Default::default(), name: String::from("dummy") }
+    }
+}
 impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
     pub fn new(name: &str) -> Self {
@@ -38,6 +43,9 @@ impl Dummy {
 impl Optical for Dummy {
     fn set_name(&mut self, name: &str) {
         self.name = name.to_owned()
+    }
+    fn name(&self) -> &str {
+        &self.name
     }
     /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {
@@ -70,6 +78,60 @@ impl Optical for Dummy {
     fn set_inverted(&mut self, inverted: bool) {
         self.is_inverted = inverted;
     }
+    fn inverted(&self) -> bool {
+        self.is_inverted
+    }
 }
 
 impl Dottable for Dummy {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn new() {
+         let node = Dummy::new("Test");
+         assert_eq!(node.name, "Test");
+         assert_eq!(node.inverted(), false);
+    }
+    #[test]
+    fn default() {
+         let node = Dummy::default();
+         assert_eq!(node.name, "dummy");
+         assert_eq!(node.inverted(), false);
+    }
+    #[test]
+    fn set_name() {
+        let mut node = Dummy::default();
+        node.set_name("Test1");
+        assert_eq!(node.name, "Test1")
+    }
+    #[test]
+    fn name() {
+        let mut node = Dummy::default();
+        node.set_name("Test1");
+        assert_eq!(node.name(), "Test1")
+    }
+    #[test]
+    fn set_inverted() {
+        let mut node = Dummy::default();
+        node.set_inverted(true);
+        assert_eq!(node.is_inverted, true)
+    }
+    #[test]
+    fn inverted() {
+        let mut node = Dummy::default();
+        node.set_inverted(true);
+        assert_eq!(node.inverted(), true)
+    }
+    #[test]
+    fn is_detector() {
+        let node = Dummy::default();
+        assert_eq!(node.is_detector(), false);
+    }
+    #[test]
+    fn node_type() {
+        let node = Dummy::default();
+        assert_eq!(node.node_type(), "dummy");
+    }
+}

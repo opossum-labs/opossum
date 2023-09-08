@@ -733,7 +733,7 @@ mod test {
     fn map_input_port_half_connected_nodes() {
         let mut og = NodeGroup::new();
         let sn1_i = og.add_node(Dummy::new("n1"));
-        let sn2_i = og.add_node(Dummy::new("n2"));
+        let sn2_i = og.add_node(BeamSplitter::default());
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
 
         // node port already internally connected
