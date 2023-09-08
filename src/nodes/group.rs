@@ -4,11 +4,8 @@ use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
-use crate::optical::{LightResult};
-use crate::{
-    optical::Optical,
-    optic_ports::OpticPorts,
-};
+use crate::optical::LightResult;
+use crate::{optic_ports::OpticPorts, optical::Optical};
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::{algo::*, Direction};
@@ -328,7 +325,9 @@ impl NodeGroup {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> Result<LightResult> {
-        if self.is_inverted {self.invert_graph();}
+        if self.is_inverted {
+            self.invert_graph();
+        }
         let g_clone = self.g.clone();
         let mut group_srcs = g_clone.externals(Direction::Incoming);
         let mut light_result = LightResult::default();
@@ -337,7 +336,11 @@ impl NodeGroup {
             // Check if node is group src node
             let incoming_edges = if group_srcs.any(|gs| gs == idx) {
                 // get from incoming_data
-                let portmap = if self.is_inverted { &self.output_port_map} else { &self.input_port_map};
+                let portmap = if self.is_inverted {
+                    &self.output_port_map
+                } else {
+                    &self.input_port_map
+                };
                 let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
                 let mut incoming = LightResult::default();
                 for port in assigned_ports {
@@ -351,11 +354,16 @@ impl NodeGroup {
                 self.incoming_edges(idx)
             };
             let node = g_clone.node_weight(idx).unwrap();
-            let outgoing_edges: HashMap<String, Option<LightData>> = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
+            let outgoing_edges: HashMap<String, Option<LightData>> =
+                node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
             let mut group_sinks = g_clone.externals(Direction::Outgoing);
             // Check if node is group sink node
             if group_sinks.any(|gs| gs == idx) {
-                let portmap = if self.is_inverted { &self.input_port_map} else { &self.output_port_map};
+                let portmap = if self.is_inverted {
+                    &self.input_port_map
+                } else {
+                    &self.output_port_map
+                };
                 let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
                 for port in assigned_ports {
                     light_result.insert(
@@ -369,7 +377,9 @@ impl NodeGroup {
                 }
             }
         }
-        if self.is_inverted {self.invert_graph();} // revert initial inversion (if necessary)
+        if self.is_inverted {
+            self.invert_graph();
+        } // revert initial inversion (if necessary)
         Ok(light_result)
     }
 
@@ -425,37 +435,6 @@ impl NodeGroup {
     pub fn expand_view(&mut self, expand_view: bool) {
         self.expand_view = expand_view;
     }
-
-    /// downcasts this "OpticNode" with trait "OpicComponent" to its actual struct format "NodeGroup"
-    /// parameters:
-    /// - ref_node:     reference to the borrowed node of a graph
-    ///
-    /// Returns a reference to the NodeGroup struct
-    ///
-    /// Error, if the OpticNode can not be casted to the type of NodeGroup
-    // fn cast_node_to_group<'a>(&self, ref_node: &'a dyn Optical) -> Result<&'a NodeGroup> {
-    //     let node_boxed = &*ref_node;
-    //     let downcasted_node = node_boxed.downcast_ref::<NodeGroup>();
-
-    //     match downcasted_node {
-    //         Some(i) => Ok(i),
-    //         _ => Err(OpossumError::OpticScenery(
-    //             "can not cast OpticNode to specific type of NodeGroup!".into(),
-    //         )),
-    //     }
-    // }
-
-    /// checks if the contained node is a group_node itself.
-    /// Returns true, if the node is a group
-    /// Returns false otherwise
-    fn check_if_group(&self, node_ref: &dyn Optical) -> bool {
-        if node_ref.node_type() == "group" {
-            true
-        } else {
-            false
-        }
-    }
-
     /// Creates the dot-format string which describes the edge that connects two nodes
     /// parameters:
     /// - end_node_idx:         NodeIndex of the node that should be connected
@@ -477,14 +456,13 @@ impl NodeGroup {
             format!("{}_i{}", &parent_identifier, end_node_idx.index())
         };
 
-        // if self.check_if_group(&node) {
-        //     let group_node = self.cast_node_to_group(&node)?;
-        //     Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
-        // } else {
+        if node.node_type() == "group" {
+            let group_node: &NodeGroup = node.as_group()?;
+            Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
+        } else {
             Ok(format!("{}:{}", parent_identifier, light_port))
-        // }
+        }
     }
-
     /// creates the dot format of the group node in its expanded view
     /// parameters:
     /// - node_index:           NodeIndex of the group
@@ -511,12 +489,16 @@ impl NodeGroup {
             parent_identifier, name, inv_string
         );
 
-        // for node_idx in self.g.node_indices() {
-        //     let node = self.g.node_weight(node_idx).unwrap();
-        //     dot_string += &node
-        //         .borrow()
-        //         .to_dot(&format!("{}", node_idx.index()), parent_identifier.clone())?;
-        // }
+        for node_idx in self.g.node_indices() {
+            let node = self.g.node_weight(node_idx).unwrap();
+            dot_string += &node.borrow().to_dot(
+                &format!("{}", node_idx.index()),
+                node.borrow().name(),
+                &node.borrow().ports(),
+                parent_identifier.clone(),
+                node.borrow().inverted(),
+            )?;
+        }
         for edge in self.g.edge_indices() {
             let light: &Light = self.g.edge_weight(edge).unwrap();
             let end_nodes = self.g.edge_endpoints(edge).unwrap();
@@ -630,8 +612,10 @@ impl Dottable for NodeGroup {
         parent_identifier: String,
         inverted: bool,
     ) -> Result<String> {
-        let mut cloned_self=self.clone();
-        if self.is_inverted {cloned_self.invert_graph();}
+        let mut cloned_self = self.clone();
+        if self.is_inverted {
+            cloned_self.invert_graph();
+        }
         if self.expand_view {
             cloned_self.to_dot_expanded_view(node_index, name, inverted, parent_identifier)
         } else {
