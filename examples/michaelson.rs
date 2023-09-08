@@ -10,7 +10,7 @@ fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Michaelson interferomater");
     let src = scenery.add_node(Source::default());
-    let bs = scenery.add_element("Beamspliiter", BeamSplitter::default());
+    let bs = scenery.add_node(BeamSplitter::default());
     let sample = scenery.add_node(Dummy::new("Sample"));
     let rf = NodeReference::from_node(scenery.node(sample)?);
     let r_sample = scenery.add_node(rf);
@@ -18,7 +18,7 @@ fn main() -> Result<(), OpossumError> {
     let m2 = scenery.add_node(Dummy::new("Mirror"));
     let rf = NodeReference::from_node(scenery.node(bs)?);
     let r_bs = scenery.add_node(rf);
-    let det = scenery.add_element("Detector", Detector::default());
+    let det = scenery.add_node(Detector::default());
 
     scenery.connect_nodes(src, "out1", bs, "input1")?;
     scenery.connect_nodes(bs, "out1_trans1_refl2", sample, "front")?;

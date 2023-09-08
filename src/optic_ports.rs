@@ -3,7 +3,7 @@ use serde_derive::Serialize;
 use crate::error::OpossumError;
 use std::{collections::HashSet, fmt::Display};
 
-/// Structure defining the optical ports (input / output terminals) of an [`OpticNode`](crate::optic_node::OpticNode).
+/// Structure defining the optical ports (input / output terminals) of an [`Optical`](crate::optical::Optical).
 #[derive(Default, Debug, Clone, Serialize)]
 pub struct OpticPorts {
     inputs: HashSet<String>,

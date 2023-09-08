@@ -7,7 +7,7 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
-use crate::optical::{LightResult, OpticComponent, Optical};
+use crate::optical::{LightResult, Optical};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
@@ -17,7 +17,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 
 /// Overall optical model and additional metatdata.
 ///
-/// All optical elements ([`OpticNode`]s) have to be added to this structure in order
+/// All optical elements ([`Optical`]s) have to be added to this structure in order
 /// to be considered for an analysis.
 #[derive(Default, Debug, Clone)]
 pub struct OpticScenery {
@@ -30,20 +30,12 @@ impl OpticScenery {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Add a given [`OpticNode`] to the graph of this [`OpticScenery`].
+    /// Add a given [`Optical`] (Source, Detector, Lens, etc.) to the graph of this [`OpticScenery`].
     ///
-    /// This command just adds an [`OpticNode`] to the graph. It does not connect
+    /// This command just adds an [`Optical`] to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         self.g.add_node(Rc::new(RefCell::new(node)))
-    }
-    /// Add a given optical element to the graph of this [`OpticScenery`].
-    ///
-    /// This command just adds an optical element (a struct implementing the [`Optical`](crate::optic_node::Optical) trait such as [`crate::nodes::Dummy`] ) to the graph. It does not connect
-    /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`]. Internally the corresponding [`OpticNode`] is
-    /// automatically generated. It serves as a short-cut to the `add_node` function.
-    pub fn add_element<T: OpticComponent + 'static>(&mut self, _name: &str, t: T) -> NodeIndex {
-        self.g.add_node(Rc::new(RefCell::new(t)))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -120,7 +112,7 @@ impl OpticScenery {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
-    /// Return a reference to the [`OpticNode`] specified by its node index.
+    /// Return a reference to the [`Optical`] specified by its node index.
     ///
     /// This function is mainly useful for setting up a reference node.
     ///

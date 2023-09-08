@@ -1,4 +1,4 @@
-//! Data structures containing the light information flowing between [`OpticNodes`](crate::optic_node::OpticNode).
+//! Data structures containing the light information flowing between [`Opticals`](crate::optical::Optical).
 use std::fmt::Display;
 use serde_derive::Serialize;
 use uom::fmt::DisplayStyle::Abbreviation;

@@ -19,7 +19,7 @@ fn main() -> Result<(), OpossumError> {
     let pump_main_amplifier_node = scenery.add_node(Dummy::new("Pump Main-Amplifier"));
     let pump_compressor_node = scenery.add_node(Dummy::new("Pump Compressor"));
     let pump_shg_node = scenery.add_node(Dummy::new("Pump SHG"));
-    let pump_splitter_node = scenery.add_element("Pump Beam Splitter", BeamSplitter::default());
+    let pump_splitter_node = scenery.add_node(BeamSplitter::default()); // Pump Beam Splitter
 
     scenery.connect_nodes(pulse_generation_split_node, "rear", u_opa_1_node, "front")?;
     // scenery

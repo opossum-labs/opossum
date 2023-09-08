@@ -30,8 +30,7 @@ fn main() -> Result<(), OpossumError> {
     group.set_inverted(true);
 
     let i_g = scenery.add_node(group);
-
-    let i_d = scenery.add_element("Detector", Detector::default());
+    let i_d = scenery.add_node(Detector::default());
 
     scenery.connect_nodes(i_s, "out1", i_g, "out1")?;
     scenery.connect_nodes(i_g, "in1", i_d, "in1")?;

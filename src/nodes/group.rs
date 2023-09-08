@@ -15,7 +15,7 @@ use std::rc::Rc;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Default, Debug, Clone)]
-/// A node that represents a group of other [`OpticNode`]s arranges in a subgraph.
+/// A node that represents a group of other [`Optical`]s arranges in a subgraph.
 ///
 /// All unconnected input and output ports of this subgraph could be used as ports of
 /// this [`NodeGroup`]. For this, port mapping is neccessary (see below).
@@ -41,9 +41,9 @@ impl NodeGroup {
             ..Default::default()
         }
     }
-    /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
+    /// Add a given [`Optical`] to the (sub-)graph of this [`NodeGroup`].
     ///
-    /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is
+    /// This command just adds an [`Optical`] but does not connect it to existing nodes in the (sub-)graph. The given node is
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         self.g.add_node(Rc::new(RefCell::new(node)))

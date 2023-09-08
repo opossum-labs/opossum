@@ -20,15 +20,12 @@ fn main() -> Result<(), OpossumError> {
             spectrum: create_he_ne_spectrum(1.0),
         }),
     ));
-    let i_bs = scenery.add_element("Beam splitter", BeamSplitter::new(0.6).unwrap());
+    let i_bs = scenery.add_node(BeamSplitter::new(0.6).unwrap());
     let filter_spectrum = Spectrum::from_csv("NE03B.csv")?;
-    let i_f = scenery.add_element(
-        "Filter",
-        IdealFilter::new(FilterType::Spectrum(filter_spectrum))?,
-    );
-    let i_d1 = scenery.add_element("Energy meter 1", Detector::default());
-    let i_d2 = scenery.add_element("Spectrometer", Spectrometer::default());
-    let i_d3 = scenery.add_element("Energy meter 2", EnergyMeter::default());
+    let i_f = scenery.add_node(IdealFilter::new(FilterType::Spectrum(filter_spectrum))?);
+    let i_d1 = scenery.add_node(Detector::default()); // Energy meter 1
+    let i_d2 = scenery.add_node(Spectrometer::default());
+    let i_d3 = scenery.add_node(EnergyMeter::default()); // Energy meter 2
 
     scenery.connect_nodes(i_s, "out1", i_bs, "input1")?;
 

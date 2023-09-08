@@ -20,18 +20,16 @@ fn main() -> Result<(), OpossumError> {
             spectrum: create_he_ne_spectrum(1.0),
         }),
     ));
-    let i_s2 = scenery.add_node(
-        Source::new("Source 2", LightData::Energy(DataEnergy {
+    let i_s2 = scenery.add_node(Source::new(
+        "Source 2",
+        LightData::Energy(DataEnergy {
             spectrum: create_nd_glass_spectrum(1.0),
-        })),
-    );
-    let i_bs = scenery.add_element("Beam splitter", BeamSplitter::new(0.5).unwrap());
+        }),
+    ));
+    let i_bs = scenery.add_node(BeamSplitter::new(0.5).unwrap());
     let filter_spectrum = Spectrum::from_csv("NE03B.csv")?;
-    let i_f = scenery.add_element(
-        "Filter",
-        IdealFilter::new(FilterType::Spectrum(filter_spectrum))?,
-    );
-    let i_d1 = scenery.add_element("Detector 1", Detector::default());
+    let i_f = scenery.add_node(IdealFilter::new(FilterType::Spectrum(filter_spectrum))?);
+    let i_d1 = scenery.add_node(Detector::default()); // Detector 1
 
     scenery.connect_nodes(i_s1, "out1", i_bs, "input1")?;
     scenery.connect_nodes(i_s2, "out1", i_bs, "input2")?;
@@ -42,14 +40,14 @@ fn main() -> Result<(), OpossumError> {
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()?).unwrap();
 
-    scenery.report();
+    // scenery.report();
     println!("");
     let mut analyzer = AnalyzerEnergy::new(&scenery);
     print!("Analyze...");
     analyzer.analyze()?;
     println!("Sucessful");
     println!("");
-    scenery.report();
+    //scenery.report();
 
     Ok(())
 }

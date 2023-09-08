@@ -16,9 +16,9 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - input ports of the referenced [`OpticNode`]
+///     - input ports of the referenced [`Optical`]
 ///   - Outputs
-///     - output ports of the referenced [`OpticNode`]
+///     - output ports of the referenced [`Optical`]
 pub struct NodeReference {
     reference: Weak<RefCell<dyn Optical>>,
 }

@@ -8,10 +8,10 @@ use opossum::error::OpossumError;
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Lens Ray-trace test".into());
-    let src = scenery.add_element("Source", Source::default());
-    let l1 = scenery.add_element("Lens 1", RealLens::default());
-    let l2 = scenery.add_element("Lens 2", RealLens::default());
-    let det = scenery.add_element("Detector", Detector::default());
+    let src = scenery.add_node(Source::default());
+    let l1 = scenery.add_node(RealLens::default()); // Lens 1, 
+    let l2 = scenery.add_node(RealLens::default()); // Lens 2
+    let det = scenery.add_node(Detector::default());
 
     scenery.connect_nodes(src, "out1", l1, "in1")?;
     scenery.connect_nodes(l1, "out1", l2, "in1")?;
