@@ -42,7 +42,7 @@ impl EnergyMeter {
     pub fn new(meter_type: Metertype) -> Self {
         EnergyMeter {
             light_data: None,
-            meter_type: meter_type,
+            meter_type,
         }
     }
     /// Returns the meter type of this [`EnergyMeter`].

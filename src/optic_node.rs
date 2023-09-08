@@ -87,13 +87,16 @@ impl OpticNode {
         let file_name = self.name.to_owned() + ".svg";
         self.node.export_data(&file_name);
     }
-    pub fn node(&self) -> &Box<(dyn OpticComponent + 'static)> {
+    pub fn node(&self) -> &(dyn OpticComponent + 'static) {
         &self.node
     }
     pub fn is_detector(&self) -> bool {
         self.node.is_detector()
     }
 }
+
+impl Optical for Box<(dyn OpticComponent + 'static)>{}
+impl Dottable for Box<(dyn OpticComponent + 'static)>{}
 
 impl Debug for OpticNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -148,7 +151,7 @@ pub trait Dottable {
     ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
-        parent_identifier = if parent_identifier == "" {
+        parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", node_index)
         } else {
             format!("{}_i{}", &parent_identifier, node_index)
@@ -349,18 +352,18 @@ pub trait Dottable {
 }
 
 pub trait OpticComponent: Optical + Dottable + Debug + Any + 'static {
-    fn upcast_any_ref(self: &'_ Self) -> &'_ dyn Any;
+    fn upcast_any_ref(&'_ self) -> &'_ dyn Any;
 }
 impl<T: Optical + Dottable + Debug + Any + 'static> OpticComponent for T {
     #[inline]
-    fn upcast_any_ref(self: &'_ Self) -> &'_ dyn Any {
+    fn upcast_any_ref(&'_ self) -> &'_ dyn Any {
         self
     }
 }
 
 impl dyn OpticComponent + 'static {
     #[inline]
-    pub fn downcast_ref<T: 'static>(self: &'_ Self) -> Option<&'_ T> {
+    pub fn downcast_ref<T: 'static>(&'_ self) -> Option<&'_ T> {
         self.upcast_any_ref().downcast_ref::<T>()
     }
 }

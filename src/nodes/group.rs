@@ -433,7 +433,7 @@ impl NodeGroup {
     ///
     /// Error, if the OpticNode can not be casted to the type of NodeGroup
     fn cast_node_to_group<'a>(&self, ref_node: &'a OpticNode) -> Result<&'a NodeGroup> {
-        let node_boxed = (&*ref_node).node();
+        let node_boxed = ref_node.node();
         let downcasted_node = node_boxed.downcast_ref::<NodeGroup>();
 
         match downcasted_node {
@@ -448,11 +448,7 @@ impl NodeGroup {
     /// Returns true, if the node is a group
     /// Returns false otherwise
     fn check_if_group(&self, node_ref: &OpticNode) -> bool {
-        if node_ref.node_type() == "group" {
-            true
-        } else {
-            false
-        }
+        node_ref.node_type() == "group"
     }
 
     /// Creates the dot-format string which describes the edge that connects two nodes
@@ -470,7 +466,7 @@ impl NodeGroup {
     ) -> Result<String> {
         let node = self.g.node_weight(end_node_idx).unwrap().borrow();
 
-        parent_identifier = if parent_identifier == "" {
+        parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node_idx.index())
         } else {
             format!("{}_i{}", &parent_identifier, end_node_idx.index())
@@ -500,7 +496,7 @@ impl NodeGroup {
         mut parent_identifier: String,
     ) -> Result<String> {
         let inv_string = if inverted { "(inv)" } else { "" };
-        parent_identifier = if parent_identifier == "" {
+        parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", node_index)
         } else {
             format!("{}_i{}", &parent_identifier, node_index)
@@ -564,7 +560,7 @@ impl NodeGroup {
     ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
-        parent_identifier = if parent_identifier == "" {
+        parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", node_index)
         } else {
             format!("{}_i{}", &parent_identifier, node_index)

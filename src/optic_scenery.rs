@@ -150,7 +150,7 @@ impl OpticScenery {
     }
 
     fn cast_node_to_group<'a>(&self, ref_node: &'a Ref<'_, OpticNode>) -> Result<&'a NodeGroup> {
-        let node_boxed = (&*ref_node).node();
+        let node_boxed = ref_node.node();
         let downcasted_node = node_boxed.downcast_ref::<NodeGroup>();
 
         match downcasted_node {
@@ -161,11 +161,7 @@ impl OpticScenery {
         }
     }
     fn check_if_group(&self, node_ref: &OpticNode) -> bool {
-        if node_ref.node_type() == "group" {
-            true
-        } else {
-            false
-        }
+        node_ref.node_type() == "group"
     }
 
     fn create_node_edge_str(
@@ -175,7 +171,7 @@ impl OpticScenery {
         mut parent_identifier: String,
     ) -> Result<String> {
         let node = self.g.node_weight(end_node).unwrap().borrow();
-        parent_identifier = if parent_identifier == "" {
+        parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node.index())
         } else {
             format!("{}_i{}", &parent_identifier, end_node.index())

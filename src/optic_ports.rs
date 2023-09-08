@@ -51,11 +51,9 @@ impl OpticPorts {
     pub fn check_if_port_exists(&self, port_name: &str) -> bool{
         if self.inputs.contains(port_name) {
             true
-        } else if self.outputs.contains(port_name) {
-            true
         }
         else{
-            false
+            self.outputs.contains(port_name)
         }
     }
 
