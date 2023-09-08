@@ -9,7 +9,7 @@ fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Lens Ray-trace test".into());
     let src = scenery.add_node(Source::default());
-    let l1 = scenery.add_node(RealLens::default()); // Lens 1, 
+    let l1 = scenery.add_node(RealLens::default()); // Lens 1
     let l2 = scenery.add_node(RealLens::default()); // Lens 2
     let det = scenery.add_node(Detector::default());
 

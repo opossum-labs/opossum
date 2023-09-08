@@ -3,10 +3,10 @@ use serde_derive::Serialize;
 
 use crate::lightdata::LightData;
 use crate::{
-    error::OpossumError,
-    optical::{LightResult, Optical},
     dottable::Dottable,
+    error::OpossumError,
     optic_ports::OpticPorts,
+    optical::{LightResult, Optical},
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -23,8 +23,8 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - `in1`
 ///   - Outputs
 ///     - `out1`
-/// 
-/// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way, 
+///
+/// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct Detector {
     light_data: Option<LightData>,

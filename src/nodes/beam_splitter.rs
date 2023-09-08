@@ -1,20 +1,20 @@
 #![warn(missing_docs)]
-use std::collections::HashMap;
 use serde_derive::Serialize;
+use std::collections::HashMap;
 
 use crate::{
     analyzer::AnalyzerType,
+    dottable::Dottable,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
-    optical::{LightResult, Optical},
-    dottable::Dottable,
     optic_ports::OpticPorts,
+    optical::{LightResult, Optical},
     spectrum::{merge_spectra, Spectrum},
 };
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Debug,Serialize)]
+#[derive(Debug, Serialize)]
 /// An ideal beamsplitter node with a given splitting ratio.
 ///
 /// ## Optical Ports
@@ -156,7 +156,7 @@ mod test {
     use super::*;
     #[test]
     fn new() {
-        let splitter=BeamSplitter::new(0.5);
+        let splitter = BeamSplitter::new(0.5);
         assert!(splitter.is_ok());
         assert_eq!(splitter.unwrap().ratio, 0.5);
         assert!(BeamSplitter::new(-0.01).is_err());
@@ -164,17 +164,17 @@ mod test {
     }
     #[test]
     fn default() {
-        let splitter=BeamSplitter::default();
+        let splitter = BeamSplitter::default();
         assert_eq!(splitter.ratio, 0.5);
     }
     #[test]
     fn ratio() {
-        let splitter=BeamSplitter::new(0.5).unwrap();
+        let splitter = BeamSplitter::new(0.5).unwrap();
         assert_eq!(splitter.ratio(), 0.5);
     }
     #[test]
     fn set_ratio() {
-        let mut splitter=BeamSplitter::new(0.0).unwrap();
+        let mut splitter = BeamSplitter::new(0.0).unwrap();
         assert!(splitter.set_ratio(1.0).is_ok());
         assert_eq!(splitter.ratio, 1.0);
         assert!(splitter.set_ratio(-0.1).is_err());
@@ -182,12 +182,12 @@ mod test {
     }
     #[test]
     fn node_type() {
-        let splitter=BeamSplitter::new(0.0).unwrap();
+        let splitter = BeamSplitter::new(0.0).unwrap();
         assert_eq!(splitter.node_type(), "beam splitter");
     }
     #[test]
     fn node_color() {
-        let splitter=BeamSplitter::new(0.0).unwrap();
+        let splitter = BeamSplitter::new(0.0).unwrap();
         assert_eq!(splitter.node_color(), "lightpink");
     }
 }

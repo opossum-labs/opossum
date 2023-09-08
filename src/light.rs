@@ -4,10 +4,10 @@
 //! the respective source an target port names this edge connects as well as the actual light information (stored as
 //! [`LightData`]).
 
-use serde_derive::Serialize;
 use crate::lightdata::LightData;
+use serde_derive::Serialize;
 
-#[derive(Debug, Clone,Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Light {
     src_port: String,
     target_port: String,
@@ -36,9 +36,9 @@ impl Light {
         self.data = data;
     }
     pub fn inverse(&mut self) {
-        let tmp=self.src_port.clone();
-        self.src_port=self.target_port.clone();
-        self.target_port=tmp;
+        let tmp = self.src_port.clone();
+        self.src_port = self.target_port.clone();
+        self.target_port = tmp;
     }
 }
 

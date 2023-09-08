@@ -2,12 +2,12 @@
 mod beam_splitter;
 mod detector;
 mod dummy;
+mod energy_meter;
 mod group;
 mod ideal_filter;
 mod lens;
 mod reference;
 mod source;
-mod energy_meter;
 mod spectrometer;
 
 pub use beam_splitter::BeamSplitter;

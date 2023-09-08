@@ -1,9 +1,10 @@
 use crate::{
     analyzer::AnalyzerType,
+    dottable::Dottable,
     error::OpossumError,
     lightdata::LightData,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical}, dottable::Dottable,
+    optical::{LightResult, Optical},
 };
 use ndarray::{array, Array1};
 use uom::{si::f64::Length, si::length::meter};

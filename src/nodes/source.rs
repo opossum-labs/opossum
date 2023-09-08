@@ -5,10 +5,11 @@ use std::fmt::Debug;
 use serde_derive::Serialize;
 
 use crate::{
+    dottable::Dottable,
     error::OpossumError,
     lightdata::LightData,
+    optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    optic_ports::OpticPorts, dottable::Dottable,
 };
 
 type Result<T> = std::result::Result<T, OpossumError>;
@@ -25,28 +26,28 @@ type Result<T> = std::result::Result<T, OpossumError>;
 #[derive(Default, Serialize)]
 pub struct Source {
     light_data: Option<LightData>,
-    name: String
+    name: String,
 }
 
 impl Source {
     /// Creates a new [`Source`].
-    /// 
+    ///
     /// The light to be emitted from this source is defined in a [`LightData`] structure.
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```rust
     /// use opossum::{
     /// lightdata::{DataEnergy, LightData},
     /// nodes::Source,
     /// spectrum::create_he_ne_spectrum};
-    /// 
+    ///
     /// let source=Source::new(LightData::Energy(DataEnergy {spectrum: create_he_ne_spectrum(1.0)}));
     /// ```
     pub fn new(name: &str, light: LightData) -> Self {
         Source {
             light_data: Some(light),
-            name: name.to_owned()
+            name: name.to_owned(),
         }
     }
 

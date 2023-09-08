@@ -5,8 +5,8 @@ use crate::dottable::Dottable;
 use crate::lightdata::LightData;
 use crate::{
     error::OpossumError,
-    optical::{LightResult, Optical},
     optic_ports::OpticPorts,
+    optical::{LightResult, Optical},
 };
 use std::collections::HashMap;
 use std::fmt::Debug;

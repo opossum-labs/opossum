@@ -76,7 +76,6 @@ pub trait Optical: Dottable {
     fn as_group(&self) -> Result<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
-
 }
 
 impl Debug for dyn Optical {

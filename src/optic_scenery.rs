@@ -186,11 +186,11 @@ impl OpticScenery {
             format!("{}_i{}", &parent_identifier, end_node.index())
         };
 
-        if node.node_type()=="group" {
-             let group_node: &NodeGroup = node.as_group()?;
-             Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
+        if node.node_type() == "group" {
+            let group_node: &NodeGroup = node.as_group()?;
+            Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
         } else {
-        Ok(format!("i{}:{}", end_node.index(), light_port))
+            Ok(format!("i{}:{}", end_node.index(), light_port))
         }
     }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].

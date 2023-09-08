@@ -2,22 +2,25 @@ use std::fs::File;
 use std::io::Write;
 
 use opossum::{
+    analyzer::AnalyzerEnergy,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
     nodes::{Detector, Dummy, NodeGroup, Source},
+    optical::Optical,
     spectrum::create_he_ne_spectrum,
-    OpticScenery, analyzer::AnalyzerEnergy, optical::Optical,
+    OpticScenery,
 };
 
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Inverse Group test".into());
 
-    let i_s = scenery.add_node(
-        Source::new("Source", LightData::Energy(DataEnergy {
+    let i_s = scenery.add_node(Source::new(
+        "Source",
+        LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spectrum(1.0),
-        })),
-    );
+        }),
+    ));
 
     let mut group = NodeGroup::new();
     group.expand_view(true);

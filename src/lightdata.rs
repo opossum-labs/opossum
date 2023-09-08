@@ -1,6 +1,6 @@
 //! Data structures containing the light information flowing between [`Opticals`](crate::optical::Optical).
-use std::fmt::Display;
 use serde_derive::Serialize;
+use std::fmt::Display;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 

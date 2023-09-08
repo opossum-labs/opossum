@@ -4,7 +4,7 @@ use crate::error::OpossumError;
 use csv::ReaderBuilder;
 use ndarray::Array1;
 use ndarray_stats::QuantileExt;
-use serde_derive::{Serialize, Deserialize};
+use serde_derive::{Deserialize, Serialize};
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
 use std::ops::Range;
@@ -200,7 +200,8 @@ impl Spectrum {
     /// This function sums the values over all wavelength slots weighted with the individual slot widths. This
     /// way it also works for non-equidistant spectra.
     pub fn total_energy(&self) -> f64 {
-        let lambda_deltas: Vec<f64> = self.data
+        let lambda_deltas: Vec<f64> = self
+            .data
             .windows(2)
             .into_iter()
             .map(|l| l[1].0 - l[0].0)
@@ -358,8 +359,9 @@ impl Spectrum {
             .unwrap();
         chart
             .draw_series(LineSeries::new(
-                self.data.map(|data| (data.0 * 1.0E9, data.1* 1.0E-9)), &RED)
-            )
+                self.data.map(|data| (data.0 * 1.0E9, data.1 * 1.0E-9)),
+                &RED,
+            ))
             .unwrap();
         root.present().unwrap();
     }
@@ -555,19 +557,14 @@ mod test {
         assert!(s.is_ok());
         let lambdas = s.clone().unwrap().data.map(|data| data.0);
         assert!(lambdas
-             .into_iter()
-             .zip(array![500.0E-9, 501.0E-9, 502.0E-9, 503.0E-9, 504.0E-9, 505.0E-9].iter())
-             .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
+            .into_iter()
+            .zip(array![500.0E-9, 501.0E-9, 502.0E-9, 503.0E-9, 504.0E-9, 505.0E-9].iter())
+            .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
         let datas = s.unwrap().data.map(|data| data.1);
         assert!(datas
-             .into_iter()
-             .zip(array![5.0E-01,
-             4.981E-01,
-             4.982E-01,
-             4.984E-01,
-             4.996E-01,
-             5.010E-01].iter())
-             .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
+            .into_iter()
+            .zip(array![5.0E-01, 4.981E-01, 4.982E-01, 4.984E-01, 4.996E-01, 5.010E-01].iter())
+            .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
     }
     #[test]
     fn from_csv_err() {
@@ -688,7 +685,7 @@ mod test {
         .unwrap();
         s.add_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
         assert!(s.scale_vertical(0.5).is_ok());
-        let data=s.data.map(|data| data.1);
+        let data = s.data.map(|data| data.1);
         assert_eq!(data, array![0.0, 0.25, 0.25, 0.0]);
     }
     #[test]
@@ -758,7 +755,7 @@ mod test {
         .unwrap();
         s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         s1.resample(&s2);
-        let data=s1.data.map(|data| data.1);
+        let data = s1.data.map(|data| data.1);
         assert_eq!(data, array![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
     }
@@ -776,7 +773,7 @@ mod test {
         .unwrap();
         s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         s1.resample(&s2);
-        let data=s1.data.map(|data| data.1);
+        let data = s1.data.map(|data| data.1);
         assert_eq!(data, array![0.0, 1.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
     }
@@ -794,7 +791,7 @@ mod test {
         .unwrap();
         s2.add_single_peak(Length::new::<meter>(4.0), 1.0).unwrap();
         s1.resample(&s2);
-        let data=s1.data.map(|data| data.1);
+        let data = s1.data.map(|data| data.1);
         assert_eq!(data, array![0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
     }
@@ -812,7 +809,7 @@ mod test {
         .unwrap();
         s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
         s1.resample(&s2);
-        let data=s1.data.map(|data| data.1);
+        let data = s1.data.map(|data| data.1);
         assert_eq!(data, array![0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
     }
@@ -823,7 +820,7 @@ mod test {
         let mut s2 = prep();
         s2.add_single_peak(Length::new::<meter>(2.25), 0.5).unwrap();
         s.add(&s2);
-        let data=s.data.map(|data| data.1);
+        let data = s.data.map(|data| data.1);
         assert_eq!(data, array![0.0, 1.0, 1.5, 0.5, 0.0, 0.0]);
     }
     #[test]
@@ -833,13 +830,13 @@ mod test {
         let mut s2 = prep();
         s2.add_single_peak(Length::new::<meter>(2.25), 0.5).unwrap();
         s.sub(&s2);
-        let data=s.data.map(|data| data.1);
+        let data = s.data.map(|data| data.1);
         assert_eq!(data, array![0.0, 1.0, 0.5, 0.0, 0.0, 0.0]);
     }
     #[test]
     fn serialize() {
         let s = prep();
-        let s_yaml=serde_yaml::to_string(&s);
+        let s_yaml = serde_yaml::to_string(&s);
         assert!(s_yaml.is_ok());
         assert_eq!(s_yaml.unwrap(),
         "data:\n  v: 1\n  dim:\n  - 6\n  data:\n  - - 1.0\n    - 0.0\n  - - 1.5\n    - 0.0\n  - - 2.0\n    - 0.0\n  - - 2.5\n    - 0.0\n  - - 3.0\n    - 0.0\n  - - 3.5\n    - 0.0\n".to_string());

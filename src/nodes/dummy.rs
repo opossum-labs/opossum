@@ -1,12 +1,12 @@
 #![warn(missing_docs)]
-use std::collections::HashMap;
 use serde_derive::Serialize;
+use std::collections::HashMap;
 
 use crate::analyzer::AnalyzerType;
-use crate::error::OpossumError;
-use crate::optical::{LightResult, Optical};
 use crate::dottable::Dottable;
+use crate::error::OpossumError;
 use crate::optic_ports::OpticPorts;
+use crate::optical::{LightResult, Optical};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -23,7 +23,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - `rear`
 pub struct Dummy {
     is_inverted: bool,
-    name: String
+    name: String,
 }
 
 impl Dummy {
@@ -31,7 +31,7 @@ impl Dummy {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_owned(),
-            is_inverted: false
+            is_inverted: false,
         }
     }
 }
