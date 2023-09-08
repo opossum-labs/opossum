@@ -13,9 +13,8 @@ fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Inverse Group test".into());
 
-    let i_s = scenery.add_element(
-        "Source",
-        Source::new(LightData::Energy(DataEnergy {
+    let i_s = scenery.add_node(
+        Source::new("Source", LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spectrum(1.0),
         })),
     );

@@ -25,6 +25,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 #[derive(Default, Serialize)]
 pub struct Source {
     light_data: Option<LightData>,
+    name: String
 }
 
 impl Source {
@@ -42,9 +43,10 @@ impl Source {
     /// 
     /// let source=Source::new(LightData::Energy(DataEnergy {spectrum: create_he_ne_spectrum(1.0)}));
     /// ```
-    pub fn new(light: LightData) -> Self {
+    pub fn new(name: &str, light: LightData) -> Self {
         Source {
             light_data: Some(light),
+            name: name.to_owned()
         }
     }
 

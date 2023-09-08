@@ -5,7 +5,7 @@ use opossum::{
     analyzer::AnalyzerEnergy,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
-    nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source, EnergyMeter, Spectrometer},
+    nodes::{BeamSplitter, Detector, EnergyMeter, FilterType, IdealFilter, Source, Spectrometer},
     spectrum::{create_he_ne_spectrum, Spectrum},
     OpticScenery,
 };
@@ -14,12 +14,12 @@ fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("filter system demo");
 
-    let i_s = scenery.add_element(
+    let i_s = scenery.add_node(Source::new(
         "Source",
-        Source::new(LightData::Energy(DataEnergy {
+        LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spectrum(1.0),
-        })),
-    );
+        }),
+    ));
     let i_bs = scenery.add_element("Beam splitter", BeamSplitter::new(0.6).unwrap());
     let filter_spectrum = Spectrum::from_csv("NE03B.csv")?;
     let i_f = scenery.add_element(

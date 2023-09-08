@@ -1,4 +1,3 @@
-
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -44,8 +43,7 @@ impl OpticScenery {
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`]. Internally the corresponding [`OpticNode`] is
     /// automatically generated. It serves as a short-cut to the `add_node` function.
     pub fn add_element<T: OpticComponent + 'static>(&mut self, name: &str, t: T) -> NodeIndex {
-        self.g
-            .add_node(Rc::new(RefCell::new(t)))
+        self.g.add_node(Rc::new(RefCell::new(t)))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -128,7 +126,7 @@ impl OpticScenery {
     ///
     /// # Errors
     ///
-    /// This function will return [`OpossumError::OpticScenery`]if the node does not exist.
+    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node: NodeIndex) -> Result<Rc<RefCell<dyn Optical>>> {
         if let Some(node) = self.g.node_weight(node) {
             Ok(node.clone())
@@ -186,7 +184,7 @@ impl OpticScenery {
         //     let group_node: &NodeGroup = self.cast_node_to_group(&node)?;
         //     Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
         // } else {
-            Ok(format!("i{}:{}", end_node.index(), light_port))
+        Ok(format!("i{}:{}", end_node.index(), light_port))
         // }
     }
 
@@ -228,10 +226,7 @@ impl OpticScenery {
             for idx in sorted {
                 let node = self.g.node_weight(idx).unwrap();
                 let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
-                let outgoing_edges: HashMap<String, Option<LightData>> = HashMap::new();
-                
-                // node.borrow_mut()
-                // .analyze(incoming_edges, analyzer_type)?;
+                let outgoing_edges = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
                 for outgoing_edge in outgoing_edges {
                     self.set_outgoing_edge_data(idx, outgoing_edge.0, outgoing_edge.1)
                 }

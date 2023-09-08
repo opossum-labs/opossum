@@ -14,15 +14,14 @@ fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("beam combiner demo");
 
-    let i_s1 = scenery.add_element(
+    let i_s1 = scenery.add_node(Source::new(
         "Source 1",
-        Source::new(LightData::Energy(DataEnergy {
+        LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spectrum(1.0),
-        })),
-    );
-    let i_s2 = scenery.add_element(
-        "Source 2",
-        Source::new(LightData::Energy(DataEnergy {
+        }),
+    ));
+    let i_s2 = scenery.add_node(
+        Source::new("Source 2", LightData::Energy(DataEnergy {
             spectrum: create_nd_glass_spectrum(1.0),
         })),
     );
