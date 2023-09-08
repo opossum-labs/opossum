@@ -450,7 +450,7 @@ impl NodeGroup {
     ) -> Result<String> {
         let node = self.g.node_weight(end_node_idx).unwrap().borrow();
 
-        parent_identifier = if parent_identifier == "" {
+        parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node_idx.index())
         } else {
             format!("{}_i{}", &parent_identifier, end_node_idx.index())
@@ -479,7 +479,7 @@ impl NodeGroup {
         mut parent_identifier: String,
     ) -> Result<String> {
         let inv_string = if inverted { "(inv)" } else { "" };
-        parent_identifier = if parent_identifier == "" {
+        parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", node_index)
         } else {
             format!("{}_i{}", &parent_identifier, node_index)
@@ -547,7 +547,7 @@ impl NodeGroup {
     ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
-        parent_identifier = if parent_identifier == "" {
+        parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", node_index)
         } else {
             format!("{}_i{}", &parent_identifier, node_index)
@@ -599,7 +599,7 @@ impl Optical for NodeGroup {
         self.is_inverted = inverted;
     }
     fn as_group(&self) -> Result<&NodeGroup> {
-        Ok(&self)
+        Ok(self)
     }
 }
 

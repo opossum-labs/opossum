@@ -50,15 +50,8 @@ impl OpticPorts {
         }
     }
 
-    pub fn check_if_port_exists(&self, port_name: &str) -> bool{
-        if self.inputs.contains(port_name) {
-            true
-        } else if self.outputs.contains(port_name) {
-            true
-        }
-        else{
-            false
-        }
+    pub fn check_if_port_exists(&self, port_name: &str) -> bool {
+        self.inputs.contains(port_name) || self.outputs.contains(port_name)
     }
 
     // pub fn get_port(&self, port_name: &str, input_flag: bool)-> Result<String, OpossumError>{
@@ -78,7 +71,7 @@ impl OpticPorts {
 
     // pub fn set_port(&mut self, target_port: &str, src_node: &OpticNode, src_port: &str, input_flag: bool) -> Result<Vec<String>, OpossumError>{
     //     let port = src_node.name().to_owned() + src_port;
-        
+
     //     if input_flag {
     //         self.inputs.remove(target_port);
     //         self.add_input(&port)?;

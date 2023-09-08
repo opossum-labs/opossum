@@ -180,7 +180,7 @@ impl OpticScenery {
         mut parent_identifier: String,
     ) -> Result<String> {
         let node = self.g.node_weight(end_node).unwrap().borrow();
-        parent_identifier = if parent_identifier == "" {
+        parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node.index())
         } else {
             format!("{}_i{}", &parent_identifier, end_node.index())

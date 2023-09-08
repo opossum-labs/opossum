@@ -5,7 +5,6 @@ use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_ports::OpticPorts;
 use core::fmt::Debug;
-use std::any::Any;
 use std::collections::HashMap;
 
 pub type LightResult = HashMap<String, Option<LightData>>;
@@ -82,24 +81,7 @@ pub trait Optical: Dottable {
 
 impl Debug for dyn Optical {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({}) - {:?}", self.name(), self.node_type(), self)
-    }
-}
-
-pub trait OpticComponent: Optical + Debug + Any + 'static {
-    fn upcast_any_ref(self: &'_ Self) -> &'_ dyn Any;
-}
-impl<T: Optical + Debug + Any + 'static> OpticComponent for T {
-    #[inline]
-    fn upcast_any_ref(self: &'_ Self) -> &'_ dyn Any {
-        self
-    }
-}
-
-impl dyn OpticComponent + 'static {
-    #[inline]
-    pub fn downcast_ref<T: 'static>(self: &'_ Self) -> Option<&'_ T> {
-        self.upcast_any_ref().downcast_ref::<T>()
+        write!(f, "{} ({})", self.name(), self.node_type())
     }
 }
 

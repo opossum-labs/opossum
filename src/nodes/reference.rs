@@ -4,8 +4,8 @@ use std::rc::{Rc, Weak};
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
-use crate::optical::{LightResult, Optical};
 use crate::optic_ports::OpticPorts;
+use crate::optical::{LightResult, Optical};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -26,10 +26,9 @@ pub struct NodeReference {
 impl NodeReference {
     // Create new [`OpticNode`] (of type [`NodeReference`]) from another existing [`OpticNode`].
     pub fn from_node(node: Rc<RefCell<dyn Optical>>) -> Self {
-        let node_ref = Self {
+        Self {
             reference: Rc::downgrade(&node),
-        };
-        node_ref
+        }
     }
 }
 

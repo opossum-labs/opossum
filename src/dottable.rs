@@ -16,7 +16,7 @@ pub trait Dottable {
     ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
-        parent_identifier = if parent_identifier == "" {
+        parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", node_index)
         } else {
             format!("{}_i{}", &parent_identifier, node_index)
