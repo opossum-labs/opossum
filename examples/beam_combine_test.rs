@@ -40,14 +40,14 @@ fn main() -> Result<(), OpossumError> {
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot()?).unwrap();
 
-    // scenery.report();
+    scenery.report();
     println!("");
     let mut analyzer = AnalyzerEnergy::new(&scenery);
     print!("Analyze...");
     analyzer.analyze()?;
     println!("Sucessful");
     println!("");
-    //scenery.report();
+    scenery.report();
 
     Ok(())
 }

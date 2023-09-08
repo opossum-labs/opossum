@@ -28,7 +28,10 @@ pub struct Dummy {
 
 impl Default for Dummy {
     fn default() -> Self {
-        Self { is_inverted: Default::default(), name: String::from("dummy") }
+        Self {
+            is_inverted: Default::default(),
+            name: String::from("dummy"),
+        }
     }
 }
 impl Dummy {
@@ -90,15 +93,15 @@ mod test {
     use super::*;
     #[test]
     fn new() {
-         let node = Dummy::new("Test");
-         assert_eq!(node.name, "Test");
-         assert_eq!(node.inverted(), false);
+        let node = Dummy::new("Test");
+        assert_eq!(node.name, "Test");
+        assert_eq!(node.inverted(), false);
     }
     #[test]
     fn default() {
-         let node = Dummy::default();
-         assert_eq!(node.name, "dummy");
-         assert_eq!(node.inverted(), false);
+        let node = Dummy::default();
+        assert_eq!(node.name, "dummy");
+        assert_eq!(node.inverted(), false);
     }
     #[test]
     fn set_name() {

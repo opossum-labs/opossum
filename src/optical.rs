@@ -10,18 +10,6 @@ use std::collections::HashMap;
 pub type LightResult = HashMap<String, Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
 
-//     /// Creates a new [`OpticNode`]. The concrete type of the component must be given while using the `new` function.
-//     /// The node type ist a struct implementing the [`Optical`] trait. Since the size of the node type is not known at compile time it must be added as `Box<nodetype>`.
-//     ///
-//     /// # Examples
-//     ///
-//     /// ```rust
-//     /// use opossum::optic_node::OpticNode;
-//     /// use opossum::nodes::Dummy;
-//     ///
-//     /// let node=OpticNode::new("My node", Dummy::default());
-//     /// ```
-
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait Optical: Dottable {
     /// Sets the name of this [`Optical`].

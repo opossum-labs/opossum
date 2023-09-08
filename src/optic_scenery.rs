@@ -9,7 +9,7 @@ use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optical::{LightResult, Optical};
 use petgraph::algo::*;
-use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
+use petgraph::prelude::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction::Incoming;
 
@@ -19,6 +19,23 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///
 /// All optical elements ([`Optical`]s) have to be added to this structure in order
 /// to be considered for an analysis.
+///
+/// # Example
+///
+/// ```rust
+/// use opossum::OpticScenery;
+/// use opossum::nodes::Dummy;
+/// use opossum::error::OpossumError;
+///
+/// fn main() -> Result<(), OpossumError> {
+///   let mut scenery = OpticScenery::new();
+///   scenery.set_description("OpticScenery demo");
+///   let node1 = scenery.add_node(Dummy::new("dummy1"));
+///   let node2 = scenery.add_node(Dummy::new("dummy2"));
+///   scenery.connect_nodes(node1, "rear", node2, "front")
+/// }
+///
+/// ```
 #[derive(Default, Debug, Clone)]
 pub struct OpticScenery {
     g: DiGraph<Rc<RefCell<dyn Optical>>, Light>,
@@ -47,7 +64,7 @@ impl OpticScenery {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
-    ) -> Result<EdgeIndex> {
+    ) -> Result<()> {
         if let Some(source) = self.g.node_weight(src_node) {
             if !source.borrow().ports().outputs().contains(&src_port.into()) {
                 return Err(OpossumError::OpticScenery(format!(
@@ -100,7 +117,7 @@ impl OpticScenery {
                 "connecting the given nodes would form a loop".into(),
             ));
         }
-        Ok(edge_index)
+        Ok(())
     }
     fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
         self.g

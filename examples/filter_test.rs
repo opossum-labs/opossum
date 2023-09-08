@@ -28,7 +28,6 @@ fn main() -> Result<(), OpossumError> {
     let i_d3 = scenery.add_node(EnergyMeter::default()); // Energy meter 2
 
     scenery.connect_nodes(i_s, "out1", i_bs, "input1")?;
-
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1")?;
     scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front")?;
     scenery.connect_nodes(i_f, "rear", i_d2, "in1")?;
