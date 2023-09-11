@@ -1,3 +1,4 @@
+use serde::ser::SerializeStruct;
 use serde::Serialize;
 
 use crate::analyzer::AnalyzerType;
@@ -14,7 +15,7 @@ pub type LightResult = HashMap<String, Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
-pub trait Optical: Dottable {
+pub trait Optical: Dottable + erased_serde::Serialize {
     /// Sets the name of this [`Optical`].
     fn set_name(&mut self, _name: &str) {}
     /// Returns a reference to the name of this [`Optical`].
@@ -81,8 +82,12 @@ pub struct OpticRef(pub Rc<RefCell<dyn Optical>>);
 impl Serialize for OpticRef {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
-        serializer.serialize_str(self.0.borrow().name())
+        S: serde::Serializer,
+    {
+        let mut node = serializer.serialize_struct("node", 1)?;
+        node.serialize_field("type", self.0.borrow().node_type())?;
+        node.serialize_field("ports", &self.0.borrow().ports())?;
+        node.end()
     }
 }
 
@@ -108,4 +113,3 @@ mod test {
     //     )
     // }
 }
-

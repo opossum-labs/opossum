@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
+use serde::Serialize;
+
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
@@ -23,6 +25,13 @@ pub struct NodeReference {
     reference: Weak<RefCell<dyn Optical>>,
 }
 
+impl Serialize for NodeReference {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+       serializer.serialize_i32(123)
+    }
+}
 impl NodeReference {
     // Create new [`OpticNode`] (of type [`NodeReference`]) from another existing [`OpticNode`].
     pub fn from_node(node: Rc<RefCell<dyn Optical>>) -> Self {

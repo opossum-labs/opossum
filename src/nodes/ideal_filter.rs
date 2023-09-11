@@ -20,7 +20,7 @@ pub enum FilterType {
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
 }
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 /// An ideal filter with given transmission or optical density.
 ///
 /// ## Optical Ports

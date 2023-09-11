@@ -7,6 +7,7 @@ use crate::{
     optical::{LightResult, Optical},
 };
 use ndarray::{array, Array1};
+use serde::Serialize;
 use uom::{si::f64::Length, si::length::meter};
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -20,7 +21,13 @@ pub struct RealLens {
     z_pos: Length,
     refractive_index: f64,
 }
-
+impl Serialize for RealLens {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        serializer.serialize_i32(123)
+    }
+}
 impl RealLens {
     pub fn new(
         aperture: Length,
