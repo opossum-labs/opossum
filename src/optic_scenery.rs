@@ -139,9 +139,10 @@ impl OpticScenery {
     }
 
     /// Returns the dot-file header of this [`OpticScenery`] graph.
-    fn add_dot_header(&self) -> String {
+    fn add_dot_header(&self, rankdir: &str) -> String {
         let mut dot_string = "digraph {\n\tfontsize = 8\n".to_owned();
         dot_string.push_str("\tcompound = true;\n");
+        dot_string.push_str(&format!("\trankdir = \"{}\";\n", rankdir));
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description));
         dot_string.push_str("\tfontname=\"Helvetica,Arial,sans-serif\"\n");
         dot_string.push_str("\tnode [fontname=\"Helvetica,Arial,sans-serif\" fontsize = 10]\n");
@@ -186,14 +187,14 @@ impl OpticScenery {
     }
 
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
-    pub fn to_dot(&self) -> Result<String> {
-        let mut dot_string = self.add_dot_header();
+    pub fn to_dot(&self, rankdir: &str) -> Result<String> {
+        let mut dot_string = self.add_dot_header(rankdir);
 
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
             dot_string += &node
                 .borrow()
-                .to_dot(&format!("{}", node_idx.index()), "".to_owned())?;
+                .to_dot(&format!("{}", node_idx.index()), "".to_owned(), rankdir)?;
         }
         for edge in self.g.edge_indices() {
             let light: &Light = self.g.edge_weight(edge).unwrap();
@@ -350,7 +351,7 @@ mod test {
     fn to_dot_empty() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into());
-        assert_eq!(scenery.to_dot().unwrap(), "digraph {\n  label=\"Test\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n}");
+        assert_eq!(scenery.to_dot("TB").unwrap(), "digraph {\n  label=\"Test\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n}");
     }
     #[test]
     #[ignore]
@@ -359,7 +360,7 @@ mod test {
         scenery.set_description("SceneryTest".into());
         scenery.add_element("Test", Dummy::default());
         assert_eq!(
-            scenery.to_dot().unwrap(),
+            scenery.to_dot("TB").unwrap(),
             "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test\"]\n}"
         );
     }
@@ -372,7 +373,7 @@ mod test {
         let n2 = scenery.add_element("Test2", Dummy::default());
         if let Ok(_) = scenery.connect_nodes(n1, "rear", n2, "front") {
             assert_eq!(
-                scenery.to_dot().unwrap(),
+                scenery.to_dot("TB").unwrap(),
                 "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test1\"]\n  i1 [label=\"Test2\"]\n  i0 -> i1 [label=\"rear->front\"]\n}"
             );
         } else {

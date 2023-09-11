@@ -47,13 +47,14 @@ impl OpticNode {
 
     /// Returns a string representation of the [`OpticNode`] in `graphviz` format including port visualization.
     /// This function is normally called by the top-level `to_dot`function within `OpticScenery`.
-    pub fn to_dot(&self, node_index: &str, parent_identifier: String) -> Result<String> {
+    pub fn to_dot(&self, node_index: &str, parent_identifier: String, rankdir: &str) -> Result<String> {
         self.node.to_dot(
             node_index,
             &self.name,
             self.inverted(),
             &self.node.ports(),
             parent_identifier,
+            rankdir, 
         )
     }
 
@@ -146,6 +147,7 @@ pub trait Dottable {
         inverted: bool,
         ports: &OpticPorts,
         mut parent_identifier: String,
+        rankdir: &str
     ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
@@ -154,13 +156,14 @@ pub trait Dottable {
         } else {
             format!("{}_i{}", &parent_identifier, node_index)
         };
-        let mut dot_str = format!("\t{} [\n\t\tshape=plaintext\n", &parent_identifier);
+        let mut dot_str = format!("\t{} [\n\t\tshape=plaintext\nrankdir=\"{}\"\n", &parent_identifier, rankdir);
         let mut indent_level = 2;
         dot_str.push_str(&self.add_html_like_labels(
             &node_name,
             &mut indent_level,
             ports,
             inverted,
+            rankdir
         ));
         Ok(dot_str)
     }
@@ -212,7 +215,7 @@ pub trait Dottable {
             "Output port"
         };
         format!(
-            "{}<TD PORT=\"{}\" BORDER=\"1\" BGCOLOR={} HREF=\"\" TOOLTIP=\"{} {}: {}\">{}</TD>\n",
+            "{}<TD HEIGHT=\"16\" WIDTH=\"16\" PORT=\"{}\" BORDER=\"1\" BGCOLOR={} HREF=\"\" TOOLTIP=\"{} {}: {}\">{}</TD>\n",
             "\t".repeat(*indent_level as usize),
             port_name,
             color_str,
@@ -325,20 +328,114 @@ pub trait Dottable {
         indent_level: &mut i32,
         ports: &OpticPorts,
         inverted: bool,
+        rankdir:&str,
     ) -> String {
         let mut dot_str = "\t\tlabel=<\n".to_owned();
 
         // Start Table environment
         dot_str.push_str(&self.create_html_like_container("table", indent_level, true, 1));
 
-        // add row containing the input ports
-        dot_str.push_str(&self.create_port_cells_str(!inverted, indent_level, 0, ports));
+        let mut inputs = ports.inputs();
+        let mut outputs = ports.outputs();
+        let mut in_port_count = 0;
+        let mut out_port_count = 0;
 
-        // add row containing the node main
-        dot_str.push_str(&self.create_main_node_row_str(node_name, indent_level));
+        let num_input_ports = inputs.len();
+        let num_output_ports = outputs.len();
+        let max_port_num = if num_input_ports <=num_output_ports{
+            num_output_ports
+        } else{
+            num_input_ports
+        };
 
-        // add row containing the output ports
-        dot_str.push_str(&self.create_port_cells_str(inverted, indent_level, -1, ports));
+        let row_col_span = (max_port_num*2+1);
+        let node_cell_size = if max_port_num > 2{
+            16*(max_port_num*2+1)
+        }
+        else{
+            80
+        };
+
+        inputs.sort();
+        outputs.sort();
+
+        let num_cells = (max_port_num+1)*2+1;
+
+
+        for row_num in 0..num_cells{
+            dot_str.push_str(&self.create_html_like_container("row", indent_level, true, 1));
+            for col_num in 0..num_cells{
+                if  in_port_count < num_input_ports && rankdir == "LR" && row_num != 0 && row_num % 2 == 0 && col_num == 0 {
+                    dot_str.push_str(&self.create_port_cell_str(
+                        &inputs[in_port_count],
+                        true,
+                        in_port_count+1,
+                        indent_level,
+                    ));
+                    in_port_count+=1;
+                }
+                else if out_port_count < num_output_ports && rankdir == "LR" &&  row_num != 0 && row_num % 2 == 0 && col_num == num_cells-1{
+                    dot_str.push_str(&self.create_port_cell_str(
+                        &outputs[out_port_count],
+                        false,
+                        out_port_count+1,
+                        indent_level,
+                    ));
+                    out_port_count+=1;
+                }
+                else if in_port_count < num_input_ports && rankdir == "TB" && col_num != 0 && col_num % 2 == 0 && row_num == 0 {
+                    dot_str.push_str(&self.create_port_cell_str(
+                        &inputs[in_port_count],
+                        true,
+                        in_port_count+1,
+                        indent_level,
+                    ));
+                    in_port_count+=1;
+                }
+                else if out_port_count < num_output_ports  && rankdir == "TB" && col_num != 0 && col_num % 2 == 0 && row_num == num_cells-1{
+                    dot_str.push_str(&self.create_port_cell_str(
+                        &outputs[out_port_count],
+                        false,
+                        out_port_count+1,
+                        indent_level,
+                    ));
+                    out_port_count+=1;
+                }
+                else if row_num == 1 && col_num == 1{
+                    dot_str.push_str(&format!("{}<TD BORDER=\"1\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" ALIGN=\"CENTER\" WIDTH=\"{}\" CELLPADDING=\"10\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level as usize), row_col_span, row_col_span, self.node_color(), node_cell_size, node_name));
+                }
+                else if  row_num >= 1 && row_num <row_col_span+1 && col_num >= 1 && col_num <row_col_span+1{
+                    ();
+                }
+                else if num_output_ports <= 1 && rankdir == "LR" && col_num == 0 && row_num % 2 == 1 {
+                    dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"32\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
+                }
+                else if num_output_ports <= 1 && rankdir == "TB" && row_num == 0 && col_num % 2 == 1 {
+                    dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"32\" BORDER=\"1\" ></TD>\n")
+                }       
+
+                else if num_output_ports <= 1 && rankdir == "LR" && col_num == num_cells-1 && row_num % 2 == 1 {
+                        dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"32\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
+                }
+                else if num_output_ports <= 1 && rankdir == "TB" && row_num == num_cells-1 && col_num % 2 == 1{
+                    dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"32\" BORDER=\"1\" ></TD>\n")
+                }
+                else{
+                    dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
+                }
+            }
+            dot_str.push_str(&self.create_html_like_container("row", indent_level, false, -1));
+
+        }
+
+        // // add row containing the input ports
+        // dot_str.push_str(&self.create_port_cells_str(!inverted, indent_level, 0, ports));
+
+        // // add row containing the node main
+        // dot_str.push_str(&self.create_main_node_row_str(node_name, indent_level));
+
+        // // add row containing the output ports
+        // dot_str.push_str(&self.create_port_cells_str(inverted, indent_level, -1, ports));
 
         //end table environment
         dot_str.push_str(&self.create_html_like_container("table", indent_level, false, -1));
@@ -411,7 +508,7 @@ mod test {
     fn to_dot() {
         let node = OpticNode::new("Test", Dummy::default());
         assert_eq!(
-            node.to_dot("i0", "".to_owned()).unwrap(),
+            node.to_dot("i0", "".to_owned(), "TB").unwrap(),
             "  i0 [label=\"Test\"]\n".to_owned()
         )
     }
@@ -421,7 +518,7 @@ mod test {
         let mut node = OpticNode::new("Test", Dummy::default());
         node.set_inverted(true);
         assert_eq!(
-            node.to_dot("i0", "".to_owned()).unwrap(),
+            node.to_dot("i0", "".to_owned(), "TB").unwrap(),
             "  i0 [label=\"Test(inv)\"]\n".to_owned()
         )
     }

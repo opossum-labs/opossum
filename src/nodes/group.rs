@@ -494,6 +494,7 @@ impl NodeGroup {
         name: &str,
         inverted: bool,
         mut parent_identifier: String,
+        rankdir: &str
     ) -> Result<String> {
         let inv_string = if inverted { "(inv)" } else { "" };
         parent_identifier = if parent_identifier.is_empty() {
@@ -510,7 +511,7 @@ impl NodeGroup {
             let node = self.g.node_weight(node_idx).unwrap();
             dot_string += &node
                 .borrow()
-                .to_dot(&format!("{}", node_idx.index()), parent_identifier.clone())?;
+                .to_dot(&format!("{}", node_idx.index()), parent_identifier.clone(), rankdir)?;
         }
         for edge in self.g.edge_indices() {
             let light: &Light = self.g.edge_weight(edge).unwrap();
@@ -557,6 +558,7 @@ impl NodeGroup {
         inverted: bool,
         _ports: &OpticPorts,
         mut parent_identifier: String,
+        rankdir: &str
     ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
@@ -572,6 +574,7 @@ impl NodeGroup {
             &mut indent_level,
             _ports,
             inverted,
+            rankdir
         ));
         Ok(dot_str)
     }
@@ -621,13 +624,14 @@ impl Dottable for NodeGroup {
         inverted: bool,
         _ports: &OpticPorts,
         parent_identifier: String,
+        rankdir: &str
     ) -> Result<String> {
         let mut cloned_self=self.clone();
         if self.is_inverted {cloned_self.invert_graph();}
         if self.expand_view {
-            cloned_self.to_dot_expanded_view(node_index, name, inverted, parent_identifier)
+            cloned_self.to_dot_expanded_view(node_index, name, inverted, parent_identifier, rankdir)
         } else {
-            cloned_self.to_dot_collapsed_view(node_index, name, inverted, _ports, parent_identifier)
+            cloned_self.to_dot_collapsed_view(node_index, name, inverted, _ports, parent_identifier, rankdir)
         }
     }
 
