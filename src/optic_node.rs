@@ -87,7 +87,7 @@ impl OpticNode {
         let file_name = self.name.to_owned() + ".svg";
         self.node.export_data(&file_name);
     }
-    pub fn node(&self) -> &(dyn OpticComponent + 'static) {
+    pub fn node(&self) -> &Box<dyn OpticComponent> {
         &self.node
     }
     pub fn is_detector(&self) -> bool {
@@ -95,8 +95,6 @@ impl OpticNode {
     }
 }
 
-impl Optical for Box<(dyn OpticComponent + 'static)>{}
-impl Dottable for Box<(dyn OpticComponent + 'static)>{}
 
 impl Debug for OpticNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
