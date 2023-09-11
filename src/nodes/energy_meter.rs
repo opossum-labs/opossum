@@ -23,7 +23,7 @@ pub enum Metertype {
     /// an ideal power meter (currently not used)
     IdealPowerMeter,
 }
-#[derive(Default, Serialize)]
+#[derive(Serialize)]
 /// (ideal) energy / power meter.
 ///
 /// It normally measures the total energy of the incoming light regardless of the wavelength, position, angle, polarization etc...
@@ -39,13 +39,25 @@ pub enum Metertype {
 pub struct EnergyMeter {
     light_data: Option<LightData>,
     meter_type: Metertype,
+    name: String,
+}
+
+impl Default for EnergyMeter {
+    fn default() -> Self {
+        Self {
+            light_data: Default::default(),
+            meter_type: Default::default(),
+            name: "energy meter".to_string(),
+        }
+    }
 }
 impl EnergyMeter {
     /// Creates a new [`EnergyMeter`] of the given [`Metertype`].
-    pub fn new(meter_type: Metertype) -> Self {
+    pub fn new(name: &str, meter_type: Metertype) -> Self {
         EnergyMeter {
             light_data: None,
             meter_type,
+            name: name.to_string(),
         }
     }
     /// Returns the meter type of this [`EnergyMeter`].
@@ -58,6 +70,12 @@ impl EnergyMeter {
     }
 }
 impl Optical for EnergyMeter {
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_string()
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
     fn node_type(&self) -> &str {
         "energy meter"
     }
@@ -110,7 +128,7 @@ mod test {
     use super::*;
     #[test]
     fn new() {
-        let meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
+        let meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
         assert!(meter.light_data.is_none());
         assert_eq!(meter.meter_type, Metertype::IdealEnergyMeter);
     }
@@ -122,28 +140,29 @@ mod test {
         assert_eq!(meter.node_type(), "energy meter");
         assert_eq!(meter.is_detector(), true);
         assert_eq!(meter.node_color(), "lightblue");
+        assert_eq!(meter.name(), "energy meter");
     }
     #[test]
     fn meter_type() {
-        let meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
+        let meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
         assert_eq!(meter.meter_type(), Metertype::IdealEnergyMeter);
     }
     #[test]
     fn set_meter_type() {
-        let mut meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
+        let mut meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
         meter.set_meter_type(Metertype::IdealPowerMeter);
         assert_eq!(meter.meter_type, Metertype::IdealPowerMeter);
     }
     #[test]
     fn ports() {
-        let meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
+        let meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
         let ports = meter.ports();
         assert_eq!(ports.inputs(), vec!["in1"]);
         assert_eq!(ports.outputs(), vec!["out1"]);
     }
     #[test]
     fn analyze() {
-        let mut meter = EnergyMeter::new(Metertype::IdealEnergyMeter);
+        let mut meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
         let mut input = LightResult::default();
         input.insert(
             "in1".into(),
