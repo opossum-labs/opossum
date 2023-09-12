@@ -5,8 +5,8 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::optical::LightResult;
-use crate::properties::Properties;
-use crate::{optic_ports::OpticPorts, optical::Optical, optical::OpticRef};
+use crate::properties::{Properties, Property, Proptype};
+use crate::{optic_ports::OpticPorts, optical::OpticRef, optical::Optical};
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::{algo::*, Direction};
@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Default, Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 /// A node that represents a group of other [`Optical`]s arranges in a subgraph.
 ///
 /// All unconnected input and output ports of this subgraph could be used as ports of
@@ -32,28 +32,49 @@ pub struct NodeGroup {
     expand_view: bool,
     input_port_map: HashMap<String, (NodeIndex, String)>,
     output_port_map: HashMap<String, (NodeIndex, String)>,
-    is_inverted: bool,
-    props: Properties
+    props: Properties,
 }
 
-// impl Serialize for NodeGroup {
-//     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer {
-//         let mut group=serializer.serialize_struct("node_group",4)?;
-//         group.serialize_field("is_inverted", &self.is_inverted)?;
-//         group.serialize_field("exapnd_view", &self.expand_view)?;
-//         group.serialize_field("input_port_map", &self.input_port_map)?;
-//         group.serialize_field("output_port_map", &self.output_port_map)?;
-//         group.end()
-//     }
-// }
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set(
+        "name",
+        Property {
+            prop: Proptype::String("group".into()),
+        },
+    );
+    props.set(
+        "inverted",
+        Property {
+            prop: Proptype::Bool(false),
+        },
+    );
+    props.set(
+        "expand view",
+        Property {
+            prop: Proptype::Bool(false),
+        },
+    );
+    props
+}
 
+impl Default for NodeGroup {
+    fn default() -> Self {
+        Self {
+            g: Default::default(),
+            expand_view: Default::default(),
+            input_port_map: Default::default(),
+            output_port_map: Default::default(),
+            props: create_default_props(),
+        }
+    }
+}
 impl NodeGroup {
     /// Creates a new [`NodeGroup`].
     pub fn new() -> Self {
         Self {
             expand_view: false,
+            props: create_default_props(),
             ..Default::default()
         }
     }
@@ -78,7 +99,13 @@ impl NodeGroup {
         target_port: &str,
     ) -> Result<EdgeIndex> {
         if let Some(source) = self.g.node_weight(src_node) {
-            if !source.0.borrow().ports().outputs().contains(&src_port.into()) {
+            if !source
+                .0
+                .borrow()
+                .ports()
+                .outputs()
+                .contains(&src_port.into())
+            {
                 return Err(OpossumError::OpticScenery(format!(
                     "source node {} does not have a port {}",
                     source.0.borrow().name(),
@@ -91,7 +118,8 @@ impl NodeGroup {
             ));
         }
         if let Some(target) = self.g.node_weight(target_node) {
-            if !target.0
+            if !target
+                .0
                 .borrow()
                 .ports()
                 .inputs()
@@ -162,7 +190,8 @@ impl NodeGroup {
             let input_ports = self
                 .g
                 .node_weight(node_idx)
-                .unwrap().0
+                .unwrap()
+                .0
                 .borrow()
                 .ports()
                 .inputs()
@@ -180,7 +209,8 @@ impl NodeGroup {
             let output_ports = self
                 .g
                 .node_weight(node_idx)
-                .unwrap().0
+                .unwrap()
+                .0
                 .borrow()
                 .ports()
                 .outputs()
@@ -214,7 +244,8 @@ impl NodeGroup {
             ));
         }
         if let Some(node) = self.g.node_weight(input_node) {
-            if !node.0
+            if !node
+                .0
                 .borrow()
                 .ports()
                 .inputs()
@@ -274,7 +305,8 @@ impl NodeGroup {
             ));
         }
         if let Some(node) = self.g.node_weight(output_node) {
-            if !node.0
+            if !node
+                .0
                 .borrow()
                 .ports()
                 .outputs()
@@ -341,7 +373,8 @@ impl NodeGroup {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> Result<LightResult> {
-        if self.is_inverted {
+        let is_inverted = self.props.get_bool("inverted").unwrap().unwrap();
+        if is_inverted {
             self.invert_graph();
         }
         let g_clone = self.g.clone();
@@ -352,7 +385,7 @@ impl NodeGroup {
             // Check if node is group src node
             let incoming_edges = if group_srcs.any(|gs| gs == idx) {
                 // get from incoming_data
-                let portmap = if self.is_inverted {
+                let portmap = if is_inverted {
                     &self.output_port_map
                 } else {
                     &self.input_port_map
@@ -375,7 +408,7 @@ impl NodeGroup {
             let mut group_sinks = g_clone.externals(Direction::Outgoing);
             // Check if node is group sink node
             if group_sinks.any(|gs| gs == idx) {
-                let portmap = if self.is_inverted {
+                let portmap = if is_inverted {
                     &self.input_port_map
                 } else {
                     &self.output_port_map
@@ -393,7 +426,7 @@ impl NodeGroup {
                 }
             }
         }
-        if self.is_inverted {
+        if is_inverted {
             self.invert_graph();
         } // revert initial inversion (if necessary)
         Ok(light_result)
@@ -612,7 +645,12 @@ impl Optical for NodeGroup {
         self.analyze_group(incoming_data, analyzer_type)
     }
     fn set_inverted(&mut self, inverted: bool) {
-        self.is_inverted = inverted;
+        self.props.set(
+            "inverted",
+            Property {
+                prop: Proptype::Bool(inverted),
+            },
+        );
     }
     fn as_group(&self) -> Result<&NodeGroup> {
         Ok(self)
@@ -632,7 +670,7 @@ impl Dottable for NodeGroup {
         inverted: bool,
     ) -> Result<String> {
         let mut cloned_self = self.clone();
-        if self.is_inverted {
+        if self.props.get_bool("inverted").unwrap().unwrap() {
             cloned_self.invert_graph();
         }
         if self.expand_view {

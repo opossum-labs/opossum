@@ -25,7 +25,6 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - `out1_trans1_refl2`
 ///     - `out2_trans2_refl1`
 pub struct BeamSplitter {
-    ratio: f64,
     props: Properties,
 }
 
@@ -62,26 +61,33 @@ impl BeamSplitter {
                     prop: Proptype::F64(ratio),
                 },
             );
-            Ok(Self {
-                ratio,
-                props: props,
-            })
+            Ok(Self { props })
         } else {
             Err(OpossumError::Other(
-                "splitting ration must be within (0.0..1.0)".into(),
+                "splitting ratio must be within (0.0..1.0)".into(),
             ))
         }
     }
 
     /// Returns the splitting ratio of this [`BeamSplitter`].
     pub fn ratio(&self) -> f64 {
-        self.ratio
+        if let Some(value) = self.props.get("ratio") {
+            if let Proptype::F64(value) = value.prop {
+                return value;
+            }
+        }
+        panic!("wrong data format")
     }
 
     /// Sets the splitting ratio of this [`BeamSplitter`].
     pub fn set_ratio(&mut self, ratio: f64) -> Result<()> {
         if (0.0..=1.0).contains(&ratio) {
-            self.ratio = ratio;
+            self.props.set(
+                "ratio",
+                Property {
+                    prop: Proptype::F64(ratio),
+                },
+            );
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -102,10 +108,10 @@ impl BeamSplitter {
             match in1 {
                 LightData::Energy(e) => {
                     let mut s = e.spectrum.clone();
-                    s.scale_vertical(self.ratio).unwrap();
+                    s.scale_vertical(self.ratio()).unwrap();
                     out1_1_spectrum = Some(s);
                     let mut s = e.spectrum.clone();
-                    s.scale_vertical(1.0 - self.ratio).unwrap();
+                    s.scale_vertical(1.0 - self.ratio()).unwrap();
                     out1_2_spectrum = Some(s);
                 }
                 _ => return Err(OpossumError::Analysis("expected DataEnergy value".into())),
@@ -115,10 +121,10 @@ impl BeamSplitter {
             match in2 {
                 LightData::Energy(e) => {
                     let mut s = e.spectrum.clone();
-                    s.scale_vertical(self.ratio).unwrap();
+                    s.scale_vertical(self.ratio()).unwrap();
                     out2_1_spectrum = Some(s);
                     let mut s = e.spectrum.clone();
-                    s.scale_vertical(1.0 - self.ratio).unwrap();
+                    s.scale_vertical(1.0 - self.ratio()).unwrap();
                     out2_2_spectrum = Some(s);
                 }
                 _ => return Err(OpossumError::Analysis("expected DataEnergy value".into())),
@@ -149,7 +155,6 @@ impl Default for BeamSplitter {
     /// Create a 50:50 beamsplitter.
     fn default() -> Self {
         Self {
-            ratio: 0.5,
             props: create_default_props(),
         }
     }
@@ -204,14 +209,14 @@ mod test {
     fn new() {
         let splitter = BeamSplitter::new(0.5);
         assert!(splitter.is_ok());
-        assert_eq!(splitter.unwrap().ratio, 0.5);
+        assert_eq!(splitter.unwrap().ratio(), 0.5);
         assert!(BeamSplitter::new(-0.01).is_err());
         assert!(BeamSplitter::new(1.01).is_err());
     }
     #[test]
     fn default() {
         let splitter = BeamSplitter::default();
-        assert_eq!(splitter.ratio, 0.5);
+        assert_eq!(splitter.ratio(), 0.5);
     }
     #[test]
     fn ratio() {
@@ -222,7 +227,7 @@ mod test {
     fn set_ratio() {
         let mut splitter = BeamSplitter::new(0.0).unwrap();
         assert!(splitter.set_ratio(1.0).is_ok());
-        assert_eq!(splitter.ratio, 1.0);
+        assert_eq!(splitter.ratio(), 1.0);
         assert!(splitter.set_ratio(-0.1).is_err());
         assert!(splitter.set_ratio(1.1).is_err());
     }

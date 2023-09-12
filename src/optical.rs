@@ -23,10 +23,8 @@ pub trait Optical: Dottable {
     fn name(&self) -> &str {
         self.node_type()
     }
-    /// Return the type of the optical component (lens, filter, ...). The default implementation returns "undefined".
-    fn node_type(&self) -> &str {
-        "undefined"
-    }
+    /// Return the type of the optical component (lens, filter, ...).
+    fn node_type(&self) -> &str;
     /// Return the available (input & output) ports of this [`Optical`].
     fn ports(&self) -> OpticPorts {
         OpticPorts::default()

@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use serde::Serialize;
 use serde_derive::Serialize;
 
+use crate::{error::OpossumError, lightdata::LightData};
+
 #[derive(Default, Debug, Clone)]
 pub struct Properties {
   props: HashMap<String, Property>
@@ -17,7 +19,18 @@ impl Properties {
     }
   }
   pub fn get(&self, name: &str) -> Option<&Property> {
-    self.props.get(name.into())
+    self.props.get(name)
+  }
+  pub fn get_bool(&self, name: & str) -> Result<Option<bool>, OpossumError> {
+    if let Some(property)=self.props.get(name) {
+      if let Proptype::Bool(value)=property.prop {
+        Ok(Some(value))
+      } else {
+        Err(OpossumError::Other("not a bool property".into()))
+      }
+    } else {
+        Ok(None)
+    }
   }
 }
 impl Serialize for Properties {
@@ -45,5 +58,6 @@ pub enum Proptype {
   String(String),
   I32(i32),
   F64(f64),
-  Bool(bool)
+  Bool(bool),
+  LightData(Option<LightData>)
 }

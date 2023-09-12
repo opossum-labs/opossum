@@ -5,7 +5,7 @@ use crate::error::OpossumError;
 use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::Properties;
+use crate::properties::{Properties, Property, Proptype};
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
@@ -32,6 +32,22 @@ pub struct IdealFilter {
     props: Properties
 }
 
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set(
+        "name",
+        Property {
+            prop: Proptype::String("group".into()),
+        },
+    );
+    props.set(
+        "inverted",
+        Property {
+            prop: Proptype::Bool(false),
+        },
+    );
+    props
+}
 impl IdealFilter {
     /// Creates a new [`IdealFilter`] with a given [`FilterType`].
     ///
@@ -47,7 +63,7 @@ impl IdealFilter {
                 ));
             }
         }
-        Ok(Self { filter_type, props: Properties::default() })
+        Ok(Self { filter_type, props: create_default_props() })
     }
     /// Returns the filter type of this [`IdealFilter`].
     pub fn filter_type(&self) -> FilterType {

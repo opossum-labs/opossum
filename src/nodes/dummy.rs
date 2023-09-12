@@ -22,7 +22,6 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - `rear`
 pub struct Dummy {
     is_inverted: bool,
-    name: String,
     props: Properties
 }
 
@@ -47,7 +46,6 @@ impl Default for Dummy {
     fn default() -> Self {
         Self {
             is_inverted: Default::default(),
-            name: String::from("dummy"),
             props: create_default_props()
         }
     }
@@ -58,18 +56,22 @@ impl Dummy {
         let mut props= create_default_props();
         props.set("name", Property{prop: Proptype::String(name.into())});
         Self {
-            name: name.to_owned(),
             is_inverted: false,
-            props: props
+            props
         }
     }
 }
 impl Optical for Dummy {
     fn set_name(&mut self, name: &str) {
-        self.name = name.to_owned()
+        self.props.set("name", Property { prop: Proptype::String(name.into()) });
     }
     fn name(&self) -> &str {
-        &self.name
+        if let Some(value)=self.props.get("name") {
+            if let Proptype::String(name) = &value.prop {
+                return name
+            }
+        }
+       panic!("wonrg format");
     }
     /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {
@@ -118,20 +120,14 @@ mod test {
     #[test]
     fn new() {
         let node = Dummy::new("Test");
-        assert_eq!(node.name, "Test");
+        assert_eq!(node.name(), "Test");
         assert_eq!(node.inverted(), false);
     }
     #[test]
     fn default() {
         let node = Dummy::default();
-        assert_eq!(node.name, "dummy");
+        assert_eq!(node.name(), "dummy");
         assert_eq!(node.inverted(), false);
-    }
-    #[test]
-    fn set_name() {
-        let mut node = Dummy::default();
-        node.set_name("Test1");
-        assert_eq!(node.name, "Test1")
     }
     #[test]
     fn name() {
