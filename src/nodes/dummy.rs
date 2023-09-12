@@ -7,6 +7,7 @@ use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
+use crate::properties::{Properties, Proptype, Property};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -24,22 +25,29 @@ type Result<T> = std::result::Result<T, OpossumError>;
 pub struct Dummy {
     is_inverted: bool,
     name: String,
+    props: Properties
 }
 
 impl Default for Dummy {
     fn default() -> Self {
+        let mut props= Properties::default();
+        props.set("name", Property{prop: Proptype::String("udo".into())});
         Self {
             is_inverted: Default::default(),
             name: String::from("dummy"),
+            props: props
         }
     }
 }
 impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
     pub fn new(name: &str) -> Self {
+        let mut props= Properties::default();
+        props.set("name", Property{prop: Proptype::String(name.into())});
         Self {
             name: name.to_owned(),
             is_inverted: false,
+            props: props
         }
     }
 }
@@ -83,6 +91,9 @@ impl Optical for Dummy {
     }
     fn inverted(&self) -> bool {
         self.is_inverted
+    }
+    fn properties(&self) -> Properties {
+        self.props.clone()
     }
 }
 

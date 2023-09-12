@@ -9,6 +9,7 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
+    properties::{Properties, Property, Proptype},
     spectrum::{merge_spectra, Spectrum},
 };
 
@@ -26,13 +27,40 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - `out2_trans2_refl1`
 pub struct BeamSplitter {
     ratio: f64,
+    props: Properties,
 }
 
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set(
+        "name",
+        Property {
+            prop: Proptype::String("beam splitter".into()),
+        },
+    );
+    props.set(
+        "ratio",
+        Property {
+            prop: Proptype::F64(0.5),
+        },
+    );
+    props
+}
 impl BeamSplitter {
     /// Creates a new [`BeamSplitter`] with a given splitting ratio.
     pub fn new(ratio: f64) -> Result<Self> {
         if (0.0..=1.0).contains(&ratio) {
-            Ok(Self { ratio })
+            let mut props = create_default_props();
+            props.set(
+                "ratio",
+                Property {
+                    prop: Proptype::F64(ratio),
+                },
+            );
+            Ok(Self {
+                ratio,
+                props: props,
+            })
         } else {
             Err(OpossumError::Other(
                 "splitting ration must be within (0.0..1.0)".into(),
@@ -115,7 +143,11 @@ impl BeamSplitter {
 impl Default for BeamSplitter {
     /// Create a 50:50 beamsplitter.
     fn default() -> Self {
-        Self { ratio: 0.5 }
+        let props= create_default_props();
+        Self {
+            ratio: 0.5,
+            props: props,
+        }
     }
 }
 impl Optical for BeamSplitter {
@@ -141,6 +173,16 @@ impl Optical for BeamSplitter {
             _ => Err(OpossumError::Analysis(
                 "analysis type not yet implemented".into(),
             )),
+        }
+    }
+    fn properties(&self) -> Properties {
+        self.props.clone()
+    }
+    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+        if self.props.set(name, prop).is_none() {
+            Err(OpossumError::Other("property not defined".into()))
+        } else {
+            Ok(())
         }
     }
 }

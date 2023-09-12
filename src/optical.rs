@@ -7,6 +7,7 @@ use crate::error::OpossumError;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_ports::OpticPorts;
+use crate::properties::{Properties, Property};
 use core::fmt::Debug;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -68,6 +69,12 @@ pub trait Optical: Dottable + erased_serde::Serialize {
     fn as_group(&self) -> Result<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
+    fn properties(&self) -> Properties {
+        Properties::default()
+    }
+    fn set_property(&mut self, _name: &str, _prop: Property) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl Debug for dyn Optical {
@@ -86,7 +93,7 @@ impl Serialize for OpticRef {
     {
         let mut node = serializer.serialize_struct("node", 1)?;
         node.serialize_field("type", self.0.borrow().node_type())?;
-        node.serialize_field("ports", &self.0.borrow().ports())?;
+        node.serialize_field("properties", &self.0.borrow().properties())?;
         node.end()
     }
 }
