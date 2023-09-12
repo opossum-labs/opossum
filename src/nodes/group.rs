@@ -5,6 +5,7 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::optical::LightResult;
+use crate::properties::Properties;
 use crate::{optic_ports::OpticPorts, optical::Optical, optical::OpticRef};
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
@@ -15,7 +16,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Default, Debug, Clone, Serialize)]
+#[derive(Default, Debug, Serialize, Clone)]
 /// A node that represents a group of other [`Optical`]s arranges in a subgraph.
 ///
 /// All unconnected input and output ports of this subgraph could be used as ports of
@@ -32,6 +33,7 @@ pub struct NodeGroup {
     input_port_map: HashMap<String, (NodeIndex, String)>,
     output_port_map: HashMap<String, (NodeIndex, String)>,
     is_inverted: bool,
+    props: Properties
 }
 
 // impl Serialize for NodeGroup {
@@ -614,6 +616,9 @@ impl Optical for NodeGroup {
     }
     fn as_group(&self) -> Result<&NodeGroup> {
         Ok(self)
+    }
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 

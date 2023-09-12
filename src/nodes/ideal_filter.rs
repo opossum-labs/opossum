@@ -1,26 +1,25 @@
 #![warn(missing_docs)]
-use serde_derive::Serialize;
-
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
+use crate::properties::Properties;
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
 /// Config data for an [`IdealFilter`].
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub enum FilterType {
     /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0
     Constant(f64),
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 /// An ideal filter with given transmission or optical density.
 ///
 /// ## Optical Ports
@@ -30,6 +29,7 @@ pub enum FilterType {
 ///     - `rear`
 pub struct IdealFilter {
     filter_type: FilterType,
+    props: Properties
 }
 
 impl IdealFilter {
@@ -47,7 +47,7 @@ impl IdealFilter {
                 ));
             }
         }
-        Ok(Self { filter_type })
+        Ok(Self { filter_type, props: Properties::default() })
     }
     /// Returns the filter type of this [`IdealFilter`].
     pub fn filter_type(&self) -> FilterType {
@@ -142,6 +142,9 @@ impl Optical for IdealFilter {
                 "analysis type not yet implemented".into(),
             )),
         }
+    }
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 

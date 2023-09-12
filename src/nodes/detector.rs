@@ -1,7 +1,6 @@
 #![warn(missing_docs)]
-use serde_derive::Serialize;
-
 use crate::lightdata::LightData;
+use crate::properties::{Properties, Property, Proptype};
 use crate::{
     dottable::Dottable,
     error::OpossumError,
@@ -13,7 +12,6 @@ use std::fmt::Debug;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Default, Serialize)]
 /// This node represents an universal detector (so far for test / debugging purposes).
 ///
 /// Any [`LightData`] coming in will be stored internally for later display / export.
@@ -28,6 +26,22 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct Detector {
     light_data: Option<LightData>,
+    props: Properties
+}
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set(
+        "name",
+        Property {
+            prop: Proptype::String("detector".into()),
+        },
+    );
+    props
+}
+impl Default for Detector {
+    fn default() -> Self {
+        Self { light_data: Default::default(), props: create_default_props() }
+    }
 }
 impl Optical for Detector {
     fn node_type(&self) -> &str {
@@ -58,6 +72,9 @@ impl Optical for Detector {
     }
     fn is_detector(&self) -> bool {
         true
+    }
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 

@@ -1,7 +1,5 @@
 #![warn(missing_docs)]
-use serde_derive::Serialize;
 use std::collections::HashMap;
-
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
@@ -11,7 +9,7 @@ use crate::properties::{Properties, Proptype, Property};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 /// A fake / dummy component without any optical functionality.
 ///
 /// Any [`LightResult`] is directly forwarded without any modification. It is mainly used for
@@ -28,21 +26,36 @@ pub struct Dummy {
     props: Properties
 }
 
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set(
+        "name",
+        Property {
+            prop: Proptype::String("dummy".into()),
+        },
+    );
+    props.set(
+        "inverted",
+        Property {
+            prop: Proptype::Bool(false),
+        },
+    );
+    props
+}
+
 impl Default for Dummy {
     fn default() -> Self {
-        let mut props= Properties::default();
-        props.set("name", Property{prop: Proptype::String("udo".into())});
         Self {
             is_inverted: Default::default(),
             name: String::from("dummy"),
-            props: props
+            props: create_default_props()
         }
     }
 }
 impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
     pub fn new(name: &str) -> Self {
-        let mut props= Properties::default();
+        let mut props= create_default_props();
         props.set("name", Property{prop: Proptype::String(name.into())});
         Self {
             name: name.to_owned(),
@@ -92,8 +105,8 @@ impl Optical for Dummy {
     fn inverted(&self) -> bool {
         self.is_inverted
     }
-    fn properties(&self) -> Properties {
-        self.props.clone()
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 

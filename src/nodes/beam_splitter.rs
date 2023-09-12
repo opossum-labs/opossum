@@ -1,5 +1,4 @@
 #![warn(missing_docs)]
-use serde_derive::Serialize;
 use std::collections::HashMap;
 
 use crate::{
@@ -15,7 +14,7 @@ use crate::{
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 /// An ideal beamsplitter node with a given splitting ratio.
 ///
 /// ## Optical Ports
@@ -42,6 +41,12 @@ fn create_default_props() -> Properties {
         "ratio",
         Property {
             prop: Proptype::F64(0.5),
+        },
+    );
+    props.set(
+        "inverted",
+        Property {
+            prop: Proptype::Bool(false),
         },
     );
     props
@@ -143,10 +148,9 @@ impl BeamSplitter {
 impl Default for BeamSplitter {
     /// Create a 50:50 beamsplitter.
     fn default() -> Self {
-        let props= create_default_props();
         Self {
             ratio: 0.5,
-            props: props,
+            props: create_default_props(),
         }
     }
 }
@@ -175,8 +179,8 @@ impl Optical for BeamSplitter {
             )),
         }
     }
-    fn properties(&self) -> Properties {
-        self.props.clone()
+    fn properties(&self) -> &Properties {
+        &self.props
     }
     fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
         if self.props.set(name, prop).is_none() {

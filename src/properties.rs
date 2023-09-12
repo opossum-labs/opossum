@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::Serialize;
 use serde_derive::Serialize;
 
-#[derive(Default, Serialize, Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Properties {
   props: HashMap<String, Property>
 }
@@ -19,6 +19,13 @@ impl Properties {
   pub fn get(&self, name: &str) -> Option<&Property> {
     self.props.get(name.into())
   }
+}
+impl Serialize for Properties {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        serializer.serialize_newtype_struct("hallo", &self.props)
+    }
 }
 #[derive(Debug, Clone)]
 pub struct Property {
@@ -37,5 +44,6 @@ impl Serialize for Property {
 pub enum Proptype {
   String(String),
   I32(i32),
-  F64(f64)
+  F64(f64),
+  Bool(bool)
 }

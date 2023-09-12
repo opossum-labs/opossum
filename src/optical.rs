@@ -16,7 +16,7 @@ pub type LightResult = HashMap<String, Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
-pub trait Optical: Dottable + erased_serde::Serialize {
+pub trait Optical: Dottable {
     /// Sets the name of this [`Optical`].
     fn set_name(&mut self, _name: &str) {}
     /// Returns a reference to the name of this [`Optical`].
@@ -69,9 +69,7 @@ pub trait Optical: Dottable + erased_serde::Serialize {
     fn as_group(&self) -> Result<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
-    fn properties(&self) -> Properties {
-        Properties::default()
-    }
+    fn properties(&self) -> &Properties;
     fn set_property(&mut self, _name: &str, _prop: Property) -> Result<()> {
         Ok(())
     }

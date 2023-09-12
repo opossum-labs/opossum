@@ -1,13 +1,12 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
-use serde::Serialize;
-
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
+use crate::properties::Properties;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -23,20 +22,14 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - output ports of the referenced [`Optical`]
 pub struct NodeReference {
     reference: Weak<RefCell<dyn Optical>>,
-}
-
-impl Serialize for NodeReference {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer {
-       serializer.serialize_i32(123)
-    }
+    props: Properties
 }
 impl NodeReference {
     // Create new [`OpticNode`] (of type [`NodeReference`]) from another existing [`OpticNode`].
     pub fn from_node(node: Rc<RefCell<dyn Optical>>) -> Self {
         Self {
             reference: Rc::downgrade(&node),
+            props: Properties::default()
         }
     }
 }
@@ -60,6 +53,9 @@ impl Optical for NodeReference {
             .unwrap()
             .borrow_mut()
             .analyze(incoming_data, analyzer_type)
+    }
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 

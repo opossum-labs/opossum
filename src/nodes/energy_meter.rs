@@ -1,8 +1,7 @@
 #![warn(missing_docs)]
-use serde_derive::Serialize;
-
 use crate::dottable::Dottable;
 use crate::lightdata::LightData;
+use crate::properties::Properties;
 use crate::{
     error::OpossumError,
     optic_ports::OpticPorts,
@@ -14,7 +13,7 @@ use std::fmt::Debug;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[non_exhaustive]
-#[derive(Debug, Default, PartialEq, Clone, Copy, Serialize)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 /// Type of the [`EnergyMeter`]. This is currently not used.
 pub enum Metertype {
     /// an ideal energy meter
@@ -23,7 +22,6 @@ pub enum Metertype {
     /// an ideal power meter (currently not used)
     IdealPowerMeter,
 }
-#[derive(Serialize)]
 /// (ideal) energy / power meter.
 ///
 /// It normally measures the total energy of the incoming light regardless of the wavelength, position, angle, polarization etc...
@@ -40,6 +38,7 @@ pub struct EnergyMeter {
     light_data: Option<LightData>,
     meter_type: Metertype,
     name: String,
+    props: Properties
 }
 
 impl Default for EnergyMeter {
@@ -48,6 +47,7 @@ impl Default for EnergyMeter {
             light_data: Default::default(),
             meter_type: Default::default(),
             name: "energy meter".to_string(),
+            props: Properties::default()
         }
     }
 }
@@ -58,6 +58,7 @@ impl EnergyMeter {
             light_data: None,
             meter_type,
             name: name.to_string(),
+            props: Properties::default()
         }
     }
     /// Returns the meter type of this [`EnergyMeter`].
@@ -104,6 +105,9 @@ impl Optical for EnergyMeter {
     }
     fn is_detector(&self) -> bool {
         true
+    }
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 

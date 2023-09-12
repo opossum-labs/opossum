@@ -9,7 +9,7 @@ use crate::{
     error::OpossumError,
     lightdata::LightData,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optical::{LightResult, Optical}, properties::Properties,
 };
 
 type Result<T> = std::result::Result<T, OpossumError>;
@@ -27,6 +27,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 pub struct Source {
     light_data: Option<LightData>,
     name: String,
+    props: Properties
 }
 
 impl Source {
@@ -48,6 +49,7 @@ impl Source {
         Source {
             light_data: Some(light),
             name: name.to_owned(),
+            props: Properties::default()
         }
     }
 
@@ -92,6 +94,9 @@ impl Optical for Source {
         } else {
             Err(OpossumError::Analysis("no input data available".into()))
         }
+    }
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 
