@@ -96,7 +96,7 @@ impl Debug for EnergyMeter {
 }
 impl Dottable for EnergyMeter {
     fn node_color(&self) -> &str {
-        "lightblue"
+        "whitesmoke"
     }
 }
 

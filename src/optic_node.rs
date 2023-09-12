@@ -156,7 +156,7 @@ pub trait Dottable {
         } else {
             format!("{}_i{}", &parent_identifier, node_index)
         };
-        let mut dot_str = format!("\t{} [\n\t\tshape=plaintext\nrankdir=\"{}\"\n", &parent_identifier, rankdir);
+        let mut dot_str = format!("\t{} [\n\t\tshape=plaintext\n", &parent_identifier);
         let mut indent_level = 2;
         dot_str.push_str(&self.add_html_like_labels(
             &node_name,
@@ -293,7 +293,7 @@ pub trait Dottable {
         let container = match container_str {
             "row" => {
                 if start_flag {
-                    "<TR>"
+                    "<TR BORDER=\"0\">"
                 } else {
                     "</TR>"
                 }
@@ -321,6 +321,79 @@ pub trait Dottable {
         new_str
     }
 
+    fn create_node_table_cells(
+        &self, 
+        dot_str:        &mut String, 
+        inputs:         &Vec<String>, 
+        input_count:    &mut usize,
+        outputs:        &Vec<String>,
+        output_count:   &mut usize,
+        ax1_num:        usize,
+        ax2_num:        usize,
+        indent_level:   &mut i32,
+        node_name:      &str){
+
+        let max_port_num = if inputs.len() <= outputs.len(){
+            outputs.len()
+        } else{
+            inputs.len()
+        };
+
+        
+    
+        let (node_cell_size, 
+            num_cells, 
+            row_col_span,
+            input_start, 
+            output_start
+        ) = if max_port_num > 1{
+            (16*(max_port_num*2+1), 
+            (max_port_num+1)*2+1, 
+            max_port_num*2+1, 
+            max_port_num - inputs.len()+2, 
+            max_port_num - outputs.len()+2
+            )
+        }
+        else {
+            (80, 7, 5, 3,3)
+        };
+        
+        if  input_count < &mut inputs.len() && ax1_num >= input_start && (ax1_num-input_start) % 2 == 0 && ax2_num == 0 {
+            dot_str.push_str(&self.create_port_cell_str(
+                &inputs[*input_count],
+                true,
+                *input_count+1,
+                indent_level,
+            ));
+            *input_count+=1;
+        }
+        else if output_count < &mut outputs.len() &&  ax1_num >= output_start && (ax1_num-output_start) % 2 == 0 && ax2_num == num_cells-1{
+            dot_str.push_str(&self.create_port_cell_str(
+                &outputs[*output_count],
+                false,
+                *output_count+1,
+                indent_level,
+            ));
+            *output_count+=1;
+        }
+        else if ax1_num == 1 && ax2_num == 1{
+            dot_str.push_str(&format!(  "{}<TD ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"10\" STYLE=\"ROUNDED\">{}</TD>\n", 
+                                                "\t".repeat(*indent_level as usize), 
+                                                row_col_span, 
+                                                row_col_span, 
+                                                self.node_color(), 
+                                                node_cell_size, 
+                                                node_cell_size, 
+                                                node_name));
+        }
+        else if  ax1_num >= 1 && ax1_num <row_col_span+1 && ax2_num >= 1 && ax2_num <row_col_span+1{
+            ();
+        }
+        else{
+            dot_str.push_str(&format!(  "{}<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"16\"> </TD>\n", "\t".repeat(*indent_level as usize)))
+        }
+    }
+
     /// creates the node label defined by html-like strings
     fn add_html_like_labels(
         &self,
@@ -332,14 +405,12 @@ pub trait Dottable {
     ) -> String {
         let mut dot_str = "\t\tlabel=<\n".to_owned();
 
-        // Start Table environment
-        dot_str.push_str(&self.create_html_like_container("table", indent_level, true, 1));
-
+        
         let mut inputs = ports.inputs();
         let mut outputs = ports.outputs();
         let mut in_port_count = 0;
         let mut out_port_count = 0;
-
+        
         let num_input_ports = inputs.len();
         let num_output_ports = outputs.len();
         let max_port_num = if num_input_ports <=num_output_ports{
@@ -359,72 +430,105 @@ pub trait Dottable {
         inputs.sort();
         outputs.sort();
 
-        let num_cells = (max_port_num+1)*2+1;
+        let num_cells = if max_port_num >2{
+            (max_port_num+1)*2+1
+        }
+        else{
+            7
+        };
 
+        // Start Table environment
+        dot_str.push_str(&self.create_html_like_container("table", indent_level, true, 1));
 
+        
         for row_num in 0..num_cells{
             dot_str.push_str(&self.create_html_like_container("row", indent_level, true, 1));
             for col_num in 0..num_cells{
-                if  in_port_count < num_input_ports && rankdir == "LR" && row_num != 0 && row_num % 2 == 0 && col_num == 0 {
-                    dot_str.push_str(&self.create_port_cell_str(
-                        &inputs[in_port_count],
-                        true,
-                        in_port_count+1,
+                if rankdir == "LR"{
+                    self.create_node_table_cells(
+                        &mut dot_str,
+                        &inputs,
+                        &mut in_port_count,
+                        &outputs,
+                        &mut out_port_count,
+                        row_num,
+                        col_num,
                         indent_level,
-                    ));
-                    in_port_count+=1;
-                }
-                else if out_port_count < num_output_ports && rankdir == "LR" &&  row_num != 0 && row_num % 2 == 0 && col_num == num_cells-1{
-                    dot_str.push_str(&self.create_port_cell_str(
-                        &outputs[out_port_count],
-                        false,
-                        out_port_count+1,
-                        indent_level,
-                    ));
-                    out_port_count+=1;
-                }
-                else if in_port_count < num_input_ports && rankdir == "TB" && col_num != 0 && col_num % 2 == 0 && row_num == 0 {
-                    dot_str.push_str(&self.create_port_cell_str(
-                        &inputs[in_port_count],
-                        true,
-                        in_port_count+1,
-                        indent_level,
-                    ));
-                    in_port_count+=1;
-                }
-                else if out_port_count < num_output_ports  && rankdir == "TB" && col_num != 0 && col_num % 2 == 0 && row_num == num_cells-1{
-                    dot_str.push_str(&self.create_port_cell_str(
-                        &outputs[out_port_count],
-                        false,
-                        out_port_count+1,
-                        indent_level,
-                    ));
-                    out_port_count+=1;
-                }
-                else if row_num == 1 && col_num == 1{
-                    dot_str.push_str(&format!("{}<TD BORDER=\"1\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" ALIGN=\"CENTER\" WIDTH=\"{}\" CELLPADDING=\"10\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level as usize), row_col_span, row_col_span, self.node_color(), node_cell_size, node_name));
-                }
-                else if  row_num >= 1 && row_num <row_col_span+1 && col_num >= 1 && col_num <row_col_span+1{
-                    ();
-                }
-                else if num_output_ports <= 1 && rankdir == "LR" && col_num == 0 && row_num % 2 == 1 {
-                    dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"32\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
-                }
-                else if num_output_ports <= 1 && rankdir == "TB" && row_num == 0 && col_num % 2 == 1 {
-                    dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"32\" BORDER=\"1\" ></TD>\n")
-                }       
-
-                else if num_output_ports <= 1 && rankdir == "LR" && col_num == num_cells-1 && row_num % 2 == 1 {
-                        dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"32\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
-                }
-                else if num_output_ports <= 1 && rankdir == "TB" && row_num == num_cells-1 && col_num % 2 == 1{
-                    dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"32\" BORDER=\"1\" ></TD>\n")
+                        node_name)
                 }
                 else{
-                    dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
+                    self.create_node_table_cells(
+                        &mut dot_str,
+                        &inputs,
+                        &mut in_port_count,
+                        &outputs,
+                        &mut out_port_count,
+                        col_num,
+                        row_num,
+                        indent_level,
+                        node_name)
                 }
+
+                // if  in_port_count < num_input_ports && rankdir == "LR" && row_num != 0 && row_num % 2 == 0 && col_num == 0 {
+                //     dot_str.push_str(&self.create_port_cell_str(
+                //         &inputs[in_port_count],
+                //         true,
+                //         in_port_count+1,
+                //         indent_level,
+                //     ));
+                //     in_port_count+=1;
+                // }
+                // else if out_port_count < num_output_ports && rankdir == "LR" &&  row_num != 0 && row_num % 2 == 0 && col_num == num_cells-1{
+                //     dot_str.push_str(&self.create_port_cell_str(
+                //         &outputs[out_port_count],
+                //         false,
+                //         out_port_count+1,
+                //         indent_level,
+                //     ));
+                //     out_port_count+=1;
+                // }
+                // else if in_port_count < num_input_ports && rankdir == "TB" && col_num != 0 && col_num % 2 == 0 && row_num == 0 {
+                //     dot_str.push_str(&self.create_port_cell_str(
+                //         &inputs[in_port_count],
+                //         true,
+                //         in_port_count+1,
+                //         indent_level,
+                //     ));
+                //     in_port_count+=1;
+                // }
+                // else if out_port_count < num_output_ports  && rankdir == "TB" && col_num != 0 && col_num % 2 == 0 && row_num == num_cells-1{
+                //     dot_str.push_str(&self.create_port_cell_str(
+                //         &outputs[out_port_count],
+                //         false,
+                //         out_port_count+1,
+                //         indent_level,
+                //     ));
+                //     out_port_count+=1;
+                // }
+                // else if row_num == 1 && col_num == 1{
+                //     dot_str.push_str(&format!("{}<TD BORDER=\"1\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" ALIGN=\"CENTER\" WIDTH=\"{}\" CELLPADDING=\"10\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level as usize), row_col_span, row_col_span, self.node_color(), node_cell_size, node_name));
+                // }
+                // else if  row_num >= 1 && row_num <row_col_span+1 && col_num >= 1 && col_num <row_col_span+1{
+                //     ();
+                // }
+                // else if num_output_ports <= 1 && rankdir == "LR" && col_num == 0 && row_num % 2 == 1 {
+                //     dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"32\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
+                // }
+                // else if num_output_ports <= 1 && rankdir == "TB" && row_num == 0 && col_num % 2 == 1 {
+                //     dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"32\" BORDER=\"1\" ></TD>\n")
+                // }       
+                // else if num_output_ports <= 1 && rankdir == "LR" && col_num == num_cells-1 && row_num % 2 == 1 {
+                //         dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"32\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
+                // }
+                // else if num_output_ports <= 1 && rankdir == "TB" && row_num == num_cells-1 && col_num % 2 == 1{
+                //     dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"32\" BORDER=\"1\" ></TD>\n")
+                // }
+                // else{
+                //     dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
+                // }
             }
-            dot_str.push_str(&self.create_html_like_container("row", indent_level, false, -1));
+            *indent_level -= 1;
+            dot_str.push_str(&self.create_html_like_container("row", indent_level, false, 0));
 
         }
 

@@ -19,7 +19,7 @@ fn main() -> Result<(), OpossumError> {
     let mut nested_group = NodeGroup::new(); 
     let nested_g_n1 = nested_group.add_node(OpticNode::new("TFP1_g_nested_1", Dummy::default()));
     let nested_g_n2 = nested_group.add_node(OpticNode::new("TFP1_g_nested_2", Dummy::default()));
-    nested_group.expand_view(true);
+    nested_group.expand_view(false);
 
     nested_group.connect_nodes(nested_g_n1, "rear", nested_g_n2, "front")?;
     nested_group.map_input_port(nested_g_n1, "front", "in1")?;
@@ -44,7 +44,7 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(scene_g1, "out1", scene_g2, "in1")?;
     let path = "graph_group.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()?).unwrap();
+    write!(output, "{}", scenery.to_dot("LR")?).unwrap();
 
     Ok(())
 }

@@ -28,7 +28,7 @@ pub struct OpticScenery {
 impl OpticScenery {
     /// Creates a new (empty) [`OpticScenery`].
     pub fn new() -> Self {
-        Self::default()
+        Self::default()        
     }
     /// Add a given [`OpticNode`] to the graph of this [`OpticScenery`].
     ///
@@ -188,10 +188,14 @@ impl OpticScenery {
 
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self, rankdir: &str) -> Result<String> {
+        //check direction
+        let rankdir = if rankdir != "LR" {"TB"}else{"LR"};
+
         let mut dot_string = self.add_dot_header(rankdir);
 
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
+
             dot_string += &node
                 .borrow()
                 .to_dot(&format!("{}", node_idx.index()), "".to_owned(), rankdir)?;
@@ -204,6 +208,7 @@ impl OpticScenery {
                 self.create_node_edge_str(end_nodes.0, light.src_port(), "".to_owned())?;
             let target_edge_str =
                 self.create_node_edge_str(end_nodes.1, light.target_port(), "".to_owned())?;
+
 
             dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
             // for src in src_edge_str.iter(){

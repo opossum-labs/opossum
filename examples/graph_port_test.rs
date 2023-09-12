@@ -28,7 +28,7 @@ fn main() -> Result<(), OpossumError> {
 
     let path = "graph_w_ports.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()?).unwrap();
+    write!(output, "{}", scenery.to_dot("")?).unwrap();
 
     Ok(())
 }

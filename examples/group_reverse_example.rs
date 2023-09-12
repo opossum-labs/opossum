@@ -41,7 +41,7 @@ fn main() -> Result<(), OpossumError> {
 
     let path = "group_reverse.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()?).unwrap();
+    write!(output, "{}", scenery.to_dot("")?).unwrap();
 
     let mut analyzer = AnalyzerEnergy::new(&scenery);
     analyzer.analyze()?;

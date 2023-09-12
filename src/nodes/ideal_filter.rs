@@ -126,6 +126,8 @@ impl Optical for IdealFilter {
         let mut ports = OpticPorts::new();
         ports.add_input("front").unwrap();
         ports.add_output("rear").unwrap();
+        ports.add_output("2").unwrap();
+        ports.add_output("3").unwrap();
         ports
     }
     fn analyze(
