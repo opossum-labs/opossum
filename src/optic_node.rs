@@ -5,7 +5,6 @@ use crate::optic_ports::OpticPorts;
 use core::fmt::Debug;
 use std::any::Any;
 use std::collections::HashMap;
-use std::fs;
 
 pub type LightResult = HashMap<String, Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
@@ -489,7 +488,7 @@ mod test {
     use super::OpticNode;
     use crate::nodes::{Detector, Dummy, BeamSplitter, EnergyMeter, Source};
     use crate::OpticScenery;
-    use std::{fs::File,io::{Write, Read}};
+    use std::{fs::File,io::Read};
 
     #[test]
     fn new() {
@@ -530,12 +529,12 @@ mod test {
     #[test]
     fn to_dot(){
         let path = "files_for_testing/to_dot_test_TB.dot";
-        let file_content_TB = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content_TB);
+        let file_content_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
 
         let path = "files_for_testing/to_dot_test_LR.dot";
-        let file_content_LR = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content_LR);
+        let file_content_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 
         let mut scenery = OpticScenery::new();    
         let i_s = scenery.add_element(
@@ -553,8 +552,8 @@ mod test {
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
         let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
 
-        assert_eq!(file_content_TB.clone(), scenery_dot_str_tb);
-        assert_eq!(file_content_LR.clone(), scenery_dot_str_lr);
+        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
+        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
     }
     #[test]
     #[ignore]
