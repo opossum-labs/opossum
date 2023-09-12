@@ -5,6 +5,7 @@ use crate::optic_ports::OpticPorts;
 use core::fmt::Debug;
 use std::any::Any;
 use std::collections::HashMap;
+use std::fs;
 
 pub type LightResult = HashMap<String, Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
@@ -200,7 +201,6 @@ pub trait Dottable {
         port_name: &str,
         input_flag: bool,
         port_index: usize,
-        indent_level: &mut i32,
     ) -> String {
         // inputs marked as green, outputs as blue
         let color_str = if input_flag {
@@ -215,8 +215,7 @@ pub trait Dottable {
             "Output port"
         };
         format!(
-            "{}<TD HEIGHT=\"16\" WIDTH=\"16\" PORT=\"{}\" BORDER=\"1\" BGCOLOR={} HREF=\"\" TOOLTIP=\"{} {}: {}\">{}</TD>\n",
-            "\t".repeat(*indent_level as usize),
+            "<TD HEIGHT=\"16\" WIDTH=\"16\" PORT=\"{}\" BORDER=\"1\" BGCOLOR={} HREF=\"\" TOOLTIP=\"{} {}: {}\">{}</TD>\n",
             port_name,
             color_str,
             in_out_str,
@@ -254,7 +253,6 @@ pub trait Dottable {
                 &port,
                 input_flag,
                 port_index,
-                indent_level,
             ));
             dot_str.push_str(&self.add_table_cell_container("", false, indent_level));
             port_index += 1;
@@ -323,62 +321,60 @@ pub trait Dottable {
 
     fn create_node_table_cells(
         &self, 
-        dot_str:        &mut String, 
-        inputs:         &Vec<String>, 
-        input_count:    &mut usize,
-        outputs:        &Vec<String>,
-        output_count:   &mut usize,
-        ax1_num:        usize,
-        ax2_num:        usize,
-        indent_level:   &mut i32,
-        node_name:      &str){
+        ports:         (&Vec<String>,&Vec<String>), 
+        // outputs:        &Vec<String>,
+        ports_count:    (&mut usize, &mut usize),
+        ax_nums:        (usize,usize),
+        node_name:      &str
+    ) -> String{
 
-        let max_port_num = if inputs.len() <= outputs.len(){
-            outputs.len()
+        let mut dot_str = "".to_owned();
+        let max_port_num = if ports.0.len() <= ports.1.len(){
+            ports.1.len()
         } else{
-            inputs.len()
+            ports.0.len()
         };
 
+
+        let port_0_count = ports_count.0;
+        let port_1_count = ports_count.1;
         
     
         let (node_cell_size, 
             num_cells, 
             row_col_span,
-            input_start, 
-            output_start
+            port_0_start, 
+            port_1_start
         ) = if max_port_num > 1{
             (16*(max_port_num*2+1), 
             (max_port_num+1)*2+1, 
             max_port_num*2+1, 
-            max_port_num - inputs.len()+2, 
-            max_port_num - outputs.len()+2
+            max_port_num - ports.0.len()+2, 
+            max_port_num - ports.1.len()+2
             )
         }
         else {
             (80, 7, 5, 3,3)
         };
         
-        if  input_count < &mut inputs.len() && ax1_num >= input_start && (ax1_num-input_start) % 2 == 0 && ax2_num == 0 {
+        if port_0_count < &mut ports.0.len() && ax_nums.0 >= port_0_start && (ax_nums.0-port_0_start) % 2 == 0 && ax_nums.1 == 0 {
             dot_str.push_str(&self.create_port_cell_str(
-                &inputs[*input_count],
+                &ports.0[*port_0_count],
                 true,
-                *input_count+1,
-                indent_level,
+                *port_0_count+1,
             ));
-            *input_count+=1;
+            *port_0_count+=1;
         }
-        else if output_count < &mut outputs.len() &&  ax1_num >= output_start && (ax1_num-output_start) % 2 == 0 && ax2_num == num_cells-1{
+        else if port_1_count < &mut ports.1.len() &&  ax_nums.0 >= port_1_start && (ax_nums.0-port_1_start) % 2 == 0 && ax_nums.1 == num_cells-1{
             dot_str.push_str(&self.create_port_cell_str(
-                &outputs[*output_count],
+                &ports.1[*port_1_count],
                 false,
-                *output_count+1,
-                indent_level,
+                *port_1_count+1,
             ));
-            *output_count+=1;
+            *port_1_count+=1;
         }
-        else if ax1_num == 1 && ax2_num == 1{
-            dot_str.push_str(&format!(  "{}<TD ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"10\" STYLE=\"ROUNDED\">{}</TD>\n", 
-                                                "\t".repeat(*indent_level as usize), 
+        else if ax_nums.0 == 1 && ax_nums.1 == 1{
+            dot_str.push_str(&format!(  "<TD ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"10\" STYLE=\"ROUNDED\">{}</TD>\n", 
                                                 row_col_span, 
                                                 row_col_span, 
                                                 self.node_color(), 
@@ -386,12 +382,11 @@ pub trait Dottable {
                                                 node_cell_size, 
                                                 node_name));
         }
-        else if  ax1_num >= 1 && ax1_num <row_col_span+1 && ax2_num >= 1 && ax2_num <row_col_span+1{
-            ();
-        }
         else{
-            dot_str.push_str(&format!(  "{}<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"16\"> </TD>\n", "\t".repeat(*indent_level as usize)))
-        }
+            dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"16\"> </TD>\n")
+        };
+
+        dot_str
     }
 
     /// creates the node label defined by html-like strings
@@ -410,137 +405,59 @@ pub trait Dottable {
         let mut outputs = ports.outputs();
         let mut in_port_count = 0;
         let mut out_port_count = 0;
-        
-        let num_input_ports = inputs.len();
-        let num_output_ports = outputs.len();
-        let max_port_num = if num_input_ports <=num_output_ports{
-            num_output_ports
-        } else{
-            num_input_ports
-        };
-
-        let row_col_span = (max_port_num*2+1);
-        let node_cell_size = if max_port_num > 2{
-            16*(max_port_num*2+1)
-        }
-        else{
-            80
-        };
-
         inputs.sort();
         outputs.sort();
-
-        let num_cells = if max_port_num >2{
-            (max_port_num+1)*2+1
+        
+        let num_cells = if inputs.len() <=outputs.len() &&  outputs.len() > 1{
+            (outputs.len()+1)*2+1
+        } else if inputs.len() > outputs.len() &&  inputs.len() > 1{
+            (inputs.len()+1)*2+1
         }
         else{
             7
         };
 
+        let port_list = if inverted{(&outputs, &inputs)}else{(&inputs, &outputs)};
+
+
         // Start Table environment
         dot_str.push_str(&self.create_html_like_container("table", indent_level, true, 1));
 
-        
+        //create each cell of the table
         for row_num in 0..num_cells{
             dot_str.push_str(&self.create_html_like_container("row", indent_level, true, 1));
             for col_num in 0..num_cells{
-                if rankdir == "LR"{
-                    self.create_node_table_cells(
-                        &mut dot_str,
-                        &inputs,
-                        &mut in_port_count,
-                        &outputs,
-                        &mut out_port_count,
-                        row_num,
-                        col_num,
-                        indent_level,
-                        node_name)
-                }
-                else{
-                    self.create_node_table_cells(
-                        &mut dot_str,
-                        &inputs,
-                        &mut in_port_count,
-                        &outputs,
-                        &mut out_port_count,
-                        col_num,
-                        row_num,
-                        indent_level,
-                        node_name)
-                }
+                if rankdir == "LR" 
+                   && !(col_num > 1 && col_num <num_cells-1 && row_num>= 1 && row_num <num_cells-1) 
+                   && !(col_num >= 1 && col_num <num_cells-1 && row_num> 1 && row_num <num_cells-1){
 
-                // if  in_port_count < num_input_ports && rankdir == "LR" && row_num != 0 && row_num % 2 == 0 && col_num == 0 {
-                //     dot_str.push_str(&self.create_port_cell_str(
-                //         &inputs[in_port_count],
-                //         true,
-                //         in_port_count+1,
-                //         indent_level,
-                //     ));
-                //     in_port_count+=1;
-                // }
-                // else if out_port_count < num_output_ports && rankdir == "LR" &&  row_num != 0 && row_num % 2 == 0 && col_num == num_cells-1{
-                //     dot_str.push_str(&self.create_port_cell_str(
-                //         &outputs[out_port_count],
-                //         false,
-                //         out_port_count+1,
-                //         indent_level,
-                //     ));
-                //     out_port_count+=1;
-                // }
-                // else if in_port_count < num_input_ports && rankdir == "TB" && col_num != 0 && col_num % 2 == 0 && row_num == 0 {
-                //     dot_str.push_str(&self.create_port_cell_str(
-                //         &inputs[in_port_count],
-                //         true,
-                //         in_port_count+1,
-                //         indent_level,
-                //     ));
-                //     in_port_count+=1;
-                // }
-                // else if out_port_count < num_output_ports  && rankdir == "TB" && col_num != 0 && col_num % 2 == 0 && row_num == num_cells-1{
-                //     dot_str.push_str(&self.create_port_cell_str(
-                //         &outputs[out_port_count],
-                //         false,
-                //         out_port_count+1,
-                //         indent_level,
-                //     ));
-                //     out_port_count+=1;
-                // }
-                // else if row_num == 1 && col_num == 1{
-                //     dot_str.push_str(&format!("{}<TD BORDER=\"1\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" ALIGN=\"CENTER\" WIDTH=\"{}\" CELLPADDING=\"10\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level as usize), row_col_span, row_col_span, self.node_color(), node_cell_size, node_name));
-                // }
-                // else if  row_num >= 1 && row_num <row_col_span+1 && col_num >= 1 && col_num <row_col_span+1{
-                //     ();
-                // }
-                // else if num_output_ports <= 1 && rankdir == "LR" && col_num == 0 && row_num % 2 == 1 {
-                //     dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"32\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
-                // }
-                // else if num_output_ports <= 1 && rankdir == "TB" && row_num == 0 && col_num % 2 == 1 {
-                //     dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"32\" BORDER=\"1\" ></TD>\n")
-                // }       
-                // else if num_output_ports <= 1 && rankdir == "LR" && col_num == num_cells-1 && row_num % 2 == 1 {
-                //         dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"32\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
-                // }
-                // else if num_output_ports <= 1 && rankdir == "TB" && row_num == num_cells-1 && col_num % 2 == 1{
-                //     dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"32\" BORDER=\"1\" ></TD>\n")
-                // }
-                // else{
-                //     dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"16\" BORDER=\"1\" ></TD>\n")
-                // }
+                    dot_str.push_str(&"\t".repeat(*indent_level as usize));
+                    dot_str.push_str(
+                        &self.create_node_table_cells(
+                            port_list,
+                            (&mut in_port_count, &mut out_port_count),
+                            (row_num,col_num),
+                            node_name
+                        )
+                    )
+                }
+                else if rankdir != "LR" 
+                        && !(row_num > 1 && row_num <num_cells-1 && col_num>= 1 && col_num <num_cells-1)
+                        && !(row_num >= 1 && row_num <num_cells-1 && col_num> 1 && col_num <num_cells-1){
+                    dot_str.push_str(&"\t".repeat(*indent_level as usize));
+                    dot_str.push_str(
+                        &self.create_node_table_cells(
+                        port_list,                        
+                        (&mut in_port_count, &mut out_port_count),
+                        (col_num, row_num),
+                        node_name)
+                    )
+                };
             }
             *indent_level -= 1;
             dot_str.push_str(&self.create_html_like_container("row", indent_level, false, 0));
 
         }
-
-        // // add row containing the input ports
-        // dot_str.push_str(&self.create_port_cells_str(!inverted, indent_level, 0, ports));
-
-        // // add row containing the node main
-        // dot_str.push_str(&self.create_main_node_row_str(node_name, indent_level));
-
-        // // add row containing the output ports
-        // dot_str.push_str(&self.create_port_cells_str(inverted, indent_level, -1, ports));
-
         //end table environment
         dot_str.push_str(&self.create_html_like_container("table", indent_level, false, -1));
 
@@ -570,7 +487,10 @@ impl dyn OpticComponent + 'static {
 #[cfg(test)]
 mod test {
     use super::OpticNode;
-    use crate::nodes::{Detector, Dummy};
+    use crate::nodes::{Detector, Dummy, BeamSplitter, EnergyMeter, Source};
+    use crate::OpticScenery;
+    use std::{fs::File,io::{Write, Read}};
+
     #[test]
     fn new() {
         let node = OpticNode::new("Test", Dummy::default());
@@ -608,13 +528,33 @@ mod test {
         assert_eq!(node.is_detector(), true)
     }
     #[test]
-    #[ignore]
-    fn to_dot() {
-        let node = OpticNode::new("Test", Dummy::default());
-        assert_eq!(
-            node.to_dot("i0", "".to_owned(), "TB").unwrap(),
-            "  i0 [label=\"Test\"]\n".to_owned()
-        )
+    fn to_dot(){
+        let path = "files_for_testing/to_dot_test_TB.dot";
+        let file_content_TB = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_TB);
+
+        let path = "files_for_testing/to_dot_test_LR.dot";
+        let file_content_LR = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_LR);
+
+        let mut scenery = OpticScenery::new();    
+        let i_s = scenery.add_element(
+            "Source",
+            Source::default(),
+        );
+        let i_bs = scenery.add_element("Beam splitter", BeamSplitter::new(0.6).unwrap());
+        let i_d1 = scenery.add_element("Energy meter 1", EnergyMeter::default());
+        let i_d2 = scenery.add_element("Energy meter 2", EnergyMeter::default());
+    
+        scenery.connect_nodes(i_s, "out1", i_bs, "input1").unwrap();    
+        scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1").unwrap();
+        scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1").unwrap();
+    
+        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
+        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+
+        assert_eq!(file_content_TB.clone(), scenery_dot_str_tb);
+        assert_eq!(file_content_LR.clone(), scenery_dot_str_lr);
     }
     #[test]
     #[ignore]

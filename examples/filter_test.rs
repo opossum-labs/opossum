@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{File, read_to_string};
 use std::io::Write;
 
 use opossum::{
