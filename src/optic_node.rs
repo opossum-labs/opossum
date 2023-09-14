@@ -527,11 +527,11 @@ mod test {
     }
     #[test]
     fn to_dot(){
-        let path = "files_for_testing/dot/to_dot_single_node_TB.dot";
+        let path = "files_for_testing/dot/to_dot_single_node_TB.txt";
         let file_content_tb = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_tb);
 
-        let path = "files_for_testing/dot/to_dot_single_node_LR.dot";
+        let path = "files_for_testing/dot/to_dot_single_node_LR.txt";
         let file_content_lr = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 
@@ -554,11 +554,11 @@ mod test {
     }
     #[test]
     fn to_dot_inverted() {
-        let path = "files_for_testing/dot/to_dot_single_node_inverted_TB.dot";
+        let path = "files_for_testing/dot/to_dot_single_node_inverted_TB.txt";
         let file_content_tb = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_tb);
 
-        let path = "files_for_testing/dot/to_dot_single_node_inverted_LR.dot";
+        let path = "files_for_testing/dot/to_dot_single_node_inverted_LR.txt";
         let file_content_lr = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 
@@ -581,19 +581,19 @@ mod test {
     }
     #[test]
     fn to_dot_group(){
-        let path = "files_for_testing/dot/to_dot_group_node_expand_TB.dot";
+        let path = "files_for_testing/dot/to_dot_group_node_expand_TB.txt";
         let file_content_expand_tb = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_expand_tb);
 
-        let path = "files_for_testing/dot/to_dot_group_node_collapse_TB.dot";
+        let path = "files_for_testing/dot/to_dot_group_node_collapse_TB.txt";
         let file_content_collapse_tb = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_collapse_tb);
 
-        let path = "files_for_testing/dot/to_dot_group_node_expand_LR.dot";
+        let path = "files_for_testing/dot/to_dot_group_node_expand_LR.txt";
         let file_content_expand_lr = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_expand_lr);
 
-        let path = "files_for_testing/dot/to_dot_group_node_collapse_LR.dot";
+        let path = "files_for_testing/dot/to_dot_group_node_collapse_LR.txt";
         let file_content_collapse_lr = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_collapse_lr);
 
