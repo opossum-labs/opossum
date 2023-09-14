@@ -365,11 +365,11 @@ mod test {
     }
     #[test]
     fn to_dot_with_node() {
-        let path = "files_for_testing/dot/to_dot_w_node_TB.dot";
+        let path = "./files_for_testing/dot/to_dot_w_node_TB.dot";
         let file_content_tb = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_tb);
 
-        let path = "files_for_testing/dot/to_dot_w_node_LR.dot";
+        let path = "./files_for_testing/dot/to_dot_w_node_LR.dot";
         let file_content_lr = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 
