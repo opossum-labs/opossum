@@ -32,7 +32,8 @@ pub struct NodeGroup {
     expand_view: bool,
     input_port_map: HashMap<String, (NodeIndex, String)>,
     output_port_map: HashMap<String, (NodeIndex, String)>,
-    is_inverted: bool,
+    /// declares wether the group is inverted or not
+    pub is_inverted: bool,
 }
 
 impl NodeGroup {

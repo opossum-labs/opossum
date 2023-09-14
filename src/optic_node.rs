@@ -486,9 +486,9 @@ impl dyn OpticComponent + 'static {
 #[cfg(test)]
 mod test {
     use super::OpticNode;
-    use crate::nodes::{Detector, Dummy, BeamSplitter, EnergyMeter, Source};
-    use crate::OpticScenery;
-    use std::{fs::File,io::Read};
+    use crate::nodes::{Detector, Dummy, BeamSplitter, NodeGroup};
+    use std::{fs::File,io::{Write,Read}};
+    use crate::optic_node::Dottable;
 
     #[test]
     fn new() {
@@ -528,42 +528,109 @@ mod test {
     }
     #[test]
     fn to_dot(){
-        let path = "files_for_testing/to_dot_test_TB.dot";
+        let path = "files_for_testing/dot/to_dot_single_node_TB.dot";
         let file_content_tb = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_tb);
 
-        let path = "files_for_testing/to_dot_test_LR.dot";
+        let path = "files_for_testing/dot/to_dot_single_node_LR.dot";
         let file_content_lr = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 
-        let mut scenery = OpticScenery::new();    
-        let i_s = scenery.add_element(
-            "Source",
-            Source::default(),
-        );
-        let i_bs = scenery.add_element("Beam splitter", BeamSplitter::new(0.6).unwrap());
-        let i_d1 = scenery.add_element("Energy meter 1", EnergyMeter::default());
-        let i_d2 = scenery.add_element("Energy meter 2", EnergyMeter::default());
-    
-        scenery.connect_nodes(i_s, "out1", i_bs, "input1").unwrap();    
-        scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1").unwrap();
-        scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1").unwrap();
-    
-        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+        let node = OpticNode::new("Test", Dummy::default());
+        let node_dot_str_lr = node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR"
+        ).unwrap(); 
 
-        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
-        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
+        let node_dot_str_tb = node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR"
+        ).unwrap(); 
+
+        assert_eq!(file_content_tb.clone(), node_dot_str_tb);
+        assert_eq!(file_content_lr.clone(), node_dot_str_lr);
+
     }
     #[test]
-    #[ignore]
     fn to_dot_inverted() {
+        let path = "files_for_testing/dot/to_dot_single_node_inverted_TB.dot";
+        let file_content_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
+
+        let path = "files_for_testing/dot/to_dot_single_node_inverted_LR.dot";
+        let file_content_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+
         let mut node = OpticNode::new("Test", Dummy::default());
         node.set_inverted(true);
-        assert_eq!(
-            node.to_dot("i0", "".to_owned(), "TB").unwrap(),
-            "  i0 [label=\"Test(inv)\"]\n".to_owned()
-        )
+        let node_dot_str_lr = node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR"
+        ).unwrap(); 
+
+        let node_dot_str_tb = node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR"
+        ).unwrap(); 
+
+        assert_eq!(file_content_tb.clone(), node_dot_str_tb);
+        assert_eq!(file_content_lr.clone(), node_dot_str_lr);
+    }
+    #[test]
+    fn to_dot_group(){
+        let path = "files_for_testing/dot/to_dot_group_node_expand_TB.dot";
+        let file_content_expand_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_expand_tb);
+
+        let path = "files_for_testing/dot/to_dot_group_node_collapse_TB.dot";
+        let file_content_collapse_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_collapse_tb);
+
+        let path = "files_for_testing/dot/to_dot_group_node_expand_LR.dot";
+        let file_content_expand_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_expand_lr);
+
+        let path = "files_for_testing/dot/to_dot_group_node_collapse_LR.dot";
+        let file_content_collapse_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_collapse_lr);
+
+        let mut group1 = NodeGroup::new();
+        group1.expand_view(true);
+        let g1_n1 = group1.add_node(OpticNode::new("TFP1_g1", Dummy::default()));
+        let g1_n2 = group1.add_node(OpticNode::new("TFP2_g1", BeamSplitter::default()));
+        group1.map_output_port(g1_n2, "out1_trans1_refl2", "out1").unwrap();
+        group1.connect_nodes(g1_n1, "rear", g1_n2, "input1").unwrap();
+
+        let group_node = OpticNode::new("Group1_TFPs", group1.clone());
+        let node_dot_str_expand_lr = group_node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR").unwrap();
+        let node_dot_str_expand_tb = group_node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR").unwrap();
+
+        group1.expand_view(false);
+
+        let group_node = OpticNode::new("Group1_TFPs", group1);
+        let node_dot_str_collapse_lr = group_node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR").unwrap();
+        let node_dot_str_collapse_tb = group_node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR").unwrap();
+
+        assert_eq!(file_content_expand_lr.clone(), node_dot_str_expand_lr);
+        assert_eq!(file_content_expand_tb.clone(), node_dot_str_expand_tb);
+        assert_eq!(file_content_collapse_lr.clone(), node_dot_str_collapse_lr);
+        assert_eq!(file_content_collapse_tb.clone(), node_dot_str_collapse_tb);
     }
     #[test]
     fn node_type() {
