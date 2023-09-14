@@ -5,7 +5,7 @@ use opossum::{
     analyzer::AnalyzerEnergy,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
-    nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source, EnergyMeter, Spectrometer},
+    nodes::{BeamSplitter, FilterType, IdealFilter, Source, EnergyMeter, Spectrometer},
     spectrum::{create_he_ne_spectrum, Spectrum},
     OpticScenery,
 };
@@ -26,7 +26,7 @@ fn main() -> Result<(), OpossumError> {
         "Filter",
         IdealFilter::new(FilterType::Spectrum(filter_spectrum))?,
     );
-    let i_d1 = scenery.add_element("Energy meter 1", Detector::default());
+    let i_d1 = scenery.add_element("Energy meter 1", EnergyMeter::default());
     let i_d2 = scenery.add_element("Spectrometer", Spectrometer::default());
     let i_d3 = scenery.add_element("Energy meter 2", EnergyMeter::default());
 
@@ -39,7 +39,7 @@ fn main() -> Result<(), OpossumError> {
 
     let path = "src_detector.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()?).unwrap();
+    write!(output, "{}", scenery.to_dot("")?).unwrap();
 
     scenery.report();
     println!("");

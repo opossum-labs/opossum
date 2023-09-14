@@ -47,13 +47,14 @@ impl OpticNode {
 
     /// Returns a string representation of the [`OpticNode`] in `graphviz` format including port visualization.
     /// This function is normally called by the top-level `to_dot`function within `OpticScenery`.
-    pub fn to_dot(&self, node_index: &str, parent_identifier: String) -> Result<String> {
+    pub fn to_dot(&self, node_index: &str, parent_identifier: String, rankdir: &str) -> Result<String> {
         self.node.to_dot(
             node_index,
             &self.name,
             self.inverted(),
             &self.node.ports(),
             parent_identifier,
+            rankdir, 
         )
     }
 
@@ -146,6 +147,7 @@ pub trait Dottable {
         inverted: bool,
         ports: &OpticPorts,
         mut parent_identifier: String,
+        rankdir: &str
     ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
@@ -161,6 +163,7 @@ pub trait Dottable {
             &mut indent_level,
             ports,
             inverted,
+            rankdir
         ));
         Ok(dot_str)
     }
@@ -197,7 +200,6 @@ pub trait Dottable {
         port_name: &str,
         input_flag: bool,
         port_index: usize,
-        indent_level: &mut i32,
     ) -> String {
         // inputs marked as green, outputs as blue
         let color_str = if input_flag {
@@ -212,8 +214,7 @@ pub trait Dottable {
             "Output port"
         };
         format!(
-            "{}<TD PORT=\"{}\" BORDER=\"1\" BGCOLOR={} HREF=\"\" TOOLTIP=\"{} {}: {}\">{}</TD>\n",
-            "\t".repeat(*indent_level as usize),
+            "<TD HEIGHT=\"16\" WIDTH=\"16\" PORT=\"{}\" BORDER=\"1\" BGCOLOR={} HREF=\"\" TOOLTIP=\"{} {}: {}\">{}</TD>\n",
             port_name,
             color_str,
             in_out_str,
@@ -251,7 +252,6 @@ pub trait Dottable {
                 &port,
                 input_flag,
                 port_index,
-                indent_level,
             ));
             dot_str.push_str(&self.add_table_cell_container("", false, indent_level));
             port_index += 1;
@@ -290,7 +290,7 @@ pub trait Dottable {
         let container = match container_str {
             "row" => {
                 if start_flag {
-                    "<TR>"
+                    "<TR BORDER=\"0\">"
                 } else {
                     "</TR>"
                 }
@@ -318,6 +318,76 @@ pub trait Dottable {
         new_str
     }
 
+    fn create_node_table_cells(
+        &self, 
+        ports:         (&Vec<String>,&Vec<String>), 
+        // outputs:        &Vec<String>,
+        ports_count:    (&mut usize, &mut usize),
+        ax_nums:        (usize,usize),
+        node_name:      &str
+    ) -> String{
+
+        let mut dot_str = "".to_owned();
+        let max_port_num = if ports.0.len() <= ports.1.len(){
+            ports.1.len()
+        } else{
+            ports.0.len()
+        };
+
+
+        let port_0_count = ports_count.0;
+        let port_1_count = ports_count.1;
+        
+    
+        let (node_cell_size, 
+            num_cells, 
+            row_col_span,
+            port_0_start, 
+            port_1_start
+        ) = if max_port_num > 1{
+            (16*(max_port_num*2+1), 
+            (max_port_num+1)*2+1, 
+            max_port_num*2+1, 
+            max_port_num - ports.0.len()+2, 
+            max_port_num - ports.1.len()+2
+            )
+        }
+        else {
+            (80, 7, 5, 3,3)
+        };
+        
+        if port_0_count < &mut ports.0.len() && ax_nums.0 >= port_0_start && (ax_nums.0-port_0_start) % 2 == 0 && ax_nums.1 == 0 {
+            dot_str.push_str(&self.create_port_cell_str(
+                &ports.0[*port_0_count],
+                true,
+                *port_0_count+1,
+            ));
+            *port_0_count+=1;
+        }
+        else if port_1_count < &mut ports.1.len() &&  ax_nums.0 >= port_1_start && (ax_nums.0-port_1_start) % 2 == 0 && ax_nums.1 == num_cells-1{
+            dot_str.push_str(&self.create_port_cell_str(
+                &ports.1[*port_1_count],
+                false,
+                *port_1_count+1,
+            ));
+            *port_1_count+=1;
+        }
+        else if ax_nums.0 == 1 && ax_nums.1 == 1{
+            dot_str.push_str(&format!(  "<TD ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"10\" STYLE=\"ROUNDED\">{}</TD>\n", 
+                                                row_col_span, 
+                                                row_col_span, 
+                                                self.node_color(), 
+                                                node_cell_size, 
+                                                node_cell_size, 
+                                                node_name));
+        }
+        else{
+            dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"16\"> </TD>\n")
+        };
+
+        dot_str
+    }
+
     /// creates the node label defined by html-like strings
     fn add_html_like_labels(
         &self,
@@ -325,21 +395,68 @@ pub trait Dottable {
         indent_level: &mut i32,
         ports: &OpticPorts,
         inverted: bool,
+        rankdir:&str,
     ) -> String {
         let mut dot_str = "\t\tlabel=<\n".to_owned();
+
+        
+        let mut inputs = ports.inputs();
+        let mut outputs = ports.outputs();
+        let mut in_port_count = 0;
+        let mut out_port_count = 0;
+        inputs.sort();
+        outputs.sort();
+        
+        let num_cells = if inputs.len() <=outputs.len() &&  outputs.len() > 1{
+            (outputs.len()+1)*2+1
+        } else if inputs.len() > outputs.len() &&  inputs.len() > 1{
+            (inputs.len()+1)*2+1
+        }
+        else{
+            7
+        };
+
+        let port_list = if inverted{(&outputs, &inputs)}else{(&inputs, &outputs)};
+
 
         // Start Table environment
         dot_str.push_str(&self.create_html_like_container("table", indent_level, true, 1));
 
-        // add row containing the input ports
-        dot_str.push_str(&self.create_port_cells_str(!inverted, indent_level, 0, ports));
+        //create each cell of the table
+        for row_num in 0..num_cells{
+            dot_str.push_str(&self.create_html_like_container("row", indent_level, true, 1));
+            for col_num in 0..num_cells{
+                if rankdir == "LR" 
+                   && !(col_num > 1 && col_num <num_cells-1 && row_num>= 1 && row_num <num_cells-1) 
+                   && !(col_num >= 1 && col_num <num_cells-1 && row_num> 1 && row_num <num_cells-1){
 
-        // add row containing the node main
-        dot_str.push_str(&self.create_main_node_row_str(node_name, indent_level));
+                    dot_str.push_str(&"\t".repeat(*indent_level as usize));
+                    dot_str.push_str(
+                        &self.create_node_table_cells(
+                            port_list,
+                            (&mut in_port_count, &mut out_port_count),
+                            (row_num,col_num),
+                            node_name
+                        )
+                    )
+                }
+                else if rankdir != "LR" 
+                        && !(row_num > 1 && row_num <num_cells-1 && col_num>= 1 && col_num <num_cells-1)
+                        && !(row_num >= 1 && row_num <num_cells-1 && col_num> 1 && col_num <num_cells-1){
+                    dot_str.push_str(&"\t".repeat(*indent_level as usize));
+                    dot_str.push_str(
+                        &self.create_node_table_cells(
+                        port_list,                        
+                        (&mut in_port_count, &mut out_port_count),
+                        (col_num, row_num),
+                        node_name)
+                    )
+                };
+            }
+            *indent_level -= 1;
+            dot_str.push_str(&self.create_html_like_container("row", indent_level, false, 0));
 
-        // add row containing the output ports
-        dot_str.push_str(&self.create_port_cells_str(inverted, indent_level, -1, ports));
-
+        }
         //end table environment
         dot_str.push_str(&self.create_html_like_container("table", indent_level, false, -1));
 
@@ -369,7 +486,9 @@ impl dyn OpticComponent + 'static {
 #[cfg(test)]
 mod test {
     use super::OpticNode;
-    use crate::nodes::{Detector, Dummy};
+    use crate::nodes::{Detector, Dummy, BeamSplitter, NodeGroup};
+    use std::{fs::File,io::Read};
+
     #[test]
     fn new() {
         let node = OpticNode::new("Test", Dummy::default());
@@ -407,23 +526,110 @@ mod test {
         assert_eq!(node.is_detector(), true)
     }
     #[test]
-    #[ignore]
-    fn to_dot() {
+    fn to_dot(){
+        let path = "files_for_testing/dot/to_dot_single_node_TB.txt";
+        let file_content_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
+
+        let path = "files_for_testing/dot/to_dot_single_node_LR.txt";
+        let file_content_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+
         let node = OpticNode::new("Test", Dummy::default());
-        assert_eq!(
-            node.to_dot("i0", "".to_owned()).unwrap(),
-            "  i0 [label=\"Test\"]\n".to_owned()
-        )
+        let node_dot_str_lr = node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR"
+        ).unwrap(); 
+
+        let node_dot_str_tb = node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR"
+        ).unwrap(); 
+
+        assert_eq!(file_content_tb.clone(), node_dot_str_tb);
+        assert_eq!(file_content_lr.clone(), node_dot_str_lr);
+
     }
     #[test]
-    #[ignore]
     fn to_dot_inverted() {
+        let path = "files_for_testing/dot/to_dot_single_node_inverted_TB.txt";
+        let file_content_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
+
+        let path = "files_for_testing/dot/to_dot_single_node_inverted_LR.txt";
+        let file_content_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+
         let mut node = OpticNode::new("Test", Dummy::default());
         node.set_inverted(true);
-        assert_eq!(
-            node.to_dot("i0", "".to_owned()).unwrap(),
-            "  i0 [label=\"Test(inv)\"]\n".to_owned()
-        )
+        let node_dot_str_lr = node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR"
+        ).unwrap(); 
+
+        let node_dot_str_tb = node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR"
+        ).unwrap(); 
+
+        assert_eq!(file_content_tb.clone(), node_dot_str_tb);
+        assert_eq!(file_content_lr.clone(), node_dot_str_lr);
+    }
+    #[test]
+    fn to_dot_group(){
+        let path = "files_for_testing/dot/to_dot_group_node_expand_TB.txt";
+        let file_content_expand_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_expand_tb);
+
+        let path = "files_for_testing/dot/to_dot_group_node_collapse_TB.txt";
+        let file_content_collapse_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_collapse_tb);
+
+        let path = "files_for_testing/dot/to_dot_group_node_expand_LR.txt";
+        let file_content_expand_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_expand_lr);
+
+        let path = "files_for_testing/dot/to_dot_group_node_collapse_LR.txt";
+        let file_content_collapse_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_collapse_lr);
+
+        let mut group1 = NodeGroup::new();
+        group1.expand_view(true);
+        let g1_n1 = group1.add_node(OpticNode::new("TFP1_g1", Dummy::default()));
+        let g1_n2 = group1.add_node(OpticNode::new("TFP2_g1", BeamSplitter::default()));
+        group1.map_output_port(g1_n2, "out1_trans1_refl2", "out1").unwrap();
+        group1.connect_nodes(g1_n1, "rear", g1_n2, "input1").unwrap();
+
+        let group_node = OpticNode::new("Group1_TFPs", group1.clone());
+        let node_dot_str_expand_lr = group_node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR").unwrap();
+        let node_dot_str_expand_tb = group_node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR").unwrap();
+
+        group1.expand_view(false);
+
+        let group_node = OpticNode::new("Group1_TFPs", group1);
+        let node_dot_str_collapse_lr = group_node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR").unwrap();
+        let node_dot_str_collapse_tb = group_node.to_dot(
+            "0", 
+            "".to_owned(), 
+            "LR").unwrap();
+
+        assert_eq!(file_content_expand_lr.clone(), node_dot_str_expand_lr);
+        assert_eq!(file_content_expand_tb.clone(), node_dot_str_expand_tb);
+        assert_eq!(file_content_collapse_lr.clone(), node_dot_str_collapse_lr);
+        assert_eq!(file_content_collapse_tb.clone(), node_dot_str_collapse_tb);
     }
     #[test]
     fn node_type() {

@@ -57,35 +57,6 @@ impl OpticPorts {
         }
     }
 
-    // pub fn get_port(&self, port_name: &str, input_flag: bool)-> Result<String, OpossumError>{
-    //     if input_flag & self.inputs.contains(port_name){
-    //         Ok(self.inputs.get(port_name).unwrap().to_owned())
-    //     }
-    //     else if !input_flag & self.outputs.contains(port_name){
-    //         Ok(self.outputs.get(port_name).unwrap().to_owned())
-    //     }
-    //     else{
-    //         Err(OpossumError::OpticPort(format!(
-    //             "a port with name {} does not exist",
-    //             port_name
-    //         )))
-    //     }
-    // }
-
-    // pub fn set_port(&mut self, target_port: &str, src_node: &OpticNode, src_port: &str, input_flag: bool) -> Result<Vec<String>, OpossumError>{
-    //     let port = src_node.name().to_owned() + src_port;
-        
-    //     if input_flag {
-    //         self.inputs.remove(target_port);
-    //         self.add_input(&port)?;
-    //         Ok(self.outputs())
-    //     } else {
-    //         self.outputs.remove(target_port);
-    //         self.add_output(&port)?;
-    //         Ok(self.outputs())
-    //     }
-    // }
-
     pub fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;
     }

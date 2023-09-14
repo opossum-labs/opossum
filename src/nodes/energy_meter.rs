@@ -96,7 +96,7 @@ impl Debug for EnergyMeter {
 }
 impl Dottable for EnergyMeter {
     fn node_color(&self) -> &str {
-        "lightblue"
+        "whitesmoke"
     }
 }
 
@@ -118,7 +118,7 @@ mod test {
         assert_eq!(meter.meter_type, Metertype::IdealEnergyMeter);
         assert_eq!(meter.node_type(), "energy meter");
         assert_eq!(meter.is_detector(), true);
-        assert_eq!(meter.node_color(), "lightblue");
+        assert_eq!(meter.node_color(), "whitesmoke");
     }
     #[test]
     fn meter_type() {

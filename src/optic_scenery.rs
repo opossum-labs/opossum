@@ -28,7 +28,7 @@ pub struct OpticScenery {
 impl OpticScenery {
     /// Creates a new (empty) [`OpticScenery`].
     pub fn new() -> Self {
-        Self::default()
+        Self::default()        
     }
     /// Add a given [`OpticNode`] to the graph of this [`OpticScenery`].
     ///
@@ -139,9 +139,10 @@ impl OpticScenery {
     }
 
     /// Returns the dot-file header of this [`OpticScenery`] graph.
-    fn add_dot_header(&self) -> String {
+    fn add_dot_header(&self, rankdir: &str) -> String {
         let mut dot_string = "digraph {\n\tfontsize = 8\n".to_owned();
         dot_string.push_str("\tcompound = true;\n");
+        dot_string.push_str(&format!("\trankdir = \"{}\";\n", rankdir));
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description));
         dot_string.push_str("\tfontname=\"Helvetica,Arial,sans-serif\"\n");
         dot_string.push_str("\tnode [fontname=\"Helvetica,Arial,sans-serif\" fontsize = 10]\n");
@@ -186,14 +187,18 @@ impl OpticScenery {
     }
 
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
-    pub fn to_dot(&self) -> Result<String> {
-        let mut dot_string = self.add_dot_header();
+    pub fn to_dot(&self, rankdir: &str) -> Result<String> {
+        //check direction
+        let rankdir = if rankdir != "LR" {"TB"}else{"LR"};
+
+        let mut dot_string = self.add_dot_header(rankdir);
 
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
+
             dot_string += &node
                 .borrow()
-                .to_dot(&format!("{}", node_idx.index()), "".to_owned())?;
+                .to_dot(&format!("{}", node_idx.index()), "".to_owned(), rankdir)?;
         }
         for edge in self.g.edge_indices() {
             let light: &Light = self.g.edge_weight(edge).unwrap();
@@ -205,15 +210,8 @@ impl OpticScenery {
                 self.create_node_edge_str(end_nodes.1, light.target_port(), "".to_owned())?;
 
             dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
-            // for src in src_edge_str.iter(){
-            //     println!("{}", src);
-            //     for target in target_edge_str.iter(){
-            //         println!("{}", target);
-            //         dot_string.push_str(&format!("  {} -> {} \n", src, target));
-            //     };
-            // };
         }
-        dot_string += "}";
+        dot_string.push_str("}\n");
         Ok(dot_string)
     }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
@@ -291,11 +289,13 @@ impl OpticScenery {
             node.borrow().export_data();
         }
     }
+
 }
 
 #[cfg(test)]
 mod test {
-    use super::super::nodes::Dummy;
+    use super::super::nodes::{Dummy, BeamSplitter, EnergyMeter, Source};
+    use std::{fs::File,io::Read};
     use super::*;
     #[test]
     fn new() {
@@ -346,38 +346,73 @@ mod test {
         assert_eq!(scenery.g.edge_count(), 1);
     }
     #[test]
-    #[ignore]
     fn to_dot_empty() {
+        let path = "files_for_testing/dot/to_dot_empty_TB.txt";
+        let file_content_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
+
+        let path = "files_for_testing/dot/to_dot_empty_LR.txt";
+        let file_content_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+
         let mut scenery = OpticScenery::new();
-        scenery.set_description("Test".into());
-        assert_eq!(scenery.to_dot().unwrap(), "digraph {\n  label=\"Test\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n}");
+        scenery.set_description("Test".into()); 
+
+        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
+        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+
+        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
+        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
     }
     #[test]
-    #[ignore]
     fn to_dot_with_node() {
+        let path = "./files_for_testing/dot/to_dot_w_node_TB.txt";
+        let file_content_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
+
+        let path = "./files_for_testing/dot/to_dot_w_node_LR.txt";
+        let file_content_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
         scenery.add_element("Test", Dummy::default());
-        assert_eq!(
-            scenery.to_dot().unwrap(),
-            "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test\"]\n}"
-        );
+
+        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
+        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+
+        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
+        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
     }
     #[test]
-    #[ignore]
-    fn to_dot_with_edge() {
-        let mut scenery = OpticScenery::new();
+    fn to_dot_full() {
+        let path = "files_for_testing/dot/to_dot_full_TB.txt";
+        let file_content_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
+
+        let path = "files_for_testing/dot/to_dot_full_LR.txt";
+        let file_content_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+
+        let mut scenery = OpticScenery::new();    
         scenery.set_description("SceneryTest".into());
-        let n1 = scenery.add_element("Test1", Dummy::default());
-        let n2 = scenery.add_element("Test2", Dummy::default());
-        if let Ok(_) = scenery.connect_nodes(n1, "rear", n2, "front") {
-            assert_eq!(
-                scenery.to_dot().unwrap(),
-                "digraph {\n  label=\"SceneryTest\"\n  fontname=\"Helvetica,Arial,sans-serif\"\n  node [fontname=\"Helvetica,Arial,sans-serif\"]\n  edge [fontname=\"Helvetica,Arial,sans-serif\"]\n  i0 [label=\"Test1\"]\n  i1 [label=\"Test2\"]\n  i0 -> i1 [label=\"rear->front\"]\n}"
-            );
-        } else {
-            assert!(false);
-        }
+        let i_s = scenery.add_element(
+            "Source",
+            Source::default(),
+        );
+        let i_bs = scenery.add_element("Beam splitter", BeamSplitter::new(0.6).unwrap());
+        let i_d1 = scenery.add_element("Energy meter 1", EnergyMeter::default());
+        let i_d2 = scenery.add_element("Energy meter 2", EnergyMeter::default());
+    
+        scenery.connect_nodes(i_s, "out1", i_bs, "input1").unwrap();    
+        scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1").unwrap();
+        scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1").unwrap();
+    
+        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
+        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+
+        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
+        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
     }
     #[test]
     fn set_description() {
