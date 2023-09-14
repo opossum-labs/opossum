@@ -4,19 +4,19 @@ use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
-use crate::optical::LightResult;
+use crate::optical::{LightResult, OpticGraph};
 use crate::properties::{Properties, Property, Proptype};
 use crate::{optic_ports::OpticPorts, optical::OpticRef, optical::Optical};
 use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::{algo::*, Direction};
-use serde_derive::Serialize;
+use serde::Serialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Clone)]
 /// A node that represents a group of other [`Optical`]s arranges in a subgraph.
 ///
 /// All unconnected input and output ports of this subgraph could be used as ports of
@@ -55,6 +55,24 @@ fn create_default_props() -> Properties {
             prop: Proptype::Bool(false),
         },
     );
+    props.set(
+        "optic graph",
+        Property {
+            prop: Proptype::OpticGraph(OpticGraph::default()),
+        },
+    );
+    props.set(
+        "input port map",
+        Property {
+            prop: Proptype::String(("input port map").into()),
+        },
+    );
+    props.set(
+        "output port map",
+        Property {
+            prop: Proptype::String(("output poart map").into()),
+        },
+    );
     props
 }
 
@@ -83,7 +101,9 @@ impl NodeGroup {
     /// This command just adds an [`Optical`] but does not connect it to existing nodes in the (sub-)graph. The given node is
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        self.g.add_node(OpticRef(Rc::new(RefCell::new(node))))
+        let idx=self.g.add_node(OpticRef(Rc::new(RefCell::new(node))));
+        self.props.set("optic graph", Property { prop: Proptype::OpticGraph(OpticGraph(self.g.clone())) });
+        idx
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -622,6 +642,13 @@ impl NodeGroup {
     }
 }
 
+impl Serialize for NodeGroup {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        serializer.serialize_newtype_struct("props", self.properties())
+    }
+}
 impl Optical for NodeGroup {
     fn node_type(&self) -> &str {
         "group"

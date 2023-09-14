@@ -1,9 +1,11 @@
+use petgraph::prelude::DiGraph;
 use serde::ser::SerializeStruct;
 use serde::Serialize;
 
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
+use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_ports::OpticPorts;
@@ -79,6 +81,17 @@ impl Debug for dyn Optical {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
+
+impl Serialize for OpticGraph {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        let g=self.0.clone();
+        serializer.collect_seq(g.node_weights())
+    }
+}
 #[derive(Debug, Clone)]
 pub struct OpticRef(pub Rc<RefCell<dyn Optical>>);
 

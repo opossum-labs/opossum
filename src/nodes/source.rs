@@ -2,8 +2,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use serde_derive::Serialize;
-
 use crate::{
     dottable::Dottable,
     error::OpossumError,
@@ -24,7 +22,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - none
 ///   - Outputs
 ///     - `out1`
-#[derive(Default, Serialize)]
+#[derive(Default)]
 pub struct Source {
     props: Properties,
 }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::Serialize;
 use serde_derive::Serialize;
 
-use crate::{error::OpossumError, lightdata::LightData};
+use crate::{error::OpossumError, lightdata::LightData, optical::OpticGraph};
 
 #[derive(Default, Debug, Clone)]
 pub struct Properties {
@@ -59,5 +59,6 @@ pub enum Proptype {
   I32(i32),
   F64(f64),
   Bool(bool),
-  LightData(Option<LightData>)
+  LightData(Option<LightData>),
+  OpticGraph(OpticGraph)
 }
