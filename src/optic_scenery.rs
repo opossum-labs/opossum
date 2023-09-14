@@ -295,7 +295,6 @@ impl OpticScenery {
 mod test {
     use super::super::nodes::{Dummy, BeamSplitter, EnergyMeter, Source};
     use std::{fs::File,io::Read};
-    use std::io::Write;
     use super::*;
     #[test]
     fn new() {

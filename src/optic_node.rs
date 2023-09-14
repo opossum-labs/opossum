@@ -487,8 +487,7 @@ impl dyn OpticComponent + 'static {
 mod test {
     use super::OpticNode;
     use crate::nodes::{Detector, Dummy, BeamSplitter, NodeGroup};
-    use std::{fs::File,io::{Write,Read}};
-    use crate::optic_node::Dottable;
+    use std::{fs::File,io::Read};
 
     #[test]
     fn new() {
