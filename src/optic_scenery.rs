@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::{fs::File,io::Read};
 
 use crate::analyzer::AnalyzerType;
 use crate::error::OpossumError;
@@ -289,6 +290,13 @@ impl OpticScenery {
             node.borrow().export_data();
         }
     }
+
+    pub fn read_file(&self, path: &str) -> String{
+        let file_content = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content);
+
+        file_content.clone()
+    }
 }
 
 #[cfg(test)]
@@ -346,19 +354,24 @@ mod test {
     }
     #[test]
     fn to_dot_empty() {
-        let path = "files_for_testing/dot/to_dot_empty_TB.dot";
-        let file_content_tb = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
+        // let path = "files_for_testing/dot/to_dot_empty_TB.dot";
+        // let file_content_tb = &mut "".to_owned();
+        // let _ = File::open(path).unwrap().read_to_string(file_content_tb);
 
-        let path = "files_for_testing/dot/to_dot_empty_LR.dot";
-        let file_content_lr = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+        // let path = "files_for_testing/dot/to_dot_empty_LR.dot";
+        // let file_content_lr = &mut "".to_owned();
+        // let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into()); 
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
         let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+
+        let path = "files_for_testing/dot/to_dot_empty_TB.dot";
+        let file_content_tb = scenery.read_file(path);
+        let path = "files_for_testing/dot/to_dot_empty_LR.dot";
+        let file_content_lr = scenery.read_file(path);
 
         assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
