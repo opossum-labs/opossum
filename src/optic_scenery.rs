@@ -165,10 +165,12 @@ impl OpticScenery {
 
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
-
-            // dot_string += &node.0
-            //     .borrow()
-            //     .to_dot(&format!("{}", node_idx.index()), "", rankdir)?;
+            let node_name=node.0.borrow().name().to_owned();
+            let inverted= node.0.borrow().inverted();
+            let ports=node.0.borrow().ports();
+            dot_string += &node.0
+                .borrow()
+                .to_dot(&format!("{}", node_idx.index()), &node_name, inverted, &ports, "".to_owned(), rankdir)?;
         }
         for edge in self.g.edge_indices() {
             let light: &Light = self.g.edge_weight(edge).unwrap();
@@ -183,11 +185,13 @@ impl OpticScenery {
         }
         dot_string.push_str("}\n");
         Ok(dot_string)
+    
     }
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
         let mut dot_string = "digraph {\n\tfontsize = 8\n".to_owned();
         dot_string.push_str("\tcompound = true;\n");
+        dot_string.push_str(&format!("\trankdir = \"{}\";\n", rankdir));
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description));
         dot_string.push_str("\tfontname=\"Helvetica,Arial,sans-serif\"\n");
         dot_string.push_str("\tnode [fontname=\"Helvetica,Arial,sans-serif\" fontsize = 10]\n");
