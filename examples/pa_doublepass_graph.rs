@@ -47,7 +47,7 @@ fn main() -> Result<(), OpossumError> {
     // scenery.add_node(OpticNode::new("CamBox", group));
     let path = "graph.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()?).unwrap();
+    write!(output, "{}", scenery.to_dot("LR")?).unwrap();
     // write!(output, "{}", scenery.to_dot()).unwrap();
 
     let mut analyzer = AnalyzerEnergy::new(&scenery);

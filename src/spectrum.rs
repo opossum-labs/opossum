@@ -553,7 +553,7 @@ mod test {
     }
     #[test]
     fn from_csv_ok() {
-        let s = Spectrum::from_csv("spectrum_test/spec_to_csv_test_01.csv");
+        let s = Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_01.csv");
         assert!(s.is_ok());
         let lambdas = s.clone().unwrap().data.map(|data| data.0);
         assert!(lambdas
@@ -569,9 +569,9 @@ mod test {
     #[test]
     fn from_csv_err() {
         assert!(Spectrum::from_csv("wrong_path.csv").is_err());
-        assert!(Spectrum::from_csv("spectrum_test/spec_to_csv_test_02.csv").is_err());
-        assert!(Spectrum::from_csv("spectrum_test/spec_to_csv_test_03.csv").is_err());
-        assert!(Spectrum::from_csv("spectrum_test/spec_to_csv_test_04.csv").is_err());
+        assert!(Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_02.csv").is_err());
+        assert!(Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_03.csv").is_err());
+        assert!(Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_04.csv").is_err());
     }
     #[test]
     fn range() {

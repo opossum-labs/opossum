@@ -162,11 +162,11 @@ fn main() -> Result<(), OpossumError> {
 
     let path = "uOPA.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()?).unwrap();
+    write!(output, "{}", scenery.to_dot("")?).unwrap();
 
     let path = "uOPA_PreAmp.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery_2.to_dot()?).unwrap();
+    write!(output, "{}", scenery_2.to_dot("")?).unwrap();
 
     let mut analyzer = AnalyzerEnergy::new(&scenery);
     analyzer.analyze()?;

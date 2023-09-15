@@ -1,0 +1,10 @@
+digraph {
+	fontsize = 8
+	compound = true;
+	rankdir = "TB";
+	label="Test"
+	fontname="Helvetica,Arial,sans-serif"
+	node [fontname="Helvetica,Arial,sans-serif" fontsize = 10]
+	edge [fontname="Helvetica,Arial,sans-serif"]
+
+}

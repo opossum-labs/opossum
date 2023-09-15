@@ -42,7 +42,7 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(scene_g1, "out1", scene_g2, "in1")?;
     let path = "graph_group.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()?).unwrap();
+    write!(output, "{}", scenery.to_dot("LR")?).unwrap();
 
     Ok(())
 }

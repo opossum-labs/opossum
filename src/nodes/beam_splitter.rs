@@ -52,6 +52,10 @@ fn create_default_props() -> Properties {
 }
 impl BeamSplitter {
     /// Creates a new [`BeamSplitter`] with a given splitting ratio.
+    /// 
+    /// ## Errors
+    /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
+    /// [0.0..1.0].
     pub fn new(ratio: f64) -> Result<Self> {
         if (0.0..=1.0).contains(&ratio) {
             let mut props = create_default_props();
@@ -80,6 +84,10 @@ impl BeamSplitter {
     }
 
     /// Sets the splitting ratio of this [`BeamSplitter`].
+    /// 
+    /// ## Errors
+    /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
+    /// [0.0..1.0].
     pub fn set_ratio(&mut self, ratio: f64) -> Result<()> {
         if (0.0..=1.0).contains(&ratio) {
             self.props.set(

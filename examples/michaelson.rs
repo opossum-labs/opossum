@@ -31,6 +31,6 @@ fn main() -> Result<(), OpossumError> {
 
     let path = "michaelson.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()?).unwrap();
+    write!(output, "{}", scenery.to_dot("")?).unwrap();
     Ok(())
 }

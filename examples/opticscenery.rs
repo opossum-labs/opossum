@@ -15,7 +15,7 @@ fn main() -> Result<(), OpossumError> {
     println!("{}", serde_yaml::to_string(&scenery).unwrap());
     let path = "graph.dot";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot()?).unwrap();
+    write!(output, "{}", scenery.to_dot("")?).unwrap();
 
     Ok(())
 }

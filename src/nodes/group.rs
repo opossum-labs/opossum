@@ -549,6 +549,7 @@ impl NodeGroup {
         name: &str,
         inverted: bool,
         mut parent_identifier: String,
+        rankdir: &str
     ) -> Result<String> {
         let inv_string = if inverted { "(inv)" } else { "" };
         parent_identifier = if parent_identifier.is_empty() {
@@ -616,6 +617,7 @@ impl NodeGroup {
         inverted: bool,
         _ports: &OpticPorts,
         mut parent_identifier: String,
+        rankdir: &str
     ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
@@ -626,12 +628,13 @@ impl NodeGroup {
         };
         let mut dot_str = format!("\t{} [\n\t\tshape=plaintext\n", parent_identifier);
         let mut indent_level = 2;
-        dot_str.push_str(&self.add_html_like_labels(
-            &node_name,
-            &mut indent_level,
-            _ports,
-            inverted,
-        ));
+        // dot_str.push_str(&self.add_html_like_labels(
+        //     &node_name,
+        //     &mut indent_level,
+        //     _ports,
+        //     inverted,
+        //     rankdir
+        // ));
         Ok(dot_str)
     }
     fn invert_graph(&mut self) {
@@ -697,17 +700,23 @@ impl Dottable for NodeGroup {
         name: &str,
         _ports: &OpticPorts,
         parent_identifier: String,
-        inverted: bool,
+        rankdir: bool
     ) -> Result<String> {
+        let is_inverted_prop=&self.props.get("inverted").unwrap().prop;
+        let is_inverted=if let Proptype::Bool(is_inverted)=is_inverted_prop {
+            is_inverted
+        } else { &false};
+
         let mut cloned_self = self.clone();
         if self.props.get_bool("inverted").unwrap().unwrap() {
             cloned_self.invert_graph();
         }
         if self.expand_view {
-            cloned_self.to_dot_expanded_view(node_index, name, inverted, parent_identifier)
+        //    cloned_self.to_dot_expanded_view(node_index, name, is_inverted, parent_identifier, rankdir)
         } else {
-            cloned_self.to_dot_collapsed_view(node_index, name, inverted, _ports, parent_identifier)
+        //    cloned_self.to_dot_collapsed_view(node_index, name, is_inverted, _ports, parent_identifier, rankdir)
         }
+        return Ok(String::new())
     }
 
     fn node_color(&self) -> &str {
