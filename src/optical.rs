@@ -1,4 +1,5 @@
 use petgraph::prelude::DiGraph;
+use petgraph::stable_graph::NodeIndex;
 use serde::ser::SerializeStruct;
 use serde::Serialize;
 
@@ -87,13 +88,31 @@ pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
 impl Serialize for OpticGraph {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
-        let g=self.0.clone();
-        let mut graph=serializer.serialize_struct("graph", 2)?;
-        let nodes=g.node_weights().map(|n| n.to_owned()).collect::<Vec<OpticRef>>();
+        S: serde::Serializer,
+    {
+        let g = self.0.clone();
+        let mut graph = serializer.serialize_struct("graph", 2)?;
+        let nodes = g
+            .node_weights()
+            .map(|n| n.to_owned())
+            .collect::<Vec<OpticRef>>();
         graph.serialize_field("nodes", &nodes)?;
-        let edges=g.edge_weights().map(|n| (n.src_port(),n.target_port()).to_owned()).collect::<Vec<(&str,&str)>>();
-        graph.serialize_field("edges", &edges)?;
+        let edgeidx = g
+            .edge_indices()
+            .map(|e| {
+                (
+                    g.edge_endpoints(e).unwrap().0,
+                    g.edge_endpoints(e).unwrap().1,
+                    g.edge_weight(e).unwrap().src_port(),
+                    g.edge_weight(e).unwrap().target_port(),
+                )
+            })
+            .collect::<Vec<(NodeIndex, NodeIndex, &str, &str)>>();
+        // let edges = g
+        //     .edge_weights()
+        //     .map(|n| (n.src_port(), n.target_port()).to_owned())
+        //     .collect::<Vec<(&str, &str)>>();
+        graph.serialize_field("edges", &edgeidx)?;
         graph.end()
     }
 }

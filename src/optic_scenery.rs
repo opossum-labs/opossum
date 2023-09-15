@@ -8,7 +8,7 @@ use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optical::{LightResult, OpticRef, Optical, OpticGraph};
-use crate::properties::Properties;
+use crate::properties::{Properties, Property, Proptype};
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
@@ -39,13 +39,29 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// }
 ///
 /// ```
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct OpticScenery {
     g: DiGraph<OpticRef, Light>,
     description: String,
     props: Properties,
 }
 
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set(
+        "description",
+        Property {
+            prop: Proptype::String("".into()),
+        },
+    );
+    props
+}
+
+impl Default for OpticScenery {
+    fn default() -> Self {
+        Self { g: Default::default(), description: Default::default(), props: create_default_props() }
+    }
+}
 impl OpticScenery {
     /// Creates a new (empty) [`OpticScenery`].
     pub fn new() -> Self {
