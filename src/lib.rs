@@ -21,4 +21,6 @@ pub mod error;
 
 pub mod spectrum;
 
+pub mod properties;
+
 pub use optic_scenery::OpticScenery;

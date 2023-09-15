@@ -7,11 +7,14 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
-use crate::optical::{LightResult, Optical};
+use crate::optical::{LightResult, OpticRef, Optical, OpticGraph};
+use crate::properties::Properties;
 use petgraph::algo::*;
 use petgraph::prelude::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction::Incoming;
+use serde::ser::SerializeStruct;
+use serde::Serialize;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -38,8 +41,9 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// ```
 #[derive(Default, Debug, Clone)]
 pub struct OpticScenery {
-    g: DiGraph<Rc<RefCell<dyn Optical>>, Light>,
+    g: DiGraph<OpticRef, Light>,
     description: String,
+    props: Properties,
 }
 
 impl OpticScenery {
@@ -52,7 +56,7 @@ impl OpticScenery {
     /// This command just adds an [`Optical`] to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        self.g.add_node(Rc::new(RefCell::new(node)))
+        self.g.add_node(OpticRef(Rc::new(RefCell::new(node))))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -66,10 +70,16 @@ impl OpticScenery {
         target_port: &str,
     ) -> Result<()> {
         if let Some(source) = self.g.node_weight(src_node) {
-            if !source.borrow().ports().outputs().contains(&src_port.into()) {
+            if !source
+                .0
+                .borrow()
+                .ports()
+                .outputs()
+                .contains(&src_port.into())
+            {
                 return Err(OpossumError::OpticScenery(format!(
                     "source node {} does not have a port {}",
-                    source.borrow().name(),
+                    source.0.borrow().name(),
                     src_port
                 )));
             }
@@ -80,6 +90,7 @@ impl OpticScenery {
         }
         if let Some(target) = self.g.node_weight(target_node) {
             if !target
+                .0
                 .borrow()
                 .ports()
                 .inputs()
@@ -87,7 +98,7 @@ impl OpticScenery {
             {
                 return Err(OpossumError::OpticScenery(format!(
                     "target node {} does not have a port {}",
-                    target.borrow().name(),
+                    target.0.borrow().name(),
                     target_port
                 )));
             }
@@ -138,7 +149,7 @@ impl OpticScenery {
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node: NodeIndex) -> Result<Rc<RefCell<dyn Optical>>> {
         if let Some(node) = self.g.node_weight(node) {
-            Ok(node.clone())
+            Ok(node.0.clone())
         } else {
             Err(OpossumError::OpticScenery(
                 "node index does not exist".into(),
@@ -151,12 +162,12 @@ impl OpticScenery {
 
         for node_idx in self.g.node_indices() {
             let node = self.g.node_weight(node_idx).unwrap();
-            dot_string += &node.borrow().to_dot(
+            dot_string += &node.0.borrow().to_dot(
                 &format!("{}", node_idx.index()),
-                node.borrow().name(),
-                &node.borrow().ports(),
+                node.0.borrow().name(),
+                &node.0.borrow().ports(),
                 "".to_owned(),
-                node.borrow().inverted(),
+                node.0.borrow().inverted(),
             )?;
         }
         for edge in self.g.edge_indices() {
@@ -196,7 +207,7 @@ impl OpticScenery {
         light_port: &str,
         mut parent_identifier: String,
     ) -> Result<String> {
-        let node = self.g.node_weight(end_node).unwrap().borrow();
+        let node = self.g.node_weight(end_node).unwrap().0.borrow();
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node.index())
         } else {
@@ -217,7 +228,7 @@ impl OpticScenery {
             for idx in sorted {
                 let node = self.g.node_weight(idx).unwrap();
                 let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
-                let outgoing_edges = node.borrow_mut().analyze(incoming_edges, analyzer_type)?;
+                let outgoing_edges = node.0.borrow_mut().analyze(incoming_edges, analyzer_type)?;
                 for outgoing_edge in outgoing_edges {
                     self.set_outgoing_edge_data(idx, outgoing_edge.0, outgoing_edge.1)
                 }
@@ -272,23 +283,34 @@ impl OpticScenery {
         let detector_nodes = self
             .g
             .node_weights()
-            .filter(|node| node.borrow().is_detector());
+            .filter(|node| node.0.borrow().is_detector());
         println!("Sources:");
         for idx in src_nodes.clone() {
             let node = self.g.node_weight(idx).unwrap();
-            println!("{:?}", node.borrow());
-            let file_name = node.borrow().name().to_owned() + ".svg";
-            node.borrow().export_data(&file_name);
+            println!("{:?}", node.0.borrow());
+            let file_name = node.0.borrow().name().to_owned() + ".svg";
+            node.0.borrow().export_data(&file_name);
         }
         println!("Detectors:");
         for node in detector_nodes {
-            println!("{:?}", node.borrow());
-            let file_name = node.borrow().name().to_owned() + ".svg";
-            node.borrow().export_data(&file_name);
+            println!("{:?}", node.0.borrow());
+            let file_name = node.0.borrow().name().to_owned() + ".svg";
+            node.0.borrow().export_data(&file_name);
         }
     }
 }
 
+impl Serialize for OpticScenery {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut scenery = serializer.serialize_struct("optic scenery", 2)?;
+        scenery.serialize_field("graph", &OpticGraph(self.g.clone()))?;
+        scenery.serialize_field("properties", &self.props)?;
+        scenery.end()
+    }
+}
 #[cfg(test)]
 mod test {
     use super::super::nodes::Dummy;

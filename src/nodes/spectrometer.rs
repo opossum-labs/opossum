@@ -4,6 +4,7 @@ use uom::si::length::nanometer;
 
 use crate::dottable::Dottable;
 use crate::lightdata::LightData;
+use crate::properties::Properties;
 use crate::{
     error::OpossumError,
     optic_ports::OpticPorts,
@@ -24,7 +25,7 @@ pub enum SpectrometerType {
     /// Ocean Optics HR2000
     HR2000,
 }
-#[derive(Default, Serialize)]
+#[derive(Default)]
 /// (ideal) spectrometer
 ///
 /// It normally measures / displays the spectrum of the incoming light.
@@ -38,9 +39,9 @@ pub enum SpectrometerType {
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 pub struct Spectrometer {
-    #[serde(skip)]
     light_data: Option<LightData>,
     spectrometer_type: SpectrometerType,
+    props: Properties
 }
 impl Spectrometer {
     /// Creates a new [`Spectrometer`] of the given [`SpectrometerType`].
@@ -48,6 +49,7 @@ impl Spectrometer {
         Spectrometer {
             light_data: None,
             spectrometer_type,
+            props: Properties::default()
         }
     }
     /// Returns the meter type of this [`Spectrometer`].
@@ -88,6 +90,9 @@ impl Optical for Spectrometer {
     }
     fn is_detector(&self) -> bool {
         true
+    }
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 

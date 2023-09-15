@@ -1,16 +1,15 @@
 #![warn(missing_docs)]
-use serde_derive::Serialize;
 use std::collections::HashMap;
-
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
+use crate::properties::{Properties, Proptype, Property};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 /// A fake / dummy component without any optical functionality.
 ///
 /// Any [`LightResult`] is directly forwarded without any modification. It is mainly used for
@@ -23,32 +22,56 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - `rear`
 pub struct Dummy {
     is_inverted: bool,
-    name: String,
+    props: Properties
+}
+
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set(
+        "name",
+        Property {
+            prop: Proptype::String("dummy".into()),
+        },
+    );
+    props.set(
+        "inverted",
+        Property {
+            prop: Proptype::Bool(false),
+        },
+    );
+    props
 }
 
 impl Default for Dummy {
     fn default() -> Self {
         Self {
             is_inverted: Default::default(),
-            name: String::from("dummy"),
+            props: create_default_props()
         }
     }
 }
 impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
     pub fn new(name: &str) -> Self {
+        let mut props= create_default_props();
+        props.set("name", Property{prop: Proptype::String(name.into())});
         Self {
-            name: name.to_owned(),
             is_inverted: false,
+            props
         }
     }
 }
 impl Optical for Dummy {
     fn set_name(&mut self, name: &str) {
-        self.name = name.to_owned()
+        self.props.set("name", Property { prop: Proptype::String(name.into()) });
     }
     fn name(&self) -> &str {
-        &self.name
+        if let Some(value)=self.props.get("name") {
+            if let Proptype::String(name) = &value.prop {
+                return name
+            }
+        }
+       panic!("wonrg format");
     }
     /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {
@@ -84,6 +107,9 @@ impl Optical for Dummy {
     fn inverted(&self) -> bool {
         self.is_inverted
     }
+    fn properties(&self) -> &Properties {
+        &self.props
+    }
 }
 
 impl Dottable for Dummy {}
@@ -94,20 +120,14 @@ mod test {
     #[test]
     fn new() {
         let node = Dummy::new("Test");
-        assert_eq!(node.name, "Test");
+        assert_eq!(node.name(), "Test");
         assert_eq!(node.inverted(), false);
     }
     #[test]
     fn default() {
         let node = Dummy::default();
-        assert_eq!(node.name, "dummy");
+        assert_eq!(node.name(), "dummy");
         assert_eq!(node.inverted(), false);
-    }
-    #[test]
-    fn set_name() {
-        let mut node = Dummy::default();
-        node.set_name("Test1");
-        assert_eq!(node.name, "Test1")
     }
     #[test]
     fn name() {

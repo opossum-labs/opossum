@@ -4,10 +4,9 @@ use crate::{
     error::OpossumError,
     lightdata::LightData,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optical::{LightResult, Optical}, properties::Properties,
 };
 use ndarray::{array, Array1};
-use serde::Serialize;
 use uom::{si::f64::Length, si::length::meter};
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -20,13 +19,7 @@ pub struct RealLens {
     center_thickness: Length,
     z_pos: Length,
     refractive_index: f64,
-}
-impl Serialize for RealLens {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer {
-        serializer.serialize_i32(123)
-    }
+    props: Properties
 }
 impl RealLens {
     pub fn new(
@@ -43,6 +36,7 @@ impl RealLens {
             center_thickness,
             z_pos,
             refractive_index,
+            props: Properties::default()
         }
     }
 
@@ -138,6 +132,7 @@ impl Default for RealLens {
             center_thickness: Length::new::<meter>(3.6e-3),
             z_pos: Length::new::<meter>(0.0),
             refractive_index: 1.5068,
+            props: Properties::default()
         }
     }
 }
@@ -164,6 +159,9 @@ impl Optical for RealLens {
             )),
             AnalyzerType::ParAxialRayTrace => self.analyze_ray_trace(incoming_data),
         }
+    }
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 

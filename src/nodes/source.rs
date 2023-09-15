@@ -2,14 +2,13 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use serde_derive::Serialize;
-
 use crate::{
     dottable::Dottable,
     error::OpossumError,
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
+    properties::{Properties, Property, Proptype},
 };
 
 type Result<T> = std::result::Result<T, OpossumError>;
@@ -23,10 +22,25 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - none
 ///   - Outputs
 ///     - `out1`
-#[derive(Default, Serialize)]
+#[derive(Default)]
 pub struct Source {
-    light_data: Option<LightData>,
-    name: String,
+    props: Properties,
+}
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set(
+        "name",
+        Property {
+            prop: Proptype::String("source".into()),
+        },
+    );
+    props.set(
+        "light data",
+        Property {
+            prop: Proptype::LightData(None),
+        },
+    );
+    props
 }
 
 impl Source {
@@ -45,26 +59,44 @@ impl Source {
     /// let source=Source::new("My Source", LightData::Energy(DataEnergy {spectrum: create_he_ne_spectrum(1.0)}));
     /// ```
     pub fn new(name: &str, light: LightData) -> Self {
+        let mut props = create_default_props();
+        props.set(
+            "name",
+            Property {
+                prop: Proptype::String(name.into()),
+            },
+        );
+        props.set(
+            "light data",
+            Property {
+                prop: Proptype::LightData(Some(light.clone())),
+            },
+        );
         Source {
-            light_data: Some(light),
-            name: name.to_owned(),
+            props
         }
-    }
-
-    /// Returns the light data of this [`Source`].
-    pub fn light_data(&self) -> Option<&LightData> {
-        self.light_data.as_ref()
     }
 
     /// Sets the light data of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
     pub fn set_light_data(&mut self, light_data: LightData) {
-        self.light_data = Some(light_data);
+        self.props.set(
+            "light data",
+            Property {
+                prop: Proptype::LightData(Some(light_data.clone())),
+            },
+        );
     }
 }
 
 impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.light_data {
+        let light_prop=self.props.get("light data").unwrap();
+        let data=if let Proptype::LightData(data)=&light_prop.prop {
+            data
+        } else {
+            &None
+        };
+        match data {
             Some(data) => write!(f, "{}", data),
             None => write!(f, "no data"),
         }
@@ -86,12 +118,20 @@ impl Optical for Source {
         _incoming_edges: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> Result<LightResult> {
-        let data = self.light_data.clone();
+        let light_prop=self.props.get("light data").unwrap();
+        let data=if let Proptype::LightData(data)=&light_prop.prop {
+            data
+        } else {
+            &None
+        };
         if data.is_some() {
-            Ok(HashMap::from([("out1".into(), data)]))
+            Ok(HashMap::from([("out1".into(), data.to_owned())]))
         } else {
             Err(OpossumError::Analysis("no input data available".into()))
         }
+    }
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 

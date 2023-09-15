@@ -1,8 +1,7 @@
 #![warn(missing_docs)]
-use serde_derive::Serialize;
-
 use crate::dottable::Dottable;
 use crate::lightdata::LightData;
+use crate::properties::{Properties, Property, Proptype};
 use crate::{
     error::OpossumError,
     optic_ports::OpticPorts,
@@ -14,7 +13,7 @@ use std::fmt::Debug;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[non_exhaustive]
-#[derive(Debug, Default, PartialEq, Clone, Copy, Serialize)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 /// Type of the [`EnergyMeter`]. This is currently not used.
 pub enum Metertype {
     /// an ideal energy meter
@@ -23,7 +22,6 @@ pub enum Metertype {
     /// an ideal power meter (currently not used)
     IdealPowerMeter,
 }
-#[derive(Serialize)]
 /// (ideal) energy / power meter.
 ///
 /// It normally measures the total energy of the incoming light regardless of the wavelength, position, angle, polarization etc...
@@ -39,7 +37,24 @@ pub enum Metertype {
 pub struct EnergyMeter {
     light_data: Option<LightData>,
     meter_type: Metertype,
-    name: String,
+    props: Properties
+}
+
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set(
+        "name",
+        Property {
+            prop: Proptype::String("energy meter".into()),
+        },
+    );
+    props.set(
+        "inverted",
+        Property {
+            prop: Proptype::Bool(false),
+        },
+    );
+    props
 }
 
 impl Default for EnergyMeter {
@@ -47,17 +62,19 @@ impl Default for EnergyMeter {
         Self {
             light_data: Default::default(),
             meter_type: Default::default(),
-            name: "energy meter".to_string(),
+            props: create_default_props()
         }
     }
 }
 impl EnergyMeter {
     /// Creates a new [`EnergyMeter`] of the given [`Metertype`].
     pub fn new(name: &str, meter_type: Metertype) -> Self {
+        let mut props=create_default_props();
+        props.set("name", Property { prop: Proptype::String(name.into()) });
         EnergyMeter {
             light_data: None,
             meter_type,
-            name: name.to_string(),
+            props
         }
     }
     /// Returns the meter type of this [`EnergyMeter`].
@@ -71,10 +88,15 @@ impl EnergyMeter {
 }
 impl Optical for EnergyMeter {
     fn set_name(&mut self, name: &str) {
-        self.name = name.to_string()
+        self.props.set("name", Property { prop: Proptype::String(name.into()) });
     }
     fn name(&self) -> &str {
-        &self.name
+        if let Some(value)=self.props.get("name") {
+            if let Proptype::String(name) = &value.prop {
+                return name
+            }
+        }
+       panic!("wonrg format");
     }
     fn node_type(&self) -> &str {
         "energy meter"
@@ -104,6 +126,9 @@ impl Optical for EnergyMeter {
     }
     fn is_detector(&self) -> bool {
         true
+    }
+    fn properties(&self) -> &Properties {
+        &self.props
     }
 }
 

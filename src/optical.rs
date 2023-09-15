@@ -1,12 +1,15 @@
+use petgraph::prelude::DiGraph;
 use serde::ser::SerializeStruct;
 use serde::Serialize;
 
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
+use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_ports::OpticPorts;
+use crate::properties::{Properties, Property};
 use core::fmt::Debug;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -15,17 +18,15 @@ pub type LightResult = HashMap<String, Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
-pub trait Optical: Dottable + erased_serde::Serialize {
+pub trait Optical: Dottable {
     /// Sets the name of this [`Optical`].
     fn set_name(&mut self, _name: &str) {}
     /// Returns a reference to the name of this [`Optical`].
     fn name(&self) -> &str {
         self.node_type()
     }
-    /// Return the type of the optical component (lens, filter, ...). The default implementation returns "undefined".
-    fn node_type(&self) -> &str {
-        "undefined"
-    }
+    /// Return the type of the optical component (lens, filter, ...).
+    fn node_type(&self) -> &str;
     /// Return the available (input & output) ports of this [`Optical`].
     fn ports(&self) -> OpticPorts {
         OpticPorts::default()
@@ -68,6 +69,10 @@ pub trait Optical: Dottable + erased_serde::Serialize {
     fn as_group(&self) -> Result<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
+    fn properties(&self) -> &Properties;
+    fn set_property(&mut self, _name: &str, _prop: Property) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl Debug for dyn Optical {
@@ -76,6 +81,17 @@ impl Debug for dyn Optical {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
+
+impl Serialize for OpticGraph {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        let g=self.0.clone();
+        serializer.collect_seq(g.node_weights())
+    }
+}
 #[derive(Debug, Clone)]
 pub struct OpticRef(pub Rc<RefCell<dyn Optical>>);
 
@@ -86,7 +102,7 @@ impl Serialize for OpticRef {
     {
         let mut node = serializer.serialize_struct("node", 1)?;
         node.serialize_field("type", self.0.borrow().node_type())?;
-        node.serialize_field("ports", &self.0.borrow().ports())?;
+        node.serialize_field("properties", &self.0.borrow().properties())?;
         node.end()
     }
 }
