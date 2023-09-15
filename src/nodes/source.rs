@@ -107,6 +107,13 @@ impl Optical for Source {
     fn node_type(&self) -> &str {
         "light source"
     }
+    fn name(&self) -> &str {
+        if let Proptype::String(name)=&self.props.get("name").unwrap().prop {
+            name
+        } else {
+            "light source"
+        }
+    }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_output("out1").unwrap();

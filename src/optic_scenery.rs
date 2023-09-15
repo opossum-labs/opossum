@@ -312,9 +312,11 @@ impl Serialize for OpticScenery {
 #[cfg(test)]
 mod test {
     use crate::nodes::Metertype;
+    use crate::properties::{Property, Proptype};
 
     use super::super::nodes::{Dummy, BeamSplitter, EnergyMeter, Source};
     use std::{fs::File,io::Read};
+    use std::io::Write;
     use super::*;
     #[test]
     fn new() {
@@ -409,8 +411,10 @@ mod test {
 
         let mut scenery = OpticScenery::new();    
         scenery.set_description("SceneryTest".into());
-        let i_s = scenery.add_node(Source::default());
-        let i_bs = scenery.add_node(BeamSplitter::new(0.6).unwrap());
+        let i_s = scenery.add_node(Source::new("Source", LightData::Fourier));
+        let mut bs=BeamSplitter::new(0.6).unwrap();
+        bs.set_property("name", Property {prop: Proptype::String("Beam splitter".into())}).unwrap();
+        let i_bs = scenery.add_node(bs);
         let i_d1 = scenery.add_node(EnergyMeter::new("Energy meter 1",Metertype::IdealEnergyMeter));
         let i_d2 = scenery.add_node(EnergyMeter::new("Energy meter 2",Metertype::IdealEnergyMeter));
     
@@ -420,6 +424,10 @@ mod test {
     
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
         let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+
+        let path = "graph.dot";
+        let mut output = File::create(path).unwrap();
+        write!(output, "{}", scenery.to_dot("TB").unwrap()).unwrap();
 
         assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);

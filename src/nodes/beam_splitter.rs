@@ -171,6 +171,13 @@ impl Optical for BeamSplitter {
     fn node_type(&self) -> &str {
         "beam splitter"
     }
+    fn name(&self) -> &str {
+        if let Proptype::String(name)=&self.props.get("name").unwrap().prop {
+            name
+        } else {
+            "beam splitter"
+        } 
+    }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("input1").unwrap();
