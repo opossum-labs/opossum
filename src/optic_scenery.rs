@@ -362,11 +362,11 @@ mod test {
     }
     #[test]
     fn to_dot_empty() {
-        let path = "files_for_testing/dot/to_dot_empty_TB.txt";
+        let path = "files_for_testing/dot/to_dot_empty_TB.dot";
         let file_content_tb = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_tb);
 
-        let path = "files_for_testing/dot/to_dot_empty_LR.txt";
+        let path = "files_for_testing/dot/to_dot_empty_LR.dot";
         let file_content_lr = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 
@@ -381,11 +381,11 @@ mod test {
     }
     #[test]
     fn to_dot_with_node() {
-        let path = "./files_for_testing/dot/to_dot_w_node_TB.txt";
+        let path = "./files_for_testing/dot/to_dot_w_node_TB.dot";
         let file_content_tb = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_tb);
 
-        let path = "./files_for_testing/dot/to_dot_w_node_LR.txt";
+        let path = "./files_for_testing/dot/to_dot_w_node_LR.dot";
         let file_content_lr = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 
@@ -401,11 +401,11 @@ mod test {
     }
     #[test]
     fn to_dot_full() {
-        let path = "files_for_testing/dot/to_dot_full_TB.txt";
+        let path = "files_for_testing/dot/to_dot_full_TB.dot";
         let file_content_tb = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_tb);
 
-        let path = "files_for_testing/dot/to_dot_full_LR.txt";
+        let path = "files_for_testing/dot/to_dot_full_LR.dot";
         let file_content_lr = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 

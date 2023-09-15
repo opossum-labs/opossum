@@ -4,3 +4,5 @@
 /book
 *.dot
 *.svg
+
+# include dot files in /files_for_testing/*
