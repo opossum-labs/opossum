@@ -89,9 +89,15 @@ impl Serialize for OpticGraph {
     where
         S: serde::Serializer {
         let g=self.0.clone();
-        serializer.collect_seq(g.node_weights())
+        let mut graph=serializer.serialize_struct("graph", 2)?;
+        let nodes=g.node_weights().map(|n| n.to_owned()).collect::<Vec<OpticRef>>();
+        graph.serialize_field("nodes", &nodes)?;
+        let edges=g.edge_weights().map(|n| (n.src_port(),n.target_port()).to_owned()).collect::<Vec<(&str,&str)>>();
+        graph.serialize_field("edges", &edges)?;
+        graph.end()
     }
 }
+
 #[derive(Debug, Clone)]
 pub struct OpticRef(pub Rc<RefCell<dyn Optical>>);
 

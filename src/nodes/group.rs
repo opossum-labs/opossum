@@ -56,7 +56,7 @@ fn create_default_props() -> Properties {
         },
     );
     props.set(
-        "optic graph",
+        "graph",
         Property {
             prop: Proptype::OpticGraph(OpticGraph::default()),
         },
@@ -70,7 +70,7 @@ fn create_default_props() -> Properties {
     props.set(
         "output port map",
         Property {
-            prop: Proptype::String(("output poart map").into()),
+            prop: Proptype::String(("output port map").into()),
         },
     );
     props
@@ -102,7 +102,7 @@ impl NodeGroup {
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         let idx=self.g.0.add_node(OpticRef(Rc::new(RefCell::new(node))));
-        self.props.set("optic graph", Property { prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())) });
+        self.props.set("graph", Property { prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())) });
         idx
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
@@ -171,8 +171,10 @@ impl NodeGroup {
         let edge_index = self
             .g.0
             .add_edge(src_node, target_node, Light::new(src_port, target_port));
+            self.props.set("graph", Property { prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())) });
         if is_cyclic_directed(&self.g.0) {
             self.g.0.remove_edge(edge_index);
+            self.props.set("graph", Property { prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())) });
             return Err(OpossumError::OpticScenery(
                 "connecting the given nodes would form a loop".into(),
             ));
