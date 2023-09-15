@@ -7,7 +7,7 @@ use crate::lightdata::LightData;
 use crate::optical::{LightResult, OpticGraph};
 use crate::properties::{Properties, Property, Proptype};
 use crate::{optic_ports::OpticPorts, optical::OpticRef, optical::Optical};
-use petgraph::prelude::{DiGraph, EdgeIndex, NodeIndex};
+use petgraph::prelude::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::{algo::*, Direction};
 use serde::Serialize;
@@ -28,7 +28,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///   - Outputs
 ///     - defined by [`map_output_port`](NodeGroup::map_output_port()) function.
 pub struct NodeGroup {
-    g: DiGraph<OpticRef, Light>,
+    g: OpticGraph,
     expand_view: bool,
     input_port_map: HashMap<String, (NodeIndex, String)>,
     output_port_map: HashMap<String, (NodeIndex, String)>,
@@ -101,8 +101,8 @@ impl NodeGroup {
     /// This command just adds an [`Optical`] but does not connect it to existing nodes in the (sub-)graph. The given node is
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        let idx=self.g.add_node(OpticRef(Rc::new(RefCell::new(node))));
-        self.props.set("optic graph", Property { prop: Proptype::OpticGraph(OpticGraph(self.g.clone())) });
+        let idx=self.g.0.add_node(OpticRef(Rc::new(RefCell::new(node))));
+        self.props.set("optic graph", Property { prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())) });
         idx
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
@@ -118,7 +118,7 @@ impl NodeGroup {
         target_node: NodeIndex,
         target_port: &str,
     ) -> Result<EdgeIndex> {
-        if let Some(source) = self.g.node_weight(src_node) {
+        if let Some(source) = self.g.0.node_weight(src_node) {
             if !source
                 .0
                 .borrow()
@@ -137,7 +137,7 @@ impl NodeGroup {
                 "source node with given index does not exist".into(),
             ));
         }
-        if let Some(target) = self.g.node_weight(target_node) {
+        if let Some(target) = self.g.0.node_weight(target_node) {
             if !target
                 .0
                 .borrow()
@@ -169,10 +169,10 @@ impl NodeGroup {
             )));
         }
         let edge_index = self
-            .g
+            .g.0
             .add_edge(src_node, target_node, Light::new(src_port, target_port));
-        if is_cyclic_directed(&self.g) {
-            self.g.remove_edge(edge_index);
+        if is_cyclic_directed(&self.g.0) {
+            self.g.0.remove_edge(edge_index);
             return Err(OpossumError::OpticScenery(
                 "connecting the given nodes would form a loop".into(),
             ));
@@ -194,21 +194,21 @@ impl NodeGroup {
         Ok(edge_index)
     }
     fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
-        self.g
+        self.g.0
             .edges_directed(src_node, petgraph::Direction::Outgoing)
             .any(|e| e.weight().src_port() == src_port)
     }
     fn target_node_port_exists(&self, target_node: NodeIndex, target_port: &str) -> bool {
-        self.g
+        self.g.0
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
     fn input_nodes(&self) -> Vec<NodeIndex> {
         let mut input_nodes: Vec<NodeIndex> = Vec::default();
-        for node_idx in self.g.node_indices() {
-            let incoming_edges = self.g.edges_directed(node_idx, Direction::Incoming).count();
+        for node_idx in self.g.0.node_indices() {
+            let incoming_edges = self.g.0.edges_directed(node_idx, Direction::Incoming).count();
             let input_ports = self
-                .g
+                .g.0
                 .node_weight(node_idx)
                 .unwrap()
                 .0
@@ -224,10 +224,10 @@ impl NodeGroup {
     }
     fn output_nodes(&self) -> Vec<NodeIndex> {
         let mut output_nodes: Vec<NodeIndex> = Vec::default();
-        for node_idx in self.g.node_indices() {
-            let outgoing_edges = self.g.edges_directed(node_idx, Direction::Outgoing).count();
+        for node_idx in self.g.0.node_indices() {
+            let outgoing_edges = self.g.0.edges_directed(node_idx, Direction::Outgoing).count();
             let output_ports = self
-                .g
+                .g.0
                 .node_weight(node_idx)
                 .unwrap()
                 .0
@@ -263,7 +263,7 @@ impl NodeGroup {
                 "external input port name already assigned".into(),
             ));
         }
-        if let Some(node) = self.g.node_weight(input_node) {
+        if let Some(node) = self.g.0.node_weight(input_node) {
             if !node
                 .0
                 .borrow()
@@ -286,7 +286,7 @@ impl NodeGroup {
             ));
         }
         let incoming_edge_connected = self
-            .g
+            .g.0
             .edges_directed(input_node, Direction::Incoming)
             .map(|e| e.weight().target_port())
             .any(|p| p == internal_name);
@@ -324,7 +324,7 @@ impl NodeGroup {
                 "external output port name already assigned".into(),
             ));
         }
-        if let Some(node) = self.g.node_weight(output_node) {
+        if let Some(node) = self.g.0.node_weight(output_node) {
             if !node
                 .0
                 .borrow()
@@ -347,7 +347,7 @@ impl NodeGroup {
             ));
         }
         let outgoing_edge_connected = self
-            .g
+            .g.0
             .edges_directed(output_node, Direction::Outgoing)
             .map(|e| e.weight().src_port())
             .any(|p| p == internal_name);
@@ -363,7 +363,7 @@ impl NodeGroup {
         Ok(())
     }
     fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
-        let edges = self.g.edges_directed(idx, Direction::Incoming);
+        let edges = self.g.0.edges_directed(idx, Direction::Incoming);
         edges
             .into_iter()
             .map(|e| {
@@ -375,14 +375,14 @@ impl NodeGroup {
             .collect::<HashMap<String, Option<LightData>>>()
     }
     fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: Option<LightData>) {
-        let edges = self.g.edges_directed(idx, Direction::Outgoing);
+        let edges = self.g.0.edges_directed(idx, Direction::Outgoing);
         let edge_ref = edges
             .into_iter()
             .filter(|idx| idx.weight().src_port() == port)
             .last();
         if let Some(edge_ref) = edge_ref {
             let edge_idx = edge_ref.id();
-            let light = self.g.edge_weight_mut(edge_idx);
+            let light = self.g.0.edge_weight_mut(edge_idx);
             if let Some(light) = light {
                 light.set_data(data);
             }
@@ -397,7 +397,7 @@ impl NodeGroup {
         if is_inverted {
             self.invert_graph();
         }
-        let g_clone = self.g.clone();
+        let g_clone = self.g.0.clone();
         let mut group_srcs = g_clone.externals(Direction::Incoming);
         let mut light_result = LightResult::default();
         let sorted = toposort(&g_clone, None).unwrap();
@@ -517,7 +517,7 @@ impl NodeGroup {
         light_port: &str,
         mut parent_identifier: String,
     ) -> Result<String> {
-        let node = self.g.node_weight(end_node_idx).unwrap().0.borrow();
+        let node = self.g.0.node_weight(end_node_idx).unwrap().0.borrow();
 
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node_idx.index())
@@ -558,8 +558,8 @@ impl NodeGroup {
             parent_identifier, name, inv_string
         );
 
-        for node_idx in self.g.node_indices() {
-            let node = self.g.node_weight(node_idx).unwrap();
+        for node_idx in self.g.0.node_indices() {
+            let node = self.g.0.node_weight(node_idx).unwrap();
             dot_string += &node.0.borrow().to_dot(
                 &format!("{}", node_idx.index()),
                 node.0.borrow().name(),
@@ -568,9 +568,9 @@ impl NodeGroup {
                 node.0.borrow().inverted(),
             )?;
         }
-        for edge in self.g.edge_indices() {
-            let light: &Light = self.g.edge_weight(edge).unwrap();
-            let end_nodes = self.g.edge_endpoints(edge).unwrap();
+        for edge in self.g.0.edge_indices() {
+            let light: &Light = self.g.0.edge_weight(edge).unwrap();
+            let end_nodes = self.g.0.edge_endpoints(edge).unwrap();
 
             let src_edge_str = self.create_node_edge_str(
                 end_nodes.0,
@@ -632,13 +632,13 @@ impl NodeGroup {
         Ok(dot_str)
     }
     fn invert_graph(&mut self) {
-        for node in self.g.node_weights_mut() {
+        for node in self.g.0.node_weights_mut() {
             node.0.borrow_mut().set_inverted(true);
         }
-        for edge in self.g.edge_weights_mut() {
+        for edge in self.g.0.edge_weights_mut() {
             edge.inverse();
         }
-        self.g.reverse();
+        self.g.0.reverse();
     }
 }
 
@@ -722,8 +722,8 @@ mod test {
     #[test]
     fn new() {
         let og = NodeGroup::new();
-        assert_eq!(og.g.node_count(), 0);
-        assert_eq!(og.g.edge_count(), 0);
+        assert_eq!(og.g.0.node_count(), 0);
+        assert_eq!(og.g.0.edge_count(), 0);
         assert!(og.input_port_map.is_empty());
         assert!(og.output_port_map.is_empty());
     }
@@ -731,7 +731,7 @@ mod test {
     fn add_node() {
         let mut og = NodeGroup::new();
         og.add_node(Dummy::new("n1"));
-        assert_eq!(og.g.node_count(), 1);
+        assert_eq!(og.g.0.node_count(), 1);
     }
     #[test]
     fn connect_nodes() {
@@ -740,17 +740,17 @@ mod test {
         let sn2_i = og.add_node(Dummy::new("n2"));
         // wrong port names
         assert!(og.connect_nodes(sn1_i, "wrong", sn2_i, "front").is_err());
-        assert_eq!(og.g.edge_count(), 0);
+        assert_eq!(og.g.0.edge_count(), 0);
         assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "wrong").is_err());
-        assert_eq!(og.g.edge_count(), 0);
+        assert_eq!(og.g.0.edge_count(), 0);
         // wrong node index
         assert!(og.connect_nodes(5.into(), "rear", sn2_i, "front").is_err());
-        assert_eq!(og.g.edge_count(), 0);
+        assert_eq!(og.g.0.edge_count(), 0);
         assert!(og.connect_nodes(sn1_i, "rear", 5.into(), "front").is_err());
-        assert_eq!(og.g.edge_count(), 0);
+        assert_eq!(og.g.0.edge_count(), 0);
         // correct usage
         assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "front").is_ok());
-        assert_eq!(og.g.edge_count(), 1);
+        assert_eq!(og.g.0.edge_count(), 1);
     }
     #[test]
     fn connect_nodes_update_port_mapping() {
