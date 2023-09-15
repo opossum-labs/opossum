@@ -22,7 +22,7 @@ fn main() -> Result<(), OpossumError> {
         }),
     ));
 
-    let mut group = NodeGroup::new();
+    let mut group = NodeGroup::default();
     group.expand_view(true);
     let g_n1 = group.add_node(Dummy::new("node1"));
     let g_n2 = group.add_node(Dummy::new("node2"));

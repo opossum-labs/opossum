@@ -89,10 +89,11 @@ impl Default for NodeGroup {
 }
 impl NodeGroup {
     /// Creates a new [`NodeGroup`].
-    pub fn new() -> Self {
+    pub fn new(name: &str) -> Self {
+        let mut props= create_default_props();
+        props.set("name", Property { prop: Proptype::String(name.into()) });
         Self {
-            expand_view: false,
-            props: create_default_props(),
+            props, 
             ..Default::default()
         }
     }
@@ -723,7 +724,7 @@ mod test {
     };
     #[test]
     fn new() {
-        let og = NodeGroup::new();
+        let og = NodeGroup::default();
         assert_eq!(og.g.0.node_count(), 0);
         assert_eq!(og.g.0.edge_count(), 0);
         assert!(og.input_port_map.is_empty());
@@ -731,13 +732,13 @@ mod test {
     }
     #[test]
     fn add_node() {
-        let mut og = NodeGroup::new();
+        let mut og = NodeGroup::default();
         og.add_node(Dummy::new("n1"));
         assert_eq!(og.g.0.node_count(), 1);
     }
     #[test]
     fn connect_nodes() {
-        let mut og = NodeGroup::new();
+        let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1"));
         let sn2_i = og.add_node(Dummy::new("n2"));
         // wrong port names
@@ -756,7 +757,7 @@ mod test {
     }
     #[test]
     fn connect_nodes_update_port_mapping() {
-        let mut og = NodeGroup::new();
+        let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1"));
         let sn2_i = og.add_node(Dummy::new("n2"));
 
@@ -771,7 +772,7 @@ mod test {
     }
     #[test]
     fn input_nodes() {
-        let mut og = NodeGroup::new();
+        let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1"));
         let sn2_i = og.add_node(Dummy::new("n2"));
         let sub_node3 = BeamSplitter::new(0.5).unwrap();
@@ -782,7 +783,7 @@ mod test {
     }
     #[test]
     fn output_nodes() {
-        let mut og = NodeGroup::new();
+        let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1"));
         let sub_node1 = BeamSplitter::new(0.5).unwrap();
         let sn2_i = og.add_node(sub_node1);
@@ -794,7 +795,7 @@ mod test {
     }
     #[test]
     fn map_input_port() {
-        let mut og = NodeGroup::new();
+        let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1"));
         let sn2_i = og.add_node(Dummy::new("n2"));
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
@@ -817,7 +818,7 @@ mod test {
     }
     #[test]
     fn map_input_port_half_connected_nodes() {
-        let mut og = NodeGroup::new();
+        let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1"));
         let sn2_i = og.add_node(BeamSplitter::default());
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
@@ -832,7 +833,7 @@ mod test {
     }
     #[test]
     fn map_output_port() {
-        let mut og = NodeGroup::new();
+        let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1"));
         let sn2_i = og.add_node(Dummy::new("n2"));
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
@@ -855,7 +856,7 @@ mod test {
     }
     #[test]
     fn map_output_port_half_connected_nodes() {
-        let mut og = NodeGroup::new();
+        let mut og = NodeGroup::default();
         let sn1_i = og.add_node(BeamSplitter::default());
         let sn2_i = og.add_node(Dummy::new("n2"));
         og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "front")
@@ -875,7 +876,7 @@ mod test {
     }
     #[test]
     fn ports() {
-        let mut og = NodeGroup::new();
+        let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1"));
         let sn2_i = og.add_node(Dummy::new("n2"));
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
