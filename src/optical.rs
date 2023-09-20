@@ -1,17 +1,17 @@
-use petgraph::prelude::DiGraph;
-use petgraph::stable_graph::NodeIndex;
-use serde::ser::SerializeStruct;
-use serde::Serialize;
-
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
-use crate::nodes::NodeGroup;
+use crate::nodes::{Dummy, NodeGroup};
 use crate::optic_ports::OpticPorts;
 use crate::properties::{Properties, Property};
 use core::fmt::Debug;
+use petgraph::prelude::DiGraph;
+use petgraph::stable_graph::NodeIndex;
+use serde::de::{self, Deserialize, MapAccess, SeqAccess, Visitor};
+use serde::ser::SerializeStruct;
+use serde::Serialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -132,25 +132,95 @@ impl Serialize for OpticRef {
     }
 }
 
-#[cfg(test)]
-mod test {
-    // #[test]
-    // #[ignore]
-    // fn to_dot() {
-    //     let node = OpticNode::new("Test", Dummy::default());
-    //     assert_eq!(
-    //         node.to_dot("i0", "".to_owned()).unwrap(),
-    //         "  i0 [label=\"Test\"]\n".to_owned()
-    //     )
-    // }
-    // #[test]
-    // #[ignore]
-    // fn to_dot_inverted() {
-    //     let mut node = OpticNode::new("Test", Dummy::default());
-    //     node.set_inverted(true);
-    //     assert_eq!(
-    //         node.to_dot("i0", "".to_owned()).unwrap(),
-    //         "  i0 [label=\"Test(inv)\"]\n".to_owned()
-    //     )
-    // }
+impl<'de> Deserialize<'de> for OpticRef {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        enum Field {
+            NodeType,
+            Properties,
+        }
+        const FIELDS: &'static [&'static str] = &["type", "properties"];
+
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct FieldVisitor;
+
+                impl<'de> Visitor<'de> for FieldVisitor {
+                    type Value = Field;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        formatter.write_str("`type` or `properties`")
+                    }
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
+                    where
+                        E: de::Error,
+                    {
+                        match value {
+                            "type" => Ok(Field::NodeType),
+                            "properties" => Ok(Field::Properties),
+                            _ => Err(de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+
+        struct OpticRefVisitor;
+
+        impl<'de> Visitor<'de> for OpticRefVisitor {
+            type Value = OpticRef;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a struct OpticRef")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<OpticRef, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let _node_type = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let _properties = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+
+                Ok(OpticRef(Rc::new(RefCell::new(Dummy::default()))))
+            }
+
+            fn visit_map<A>(self, mut map: A) -> std::result::Result<OpticRef, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut node_type = None;
+                let mut properties = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::NodeType => {
+                            if node_type.is_some() {
+                                return Err(de::Error::duplicate_field("type"));
+                            }
+                            node_type = Some(map.next_value()?);
+                        }
+                        Field::Properties => {
+                            if properties.is_some() {
+                                return Err(de::Error::duplicate_field("properties"));
+                            }
+                            properties = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let _node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
+                let _nanos = properties.ok_or_else(|| de::Error::missing_field("properties"))?;
+                Ok(OpticRef(Rc::new(RefCell::new(Dummy::default()))))
+            }
+        }
+        deserializer.deserialize_struct("OpticRef", FIELDS, OpticRefVisitor)
+    }
 }

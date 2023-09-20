@@ -37,7 +37,7 @@ impl Serialize for Properties {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer {
-        serializer.serialize_newtype_struct("hallo", &self.props)
+        serializer.serialize_newtype_struct("properties", &self.props)
     }
 }
 #[derive(Debug, Clone)]
@@ -49,7 +49,7 @@ impl Serialize for Property {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer {
-        serializer.serialize_newtype_struct("hallo", &self.prop)
+        serializer.serialize_newtype_struct("property", &self.prop)
     }
 }
 #[non_exhaustive]
