@@ -108,10 +108,6 @@ impl Serialize for OpticGraph {
                 )
             })
             .collect::<Vec<(NodeIndex, NodeIndex, &str, &str)>>();
-        // let edges = g
-        //     .edge_weights()
-        //     .map(|n| (n.src_port(), n.target_port()).to_owned())
-        //     .collect::<Vec<(&str, &str)>>();
         graph.serialize_field("edges", &edgeidx)?;
         graph.end()
     }
@@ -198,26 +194,31 @@ impl<'de> Deserialize<'de> for OpticRef {
             where
                 A: MapAccess<'de>,
             {
-                let mut node_type = None;
-                let mut properties = None;
+                //let mut node_type = None;
+                //let mut properties = None;
+                println!("visit_map");
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::NodeType => {
-                            if node_type.is_some() {
-                                return Err(de::Error::duplicate_field("type"));
-                            }
-                            node_type = Some(map.next_value()?);
+                            println!("found `type`");
+                            // if node_type.is_some() {
+                            //     return Err(de::Error::duplicate_field("type"));
+                            // }
+                            map.next_value::<String>();
+                            // node_type = Some(map.next_value()?);
                         }
                         Field::Properties => {
-                            if properties.is_some() {
-                                return Err(de::Error::duplicate_field("properties"));
-                            }
-                            properties = Some(map.next_value()?);
+                            println!("found `properteis`");
+                            // if properties.is_some() {
+                            //     return Err(de::Error::duplicate_field("properties"));
+                            // }
+                            // properties = Some(map.next_value()?);
+                            map.next_value::<String>();
                         }
                     }
                 }
-                let _node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
-                let _nanos = properties.ok_or_else(|| de::Error::missing_field("properties"))?;
+                //let _node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
+                //let _nanos = properties.ok_or_else(|| de::Error::missing_field("properties"))?;
                 Ok(OpticRef(Rc::new(RefCell::new(Dummy::default()))))
             }
         }
