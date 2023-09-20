@@ -27,4 +27,3 @@ pub use optic_scenery::OpticScenery;
 
 pub mod console;
 
-pub mod console;

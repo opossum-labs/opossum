@@ -6,3 +6,5 @@
 *.svg
 
 # include dot files in /files_for_testing/*
+!/files_for_testing/dot/*
+
