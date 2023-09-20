@@ -14,6 +14,8 @@ pub enum OpossumError {
     Analysis(String),
     /// errors while handling optical spectra
     Spectrum(String),
+    /// errors console io
+    Console(String),
     /// errors not falling in one of the categories above
     Other(String),
 }
@@ -35,6 +37,9 @@ impl Display for OpossumError {
             }
             OpossumError::Spectrum(m) => {
                 write!(f, "Opossum Spectrum::{}", m)
+            }
+            OpossumError::Console(m) => {
+                write!(f, "Opossum Console::{}", m)
             }
             OpossumError::Other(m) => write!(f, "Opossum Error::Other::{}", m),
         }

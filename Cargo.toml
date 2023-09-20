@@ -25,3 +25,7 @@ csv="1"
 plotters="0"
 
 approx = "0" # assert macros for comparison of floats with tolerance
+clap = { version = "4.4.3", features = ["derive"] }
+structopt = "0.3.26"
+rprompt = "2.0.2"
+strum = { version = "0.25", features = ["derive"] }
