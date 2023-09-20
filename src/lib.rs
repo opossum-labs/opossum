@@ -19,3 +19,5 @@ pub mod error;
 pub mod spectrum;
 
 pub use optic_scenery::OpticScenery;
+
+pub mod console;
