@@ -1,5 +1,6 @@
 //! Optical Analyzers
 use crate::{error::OpossumError, optic_scenery::OpticScenery};
+use strum::EnumIter;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 #[derive(Debug)]
@@ -18,6 +19,7 @@ impl AnalyzerEnergy {
     }
 }
 
+#[derive(EnumIter)]
 pub enum AnalyzerType {
     Energy,
     ParAxialRayTrace,
