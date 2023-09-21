@@ -4,7 +4,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 
 
 
-fn main() -> Result<()>{
+fn main() -> Result<()>{    
     let opossum_args = Args::try_from(PartialArgs::parse())?;
 
     println!("file path: {}", opossum_args.file_path);
