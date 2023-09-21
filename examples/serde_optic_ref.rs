@@ -1,9 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
-use opossum::{optical::OpticRef, nodes::{Dummy, Detector}, error::OpossumError};
+use opossum::{optical::OpticRef, nodes::Dummy, error::OpossumError};
 
 fn main() -> Result<(), OpossumError>{
-  let optic_ref=OpticRef(Rc::new(RefCell::new(Detector::default())));
+  let optic_ref=OpticRef(Rc::new(RefCell::new(Dummy::default())));
 
   let serialized= serde_yaml::to_string(&optic_ref).unwrap();
 

@@ -35,6 +35,14 @@ pub fn create_node_ref(node_type: &str) -> Result<OpticRef,OpossumError> {
   match node_type {
     "dummy" => Ok(OpticRef(Rc::new(RefCell::new(Dummy::default())))),
     "detector" => Ok(OpticRef(Rc::new(RefCell::new(Detector::default())))),
+    "beam splitter" => Ok(OpticRef(Rc::new(RefCell::new(BeamSplitter::default())))),
+    "energy meter" => Ok(OpticRef(Rc::new(RefCell::new(EnergyMeter::default())))),
+    "group" => Ok(OpticRef(Rc::new(RefCell::new(NodeGroup::default())))),
+    "ideal filter" => Ok(OpticRef(Rc::new(RefCell::new(IdealFilter::default())))),
+    "reference" => Ok(OpticRef(Rc::new(RefCell::new(NodeReference::default())))),
+    "real lens" => Ok(OpticRef(Rc::new(RefCell::new(RealLens::default())))),
+    "light source" => Ok(OpticRef(Rc::new(RefCell::new(Source::default())))),
+    "spectrometer" => Ok(OpticRef(Rc::new(RefCell::new(Spectrometer::default())))),
     _ => Err(OpossumError::Other(format!("cannot create node type {}", node_type)))
   }
 }

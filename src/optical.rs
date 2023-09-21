@@ -3,7 +3,7 @@ use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
-use crate::nodes::{create_node_ref, Dummy, NodeGroup};
+use crate::nodes::{create_node_ref, NodeGroup};
 use crate::optic_ports::OpticPorts;
 use crate::properties::{Properties, Property};
 use core::fmt::Debug;
@@ -75,7 +75,7 @@ pub trait Optical: Dottable {
         Ok(())
     }
     fn set_properties(&mut self, properties: &Properties) -> Result<()> {
-        let own_properties= self.properties().props.clone();
+        let own_properties = self.properties().props.clone();
 
         for prop in properties.props.iter() {
             if own_properties.contains_key(prop.0) {
@@ -147,7 +147,7 @@ impl<'de> Deserialize<'de> for OpticRef {
             NodeType,
             Properties,
         }
-        const FIELDS: &'static [&'static str] = &["type", "properties"];
+        const FIELDS: &[&str] = &["type", "properties"];
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -190,14 +190,19 @@ impl<'de> Deserialize<'de> for OpticRef {
             where
                 A: SeqAccess<'de>,
             {
-                let _node_type = seq
+                let node_type = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let _properties = seq
+                let properties = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-
-                Ok(OpticRef(Rc::new(RefCell::new(Dummy::default()))))
+                let node =
+                    create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+                node.0
+                    .borrow_mut()
+                    .set_properties(&properties)
+                    .map_err(|e| de::Error::custom(e.to_string()))?;
+                Ok(node)
             }
 
             fn visit_map<A>(self, mut map: A) -> std::result::Result<OpticRef, A::Error>
@@ -229,7 +234,8 @@ impl<'de> Deserialize<'de> for OpticRef {
                     create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
                 node.0
                     .borrow_mut()
-                    .set_properties(&properties).map_err(|e| de::Error::custom(e.to_string()))?;
+                    .set_properties(&properties)
+                    .map_err(|e| de::Error::custom(e.to_string()))?;
                 Ok(node)
             }
         }
