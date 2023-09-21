@@ -3,7 +3,7 @@ use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
-use crate::nodes::{Dummy, NodeGroup};
+use crate::nodes::{create_node_ref, Dummy, NodeGroup};
 use crate::optic_ports::OpticPorts;
 use crate::properties::{Properties, Property};
 use core::fmt::Debug;
@@ -72,6 +72,16 @@ pub trait Optical: Dottable {
     }
     fn properties(&self) -> &Properties;
     fn set_property(&mut self, _name: &str, _prop: Property) -> Result<()> {
+        Ok(())
+    }
+    fn set_properties(&mut self, properties: &Properties) -> Result<()> {
+        let own_properties= self.properties().props.clone();
+
+        for prop in properties.props.iter() {
+            if own_properties.contains_key(prop.0) {
+                self.set_property(prop.0, prop.1.clone())?;
+            }
+        }
         Ok(())
     }
 }
@@ -212,9 +222,15 @@ impl<'de> Deserialize<'de> for OpticRef {
                         }
                     }
                 }
-                let _node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
-                let _nanos = properties.ok_or_else(|| de::Error::missing_field("properties"))?;
-                Ok(OpticRef(Rc::new(RefCell::new(Dummy::default()))))
+                let node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
+                let properties =
+                    properties.ok_or_else(|| de::Error::missing_field("properties"))?;
+                let node =
+                    create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+                node.0
+                    .borrow_mut()
+                    .set_properties(&properties).map_err(|e| de::Error::custom(e.to_string()))?;
+                Ok(node)
             }
         }
         deserializer.deserialize_struct("OpticRef", FIELDS, OpticRefVisitor)

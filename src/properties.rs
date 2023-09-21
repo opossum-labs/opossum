@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use serde::Serialize;
+// use serde::Serialize;
 use serde_derive::{Serialize, Deserialize};
 
 use crate::{error::OpossumError, lightdata::LightData, optical::OpticGraph};
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct Properties {
-  props: HashMap<String, Property>
+  pub props: HashMap<String, Property>
 }
 
 impl Properties {

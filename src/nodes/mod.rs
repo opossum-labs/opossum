@@ -10,6 +10,9 @@ mod reference;
 mod source;
 mod spectrometer;
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 pub use beam_splitter::BeamSplitter;
 pub use detector::Detector;
 pub use dummy::Dummy;
@@ -24,3 +27,14 @@ pub use energy_meter::Metertype;
 
 pub use spectrometer::Spectrometer;
 pub use spectrometer::SpectrometerType;
+
+use crate::error::OpossumError;
+use crate::optical::OpticRef;
+
+pub fn create_node_ref(node_type: &str) -> Result<OpticRef,OpossumError> {
+  match node_type {
+    "dummy" => Ok(OpticRef(Rc::new(RefCell::new(Dummy::default())))),
+    "detector" => Ok(OpticRef(Rc::new(RefCell::new(Detector::default())))),
+    _ => Err(OpossumError::Other(format!("cannot create node type {}", node_type)))
+  }
+}
