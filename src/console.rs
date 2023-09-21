@@ -18,8 +18,15 @@ pub struct Args {
     /// analyzer type that should be used to analyze the optical setup
     #[arg(short, long)]
     pub analyzer: String,
-}
 
+    /// flag to define whether a report should be created or not
+    #[arg(short, long)]
+    report: Option<String>,
+
+    /// path to the report destination. if not defined, same directory as the filepath for the optical setup is used
+    #[arg(short, long)]
+    path_to_report: Option<String>,
+}
 
 
 #[derive(Parser, StructOpt)]
@@ -31,6 +38,14 @@ pub struct PartialArgs {
     /// analyzer type that should be used to analyze the optical setup
     #[arg(short, long)]
     analyzer: Option<String>,
+
+    /// flag to define whether a report should be created or not, defafult yes
+    #[arg(short, long)]
+    report: Option<String>,
+
+    /// path to the report destination. if not defined, same directory as the filepath for the optical setup is used
+    #[arg(short, long)]
+    path_to_report: Option<String>,
 }
 
 fn user_prompt(prompt: &str, check_flag: &str, err_count: &mut usize) -> Result<String>{
