@@ -19,13 +19,9 @@ pub struct Args {
     #[arg(short, long)]
     pub analyzer: String,
 
-    /// flag to define whether a report should be created or not
+    /// destination directory of the report. if not defined, same directory as the filepath for the optical setup is used
     #[arg(short, long)]
-    report: Option<String>,
-
-    /// path to the report destination. if not defined, same directory as the filepath for the optical setup is used
-    #[arg(short, long)]
-    path_to_report: Option<String>,
+    pub report_directory: String,
 }
 
 
@@ -39,13 +35,66 @@ pub struct PartialArgs {
     #[arg(short, long)]
     analyzer: Option<String>,
 
-    /// flag to define whether a report should be created or not, defafult yes
+    /// destination directory of the report. if not defined, same directory as the filepath for the optical setup is used
     #[arg(short, long)]
-    report: Option<String>,
+    report_directory: Option<String>,
+}
 
-    /// path to the report destination. if not defined, same directory as the filepath for the optical setup is used
-    #[arg(short, long)]
-    path_to_report: Option<String>,
+fn file_path_is_valid(path: &str) -> bool{
+    Path::exists(Path::new(path)) && Path::is_file(Path::new(path)) && path.ends_with(".yaml")
+}
+
+fn eval_file_path(path: Option<String>, err_count:&mut usize) -> Result<String>{
+    match path{
+        Some(f) => {
+            if file_path_is_valid(&f) {
+                Ok(f)
+            }
+            else{
+                user_prompt(&format!("Invalid file path: {}\nFile must be inside of an existing directory end end with .yaml!\n\nPlease insert valid file path!\n", f), "f", err_count)
+            }
+        },
+        None => user_prompt("Insert path to optical-setup-description file:\n", "f", err_count)
+    }
+}
+
+fn eval_analyzer_flag(analyzer_flag: Option<String>, err_count:&mut usize) -> Result<String>{
+    match analyzer_flag{
+        Some(flag) => {
+            match flag.as_str() {
+                "e" => Ok("energy".to_owned()),
+                "p" => Ok("paraxial ray-tracing".to_owned()),
+                _ => {
+                    *err_count += 1;
+                    user_prompt(&format!("Invalid analyzer flag: {}\n\nPlease choose an analyzer for your setup:\n", flag), "a", err_count)
+                }
+            }
+        }
+        None => user_prompt("Please choose an analyzer for your setup:\n", "a", err_count)       
+    }
+}
+
+fn eval_report_directory(report_dir: Option<String>, err_count: &mut usize) -> Result<String>{
+    match report_dir{
+        Some(r) => {
+            let r_path = Path::new(&r);
+            if Path::exists(r_path){
+                if r_path.ends_with("\\"){
+                    Ok(r.to_owned())
+                }
+                else{
+                    Ok(r + "\\")
+                }
+            }
+            else if r == "" {
+                Ok("".to_owned())
+            }
+            else{
+                user_prompt(&format!("Invalid directory: {}\n\nPlease insert a valid directory or nothing to choose the same directory as the optical-setup file\n", r), "r", err_count)
+            }
+        },
+        None => Ok("".to_owned())
+    }
 }
 
 fn user_prompt(prompt: &str, check_flag: &str, err_count: &mut usize) -> Result<String>{
@@ -53,15 +102,7 @@ fn user_prompt(prompt: &str, check_flag: &str, err_count: &mut usize) -> Result<
         match check_flag{
             "f" => {
                 let input: String = prompt_reply(prompt).unwrap();
-                if Path::exists(Path::new(&input)){
-                    //todo: check for correct file extension
-                    *err_count = 0;
-                    Ok(input)
-                }
-                else{
-                    *err_count += 1;
-                    user_prompt(&format!("Invalid file path: {}\n\nPlease insert valid file path!\n", input), "f", err_count)
-                }
+                eval_file_path(Some(input), err_count)
             }
             "a" => 
             {
@@ -74,14 +115,12 @@ fn user_prompt(prompt: &str, check_flag: &str, err_count: &mut usize) -> Result<
                 }
                 let input: String = prompt_reply(prompt_str).unwrap();
 
-                match input.as_str() {
-                    "e" => Ok("energy".to_owned()),
-                    "p" => Ok("paraxial ray-tracing".to_owned()),
-                    _ => {
-                        *err_count += 1;
-                        user_prompt(&format!("Invalid analyzer flag: {}\n\nPlease choose an analyzer for your setup:\n", input), "a", err_count)
-                    }
-                }
+                eval_analyzer_flag(Some(input), err_count)
+            }
+            "r" => 
+            {
+                let input: String = prompt_reply(prompt).unwrap();
+                eval_report_directory(Some(input), err_count)
             }
             _ => {
                 Err(OpossumError::Console("Wrong check flag! This type of flag is not defined!".into()))
@@ -100,18 +139,25 @@ impl TryFrom<PartialArgs> for Args{
     fn try_from(part_args: PartialArgs) -> Result<Args> {
         let mut err_count: usize = 0;
 
-        let file_path = match part_args.file_path{
-            Some(f) => f,
-            None => user_prompt("Insert path to optical-setup-description file:\n", "f", &mut err_count)?
-        };
+        let file_path = eval_file_path(part_args.file_path, &mut err_count)?;
         println!("{}", format!("Path to optical-setup file: {}\n", file_path));
 
-        let analyzer = match part_args.analyzer{
-            Some(a) => a,
-            None => user_prompt("Please choose an analyzer for your setup:\n", "a", &mut err_count)?
-        };
+        let analyzer = eval_analyzer_flag(part_args.analyzer, &mut err_count)?;
         println!("{}", format!("Chosen analysis: {}\n", analyzer));
+
+        let report_directory = eval_report_directory(part_args.report_directory, &mut err_count)?;
+        let report_directory = if report_directory.is_empty(){
+            Path::parent(Path::new(&file_path))
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()
+        }
+        else{
+            report_directory
+        };
+        println!("{}", format!("Report directory: {}\n", report_directory));
         
-        Ok(Args{ file_path: file_path, analyzer: analyzer})
+        Ok(Args{ file_path: file_path, analyzer: analyzer, report_directory: report_directory})
     }
 }
