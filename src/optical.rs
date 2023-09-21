@@ -123,6 +123,117 @@ impl Serialize for OpticGraph {
     }
 }
 
+impl<'de> Deserialize<'de> for OpticGraph {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        enum Field {
+            Nodes,
+            Edges,
+        }
+        const FIELDS: &[&str] = &["nodes", "edges"];
+
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct FieldVisitor;
+
+                impl<'de> Visitor<'de> for FieldVisitor {
+                    type Value = Field;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        formatter.write_str("`nodes` or `edges`")
+                    }
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
+                    where
+                        E: de::Error,
+                    {
+                        match value {
+                            "nodes" => Ok(Field::Nodes),
+                            "edges" => Ok(Field::Edges),
+                            _ => Err(de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+
+        struct OpticGraphVisitor;
+
+        impl<'de> Visitor<'de> for OpticGraphVisitor {
+            type Value = OpticGraph;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("an OpticGraph")
+            }
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<OpticGraph, A::Error>
+             where
+                 A: SeqAccess<'de>,
+            {
+                println!("visit seq");
+                let g=OpticGraph::default();
+            //     let node_type = seq
+            //         .next_element()?
+            //         .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+            //     let properties = seq
+            //         .next_element()?
+            //         .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+            //     let node =
+            //         create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+            //     node.0
+            //         .borrow_mut()
+            //         .set_properties(&properties)
+            //         .map_err(|e| de::Error::custom(e.to_string()))?;
+                 Ok(g)
+            }
+            fn visit_map<A>(self, mut map: A) -> std::result::Result<OpticGraph, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                println!("Visit map");
+                let g=OpticGraph::default();
+                let mut nodes: Option<Vec<OpticRef>>=None;
+                let mut edges: Option<Vec<(NodeIndex, NodeIndex, &str, &str)>>= None;
+                while let Some(key) = map.next_key()? {
+                     match key {
+                         Field::Nodes => {
+                            println!("visit nodes");
+                             if nodes.is_some() {
+                                 return Err(de::Error::duplicate_field("nodes"));
+                             }
+                             nodes = Some(map.next_value::<Vec<OpticRef>>()?);
+                             println!("{:?}", nodes);
+                         }
+                         Field::Edges => {
+                            println!("visit edges");
+                             if edges.is_some() {
+                                 return Err(de::Error::duplicate_field("edges"));
+                             }
+                             edges = Some(map.next_value::<Vec<(NodeIndex, NodeIndex, &str, &str)>>()?);
+                             println!("{:?}", nodes);
+                         }
+                     }
+                }
+                // let node_type = node_type.ok_or_else(|| de::Error::missing_field("nodes"))?;
+                // let properties =
+                //     properties.ok_or_else(|| de::Error::missing_field("edges"))?;
+                // let node =
+                //     create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+                // node.0
+                //     .borrow_mut()
+                //     .set_properties(&properties)
+                //     .map_err(|e| de::Error::custom(e.to_string()))?;
+                Ok(g)
+            }
+        }
+        deserializer.deserialize_struct("OpticGraph", FIELDS, OpticGraphVisitor)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct OpticRef(pub Rc<RefCell<dyn Optical>>);
 
@@ -242,3 +353,4 @@ impl<'de> Deserialize<'de> for OpticRef {
         deserializer.deserialize_struct("OpticRef", FIELDS, OpticRefVisitor)
     }
 }
+ 
