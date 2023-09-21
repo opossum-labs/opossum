@@ -41,6 +41,7 @@ impl Properties {
 //     }
 // }
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(transparent)]
 pub struct Property {
   pub prop: Proptype
 }
