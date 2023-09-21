@@ -194,31 +194,26 @@ impl<'de> Deserialize<'de> for OpticRef {
             where
                 A: MapAccess<'de>,
             {
-                //let mut node_type = None;
-                //let mut properties = None;
-                println!("visit_map");
+                let mut node_type = None;
+                let mut properties = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::NodeType => {
-                            println!("found `type`");
-                            // if node_type.is_some() {
-                            //     return Err(de::Error::duplicate_field("type"));
-                            // }
-                            map.next_value::<String>();
-                            // node_type = Some(map.next_value()?);
+                            if node_type.is_some() {
+                                return Err(de::Error::duplicate_field("type"));
+                            }
+                            node_type = Some(map.next_value()?);
                         }
                         Field::Properties => {
-                            println!("found `properteis`");
-                            // if properties.is_some() {
-                            //     return Err(de::Error::duplicate_field("properties"));
-                            // }
-                            // properties = Some(map.next_value()?);
-                            map.next_value::<String>();
+                            if properties.is_some() {
+                                return Err(de::Error::duplicate_field("properties"));
+                            }
+                            properties = Some(map.next_value::<Properties>()?);
                         }
                     }
                 }
-                //let _node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
-                //let _nanos = properties.ok_or_else(|| de::Error::missing_field("properties"))?;
+                let _node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
+                let _nanos = properties.ok_or_else(|| de::Error::missing_field("properties"))?;
                 Ok(OpticRef(Rc::new(RefCell::new(Dummy::default()))))
             }
         }

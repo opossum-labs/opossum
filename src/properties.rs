@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use serde_derive::Serialize;
+use serde_derive::{Serialize, Deserialize};
 
 use crate::{error::OpossumError, lightdata::LightData, optical::OpticGraph};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct Properties {
   props: HashMap<String, Property>
 }
@@ -33,32 +33,33 @@ impl Properties {
     }
   }
 }
-impl Serialize for Properties {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer {
-        serializer.serialize_newtype_struct("properties", &self.props)
-    }
-}
-#[derive(Debug, Clone)]
+// impl Serialize for Properties {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer {
+//         serializer.serialize_newtype_struct("properties", &self.props)
+//     }
+// }
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Property {
   pub prop: Proptype
 }
 
-impl Serialize for Property {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer {
-        serializer.serialize_newtype_struct("property", &self.prop)
-    }
-}
+// impl Serialize for Property {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer {
+//         serializer.serialize_newtype_struct("property", &self.prop)
+//     }
+// }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Proptype {
   String(String),
   I32(i32),
   F64(f64),
   Bool(bool),
   LightData(Option<LightData>),
+  #[serde(skip)]
   OpticGraph(OpticGraph)
 }
