@@ -61,11 +61,11 @@ fn eval_analyzer_input(analyzer_input: &str) -> Option<String>{
 fn eval_report_directory_input(report_input: &str) -> Option<String>{
     let r_path = Path::new(&report_input);
     if Path::exists(r_path){
-        if report_input.ends_with('\\'){
+        if report_input.ends_with('/'){
             Some(report_input.to_owned())
         }
         else{
-            Some(report_input.to_owned() + "\\")
+            Some(report_input.to_owned() + "/")
         }
     }
     else if report_input.is_empty() {
@@ -125,7 +125,7 @@ fn get_parent_dir(path: &str) -> String{
                 .to_str()
                 .unwrap()
                 .to_owned();
-    parent_dir + "\\"
+    parent_dir + "/"
 }
 
 impl TryFrom<PartialArgs> for Args{
@@ -158,11 +158,11 @@ mod test {
     use super::*;
     #[test]
     fn file_path_is_valid_test() {
-        let path_valid = ".\\files_for_testing\\CLI\\empty_yaml.yaml";
-        let path_inexistent_file = ".\\files_for_testing\\CLI\\nonexistent.yaml";
-        let path_inexistent_dir = ".\\files_for_testing\\this_dir_does_not_exist\\empty_yaml.yaml";
-        let path_not_yaml = ".\\files_for_testing\\CLI\\is_not_a_yaml.txt";
-        let path_is_dir = ".\\files_for_testing\\CLI\\";
+        let path_valid = "./files_for_testing/CLI/empty_yaml.yaml";
+        let path_inexistent_file = "./files_for_testing/CLI/nonexistent.yaml";
+        let path_inexistent_dir = "./files_for_testing/this_dir_does_not_exist/empty_yaml.yaml";
+        let path_not_yaml = "./files_for_testing/CLI/is_not_a_yaml.txt";
+        let path_is_dir = "./files_for_testing/CLI/";
 
         assert_eq!(file_path_is_valid(path_valid), true);
         assert_eq!(file_path_is_valid(path_inexistent_file), false);
@@ -172,11 +172,11 @@ mod test {
     }
     #[test]
     fn eval_file_path_input_test(){
-        let path_valid = ".\\files_for_testing\\CLI\\empty_yaml.yaml";
-        let path_inexistent_file = ".\\files_for_testing\\CLI\\nonexistent.yaml";
-        let path_inexistent_dir = ".\\files_for_testing\\this_dir_does_not_exist\\empty_yaml.yaml";
-        let path_not_yaml = ".\\files_for_testing\\CLI\\is_not_a_yaml.txt";
-        let path_is_dir = ".\\files_for_testing\\CLI\\";
+        let path_valid = "./files_for_testing/CLI/empty_yaml.yaml";
+        let path_inexistent_file = "./files_for_testing/CLI/nonexistent.yaml";
+        let path_inexistent_dir = "./files_for_testing/this_dir_does_not_exist/empty_yaml.yaml";
+        let path_not_yaml = "./files_for_testing/CLI/is_not_a_yaml.txt";
+        let path_is_dir = "./files_for_testing/CLI/";
 
         assert_eq!(eval_file_path_input(path_valid), Some(path_valid.to_owned()));
         assert_eq!(eval_file_path_input(path_inexistent_file), None);
@@ -192,8 +192,8 @@ mod test {
     }
     #[test]
     fn eval_report_directory_input_test(){
-        let dir_valid = ".\\files_for_testing\\CLI\\";
-        let dir_valid2 = ".\\files_for_testing\\CLI";
+        let dir_valid = "./files_for_testing/CLI/";
+        let dir_valid2 = "./files_for_testing/CLI";
 
         assert_eq!(eval_report_directory_input(""), Some("".to_owned()));
         assert_eq!(eval_report_directory_input(dir_valid), Some(dir_valid.to_owned()));
@@ -202,7 +202,7 @@ mod test {
     }
     #[test]
     fn get_parent_dir_test(){
-        let path_valid = ".\\files_for_testing\\CLI\\empty_yaml.yaml".to_owned();
-        assert_eq!(get_parent_dir(&path_valid), ".\\files_for_testing\\CLI\\");
+        let path_valid = "./files_for_testing/CLI/empty_yaml.yaml".to_owned();
+        assert_eq!(get_parent_dir(&path_valid), "./files_for_testing/CLI/");
     }
 }
