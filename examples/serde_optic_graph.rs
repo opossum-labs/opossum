@@ -1,6 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
-
-use opossum::{optical::OpticGraph, nodes::Dummy, error::OpossumError};
+use opossum::{optical::OpticGraph, error::OpossumError};
 
 fn main() -> Result<(), OpossumError>{
   let optic_graph=OpticGraph::default();
