@@ -24,3 +24,6 @@ pub mod spectrum;
 pub mod properties;
 
 pub use optic_scenery::OpticScenery;
+
+pub mod console;
+
