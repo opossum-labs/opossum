@@ -170,26 +170,14 @@ impl<'de> Deserialize<'de> for OpticGraph {
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("an OpticGraph")
             }
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<OpticGraph, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
-                println!("visit seq");
-                let g = OpticGraph::default();
-                //     let node_type = seq
-                //         .next_element()?
-                //         .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                //     let properties = seq
-                //         .next_element()?
-                //         .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                //     let node =
-                //         create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
-                //     node.0
-                //         .borrow_mut()
-                //         .set_properties(&properties)
-                //         .map_err(|e| de::Error::custom(e.to_string()))?;
-                Ok(g)
-            }
+            // fn visit_seq<A>(self, mut seq: A) -> std::result::Result<OpticGraph, A::Error>
+            // where
+            //     A: SeqAccess<'de>,
+            // {
+            //     println!("visit seq");
+            //     let g = OpticGraph::default();
+            //     Ok(g)
+            // }
             fn visit_map<A>(self, mut map: A) -> std::result::Result<OpticGraph, A::Error>
             where
                 A: MapAccess<'de>,
@@ -215,9 +203,13 @@ impl<'de> Deserialize<'de> for OpticGraph {
                     }
                 }
                 let nodes = nodes.ok_or_else(|| de::Error::missing_field("nodes"))?;
-                let _edges = edges.ok_or_else(|| de::Error::missing_field("edges"))?;
+                let edges = edges.ok_or_else(|| de::Error::missing_field("edges"))?;
                 for node in nodes.iter() {
                     g.0.add_node(node.clone());
+                }
+                for edge in edges.iter() {
+                    g.0
+                    .add_edge(edge.0, edge.1, Light::new(edge.2, edge.3));
                 }
                 Ok(g)
             }

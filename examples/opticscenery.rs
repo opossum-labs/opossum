@@ -16,6 +16,10 @@ fn main() -> Result<(), OpossumError> {
     let serialized=serde_yaml::to_string(&scenery).unwrap();
     println!("{}", serialized);
 
+    let path = "opticscenery.opm";
+    let mut output = File::create(path).unwrap();
+    write!(output, "{}", serialized).unwrap();
+
     let restored= serde_yaml::from_str::<OpticScenery>(&serialized);
     println!("{:?}", restored);
 

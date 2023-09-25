@@ -13,8 +13,8 @@ use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction::Incoming;
-use serde::ser::SerializeStruct;
-use serde::Serialize;
+//use serde::ser::SerializeStruct;
+//use serde::Serialize;
 use serde_derive::{Serialize, Deserialize};
 
 type Result<T> = std::result::Result<T, OpossumError>;
