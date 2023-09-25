@@ -10,7 +10,7 @@ use crate::properties::Properties;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 /// A virtual component referring to another existing component.
 ///
 /// This node type is necessary in order to model resonators (loops) or double-pass systems.
@@ -21,14 +21,15 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///   - Outputs
 ///     - output ports of the referenced [`Optical`]
 pub struct NodeReference {
-    reference: Weak<RefCell<dyn Optical>>,
+    reference: Option<Weak<RefCell<dyn Optical>>>,
     props: Properties
 }
+
 impl NodeReference {
     // Create new [`OpticNode`] (of type [`NodeReference`]) from another existing [`OpticNode`].
     pub fn from_node(node: Rc<RefCell<dyn Optical>>) -> Self {
         Self {
-            reference: Rc::downgrade(&node),
+            reference: Some(Rc::downgrade(&node)),
             props: Properties::default()
         }
     }
@@ -40,7 +41,12 @@ impl Optical for NodeReference {
     }
 
     fn ports(&self) -> OpticPorts {
-        self.reference.upgrade().unwrap().borrow().ports().clone()
+        if let Some(rf)= &self.reference {
+            rf.upgrade().unwrap().borrow().ports().clone()
+        } else {
+            OpticPorts::default()
+        }
+        
     }
 
     fn analyze(
@@ -48,11 +54,16 @@ impl Optical for NodeReference {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> Result<LightResult> {
-        self.reference
+        if let Some(rf)= &self.reference {
+            rf
             .upgrade()
             .unwrap()
             .borrow_mut()
             .analyze(incoming_data, analyzer_type)
+        } else {
+            Err(OpossumError::Analysis("reference node has no reference defined".into()))
+        }
+       
     }
     fn properties(&self) -> &Properties {
         &self.props

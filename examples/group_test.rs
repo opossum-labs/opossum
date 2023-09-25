@@ -23,7 +23,7 @@ fn main() -> Result<(), OpossumError> {
     nested_group.map_input_port(nested_g_n1, "front", "in1")?;
     nested_group.map_output_port(nested_g_n2, "rear", "out1")?;
 
-    println!("{}", serde_yaml::to_string(&group1).unwrap());
+    
 
     let nested_group_index = group1.add_node(nested_group);
     group1.connect_nodes(nested_group_index, "out1", g1_n1, "front")?;
@@ -38,8 +38,10 @@ fn main() -> Result<(), OpossumError> {
 
     let scene_g1 = scenery.add_node(group1);
     let scene_g2 = scenery.add_node(group2);
+    
     // set_output_port
     scenery.connect_nodes(scene_g1, "out1", scene_g2, "in1")?;
+    println!("{}", serde_yaml::to_string(&scenery).unwrap());
     let path = "graph_group.dot";
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot("LR")?).unwrap();

@@ -7,14 +7,15 @@ use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
-use crate::optical::{LightResult, OpticRef, Optical, OpticGraph};
+use crate::optical::{LightResult, OpticGraph, OpticRef, Optical};
 use crate::properties::{Properties, Property, Proptype};
 use petgraph::algo::*;
-use petgraph::prelude::{DiGraph, NodeIndex};
+use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction::Incoming;
-use serde::ser::SerializeStruct;
-use serde::Serialize;
+//use serde::ser::SerializeStruct;
+//use serde::Serialize;
+use serde_derive::{Serialize, Deserialize};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -39,10 +40,11 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// }
 ///
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OpticScenery {
-    g: DiGraph<OpticRef, Light>,
-    description: String,
+    #[serde(rename = "graph")]
+    g: OpticGraph,
+    #[serde(rename = "properties")]
     props: Properties,
 }
 
@@ -59,20 +61,23 @@ fn create_default_props() -> Properties {
 
 impl Default for OpticScenery {
     fn default() -> Self {
-        Self { g: Default::default(), description: Default::default(), props: create_default_props() }
+        Self {
+            g: Default::default(),
+            props: create_default_props(),
+        }
     }
 }
 impl OpticScenery {
     /// Creates a new (empty) [`OpticScenery`].
     pub fn new() -> Self {
-        Self::default()        
+        Self::default()
     }
     /// Add a given [`Optical`] (Source, Detector, Lens, etc.) to the graph of this [`OpticScenery`].
     ///
     /// This command just adds an [`Optical`] to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        self.g.add_node(OpticRef(Rc::new(RefCell::new(node))))
+        self.g.0.add_node(OpticRef(Rc::new(RefCell::new(node))))
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -85,7 +90,7 @@ impl OpticScenery {
         target_node: NodeIndex,
         target_port: &str,
     ) -> Result<()> {
-        if let Some(source) = self.g.node_weight(src_node) {
+        if let Some(source) = self.g.0.node_weight(src_node) {
             if !source
                 .0
                 .borrow()
@@ -104,7 +109,7 @@ impl OpticScenery {
                 "source node with given index does not exist".into(),
             ));
         }
-        if let Some(target) = self.g.node_weight(target_node) {
+        if let Some(target) = self.g.0.node_weight(target_node) {
             if !target
                 .0
                 .borrow()
@@ -135,11 +140,12 @@ impl OpticScenery {
                 target_port
             )));
         }
-        let edge_index = self
-            .g
-            .add_edge(src_node, target_node, Light::new(src_port, target_port));
-        if is_cyclic_directed(&self.g) {
-            self.g.remove_edge(edge_index);
+        let edge_index =
+            self.g
+                .0
+                .add_edge(src_node, target_node, Light::new(src_port, target_port));
+        if is_cyclic_directed(&self.g.0) {
+            self.g.0.remove_edge(edge_index);
             return Err(OpossumError::OpticScenery(
                 "connecting the given nodes would form a loop".into(),
             ));
@@ -148,11 +154,13 @@ impl OpticScenery {
     }
     fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
         self.g
+            .0
             .edges_directed(src_node, petgraph::Direction::Outgoing)
             .any(|e| e.weight().src_port() == src_port)
     }
     fn target_node_port_exists(&self, target_node: NodeIndex, target_port: &str) -> bool {
         self.g
+            .0
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
@@ -164,7 +172,7 @@ impl OpticScenery {
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node: NodeIndex) -> Result<Rc<RefCell<dyn Optical>>> {
-        if let Some(node) = self.g.node_weight(node) {
+        if let Some(node) = self.g.0.node_weight(node) {
             Ok(node.0.clone())
         } else {
             Err(OpossumError::OpticScenery(
@@ -175,22 +183,27 @@ impl OpticScenery {
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self, rankdir: &str) -> Result<String> {
         //check direction
-        let rankdir = if rankdir != "LR" {"TB"}else{"LR"};
+        let rankdir = if rankdir != "LR" { "TB" } else { "LR" };
 
         let mut dot_string = self.add_dot_header(rankdir);
 
-        for node_idx in self.g.node_indices() {
-            let node = self.g.node_weight(node_idx).unwrap();
-            let node_name=node.0.borrow().name().to_owned();
-            let inverted= node.0.borrow().inverted();
-            let ports=node.0.borrow().ports();
-            dot_string += &node.0
-                .borrow()
-                .to_dot(&format!("{}", node_idx.index()), &node_name, inverted, &ports, "".to_owned(), rankdir)?;
+        for node_idx in self.g.0.node_indices() {
+            let node = self.g.0.node_weight(node_idx).unwrap();
+            let node_name = node.0.borrow().name().to_owned();
+            let inverted = node.0.borrow().inverted();
+            let ports = node.0.borrow().ports();
+            dot_string += &node.0.borrow().to_dot(
+                &format!("{}", node_idx.index()),
+                &node_name,
+                inverted,
+                &ports,
+                "".to_owned(),
+                rankdir,
+            )?;
         }
-        for edge in self.g.edge_indices() {
-            let light: &Light = self.g.edge_weight(edge).unwrap();
-            let end_nodes = self.g.edge_endpoints(edge).unwrap();
+        for edge in self.g.0.edge_indices() {
+            let light: &Light = self.g.0.edge_weight(edge).unwrap();
+            let end_nodes = self.g.0.edge_endpoints(edge).unwrap();
 
             let src_edge_str =
                 self.create_node_edge_str(end_nodes.0, light.src_port(), "".to_owned())?;
@@ -201,14 +214,13 @@ impl OpticScenery {
         }
         dot_string.push_str("}\n");
         Ok(dot_string)
-    
     }
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
         let mut dot_string = "digraph {\n\tfontsize = 8\n".to_owned();
         dot_string.push_str("\tcompound = true;\n");
         dot_string.push_str(&format!("\trankdir = \"{}\";\n", rankdir));
-        dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description));
+        dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description()));
         dot_string.push_str("\tfontname=\"Helvetica,Arial,sans-serif\"\n");
         dot_string.push_str("\tnode [fontname=\"Helvetica,Arial,sans-serif\" fontsize = 10]\n");
         dot_string.push_str("\tedge [fontname=\"Helvetica,Arial,sans-serif\"]\n\n");
@@ -220,7 +232,7 @@ impl OpticScenery {
         light_port: &str,
         mut parent_identifier: String,
     ) -> Result<String> {
-        let node = self.g.node_weight(end_node).unwrap().0.borrow();
+        let node = self.g.0.node_weight(end_node).unwrap().0.borrow();
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node.index())
         } else {
@@ -236,10 +248,10 @@ impl OpticScenery {
     }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> Result<()> {
-        let sorted = toposort(&self.g, None);
+        let sorted = toposort(&self.g.0, None);
         if let Ok(sorted) = sorted {
             for idx in sorted {
-                let node = self.g.node_weight(idx).unwrap();
+                let node = self.g.0.node_weight(idx).unwrap();
                 let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
                 let outgoing_edges = node.0.borrow_mut().analyze(incoming_edges, analyzer_type)?;
                 for outgoing_edge in outgoing_edges {
@@ -255,18 +267,30 @@ impl OpticScenery {
     }
     /// Sets the description of this [`OpticScenery`].
     pub fn set_description(&mut self, description: &str) {
-        self.description = description.into();
+        self.props
+            .set(
+                "description",
+                Property {
+                    prop: Proptype::String(description.into()),
+                },
+            )
+            .unwrap();
     }
     /// Returns a reference to the description of this [`OpticScenery`].
     pub fn description(&self) -> &str {
-        self.description.as_ref()
+        let prop = self.props.get("description").unwrap();
+        if let Proptype::String(dsc) = &prop.prop {
+            dsc
+        } else {
+            ""
+        }
     }
     /// Returns the nodes unordered of this [`OpticScenery`].
     pub fn nodes_unordered(&self) -> Vec<NodeIndex> {
-        self.g.node_indices().collect::<Vec<NodeIndex>>()
+        self.g.0.node_indices().collect::<Vec<NodeIndex>>()
     }
     fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
-        let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
+        let edges = self.g.0.edges_directed(idx, petgraph::Direction::Incoming);
         edges
             .into_iter()
             .map(|e| {
@@ -278,28 +302,29 @@ impl OpticScenery {
             .collect::<HashMap<String, Option<LightData>>>()
     }
     fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: String, data: Option<LightData>) {
-        let edges = self.g.edges_directed(idx, petgraph::Direction::Outgoing);
+        let edges = self.g.0.edges_directed(idx, petgraph::Direction::Outgoing);
         let edge_ref = edges
             .into_iter()
             .filter(|idx| idx.weight().src_port() == port)
             .last();
         if let Some(edge_ref) = edge_ref {
             let edge_idx = edge_ref.id();
-            let light = self.g.edge_weight_mut(edge_idx);
+            let light = self.g.0.edge_weight_mut(edge_idx);
             if let Some(light) = light {
                 light.set_data(data);
             }
         } // else outgoing edge not connected
     }
     pub fn report(&self) {
-        let src_nodes = &self.g.externals(Incoming);
+        let src_nodes = &self.g.0.externals(Incoming);
         let detector_nodes = self
             .g
+            .0
             .node_weights()
             .filter(|node| node.0.borrow().is_detector());
         println!("Sources:");
         for idx in src_nodes.clone() {
-            let node = self.g.node_weight(idx).unwrap();
+            let node = self.g.0.node_weight(idx).unwrap();
             println!("{:?}", node.0.borrow());
             let file_name = node.0.borrow().name().to_owned() + ".svg";
             node.0.borrow().export_data(&file_name);
@@ -311,41 +336,40 @@ impl OpticScenery {
             node.0.borrow().export_data(&file_name);
         }
     }
-
 }
 
-impl Serialize for OpticScenery {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut scenery = serializer.serialize_struct("optic scenery", 2)?;
-        scenery.serialize_field("graph", &OpticGraph(self.g.clone()))?;
-        scenery.serialize_field("properties", &self.props)?;
-        scenery.end()
-    }
-}
+// impl Serialize for OpticScenery {
+//     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         let mut scenery = serializer.serialize_struct("optic scenery", 2)?;
+//         scenery.serialize_field("graph", &OpticGraph(self.g.0.clone()))?;
+//         scenery.serialize_field("properties", &self.props)?;
+//         scenery.end()
+//     }
+// }
 #[cfg(test)]
 mod test {
     use crate::nodes::Metertype;
     use crate::properties::{Property, Proptype};
 
-    use super::super::nodes::{Dummy, BeamSplitter, EnergyMeter, Source};
-    use std::{fs::File,io::Read};
-    use std::io::Write;
+    use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
+    use std::io::Write;
+    use std::{fs::File, io::Read};
     #[test]
     fn new() {
         let scenery = OpticScenery::new();
-        assert_eq!(scenery.description, "".to_owned());
-        assert_eq!(scenery.g.edge_count(), 0);
-        assert_eq!(scenery.g.node_count(), 0);
+        assert_eq!(scenery.description(), "".to_owned());
+        assert_eq!(scenery.g.0.edge_count(), 0);
+        assert_eq!(scenery.g.0.node_count(), 0);
     }
     #[test]
     fn add_node() {
         let mut scenery = OpticScenery::new();
         scenery.add_node(Dummy::new("n1"));
-        assert_eq!(scenery.g.node_count(), 1);
+        assert_eq!(scenery.g.0.node_count(), 1);
     }
     #[test]
     fn connect_nodes_ok() {
@@ -353,7 +377,7 @@ mod test {
         let n1 = scenery.add_node(Dummy::new("Test"));
         let n2 = scenery.add_node(Dummy::new("Test"));
         assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
-        assert_eq!(scenery.g.edge_count(), 1);
+        assert_eq!(scenery.g.0.edge_count(), 1);
     }
     #[test]
     fn connect_nodes_failure() {
@@ -374,7 +398,7 @@ mod test {
         let n2 = scenery.add_node(Dummy::new("Test"));
         assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
         assert!(scenery.connect_nodes(n2, "rear", n1, "front").is_err());
-        assert_eq!(scenery.g.edge_count(), 1);
+        assert_eq!(scenery.g.0.edge_count(), 1);
     }
     #[test]
     fn to_dot_empty() {
@@ -387,7 +411,7 @@ mod test {
         let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 
         let mut scenery = OpticScenery::new();
-        scenery.set_description("Test".into()); 
+        scenery.set_description("Test".into());
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
         let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
@@ -425,19 +449,35 @@ mod test {
         let file_content_lr = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content_lr);
 
-        let mut scenery = OpticScenery::new();    
+        let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
         let i_s = scenery.add_node(Source::new("Source", LightData::Fourier));
-        let mut bs=BeamSplitter::new(0.6).unwrap();
-        bs.set_property("name", Property {prop: Proptype::String("Beam splitter".into())}).unwrap();
+        let mut bs = BeamSplitter::new(0.6).unwrap();
+        bs.set_property(
+            "name",
+            Property {
+                prop: Proptype::String("Beam splitter".into()),
+            },
+        )
+        .unwrap();
         let i_bs = scenery.add_node(bs);
-        let i_d1 = scenery.add_node(EnergyMeter::new("Energy meter 1",Metertype::IdealEnergyMeter));
-        let i_d2 = scenery.add_node(EnergyMeter::new("Energy meter 2",Metertype::IdealEnergyMeter));
-    
-        scenery.connect_nodes(i_s, "out1", i_bs, "input1").unwrap();    
-        scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1").unwrap();
-        scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1").unwrap();
-    
+        let i_d1 = scenery.add_node(EnergyMeter::new(
+            "Energy meter 1",
+            Metertype::IdealEnergyMeter,
+        ));
+        let i_d2 = scenery.add_node(EnergyMeter::new(
+            "Energy meter 2",
+            Metertype::IdealEnergyMeter,
+        ));
+
+        scenery.connect_nodes(i_s, "out1", i_bs, "input1").unwrap();
+        scenery
+            .connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1")
+            .unwrap();
+        scenery
+            .connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1")
+            .unwrap();
+
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
         let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
 
@@ -452,7 +492,7 @@ mod test {
     fn set_description() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into());
-        assert_eq!(scenery.description, "Test")
+        assert_eq!(scenery.description(), "Test")
     }
     #[test]
     fn description() {

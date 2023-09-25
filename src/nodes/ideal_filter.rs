@@ -48,6 +48,12 @@ fn create_default_props() -> Properties {
     );
     props
 }
+
+impl Default for IdealFilter {
+    fn default() -> Self {
+        Self { filter_type: FilterType::Constant(1.0), props: create_default_props() }
+    }
+}
 impl IdealFilter {
     /// Creates a new [`IdealFilter`] with a given [`FilterType`].
     ///
