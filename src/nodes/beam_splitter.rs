@@ -52,7 +52,7 @@ fn create_default_props() -> Properties {
 }
 impl BeamSplitter {
     /// Creates a new [`BeamSplitter`] with a given splitting ratio.
-    /// 
+    ///
     /// ## Errors
     /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
     /// [0.0..1.0].
@@ -84,7 +84,7 @@ impl BeamSplitter {
     }
 
     /// Sets the splitting ratio of this [`BeamSplitter`].
-    /// 
+    ///
     /// ## Errors
     /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
     /// [0.0..1.0].
@@ -172,11 +172,11 @@ impl Optical for BeamSplitter {
         "beam splitter"
     }
     fn name(&self) -> &str {
-        if let Proptype::String(name)=&self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
             name
         } else {
             "beam splitter"
-        } 
+        }
     }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();

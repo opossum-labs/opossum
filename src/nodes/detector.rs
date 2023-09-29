@@ -26,7 +26,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct Detector {
     light_data: Option<LightData>,
-    props: Properties
+    props: Properties,
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
@@ -40,7 +40,10 @@ fn create_default_props() -> Properties {
 }
 impl Default for Detector {
     fn default() -> Self {
-        Self { light_data: Default::default(), props: create_default_props() }
+        Self {
+            light_data: Default::default(),
+            props: create_default_props(),
+        }
     }
 }
 impl Optical for Detector {

@@ -13,7 +13,6 @@ publish = false
 [dependencies]
 petgraph = {version="0.6.3", features = ["serde-1"]} # the graph library
 uom = "0"
-# erased-serde = "0.3"
 serde = { version="1" }
 serde_derive = "1"
 serde_yaml = "0"
@@ -25,7 +24,7 @@ csv="1"
 plotters="0"
 
 approx = "0" # assert macros for comparison of floats with tolerance
-clap = { version = "4.4.3", features = ["derive"] }
-structopt = "0.3.26"
-rprompt = "2.0.2"
+clap = { version = "4.4", features = ["derive"] } # command line argument parser
+structopt = "0.3"
+rprompt = "2.0"
 strum = { version = "0.25", features = ["derive"] }

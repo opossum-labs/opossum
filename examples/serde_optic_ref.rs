@@ -1,17 +1,17 @@
 use std::{cell::RefCell, rc::Rc};
 
-use opossum::{optical::OpticRef, nodes::Dummy, error::OpossumError};
+use opossum::{error::OpossumError, nodes::Dummy, optical::OpticRef};
 
-fn main() -> Result<(), OpossumError>{
-  let optic_ref=OpticRef(Rc::new(RefCell::new(Dummy::default())));
+fn main() -> Result<(), OpossumError> {
+    let optic_ref = OpticRef(Rc::new(RefCell::new(Dummy::default())));
 
-  let serialized= serde_yaml::to_string(&optic_ref).unwrap();
+    let serialized = serde_yaml::to_string(&optic_ref).unwrap();
 
-  println!("serialized:\n{}", serialized);
+    println!("serialized:\n{}", serialized);
 
-  let restored_ref = serde_yaml::from_str::<OpticRef>(&serialized).unwrap();
+    let restored_ref = serde_yaml::from_str::<OpticRef>(&serialized).unwrap();
 
-  println!("restored:\n{:?}", restored_ref);
+    println!("restored:\n{:?}", restored_ref);
 
-  Ok(())
+    Ok(())
 }

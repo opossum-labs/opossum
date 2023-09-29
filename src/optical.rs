@@ -208,8 +208,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                     g.0.add_node(node.clone());
                 }
                 for edge in edges.iter() {
-                    g.0
-                    .add_edge(edge.0, edge.1, Light::new(edge.2, edge.3));
+                    g.0.add_edge(edge.0, edge.1, Light::new(edge.2, edge.3));
                 }
                 Ok(g)
             }

@@ -4,7 +4,8 @@ use crate::{
     error::OpossumError,
     lightdata::LightData,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical}, properties::Properties,
+    optical::{LightResult, Optical},
+    properties::Properties,
 };
 use ndarray::{array, Array1};
 use uom::{si::f64::Length, si::length::meter};
@@ -19,7 +20,7 @@ pub struct RealLens {
     center_thickness: Length,
     z_pos: Length,
     refractive_index: f64,
-    props: Properties
+    props: Properties,
 }
 impl RealLens {
     pub fn new(
@@ -36,7 +37,7 @@ impl RealLens {
             center_thickness,
             z_pos,
             refractive_index,
-            props: Properties::default()
+            props: Properties::default(),
         }
     }
 
@@ -132,7 +133,7 @@ impl Default for RealLens {
             center_thickness: Length::new::<meter>(3.6e-3),
             z_pos: Length::new::<meter>(0.0),
             refractive_index: 1.5068,
-            props: Properties::default()
+            props: Properties::default(),
         }
     }
 }

@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
-use std::collections::HashMap;
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Proptype, Property};
+use crate::properties::{Properties, Property, Proptype};
+use std::collections::HashMap;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -22,7 +22,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - `rear`
 pub struct Dummy {
     is_inverted: bool,
-    props: Properties
+    props: Properties,
 }
 
 fn create_default_props() -> Properties {
@@ -46,32 +46,42 @@ impl Default for Dummy {
     fn default() -> Self {
         Self {
             is_inverted: Default::default(),
-            props: create_default_props()
+            props: create_default_props(),
         }
     }
 }
 impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
     pub fn new(name: &str) -> Self {
-        let mut props= create_default_props();
-        props.set("name", Property{prop: Proptype::String(name.into())});
+        let mut props = create_default_props();
+        props.set(
+            "name",
+            Property {
+                prop: Proptype::String(name.into()),
+            },
+        );
         Self {
             is_inverted: false,
-            props
+            props,
         }
     }
 }
 impl Optical for Dummy {
     fn set_name(&mut self, name: &str) {
-        self.props.set("name", Property { prop: Proptype::String(name.into()) });
+        self.props.set(
+            "name",
+            Property {
+                prop: Proptype::String(name.into()),
+            },
+        );
     }
     fn name(&self) -> &str {
-        if let Some(value)=self.props.get("name") {
+        if let Some(value) = self.props.get("name") {
             if let Proptype::String(name) = &value.prop {
-                return name
+                return name;
             }
         }
-       panic!("wonrg format");
+        panic!("wonrg format");
     }
     /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {

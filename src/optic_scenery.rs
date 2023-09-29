@@ -15,7 +15,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction::Incoming;
 //use serde::ser::SerializeStruct;
 //use serde::Serialize;
-use serde_derive::{Serialize, Deserialize};
+use serde_derive::{Deserialize, Serialize};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 

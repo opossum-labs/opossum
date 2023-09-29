@@ -37,7 +37,7 @@ pub enum Metertype {
 pub struct EnergyMeter {
     light_data: Option<LightData>,
     meter_type: Metertype,
-    props: Properties
+    props: Properties,
 }
 
 fn create_default_props() -> Properties {
@@ -62,19 +62,24 @@ impl Default for EnergyMeter {
         Self {
             light_data: Default::default(),
             meter_type: Default::default(),
-            props: create_default_props()
+            props: create_default_props(),
         }
     }
 }
 impl EnergyMeter {
     /// Creates a new [`EnergyMeter`] of the given [`Metertype`].
     pub fn new(name: &str, meter_type: Metertype) -> Self {
-        let mut props=create_default_props();
-        props.set("name", Property { prop: Proptype::String(name.into()) });
+        let mut props = create_default_props();
+        props.set(
+            "name",
+            Property {
+                prop: Proptype::String(name.into()),
+            },
+        );
         EnergyMeter {
             light_data: None,
             meter_type,
-            props
+            props,
         }
     }
     /// Returns the meter type of this [`EnergyMeter`].
@@ -88,15 +93,20 @@ impl EnergyMeter {
 }
 impl Optical for EnergyMeter {
     fn set_name(&mut self, name: &str) {
-        self.props.set("name", Property { prop: Proptype::String(name.into()) });
+        self.props.set(
+            "name",
+            Property {
+                prop: Proptype::String(name.into()),
+            },
+        );
     }
     fn name(&self) -> &str {
-        if let Some(value)=self.props.get("name") {
+        if let Some(value) = self.props.get("name") {
             if let Proptype::String(name) = &value.prop {
-                return name
+                return name;
             }
         }
-       panic!("wonrg format");
+        panic!("wonrg format");
     }
     fn node_type(&self) -> &str {
         "energy meter"
