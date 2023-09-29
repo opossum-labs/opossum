@@ -90,10 +90,15 @@ impl Default for NodeGroup {
 impl NodeGroup {
     /// Creates a new [`NodeGroup`].
     pub fn new(name: &str) -> Self {
-        let mut props= create_default_props();
-        props.set("name", Property { prop: Proptype::String(name.into()) });
+        let mut props = create_default_props();
+        props.set(
+            "name",
+            Property {
+                prop: Proptype::String(name.into()),
+            },
+        );
         Self {
-            props, 
+            props,
             ..Default::default()
         }
     }
@@ -102,8 +107,13 @@ impl NodeGroup {
     /// This command just adds an [`Optical`] but does not connect it to existing nodes in the (sub-)graph. The given node is
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        let idx=self.g.0.add_node(OpticRef(Rc::new(RefCell::new(node))));
-        self.props.set("graph", Property { prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())) });
+        let idx = self.g.0.add_node(OpticRef(Rc::new(RefCell::new(node))));
+        self.props.set(
+            "graph",
+            Property {
+                prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())),
+            },
+        );
         idx
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
@@ -169,13 +179,24 @@ impl NodeGroup {
                 target_port
             )));
         }
-        let edge_index = self
-            .g.0
-            .add_edge(src_node, target_node, Light::new(src_port, target_port));
-            self.props.set("graph", Property { prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())) });
+        let edge_index =
+            self.g
+                .0
+                .add_edge(src_node, target_node, Light::new(src_port, target_port));
+        self.props.set(
+            "graph",
+            Property {
+                prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())),
+            },
+        );
         if is_cyclic_directed(&self.g.0) {
             self.g.0.remove_edge(edge_index);
-            self.props.set("graph", Property { prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())) });
+            self.props.set(
+                "graph",
+                Property {
+                    prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())),
+                },
+            );
             return Err(OpossumError::OpticScenery(
                 "connecting the given nodes would form a loop".into(),
             ));
@@ -197,21 +218,28 @@ impl NodeGroup {
         Ok(edge_index)
     }
     fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
-        self.g.0
+        self.g
+            .0
             .edges_directed(src_node, petgraph::Direction::Outgoing)
             .any(|e| e.weight().src_port() == src_port)
     }
     fn target_node_port_exists(&self, target_node: NodeIndex, target_port: &str) -> bool {
-        self.g.0
+        self.g
+            .0
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
     fn input_nodes(&self) -> Vec<NodeIndex> {
         let mut input_nodes: Vec<NodeIndex> = Vec::default();
         for node_idx in self.g.0.node_indices() {
-            let incoming_edges = self.g.0.edges_directed(node_idx, Direction::Incoming).count();
+            let incoming_edges = self
+                .g
+                .0
+                .edges_directed(node_idx, Direction::Incoming)
+                .count();
             let input_ports = self
-                .g.0
+                .g
+                .0
                 .node_weight(node_idx)
                 .unwrap()
                 .0
@@ -228,9 +256,14 @@ impl NodeGroup {
     fn output_nodes(&self) -> Vec<NodeIndex> {
         let mut output_nodes: Vec<NodeIndex> = Vec::default();
         for node_idx in self.g.0.node_indices() {
-            let outgoing_edges = self.g.0.edges_directed(node_idx, Direction::Outgoing).count();
+            let outgoing_edges = self
+                .g
+                .0
+                .edges_directed(node_idx, Direction::Outgoing)
+                .count();
             let output_ports = self
-                .g.0
+                .g
+                .0
                 .node_weight(node_idx)
                 .unwrap()
                 .0
@@ -289,7 +322,8 @@ impl NodeGroup {
             ));
         }
         let incoming_edge_connected = self
-            .g.0
+            .g
+            .0
             .edges_directed(input_node, Direction::Incoming)
             .map(|e| e.weight().target_port())
             .any(|p| p == internal_name);
@@ -350,7 +384,8 @@ impl NodeGroup {
             ));
         }
         let outgoing_edge_connected = self
-            .g.0
+            .g
+            .0
             .edges_directed(output_node, Direction::Outgoing)
             .map(|e| e.weight().src_port())
             .any(|p| p == internal_name);
@@ -549,7 +584,7 @@ impl NodeGroup {
         name: &str,
         inverted: bool,
         mut parent_identifier: String,
-        rankdir: &str
+        rankdir: &str,
     ) -> Result<String> {
         let inv_string = if inverted { "(inv)" } else { "" };
         parent_identifier = if parent_identifier.is_empty() {
@@ -570,7 +605,7 @@ impl NodeGroup {
                 node.0.borrow().inverted(),
                 &node.0.borrow().ports(),
                 parent_identifier.clone(),
-                rankdir
+                rankdir,
             )?;
         }
         for edge in self.g.0.edge_indices() {
@@ -618,7 +653,7 @@ impl NodeGroup {
         inverted: bool,
         _ports: &OpticPorts,
         mut parent_identifier: String,
-        rankdir: &str
+        rankdir: &str,
     ) -> Result<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
@@ -630,13 +665,13 @@ impl NodeGroup {
         let mut dot_str = format!("\t{} [\n\t\tshape=plaintext\n", parent_identifier);
         let mut indent_level = 2;
         dot_str.push_str(&self.add_html_like_labels(
-             &node_name,
-             &mut indent_level,
-             _ports,
-             inverted,
-             rankdir
-         ));
-         Ok(dot_str)
+            &node_name,
+            &mut indent_level,
+            _ports,
+            inverted,
+            rankdir,
+        ));
+        Ok(dot_str)
     }
     fn invert_graph(&mut self) {
         for node in self.g.0.node_weights_mut() {
@@ -652,7 +687,8 @@ impl NodeGroup {
 impl Serialize for NodeGroup {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
+        S: serde::Serializer,
+    {
         serializer.serialize_newtype_struct("props", self.properties())
     }
 }
@@ -702,7 +738,7 @@ impl Dottable for NodeGroup {
         inverted: bool,
         ports: &OpticPorts,
         parent_identifier: String,
-        rankdir: &str
+        rankdir: &str,
     ) -> Result<String> {
         let mut cloned_self = self.clone();
         if self.props.get_bool("inverted").unwrap().unwrap() {
@@ -711,7 +747,14 @@ impl Dottable for NodeGroup {
         if self.expand_view {
             cloned_self.to_dot_expanded_view(node_index, name, inverted, parent_identifier, rankdir)
         } else {
-            cloned_self.to_dot_collapsed_view(node_index, name, inverted, ports, parent_identifier, rankdir)
+            cloned_self.to_dot_collapsed_view(
+                node_index,
+                name,
+                inverted,
+                ports,
+                parent_identifier,
+                rankdir,
+            )
         }
     }
 

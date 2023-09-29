@@ -29,7 +29,7 @@ pub enum FilterType {
 ///     - `rear`
 pub struct IdealFilter {
     filter_type: FilterType,
-    props: Properties
+    props: Properties,
 }
 
 fn create_default_props() -> Properties {
@@ -51,7 +51,10 @@ fn create_default_props() -> Properties {
 
 impl Default for IdealFilter {
     fn default() -> Self {
-        Self { filter_type: FilterType::Constant(1.0), props: create_default_props() }
+        Self {
+            filter_type: FilterType::Constant(1.0),
+            props: create_default_props(),
+        }
     }
 }
 impl IdealFilter {
@@ -69,7 +72,10 @@ impl IdealFilter {
                 ));
             }
         }
-        Ok(Self { filter_type, props: create_default_props() })
+        Ok(Self {
+            filter_type,
+            props: create_default_props(),
+        })
     }
     /// Returns the filter type of this [`IdealFilter`].
     pub fn filter_type(&self) -> FilterType {

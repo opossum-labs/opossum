@@ -22,7 +22,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - output ports of the referenced [`Optical`]
 pub struct NodeReference {
     reference: Option<Weak<RefCell<dyn Optical>>>,
-    props: Properties
+    props: Properties,
 }
 
 impl NodeReference {
@@ -30,7 +30,7 @@ impl NodeReference {
     pub fn from_node(node: Rc<RefCell<dyn Optical>>) -> Self {
         Self {
             reference: Some(Rc::downgrade(&node)),
-            props: Properties::default()
+            props: Properties::default(),
         }
     }
 }
@@ -41,12 +41,11 @@ impl Optical for NodeReference {
     }
 
     fn ports(&self) -> OpticPorts {
-        if let Some(rf)= &self.reference {
+        if let Some(rf) = &self.reference {
             rf.upgrade().unwrap().borrow().ports().clone()
         } else {
             OpticPorts::default()
         }
-        
     }
 
     fn analyze(
@@ -54,16 +53,16 @@ impl Optical for NodeReference {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> Result<LightResult> {
-        if let Some(rf)= &self.reference {
-            rf
-            .upgrade()
-            .unwrap()
-            .borrow_mut()
-            .analyze(incoming_data, analyzer_type)
+        if let Some(rf) = &self.reference {
+            rf.upgrade()
+                .unwrap()
+                .borrow_mut()
+                .analyze(incoming_data, analyzer_type)
         } else {
-            Err(OpossumError::Analysis("reference node has no reference defined".into()))
+            Err(OpossumError::Analysis(
+                "reference node has no reference defined".into(),
+            ))
         }
-       
     }
     fn properties(&self) -> &Properties {
         &self.props

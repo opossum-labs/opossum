@@ -72,9 +72,7 @@ impl Source {
                 prop: Proptype::LightData(Some(light.clone())),
             },
         );
-        Source {
-            props
-        }
+        Source { props }
     }
 
     /// Sets the light data of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
@@ -90,8 +88,8 @@ impl Source {
 
 impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let light_prop=self.props.get("light data").unwrap();
-        let data=if let Proptype::LightData(data)=&light_prop.prop {
+        let light_prop = self.props.get("light data").unwrap();
+        let data = if let Proptype::LightData(data) = &light_prop.prop {
             data
         } else {
             &None
@@ -108,7 +106,7 @@ impl Optical for Source {
         "light source"
     }
     fn name(&self) -> &str {
-        if let Proptype::String(name)=&self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
             name
         } else {
             "light source"
@@ -125,8 +123,8 @@ impl Optical for Source {
         _incoming_edges: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> Result<LightResult> {
-        let light_prop=self.props.get("light data").unwrap();
-        let data=if let Proptype::LightData(data)=&light_prop.prop {
+        let light_prop = self.props.get("light data").unwrap();
+        let data = if let Proptype::LightData(data) = &light_prop.prop {
             data
         } else {
             &None
