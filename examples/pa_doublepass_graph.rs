@@ -3,6 +3,7 @@ use opossum::error::OpossumError;
 use opossum::nodes::{Dummy, NodeReference};
 use opossum::optical::Optical;
 use opossum::OpticScenery;
+use opossum::properties::{Property, Proptype};
 use std::fs::File;
 use std::io::Write;
 
@@ -16,7 +17,7 @@ fn main() -> Result<(), OpossumError> {
     let n4 = scenery.add_node(Dummy::new("0° mirror"));
 
     let mut node = NodeReference::from_node(scenery.node(n1).unwrap());
-    node.set_inverted(true);
+    node.set_property("inverted", Property{prop: Proptype::Bool(true)}).unwrap();
     let n1r = scenery.add_node(node);
 
     // let mut node= NodeReference::new(scenery.node(n3).unwrap());
@@ -24,7 +25,7 @@ fn main() -> Result<(), OpossumError> {
     // let n3r = scenery.add_node(node);
 
     let mut node = NodeReference::from_node(scenery.node(n2)?);
-    node.set_inverted(true);
+    node.set_property("inverted", Property{prop: Proptype::Bool(true)}).unwrap();
     let n2r = scenery.add_node(node);
 
     // scenery.connect_nodes(n0, "out1", n1, "front").unwrap();

@@ -1,10 +1,11 @@
 #![warn(missing_docs)]
 use serde_derive::Serialize;
+use serde_json::json;
 use uom::si::length::nanometer;
 
 use crate::dottable::Dottable;
 use crate::lightdata::LightData;
-use crate::properties::Properties;
+use crate::properties::{Properties, Property};
 use crate::{
     error::OpossumError,
     optic_ports::OpticPorts,
@@ -12,6 +13,7 @@ use crate::{
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -83,9 +85,11 @@ impl Optical for Spectrometer {
             Ok(HashMap::from([("out2".into(), None)]))
         }
     }
-    fn export_data(&self, file_name: &str) {
+    fn export_data(&self, report_dir: &Path) {
         if let Some(data) = &self.light_data {
-            data.export(file_name)
+            let mut file_path = PathBuf::from(report_dir);
+            file_path.push(format!("spectrum_{}.svg", self.name()));
+            data.export(&file_path)
         }
     }
     fn is_detector(&self) -> bool {
@@ -93,6 +97,23 @@ impl Optical for Spectrometer {
     }
     fn properties(&self) -> &Properties {
         &self.props
+    }
+    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+        if self.props.set(name, prop).is_none() {
+            Err(OpossumError::Other("property not defined".into()))
+        } else {
+            Ok(())
+        }
+    }
+    fn report(&self) -> serde_json::Value {
+        let data = &self.light_data;
+        let mut energy_data = serde_json::Value::Null;
+        if let Some(LightData::Energy(e)) = data {
+            energy_data =e.spectrum.to_json();
+        }
+        json!({"type": self.node_type(),
+        "name": self.name(),
+        "energy": energy_data})
     }
 }
 

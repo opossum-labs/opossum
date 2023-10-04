@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::Path;
 use std::rc::Rc;
 
 use crate::analyzer::AnalyzerType;
@@ -12,10 +13,8 @@ use crate::properties::{Properties, Property, Proptype};
 use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
-use petgraph::Direction::Incoming;
-//use serde::ser::SerializeStruct;
-//use serde::Serialize;
 use serde_derive::{Deserialize, Serialize};
+use serde_json::json;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -285,10 +284,6 @@ impl OpticScenery {
             ""
         }
     }
-    /// Returns the nodes unordered of this [`OpticScenery`].
-    pub fn nodes_unordered(&self) -> Vec<NodeIndex> {
-        self.g.0.node_indices().collect::<Vec<NodeIndex>>()
-    }
     fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
         let edges = self.g.0.edges_directed(idx, petgraph::Direction::Incoming);
         edges
@@ -315,40 +310,25 @@ impl OpticScenery {
             }
         } // else outgoing edge not connected
     }
-    pub fn report(&self) {
-        let src_nodes = &self.g.0.externals(Incoming);
+    pub fn report(&self, report_dir: &Path) -> serde_json::Value {
+        let mut report = serde_json::Map::new();
         let detector_nodes = self
             .g
             .0
             .node_weights()
             .filter(|node| node.0.borrow().is_detector());
-        println!("Sources:");
-        for idx in src_nodes.clone() {
-            let node = self.g.0.node_weight(idx).unwrap();
-            println!("{:?}", node.0.borrow());
-            let file_name = node.0.borrow().name().to_owned() + ".svg";
-            node.0.borrow().export_data(&file_name);
-        }
-        println!("Detectors:");
+        report.insert("Detectors".into(), json!("Detectors"));
+        let mut detectors: Vec<serde_json::Value> = Vec::new();
         for node in detector_nodes {
-            println!("{:?}", node.0.borrow());
-            let file_name = node.0.borrow().name().to_owned() + ".svg";
-            node.0.borrow().export_data(&file_name);
+            detectors.push(node.0.borrow().report());
+            node.0.borrow().export_data(report_dir);
         }
+        let detector_json = serde_json::Value::Array(detectors);
+        report.insert("Detectors".into(), detector_json);
+        serde_json::Value::Object(report)
     }
 }
 
-// impl Serialize for OpticScenery {
-//     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer,
-//     {
-//         let mut scenery = serializer.serialize_struct("optic scenery", 2)?;
-//         scenery.serialize_field("graph", &OpticGraph(self.g.0.clone()))?;
-//         scenery.serialize_field("properties", &self.props)?;
-//         scenery.end()
-//     }
-// }
 #[cfg(test)]
 mod test {
     use crate::nodes::Metertype;

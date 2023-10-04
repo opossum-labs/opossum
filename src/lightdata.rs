@@ -1,6 +1,7 @@
 //! Data structures containing the light information flowing between [`Opticals`](crate::optical::Optical).
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::Display;
+use std::path::Path;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
@@ -20,10 +21,10 @@ pub enum LightData {
     Fourier,
 }
 impl LightData {
-    pub fn export(&self, file_name: &str) {
+    pub fn export(&self, file_path: &Path) {
         match self {
             LightData::Energy(d) => {
-                d.spectrum.to_plot(file_name);
+                d.spectrum.to_plot(file_path);
             }
             _ => println!("no export function defined for this type of LightData"),
         }

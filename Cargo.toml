@@ -16,6 +16,7 @@ uom = "0"
 serde = { version="1" }
 serde_derive = "1"
 serde_yaml = "0"
+serde_json = "1"
 
 # for spectrum
 ndarray= { version="0", features= ["serde"]}

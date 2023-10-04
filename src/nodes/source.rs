@@ -22,7 +22,6 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///     - none
 ///   - Outputs
 ///     - `out1`
-#[derive(Default)]
 pub struct Source {
     props: Properties,
 }
@@ -43,6 +42,13 @@ fn create_default_props() -> Properties {
     props
 }
 
+impl Default for Source {
+    fn default() -> Self {
+        Self {
+            props: create_default_props(),
+        }
+    }
+}
 impl Source {
     /// Creates a new [`Source`].
     ///
@@ -137,6 +143,13 @@ impl Optical for Source {
     }
     fn properties(&self) -> &Properties {
         &self.props
+    }
+    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+        if self.props.set(name, prop).is_none() {
+            Err(OpossumError::Other("property not defined".into()))
+        } else {
+            Ok(())
+        }
     }
 }
 

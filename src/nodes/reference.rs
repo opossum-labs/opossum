@@ -6,7 +6,7 @@ use crate::dottable::Dottable;
 use crate::error::OpossumError;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::Properties;
+use crate::properties::{Properties, Property};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -66,6 +66,13 @@ impl Optical for NodeReference {
     }
     fn properties(&self) -> &Properties {
         &self.props
+    }
+    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+        if self.props.set(name, prop).is_none() {
+            Err(OpossumError::Other("property not defined".into()))
+        } else {
+            Ok(())
+        }
     }
 }
 

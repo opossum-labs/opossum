@@ -12,8 +12,10 @@ use petgraph::stable_graph::NodeIndex;
 use serde::de::{self, Deserialize, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::Serialize;
+use serde_json::json;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::Path;
 use std::rc::Rc;
 pub type LightResult = HashMap<String, Option<LightData>>;
 type Result<T> = std::result::Result<T, OpossumError>;
@@ -48,20 +50,14 @@ pub trait Optical: Dottable {
         Ok(LightResult::default())
     }
     /// Export analysis data to file with the given name.
-    fn export_data(&self, _file_name: &str) {
-        println!(
-            "no export_data function implemented for nodetype <{}>",
-            self.node_type()
-        )
+    /// 
+    /// This function should be overridden by a node in order to export node-specific data into a file.
+    /// The default implementation does nothing.
+    fn export_data(&self, _report_dir: &Path) {
     }
     /// Returns `true` if the [`Optical`] represents a detector which can report analysis data.
     fn is_detector(&self) -> bool {
         false
-    }
-    /// Mark this [`Optical`] as inverted.
-    fn set_inverted(&mut self, _inverted: bool) {
-        // self.ports.set_inverted(inverted);
-        // self.node.set_inverted(inverted);
     }
     /// Returns `true` if this [`Optical`] is inverted.
     fn inverted(&self) -> bool {
@@ -71,9 +67,7 @@ pub trait Optical: Dottable {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
     fn properties(&self) -> &Properties;
-    fn set_property(&mut self, _name: &str, _prop: Property) -> Result<()> {
-        Ok(())
-    }
+    fn set_property(&mut self, _name: &str, _prop: Property) -> Result<()>;
     fn set_properties(&mut self, properties: &Properties) -> Result<()> {
         let own_properties = self.properties().props.clone();
 
@@ -83,6 +77,9 @@ pub trait Optical: Dottable {
             }
         }
         Ok(())
+    }
+    fn report(&self) -> serde_json::Value {
+        json!(null)
     }
 }
 

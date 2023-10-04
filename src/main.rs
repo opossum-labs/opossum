@@ -34,13 +34,24 @@ fn do_it() -> Result<()> {
             e
         ))
     })?;
-    let mut scenery: OpticScenery = serde_yaml::from_str(&contents)
-        .map_err(|e| OpossumError::OpticScenery(format!("error while parsing model file: {}", e)))?;
+    let mut scenery: OpticScenery = serde_json::from_str(&contents).map_err(|e| {
+        OpossumError::OpticScenery(format!("error while parsing model file: {}", e))
+    })?;
     println!("Success");
     print!("\nAnalyzing...");
     scenery.analyze(&opossum_args.analyzer)?;
     println!("Success\n");
-    scenery.report();
+    let mut report_path = opossum_args.report_directory.clone();
+    report_path.push("report.json");
+    print!("Write detector report to {}...", report_path.display());
+    let mut output = File::create(report_path).unwrap();
+    write!(
+        output,
+        "{}",
+        serde_json::to_string_pretty(&scenery.report(&opossum_args.report_directory)).unwrap()
+    )
+    .unwrap();
+    println!("Success");
     let mut dot_path = opossum_args.report_directory.clone();
     dot_path.push(opossum_args.file_path.file_stem().unwrap());
     dot_path.set_extension("dot");

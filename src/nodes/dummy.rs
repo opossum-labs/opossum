@@ -1,4 +1,6 @@
 #![warn(missing_docs)]
+use serde_json::json;
+
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpossumError;
@@ -111,14 +113,22 @@ impl Optical for Dummy {
             Ok(HashMap::from([("front".into(), None)]))
         }
     }
-    fn set_inverted(&mut self, inverted: bool) {
-        self.is_inverted = inverted;
-    }
     fn inverted(&self) -> bool {
-        self.is_inverted
+        self.properties().get_bool("inverted").unwrap().unwrap()
     }
     fn properties(&self) -> &Properties {
         &self.props
+    }
+    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+        if self.props.set(name, prop).is_none() {
+            Err(OpossumError::Other("property not defined".into()))
+        } else {
+            Ok(())
+        }
+    }
+    fn report(&self) -> serde_json::Value {
+        json!({"type": self.node_type(),
+        "name": self.name()})
     }
 }
 
@@ -146,15 +156,9 @@ mod test {
         assert_eq!(node.name(), "Test1")
     }
     #[test]
-    fn set_inverted() {
-        let mut node = Dummy::default();
-        node.set_inverted(true);
-        assert_eq!(node.is_inverted, true)
-    }
-    #[test]
     fn inverted() {
         let mut node = Dummy::default();
-        node.set_inverted(true);
+        node.set_property("inverted", Property{prop: Proptype::Bool(true)}).unwrap();
         assert_eq!(node.inverted(), true)
     }
     #[test]

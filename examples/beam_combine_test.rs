@@ -1,5 +1,5 @@
-use std::fs::File;
 use std::io::Write;
+use std::{fs::File, path::Path};
 
 use opossum::{
     analyzer::AnalyzerEnergy,
@@ -40,14 +40,14 @@ fn main() -> Result<(), OpossumError> {
     let mut output = File::create(path).unwrap();
     write!(output, "{}", scenery.to_dot("")?).unwrap();
 
-    scenery.report();
+    scenery.report(Path::new(""));
     println!("");
     let mut analyzer = AnalyzerEnergy::new(&scenery);
     print!("Analyze...");
     analyzer.analyze()?;
     println!("Sucessful");
     println!("");
-    scenery.report();
+    scenery.report(Path::new(""));
 
     Ok(())
 }
