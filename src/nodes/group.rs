@@ -675,7 +675,10 @@ impl NodeGroup {
     }
     fn invert_graph(&mut self) {
         for node in self.g.0.node_weights_mut() {
-            node.0.borrow_mut().set_property("inverted", Property{prop: Proptype::Bool(true)}).unwrap();
+            node.0
+                .borrow_mut()
+                .set_property("inverted", true.into())
+                .unwrap();
         }
         for edge in self.g.0.edge_weights_mut() {
             edge.inverse();

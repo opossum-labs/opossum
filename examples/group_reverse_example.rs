@@ -1,7 +1,6 @@
 use std::io::Write;
 use std::{fs::File, path::Path};
 
-use opossum::properties::{Property, Proptype};
 use opossum::{
     analyzer::AnalyzerEnergy,
     error::OpossumError,
@@ -31,7 +30,7 @@ fn main() -> Result<(), OpossumError> {
     group.connect_nodes(g_n1, "rear", g_n2, "front")?;
     group.map_input_port(g_n1, "front", "in1")?;
     group.map_output_port(g_n2, "rear", "out1")?;
-    group.set_property("inverted", Property{prop: Proptype::Bool(true)}).unwrap();
+    group.set_property("inverted", true.into()).unwrap();
 
     let i_g = scenery.add_node(group);
     let i_d = scenery.add_node(Detector::default());

@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
-// use serde::Serialize;
 use serde_derive::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::{error::OpossumError, lightdata::LightData, optical::OpticGraph};
 
@@ -33,26 +31,52 @@ impl Properties {
         }
     }
 }
-// impl Serialize for Properties {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer {
-//         serializer.serialize_newtype_struct("properties", &self.props)
-//     }
-// }
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
 pub struct Property {
     pub prop: Proptype,
 }
 
-// impl Serialize for Property {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer {
-//         serializer.serialize_newtype_struct("property", &self.prop)
-//     }
-// }
+impl From<bool> for Property {
+    fn from(value: bool) -> Self {
+        Property {
+            prop: Proptype::Bool(value),
+        }
+    }
+}
+
+impl From<f64> for Property {
+    fn from(value: f64) -> Self {
+        Property {
+            prop: Proptype::F64(value),
+        }
+    }
+}
+
+impl From<String> for Property {
+    fn from(value: String) -> Self {
+        Property {
+            prop: Proptype::String(value),
+        }
+    }
+}
+
+impl From<&str> for Property {
+    fn from(value: &str) -> Self {
+        Property {
+            prop: Proptype::String(value.to_string()),
+        }
+    }
+}
+
+impl From<i32> for Property {
+    fn from(value: i32) -> Self {
+        Property {
+            prop: Proptype::I32(value),
+        }
+    }
+}
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Proptype {
@@ -61,6 +85,5 @@ pub enum Proptype {
     F64(f64),
     Bool(bool),
     LightData(Option<LightData>),
-    #[serde(skip)]
     OpticGraph(OpticGraph),
 }

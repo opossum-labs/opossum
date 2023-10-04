@@ -367,10 +367,10 @@ impl Spectrum {
         root.present().unwrap();
     }
     /// Generate JSON representation.
-    /// 
+    ///
     /// Generate a JSON representation of this [`Spectrum`]. This function is mainly used for generating reports.
     pub fn to_json(&self) -> serde_json::Value {
-        let data_as_vec=self.data.to_vec();
+        let data_as_vec = self.data.to_vec();
         json!(data_as_vec)
     }
 }

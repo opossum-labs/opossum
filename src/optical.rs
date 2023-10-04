@@ -50,11 +50,10 @@ pub trait Optical: Dottable {
         Ok(LightResult::default())
     }
     /// Export analysis data to file with the given name.
-    /// 
+    ///
     /// This function should be overridden by a node in order to export node-specific data into a file.
     /// The default implementation does nothing.
-    fn export_data(&self, _report_dir: &Path) {
-    }
+    fn export_data(&self, _report_dir: &Path) {}
     /// Returns `true` if the [`Optical`] represents a detector which can report analysis data.
     fn is_detector(&self) -> bool {
         false
