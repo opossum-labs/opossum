@@ -109,7 +109,7 @@ impl Optical for Spectrometer {
         let data = &self.light_data;
         let mut energy_data = serde_json::Value::Null;
         if let Some(LightData::Energy(e)) = data {
-            energy_data =e.spectrum.to_json();
+            energy_data = e.spectrum.to_json();
         }
         json!({"type": self.node_type(),
         "name": self.name(),

@@ -104,9 +104,14 @@ impl BeamSplitter {
         }
     }
     fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
-        let in1 = incoming_data.get("input1");
-        let in2 = incoming_data.get("input2");
-
+        let (in1, in2) = if !self.inverted() {
+            (incoming_data.get("input1"), incoming_data.get("input2"))
+        } else {
+            (
+                incoming_data.get("out1_trans1_refl2"),
+                incoming_data.get("out2_trans2_refl1"),
+            )
+        };
         let mut out1_1_spectrum: Option<Spectrum> = None;
         let mut out1_2_spectrum: Option<Spectrum> = None;
         let mut out2_1_spectrum: Option<Spectrum> = None;
@@ -152,10 +157,17 @@ impl BeamSplitter {
                 spectrum: out2_spec,
             }))
         }
-        Ok(HashMap::from([
-            ("out1_trans1_refl2".into(), out1_data),
-            ("out2_trans2_refl1".into(), out2_data),
-        ]))
+        if !self.inverted() {
+            Ok(HashMap::from([
+                ("out1_trans1_refl2".into(), out1_data),
+                ("out2_trans2_refl1".into(), out2_data),
+            ]))
+        } else {
+            Ok(HashMap::from([
+                ("input1".into(), out1_data),
+                ("input2".into(), out2_data),
+            ]))
+        }
     }
 }
 
@@ -184,6 +196,9 @@ impl Optical for BeamSplitter {
         ports.add_input("input2").unwrap();
         ports.add_output("out1_trans1_refl2").unwrap();
         ports.add_output("out2_trans2_refl1").unwrap();
+        if self.properties().get_bool("inverted").unwrap().unwrap() {
+            ports.set_inverted(true)
+        }
         ports
     }
 
@@ -208,6 +223,9 @@ impl Optical for BeamSplitter {
         } else {
             Ok(())
         }
+    }
+    fn inverted(&self) -> bool {
+        self.properties().get_bool("inverted").unwrap().unwrap()
     }
 }
 

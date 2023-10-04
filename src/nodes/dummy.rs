@@ -23,7 +23,6 @@ type Result<T> = std::result::Result<T, OpossumError>;
 ///   - Outputs
 ///     - `rear`
 pub struct Dummy {
-    is_inverted: bool,
     props: Properties,
 }
 
@@ -47,7 +46,6 @@ fn create_default_props() -> Properties {
 impl Default for Dummy {
     fn default() -> Self {
         Self {
-            is_inverted: Default::default(),
             props: create_default_props(),
         }
     }
@@ -62,10 +60,7 @@ impl Dummy {
                 prop: Proptype::String(name.into()),
             },
         );
-        Self {
-            is_inverted: false,
-            props,
-        }
+        Self { props }
     }
 }
 impl Optical for Dummy {
@@ -93,6 +88,9 @@ impl Optical for Dummy {
         let mut ports = OpticPorts::new();
         ports.add_input("front").unwrap();
         ports.add_output("rear").unwrap();
+        if self.properties().get_bool("inverted").unwrap().unwrap() {
+            ports.set_inverted(true)
+        }
         ports
     }
 
@@ -101,7 +99,7 @@ impl Optical for Dummy {
         incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
     ) -> Result<LightResult> {
-        if !self.is_inverted {
+        if !self.inverted() {
             if let Some(data) = incoming_data.get("front") {
                 Ok(HashMap::from([("rear".into(), data.clone())]))
             } else {
@@ -158,7 +156,7 @@ mod test {
     #[test]
     fn inverted() {
         let mut node = Dummy::default();
-        node.set_property("inverted", Property{prop: Proptype::Bool(true)}).unwrap();
+        node.set_property("inverted", true.into()).unwrap();
         assert_eq!(node.inverted(), true)
     }
     #[test]
