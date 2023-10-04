@@ -174,6 +174,13 @@ impl Optical for IdealFilter {
     fn properties(&self) -> &Properties {
         &self.props
     }
+    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+        if self.props.set(name, prop).is_none() {
+            Err(OpossumError::Other("property not defined".into()))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl Dottable for IdealFilter {

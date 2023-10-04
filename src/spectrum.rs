@@ -5,6 +5,7 @@ use csv::ReaderBuilder;
 use ndarray::Array1;
 use ndarray_stats::QuantileExt;
 use serde_derive::{Deserialize, Serialize};
+use serde_json::json;
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
 use std::ops::Range;
@@ -338,8 +339,8 @@ impl Spectrum {
     /// # Panics
     ///
     /// ???
-    pub fn to_plot(&self, filename: &str) {
-        let root = SVGBackend::new(filename, (800, 600)).into_drawing_area();
+    pub fn to_plot(&self, file_path: &std::path::Path) {
+        let root = SVGBackend::new(file_path, (800, 600)).into_drawing_area();
         root.fill(&WHITE).unwrap();
         let x_left = self.data.first().unwrap().0;
         let x_right = self.data.last().unwrap().0;
@@ -364,6 +365,13 @@ impl Spectrum {
             ))
             .unwrap();
         root.present().unwrap();
+    }
+    /// Generate JSON representation.
+    /// 
+    /// Generate a JSON representation of this [`Spectrum`]. This function is mainly used for generating reports.
+    pub fn to_json(&self) -> serde_json::Value {
+        let data_as_vec=self.data.to_vec();
+        json!(data_as_vec)
     }
 }
 impl Display for Spectrum {

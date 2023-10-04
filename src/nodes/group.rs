@@ -675,7 +675,7 @@ impl NodeGroup {
     }
     fn invert_graph(&mut self) {
         for node in self.g.0.node_weights_mut() {
-            node.0.borrow_mut().set_inverted(true);
+            node.0.borrow_mut().set_property("inverted", Property{prop: Proptype::Bool(true)}).unwrap();
         }
         for edge in self.g.0.edge_weights_mut() {
             edge.inverse();
@@ -714,19 +714,26 @@ impl Optical for NodeGroup {
     ) -> Result<LightResult> {
         self.analyze_group(incoming_data, analyzer_type)
     }
-    fn set_inverted(&mut self, inverted: bool) {
-        self.props.set(
-            "inverted",
-            Property {
-                prop: Proptype::Bool(inverted),
-            },
-        );
-    }
+    // fn set_inverted(&mut self, inverted: bool) {
+    //     self.props.set(
+    //         "inverted",
+    //         Property {
+    //             prop: Proptype::Bool(inverted),
+    //         },
+    //     );
+    // }
     fn as_group(&self) -> Result<&NodeGroup> {
         Ok(self)
     }
     fn properties(&self) -> &Properties {
         &self.props
+    }
+    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+        if self.props.set(name, prop).is_none() {
+            Err(OpossumError::Other("property not defined".into()))
+        } else {
+            Ok(())
+        }
     }
 }
 

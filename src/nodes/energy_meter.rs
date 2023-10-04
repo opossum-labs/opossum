@@ -1,4 +1,6 @@
 #![warn(missing_docs)]
+use serde_json::{json, Number};
+
 use crate::dottable::Dottable;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Property, Proptype};
@@ -129,16 +131,29 @@ impl Optical for EnergyMeter {
             Ok(HashMap::from([("out2".into(), None)]))
         }
     }
-    fn export_data(&self, file_name: &str) {
-        if let Some(data) = &self.light_data {
-            data.export(file_name)
-        }
-    }
     fn is_detector(&self) -> bool {
         true
     }
     fn properties(&self) -> &Properties {
         &self.props
+    }
+    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+        if self.props.set(name, prop).is_none() {
+            Err(OpossumError::Other("property not defined".into()))
+        } else {
+            Ok(())
+        }
+    }
+    fn report(&self) -> serde_json::Value {
+        let data = &self.light_data;
+        let mut energy_data = serde_json::Value::Null;
+        if let Some(LightData::Energy(e)) = data {
+            energy_data =
+                serde_json::Value::Number(Number::from_f64(e.spectrum.total_energy()).unwrap())
+        }
+        json!({"type": self.node_type(),
+        "name": self.name(),
+        "energy": energy_data})
     }
 }
 

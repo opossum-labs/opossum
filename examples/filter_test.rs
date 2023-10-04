@@ -1,5 +1,5 @@
-use std::fs::File;
 use std::io::Write;
+use std::{fs::File, path::Path};
 
 use opossum::{
     analyzer::AnalyzerEnergy,
@@ -39,18 +39,19 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(i_f, "rear", i_d2, "in1")?;
     scenery.connect_nodes(i_d2, "out1", i_d3, "in1")?;
 
-    let path = "src_detector.dot";
+    let serialized = serde_json::to_string_pretty(&scenery).unwrap();
+    let path = "filter_test.opm";
     let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot("")?).unwrap();
+    write!(output, "{}", serialized).unwrap();
 
-    scenery.report();
+    scenery.report(Path::new("./"));
     println!("");
     let mut analyzer = AnalyzerEnergy::new(&scenery);
     print!("Analyze...");
     analyzer.analyze()?;
     println!("Sucessful");
     println!("");
-    scenery.report();
+    scenery.report(Path::new("./"));
 
     Ok(())
 }

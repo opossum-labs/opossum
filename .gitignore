@@ -2,6 +2,9 @@
 /.vscode
 /book/book
 /book
+# ignore special directory for development
+/playground
+
 *.dot
 *.svg
 # exclude OPOSSUM model files

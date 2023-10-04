@@ -9,6 +9,7 @@ use crate::{
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::path::Path;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -68,9 +69,9 @@ impl Optical for Detector {
             Ok(HashMap::from([("out2".into(), None)]))
         }
     }
-    fn export_data(&self, file_name: &str) {
+    fn export_data(&self, file_path: &Path) {
         if let Some(data) = &self.light_data {
-            data.export(file_name)
+            data.export(file_path)
         }
     }
     fn is_detector(&self) -> bool {
@@ -78,6 +79,13 @@ impl Optical for Detector {
     }
     fn properties(&self) -> &Properties {
         &self.props
+    }
+    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+        if self.props.set(name, prop).is_none() {
+            Err(OpossumError::Other("property not defined".into()))
+        } else {
+            Ok(())
+        }
     }
 }
 
