@@ -52,13 +52,14 @@ test_windows:
     - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
     - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
     - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
-    - rustup default nightly
-    - cargo install junitify
-    - cargo test -- --format=json -Z unstable-options --report-time | junitify --out $CI_PROJECT_DIR\tests\
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/tests/*.xml
+#    - rustup default nightly
+#    - cargo install junitify
+    # junitify does not find some files under windows ???
+    - cargo test # -- --format=json -Z unstable-options --report-time | junitify --out $CI_PROJECT_DIR\tests\
+#  artifacts:
+#    when: always
+#    reports:
+#      junit: $CI_PROJECT_DIR/tests/*.xml
 
 clippy:
   stage: test
