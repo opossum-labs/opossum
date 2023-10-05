@@ -88,6 +88,9 @@ test:clippy_windows:
   tags:
     - windows
   script:
+    - set CARGO_HOME=C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo
+    - set CARGO_TARGET_DIR=C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target
+    - set PATH=%PATH%:C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin
     - cargo clippy --workspace
 
 #deploy:
