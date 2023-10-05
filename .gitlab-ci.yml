@@ -83,6 +83,13 @@ test:clippy:
   allow_failure: true
   dependencies:
     - test:cargo
+test:clippy_windows:
+  stage: test
+  tags:
+    - windows
+  script:
+    - rustup component add clippy
+    - cargo clippy --workspace
 
 #deploy:
 #  stage: deploy
