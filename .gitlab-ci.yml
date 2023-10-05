@@ -54,7 +54,7 @@ test_windows:
     - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - rustup default nightly
     - cargo install junitify
-    - cargo test -- --format=json -Z unstable-options --report-time | junitify --out $CI_PROJECT_DIR/tests/
+    - cargo test -- --format=json -Z unstable-options --report-time | junitify --out $CI_PROJECT_DIR\tests\
   artifacts:
     when: always
     reports:
