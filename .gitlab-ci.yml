@@ -88,7 +88,6 @@ test:clippy_windows:
   tags:
     - windows
   script:
-    - rustup component add clippy
     - cargo clippy --workspace
 
 #deploy:
