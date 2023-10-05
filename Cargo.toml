@@ -10,6 +10,8 @@ keywords = ["laser", "optics", "physics", "simulation"]
 categories = [ "science", "simulation"]
 publish = false
 
+build = "build.rs"
+
 [dependencies]
 petgraph = {version="0.6.3", features = ["serde-1"]} # the graph library
 uom = "0"
@@ -29,3 +31,9 @@ clap = { version = "4.4", features = ["derive"] } # command line argument parser
 structopt = "0.3"
 rprompt = "2.0"
 strum = { version = "0.25", features = ["derive"] }
+
+chrono = "0"
+
+[build-dependencies]
+# All features enabled
+vergen = { version = "8.2", features = ["git", "gitcl"] }
