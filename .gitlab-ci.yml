@@ -83,7 +83,7 @@ build-windows:
     - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
     - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
     - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
-    - cargo build
+    - cargo build --release
   dependencies:
     - test_windows
 
@@ -97,7 +97,7 @@ build-windows:
 #    - export HTTP_PROXY=lxproxy01.gsi.de:3128
 #    - export https_proxy=lxproxy01.gsi.de:3128
 #    - export http_proxy=lxproxy01.gsi.de:3128
-#    - cargo build
+#    - cargo build --release
 #  dependencies:
 #    - test:cargo
 
