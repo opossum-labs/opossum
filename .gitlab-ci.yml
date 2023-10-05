@@ -22,68 +22,43 @@ stages:
   - build
   - deploy
 
-# Build the main application (currently mostly useless)
-build-main:
-  stage: build
-  tags:
-    - opossum
-  script:
-    - export HTTPS_PROXY=lxproxy01.gsi.de:3128
-    - export HTTP_PROXY=lxproxy01.gsi.de:3128
-    - export https_proxy=lxproxy01.gsi.de:3128
-    - export http_proxy=lxproxy01.gsi.de:3128
-    - cargo build
-  dependencies:
-    - test:cargo
+# Test the project for linux environment
+#test_linux:
+#  stage: test
+#  tags:
+#    - opossum
+#  script:
+#    - export HTTPS_PROXY=lxproxy01.gsi.de:3128
+#    - export HTTP_PROXY=lxproxy01.gsi.de:3128
+#    - export https_proxy=lxproxy01.gsi.de:3128
+#    - export http_proxy=lxproxy01.gsi.de:3128
+#    - rustup default nightly
+#    - cargo install junitify
+#    - rustc --version && cargo --version # Print version info for debugging
+#    # - cargo test --workspace
+#    - cargo test -- --format=json -Z unstable-options --report-time | junitify --out $CI_PROJECT_DIR/tests/
+#  artifacts:
+#    when: always
+#    reports:
+#      junit: $CI_PROJECT_DIR/tests/*.xml
 
-# Build API documentation
-build-doc:
-  stage: build
-  tags:
-    - opossum
-  script:
-    - export HTTPS_PROXY=lxproxy01.gsi.de:3128
-    - export HTTP_PROXY=lxproxy01.gsi.de:3128
-    - export https_proxy=lxproxy01.gsi.de:3128
-    - export http_proxy=lxproxy01.gsi.de:3128
-    - cargo doc --no-deps
-  dependencies:
-    - test:cargo
-# Use cargo to test the project
-test:cargo:
+test_windows:
   stage: test
   tags:
-    - opossum
+    - windows
   script:
-    - export HTTPS_PROXY=lxproxy01.gsi.de:3128
-    - export HTTP_PROXY=lxproxy01.gsi.de:3128
-    - export https_proxy=lxproxy01.gsi.de:3128
-    - export http_proxy=lxproxy01.gsi.de:3128
+    - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
+    - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
+    - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - rustup default nightly
     - cargo install junitify
-    - rustc --version && cargo --version # Print version info for debugging
-    # - cargo test --workspace
     - cargo test -- --format=json -Z unstable-options --report-time | junitify --out $CI_PROJECT_DIR/tests/
   artifacts:
     when: always
     reports:
       junit: $CI_PROJECT_DIR/tests/*.xml
 
-test:clippy:
-  stage: test
-  tags:
-    - opossum
-  script:
-    - export HTTPS_PROXY=lxproxy01.gsi.de:3128
-    - export HTTP_PROXY=lxproxy01.gsi.de:3128
-    - export https_proxy=lxproxy01.gsi.de:3128
-    - export http_proxy=lxproxy01.gsi.de:3128
-    - rustup component add clippy
-    - cargo clippy --workspace
-  allow_failure: true
-  dependencies:
-    - test:cargo
-test:clippy_windows:
+clippy:
   stage: test
   tags:
     - windows
@@ -92,6 +67,50 @@ test:clippy_windows:
     - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
     - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - cargo clippy --workspace
+  allow_failure: true
+  dependencies:
+    - test_windows
+
+# Build the main application (currently mostly useless)
+build-windows:
+  stage: build
+  tags:
+    - windows
+  script:
+    - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
+    - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
+    - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
+    - cargo build
+  dependencies:
+    - test_windows
+
+# Build the main application for linux
+#build-linux:
+#  stage: build
+#  tags:
+#    - opossum
+#  script:
+#    - export HTTPS_PROXY=lxproxy01.gsi.de:3128
+#    - export HTTP_PROXY=lxproxy01.gsi.de:3128
+#    - export https_proxy=lxproxy01.gsi.de:3128
+#    - export http_proxy=lxproxy01.gsi.de:3128
+#    - cargo build
+#  dependencies:
+#    - test:cargo
+
+# Build API documentation
+build-doc:
+  stage: build
+  tags:
+    - windows
+  script:
+    - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
+    - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
+    - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
+    - cargo doc --no-deps
+
+  dependencies:
+    - test_windows
 
 #deploy:
 #  stage: deploy
