@@ -70,7 +70,7 @@ clippy:
     - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
     - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - cargo clippy --workspace
-  allow_failure: true
+    - cargo clean
   dependencies:
     - test_windows
 
