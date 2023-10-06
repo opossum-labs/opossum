@@ -1,13 +1,9 @@
-use opossum::analyzer::AnalyzerEnergy;
 use opossum::error::OpossumError;
 use opossum::nodes::{BeamSplitter, Dummy};
 use opossum::OpticScenery;
-
-use std::fs::File;
-use std::io::Write;
+use std::path::Path;
 
 fn main() -> Result<(), OpossumError> {
-    println!("PHELIX uOPA opticscenery example");
     let mut scenery = OpticScenery::new();
 
     scenery.set_description("PHELIX uOPA");
@@ -160,16 +156,7 @@ fn main() -> Result<(), OpossumError> {
     // scenery.connect_nodes(pump_bs_node1, pump_kepler_node1);
     // scenery.connect_nodes(pump_kepler_node1, dichroic_node1);
 
-    let path = "uOPA.dot";
-    let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot("")?).unwrap();
-
-    let path = "uOPA_PreAmp.dot";
-    let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery_2.to_dot("")?).unwrap();
-
-    let mut analyzer = AnalyzerEnergy::new(&scenery);
-    analyzer.analyze()?;
-
+    scenery.save_to_file(Path::new("uOPA.opm"))?;
+    scenery_2.save_to_file(Path::new("uOPA_PreAmp.opm"))?;
     Ok(())
 }

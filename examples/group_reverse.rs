@@ -1,11 +1,9 @@
-use std::io::Write;
-use std::{fs::File, path::Path};
+use std::path::Path;
 
 use opossum::{
-    analyzer::AnalyzerEnergy,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
-    nodes::{Detector, Dummy, NodeGroup, Source},
+    nodes::{Dummy, EnergyMeter, NodeGroup, Source},
     optical::Optical,
     spectrum::create_he_ne_spectrum,
     OpticScenery,
@@ -33,18 +31,11 @@ fn main() -> Result<(), OpossumError> {
     group.set_property("inverted", true.into()).unwrap();
 
     let i_g = scenery.add_node(group);
-    let i_d = scenery.add_node(Detector::default());
+    let i_d = scenery.add_node(EnergyMeter::default());
 
     scenery.connect_nodes(i_s, "out1", i_g, "out1")?;
     scenery.connect_nodes(i_g, "in1", i_d, "in1")?;
 
-    let path = "group_reverse.dot";
-    let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot("")?).unwrap();
-
-    let mut analyzer = AnalyzerEnergy::new(&scenery);
-    analyzer.analyze()?;
-    scenery.report(Path::new(""));
-
+    scenery.save_to_file(Path::new("group_reverse.opm"))?;
     Ok(())
 }

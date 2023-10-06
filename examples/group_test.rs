@@ -1,8 +1,7 @@
 use opossum::error::OpossumError;
 use opossum::nodes::{BeamSplitter, Dummy, NodeGroup};
 use opossum::OpticScenery;
-use std::fs::File;
-use std::io::Write;
+use std::path::Path;
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Node Group test section".into());
@@ -39,10 +38,7 @@ fn main() -> Result<(), OpossumError> {
 
     // set_output_port
     scenery.connect_nodes(scene_g1, "out1", scene_g2, "in1")?;
-    println!("{}", serde_yaml::to_string(&scenery).unwrap());
-    let path = "graph_group.dot";
-    let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot("LR")?).unwrap();
 
+    scenery.save_to_file(Path::new("group_test.opm"))?;
     Ok(())
 }

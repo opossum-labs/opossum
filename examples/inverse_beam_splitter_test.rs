@@ -1,15 +1,12 @@
-use std::io::Write;
-use std::{fs::File, path::Path};
-
 use opossum::optical::Optical;
 use opossum::{
-    analyzer::AnalyzerEnergy,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, EnergyMeter, Source},
     spectrum::create_he_ne_spectrum,
     OpticScenery,
 };
+use std::path::Path;
 
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
@@ -37,19 +34,7 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(i_bs, "input1", i_d1, "in1")?;
     scenery.connect_nodes(i_bs, "input2", i_d2, "in1")?;
 
-    let serialized = serde_json::to_string_pretty(&scenery).unwrap();
-    let path = "inverse_beam_splitter_test.opm";
-    let mut output = File::create(path).unwrap();
-    write!(output, "{}", serialized).unwrap();
-
-    scenery.report(Path::new("./"));
-    println!("");
-    let mut analyzer = AnalyzerEnergy::new(&scenery);
-    print!("Analyze...");
-    analyzer.analyze()?;
-    println!("Sucessful");
-    println!("");
-    scenery.report(Path::new("./"));
+    scenery.save_to_file(Path::new("inverse_beam_splitter.opm"))?;
 
     Ok(())
 }
