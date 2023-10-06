@@ -1,8 +1,6 @@
-use std::io::Write;
-use std::{fs::File, path::Path};
+use std::path::Path;
 
 use opossum::{
-    analyzer::AnalyzerEnergy,
     error::OpossumError,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, EnergyMeter, FilterType, IdealFilter, Source, Spectrometer},
@@ -39,19 +37,6 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(i_f, "rear", i_d2, "in1")?;
     scenery.connect_nodes(i_d2, "out1", i_d3, "in1")?;
 
-    let serialized = serde_json::to_string_pretty(&scenery).unwrap();
-    let path = "filter_test.opm";
-    let mut output = File::create(path).unwrap();
-    write!(output, "{}", serialized).unwrap();
-
-    scenery.report(Path::new("./"));
-    println!("");
-    let mut analyzer = AnalyzerEnergy::new(&scenery);
-    print!("Analyze...");
-    analyzer.analyze()?;
-    println!("Sucessful");
-    println!("");
-    scenery.report(Path::new("./"));
-
+    scenery.save_to_file(Path::new("filter_test.opm"))?;
     Ok(())
 }

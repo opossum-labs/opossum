@@ -1,15 +1,21 @@
 use opossum::{
     error::OpossumError,
+    lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, Detector, Dummy, NodeReference, Source},
+    spectrum::create_he_ne_spectrum,
     OpticScenery,
 };
-use std::fs::File;
-use std::io::Write;
+use std::path::Path;
 
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Michaelson interferomater");
-    let src = scenery.add_node(Source::default());
+    let src = scenery.add_node(Source::new(
+        "Source",
+        LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        }),
+    ));
     let bs = scenery.add_node(BeamSplitter::default());
     let sample = scenery.add_node(Dummy::new("Sample"));
     let rf = NodeReference::from_node(scenery.node(sample)?);
@@ -29,8 +35,6 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(m2, "rear", r_bs, "input2")?;
     scenery.connect_nodes(r_bs, "out1_trans1_refl2", det, "in1")?;
 
-    let path = "michaelson.dot";
-    let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot("")?).unwrap();
+    scenery.save_to_file(Path::new("michaelson.opm"))?;
     Ok(())
 }

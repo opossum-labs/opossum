@@ -9,7 +9,7 @@ use crate::{
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -69,9 +69,11 @@ impl Optical for Detector {
             Ok(HashMap::from([("out2".into(), None)]))
         }
     }
-    fn export_data(&self, file_path: &Path) {
+    fn export_data(&self, report_dir: &Path) {
         if let Some(data) = &self.light_data {
-            data.export(file_path)
+            let mut file_path = PathBuf::from(report_dir);
+            file_path.push(format!("spectrum_{}.svg", self.name()));
+            data.export(&file_path)
         }
     }
     fn is_detector(&self) -> bool {

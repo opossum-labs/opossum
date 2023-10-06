@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -14,7 +16,6 @@ use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use serde_derive::{Deserialize, Serialize};
-use serde_json::json;
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
@@ -317,15 +318,35 @@ impl OpticScenery {
             .0
             .node_weights()
             .filter(|node| node.0.borrow().is_detector());
-        report.insert("Detectors".into(), json!("Detectors"));
+        //report.insert("detectors".into(), json!("Detectors"));
         let mut detectors: Vec<serde_json::Value> = Vec::new();
         for node in detector_nodes {
             detectors.push(node.0.borrow().report());
             node.0.borrow().export_data(report_dir);
         }
         let detector_json = serde_json::Value::Array(detectors);
-        report.insert("Detectors".into(), detector_json);
+        report.insert("detectors".into(), detector_json);
         serde_json::Value::Object(report)
+    }
+    pub fn save_to_file(&self, path: &Path) -> Result<()> {
+        let serialized = serde_json::to_string_pretty(&self).map_err(|e| {
+            OpossumError::OpticScenery(format!("deserialization of OpticScenery failed: {}", e))
+        })?;
+        let mut output = File::create(path).map_err(|e| {
+            OpossumError::OpticScenery(format!(
+                "could not create file path: {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
+        write!(output, "{}", serialized).map_err(|e| {
+            OpossumError::OpticScenery(format!(
+                "writing to file path {} failed: {}",
+                path.display(),
+                e
+            ))
+        })?;
+        Ok(())
     }
 }
 

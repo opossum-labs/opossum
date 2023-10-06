@@ -12,14 +12,12 @@ use opossum::{
 
 type Result<T> = std::result::Result<T, OpossumError>;
 
-fn main() -> Result<()> {
+fn main() {
     //not necessary, just for fun
     show_intro();
     if let Err(e) = do_it() {
         println!("Error: {}", e);
-        Err(e)
-    } else {
-        Ok(())
+        std::process::exit(1);
     }
 }
 
@@ -38,6 +36,13 @@ fn do_it() -> Result<()> {
         OpossumError::OpticScenery(format!("error while parsing model file: {}", e))
     })?;
     println!("Success");
+    let mut dot_path = opossum_args.report_directory.clone();
+    dot_path.push(opossum_args.file_path.file_stem().unwrap());
+    dot_path.set_extension("dot");
+    print!("Write diagram to {}...", dot_path.display());
+    let mut output = File::create(dot_path).unwrap();
+    write!(output, "{}", scenery.to_dot("")?).unwrap();
+    println!("Success");
     print!("\nAnalyzing...");
     scenery.analyze(&opossum_args.analyzer)?;
     println!("Success\n");
@@ -51,13 +56,6 @@ fn do_it() -> Result<()> {
         serde_json::to_string_pretty(&scenery.report(&opossum_args.report_directory)).unwrap()
     )
     .unwrap();
-    println!("Success");
-    let mut dot_path = opossum_args.report_directory.clone();
-    dot_path.push(opossum_args.file_path.file_stem().unwrap());
-    dot_path.set_extension("dot");
-    print!("Write diagram to {}...", dot_path.display());
-    let mut output = File::create(dot_path).unwrap();
-    write!(output, "{}", scenery.to_dot("")?).unwrap();
     println!("Success");
     Ok(())
 }
