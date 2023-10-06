@@ -90,44 +90,47 @@ impl OpticScenery {
         target_node: NodeIndex,
         target_port: &str,
     ) -> Result<()> {
-        if let Some(source) = self.g.0.node_weight(src_node) {
-            if !source
-                .0
-                .borrow()
-                .ports()
-                .outputs()
-                .contains(&src_port.into())
-            {
-                return Err(OpossumError::OpticScenery(format!(
-                    "source node {} does not have a port {}",
-                    source.0.borrow().name(),
-                    src_port
-                )));
-            }
-        } else {
-            return Err(OpossumError::OpticScenery(
+        let source = self
+            .g
+            .0
+            .node_weight(src_node)
+            .ok_or(OpossumError::OpticScenery(
                 "source node with given index does not exist".into(),
-            ));
+            ))?;
+        if !source
+            .0
+            .borrow()
+            .ports()
+            .outputs()
+            .contains(&src_port.into())
+        {
+            return Err(OpossumError::OpticScenery(format!(
+                "source node {} does not have a port {}",
+                source.0.borrow().name(),
+                src_port
+            )));
         }
-        if let Some(target) = self.g.0.node_weight(target_node) {
-            if !target
-                .0
-                .borrow()
-                .ports()
-                .inputs()
-                .contains(&target_port.into())
-            {
-                return Err(OpossumError::OpticScenery(format!(
-                    "target node {} does not have a port {}",
-                    target.0.borrow().name(),
-                    target_port
-                )));
-            }
-        } else {
-            return Err(OpossumError::OpticScenery(
+        let target = self
+            .g
+            .0
+            .node_weight(target_node)
+            .ok_or(OpossumError::OpticScenery(
                 "target node with given index does not exist".into(),
-            ));
+            ))?;
+        if !target
+            .0
+            .borrow()
+            .ports()
+            .inputs()
+            .contains(&target_port.into())
+        {
+            return Err(OpossumError::OpticScenery(format!(
+                "target node {} does not have a port {}",
+                target.0.borrow().name(),
+                target_port
+            )));
         }
+
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "src node with given port {} is already connected",
@@ -248,22 +251,23 @@ impl OpticScenery {
     }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> Result<()> {
-        let sorted = toposort(&self.g.0, None);
-        if let Ok(sorted) = sorted {
-            for idx in sorted {
-                let node = self.g.0.node_weight(idx).unwrap();
-                let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
-                let outgoing_edges = node.0.borrow_mut().analyze(incoming_edges, analyzer_type)?;
-                for outgoing_edge in outgoing_edges {
-                    self.set_outgoing_edge_data(idx, outgoing_edge.0, outgoing_edge.1)
-                }
+        let sorted = toposort(&self.g.0, None)
+            .map_err(|_| OpossumError::OpticScenery("Analyis: topological sort failed".into()))?;
+        for idx in sorted {
+            let node = self.g.0.node_weight(idx).unwrap();
+            let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
+            let outgoing_edges = node
+                .0
+                .borrow_mut()
+                .analyze(incoming_edges, analyzer_type)
+                .map_err(|e| {
+                    format!("analysis of node {} failed: {}", node.0.borrow().name(), e)
+                })?;
+            for outgoing_edge in outgoing_edges {
+                self.set_outgoing_edge_data(idx, outgoing_edge.0, outgoing_edge.1)
             }
-            Ok(())
-        } else {
-            Err(OpossumError::OpticScenery(
-                "Analyis: topological sort failed".into(),
-            ))
         }
+        Ok(())
     }
     /// Sets the description of this [`OpticScenery`].
     pub fn set_description(&mut self, description: &str) {
