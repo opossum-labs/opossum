@@ -134,6 +134,8 @@ impl Dottable for Dummy {}
 
 #[cfg(test)]
 mod test {
+    use crate::{lightdata::{DataEnergy, LightData}, spectrum::create_he_ne_spectrum};
+
     use super::*;
     #[test]
     fn new() {
@@ -168,5 +170,51 @@ mod test {
     fn node_type() {
         let node = Dummy::default();
         assert_eq!(node.node_type(), "dummy");
+    }
+    #[test]
+    fn analyze_ok() {
+        let mut dummy = Dummy::default();
+        let mut input=LightResult::default();
+        let input_light=LightData::Energy(DataEnergy{spectrum:create_he_ne_spectrum(1.0)});
+        input.insert("front".into(), Some(input_light.clone()));
+        let output=dummy.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output=output.unwrap();
+        assert!(output.contains_key("rear".into()));
+        assert_eq!(output.len(),1);
+        let output=output.get("rear".into()).unwrap();
+        assert!(output.is_some());
+        let output=output.clone().unwrap();
+        assert_eq!(output, input_light);
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut dummy = Dummy::default();
+        let mut input=LightResult::default();
+        let input_light=LightData::Energy(DataEnergy{spectrum:create_he_ne_spectrum(1.0)});
+        input.insert("rear".into(), Some(input_light.clone()));
+        let output=dummy.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output=output.unwrap();
+        let output=output.get("rear".into()).unwrap();
+        assert!(output.is_none());
+    }
+    #[test]
+    fn analyze_inverse() {
+        let mut dummy = Dummy::default();
+        dummy.set_property("inverted", true.into()).unwrap();
+        let mut input=LightResult::default();
+        let input_light=LightData::Energy(DataEnergy{spectrum:create_he_ne_spectrum(1.0)});
+        input.insert("rear".into(), Some(input_light.clone()));
+
+        let output=dummy.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output=output.unwrap();
+        assert!(output.contains_key("front".into()));
+        assert_eq!(output.len(),1);
+        let output=output.get("front".into()).unwrap();
+        assert!(output.is_some());
+        let output=output.clone().unwrap();
+        assert_eq!(output, input_light);
     }
 }

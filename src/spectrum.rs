@@ -21,7 +21,7 @@ use std::fs::File;
 ///
 /// This structure handles an array of values over a given wavelength range. Although the interface
 /// is still limited, the structure is prepared for handling also non-equidistant wavelength slots.  
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Spectrum {
     data: Array1<(f64, f64)>, // (wavelength in meters, data in 1/meters)
 }

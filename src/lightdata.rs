@@ -11,7 +11,7 @@ use crate::spectrum::Spectrum;
 /// [`AnalyzerType`](crate::analyzer::AnalyzerType). For example, an energy analysis ([`LightData::Energy`]) only
 /// contains a [`Spectrum`] information, while a geometric analysis ([`LightData::Geometric]) constains a set of optical
 /// ray data.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LightData {
     /// data type used for energy analysis.
     Energy(DataEnergy),
@@ -45,12 +45,12 @@ impl Display for LightData {
         }
     }
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DataEnergy {
     pub spectrum: Spectrum,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DataGeometric {
     _ray: i32,
 }
