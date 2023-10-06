@@ -23,6 +23,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait Optical: Dottable {
     /// Sets the name of this [`Optical`].
+    #[deprecated(note = "set_property(\"name\",...) should  used instead")]
     fn set_name(&mut self, _name: &str) {}
     /// Returns a reference to the name of this [`Optical`].
     fn name(&self) -> &str {
@@ -49,7 +50,7 @@ pub trait Optical: Dottable {
         print!("{}: No analyze function defined.", self.node_type());
         Ok(LightResult::default())
     }
-    /// Export analysis data to file with the given name.
+    /// Export analysis data to file(s) within the given directory path.
     ///
     /// This function should be overridden by a node in order to export node-specific data into a file.
     /// The default implementation does nothing.
@@ -65,8 +66,18 @@ pub trait Optical: Dottable {
     fn as_group(&self) -> Result<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
+    /// Return the properties of this [`Optical`].
+    /// 
+    /// Return all properties of an optical node. Note, that some properties might be read-only.
     fn properties(&self) -> &Properties;
-    fn set_property(&mut self, _name: &str, _prop: Property) -> Result<()>;
+    /// Set a property of this [`Optical`].
+    /// 
+    /// Set a property of an optical node. This property must already exist (e.g. defined in new() / default() functions of the node).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if a non-defined property is set or the property has the wrong data type.
+    fn set_property(&mut self, name: &str, property: Property) -> Result<()>;
     fn set_properties(&mut self, properties: &Properties) -> Result<()> {
         let own_properties = self.properties().props.clone();
 
@@ -77,6 +88,10 @@ pub trait Optical: Dottable {
         }
         Ok(())
     }
+    /// Return a JSON representation of the current state of this [`Optical`].
+    /// 
+    /// This function must be overridden for generating output in the analysis report. Mainly detector nodes use this feature.
+    /// The default implementation is to return a JSON `null` value.
     fn report(&self) -> serde_json::Value {
         json!(null)
     }

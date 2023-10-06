@@ -152,7 +152,7 @@ mod test {
     #[test]
     fn name() {
         let mut node = Dummy::default();
-        node.set_name("Test1");
+        node.set_property("name", "Test1".into()).unwrap();
         assert_eq!(node.name(), "Test1")
     }
     #[test]
