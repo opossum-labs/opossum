@@ -37,42 +37,17 @@ pub struct NodeGroup {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set(
-        "name",
-        Property {
-            prop: Proptype::String("group".into()),
-        },
-    );
-    props.set(
-        "inverted",
-        Property {
-            prop: Proptype::Bool(false),
-        },
-    );
-    props.set(
-        "expand view",
-        Property {
-            prop: Proptype::Bool(false),
-        },
-    );
+    props.set("name", "group".into());
+    props.set("inverted", false.into());
+    props.set("expand view", false.into());
     props.set(
         "graph",
         Property {
             prop: Proptype::OpticGraph(OpticGraph::default()),
         },
     );
-    props.set(
-        "input port map",
-        Property {
-            prop: Proptype::String(("input port map").into()),
-        },
-    );
-    props.set(
-        "output port map",
-        Property {
-            prop: Proptype::String(("output port map").into()),
-        },
-    );
+    props.set("input port map", "input port map".into());
+    props.set("output port map", "output port map".into());
     props
 }
 

@@ -1,5 +1,6 @@
 use std::fs::{self, File};
 use std::io::Write;
+use std::path::Path;
 
 use clap::Parser;
 use opossum::{
@@ -20,22 +21,26 @@ fn main() {
         std::process::exit(1);
     }
 }
-
-fn do_it() -> Result<()> {
-    let opossum_args = Args::try_from(PartialArgs::parse())?;
-
+fn read_and_parse_model(path: &Path) -> Result<OpticScenery> {
     print!("\nReading model...");
-    let contents = fs::read_to_string(&opossum_args.file_path).map_err(|e| {
+    let contents = fs::read_to_string(&path).map_err(|e| {
         OpossumError::Console(format!(
             "cannot read file {} : {}",
-            opossum_args.file_path.display(),
+            path.display(),
             e
         ))
     })?;
-    let mut scenery: OpticScenery = serde_json::from_str(&contents).map_err(|e| {
+    let scenery: OpticScenery = serde_json::from_str(&contents).map_err(|e| {
         OpossumError::OpticScenery(format!("error while parsing model file: {}", e))
     })?;
     println!("Success");
+    Ok(scenery)
+}
+
+fn do_it() -> Result<()> {
+    let opossum_args = Args::try_from(PartialArgs::parse())?;
+    let mut scenery=read_and_parse_model(&opossum_args.file_path)?;
+    
     let mut dot_path = opossum_args.report_directory.clone();
     dot_path.push(opossum_args.file_path.file_stem().unwrap());
     dot_path.set_extension("dot");

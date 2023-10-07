@@ -3,6 +3,8 @@ use serde_derive::Serialize;
 use crate::error::OpossumError;
 use std::{collections::HashSet, fmt::Display};
 
+type Result<T> = std::result::Result<T, OpossumError>;
+
 /// Structure defining the optical ports (input / output terminals) of an [`Optical`](crate::optical::Optical).
 #[derive(Default, Debug, Clone, Serialize)]
 pub struct OpticPorts {
@@ -29,7 +31,7 @@ impl OpticPorts {
             self.outputs.clone().into_iter().collect::<Vec<String>>()
         }
     }
-    pub fn add_input(&mut self, name: &str) -> Result<Vec<String>, OpossumError> {
+    pub fn add_input(&mut self, name: &str) -> Result<Vec<String>> {
         if self.inputs.insert(name.into()) {
             Ok(self.inputs())
         } else {
@@ -39,7 +41,7 @@ impl OpticPorts {
             )))
         }
     }
-    pub fn add_output(&mut self, name: &str) -> Result<Vec<String>, OpossumError> {
+    pub fn add_output(&mut self, name: &str) -> Result<Vec<String>> {
         if self.outputs.insert(name.into()) {
             Ok(self.outputs())
         } else {
@@ -53,35 +55,6 @@ impl OpticPorts {
     pub fn check_if_port_exists(&self, port_name: &str) -> bool {
         self.inputs.contains(port_name) || self.outputs.contains(port_name)
     }
-
-    // pub fn get_port(&self, port_name: &str, input_flag: bool)-> Result<String, OpossumError>{
-    //     if input_flag & self.inputs.contains(port_name){
-    //         Ok(self.inputs.get(port_name).unwrap().to_owned())
-    //     }
-    //     else if !input_flag & self.outputs.contains(port_name){
-    //         Ok(self.outputs.get(port_name).unwrap().to_owned())
-    //     }
-    //     else{
-    //         Err(OpossumError::OpticPort(format!(
-    //             "a port with name {} does not exist",
-    //             port_name
-    //         )))
-    //     }
-    // }
-
-    // pub fn set_port(&mut self, target_port: &str, src_node: &OpticNode, src_port: &str, input_flag: bool) -> Result<Vec<String>, OpossumError>{
-    //     let port = src_node.name().to_owned() + src_port;
-
-    //     if input_flag {
-    //         self.inputs.remove(target_port);
-    //         self.add_input(&port)?;
-    //         Ok(self.outputs())
-    //     } else {
-    //         self.outputs.remove(target_port);
-    //         self.add_output(&port)?;
-    //         Ok(self.outputs())
-    //     }
-    // }
 
     pub fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;

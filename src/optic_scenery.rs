@@ -50,12 +50,7 @@ pub struct OpticScenery {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set(
-        "description",
-        Property {
-            prop: Proptype::String("".into()),
-        },
-    );
+    props.set("description", "".into());
     props
 }
 
@@ -220,7 +215,7 @@ impl OpticScenery {
     }
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
-        let mut dot_string = "digraph {\n\tfontsize = 8\n".to_owned();
+        let mut dot_string = String::from("digraph {\n\tfontsize = 8\n");
         dot_string.push_str("\tcompound = true;\n");
         dot_string.push_str(&format!("\trankdir = \"{}\";\n", rankdir));
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description()));
@@ -252,7 +247,7 @@ impl OpticScenery {
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> Result<()> {
         let sorted = toposort(&self.g.0, None)
-            .map_err(|_| OpossumError::OpticScenery("Analyis: topological sort failed".into()))?;
+            .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
         for idx in sorted {
             let node = self.g.0.node_weight(idx).unwrap();
             let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);

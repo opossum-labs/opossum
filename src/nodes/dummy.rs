@@ -28,18 +28,8 @@ pub struct Dummy {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set(
-        "name",
-        Property {
-            prop: Proptype::String("dummy".into()),
-        },
-    );
-    props.set(
-        "inverted",
-        Property {
-            prop: Proptype::Bool(false),
-        },
-    );
+    props.set("name", "dummy".into());
+    props.set("inverted", false.into());
     props
 }
 
@@ -54,23 +44,13 @@ impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
     pub fn new(name: &str) -> Self {
         let mut props = create_default_props();
-        props.set(
-            "name",
-            Property {
-                prop: Proptype::String(name.into()),
-            },
-        );
+        props.set("name", name.into());
         Self { props }
     }
 }
 impl Optical for Dummy {
     fn set_name(&mut self, name: &str) {
-        self.props.set(
-            "name",
-            Property {
-                prop: Proptype::String(name.into()),
-            },
-        );
+        self.props.set("name", name.into());
     }
     fn name(&self) -> &str {
         if let Some(value) = self.props.get("name") {
@@ -78,7 +58,7 @@ impl Optical for Dummy {
                 return name;
             }
         }
-        panic!("wonrg format");
+        panic!("wrong format");
     }
     /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {
@@ -134,7 +114,10 @@ impl Dottable for Dummy {}
 
 #[cfg(test)]
 mod test {
-    use crate::{lightdata::{DataEnergy, LightData}, spectrum::create_he_ne_spectrum};
+    use crate::{
+        lightdata::{DataEnergy, LightData},
+        spectrum::create_he_ne_spectrum,
+    };
 
     use super::*;
     #[test]
@@ -174,47 +157,53 @@ mod test {
     #[test]
     fn analyze_ok() {
         let mut dummy = Dummy::default();
-        let mut input=LightResult::default();
-        let input_light=LightData::Energy(DataEnergy{spectrum:create_he_ne_spectrum(1.0)});
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
         input.insert("front".into(), Some(input_light.clone()));
-        let output=dummy.analyze(input, &AnalyzerType::Energy);
+        let output = dummy.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
-        let output=output.unwrap();
+        let output = output.unwrap();
         assert!(output.contains_key("rear".into()));
-        assert_eq!(output.len(),1);
-        let output=output.get("rear".into()).unwrap();
+        assert_eq!(output.len(), 1);
+        let output = output.get("rear".into()).unwrap();
         assert!(output.is_some());
-        let output=output.clone().unwrap();
+        let output = output.clone().unwrap();
         assert_eq!(output, input_light);
     }
     #[test]
     fn analyze_wrong() {
         let mut dummy = Dummy::default();
-        let mut input=LightResult::default();
-        let input_light=LightData::Energy(DataEnergy{spectrum:create_he_ne_spectrum(1.0)});
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
         input.insert("rear".into(), Some(input_light.clone()));
-        let output=dummy.analyze(input, &AnalyzerType::Energy);
+        let output = dummy.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
-        let output=output.unwrap();
-        let output=output.get("rear".into()).unwrap();
+        let output = output.unwrap();
+        let output = output.get("rear".into()).unwrap();
         assert!(output.is_none());
     }
     #[test]
     fn analyze_inverse() {
         let mut dummy = Dummy::default();
         dummy.set_property("inverted", true.into()).unwrap();
-        let mut input=LightResult::default();
-        let input_light=LightData::Energy(DataEnergy{spectrum:create_he_ne_spectrum(1.0)});
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
         input.insert("rear".into(), Some(input_light.clone()));
 
-        let output=dummy.analyze(input, &AnalyzerType::Energy);
+        let output = dummy.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
-        let output=output.unwrap();
+        let output = output.unwrap();
         assert!(output.contains_key("front".into()));
-        assert_eq!(output.len(),1);
-        let output=output.get("front".into()).unwrap();
+        assert_eq!(output.len(), 1);
+        let output = output.get("front".into()).unwrap();
         assert!(output.is_some());
-        let output=output.clone().unwrap();
+        let output = output.clone().unwrap();
         assert_eq!(output, input_light);
     }
 }

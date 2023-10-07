@@ -30,24 +30,9 @@ pub struct BeamSplitter {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set(
-        "name",
-        Property {
-            prop: Proptype::String("beam splitter".into()),
-        },
-    );
-    props.set(
-        "ratio",
-        Property {
-            prop: Proptype::F64(0.5),
-        },
-    );
-    props.set(
-        "inverted",
-        Property {
-            prop: Proptype::Bool(false),
-        },
-    );
+    props.set("name", "beam splitter".into());
+    props.set("ratio", 0.5.into());
+    props.set("inverted", false.into());
     props
 }
 impl BeamSplitter {
@@ -59,12 +44,7 @@ impl BeamSplitter {
     pub fn new(ratio: f64) -> Result<Self> {
         if (0.0..=1.0).contains(&ratio) {
             let mut props = create_default_props();
-            props.set(
-                "ratio",
-                Property {
-                    prop: Proptype::F64(ratio),
-                },
-            );
+            props.set("ratio", ratio.into());
             Ok(Self { props })
         } else {
             Err(OpossumError::Other(
@@ -90,12 +70,7 @@ impl BeamSplitter {
     /// [0.0..1.0].
     pub fn set_ratio(&mut self, ratio: f64) -> Result<()> {
         if (0.0..=1.0).contains(&ratio) {
-            self.props.set(
-                "ratio",
-                Property {
-                    prop: Proptype::F64(ratio),
-                },
-            );
+            self.props.set("ratio", ratio.into());
             Ok(())
         } else {
             Err(OpossumError::Other(

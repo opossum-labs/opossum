@@ -44,18 +44,8 @@ pub struct EnergyMeter {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set(
-        "name",
-        Property {
-            prop: Proptype::String("energy meter".into()),
-        },
-    );
-    props.set(
-        "inverted",
-        Property {
-            prop: Proptype::Bool(false),
-        },
-    );
+    props.set("name", "energy meter".into());
+    props.set("inverted", false.into());
     props
 }
 
@@ -72,12 +62,7 @@ impl EnergyMeter {
     /// Creates a new [`EnergyMeter`] of the given [`Metertype`].
     pub fn new(name: &str, meter_type: Metertype) -> Self {
         let mut props = create_default_props();
-        props.set(
-            "name",
-            Property {
-                prop: Proptype::String(name.into()),
-            },
-        );
+        props.set("name", name.into());
         EnergyMeter {
             light_data: None,
             meter_type,
@@ -95,12 +80,7 @@ impl EnergyMeter {
 }
 impl Optical for EnergyMeter {
     fn set_name(&mut self, name: &str) {
-        self.props.set(
-            "name",
-            Property {
-                prop: Proptype::String(name.into()),
-            },
-        );
+        self.props.set("name", name.into());
     }
     fn name(&self) -> &str {
         if let Some(value) = self.props.get("name") {
@@ -108,7 +88,7 @@ impl Optical for EnergyMeter {
                 return name;
             }
         }
-        panic!("wonrg format");
+        panic!("wrong format");
     }
     fn node_type(&self) -> &str {
         "energy meter"

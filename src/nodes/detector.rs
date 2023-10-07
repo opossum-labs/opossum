@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 use crate::lightdata::LightData;
-use crate::properties::{Properties, Property, Proptype};
+use crate::properties::{Properties, Property};
 use crate::{
     dottable::Dottable,
     error::OpossumError,
@@ -31,12 +31,7 @@ pub struct Detector {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set(
-        "name",
-        Property {
-            prop: Proptype::String("detector".into()),
-        },
-    );
+    props.set("name", "detector".into());
     props
 }
 impl Default for Detector {
