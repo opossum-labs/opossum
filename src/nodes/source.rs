@@ -27,12 +27,7 @@ pub struct Source {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set(
-        "name",
-        Property {
-            prop: Proptype::String("source".into()),
-        },
-    );
+    props.set("name", "source".into());
     props.set(
         "light data",
         Property {
@@ -66,12 +61,7 @@ impl Source {
     /// ```
     pub fn new(name: &str, light: LightData) -> Self {
         let mut props = create_default_props();
-        props.set(
-            "name",
-            Property {
-                prop: Proptype::String(name.into()),
-            },
-        );
+        props.set("name", name.into());
         props.set(
             "light data",
             Property {

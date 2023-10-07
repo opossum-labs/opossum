@@ -23,7 +23,7 @@ fn main() {
 }
 fn read_and_parse_model(path: &Path) -> Result<OpticScenery> {
     print!("\nReading model...");
-    let contents = fs::read_to_string(&path).map_err(|e| {
+    let contents = fs::read_to_string(path).map_err(|e| {
         OpossumError::Console(format!(
             "cannot read file {} : {}",
             path.display(),
