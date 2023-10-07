@@ -27,7 +27,6 @@ pub enum SpectrometerType {
     /// Ocean Optics HR2000
     HR2000,
 }
-#[derive(Default)]
 /// (ideal) spectrometer
 ///
 /// It normally measures / displays the spectrum of the incoming light.
@@ -45,13 +44,29 @@ pub struct Spectrometer {
     spectrometer_type: SpectrometerType,
     props: Properties,
 }
+
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set("name", "spectrometer".into());
+    props
+}
+
+impl Default for Spectrometer {
+    fn default() -> Self {
+        Self {
+            light_data: Default::default(),
+            spectrometer_type: Default::default(),
+            props: create_default_props(),
+        }
+    }
+}
 impl Spectrometer {
     /// Creates a new [`Spectrometer`] of the given [`SpectrometerType`].
     pub fn new(spectrometer_type: SpectrometerType) -> Self {
         Spectrometer {
             light_data: None,
             spectrometer_type,
-            props: Properties::default(),
+            props: create_default_props(),
         }
     }
     /// Returns the meter type of this [`Spectrometer`].

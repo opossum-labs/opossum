@@ -24,11 +24,7 @@ fn main() {
 fn read_and_parse_model(path: &Path) -> Result<OpticScenery> {
     print!("\nReading model...");
     let contents = fs::read_to_string(path).map_err(|e| {
-        OpossumError::Console(format!(
-            "cannot read file {} : {}",
-            path.display(),
-            e
-        ))
+        OpossumError::Console(format!("cannot read file {} : {}", path.display(), e))
     })?;
     let scenery: OpticScenery = serde_json::from_str(&contents).map_err(|e| {
         OpossumError::OpticScenery(format!("error while parsing model file: {}", e))
@@ -39,8 +35,8 @@ fn read_and_parse_model(path: &Path) -> Result<OpticScenery> {
 
 fn do_it() -> Result<()> {
     let opossum_args = Args::try_from(PartialArgs::parse())?;
-    let mut scenery=read_and_parse_model(&opossum_args.file_path)?;
-    
+    let mut scenery = read_and_parse_model(&opossum_args.file_path)?;
+
     let mut dot_path = opossum_args.report_directory.clone();
     dot_path.push(opossum_args.file_path.file_stem().unwrap());
     dot_path.set_extension("dot");

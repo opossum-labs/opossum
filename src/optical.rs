@@ -67,11 +67,11 @@ pub trait Optical: Dottable {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
     /// Return the properties of this [`Optical`].
-    /// 
+    ///
     /// Return all properties of an optical node. Note, that some properties might be read-only.
     fn properties(&self) -> &Properties;
     /// Set a property of this [`Optical`].
-    /// 
+    ///
     /// Set a property of an optical node. This property must already exist (e.g. defined in new() / default() functions of the node).
     ///
     /// # Errors
@@ -89,7 +89,7 @@ pub trait Optical: Dottable {
         Ok(())
     }
     /// Return a JSON representation of the current state of this [`Optical`].
-    /// 
+    ///
     /// This function must be overridden for generating output in the analysis report. Mainly detector nodes use this feature.
     /// The default implementation is to return a JSON `null` value.
     fn report(&self) -> serde_json::Value {
