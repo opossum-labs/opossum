@@ -67,7 +67,7 @@ impl Spectrometer {
         props.set("spectrometer type", spectrometer_type.into());
         Spectrometer {
             light_data: None,
-            props: props,
+            props,
         }
     }
     /// Returns the meter type of this [`Spectrometer`].
