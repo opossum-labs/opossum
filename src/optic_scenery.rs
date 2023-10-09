@@ -130,7 +130,7 @@ impl OpticScenery {
                 src_port
             )));
         }
-        if self.target_node_port_exists(src_node, src_port) {
+        if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "target node with given port {} is already connected",
                 target_port
@@ -386,6 +386,15 @@ mod test {
         assert!(scenery
             .connect_nodes(NodeIndex::new(5), "rear", n2, "front")
             .is_err());
+    }
+    #[test]
+    fn connect_nodes_target_already_connected() {
+        let mut scenery = OpticScenery::new();
+        let n1 = scenery.add_node(Dummy::new("Test"));
+        let n2 = scenery.add_node(Dummy::new("Test"));
+        let n3 = scenery.add_node(Dummy::new("Test"));
+        assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
+        assert!(scenery.connect_nodes(n3, "rear", n2, "front").is_err());
     }
     #[test]
     fn connect_nodes_loop_error() {
