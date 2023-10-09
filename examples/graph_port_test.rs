@@ -22,8 +22,6 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(m1, "rear", bs2, "input1")?;
     scenery.connect_nodes(m2, "rear", bs2, "input2")?;
     scenery.connect_nodes(bs2, "out1_trans1_refl2", out1, "front")?;
-    scenery.connect_nodes(bs2, "out2_trans2_refl1", out1, "front")?;
-
     scenery.save_to_file(Path::new("graph_w_ports.opm"))?;
     Ok(())
 }
