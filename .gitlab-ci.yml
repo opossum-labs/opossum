@@ -56,6 +56,8 @@ test_windows:
 #    - cargo install junitify
     # junitify does not find some files under windows ???
     - cargo test # -- --format=json -Z unstable-options --report-time | junitify --out $CI_PROJECT_DIR\tests\
+  rules:
+  - if: '$CI_COMMIT_REF_PROTECTED == "true"'
 #  artifacts:
 #    when: always
 #    reports:
@@ -73,6 +75,8 @@ clippy:
     - cargo clean
   dependencies:
     - test_windows
+  rules:
+    - if: '$CI_COMMIT_REF_PROTECTED == "true"'
 
 # Build the main application (currently mostly useless)
 build-windows:
@@ -86,6 +90,9 @@ build-windows:
     - cargo build --release
   dependencies:
     - test_windows
+  rules:
+    - if: '$CI_COMMIT_REF_PROTECTED == "true"'
+
 
 # Build the main application for linux
 #build-linux:
@@ -111,9 +118,10 @@ build-doc:
     - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
     - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - cargo doc --no-deps
-
   dependencies:
     - test_windows
+  rules:
+  - if: '$CI_COMMIT_REF_PROTECTED == "true"'
 
 #deploy:
 #  stage: deploy
