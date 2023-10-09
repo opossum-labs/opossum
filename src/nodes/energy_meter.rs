@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+use serde_derive::{Deserialize, Serialize};
 use serde_json::{json, Number};
 
 use crate::dottable::Dottable;
@@ -15,7 +16,7 @@ use std::fmt::Debug;
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[non_exhaustive]
-#[derive(Debug, Default, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Clone, Copy, Serialize, Deserialize)]
 /// Type of the [`EnergyMeter`]. This is currently not used.
 pub enum Metertype {
     /// an ideal energy meter
@@ -38,7 +39,7 @@ pub enum Metertype {
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct EnergyMeter {
     light_data: Option<LightData>,
-    meter_type: Metertype,
+    //meter_type: Metertype,
     props: Properties,
 }
 
@@ -46,6 +47,7 @@ fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props.set("name", "energy meter".into());
     props.set("inverted", false.into());
+    props.set("meter type", Metertype::default().into());
     props
 }
 
@@ -53,7 +55,7 @@ impl Default for EnergyMeter {
     fn default() -> Self {
         Self {
             light_data: Default::default(),
-            meter_type: Default::default(),
+            //meter_type: Default::default(),
             props: create_default_props(),
         }
     }
@@ -63,19 +65,24 @@ impl EnergyMeter {
     pub fn new(name: &str, meter_type: Metertype) -> Self {
         let mut props = create_default_props();
         props.set("name", name.into());
+        props.set("meter type", meter_type.into());
         EnergyMeter {
             light_data: None,
-            meter_type,
             props,
         }
     }
     /// Returns the meter type of this [`EnergyMeter`].
     pub fn meter_type(&self) -> Metertype {
-        self.meter_type
+        let meter_type=self.props.get("meter type").unwrap().prop.clone();
+        if let Proptype::Metertype(meter_type)=meter_type {
+            meter_type
+        } else {
+            panic!("wrong data format")
+        }
     }
     /// Sets the meter type of this [`EnergyMeter`].
     pub fn set_meter_type(&mut self, meter_type: Metertype) {
-        self.meter_type = meter_type;
+        self.props.set("meter type", meter_type.into());
     }
 }
 impl Optical for EnergyMeter {
@@ -140,7 +147,7 @@ impl Optical for EnergyMeter {
 impl Debug for EnergyMeter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
-            Some(data) => write!(f, "{} (Type: {:?})", data, self.meter_type),
+            Some(data) => write!(f, "{} (Type: {:?})", data, self.meter_type()),
             None => write!(f, "no data"),
         }
     }
@@ -160,13 +167,13 @@ mod test {
     fn new() {
         let meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
         assert!(meter.light_data.is_none());
-        assert_eq!(meter.meter_type, Metertype::IdealEnergyMeter);
+        assert_eq!(meter.meter_type(), Metertype::IdealEnergyMeter);
     }
     #[test]
     fn default() {
         let meter = EnergyMeter::default();
         assert!(meter.light_data.is_none());
-        assert_eq!(meter.meter_type, Metertype::IdealEnergyMeter);
+        assert_eq!(meter.meter_type(), Metertype::IdealEnergyMeter);
         assert_eq!(meter.node_type(), "energy meter");
         assert_eq!(meter.is_detector(), true);
         assert_eq!(meter.node_color(), "whitesmoke");
@@ -181,7 +188,7 @@ mod test {
     fn set_meter_type() {
         let mut meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
         meter.set_meter_type(Metertype::IdealPowerMeter);
-        assert_eq!(meter.meter_type, Metertype::IdealPowerMeter);
+        assert_eq!(meter.meter_type(), Metertype::IdealPowerMeter);
     }
     #[test]
     fn ports() {

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::{
     error::OpossumError,
     lightdata::LightData,
-    nodes::{FilterType, SpectrometerType},
+    nodes::{FilterType, SpectrometerType, Metertype},
     optical::OpticGraph,
 };
 
@@ -96,6 +96,13 @@ impl From<SpectrometerType> for Property {
         }
     }
 }
+impl From<Metertype> for Property {
+    fn from(value: Metertype) -> Self {
+        Property {
+            prop: Proptype::Metertype(value),
+        }
+    }
+}
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Proptype {
@@ -107,4 +114,5 @@ pub enum Proptype {
     OpticGraph(OpticGraph),
     FilterType(FilterType),
     SpectrometerType(SpectrometerType),
+    Metertype(Metertype)
 }
