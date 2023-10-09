@@ -1,21 +1,20 @@
 #![warn(missing_docs)]
 //! Module for handling optical spectra
-use crate::error::OpossumError;
+use crate::error::{OpmResult, OpossumError};
 use csv::ReaderBuilder;
 use ndarray::Array1;
 use ndarray_stats::QuantileExt;
+use plotters::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
+use std::fs::File;
 use std::ops::Range;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
 use uom::si::length::meter;
 use uom::si::{f64::Length, length::nanometer};
-type Result<T> = std::result::Result<T, OpossumError>;
-use plotters::prelude::*;
-use std::fs::File;
 
 /// Structure for handling spectral data.
 ///
@@ -34,7 +33,7 @@ impl Spectrum {
     ///   - the wavelength range is not in ascending order
     ///   - the wavelength limits are not both positive
     ///   - the resolution is not positive
-    pub fn new(range: Range<Length>, resolution: Length) -> Result<Self> {
+    pub fn new(range: Range<Length>, resolution: Length) -> OpmResult<Self> {
         if resolution <= Length::zero() {
             return Err(OpossumError::Spectrum("resolution must be positive".into()));
         }
@@ -73,7 +72,7 @@ impl Spectrum {
     ///   - the file path is not found or could not be read.
     ///   - the file is empty.
     ///   - the file could not be parsed.
-    pub fn from_csv(path: &str) -> Result<Self> {
+    pub fn from_csv(path: &str) -> OpmResult<Self> {
         let file = File::open(path).map_err(|e| OpossumError::Spectrum(e.to_string()))?;
         let mut reader = ReaderBuilder::new()
             .has_headers(false)
@@ -127,7 +126,7 @@ impl Spectrum {
     /// This function will return an [`OpossumError::Spectrum`] if
     ///   - the wavelength i s outside the spectrum range
     ///   - the energy is negative
-    pub fn add_single_peak(&mut self, wavelength: Length, value: f64) -> Result<()> {
+    pub fn add_single_peak(&mut self, wavelength: Length, value: f64) -> OpmResult<()> {
         let spectrum_range = self.data.first().unwrap().0..self.data.last().unwrap().0;
         if !spectrum_range.contains(&wavelength.get::<meter>()) {
             return Err(OpossumError::Spectrum(
@@ -174,7 +173,7 @@ impl Spectrum {
         center: Length,
         width: Length,
         energy: f64,
-    ) -> Result<()> {
+    ) -> OpmResult<()> {
         if center.is_sign_negative() {
             return Err(OpossumError::Spectrum(
                 "center wavelength must be positive".into(),
@@ -219,7 +218,7 @@ impl Spectrum {
     /// # Errors
     ///
     /// This function will return an [`OpossumError::Spectrum`] if the scaling factor is < 0.0.
-    pub fn scale_vertical(&mut self, factor: f64) -> Result<()> {
+    pub fn scale_vertical(&mut self, factor: f64) -> OpmResult<()> {
         if factor < 0.0 {
             return Err(OpossumError::Spectrum(
                 "scaling factor mus be >= 0.0".into(),

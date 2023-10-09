@@ -1,9 +1,7 @@
 use serde_derive::Serialize;
 
-use crate::error::OpossumError;
+use crate::error::{OpmResult, OpossumError};
 use std::{collections::HashSet, fmt::Display};
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 /// Structure defining the optical ports (input / output terminals) of an [`Optical`](crate::optical::Optical).
 #[derive(Default, Debug, Clone, Serialize)]
@@ -31,7 +29,7 @@ impl OpticPorts {
             self.outputs.clone().into_iter().collect::<Vec<String>>()
         }
     }
-    pub fn add_input(&mut self, name: &str) -> Result<Vec<String>> {
+    pub fn add_input(&mut self, name: &str) -> OpmResult<Vec<String>> {
         if self.inputs.insert(name.into()) {
             Ok(self.inputs())
         } else {
@@ -41,7 +39,7 @@ impl OpticPorts {
             )))
         }
     }
-    pub fn add_output(&mut self, name: &str) -> Result<Vec<String>> {
+    pub fn add_output(&mut self, name: &str) -> OpmResult<Vec<String>> {
         if self.outputs.insert(name.into()) {
             Ok(self.outputs())
         } else {

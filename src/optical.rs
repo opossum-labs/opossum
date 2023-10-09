@@ -1,6 +1,6 @@
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
-use crate::error::OpossumError;
+use crate::error::{OpmResult, OpossumError};
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::{create_node_ref, NodeGroup};
@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 pub type LightResult = HashMap<String, Option<LightData>>;
-type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait Optical: Dottable {
@@ -46,7 +45,7 @@ pub trait Optical: Dottable {
         &mut self,
         _incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
-    ) -> Result<LightResult> {
+    ) -> OpmResult<LightResult> {
         print!("{}: No analyze function defined.", self.node_type());
         Ok(LightResult::default())
     }
@@ -63,7 +62,7 @@ pub trait Optical: Dottable {
     fn inverted(&self) -> bool {
         false
     }
-    fn as_group(&self) -> Result<&NodeGroup> {
+    fn as_group(&self) -> OpmResult<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
     /// Return the properties of this [`Optical`].
@@ -77,8 +76,8 @@ pub trait Optical: Dottable {
     /// # Errors
     ///
     /// This function will return an error if a non-defined property is set or the property has the wrong data type.
-    fn set_property(&mut self, name: &str, property: Property) -> Result<()>;
-    fn set_properties(&mut self, properties: &Properties) -> Result<()> {
+    fn set_property(&mut self, name: &str, property: Property) -> OpmResult<()>;
+    fn set_properties(&mut self, properties: &Properties) -> OpmResult<()> {
         let own_properties = self.properties().props.clone();
 
         for prop in properties.props.iter() {

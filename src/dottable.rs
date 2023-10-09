@@ -1,7 +1,5 @@
-use crate::error::OpossumError;
+use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This trait deals with the translation of the OpticScenery-graph structure to the dot-file format which is needed to visualize the graphs
 pub trait Dottable {
@@ -14,7 +12,7 @@ pub trait Dottable {
         ports: &OpticPorts,
         mut parent_identifier: String,
         rankdir: &str,
-    ) -> Result<String> {
+    ) -> OpmResult<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
         parent_identifier = if parent_identifier.is_empty() {

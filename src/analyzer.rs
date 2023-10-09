@@ -1,10 +1,9 @@
 //! Optical Analyzers
 use std::fmt::Display;
 
-use crate::{error::OpossumError, optic_scenery::OpticScenery};
+use crate::{error::OpmResult, optic_scenery::OpticScenery};
 use strum::EnumIter;
 
-type Result<T> = std::result::Result<T, OpossumError>;
 #[derive(Debug)]
 pub struct AnalyzerEnergy {
     scene: OpticScenery,
@@ -16,7 +15,7 @@ impl AnalyzerEnergy {
             scene: (*scenery).to_owned(),
         }
     }
-    pub fn analyze(&mut self) -> Result<()> {
+    pub fn analyze(&mut self) -> OpmResult<()> {
         self.scene.analyze(&AnalyzerType::Energy)
     }
 }

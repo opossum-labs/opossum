@@ -6,7 +6,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use crate::analyzer::AnalyzerType;
-use crate::error::OpossumError;
+use crate::error::{OpmResult, OpossumError};
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
@@ -16,8 +16,6 @@ use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use serde_derive::{Deserialize, Serialize};
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 /// Overall optical model and additional metatdata.
 ///
@@ -84,7 +82,7 @@ impl OpticScenery {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
-    ) -> Result<()> {
+    ) -> OpmResult<()> {
         let source = self
             .g
             .0
@@ -169,7 +167,7 @@ impl OpticScenery {
     /// # Errors
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
-    pub fn node(&self, node: NodeIndex) -> Result<Rc<RefCell<dyn Optical>>> {
+    pub fn node(&self, node: NodeIndex) -> OpmResult<Rc<RefCell<dyn Optical>>> {
         if let Some(node) = self.g.0.node_weight(node) {
             Ok(node.0.clone())
         } else {
@@ -179,7 +177,7 @@ impl OpticScenery {
         }
     }
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
-    pub fn to_dot(&self, rankdir: &str) -> Result<String> {
+    pub fn to_dot(&self, rankdir: &str) -> OpmResult<String> {
         //check direction
         let rankdir = if rankdir != "LR" { "TB" } else { "LR" };
 
@@ -229,7 +227,7 @@ impl OpticScenery {
         end_node: NodeIndex,
         light_port: &str,
         mut parent_identifier: String,
-    ) -> Result<String> {
+    ) -> OpmResult<String> {
         let node = self.g.0.node_weight(end_node).unwrap().0.borrow();
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node.index())
@@ -245,7 +243,7 @@ impl OpticScenery {
         }
     }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
-    pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> Result<()> {
+    pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> OpmResult<()> {
         let sorted = toposort(&self.g.0, None)
             .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
         for idx in sorted {
@@ -327,7 +325,7 @@ impl OpticScenery {
         report.insert("detectors".into(), detector_json);
         serde_json::Value::Object(report)
     }
-    pub fn save_to_file(&self, path: &Path) -> Result<()> {
+    pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
         let serialized = serde_json::to_string_pretty(&self).map_err(|e| {
             OpossumError::OpticScenery(format!("deserialization of OpticScenery failed: {}", e))
         })?;

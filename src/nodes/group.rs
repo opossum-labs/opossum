@@ -42,12 +42,7 @@ fn create_default_props() -> Properties {
     props.set("name", "group".into());
     props.set("inverted", false.into());
     props.set("expand view", false.into());
-    props.set(
-        "graph",
-        Property {
-            prop: Proptype::OpticGraph(OpticGraph::default()),
-        },
-    );
+    props.set("graph", OpticGraph::default().into());
     props.set("input port map", PortMap::new().into());
     props.set("output port map", PortMap::new().into());
     props

@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Property};
 use crate::{
@@ -10,8 +11,6 @@ use crate::{
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This node represents an universal detector (so far for test / debugging purposes).
 ///
@@ -56,7 +55,7 @@ impl Optical for Detector {
         &mut self,
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
-    ) -> Result<LightResult> {
+    ) -> OpmResult<LightResult> {
         if let Some(data) = incoming_data.get("in1") {
             self.light_data = data.clone();
             Ok(HashMap::from([("out1".into(), data.clone())]))
@@ -77,7 +76,7 @@ impl Optical for Detector {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
         if self.props.set(name, prop).is_none() {
             Err(OpossumError::Other("property not defined".into()))
         } else {

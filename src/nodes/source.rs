@@ -4,14 +4,12 @@ use std::fmt::Debug;
 
 use crate::{
     dottable::Dottable,
-    error::OpossumError,
+    error::{OpmResult, OpossumError},
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Property, Proptype},
 };
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 /// This node represents a source of light.
 ///
@@ -118,7 +116,7 @@ impl Optical for Source {
         &mut self,
         _incoming_edges: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
-    ) -> Result<LightResult> {
+    ) -> OpmResult<LightResult> {
         let light_prop = self.props.get("light data").unwrap();
         let data = if let Proptype::LightData(data) = &light_prop.prop {
             data
@@ -134,7 +132,7 @@ impl Optical for Source {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
         if self.props.set(name, prop).is_none() {
             Err(OpossumError::Other("property not defined".into()))
         } else {

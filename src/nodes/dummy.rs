@@ -3,13 +3,11 @@ use serde_json::json;
 
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
-use crate::error::OpossumError;
+use crate::error::{OpmResult, OpossumError};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Property, Proptype};
 use std::collections::HashMap;
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Debug)]
 /// A fake / dummy component without any optical functionality.
@@ -78,7 +76,7 @@ impl Optical for Dummy {
         &mut self,
         incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
-    ) -> Result<LightResult> {
+    ) -> OpmResult<LightResult> {
         if !self.inverted() {
             if let Some(data) = incoming_data.get("front") {
                 Ok(HashMap::from([("rear".into(), data.clone())]))
@@ -97,7 +95,7 @@ impl Optical for Dummy {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
         if self.props.set(name, prop).is_none() {
             Err(OpossumError::Other("property not defined".into()))
         } else {

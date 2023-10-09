@@ -3,15 +3,13 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
-use crate::error::OpossumError;
+use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Property, Proptype};
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 /// Config data for an [`IdealFilter`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +53,7 @@ impl IdealFilter {
     ///
     /// This function will return an [`OpossumError::Other`] if the filter type is
     /// [`FilterType::Constant`] and the transmission factor is outside the interval [0.0; 1.0].
-    pub fn new(filter_type: FilterType) -> Result<Self> {
+    pub fn new(filter_type: FilterType) -> OpmResult<Self> {
         if let FilterType::Constant(transmission) = filter_type {
             if !(0.0..=1.0).contains(&transmission) {
                 return Err(OpossumError::Other(
@@ -82,7 +80,7 @@ impl IdealFilter {
     /// # Errors
     ///
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
-    pub fn set_transmission(&mut self, transmission: f64) -> Result<()> {
+    pub fn set_transmission(&mut self, transmission: f64) -> OpmResult<()> {
         if (0.0..=1.0).contains(&transmission) {
             self.props
                 .set("filter type", FilterType::Constant(transmission).into());
@@ -99,7 +97,7 @@ impl IdealFilter {
     /// # Errors
     ///
     /// This function will return an error if an optical density < 0.0 was given.
-    pub fn set_optical_density(&mut self, density: f64) -> Result<()> {
+    pub fn set_optical_density(&mut self, density: f64) -> OpmResult<()> {
         if density >= 0.0 {
             self.props.set(
                 "filter type",
@@ -119,7 +117,7 @@ impl IdealFilter {
             _ => None,
         }
     }
-    fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
+    fn analyze_energy(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let input = incoming_data.get("front");
         if let Some(Some(input)) = input {
             match input {
@@ -162,7 +160,7 @@ impl Optical for IdealFilter {
         &mut self,
         incoming_data: crate::optical::LightResult,
         analyzer_type: &crate::analyzer::AnalyzerType,
-    ) -> Result<crate::optical::LightResult> {
+    ) -> OpmResult<crate::optical::LightResult> {
         match analyzer_type {
             AnalyzerType::Energy => self.analyze_energy(incoming_data),
             _ => Err(OpossumError::Analysis(
@@ -173,7 +171,7 @@ impl Optical for IdealFilter {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
         if self.props.set(name, prop).is_none() {
             Err(OpossumError::Other("property not defined".into()))
         } else {

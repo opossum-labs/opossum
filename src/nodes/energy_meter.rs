@@ -3,6 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::{json, Number};
 
 use crate::dottable::Dottable;
+use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Property, Proptype};
 use crate::{
@@ -12,8 +13,6 @@ use crate::{
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 #[non_exhaustive]
 #[derive(Debug, Default, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -73,8 +72,8 @@ impl EnergyMeter {
     }
     /// Returns the meter type of this [`EnergyMeter`].
     pub fn meter_type(&self) -> Metertype {
-        let meter_type=self.props.get("meter type").unwrap().prop.clone();
-        if let Proptype::Metertype(meter_type)=meter_type {
+        let meter_type = self.props.get("meter type").unwrap().prop.clone();
+        if let Proptype::Metertype(meter_type) = meter_type {
             meter_type
         } else {
             panic!("wrong data format")
@@ -110,7 +109,7 @@ impl Optical for EnergyMeter {
         &mut self,
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
-    ) -> Result<LightResult> {
+    ) -> OpmResult<LightResult> {
         if let Some(data) = incoming_data.get("in1") {
             self.light_data = data.clone();
             Ok(HashMap::from([("out1".into(), data.clone())]))
@@ -124,7 +123,7 @@ impl Optical for EnergyMeter {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
         if self.props.set(name, prop).is_none() {
             Err(OpossumError::Other("property not defined".into()))
         } else {

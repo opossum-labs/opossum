@@ -4,15 +4,13 @@ use std::collections::HashMap;
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
-    error::OpossumError,
+    error::{OpmResult, OpossumError},
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Property, Proptype},
     spectrum::{merge_spectra, Spectrum},
 };
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Debug)]
 /// An ideal beamsplitter node with a given splitting ratio.
@@ -41,7 +39,7 @@ impl BeamSplitter {
     /// ## Errors
     /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
     /// [0.0..1.0].
-    pub fn new(ratio: f64) -> Result<Self> {
+    pub fn new(ratio: f64) -> OpmResult<Self> {
         if (0.0..=1.0).contains(&ratio) {
             let mut props = create_default_props();
             props.set("ratio", ratio.into());
@@ -68,7 +66,7 @@ impl BeamSplitter {
     /// ## Errors
     /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
     /// [0.0..1.0].
-    pub fn set_ratio(&mut self, ratio: f64) -> Result<()> {
+    pub fn set_ratio(&mut self, ratio: f64) -> OpmResult<()> {
         if (0.0..=1.0).contains(&ratio) {
             self.props.set("ratio", ratio.into());
             Ok(())
@@ -78,7 +76,7 @@ impl BeamSplitter {
             ))
         }
     }
-    fn analyze_energy(&mut self, incoming_data: LightResult) -> Result<LightResult> {
+    fn analyze_energy(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (in1, in2) = if !self.inverted() {
             (incoming_data.get("input1"), incoming_data.get("input2"))
         } else {
@@ -181,7 +179,7 @@ impl Optical for BeamSplitter {
         &mut self,
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
-    ) -> Result<LightResult> {
+    ) -> OpmResult<LightResult> {
         match analyzer_type {
             AnalyzerType::Energy => self.analyze_energy(incoming_data),
             _ => Err(OpossumError::Analysis(
@@ -192,7 +190,7 @@ impl Optical for BeamSplitter {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
         if self.props.set(name, prop).is_none() {
             Err(OpossumError::Other("property not defined".into()))
         } else {

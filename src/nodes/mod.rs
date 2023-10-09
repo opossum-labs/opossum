@@ -29,8 +29,8 @@ pub use energy_meter::Metertype;
 pub use spectrometer::Spectrometer;
 pub use spectrometer::SpectrometerType;
 
-use crate::error::OpossumError;
 use crate::error::OpmResult;
+use crate::error::OpossumError;
 
 use crate::optical::OpticRef;
 

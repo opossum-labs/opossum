@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::{
     error::OpossumError,
     lightdata::LightData,
-    nodes::{FilterType, SpectrometerType, Metertype, PortMap},
+    nodes::{FilterType, Metertype, PortMap, SpectrometerType},
     optical::OpticGraph,
 };
 
@@ -82,6 +82,13 @@ impl From<i32> for Property {
         }
     }
 }
+impl From<OpticGraph> for Property {
+    fn from(value: OpticGraph) -> Self {
+        Property {
+            prop: Proptype::OpticGraph(value),
+        }
+    }
+}
 impl From<FilterType> for Property {
     fn from(value: FilterType) -> Self {
         Property {
@@ -122,5 +129,5 @@ pub enum Proptype {
     FilterType(FilterType),
     SpectrometerType(SpectrometerType),
     Metertype(Metertype),
-    GroupPortMap(PortMap)
+    GroupPortMap(PortMap),
 }

@@ -1,7 +1,7 @@
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
-    error::OpossumError,
+    error::{OpmResult, OpossumError},
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -9,7 +9,6 @@ use crate::{
 };
 use ndarray::{array, Array1};
 use uom::{si::f64::Length, si::length::meter};
-type Result<T> = std::result::Result<T, OpossumError>;
 
 pub struct IdealLens;
 
@@ -84,7 +83,7 @@ impl RealLens {
         self.refractive_index = refractive_index;
     }
 
-    fn analyze_ray_trace(&mut self, incoming_data: LightResult) -> Result<LightResult> {
+    fn analyze_ray_trace(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let _in1: Option<&Option<LightData>> = incoming_data.get("in1");
         Ok(incoming_data)
 
@@ -153,7 +152,7 @@ impl Optical for RealLens {
         &mut self,
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
-    ) -> Result<LightResult> {
+    ) -> OpmResult<LightResult> {
         match analyzer_type {
             AnalyzerType::Energy => Err(OpossumError::Analysis(
                 "Energy Analysis is not yet implemented for Lens Nodes".into(),
@@ -164,7 +163,7 @@ impl Optical for RealLens {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
         if self.props.set(name, prop).is_none() {
             Err(OpossumError::Other("property not defined".into()))
         } else {

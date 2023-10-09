@@ -3,12 +3,10 @@ use std::rc::{Rc, Weak};
 
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
-use crate::error::OpossumError;
+use crate::error::{OpmResult, OpossumError};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Property};
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 #[derive(Debug, Default)]
 /// A virtual component referring to another existing component.
@@ -52,7 +50,7 @@ impl Optical for NodeReference {
         &mut self,
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
-    ) -> Result<LightResult> {
+    ) -> OpmResult<LightResult> {
         if let Some(rf) = &self.reference {
             rf.upgrade()
                 .unwrap()
@@ -67,7 +65,7 @@ impl Optical for NodeReference {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
         if self.props.set(name, prop).is_none() {
             Err(OpossumError::Other("property not defined".into()))
         } else {

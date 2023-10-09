@@ -1,12 +1,13 @@
-use crate::{analyzer::AnalyzerType, error::OpossumError};
+use crate::{
+    analyzer::AnalyzerType,
+    error::{OpmResult, OpossumError},
+};
 use chrono::DateTime;
 use clap::{builder::OsStr, Parser};
 use rprompt::prompt_reply;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 use strum::IntoEnumIterator;
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 /// Command line arguments for the OPOSSUM application.
 pub struct Args {
@@ -67,7 +68,7 @@ fn eval_report_directory_input(report_input: &str) -> Option<PathBuf> {
     }
 }
 
-fn create_prompt_str(flag: &str, init_str: &str) -> Result<String> {
+fn create_prompt_str(flag: &str, init_str: &str) -> OpmResult<String> {
     let mut prompt_str = init_str.to_owned();
     match flag{
         "f" =>{
@@ -93,7 +94,7 @@ fn get_analyzer_args(
     func: fn(&str) -> Option<AnalyzerType>,
     input: Option<String>,
     arg_flag: &str,
-) -> Result<AnalyzerType> {
+) -> OpmResult<AnalyzerType> {
     match input {
         Some(i) => {
             let arg = func(&i);
@@ -117,7 +118,7 @@ fn get_path_args(
     func: fn(&str) -> Option<PathBuf>,
     input: Option<&str>,
     arg_flag: &str,
-) -> Result<PathBuf> {
+) -> OpmResult<PathBuf> {
     match input {
         Some(i) => {
             let arg = func(i);
@@ -144,7 +145,7 @@ fn get_parent_dir(path: &Path) -> PathBuf {
 impl TryFrom<PartialArgs> for Args {
     type Error = OpossumError;
 
-    fn try_from(part_args: PartialArgs) -> Result<Args> {
+    fn try_from(part_args: PartialArgs) -> OpmResult<Args> {
         let file_path = get_path_args(eval_file_path_input, part_args.file_path.as_deref(), "f")?;
         println!("Path to optical-setup file: {}", file_path.display());
 

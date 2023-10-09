@@ -3,6 +3,7 @@ use std::io::Write;
 use std::path::Path;
 
 use clap::Parser;
+use opossum::error::OpmResult;
 use opossum::{
     OpticScenery,
     {
@@ -10,8 +11,6 @@ use opossum::{
         error::OpossumError,
     },
 };
-
-type Result<T> = std::result::Result<T, OpossumError>;
 
 fn main() {
     //not necessary, just for fun
@@ -21,7 +20,7 @@ fn main() {
         std::process::exit(1);
     }
 }
-fn read_and_parse_model(path: &Path) -> Result<OpticScenery> {
+fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
     print!("\nReading model...");
     let contents = fs::read_to_string(path).map_err(|e| {
         OpossumError::Console(format!("cannot read file {} : {}", path.display(), e))
@@ -33,7 +32,7 @@ fn read_and_parse_model(path: &Path) -> Result<OpticScenery> {
     Ok(scenery)
 }
 
-fn do_it() -> Result<()> {
+fn do_it() -> OpmResult<()> {
     let opossum_args = Args::try_from(PartialArgs::parse())?;
     let mut scenery = read_and_parse_model(&opossum_args.file_path)?;
 
