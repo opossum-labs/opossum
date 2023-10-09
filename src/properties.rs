@@ -1,7 +1,12 @@
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{error::OpossumError, lightdata::LightData, optical::OpticGraph, nodes::FilterType};
+use crate::{
+    error::OpossumError,
+    lightdata::LightData,
+    nodes::{FilterType, SpectrometerType},
+    optical::OpticGraph,
+};
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct Properties {
@@ -84,6 +89,13 @@ impl From<FilterType> for Property {
         }
     }
 }
+impl From<SpectrometerType> for Property {
+    fn from(value: SpectrometerType) -> Self {
+        Property {
+            prop: Proptype::SpectrometerType(value),
+        }
+    }
+}
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Proptype {
@@ -93,5 +105,6 @@ pub enum Proptype {
     Bool(bool),
     LightData(Option<LightData>),
     OpticGraph(OpticGraph),
-    FilterType(FilterType)
+    FilterType(FilterType),
+    SpectrometerType(SpectrometerType),
 }

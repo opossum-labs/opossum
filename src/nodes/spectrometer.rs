@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
-use serde_derive::Serialize;
+use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use uom::si::length::nanometer;
 
 use crate::dottable::Dottable;
 use crate::lightdata::LightData;
-use crate::properties::{Properties, Property};
+use crate::properties::{Properties, Property, Proptype};
 use crate::{
     error::OpossumError,
     optic_ports::OpticPorts,
@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 type Result<T> = std::result::Result<T, OpossumError>;
 
 #[non_exhaustive]
-#[derive(Debug, Default, PartialEq, Clone, Copy, Serialize)]
+#[derive(Debug, Default, PartialEq, Clone, Copy, Serialize, Deserialize)]
 /// Type of the [`Spectrometer`]. This is currently not used.
 pub enum SpectrometerType {
     /// an ideal energy meter
@@ -41,21 +41,21 @@ pub enum SpectrometerType {
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 pub struct Spectrometer {
     light_data: Option<LightData>,
-    spectrometer_type: SpectrometerType,
     props: Properties,
 }
-
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props.set("name", "spectrometer".into());
+    props.set(
+        "spectrometer type",
+        SpectrometerType::IdealSpectrometer.into(),
+    );
     props
 }
-
 impl Default for Spectrometer {
     fn default() -> Self {
         Self {
             light_data: Default::default(),
-            spectrometer_type: Default::default(),
             props: create_default_props(),
         }
     }
@@ -63,22 +63,31 @@ impl Default for Spectrometer {
 impl Spectrometer {
     /// Creates a new [`Spectrometer`] of the given [`SpectrometerType`].
     pub fn new(spectrometer_type: SpectrometerType) -> Self {
+        let mut props = create_default_props();
+        props.set("spectrometer type", spectrometer_type.into());
         Spectrometer {
             light_data: None,
-            spectrometer_type,
-            props: create_default_props(),
+            props: props,
         }
     }
     /// Returns the meter type of this [`Spectrometer`].
     pub fn spectrometer_type(&self) -> SpectrometerType {
-        self.spectrometer_type
+        let meter_type = self.props.get("spectrometer type").unwrap().prop.clone();
+        if let Proptype::SpectrometerType(meter_type) = meter_type {
+            meter_type
+        } else {
+            panic!("wrong data format")
+        }
     }
     /// Sets the meter type of this [`Spectrometer`].
     pub fn set_spectrometer_type(&mut self, meter_type: SpectrometerType) {
-        self.spectrometer_type = meter_type;
+        self.props.set("spectrometer type", meter_type.into());
     }
 }
 impl Optical for Spectrometer {
+    fn set_name(&mut self, name: &str) {
+        self.props.set("name", name.into());
+    }
     fn node_type(&self) -> &str {
         "spectrometer"
     }
@@ -143,7 +152,7 @@ impl Debug for Spectrometer {
                         "Spectrum {:.3} - {:.3} nm (Type: {:?})",
                         spectrum_range.start.get::<nanometer>(),
                         spectrum_range.end.get::<nanometer>(),
-                        self.spectrometer_type
+                        self.spectrometer_type()
                     )
                 }
                 _ => write!(f, "no spectrum data to display"),
@@ -167,13 +176,19 @@ mod test {
     fn new() {
         let meter = Spectrometer::new(SpectrometerType::IdealSpectrometer);
         assert!(meter.light_data.is_none());
-        assert_eq!(meter.spectrometer_type, SpectrometerType::IdealSpectrometer);
+        assert_eq!(
+            meter.spectrometer_type(),
+            SpectrometerType::IdealSpectrometer
+        );
     }
     #[test]
     fn default() {
         let meter = Spectrometer::default();
         assert!(meter.light_data.is_none());
-        assert_eq!(meter.spectrometer_type, SpectrometerType::IdealSpectrometer);
+        assert_eq!(
+            meter.spectrometer_type(),
+            SpectrometerType::IdealSpectrometer
+        );
         assert_eq!(meter.node_type(), "spectrometer");
         assert_eq!(meter.is_detector(), true);
         assert_eq!(meter.node_color(), "lightseagreen");
@@ -190,7 +205,7 @@ mod test {
     fn set_meter_type() {
         let mut meter = Spectrometer::new(SpectrometerType::IdealSpectrometer);
         meter.set_spectrometer_type(SpectrometerType::HR2000);
-        assert_eq!(meter.spectrometer_type, SpectrometerType::HR2000);
+        assert_eq!(meter.spectrometer_type(), SpectrometerType::HR2000);
     }
     #[test]
     fn ports() {
