@@ -6,7 +6,6 @@ use chrono::DateTime;
 use clap::{builder::OsStr, Parser};
 use rprompt::prompt_reply;
 use std::path::{Path, PathBuf};
-use structopt::StructOpt;
 use strum::IntoEnumIterator;
 
 /// Command line arguments for the OPOSSUM application.
@@ -21,7 +20,7 @@ pub struct Args {
     pub report_directory: PathBuf,
 }
 
-#[derive(Parser, StructOpt)]
+#[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct PartialArgs {
     /// filepath of the opticscenery to read in

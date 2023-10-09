@@ -27,8 +27,7 @@ csv="1"
 plotters="0"
 
 approx = "0" # assert macros for comparison of floats with tolerance
-clap = { version = "4.4", features = ["derive"] } # command line argument parser
-structopt = "0.3"
+clap = { version = "4", features = ["derive"] } # command line argument parser
 rprompt = "2.0"
 strum = { version = "0.25", features = ["derive"] }
 
