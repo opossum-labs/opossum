@@ -32,8 +32,6 @@ pub type PortMap = HashMap<String, (NodeIndex, String)>;
 ///     - defined by [`map_output_port`](NodeGroup::map_output_port()) function.
 pub struct NodeGroup {
     g: OpticGraph,
-    expand_view: bool,
-    output_port_map: PortMap,
     props: Properties,
 }
 
@@ -52,8 +50,6 @@ impl Default for NodeGroup {
     fn default() -> Self {
         Self {
             g: Default::default(),
-            expand_view: Default::default(),
-            output_port_map: Default::default(),
             props: create_default_props(),
         }
     }
@@ -62,12 +58,7 @@ impl NodeGroup {
     /// Creates a new [`NodeGroup`].
     pub fn new(name: &str) -> Self {
         let mut props = create_default_props();
-        props.set(
-            "name",
-            Property {
-                prop: Proptype::String(name.into()),
-            },
-        );
+        props.set("name", name.into());
         Self {
             props,
             ..Default::default()
@@ -79,12 +70,7 @@ impl NodeGroup {
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         let idx = self.g.0.add_node(OpticRef(Rc::new(RefCell::new(node))));
-        self.props.set(
-            "graph",
-            Property {
-                prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())),
-            },
-        );
+        self.props.set("graph", OpticGraph(self.g.0.clone()).into());
         idx
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
@@ -181,12 +167,14 @@ impl NodeGroup {
             in_map.remove(input.0);
             self.set_input_port_map(in_map);
         }
-        let out_map = self.output_port_map.clone();
+        let out_map = self.output_port_map();
         let invalid_mapping = out_map
             .iter()
             .find(|m| m.1 .0 == src_node && m.1 .1 == src_port);
+        let mut out_map = self.output_port_map();
         if let Some(input) = invalid_mapping {
-            self.output_port_map.remove(input.0);
+            out_map.remove(input.0);
+            self.set_output_port_map(out_map);
         }
         Ok(edge_index)
     }
@@ -200,6 +188,17 @@ impl NodeGroup {
     }
     fn set_input_port_map(&mut self, port_map: PortMap) {
         self.props.set("input port map", port_map.into());
+    }
+    fn output_port_map(&self) -> PortMap {
+        let output_port_map = self.props.get("output port map").unwrap().prop.clone();
+        if let Proptype::GroupPortMap(output_port_map) = output_port_map {
+            output_port_map
+        } else {
+            panic!("wrong data type")
+        }
+    }
+    fn set_output_port_map(&mut self, port_map: PortMap) {
+        self.props.set("output port map", port_map.into());
     }
     fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
         self.g
@@ -342,7 +341,7 @@ impl NodeGroup {
         internal_name: &str,
         external_name: &str,
     ) -> OpmResult<()> {
-        if self.output_port_map.contains_key(external_name) {
+        if self.output_port_map().contains_key(external_name) {
             return Err(OpossumError::OpticGroup(
                 "external output port name already assigned".into(),
             ));
@@ -380,10 +379,12 @@ impl NodeGroup {
                 "port of output node is already internally connected".into(),
             ));
         }
-        self.output_port_map.insert(
+        let mut out_map = self.output_port_map();
+        out_map.insert(
             external_name.to_string(),
             (output_node, internal_name.to_string()),
         );
+        self.set_output_port_map(out_map);
         Ok(())
     }
     fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
@@ -430,7 +431,7 @@ impl NodeGroup {
             let incoming_edges = if group_srcs.any(|gs| gs == idx) {
                 // get from incoming_data
                 let portmap = if is_inverted {
-                    self.output_port_map.clone()
+                    self.output_port_map()
                 } else {
                     self.input_port_map()
                 };
@@ -455,7 +456,7 @@ impl NodeGroup {
                 let portmap = if is_inverted {
                     self.input_port_map()
                 } else {
-                    self.output_port_map.clone()
+                    self.output_port_map()
                 };
                 let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
                 for port in assigned_ports {
@@ -480,7 +481,7 @@ impl NodeGroup {
     /// If true, the group expands and the internal nodes of this group are displayed in the dot format.
     /// If false, only the group node itself is displayed and the internal setup is not shown
     pub fn shall_expand(&self) -> bool {
-        self.expand_view
+        self.props.get_bool("expand view").unwrap().unwrap()
     }
 
     /// Defines and returns the node/port identifier to connect the edges in the dot format
@@ -505,8 +506,9 @@ impl NodeGroup {
                     port.0.index(),
                     port.1
                 ))
-            } else if self.output_port_map.contains_key(port_name) {
-                let port = self.output_port_map.get(port_name).unwrap();
+            } else if self.output_port_map().contains_key(port_name) {
+                let output_port_map = self.output_port_map();
+                let port = output_port_map.get(port_name).unwrap();
 
                 Ok(format!(
                     "{}_i{}:{}",
@@ -527,7 +529,7 @@ impl NodeGroup {
 
     /// returns the boolean which defines whether the group expands or not.
     pub fn expand_view(&mut self, expand_view: bool) {
-        self.expand_view = expand_view;
+        self.props.set("expand view", expand_view.into());
     }
     /// Creates the dot-format string which describes the edge that connects two nodes
     /// parameters:
@@ -692,7 +694,7 @@ impl Optical for NodeGroup {
         for p in self.input_port_map().iter() {
             ports.add_input(p.0).unwrap();
         }
-        for p in self.output_port_map.iter() {
+        for p in self.output_port_map().iter() {
             ports.add_output(p.0).unwrap();
         }
         ports
@@ -741,7 +743,7 @@ impl Dottable for NodeGroup {
         if self.props.get_bool("inverted").unwrap().unwrap() {
             cloned_self.invert_graph();
         }
-        if self.expand_view {
+        if self.shall_expand() {
             cloned_self.to_dot_expanded_view(node_index, name, inverted, parent_identifier, rankdir)
         } else {
             cloned_self.to_dot_collapsed_view(
@@ -773,7 +775,7 @@ mod test {
         assert_eq!(og.g.0.node_count(), 0);
         assert_eq!(og.g.0.edge_count(), 0);
         assert!(og.input_port_map().is_empty());
-        assert!(og.output_port_map.is_empty());
+        assert!(og.output_port_map().is_empty());
     }
     #[test]
     fn add_node() {
@@ -809,11 +811,11 @@ mod test {
         og.map_input_port(sn2_i, "front", "input").unwrap();
         og.map_output_port(sn1_i, "rear", "output").unwrap();
         assert_eq!(og.input_port_map().len(), 1);
-        assert_eq!(og.output_port_map.len(), 1);
+        assert_eq!(og.output_port_map().len(), 1);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         // delete no longer valid port mapping
         assert_eq!(og.input_port_map().len(), 0);
-        assert_eq!(og.output_port_map.len(), 0);
+        assert_eq!(og.output_port_map().len(), 0);
     }
     #[test]
     fn input_nodes() {
@@ -885,19 +887,19 @@ mod test {
 
         // wrong port name
         assert!(og.map_output_port(sn2_i, "wrong", "output").is_err());
-        assert!(og.output_port_map.is_empty());
+        assert!(og.output_port_map().is_empty());
         // wrong node index
         assert!(og.map_output_port(5.into(), "rear", "output").is_err());
-        assert!(og.output_port_map.is_empty());
+        assert!(og.output_port_map().is_empty());
         // map input port
         assert!(og.map_output_port(sn1_i, "front", "output").is_err());
-        assert!(og.output_port_map.is_empty());
+        assert!(og.output_port_map().is_empty());
         // map internal node
         assert!(og.map_output_port(sn1_i, "rear", "output").is_err());
-        assert!(og.output_port_map.is_empty());
+        assert!(og.output_port_map().is_empty());
         // correct usage
         assert!(og.map_output_port(sn2_i, "rear", "output").is_ok());
-        assert_eq!(og.output_port_map.len(), 1);
+        assert_eq!(og.output_port_map().len(), 1);
     }
     #[test]
     fn map_output_port_half_connected_nodes() {
@@ -917,7 +919,7 @@ mod test {
             .map_output_port(sn1_i, "out2_trans2_refl1", "bs_output")
             .is_ok());
         assert!(og.map_output_port(sn2_i, "rear", "output").is_ok());
-        assert_eq!(og.output_port_map.len(), 2);
+        assert_eq!(og.output_port_map().len(), 2);
     }
     #[test]
     fn ports() {
