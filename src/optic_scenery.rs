@@ -355,7 +355,6 @@ mod test {
 
     use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
-    use std::io::Write;
     use std::{fs::File, io::Read};
     #[test]
     fn new() {
@@ -473,11 +472,7 @@ mod test {
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
         let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
-
-        let path = "graph.dot";
-        let mut output = File::create(path).unwrap();
-        write!(output, "{}", scenery.to_dot("TB").unwrap()).unwrap();
-
+    
         assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
     }

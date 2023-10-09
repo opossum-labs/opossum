@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-use serde_derive::{Serialize, Deserialize};
+use serde_derive::{Deserialize, Serialize};
 
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
@@ -63,16 +63,14 @@ impl IdealFilter {
                 ));
             }
         }
-        let mut props=create_default_props();
+        let mut props = create_default_props();
         props.set("filter type", filter_type.into());
-        Ok(Self {
-            props: props,
-        })
+        Ok(Self { props })
     }
     /// Returns the filter type of this [`IdealFilter`].
     pub fn filter_type(&self) -> FilterType {
-        let filter_type=self.props.get("filter type").unwrap().prop.clone();
-        if let Proptype::FilterType(filter_type)=filter_type {
+        let filter_type = self.props.get("filter type").unwrap().prop.clone();
+        if let Proptype::FilterType(filter_type) = filter_type {
             filter_type
         } else {
             panic!("wrong data type")
@@ -86,7 +84,8 @@ impl IdealFilter {
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
     pub fn set_transmission(&mut self, transmission: f64) -> Result<()> {
         if (0.0..=1.0).contains(&transmission) {
-            self.props.set("filter type", FilterType::Constant(transmission).into());
+            self.props
+                .set("filter type", FilterType::Constant(transmission).into());
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -102,7 +101,10 @@ impl IdealFilter {
     /// This function will return an error if an optical density < 0.0 was given.
     pub fn set_optical_density(&mut self, density: f64) -> Result<()> {
         if density >= 0.0 {
-            self.props.set("filter type", FilterType::Constant(f64::powf(10.0, -1.0 * density)).into());
+            self.props.set(
+                "filter type",
+                FilterType::Constant(f64::powf(10.0, -1.0 * density)).into(),
+            );
             Ok(())
         } else {
             Err(OpossumError::Other("optical densitiy must be >=0".into()))
