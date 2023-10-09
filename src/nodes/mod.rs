@@ -17,6 +17,7 @@ pub use beam_splitter::BeamSplitter;
 pub use detector::Detector;
 pub use dummy::Dummy;
 pub use group::NodeGroup;
+pub use group::PortMap;
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::{IdealLens, RealLens};
 pub use reference::NodeReference;
@@ -29,9 +30,11 @@ pub use spectrometer::Spectrometer;
 pub use spectrometer::SpectrometerType;
 
 use crate::error::OpossumError;
+use crate::error::OpmResult;
+
 use crate::optical::OpticRef;
 
-pub fn create_node_ref(node_type: &str) -> Result<OpticRef, OpossumError> {
+pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
     match node_type {
         "dummy" => Ok(OpticRef(Rc::new(RefCell::new(Dummy::default())))),
         "detector" => Ok(OpticRef(Rc::new(RefCell::new(Detector::default())))),

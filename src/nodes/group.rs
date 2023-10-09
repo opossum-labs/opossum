@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
+use crate::error::OpmResult;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
@@ -14,7 +15,9 @@ use serde::Serialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-type Result<T> = std::result::Result<T, OpossumError>;
+
+/// Mappin of group internal ports to externally visble ports.
+pub type PortMap = HashMap<String, (NodeIndex, String)>;
 
 #[derive(Debug, Clone)]
 /// A node that represents a group of other [`Optical`]s arranges in a subgraph.
@@ -30,8 +33,7 @@ type Result<T> = std::result::Result<T, OpossumError>;
 pub struct NodeGroup {
     g: OpticGraph,
     expand_view: bool,
-    input_port_map: HashMap<String, (NodeIndex, String)>,
-    output_port_map: HashMap<String, (NodeIndex, String)>,
+    output_port_map: PortMap,
     props: Properties,
 }
 
@@ -46,8 +48,8 @@ fn create_default_props() -> Properties {
             prop: Proptype::OpticGraph(OpticGraph::default()),
         },
     );
-    props.set("input port map", "input port map".into());
-    props.set("output port map", "output port map".into());
+    props.set("input port map", PortMap::new().into());
+    props.set("output port map", PortMap::new().into());
     props
 }
 
@@ -56,7 +58,6 @@ impl Default for NodeGroup {
         Self {
             g: Default::default(),
             expand_view: Default::default(),
-            input_port_map: Default::default(),
             output_port_map: Default::default(),
             props: create_default_props(),
         }
@@ -103,7 +104,7 @@ impl NodeGroup {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
-    ) -> Result<EdgeIndex> {
+    ) -> OpmResult<EdgeIndex> {
         if let Some(source) = self.g.0.node_weight(src_node) {
             if !source
                 .0
@@ -176,12 +177,14 @@ impl NodeGroup {
                 "connecting the given nodes would form a loop".into(),
             ));
         }
-        let in_map = self.input_port_map.clone();
+        let in_map = self.input_port_map();
         let invalid_mapping = in_map
             .iter()
             .find(|m| m.1 .0 == target_node && m.1 .1 == target_port);
+        let mut in_map = self.input_port_map();
         if let Some(input) = invalid_mapping {
-            self.input_port_map.remove(input.0);
+            in_map.remove(input.0);
+            self.set_input_port_map(in_map);
         }
         let out_map = self.output_port_map.clone();
         let invalid_mapping = out_map
@@ -191,6 +194,17 @@ impl NodeGroup {
             self.output_port_map.remove(input.0);
         }
         Ok(edge_index)
+    }
+    fn input_port_map(&self) -> PortMap {
+        let input_port_map = self.props.get("input port map").unwrap().prop.clone();
+        if let Proptype::GroupPortMap(input_port_map) = input_port_map {
+            input_port_map
+        } else {
+            panic!("wrong data type")
+        }
+    }
+    fn set_input_port_map(&mut self, port_map: PortMap) {
+        self.props.set("input port map", port_map.into());
     }
     fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
         self.g
@@ -268,8 +282,8 @@ impl NodeGroup {
         input_node: NodeIndex,
         internal_name: &str,
         external_name: &str,
-    ) -> Result<()> {
-        if self.input_port_map.contains_key(external_name) {
+    ) -> OpmResult<()> {
+        if self.input_port_map().contains_key(external_name) {
             return Err(OpossumError::OpticGroup(
                 "external input port name already assigned".into(),
             ));
@@ -307,10 +321,12 @@ impl NodeGroup {
                 "port of input node is already internally connected".into(),
             ));
         }
-        self.input_port_map.insert(
+        let mut input_port_map = self.input_port_map();
+        input_port_map.insert(
             external_name.to_string(),
             (input_node, internal_name.to_string()),
         );
+        self.set_input_port_map(input_port_map);
         Ok(())
     }
 
@@ -330,7 +346,7 @@ impl NodeGroup {
         output_node: NodeIndex,
         internal_name: &str,
         external_name: &str,
-    ) -> Result<()> {
+    ) -> OpmResult<()> {
         if self.output_port_map.contains_key(external_name) {
             return Err(OpossumError::OpticGroup(
                 "external output port name already assigned".into(),
@@ -405,7 +421,7 @@ impl NodeGroup {
         &mut self,
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
-    ) -> Result<LightResult> {
+    ) -> OpmResult<LightResult> {
         let is_inverted = self.props.get_bool("inverted").unwrap().unwrap();
         if is_inverted {
             self.invert_graph();
@@ -419,9 +435,9 @@ impl NodeGroup {
             let incoming_edges = if group_srcs.any(|gs| gs == idx) {
                 // get from incoming_data
                 let portmap = if is_inverted {
-                    &self.output_port_map
+                    self.output_port_map.clone()
                 } else {
-                    &self.input_port_map
+                    self.input_port_map()
                 };
                 let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
                 let mut incoming = LightResult::default();
@@ -442,9 +458,9 @@ impl NodeGroup {
             // Check if node is group sink node
             if group_sinks.any(|gs| gs == idx) {
                 let portmap = if is_inverted {
-                    &self.input_port_map
+                    self.input_port_map()
                 } else {
-                    &self.output_port_map
+                    self.output_port_map.clone()
                 };
                 let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
                 for port in assigned_ports {
@@ -482,10 +498,11 @@ impl NodeGroup {
         &self,
         port_name: &str,
         parent_identifier: String,
-    ) -> Result<String> {
+    ) -> OpmResult<String> {
         if self.shall_expand() {
-            if self.input_port_map.contains_key(port_name) {
-                let port = self.input_port_map.get(port_name).unwrap();
+            if self.input_port_map().contains_key(port_name) {
+                let input_port_map = self.input_port_map();
+                let port = input_port_map.get(port_name).unwrap();
 
                 Ok(format!(
                     "{}_i{}:{}",
@@ -529,7 +546,7 @@ impl NodeGroup {
         end_node_idx: NodeIndex,
         light_port: &str,
         mut parent_identifier: String,
-    ) -> Result<String> {
+    ) -> OpmResult<String> {
         let node = self.g.0.node_weight(end_node_idx).unwrap().0.borrow();
 
         parent_identifier = if parent_identifier.is_empty() {
@@ -560,7 +577,7 @@ impl NodeGroup {
         inverted: bool,
         mut parent_identifier: String,
         rankdir: &str,
-    ) -> Result<String> {
+    ) -> OpmResult<String> {
         let inv_string = if inverted { "(inv)" } else { "" };
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", node_index)
@@ -629,7 +646,7 @@ impl NodeGroup {
         _ports: &OpticPorts,
         mut parent_identifier: String,
         rankdir: &str,
-    ) -> Result<String> {
+    ) -> OpmResult<String> {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{}{}", name, inv_string);
         parent_identifier = if parent_identifier.is_empty() {
@@ -677,7 +694,7 @@ impl Optical for NodeGroup {
 
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
-        for p in self.input_port_map.iter() {
+        for p in self.input_port_map().iter() {
             ports.add_input(p.0).unwrap();
         }
         for p in self.output_port_map.iter() {
@@ -689,7 +706,7 @@ impl Optical for NodeGroup {
         &mut self,
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
-    ) -> Result<LightResult> {
+    ) -> OpmResult<LightResult> {
         self.analyze_group(incoming_data, analyzer_type)
     }
     // fn set_inverted(&mut self, inverted: bool) {
@@ -700,13 +717,13 @@ impl Optical for NodeGroup {
     //         },
     //     );
     // }
-    fn as_group(&self) -> Result<&NodeGroup> {
+    fn as_group(&self) -> OpmResult<&NodeGroup> {
         Ok(self)
     }
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> Result<()> {
+    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
         if self.props.set(name, prop).is_none() {
             Err(OpossumError::Other("property not defined".into()))
         } else {
@@ -724,7 +741,7 @@ impl Dottable for NodeGroup {
         ports: &OpticPorts,
         parent_identifier: String,
         rankdir: &str,
-    ) -> Result<String> {
+    ) -> OpmResult<String> {
         let mut cloned_self = self.clone();
         if self.props.get_bool("inverted").unwrap().unwrap() {
             cloned_self.invert_graph();
@@ -760,7 +777,7 @@ mod test {
         let og = NodeGroup::default();
         assert_eq!(og.g.0.node_count(), 0);
         assert_eq!(og.g.0.edge_count(), 0);
-        assert!(og.input_port_map.is_empty());
+        assert!(og.input_port_map().is_empty());
         assert!(og.output_port_map.is_empty());
     }
     #[test]
@@ -796,11 +813,11 @@ mod test {
 
         og.map_input_port(sn2_i, "front", "input").unwrap();
         og.map_output_port(sn1_i, "rear", "output").unwrap();
-        assert_eq!(og.input_port_map.len(), 1);
+        assert_eq!(og.input_port_map().len(), 1);
         assert_eq!(og.output_port_map.len(), 1);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         // delete no longer valid port mapping
-        assert_eq!(og.input_port_map.len(), 0);
+        assert_eq!(og.input_port_map().len(), 0);
         assert_eq!(og.output_port_map.len(), 0);
     }
     #[test]
@@ -835,19 +852,19 @@ mod test {
 
         // wrong port name
         assert!(og.map_input_port(sn1_i, "wrong", "input").is_err());
-        assert!(og.input_port_map.is_empty());
+        assert!(og.input_port_map().is_empty());
         // wrong node index
         assert!(og.map_input_port(5.into(), "front", "input").is_err());
-        assert!(og.input_port_map.is_empty());
+        assert!(og.input_port_map().is_empty());
         // map output port
         assert!(og.map_input_port(sn2_i, "rear", "input").is_err());
-        assert!(og.input_port_map.is_empty());
+        assert!(og.input_port_map().is_empty());
         // map internal node
         assert!(og.map_input_port(sn2_i, "front", "input").is_err());
-        assert!(og.input_port_map.is_empty());
+        assert!(og.input_port_map().is_empty());
         // correct usage
         assert!(og.map_input_port(sn1_i, "front", "input").is_ok());
-        assert_eq!(og.input_port_map.len(), 1);
+        assert_eq!(og.input_port_map().len(), 1);
     }
     #[test]
     fn map_input_port_half_connected_nodes() {
@@ -862,7 +879,7 @@ mod test {
         // correct usage
         assert!(og.map_input_port(sn1_i, "front", "input").is_ok());
         assert!(og.map_input_port(sn2_i, "input2", "bs_input").is_ok());
-        assert_eq!(og.input_port_map.len(), 2);
+        assert_eq!(og.input_port_map().len(), 2);
     }
     #[test]
     fn map_output_port() {
