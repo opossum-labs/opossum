@@ -21,11 +21,12 @@ pub mod error;
 
 pub mod spectrum;
 
+/// Handling of node properties
 pub mod properties;
 
 use chrono::DateTime;
 pub use optic_scenery::OpticScenery;
-
+/// Module for handling the OPOSSUM CLI
 pub mod console;
 
 mod optic_graph;

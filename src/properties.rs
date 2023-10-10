@@ -7,7 +7,7 @@ use crate::{
     nodes::{FilterType, Metertype, PortMap, SpectrometerType},
     optic_graph::OpticGraph,
 };
-
+/// A general set of (optical) properties.
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct Properties {
     pub props: HashMap<String, Property>,

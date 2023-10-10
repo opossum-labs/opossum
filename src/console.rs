@@ -171,6 +171,7 @@ impl TryFrom<PartialArgs> for Args {
     }
 }
 
+/// Show the OPOSSUM logo as ASCII art and the CLI version information.
 pub fn show_intro() {
     println!("                                                            .:^
                                              ::   ......:::^^^^:.. .:.

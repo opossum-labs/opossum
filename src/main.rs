@@ -11,7 +11,6 @@ use opossum::{
         error::OpossumError,
     },
 };
-
 fn main() {
     //not necessary, just for fun
     show_intro();
