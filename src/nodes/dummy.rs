@@ -20,6 +20,10 @@ use std::collections::HashMap;
 ///     - `front`
 ///   - Outputs
 ///     - `rear`
+///
+/// ## Properties
+///   - `name`
+///   - `inverted`
 pub struct Dummy {
     props: Properties,
 }

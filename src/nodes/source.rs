@@ -20,6 +20,12 @@ use crate::{
 ///     - none
 ///   - Outputs
 ///     - `out1`
+///
+/// ## Properties
+///   - `name`
+///   - `light data`
+///
+/// **Note**: This node does not have the `inverted` property since it has only one output port.
 pub struct Source {
     props: Properties,
 }

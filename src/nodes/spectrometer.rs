@@ -36,6 +36,10 @@ pub enum SpectrometerType {
 ///   - Outputs
 ///     - `out1`
 ///
+/// ## Properties
+///   - `name`
+///   - `spectrometer type
+/// `
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 pub struct Spectrometer {

@@ -34,6 +34,11 @@ pub enum Metertype {
 ///   - Outputs
 ///     - `out1`
 ///
+/// ## Propertied
+///   - `name`
+///   - `inverted`
+///   - `meter type`
+///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct EnergyMeter {

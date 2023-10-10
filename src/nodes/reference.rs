@@ -18,6 +18,10 @@ use crate::properties::{Properties, Property, Proptype};
 ///     - input ports of the referenced [`Optical`]
 ///   - Outputs
 ///     - output ports of the referenced [`Optical`]
+///
+/// ## Rpeoperties
+///   - `name`
+///   - `inverted`
 pub struct NodeReference {
     reference: Option<Weak<RefCell<dyn Optical>>>,
     props: Properties,

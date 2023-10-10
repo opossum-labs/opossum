@@ -29,6 +29,14 @@ pub type PortMap = HashMap<String, (NodeIndex, String)>;
 ///     - defined by [`map_input_port`](NodeGroup::map_input_port()) function.
 ///   - Outputs
 ///     - defined by [`map_output_port`](NodeGroup::map_output_port()) function.
+///
+/// ## Properties
+///   - `name`
+///   - `inverted`
+///   - `expand view`
+///   - `graph`
+///   - `input port map`
+///   - `output port map`
 pub struct NodeGroup {
     g: OpticGraph,
     props: Properties,
