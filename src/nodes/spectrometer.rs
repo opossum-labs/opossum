@@ -84,8 +84,12 @@ impl Spectrometer {
     }
 }
 impl Optical for Spectrometer {
-    fn set_name(&mut self, name: &str) {
-        self.props.set("name", name.into());
+    fn name(&self) -> &str {
+        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+            name
+        } else {
+            self.node_type()
+        }
     }
     fn node_type(&self) -> &str {
         "spectrometer"
@@ -168,37 +172,28 @@ impl Dottable for Spectrometer {
 
 #[cfg(test)]
 mod test {
-    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
-
     use super::*;
-    #[test]
-    fn new() {
-        let meter = Spectrometer::new(SpectrometerType::IdealSpectrometer);
-        assert!(meter.light_data.is_none());
-        assert_eq!(
-            meter.spectrometer_type(),
-            SpectrometerType::IdealSpectrometer
-        );
-    }
+    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
     #[test]
     fn default() {
-        let meter = Spectrometer::default();
-        assert!(meter.light_data.is_none());
+        let node = Spectrometer::default();
+        assert!(node.light_data.is_none());
         assert_eq!(
-            meter.spectrometer_type(),
+            node.spectrometer_type(),
             SpectrometerType::IdealSpectrometer
         );
-        assert_eq!(meter.node_type(), "spectrometer");
-        assert_eq!(meter.is_detector(), true);
-        assert_eq!(meter.node_color(), "lightseagreen");
+        assert_eq!(node.name(), "spectrometer");
+        assert_eq!(node.node_type(), "spectrometer");
+        assert_eq!(node.is_detector(), true);
+        assert_eq!(node.inverted(), false);
+        assert_eq!(node.node_color(), "lightseagreen");
+        assert!(node.as_group().is_err());
     }
     #[test]
-    fn meter_type() {
-        let meter = Spectrometer::new(SpectrometerType::IdealSpectrometer);
-        assert_eq!(
-            meter.spectrometer_type(),
-            SpectrometerType::IdealSpectrometer
-        );
+    fn new() {
+        let meter = Spectrometer::new(SpectrometerType::HR2000);
+        assert!(meter.light_data.is_none());
+        assert_eq!(meter.spectrometer_type(), SpectrometerType::HR2000);
     }
     #[test]
     fn set_meter_type() {
@@ -209,9 +204,8 @@ mod test {
     #[test]
     fn ports() {
         let meter = Spectrometer::default();
-        let ports = meter.ports();
-        assert_eq!(ports.inputs(), vec!["in1"]);
-        assert_eq!(ports.outputs(), vec!["out1"]);
+        assert_eq!(meter.ports().inputs(), vec!["in1"]);
+        assert_eq!(meter.ports().outputs(), vec!["out1"]);
     }
     #[test]
     fn analyze() {

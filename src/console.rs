@@ -216,7 +216,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         "{: ^119}",
         "Opossum - Open-source Optics Simulation System and Unified Modeler"
     );
-    println!("{: ^119}\n", "version ".to_owned()+&get_version());
+    println!("{: ^119}\n", "version ".to_owned() + &get_version());
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Property},
+    properties::{Properties, Property, Proptype},
 };
 use ndarray::{array, Array1};
 use uom::{si::f64::Length, si::length::meter};
@@ -138,6 +138,13 @@ impl Default for RealLens {
 }
 
 impl Optical for RealLens {
+    fn name(&self) -> &str {
+        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+            name
+        } else {
+            self.node_type()
+        }
+    }
     fn node_type(&self) -> &str {
         "real lens"
     }

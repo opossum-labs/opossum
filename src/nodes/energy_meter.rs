@@ -85,9 +85,6 @@ impl EnergyMeter {
     }
 }
 impl Optical for EnergyMeter {
-    fn set_name(&mut self, name: &str) {
-        self.props.set("name", name.into());
-    }
     fn name(&self) -> &str {
         if let Some(value) = self.props.get("name") {
             if let Proptype::String(name) = &value.prop {
@@ -159,46 +156,42 @@ impl Dottable for EnergyMeter {
 
 #[cfg(test)]
 mod test {
-    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
-
     use super::*;
-    #[test]
-    fn new() {
-        let meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
-        assert!(meter.light_data.is_none());
-        assert_eq!(meter.meter_type(), Metertype::IdealEnergyMeter);
-    }
+    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
     #[test]
     fn default() {
-        let meter = EnergyMeter::default();
-        assert!(meter.light_data.is_none());
-        assert_eq!(meter.meter_type(), Metertype::IdealEnergyMeter);
-        assert_eq!(meter.node_type(), "energy meter");
-        assert_eq!(meter.is_detector(), true);
-        assert_eq!(meter.node_color(), "whitesmoke");
-        assert_eq!(meter.name(), "energy meter");
+        let node = EnergyMeter::default();
+        assert!(node.light_data.is_none());
+        assert_eq!(node.meter_type(), Metertype::IdealEnergyMeter);
+        assert_eq!(node.name(), "energy meter");
+        assert_eq!(node.node_type(), "energy meter");
+        assert_eq!(node.is_detector(), true);
+        assert_eq!(node.inverted(), false);
+        assert_eq!(node.node_color(), "whitesmoke");
+        assert!(node.as_group().is_err());
     }
     #[test]
-    fn meter_type() {
-        let meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
-        assert_eq!(meter.meter_type(), Metertype::IdealEnergyMeter);
+    fn new() {
+        let meter = EnergyMeter::new("test", Metertype::IdealPowerMeter);
+        assert!(meter.light_data.is_none());
+        assert_eq!(meter.meter_type(), Metertype::IdealPowerMeter);
     }
     #[test]
     fn set_meter_type() {
-        let mut meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
+        let mut meter = EnergyMeter::default();
         meter.set_meter_type(Metertype::IdealPowerMeter);
         assert_eq!(meter.meter_type(), Metertype::IdealPowerMeter);
     }
     #[test]
     fn ports() {
-        let meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
+        let meter = EnergyMeter::default();
         let ports = meter.ports();
         assert_eq!(ports.inputs(), vec!["in1"]);
         assert_eq!(ports.outputs(), vec!["out1"]);
     }
     #[test]
     fn analyze() {
-        let mut meter = EnergyMeter::new("test", Metertype::IdealEnergyMeter);
+        let mut meter = EnergyMeter::default();
         let mut input = LightResult::default();
         input.insert(
             "in1".into(),

@@ -18,13 +18,10 @@ pub type LightResult = HashMap<String, Option<LightData>>;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait Optical: Dottable {
-    /// Sets the name of this [`Optical`].
-    #[deprecated(note = "set_property(\"name\",...) should  used instead")]
-    fn set_name(&mut self, _name: &str) {}
     /// Returns a reference to the name of this [`Optical`].
-    fn name(&self) -> &str {
-        self.node_type()
-    }
+    fn name(&self) -> &str; // {
+                            //    self.node_type()
+                            //}
     /// Return the type of the optical component (lens, filter, ...).
     fn node_type(&self) -> &str;
     /// Return the available (input & output) ports of this [`Optical`].

@@ -607,6 +607,13 @@ impl Serialize for NodeGroup {
     }
 }
 impl Optical for NodeGroup {
+    fn name(&self) -> &str {
+        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+            name
+        } else {
+            self.node_type()
+        }
+    }
     fn node_type(&self) -> &str {
         "group"
     }
@@ -669,7 +676,6 @@ impl Dottable for NodeGroup {
             )
         }
     }
-
     fn node_color(&self) -> &str {
         "yellow"
     }
@@ -677,18 +683,29 @@ impl Dottable for NodeGroup {
 
 #[cfg(test)]
 mod test {
-    use super::NodeGroup;
+    use super::*;
     use crate::{
         nodes::{BeamSplitter, Dummy},
         optical::Optical,
     };
     #[test]
-    fn new() {
-        let og = NodeGroup::default();
-        assert_eq!(og.g.0.node_count(), 0);
-        assert_eq!(og.g.0.edge_count(), 0);
-        assert!(og.input_port_map().is_empty());
-        assert!(og.output_port_map().is_empty());
+    fn default() {
+        let node = NodeGroup::default();
+        assert_eq!(node.g.0.node_count(), 0);
+        assert_eq!(node.g.0.edge_count(), 0);
+        assert!(node.input_port_map().is_empty());
+        assert!(node.output_port_map().is_empty());
+        assert_eq!(node.name(), "group");
+        assert_eq!(node.node_type(), "group");
+        assert_eq!(node.is_detector(), false);
+        assert_eq!(node.inverted(), false);
+        assert_eq!(node.node_color(), "yellow");
+        assert!(node.as_group().is_ok());
+    }
+    #[test]
+    fn net() {
+        let node = NodeGroup::new("test");
+        assert_eq!(node.name(), "test");
     }
     #[test]
     fn add_node() {

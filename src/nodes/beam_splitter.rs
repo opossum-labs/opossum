@@ -22,6 +22,11 @@ use crate::{
 ///   - Outputs
 ///     - `out1_trans1_refl2`
 ///     - `out2_trans2_refl1`
+///
+/// ## Properties
+///   - `name`
+///   - `ratio`
+///   - `inverted`
 pub struct BeamSplitter {
     props: Properties,
 }
@@ -160,7 +165,7 @@ impl Optical for BeamSplitter {
         if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
             name
         } else {
-            "beam splitter"
+            self.node_type()
         }
     }
     fn ports(&self) -> OpticPorts {
@@ -212,17 +217,23 @@ impl Dottable for BeamSplitter {
 mod test {
     use super::*;
     #[test]
-    fn new() {
-        let splitter = BeamSplitter::new(0.5);
-        assert!(splitter.is_ok());
-        assert_eq!(splitter.unwrap().ratio(), 0.5);
-        assert!(BeamSplitter::new(-0.01).is_err());
-        assert!(BeamSplitter::new(1.01).is_err());
+    fn default() {
+        let node = BeamSplitter::default();
+        assert_eq!(node.ratio(), 0.5);
+        assert_eq!(node.name(), "beam splitter");
+        assert_eq!(node.node_type(), "beam splitter");
+        assert_eq!(node.is_detector(), false);
+        assert_eq!(node.inverted(), false);
+        assert_eq!(node.node_color(), "lightpink");
+        assert!(node.as_group().is_err());
     }
     #[test]
-    fn default() {
-        let splitter = BeamSplitter::default();
-        assert_eq!(splitter.ratio(), 0.5);
+    fn new() {
+        let splitter = BeamSplitter::new(0.6);
+        assert!(splitter.is_ok());
+        assert_eq!(splitter.unwrap().ratio(), 0.6);
+        assert!(BeamSplitter::new(-0.01).is_err());
+        assert!(BeamSplitter::new(1.01).is_err());
     }
     #[test]
     fn ratio() {
@@ -236,15 +247,5 @@ mod test {
         assert_eq!(splitter.ratio(), 1.0);
         assert!(splitter.set_ratio(-0.1).is_err());
         assert!(splitter.set_ratio(1.1).is_err());
-    }
-    #[test]
-    fn node_type() {
-        let splitter = BeamSplitter::new(0.0).unwrap();
-        assert_eq!(splitter.node_type(), "beam splitter");
-    }
-    #[test]
-    fn node_color() {
-        let splitter = BeamSplitter::new(0.0).unwrap();
-        assert_eq!(splitter.node_color(), "lightpink");
     }
 }

@@ -47,9 +47,6 @@ impl Dummy {
     }
 }
 impl Optical for Dummy {
-    fn set_name(&mut self, name: &str) {
-        self.props.set("name", name.into());
-    }
     fn name(&self) -> &str {
         if let Some(value) = self.props.get("name") {
             if let Proptype::String(name) = &value.prop {
@@ -112,26 +109,27 @@ impl Dottable for Dummy {}
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::{
         lightdata::{DataEnergy, LightData},
         spectrum::create_he_ne_spectrum,
     };
-
-    use super::*;
-    #[test]
-    fn new() {
-        let node = Dummy::new("Test");
-        assert_eq!(node.name(), "Test");
-        assert_eq!(node.inverted(), false);
-    }
     #[test]
     fn default() {
         let node = Dummy::default();
         assert_eq!(node.name(), "dummy");
+        assert_eq!(node.node_type(), "dummy");
+        assert_eq!(node.is_detector(), false);
         assert_eq!(node.inverted(), false);
+        assert!(node.as_group().is_err());
     }
     #[test]
-    fn name() {
+    fn new() {
+        let node = Dummy::new("Test");
+        assert_eq!(node.name(), "Test");
+    }
+    #[test]
+    fn name_property() {
         let mut node = Dummy::default();
         node.set_property("name", "Test1".into()).unwrap();
         assert_eq!(node.name(), "Test1")

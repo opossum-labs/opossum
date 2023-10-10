@@ -146,3 +146,33 @@ impl Dottable for Source {
         "slateblue"
     }
 }
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn default() {
+        let node = Source::default();
+        assert_eq!(node.name(), "source");
+        assert_eq!(node.node_type(), "light source");
+        assert_eq!(node.is_detector(), false);
+        assert_eq!(node.inverted(), false);
+        assert_eq!(node.node_color(), "slateblue");
+        assert!(node.as_group().is_err());
+    }
+    #[test]
+    fn new() {
+        let source = Source::new("test", LightData::Fourier);
+        assert_eq!(source.name(), "test");
+    }
+    #[test]
+    fn not_invertable() {
+        let mut node = Source::default();
+        assert!(node.set_property("inverted", true.into()).is_err());
+    }
+    #[test]
+    fn ports() {
+        let detector = Source::default();
+        assert!(detector.ports().inputs().is_empty());
+        assert_eq!(detector.ports().outputs(), vec!["out1"]);
+    }
+}

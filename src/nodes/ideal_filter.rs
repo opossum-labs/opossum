@@ -12,7 +12,7 @@ use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
 /// Config data for an [`IdealFilter`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum FilterType {
     /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0
     Constant(f64),
@@ -27,6 +27,11 @@ pub enum FilterType {
 ///     - `front`
 ///   - Outputs
 ///     - `rear`
+///
+/// ## Properties
+///   - `name`
+///   - `inverted`
+///   - `filter type`
 pub struct IdealFilter {
     props: Properties,
 }
@@ -147,8 +152,18 @@ impl IdealFilter {
 }
 
 impl Optical for IdealFilter {
+    fn name(&self) -> &str {
+        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+            name
+        } else {
+            self.node_type()
+        }
+    }
     fn node_type(&self) -> &str {
         "ideal filter"
+    }
+    fn inverted(&self) -> bool {
+        self.properties().get_bool("inverted").unwrap().unwrap()
     }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
@@ -183,5 +198,37 @@ impl Optical for IdealFilter {
 impl Dottable for IdealFilter {
     fn node_color(&self) -> &str {
         "darkgray"
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn default() {
+        let node = IdealFilter::default();
+        assert_eq!(node.filter_type(), FilterType::Constant(1.0));
+        assert_eq!(node.name(), "ideal filter");
+        assert_eq!(node.node_type(), "ideal filter");
+        assert_eq!(node.is_detector(), false);
+        assert_eq!(node.inverted(), false);
+        assert_eq!(node.node_color(), "darkgray");
+        assert!(node.as_group().is_err());
+    }
+    #[test]
+    fn new() {
+        let node = IdealFilter::new(FilterType::Constant(0.8)).unwrap();
+        assert_eq!(node.filter_type(), FilterType::Constant(0.8));
+    }
+    #[test]
+    fn inverted() {
+        let mut node = IdealFilter::default();
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.inverted(), true)
+    }
+    #[test]
+    fn ports() {
+        let node = IdealFilter::default();
+        assert_eq!(node.ports().inputs(), vec!["front"]);
+        assert_eq!(node.ports().outputs(), vec!["rear"]);
     }
 }

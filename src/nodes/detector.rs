@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{Properties, Property};
+use crate::properties::{Properties, Property, Proptype};
 use crate::{
     dottable::Dottable,
     error::OpossumError,
@@ -22,6 +22,10 @@ use std::path::{Path, PathBuf};
 ///   - Outputs
 ///     - `out1`
 ///
+/// ## Properties
+///   - `name`
+///   - `inverted`
+///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct Detector {
@@ -31,6 +35,7 @@ pub struct Detector {
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props.set("name", "detector".into());
+    props.set("inverted", false.into());
     props
 }
 impl Default for Detector {
@@ -41,7 +46,29 @@ impl Default for Detector {
         }
     }
 }
+impl Detector {
+    /// Creates a new [`Detector`].
+    pub fn new(name: &str) -> Self {
+        let mut props = create_default_props();
+        props.set("name", name.into());
+        Self {
+            props,
+            ..Default::default()
+        }
+    }
+}
 impl Optical for Detector {
+    fn name(&self) -> &str {
+        if let Some(value) = self.props.get("name") {
+            if let Proptype::String(name) = &value.prop {
+                return name;
+            }
+        }
+        panic!("wrong format");
+    }
+    fn inverted(&self) -> bool {
+        self.properties().get_bool("inverted").unwrap().unwrap()
+    }
     fn node_type(&self) -> &str {
         "detector"
     }
@@ -96,5 +123,36 @@ impl Debug for Detector {
 impl Dottable for Detector {
     fn node_color(&self) -> &str {
         "lemonchiffon"
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn default() {
+        let node = Detector::default();
+        assert_eq!(node.name(), "detector");
+        assert_eq!(node.node_type(), "detector");
+        assert_eq!(node.is_detector(), true);
+        assert_eq!(node.inverted(), false);
+        assert_eq!(node.node_color(), "lemonchiffon");
+        assert!(node.as_group().is_err());
+    }
+    #[test]
+    fn new() {
+        let node = Detector::new("test");
+        assert_eq!(node.name(), "test");
+    }
+    #[test]
+    fn inverted() {
+        let mut node = Detector::default();
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.inverted(), true)
+    }
+    #[test]
+    fn ports() {
+        let node = Detector::default();
+        assert_eq!(node.ports().inputs(), vec!["in1"]);
+        assert_eq!(node.ports().outputs(), vec!["out1"]);
     }
 }
