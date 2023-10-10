@@ -5,12 +5,14 @@ use std::path::Path;
 
 use crate::analyzer::AnalyzerType;
 use crate::error::{OpmResult, OpossumError};
+use crate::get_version;
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_graph::OpticGraph;
 use crate::optical::{LightResult, OpticRef, Optical};
 use crate::properties::{Properties, Property, Proptype};
+use chrono::Local;
 use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -236,6 +238,9 @@ impl OpticScenery {
     }
     pub fn report(&self, report_dir: &Path) -> serde_json::Value {
         let mut report = serde_json::Map::new();
+        report.insert("opossum version".into(), get_version().into());
+        report.insert("analysis timestamp".into(), Local::now().to_string().into());
+
         let detector_nodes = self
             .g
             .0

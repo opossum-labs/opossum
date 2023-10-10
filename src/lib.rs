@@ -23,8 +23,18 @@ pub mod spectrum;
 
 pub mod properties;
 
+use chrono::DateTime;
 pub use optic_scenery::OpticScenery;
 
 pub mod console;
 
 mod optic_graph;
+
+fn get_version() -> String {
+    let timestamp = DateTime::parse_from_rfc3339(env!("VERGEN_GIT_COMMIT_TIMESTAMP")).unwrap();
+    format!(
+        "{} ({})",
+        env!("VERGEN_GIT_DESCRIBE"),
+        timestamp.format("%Y/%m/%d %H:%M")
+    )
+}
