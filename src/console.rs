@@ -1,8 +1,8 @@
 use crate::{
     analyzer::AnalyzerType,
     error::{OpmResult, OpossumError},
+    get_version,
 };
-use chrono::DateTime;
 use clap::{builder::OsStr, Parser};
 use rprompt::prompt_reply;
 use std::path::{Path, PathBuf};
@@ -216,13 +216,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         "{: ^119}",
         "Opossum - Open-source Optics Simulation System and Unified Modeler"
     );
-    let timestamp = DateTime::parse_from_rfc3339(env!("VERGEN_GIT_COMMIT_TIMESTAMP")).unwrap();
-    let version_string = format!(
-        " version {} ({})",
-        env!("VERGEN_GIT_DESCRIBE"),
-        timestamp.format("%Y/%m/%d %H:%M")
-    );
-    println!("{: ^119}\n", version_string);
+    println!("{: ^119}\n", "version ".to_owned()+&get_version());
 }
 
 #[cfg(test)]
