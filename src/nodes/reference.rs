@@ -5,7 +5,7 @@ use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::optic_ports::OpticPorts;
-use crate::optical::{LightResult, Optical};
+use crate::optical::{LightResult, OpticRef, Optical};
 use crate::properties::{Properties, Property};
 
 #[derive(Debug, Default)]
@@ -25,9 +25,9 @@ pub struct NodeReference {
 
 impl NodeReference {
     // Create new [`OpticNode`] (of type [`NodeReference`]) from another existing [`OpticNode`].
-    pub fn from_node(node: Rc<RefCell<dyn Optical>>) -> Self {
+    pub fn from_node(node: OpticRef) -> Self {
         Self {
-            reference: Some(Rc::downgrade(&node)),
+            reference: Some(Rc::downgrade(&node.0)),
             props: Properties::default(),
         }
     }
@@ -51,16 +51,13 @@ impl Optical for NodeReference {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        if let Some(rf) = &self.reference {
-            rf.upgrade()
-                .unwrap()
-                .borrow_mut()
-                .analyze(incoming_data, analyzer_type)
-        } else {
-            Err(OpossumError::Analysis(
-                "reference node has no reference defined".into(),
-            ))
-        }
+        let rf = &self.reference.clone().ok_or(OpossumError::Analysis(
+            "reference node has no reference defined".into(),
+        ))?;
+        rf.upgrade()
+            .unwrap()
+            .borrow_mut()
+            .analyze(incoming_data, analyzer_type)
     }
     fn properties(&self) -> &Properties {
         &self.props

@@ -1,16 +1,15 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::rc::Rc;
 
 use crate::analyzer::AnalyzerType;
 use crate::error::{OpmResult, OpossumError};
 use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
-use crate::optical::{LightResult, OpticGraph, OpticRef, Optical};
+use crate::optic_graph::OpticGraph;
+use crate::optical::{LightResult, OpticRef, Optical};
 use crate::properties::{Properties, Property, Proptype};
 use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
@@ -27,9 +26,9 @@ use serde_derive::{Deserialize, Serialize};
 /// ```rust
 /// use opossum::OpticScenery;
 /// use opossum::nodes::Dummy;
-/// use opossum::error::OpossumError;
+/// use opossum::error::OpmResult;
 ///
-/// fn main() -> Result<(), OpossumError> {
+/// fn main() -> OpmResult<()> {
 ///   let mut scenery = OpticScenery::new();
 ///   scenery.set_description("OpticScenery demo");
 ///   let node1 = scenery.add_node(Dummy::new("dummy1"));
@@ -70,7 +69,7 @@ impl OpticScenery {
     /// This command just adds an [`Optical`] to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        self.g.0.add_node(OpticRef(Rc::new(RefCell::new(node))))
+        self.g.add_node(node)
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -83,98 +82,25 @@ impl OpticScenery {
         target_node: NodeIndex,
         target_port: &str,
     ) -> OpmResult<()> {
-        let source = self
-            .g
-            .0
-            .node_weight(src_node)
-            .ok_or(OpossumError::OpticScenery(
-                "source node with given index does not exist".into(),
-            ))?;
-        if !source
-            .0
-            .borrow()
-            .ports()
-            .outputs()
-            .contains(&src_port.into())
-        {
-            return Err(OpossumError::OpticScenery(format!(
-                "source node {} does not have a port {}",
-                source.0.borrow().name(),
-                src_port
-            )));
-        }
-        let target = self
-            .g
-            .0
-            .node_weight(target_node)
-            .ok_or(OpossumError::OpticScenery(
-                "target node with given index does not exist".into(),
-            ))?;
-        if !target
-            .0
-            .borrow()
-            .ports()
-            .inputs()
-            .contains(&target_port.into())
-        {
-            return Err(OpossumError::OpticScenery(format!(
-                "target node {} does not have a port {}",
-                target.0.borrow().name(),
-                target_port
-            )));
-        }
-
-        if self.src_node_port_exists(src_node, src_port) {
-            return Err(OpossumError::OpticScenery(format!(
-                "src node with given port {} is already connected",
-                src_port
-            )));
-        }
-        if self.target_node_port_exists(target_node, target_port) {
-            return Err(OpossumError::OpticScenery(format!(
-                "target node with given port {} is already connected",
-                target_port
-            )));
-        }
-        let edge_index =
-            self.g
-                .0
-                .add_edge(src_node, target_node, Light::new(src_port, target_port));
-        if is_cyclic_directed(&self.g.0) {
-            self.g.0.remove_edge(edge_index);
-            return Err(OpossumError::OpticScenery(
-                "connecting the given nodes would form a loop".into(),
-            ));
-        }
-        Ok(())
-    }
-    fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
         self.g
-            .0
-            .edges_directed(src_node, petgraph::Direction::Outgoing)
-            .any(|e| e.weight().src_port() == src_port)
+            .connect_nodes(src_node, src_port, target_node, target_port)
     }
-    fn target_node_port_exists(&self, target_node: NodeIndex, target_port: &str) -> bool {
-        self.g
-            .0
-            .edges_directed(target_node, petgraph::Direction::Incoming)
-            .any(|e| e.weight().target_port() == target_port)
-    }
-    /// Return a reference to the [`Optical`] specified by its node index.
+    /// Return a reference to the [`OpticRef`] specified by its node index.
     ///
     /// This function is mainly useful for setting up a reference node.
     ///
     /// # Errors
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
-    pub fn node(&self, node: NodeIndex) -> OpmResult<Rc<RefCell<dyn Optical>>> {
-        if let Some(node) = self.g.0.node_weight(node) {
-            Ok(node.0.clone())
-        } else {
-            Err(OpossumError::OpticScenery(
+    pub fn node(&self, node: NodeIndex) -> OpmResult<OpticRef> {
+        let node = self
+            .g
+            .0
+            .node_weight(node)
+            .ok_or(OpossumError::OpticScenery(
                 "node index does not exist".into(),
-            ))
-        }
+            ))?;
+        Ok(node.clone())
     }
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     pub fn to_dot(&self, rankdir: &str) -> OpmResult<String> {
@@ -357,53 +283,9 @@ mod test {
     #[test]
     fn new() {
         let scenery = OpticScenery::new();
-        assert_eq!(scenery.description(), "".to_owned());
+        assert_eq!(scenery.description(), "");
         assert_eq!(scenery.g.0.edge_count(), 0);
         assert_eq!(scenery.g.0.node_count(), 0);
-    }
-    #[test]
-    fn add_node() {
-        let mut scenery = OpticScenery::new();
-        scenery.add_node(Dummy::new("n1"));
-        assert_eq!(scenery.g.0.node_count(), 1);
-    }
-    #[test]
-    fn connect_nodes_ok() {
-        let mut scenery = OpticScenery::new();
-        let n1 = scenery.add_node(Dummy::new("Test"));
-        let n2 = scenery.add_node(Dummy::new("Test"));
-        assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
-        assert_eq!(scenery.g.0.edge_count(), 1);
-    }
-    #[test]
-    fn connect_nodes_failure() {
-        let mut scenery = OpticScenery::new();
-        let n1 = scenery.add_node(Dummy::new("Test"));
-        let n2 = scenery.add_node(Dummy::new("Test"));
-        assert!(scenery
-            .connect_nodes(n1, "rear", NodeIndex::new(5), "front")
-            .is_err());
-        assert!(scenery
-            .connect_nodes(NodeIndex::new(5), "rear", n2, "front")
-            .is_err());
-    }
-    #[test]
-    fn connect_nodes_target_already_connected() {
-        let mut scenery = OpticScenery::new();
-        let n1 = scenery.add_node(Dummy::new("Test"));
-        let n2 = scenery.add_node(Dummy::new("Test"));
-        let n3 = scenery.add_node(Dummy::new("Test"));
-        assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
-        assert!(scenery.connect_nodes(n3, "rear", n2, "front").is_err());
-    }
-    #[test]
-    fn connect_nodes_loop_error() {
-        let mut scenery = OpticScenery::new();
-        let n1 = scenery.add_node(Dummy::new("Test"));
-        let n2 = scenery.add_node(Dummy::new("Test"));
-        assert!(scenery.connect_nodes(n1, "rear", n2, "front").is_ok());
-        assert!(scenery.connect_nodes(n2, "rear", n1, "front").is_err());
-        assert_eq!(scenery.g.0.edge_count(), 1);
     }
     #[test]
     fn to_dot_empty() {
@@ -482,12 +364,6 @@ mod test {
 
         assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
-    }
-    #[test]
-    fn set_description() {
-        let mut scenery = OpticScenery::new();
-        scenery.set_description("Test".into());
-        assert_eq!(scenery.description(), "Test")
     }
     #[test]
     fn description() {

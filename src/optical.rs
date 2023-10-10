@@ -1,14 +1,11 @@
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
-use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::{create_node_ref, NodeGroup};
 use crate::optic_ports::OpticPorts;
 use crate::properties::{Properties, Property};
 use core::fmt::Debug;
-use petgraph::prelude::DiGraph;
-use petgraph::stable_graph::NodeIndex;
 use serde::de::{self, Deserialize, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::Serialize;
@@ -99,131 +96,6 @@ pub trait Optical: Dottable {
 impl Debug for dyn Optical {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} ({})", self.name(), self.node_type())
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
-
-impl Serialize for OpticGraph {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let g = self.0.clone();
-        let mut graph = serializer.serialize_struct("graph", 2)?;
-        let nodes = g
-            .node_weights()
-            .map(|n| n.to_owned())
-            .collect::<Vec<OpticRef>>();
-        graph.serialize_field("nodes", &nodes)?;
-        let edgeidx = g
-            .edge_indices()
-            .map(|e| {
-                (
-                    g.edge_endpoints(e).unwrap().0,
-                    g.edge_endpoints(e).unwrap().1,
-                    g.edge_weight(e).unwrap().src_port(),
-                    g.edge_weight(e).unwrap().target_port(),
-                )
-            })
-            .collect::<Vec<(NodeIndex, NodeIndex, &str, &str)>>();
-        graph.serialize_field("edges", &edgeidx)?;
-        graph.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for OpticGraph {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        enum Field {
-            Nodes,
-            Edges,
-        }
-        const FIELDS: &[&str] = &["nodes", "edges"];
-
-        impl<'de> Deserialize<'de> for Field {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct FieldVisitor;
-
-                impl<'de> Visitor<'de> for FieldVisitor {
-                    type Value = Field;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                        formatter.write_str("`nodes` or `edges`")
-                    }
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
-                    where
-                        E: de::Error,
-                    {
-                        match value {
-                            "nodes" => Ok(Field::Nodes),
-                            "edges" => Ok(Field::Edges),
-                            _ => Err(de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
-        }
-
-        struct OpticGraphVisitor;
-
-        impl<'de> Visitor<'de> for OpticGraphVisitor {
-            type Value = OpticGraph;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("an OpticGraph")
-            }
-            // fn visit_seq<A>(self, mut seq: A) -> std::result::Result<OpticGraph, A::Error>
-            // where
-            //     A: SeqAccess<'de>,
-            // {
-            //     println!("visit seq");
-            //     let g = OpticGraph::default();
-            //     Ok(g)
-            // }
-            fn visit_map<A>(self, mut map: A) -> std::result::Result<OpticGraph, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
-                let mut g = OpticGraph::default();
-                let mut nodes: Option<Vec<OpticRef>> = None;
-                let mut edges: Option<Vec<(NodeIndex, NodeIndex, &str, &str)>> = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Nodes => {
-                            if nodes.is_some() {
-                                return Err(de::Error::duplicate_field("nodes"));
-                            }
-                            nodes = Some(map.next_value::<Vec<OpticRef>>()?);
-                        }
-                        Field::Edges => {
-                            if edges.is_some() {
-                                return Err(de::Error::duplicate_field("edges"));
-                            }
-                            edges =
-                                Some(map.next_value::<Vec<(NodeIndex, NodeIndex, &str, &str)>>()?);
-                        }
-                    }
-                }
-                let nodes = nodes.ok_or_else(|| de::Error::missing_field("nodes"))?;
-                let edges = edges.ok_or_else(|| de::Error::missing_field("edges"))?;
-                for node in nodes.iter() {
-                    g.0.add_node(node.clone());
-                }
-                for edge in edges.iter() {
-                    g.0.add_edge(edge.0, edge.1, Light::new(edge.2, edge.3));
-                }
-                Ok(g)
-            }
-        }
-        deserializer.deserialize_struct("OpticGraph", FIELDS, OpticGraphVisitor)
     }
 }
 

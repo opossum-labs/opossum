@@ -47,7 +47,7 @@ pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
         "light source" => Ok(OpticRef(Rc::new(RefCell::new(Source::default())))),
         "spectrometer" => Ok(OpticRef(Rc::new(RefCell::new(Spectrometer::default())))),
         _ => Err(OpossumError::Other(format!(
-            "cannot create node type {}",
+            "cannot create node type <{}>",
             node_type
         ))),
     }
