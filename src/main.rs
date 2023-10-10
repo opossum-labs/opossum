@@ -25,9 +25,8 @@ fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
     let contents = fs::read_to_string(path).map_err(|e| {
         OpossumError::Console(format!("cannot read file {} : {}", path.display(), e))
     })?;
-    let scenery: OpticScenery = serde_json::from_str(&contents).map_err(|e| {
-        OpossumError::OpticScenery(format!("error while parsing model file: {}", e))
-    })?;
+    let scenery: OpticScenery = serde_json::from_str(&contents)
+        .map_err(|e| OpossumError::OpticScenery(format!("parsing of model failed: {}", e)))?;
     println!("Success");
     Ok(scenery)
 }

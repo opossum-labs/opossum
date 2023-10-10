@@ -2,10 +2,10 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::{
-    error::OpossumError,
+    error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{FilterType, Metertype, PortMap, SpectrometerType},
-    optical::OpticGraph,
+    optic_graph::OpticGraph,
 };
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
@@ -24,7 +24,7 @@ impl Properties {
     pub fn get(&self, name: &str) -> Option<&Property> {
         self.props.get(name)
     }
-    pub fn get_bool(&self, name: &str) -> Result<Option<bool>, OpossumError> {
+    pub fn get_bool(&self, name: &str) -> OpmResult<Option<bool>> {
         if let Some(property) = self.props.get(name) {
             if let Proptype::Bool(value) = property.prop {
                 Ok(Some(value))

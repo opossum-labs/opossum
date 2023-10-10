@@ -5,16 +5,15 @@ use crate::error::OpmResult;
 use crate::error::OpossumError;
 use crate::light::Light;
 use crate::lightdata::LightData;
-use crate::optical::{LightResult, OpticGraph};
+use crate::optic_graph::OpticGraph;
+use crate::optical::LightResult;
 use crate::properties::{Properties, Property, Proptype};
-use crate::{optic_ports::OpticPorts, optical::OpticRef, optical::Optical};
-use petgraph::prelude::{EdgeIndex, NodeIndex};
+use crate::{optic_ports::OpticPorts, optical::Optical};
+use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::{algo::*, Direction};
 use serde::Serialize;
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 /// Mappin of group internal ports to externally visble ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
@@ -69,8 +68,8 @@ impl NodeGroup {
     /// This command just adds an [`Optical`] but does not connect it to existing nodes in the (sub-)graph. The given node is
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        let idx = self.g.0.add_node(OpticRef(Rc::new(RefCell::new(node))));
-        self.props.set("graph", OpticGraph(self.g.0.clone()).into());
+        let idx = self.g.add_node(node);
+        self.props.set("graph", self.g.clone().into());
         idx
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
@@ -85,79 +84,11 @@ impl NodeGroup {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
-    ) -> OpmResult<EdgeIndex> {
-        if let Some(source) = self.g.0.node_weight(src_node) {
-            if !source
-                .0
-                .borrow()
-                .ports()
-                .outputs()
-                .contains(&src_port.into())
-            {
-                return Err(OpossumError::OpticScenery(format!(
-                    "source node {} does not have a port {}",
-                    source.0.borrow().name(),
-                    src_port
-                )));
-            }
-        } else {
-            return Err(OpossumError::OpticScenery(
-                "source node with given index does not exist".into(),
-            ));
-        }
-        if let Some(target) = self.g.0.node_weight(target_node) {
-            if !target
-                .0
-                .borrow()
-                .ports()
-                .inputs()
-                .contains(&target_port.into())
-            {
-                return Err(OpossumError::OpticScenery(format!(
-                    "target node {} does not have a port {}",
-                    target.0.borrow().name(),
-                    target_port
-                )));
-            }
-        } else {
-            return Err(OpossumError::OpticScenery(
-                "target node with given index does not exist".into(),
-            ));
-        }
-        if self.src_node_port_exists(src_node, src_port) {
-            return Err(OpossumError::OpticScenery(format!(
-                "src node with given port {} is already connected",
-                src_port
-            )));
-        }
-        if self.target_node_port_exists(src_node, src_port) {
-            return Err(OpossumError::OpticScenery(format!(
-                "target node with given port {} is already connected",
-                target_port
-            )));
-        }
-        let edge_index =
-            self.g
-                .0
-                .add_edge(src_node, target_node, Light::new(src_port, target_port));
-        self.props.set(
-            "graph",
-            Property {
-                prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())),
-            },
-        );
-        if is_cyclic_directed(&self.g.0) {
-            self.g.0.remove_edge(edge_index);
-            self.props.set(
-                "graph",
-                Property {
-                    prop: Proptype::OpticGraph(OpticGraph(self.g.0.clone())),
-                },
-            );
-            return Err(OpossumError::OpticScenery(
-                "connecting the given nodes would form a loop".into(),
-            ));
-        }
+    ) -> OpmResult<()> {
+        self.g
+            .connect_nodes(src_node, src_port, target_node, target_port)?;
+        self.props.set("graph", self.g.clone().into());
+
         let in_map = self.input_port_map();
         let invalid_mapping = in_map
             .iter()
@@ -176,7 +107,7 @@ impl NodeGroup {
             out_map.remove(input.0);
             self.set_output_port_map(out_map);
         }
-        Ok(edge_index)
+        Ok(())
     }
     fn input_port_map(&self) -> PortMap {
         let input_port_map = self.props.get("input port map").unwrap().prop.clone();
@@ -199,18 +130,6 @@ impl NodeGroup {
     }
     fn set_output_port_map(&mut self, port_map: PortMap) {
         self.props.set("output port map", port_map.into());
-    }
-    fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
-        self.g
-            .0
-            .edges_directed(src_node, petgraph::Direction::Outgoing)
-            .any(|e| e.weight().src_port() == src_port)
-    }
-    fn target_node_port_exists(&self, target_node: NodeIndex, target_port: &str) -> bool {
-        self.g
-            .0
-            .edges_directed(target_node, petgraph::Direction::Incoming)
-            .any(|e| e.weight().target_port() == target_port)
     }
     fn input_nodes(&self) -> Vec<NodeIndex> {
         let mut input_nodes: Vec<NodeIndex> = Vec::default();
@@ -282,21 +201,22 @@ impl NodeGroup {
                 "external input port name already assigned".into(),
             ));
         }
-        if let Some(node) = self.g.0.node_weight(input_node) {
-            if !node
-                .0
-                .borrow()
-                .ports()
-                .inputs()
-                .contains(&(internal_name.to_string()))
-            {
-                return Err(OpossumError::OpticGroup(
-                    "internal input port name not found".into(),
-                ));
-            }
-        } else {
-            return Err(OpossumError::OpticGroup(
+        let node = self
+            .g
+            .0
+            .node_weight(input_node)
+            .ok_or(OpossumError::OpticGroup(
                 "internal node index not found".into(),
+            ))?;
+        if !node
+            .0
+            .borrow()
+            .ports()
+            .inputs()
+            .contains(&(internal_name.to_string()))
+        {
+            return Err(OpossumError::OpticGroup(
+                "internal input port name not found".into(),
             ));
         }
         if !self.input_nodes().contains(&input_node) {
@@ -346,23 +266,25 @@ impl NodeGroup {
                 "external output port name already assigned".into(),
             ));
         }
-        if let Some(node) = self.g.0.node_weight(output_node) {
-            if !node
-                .0
-                .borrow()
-                .ports()
-                .outputs()
-                .contains(&(internal_name.to_string()))
-            {
-                return Err(OpossumError::OpticGroup(
-                    "internal output port name not found".into(),
-                ));
-            }
-        } else {
-            return Err(OpossumError::OpticGroup(
+        let node = self
+            .g
+            .0
+            .node_weight(output_node)
+            .ok_or(OpossumError::OpticGroup(
                 "internal node index not found".into(),
+            ))?;
+        if !node
+            .0
+            .borrow()
+            .ports()
+            .outputs()
+            .contains(&(internal_name.to_string()))
+        {
+            return Err(OpossumError::OpticGroup(
+                "internal output port name not found".into(),
             ));
         }
+
         if !self.output_nodes().contains(&output_node) {
             return Err(OpossumError::OpticGroup(
                 "node to be mapped is not an output node of the group".into(),
@@ -688,7 +610,6 @@ impl Optical for NodeGroup {
     fn node_type(&self) -> &str {
         "group"
     }
-
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         for p in self.input_port_map().iter() {
@@ -706,14 +627,6 @@ impl Optical for NodeGroup {
     ) -> OpmResult<LightResult> {
         self.analyze_group(incoming_data, analyzer_type)
     }
-    // fn set_inverted(&mut self, inverted: bool) {
-    //     self.props.set(
-    //         "inverted",
-    //         Property {
-    //             prop: Proptype::Bool(inverted),
-    //         },
-    //     );
-    // }
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Ok(self)
     }
