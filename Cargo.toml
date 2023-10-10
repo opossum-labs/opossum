@@ -33,6 +33,10 @@ strum = { version = "0", features = ["derive"] }
 
 chrono = "0"
 
+embed-doc-image = "0" # allows for embedded images in the rust API doc
+[features]
+doc-images = []
+
 [build-dependencies]
 # All features enabled
 vergen = { version = "8", features = ["git", "gitcl"] }
