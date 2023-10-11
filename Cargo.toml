@@ -9,7 +9,6 @@ license = "GPL-3.0-or-later"
 keywords = ["laser", "optics", "physics", "simulation"]
 categories = [ "science", "simulation"]
 publish = false
-
 build = "build.rs"
 
 [dependencies]

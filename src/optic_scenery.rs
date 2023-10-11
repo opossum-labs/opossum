@@ -257,6 +257,9 @@ impl OpticScenery {
         serde_json::Value::Object(report)
     }
     pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
+         // testing only:
+        let file_version=env!("OPM_FILE_VERSION");
+        println!("file version: {:?}", file_version);
         let serialized = serde_json::to_string_pretty(&self).map_err(|e| {
             OpossumError::OpticScenery(format!("deserialization of OpticScenery failed: {}", e))
         })?;
