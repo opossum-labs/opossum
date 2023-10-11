@@ -16,7 +16,9 @@ use chrono::Local;
 use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
-use serde_derive::{Deserialize, Serialize};
+use serde::de::{self, MapAccess, Visitor};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize};
 
 /// Overall optical model and additional metatdata.
 ///
@@ -39,11 +41,9 @@ use serde_derive::{Deserialize, Serialize};
 /// }
 ///
 /// ```
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct OpticScenery {
-    #[serde(rename = "graph")]
     g: OpticGraph,
-    #[serde(rename = "properties")]
     props: Properties,
 }
 
@@ -246,7 +246,6 @@ impl OpticScenery {
             .0
             .node_weights()
             .filter(|node| node.0.borrow().is_detector());
-        //report.insert("detectors".into(), json!("Detectors"));
         let mut detectors: Vec<serde_json::Value> = Vec::new();
         for node in detector_nodes {
             detectors.push(node.0.borrow().report());
@@ -277,7 +276,118 @@ impl OpticScenery {
         Ok(())
     }
 }
+impl Serialize for OpticScenery {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut scene = serializer.serialize_struct("scenery", 3)?;
+        scene.serialize_field("opm version", &env!("OPM_FILE_VERSION"))?;
+        scene.serialize_field("graph", &self.g)?;
+        scene.serialize_field("properties", &self.props)?;
+        scene.end()
+    }
+}
+impl<'de> Deserialize<'de> for OpticScenery {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        enum Field {
+            OpmVersion,
+            Graph,
+            Properties,
+        }
+        const FIELDS: &[&str] = &["opm version", "graph", "properties"];
 
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct FieldVisitor;
+
+                impl<'de> Visitor<'de> for FieldVisitor {
+                    type Value = Field;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        formatter.write_str("`opm version`, `graph`, or `properties`")
+                    }
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
+                    where
+                        E: de::Error,
+                    {
+                        match value {
+                            "opm version" => Ok(Field::OpmVersion),
+                            "graph" => Ok(Field::Graph),
+                            "properties" => Ok(Field::Properties),
+                            _ => Err(de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+
+        struct OpticSceneryVisitor;
+
+        impl<'de> Visitor<'de> for OpticSceneryVisitor {
+            type Value = OpticScenery;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("an OpticScenery")
+            }
+            fn visit_map<A>(self, mut map: A) -> std::result::Result<OpticScenery, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut opm_version: Option<String> = None;
+                let mut graph: Option<OpticGraph> = None;
+                let mut properties: Option<Properties> = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::OpmVersion => {
+                            if opm_version.is_some() {
+                                return Err(de::Error::duplicate_field("opm version"));
+                            }
+                            opm_version = Some(map.next_value()?);
+                        }
+                        Field::Graph => {
+                            if graph.is_some() {
+                                return Err(de::Error::duplicate_field("graph"));
+                            }
+                            graph = Some(map.next_value()?);
+                        }
+                        Field::Properties => {
+                            if properties.is_some() {
+                                return Err(de::Error::duplicate_field("properties"));
+                            }
+                            properties = Some(map.next_value()?);
+                        }
+                    }
+                }
+                if let Some(opm_version) = opm_version {
+                    if opm_version != env!("OPM_FILE_VERSION") {
+                        println!(
+                            "\nWarning: version mismatch! File version {}, Appplication version {}",
+                            opm_version,
+                            env!("OPM_FILE_VERSION")
+                        );
+                    }
+                }
+                let graph = graph.ok_or_else(|| de::Error::missing_field("graph"))?;
+                let properties =
+                    properties.ok_or_else(|| de::Error::missing_field("properties"))?;
+
+                Ok(OpticScenery {
+                    g: graph,
+                    props: properties,
+                })
+            }
+        }
+        deserializer.deserialize_struct("OpticScenery", FIELDS, OpticSceneryVisitor)
+    }
+}
 #[cfg(test)]
 mod test {
     use crate::nodes::Metertype;
