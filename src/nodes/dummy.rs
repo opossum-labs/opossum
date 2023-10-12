@@ -59,7 +59,6 @@ impl Optical for Dummy {
         }
         panic!("wrong format");
     }
-    /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {
         "dummy"
     }
@@ -72,23 +71,18 @@ impl Optical for Dummy {
         }
         ports
     }
-
     fn analyze(
         &mut self,
         incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        if !self.inverted() {
-            if let Some(data) = incoming_data.get("front") {
-                Ok(HashMap::from([("rear".into(), data.clone())]))
-            } else {
-                Ok(HashMap::from([("rear".into(), None)]))
-            }
-        } else if let Some(data) = incoming_data.get("rear") {
-            Ok(HashMap::from([("front".into(), data.clone())]))
+        let (src, target) = if self.inverted() {
+            ("rear", "front")
         } else {
-            Ok(HashMap::from([("front".into(), None)]))
-        }
+            ("front", "rear")
+        };
+        let data = incoming_data.get(src).unwrap_or(&None);
+        Ok(HashMap::from([(target.into(), data.clone())]))
     }
     fn inverted(&self) -> bool {
         self.properties().get_bool("inverted").unwrap().unwrap()

@@ -123,7 +123,11 @@ impl IdealFilter {
         }
     }
     fn analyze_energy(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let input = incoming_data.get("front");
+        let (mut src, mut target) = ("front", "rear");
+        if self.inverted() {
+            (src, target) = (target, src)
+        }
+        let input = incoming_data.get(src);
         if let Some(Some(input)) = input {
             match input {
                 LightData::Energy(e) => {
@@ -133,21 +137,21 @@ impl IdealFilter {
                             if out_spec.scale_vertical(*t).is_ok() {
                                 let light_data =
                                     Some(LightData::Energy(DataEnergy { spectrum: out_spec }));
-                                return Ok(HashMap::from([("rear".into(), light_data)]));
+                                return Ok(HashMap::from([(target.into(), light_data)]));
                             }
                         }
                         FilterType::Spectrum(s) => {
                             out_spec.filter(s);
                             let light_data =
                                 Some(LightData::Energy(DataEnergy { spectrum: out_spec }));
-                            return Ok(HashMap::from([("rear".into(), light_data)]));
+                            return Ok(HashMap::from([(target.into(), light_data)]));
                         }
                     }
                 }
                 _ => return Err(OpossumError::Analysis("expected energy value".into())),
             }
         }
-        Err(OpossumError::Analysis("error in analysis".into()))
+        Err(OpossumError::Analysis("no data on input port".into()))
     }
 }
 

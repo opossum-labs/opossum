@@ -58,7 +58,7 @@ fn create_default_props() -> Properties {
 impl Default for Spectrometer {
     fn default() -> Self {
         Self {
-            light_data: Default::default(),
+            light_data: None,
             props: create_default_props(),
         }
     }
@@ -69,8 +69,8 @@ impl Spectrometer {
         let mut props = create_default_props();
         props.set("spectrometer type", spectrometer_type.into());
         Spectrometer {
-            light_data: None,
             props,
+            ..Default::default()
         }
     }
     /// Returns the meter type of this [`Spectrometer`].
@@ -109,12 +109,14 @@ impl Optical for Spectrometer {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        if let Some(data) = incoming_data.get("in1") {
-            self.light_data = data.clone();
-            Ok(HashMap::from([("out1".into(), data.clone())]))
+        let (src, target) = if self.inverted() {
+            ("out1", "in1")
         } else {
-            Ok(HashMap::from([("out2".into(), None)]))
-        }
+            ("in1", "out1")
+        };
+        let data = incoming_data.get(src).unwrap_or(&None);
+        self.light_data = data.clone();
+        Ok(HashMap::from([(target.into(), data.clone())]))
     }
     fn export_data(&self, report_dir: &Path) {
         if let Some(data) = &self.light_data {

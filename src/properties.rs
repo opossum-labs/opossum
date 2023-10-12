@@ -117,6 +117,13 @@ impl From<PortMap> for Property {
         }
     }
 }
+impl From<Option<LightData>> for Property {
+    fn from(value: Option<LightData>) -> Self {
+        Property {
+            prop: Proptype::LightData(value),
+        }
+    }
+}
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Proptype {

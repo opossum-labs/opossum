@@ -32,12 +32,7 @@ pub struct Source {
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props.set("name", "source".into());
-    props.set(
-        "light data",
-        Property {
-            prop: Proptype::LightData(None),
-        },
-    );
+    props.set("light data", None.into());
     props
 }
 
@@ -66,23 +61,14 @@ impl Source {
     pub fn new(name: &str, light: LightData) -> Self {
         let mut props = create_default_props();
         props.set("name", name.into());
-        props.set(
-            "light data",
-            Property {
-                prop: Proptype::LightData(Some(light.clone())),
-            },
-        );
+        props.set("light data", Some(light.clone()).into());
         Source { props }
     }
 
     /// Sets the light data of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
     pub fn set_light_data(&mut self, light_data: LightData) {
-        self.props.set(
-            "light data",
-            Property {
-                prop: Proptype::LightData(Some(light_data.clone())),
-            },
-        );
+        self.props
+            .set("light data", Some(light_data.clone()).into());
     }
 }
 
@@ -117,7 +103,6 @@ impl Optical for Source {
         ports.add_output("out1").unwrap();
         ports
     }
-
     fn analyze(
         &mut self,
         _incoming_edges: LightResult,
@@ -132,7 +117,7 @@ impl Optical for Source {
         if data.is_some() {
             Ok(HashMap::from([("out1".into(), data.to_owned())]))
         } else {
-            Err(OpossumError::Analysis("no input data available".into()))
+            Err(OpossumError::Analysis("no light data defined".into()))
         }
     }
     fn properties(&self) -> &Properties {

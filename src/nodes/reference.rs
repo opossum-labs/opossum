@@ -71,15 +71,15 @@ impl Optical for NodeReference {
             OpticPorts::default()
         }
     }
-
     fn analyze(
         &mut self,
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let rf = &self.reference.clone().ok_or(OpossumError::Analysis(
-            "reference node has no reference defined".into(),
-        ))?;
+        let rf = &self
+            .reference
+            .clone()
+            .ok_or(OpossumError::Analysis("no reference defined".into()))?;
         rf.upgrade()
             .unwrap()
             .borrow_mut()

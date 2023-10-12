@@ -1,5 +1,5 @@
 //! ![OPOSSUM logo][opossum_logo]
-//! 
+//!
 //! This is the documentation for the **OPOSSUM** software package. **OPOSSUM** stands for
 //! **Op**en-source **O**ptics **S**imulation **S**oftware and **U**nified **M**odeller.
 //!
@@ -12,29 +12,28 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
            to enable."
 )]
 
+pub mod analyzer;
+pub mod dottable;
+pub mod error;
 mod light;
 pub mod lightdata;
-/// The basic structure representing an optical element
-pub mod optical;
-pub mod dottable;
+pub mod nodes;
+pub mod optic_ports;
 /// The basic structure containing the entire optical model
 mod optic_scenery;
-pub mod optic_ports;
-pub mod nodes;
-pub mod analyzer;
-pub mod error;
-pub mod spectrum;
+/// The basic structure representing an optical element
+pub mod optical;
 /// Handling of node properties
 pub mod properties;
+pub mod spectrum;
 use chrono::DateTime;
 pub use optic_scenery::OpticScenery;
 /// Module for handling the OPOSSUM CLI
 pub mod console;
 mod optic_graph;
 
-
 /// Return the version information of the currently built OPOSSUM executable.
-/// 
+///
 /// This function returs a `String` which contains the current Git tag/hash combination as well as
 /// the timestamp of this commit.
 fn get_version() -> String {
