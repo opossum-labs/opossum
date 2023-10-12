@@ -119,6 +119,9 @@ impl Optical for EnergyMeter {
         self.light_data = data.clone();
         Ok(HashMap::from([(target.into(), data.clone())]))
     }
+    fn inverted(&self) -> bool {
+        self.properties().get_bool("inverted").unwrap().unwrap()
+    }
     fn is_detector(&self) -> bool {
         true
     }
@@ -180,6 +183,13 @@ mod test {
         let meter = EnergyMeter::new("test", Metertype::IdealPowerMeter);
         assert!(meter.light_data.is_none());
         assert_eq!(meter.meter_type(), Metertype::IdealPowerMeter);
+        assert_eq!(meter.name(), "test");
+    }
+    #[test]
+    fn inverted() {
+        let mut meter = EnergyMeter::new("test", Metertype::IdealPowerMeter);
+        meter.set_property("inverted", true.into()).unwrap();
+        assert_eq!(meter.inverted(), true);
     }
     #[test]
     fn set_meter_type() {
@@ -198,13 +208,27 @@ mod test {
     fn analyze() {
         let mut meter = EnergyMeter::default();
         let mut input = LightResult::default();
-        input.insert(
-            "in1".into(),
-            Some(LightData::Energy(DataEnergy {
-                spectrum: create_he_ne_spectrum(1.0),
-            })),
-        );
+        let input_data = Some(LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        }));
+        input.insert("in1".into(), input_data.clone());
         let result = meter.analyze(input, &AnalyzerType::Energy);
         assert!(result.is_ok());
+        assert!(result.clone().unwrap().contains_key("out1"));
+        assert_eq!(result.unwrap().get("out1").unwrap(), &input_data);
+    }
+    #[test]
+    fn analyze_inverted() {
+        let mut meter = EnergyMeter::default();
+        let mut input = LightResult::default();
+        meter.set_property("inverted", true.into()).unwrap();
+        let input_data = Some(LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        }));
+        input.insert("out1".into(), input_data.clone());
+        let result = meter.analyze(input, &AnalyzerType::Energy);
+        assert!(result.is_ok());
+        assert!(result.clone().unwrap().contains_key("in1"));
+        assert_eq!(result.unwrap().get("in1").unwrap(), &input_data);
     }
 }
