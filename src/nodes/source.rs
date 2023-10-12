@@ -103,7 +103,6 @@ impl Optical for Source {
         ports.add_output("out1").unwrap();
         ports
     }
-
     fn analyze(
         &mut self,
         _incoming_edges: LightResult,
@@ -118,7 +117,7 @@ impl Optical for Source {
         if data.is_some() {
             Ok(HashMap::from([("out1".into(), data.to_owned())]))
         } else {
-            Err(OpossumError::Analysis("no input data available".into()))
+            Err(OpossumError::Analysis("no light data defined".into()))
         }
     }
     fn properties(&self) -> &Properties {
