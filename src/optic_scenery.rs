@@ -11,7 +11,7 @@ use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_graph::OpticGraph;
 use crate::optical::{LightResult, OpticRef, Optical};
-use crate::properties::{Properties, Property, Proptype};
+use crate::properties::{Properties, Proptype};
 use chrono::Local;
 use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
@@ -182,7 +182,12 @@ impl OpticScenery {
                 .borrow_mut()
                 .analyze(incoming_edges, analyzer_type)
                 .map_err(|e| {
-                    format!("analysis of node {} failed: {}", node.0.borrow().name(), e)
+                    format!(
+                        "analysis of node {} <{}> failed: {}",
+                        node.0.borrow().name(),
+                        node.0.borrow().node_type(),
+                        e
+                    )
                 })?;
             for outgoing_edge in outgoing_edges {
                 self.set_outgoing_edge_data(idx, outgoing_edge.0, outgoing_edge.1)
@@ -192,14 +197,7 @@ impl OpticScenery {
     }
     /// Sets the description of this [`OpticScenery`].
     pub fn set_description(&mut self, description: &str) {
-        self.props
-            .set(
-                "description",
-                Property {
-                    prop: Proptype::String(description.into()),
-                },
-            )
-            .unwrap();
+        self.props.set("description", description.into()).unwrap();
     }
     /// Returns a reference to the description of this [`OpticScenery`].
     pub fn description(&self) -> &str {

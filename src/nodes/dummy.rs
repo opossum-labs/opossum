@@ -59,7 +59,6 @@ impl Optical for Dummy {
         }
         panic!("wrong format");
     }
-    /// Returns "dummy" as node type.
     fn node_type(&self) -> &str {
         "dummy"
     }
@@ -72,7 +71,6 @@ impl Optical for Dummy {
         }
         ports
     }
-
     fn analyze(
         &mut self,
         incoming_data: LightResult,
