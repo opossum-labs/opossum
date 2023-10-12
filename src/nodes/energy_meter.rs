@@ -208,32 +208,27 @@ mod test {
     fn analyze() {
         let mut meter = EnergyMeter::default();
         let mut input = LightResult::default();
-        let input_data=Some(LightData::Energy(DataEnergy {
+        let input_data = Some(LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spectrum(1.0),
         }));
-        input.insert(
-            "in1".into(),
-            input_data.clone(),
-        );
+        input.insert("in1".into(), input_data.clone());
         let result = meter.analyze(input, &AnalyzerType::Energy);
         assert!(result.is_ok());
         assert!(result.clone().unwrap().contains_key("out1"));
-        assert!(result.unwrap().get("out1").unwrap().is_some());
+        assert_eq!(result.unwrap().get("out1").unwrap(), &input_data);
     }
     #[test]
     fn analyze_inverted() {
         let mut meter = EnergyMeter::default();
         let mut input = LightResult::default();
         meter.set_property("inverted", true.into()).unwrap();
-        input.insert(
-            "out1".into(),
-            Some(LightData::Energy(DataEnergy {
-                spectrum: create_he_ne_spectrum(1.0),
-            })),
-        );
+        let input_data = Some(LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        }));
+        input.insert("out1".into(), input_data.clone());
         let result = meter.analyze(input, &AnalyzerType::Energy);
         assert!(result.is_ok());
         assert!(result.clone().unwrap().contains_key("in1"));
-        assert!(result.unwrap().get("in1").unwrap().is_some());
+        assert_eq!(result.unwrap().get("in1").unwrap(), &input_data);
     }
 }
