@@ -105,7 +105,7 @@ impl BeamSplitter {
                     s.scale_vertical(1.0 - self.ratio()).unwrap();
                     out1_2_spectrum = Some(s);
                 }
-                _ => return Err(OpossumError::Analysis("expected DataEnergy value".into())),
+                _ => return Err(OpossumError::Analysis("expected DataEnergy value at input port".into())),
             }
         }
         if let Some(Some(in2)) = in2 {
@@ -118,7 +118,7 @@ impl BeamSplitter {
                     s.scale_vertical(1.0 - self.ratio()).unwrap();
                     out2_2_spectrum = Some(s);
                 }
-                _ => return Err(OpossumError::Analysis("expected DataEnergy value".into())),
+                _ => return Err(OpossumError::Analysis("expected DataEnergy value at input port".into())),
             }
         }
         let out1_spec = merge_spectra(out1_1_spectrum, out2_2_spectrum);

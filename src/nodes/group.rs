@@ -355,7 +355,8 @@ impl NodeGroup {
         let g_clone = self.g.0.clone();
         let mut group_srcs = g_clone.externals(Direction::Incoming);
         let mut light_result = LightResult::default();
-        let sorted = toposort(&g_clone, None).unwrap();
+        let sorted = toposort(&self.g.0, None)
+            .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
         for idx in sorted {
             // Check if node is group src node
             let incoming_edges = if group_srcs.any(|gs| gs == idx) {
