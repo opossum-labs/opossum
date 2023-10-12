@@ -10,7 +10,6 @@ use crate::{
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::path::{Path, PathBuf};
 
 /// This node represents an universal detector (so far for test / debugging purposes).
 ///
@@ -83,18 +82,12 @@ impl Optical for Detector {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        if let Some(data) = incoming_data.get("in1") {
-            self.light_data = data.clone();
+        if !self.inverted() {
+            let data = incoming_data.get("in1").unwrap_or(&None);
             Ok(HashMap::from([("out1".into(), data.clone())]))
         } else {
-            Ok(HashMap::from([("out2".into(), None)]))
-        }
-    }
-    fn export_data(&self, report_dir: &Path) {
-        if let Some(data) = &self.light_data {
-            let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!("spectrum_{}.svg", self.name()));
-            data.export(&file_path)
+            let data = incoming_data.get("out1").unwrap_or(&None);
+            Ok(HashMap::from([("in1".into(), data.clone())]))
         }
     }
     fn is_detector(&self) -> bool {

@@ -120,7 +120,7 @@ impl From<PortMap> for Property {
 impl From<Option<LightData>> for Property {
     fn from(value: Option<LightData>) -> Self {
         Property {
-            prop: Proptype::LightData(value), 
+            prop: Proptype::LightData(value),
         }
     }
 }

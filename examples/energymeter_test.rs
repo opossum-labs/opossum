@@ -1,0 +1,29 @@
+use std::path::Path;
+
+use opossum::{
+    error::OpossumError,
+    lightdata::{DataEnergy, LightData},
+    nodes::{EnergyMeter, Source},
+    spectrum::create_he_ne_spectrum,
+    OpticScenery,
+};
+
+fn main() -> Result<(), OpossumError> {
+    let mut scenery = OpticScenery::new();
+    scenery.set_description("energymeter demo");
+
+    let i_s = scenery.add_node(Source::new(
+        "Source",
+        LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        }),
+    ));
+    let i_d = scenery.add_node(EnergyMeter::new(
+        "Energy meter 1",
+        opossum::nodes::Metertype::IdealEnergyMeter,
+    ));
+
+    scenery.connect_nodes(i_s, "out1", i_d, "in1")?;
+    scenery.save_to_file(Path::new("energymeter_test.opm"))?;
+    Ok(())
+}

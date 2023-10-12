@@ -67,7 +67,8 @@ impl Source {
 
     /// Sets the light data of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
     pub fn set_light_data(&mut self, light_data: LightData) {
-        self.props.set("light data", Some(light_data.clone()).into());
+        self.props
+            .set("light data", Some(light_data.clone()).into());
     }
 }
 

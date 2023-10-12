@@ -43,7 +43,6 @@ pub enum Metertype {
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct EnergyMeter {
     light_data: Option<LightData>,
-    //meter_type: Metertype,
     props: Properties,
 }
 
@@ -58,8 +57,7 @@ fn create_default_props() -> Properties {
 impl Default for EnergyMeter {
     fn default() -> Self {
         Self {
-            light_data: Default::default(),
-            //meter_type: Default::default(),
+            light_data: None,
             props: create_default_props(),
         }
     }
@@ -71,8 +69,8 @@ impl EnergyMeter {
         props.set("name", name.into());
         props.set("meter type", meter_type.into());
         EnergyMeter {
-            light_data: None,
             props,
+            ..Default::default()
         }
     }
     /// Returns the meter type of this [`EnergyMeter`].
@@ -112,12 +110,14 @@ impl Optical for EnergyMeter {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        if let Some(data) = incoming_data.get("in1") {
-            self.light_data = data.clone();
-            Ok(HashMap::from([("out1".into(), data.clone())]))
+        let (src, target) = if self.inverted() {
+            ("out1", "in1")
         } else {
-            Ok(HashMap::from([("out2".into(), None)]))
-        }
+            ("in1", "out1")
+        };
+        let data = incoming_data.get(src).unwrap_or(&None);
+        self.light_data = data.clone();
+        Ok(HashMap::from([(target.into(), data.clone())]))
     }
     fn is_detector(&self) -> bool {
         true
