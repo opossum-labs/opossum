@@ -140,6 +140,7 @@ impl Dottable for Source {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
     #[test]
     fn default() {
         let node = Source::default();
@@ -162,8 +163,31 @@ mod test {
     }
     #[test]
     fn ports() {
-        let detector = Source::default();
-        assert!(detector.ports().inputs().is_empty());
-        assert_eq!(detector.ports().outputs(), vec!["out1"]);
+        let node = Source::default();
+        assert!(node.ports().inputs().is_empty());
+        assert_eq!(node.ports().outputs(), vec!["out1"]);
+    }
+    #[test]
+    fn analyze_empty() {
+        let mut node = Source::default();
+        let incoming_data: LightResult = LightResult::default();
+        assert!(node.analyze(incoming_data, &AnalyzerType::Energy).is_err())
+    }
+    #[test]
+    fn analyze_ok() {
+        let light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        let mut node = Source::new("test", light.clone());
+        let incoming_data: LightResult = LightResult::default();
+        let output = node.analyze(incoming_data, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("out1".into()));
+        assert_eq!(output.len(), 1);
+        let output = output.get("out1".into()).unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output, light);
     }
 }
