@@ -120,6 +120,8 @@ impl Dottable for Detector {
 }
 #[cfg(test)]
 mod test {
+    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
+
     use super::*;
     #[test]
     fn default() {
@@ -147,5 +149,57 @@ mod test {
         let node = Detector::default();
         assert_eq!(node.ports().inputs(), vec!["in1"]);
         assert_eq!(node.ports().outputs(), vec!["out1"]);
+    }
+    #[test]
+    fn analyze_ok() {
+        let mut node = Detector::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        input.insert("in1".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("out1".into()));
+        assert_eq!(output.len(), 1);
+        let output = output.get("out1".into()).unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output, input_light);
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut node = Detector::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        input.insert("wrong".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        let output = output.get("out1".into()).unwrap();
+        assert!(output.is_none());
+    }
+    #[test]
+    fn analyze_inverse() {
+        let mut node = Detector::default();
+        node.set_property("inverted", true.into()).unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        input.insert("out1".into(), Some(input_light.clone()));
+
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("in1".into()));
+        assert_eq!(output.len(), 1);
+        let output = output.get("in1".into()).unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output, input_light);
     }
 }
