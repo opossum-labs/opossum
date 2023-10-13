@@ -44,10 +44,11 @@ impl BeamSplitter {
     /// ## Errors
     /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
     /// [0.0..1.0].
-    pub fn new(ratio: f64) -> OpmResult<Self> {
+    pub fn new(name: &str, ratio: f64) -> OpmResult<Self> {
         if (0.0..=1.0).contains(&ratio) {
             let mut props = create_default_props();
             props.set("ratio", ratio.into());
+            props.set("name", name.into());
             Ok(Self { props })
         } else {
             Err(OpossumError::Other(
@@ -237,20 +238,22 @@ mod test {
     }
     #[test]
     fn new() {
-        let splitter = BeamSplitter::new(0.6);
+        let splitter = BeamSplitter::new("test", 0.6);
         assert!(splitter.is_ok());
-        assert_eq!(splitter.unwrap().ratio(), 0.6);
-        assert!(BeamSplitter::new(-0.01).is_err());
-        assert!(BeamSplitter::new(1.01).is_err());
+        let splitter = splitter.unwrap();
+        assert_eq!(splitter.name(), "test");
+        assert_eq!(splitter.ratio(), 0.6);
+        assert!(BeamSplitter::new("test", -0.01).is_err());
+        assert!(BeamSplitter::new("test", 1.01).is_err());
     }
     #[test]
     fn ratio() {
-        let splitter = BeamSplitter::new(0.5).unwrap();
+        let splitter = BeamSplitter::new("test", 0.5).unwrap();
         assert_eq!(splitter.ratio(), 0.5);
     }
     #[test]
     fn set_ratio() {
-        let mut splitter = BeamSplitter::new(0.0).unwrap();
+        let mut splitter = BeamSplitter::new("test", 0.0).unwrap();
         assert!(splitter.set_ratio(1.0).is_ok());
         assert_eq!(splitter.ratio(), 1.0);
         assert!(splitter.set_ratio(-0.1).is_err());

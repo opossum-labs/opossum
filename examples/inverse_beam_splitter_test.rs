@@ -18,7 +18,7 @@ fn main() -> Result<(), OpossumError> {
             spectrum: create_he_ne_spectrum(1.0),
         }),
     ));
-    let mut bs = BeamSplitter::new(0.6).unwrap();
+    let mut bs = BeamSplitter::new("bs", 0.6).unwrap();
     bs.set_property("inverted", true.into()).unwrap();
     let i_bs = scenery.add_node(bs);
     let i_d1 = scenery.add_node(EnergyMeter::new(

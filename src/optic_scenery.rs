@@ -452,7 +452,7 @@ mod test {
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into());
         let i_s = scenery.add_node(Source::new("Source", LightData::Fourier));
-        let mut bs = BeamSplitter::new(0.6).unwrap();
+        let mut bs = BeamSplitter::new("test", 0.6).unwrap();
         bs.set_property("name", "Beam splitter".into()).unwrap();
         let i_bs = scenery.add_node(bs);
         let i_d1 = scenery.add_node(EnergyMeter::new(

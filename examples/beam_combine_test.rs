@@ -24,7 +24,7 @@ fn main() -> Result<(), OpossumError> {
             spectrum: create_nd_glass_spectrum(1.0),
         }),
     ));
-    let i_bs = scenery.add_node(BeamSplitter::new(0.5).unwrap());
+    let i_bs = scenery.add_node(BeamSplitter::new("bs", 0.5).unwrap());
     let filter_spectrum = Spectrum::from_csv("NE03B.csv")?;
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
