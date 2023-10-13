@@ -224,6 +224,10 @@ impl Dottable for BeamSplitter {
 
 #[cfg(test)]
 mod test {
+    use approx::AbsDiffEq;
+
+    use crate::spectrum::create_he_ne_spectrum;
+
     use super::*;
     #[test]
     fn default() {
@@ -268,11 +272,135 @@ mod test {
     #[test]
     fn ports() {
         let node = BeamSplitter::default();
-        let mut input_ports=node.ports().inputs();
+        let mut input_ports = node.ports().inputs();
         input_ports.sort();
         assert_eq!(input_ports, vec!["input1", "input2"]);
-        let mut output_ports= node.ports().outputs();
+        let mut output_ports = node.ports().outputs();
         output_ports.sort();
         assert_eq!(output_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
+    }
+    #[test]
+    fn analyze_wrong_analyszer() {
+        let mut node = BeamSplitter::default();
+        let input = LightResult::default();
+        assert!(node
+            .analyze(input, &AnalyzerType::ParAxialRayTrace)
+            .is_err());
+    }
+    #[test]
+    fn analyze_empty_input() {
+        let mut node = BeamSplitter::default();
+        let input = LightResult::default();
+        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        assert!(output.contains_key("out1_trans1_refl2"));
+        assert!(output.contains_key("out2_trans2_refl1"));
+        assert!(output.clone().get("out1_trans1_refl2").unwrap().is_none());
+        assert!(output.get("out2_trans2_refl1").unwrap().is_none());
+    }
+    #[test]
+    fn analyze_one_input() {
+        let mut node = BeamSplitter::new("test", 0.6).unwrap();
+        let mut input = LightResult::default();
+        input.insert(
+            "input1".into(),
+            Some(LightData::Energy(DataEnergy {
+                spectrum: create_he_ne_spectrum(1.0),
+            })),
+        );
+        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output1_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(0.6),
+        });
+        assert_eq!(
+            output
+                .clone()
+                .get("out1_trans1_refl2")
+                .unwrap()
+                .clone()
+                .unwrap(),
+            output1_light
+        );
+        let output2_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(0.4),
+        });
+        assert_eq!(
+            output.get("out2_trans2_refl1").unwrap().clone().unwrap(),
+            output2_light
+        );
+    }
+    #[test]
+    fn analyze_two_input() {
+        let mut node = BeamSplitter::new("test", 0.6).unwrap();
+        let mut input = LightResult::default();
+        input.insert(
+            "input1".into(),
+            Some(LightData::Energy(DataEnergy {
+                spectrum: create_he_ne_spectrum(1.0),
+            })),
+        );
+        input.insert(
+            "input2".into(),
+            Some(LightData::Energy(DataEnergy {
+                spectrum: create_he_ne_spectrum(0.5),
+            })),
+        );
+        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let energy_output1 = if let LightData::Energy(s) = output
+            .clone()
+            .get("out1_trans1_refl2")
+            .unwrap()
+            .clone()
+            .unwrap()
+        {
+            s.spectrum.total_energy()
+        } else {
+            0.0
+        };
+        assert!(energy_output1.abs_diff_eq(&0.8, f64::EPSILON));
+        let energy_output2 = if let LightData::Energy(s) = output
+            .clone()
+            .get("out2_trans2_refl1")
+            .unwrap()
+            .clone()
+            .unwrap()
+        {
+            s.spectrum.total_energy()
+        } else {
+            0.0
+        };
+        assert!(energy_output2.abs_diff_eq(&0.7, f64::EPSILON));
+    }
+    #[test]
+    fn analyze_inverse() {
+        let mut node = BeamSplitter::new("test", 0.6).unwrap();
+        node.set_property("inverted", true.into()).unwrap();
+        let mut input = LightResult::default();
+        input.insert(
+            "out1_trans1_refl2".into(),
+            Some(LightData::Energy(DataEnergy {
+                spectrum: create_he_ne_spectrum(1.0),
+            })),
+        );
+        input.insert(
+            "out2_trans2_refl1".into(),
+            Some(LightData::Energy(DataEnergy {
+                spectrum: create_he_ne_spectrum(0.5),
+            })),
+        );
+        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let energy_output1 =
+            if let LightData::Energy(s) = output.clone().get("input1").unwrap().clone().unwrap() {
+                s.spectrum.total_energy()
+            } else {
+                0.0
+            };
+        assert!(energy_output1.abs_diff_eq(&0.8, f64::EPSILON));
+        let energy_output2 =
+            if let LightData::Energy(s) = output.clone().get("input2").unwrap().clone().unwrap() {
+                s.spectrum.total_energy()
+            } else {
+                0.0
+            };
+        assert!(energy_output2.abs_diff_eq(&0.7, f64::EPSILON));
     }
 }
