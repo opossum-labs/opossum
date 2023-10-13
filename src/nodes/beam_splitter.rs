@@ -259,4 +259,20 @@ mod test {
         assert!(splitter.set_ratio(-0.1).is_err());
         assert!(splitter.set_ratio(1.1).is_err());
     }
+    #[test]
+    fn inverted() {
+        let mut node = BeamSplitter::default();
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.inverted(), true)
+    }
+    #[test]
+    fn ports() {
+        let node = BeamSplitter::default();
+        let mut input_ports=node.ports().inputs();
+        input_ports.sort();
+        assert_eq!(input_ports, vec!["input1", "input2"]);
+        let mut output_ports= node.ports().outputs();
+        output_ports.sort();
+        assert_eq!(output_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
+    }
 }
