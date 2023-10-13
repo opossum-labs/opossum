@@ -43,8 +43,8 @@ fn create_default_props() -> Properties {
     props.set("filter type", FilterType::Constant(1.0).into());
     props
 }
-
 impl Default for IdealFilter {
+    /// Create an ideal filter node with a transmission of 100%.
     fn default() -> Self {
         Self {
             props: create_default_props(),
@@ -58,7 +58,7 @@ impl IdealFilter {
     ///
     /// This function will return an [`OpossumError::Other`] if the filter type is
     /// [`FilterType::Constant`] and the transmission factor is outside the interval [0.0; 1.0].
-    pub fn new(filter_type: FilterType) -> OpmResult<Self> {
+    pub fn new(name: &str, filter_type: FilterType) -> OpmResult<Self> {
         if let FilterType::Constant(transmission) = filter_type {
             if !(0.0..=1.0).contains(&transmission) {
                 return Err(OpossumError::Other(
@@ -68,6 +68,7 @@ impl IdealFilter {
         }
         let mut props = create_default_props();
         props.set("filter type", filter_type.into());
+        props.set("name", name.into());
         Ok(Self { props })
     }
     /// Returns the filter type of this [`IdealFilter`].
@@ -206,6 +207,8 @@ impl Dottable for IdealFilter {
 }
 #[cfg(test)]
 mod test {
+    use crate::spectrum::create_he_ne_spectrum;
+
     use super::*;
     #[test]
     fn default() {
@@ -220,7 +223,8 @@ mod test {
     }
     #[test]
     fn new() {
-        let node = IdealFilter::new(FilterType::Constant(0.8)).unwrap();
+        let node = IdealFilter::new("test", FilterType::Constant(0.8)).unwrap();
+        assert_eq!(node.name(), "test");
         assert_eq!(node.filter_type(), FilterType::Constant(0.8));
     }
     #[test]
@@ -234,5 +238,59 @@ mod test {
         let node = IdealFilter::default();
         assert_eq!(node.ports().inputs(), vec!["front"]);
         assert_eq!(node.ports().outputs(), vec!["rear"]);
+    }
+    #[test]
+    fn analyze_ok() {
+        let mut node = IdealFilter::new("test", FilterType::Constant(0.5)).unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        input.insert("front".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("rear".into()));
+        assert_eq!(output.len(), 1);
+        let output = output.get("rear".into()).unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        let expected_output_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(0.5),
+        });
+        assert_eq!(output, expected_output_light);
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut node = IdealFilter::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        input.insert("rear".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_err());
+    }
+    #[test]
+    fn analyze_inverse() {
+        let mut node = IdealFilter::new("test", FilterType::Constant(0.5)).unwrap();
+        node.set_property("inverted", true.into()).unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        input.insert("rear".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("front".into()));
+        assert_eq!(output.len(), 1);
+        let output = output.get("front".into()).unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        let expected_output_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(0.5),
+        });
+        assert_eq!(output, expected_output_light);
     }
 }

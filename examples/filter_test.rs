@@ -20,7 +20,10 @@ fn main() -> Result<(), OpossumError> {
     ));
     let i_bs = scenery.add_node(BeamSplitter::new(0.6).unwrap());
     let filter_spectrum = Spectrum::from_csv("NE03B.csv")?;
-    let i_f = scenery.add_node(IdealFilter::new(FilterType::Spectrum(filter_spectrum))?);
+    let i_f = scenery.add_node(IdealFilter::new(
+        "filter",
+        FilterType::Spectrum(filter_spectrum),
+    )?);
     let i_d1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
         opossum::nodes::Metertype::IdealEnergyMeter,

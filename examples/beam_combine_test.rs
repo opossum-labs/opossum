@@ -26,7 +26,10 @@ fn main() -> Result<(), OpossumError> {
     ));
     let i_bs = scenery.add_node(BeamSplitter::new(0.5).unwrap());
     let filter_spectrum = Spectrum::from_csv("NE03B.csv")?;
-    let i_f = scenery.add_node(IdealFilter::new(FilterType::Spectrum(filter_spectrum))?);
+    let i_f = scenery.add_node(IdealFilter::new(
+        "filter",
+        FilterType::Spectrum(filter_spectrum),
+    )?);
     let i_d1 = scenery.add_node(Detector::default()); // Detector 1
 
     scenery.connect_nodes(i_s1, "out1", i_bs, "input1")?;
