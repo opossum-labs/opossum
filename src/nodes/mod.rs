@@ -32,7 +32,7 @@ pub use spectrometer::SpectrometerType;
 use crate::error::OpmResult;
 use crate::error::OpossumError;
 
-use crate::optical::OpticRef;
+use crate::optic_ref::OpticRef;
 
 pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
     match node_type {

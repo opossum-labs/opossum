@@ -6,10 +6,11 @@ use serde::{
 };
 use std::{cell::RefCell, rc::Rc};
 
+use crate::optic_ref::OpticRef;
 use crate::{
     error::{OpmResult, OpossumError},
     light::Light,
-    optical::{OpticRef, Optical},
+    optical::Optical,
 };
 
 #[derive(Debug, Default, Clone)]
