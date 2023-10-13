@@ -57,6 +57,7 @@ fn create_default_props() -> Properties {
     props
 }
 impl Default for Spectrometer {
+    /// create an ideal spectrometer.
     fn default() -> Self {
         Self {
             light_data: None,
@@ -66,9 +67,10 @@ impl Default for Spectrometer {
 }
 impl Spectrometer {
     /// Creates a new [`Spectrometer`] of the given [`SpectrometerType`].
-    pub fn new(spectrometer_type: SpectrometerType) -> Self {
+    pub fn new(name: &str, spectrometer_type: SpectrometerType) -> Self {
         let mut props = create_default_props();
         props.set("spectrometer type", spectrometer_type.into());
+        props.set("name", name.into());
         Spectrometer {
             props,
             ..Default::default()
@@ -201,13 +203,14 @@ mod test {
     }
     #[test]
     fn new() {
-        let meter = Spectrometer::new(SpectrometerType::HR2000);
+        let meter = Spectrometer::new("test", SpectrometerType::HR2000);
+        assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
         assert_eq!(meter.spectrometer_type(), SpectrometerType::HR2000);
     }
     #[test]
     fn set_meter_type() {
-        let mut meter = Spectrometer::new(SpectrometerType::IdealSpectrometer);
+        let mut meter = Spectrometer::new("test", SpectrometerType::IdealSpectrometer);
         meter.set_spectrometer_type(SpectrometerType::HR2000);
         assert_eq!(meter.spectrometer_type(), SpectrometerType::HR2000);
     }
