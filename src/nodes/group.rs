@@ -761,7 +761,7 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1"));
         let sn2_i = og.add_node(Dummy::new("n2"));
-        let sub_node3 = BeamSplitter::new(0.5).unwrap();
+        let sub_node3 = BeamSplitter::new("test", 0.5).unwrap();
         let sn3_i = og.add_node(sub_node3);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         og.connect_nodes(sn2_i, "rear", sn3_i, "input1").unwrap();
@@ -771,7 +771,7 @@ mod test {
     fn output_nodes() {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1"));
-        let sub_node1 = BeamSplitter::new(0.5).unwrap();
+        let sub_node1 = BeamSplitter::new("test", 0.5).unwrap();
         let sn2_i = og.add_node(sub_node1);
         let sn3_i = og.add_node(Dummy::new("n3"));
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
