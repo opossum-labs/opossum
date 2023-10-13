@@ -5,20 +5,32 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
+use uuid::Uuid;
 
 use crate::{nodes::create_node_ref, optical::Optical, properties::Properties};
 
 #[derive(Debug, Clone)]
-pub struct OpticRef(pub Rc<RefCell<dyn Optical>>);
+pub struct OpticRef {
+    pub optical_ref: Rc<RefCell<dyn Optical>>,
+    pub uuid: Uuid,
+}
 
+impl OpticRef {
+    pub fn new(node: Rc<RefCell<dyn Optical>>) -> Self {
+        Self {
+            optical_ref: node,
+            uuid: Uuid::new_v4(),
+        }
+    }
+}
 impl Serialize for OpticRef {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         let mut node = serializer.serialize_struct("node", 1)?;
-        node.serialize_field("type", self.0.borrow().node_type())?;
-        node.serialize_field("properties", &self.0.borrow().properties())?;
+        node.serialize_field("type", self.optical_ref.borrow().node_type())?;
+        node.serialize_field("properties", &self.optical_ref.borrow().properties())?;
         node.end()
     }
 }
@@ -83,7 +95,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
                 let node =
                     create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
-                node.0
+                node.optical_ref
                     .borrow_mut()
                     .set_properties(&properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
@@ -117,7 +129,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                     properties.ok_or_else(|| de::Error::missing_field("properties"))?;
                 let node =
                     create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
-                node.0
+                node.optical_ref
                     .borrow_mut()
                     .set_properties(&properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;

@@ -1,10 +1,11 @@
+use std::{cell::RefCell, rc::Rc};
+
 use petgraph::{algo::is_cyclic_directed, prelude::DiGraph, stable_graph::NodeIndex};
 use serde::{
     de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
-use std::{cell::RefCell, rc::Rc};
 
 use crate::optic_ref::OpticRef;
 use crate::{
@@ -18,7 +19,7 @@ pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
 
 impl OpticGraph {
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        self.0.add_node(OpticRef(Rc::new(RefCell::new(node))))
+        self.0.add_node(OpticRef::new(Rc::new(RefCell::new(node))))
     }
 
     pub fn connect_nodes(
@@ -35,7 +36,7 @@ impl OpticGraph {
                 "source node with given index does not exist".into(),
             ))?;
         if !source
-            .0
+            .optical_ref
             .borrow()
             .ports()
             .outputs()
@@ -43,7 +44,7 @@ impl OpticGraph {
         {
             return Err(OpossumError::OpticScenery(format!(
                 "source node {} does not have a port {}",
-                source.0.borrow().name(),
+                source.optical_ref.borrow().name(),
                 src_port
             )));
         }
@@ -54,7 +55,7 @@ impl OpticGraph {
                 "target node with given index does not exist".into(),
             ))?;
         if !target
-            .0
+            .optical_ref
             .borrow()
             .ports()
             .inputs()
@@ -62,7 +63,7 @@ impl OpticGraph {
         {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} does not have a port {}",
-                target.0.borrow().name(),
+                target.optical_ref.borrow().name(),
                 target_port
             )));
         }
@@ -70,19 +71,19 @@ impl OpticGraph {
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "src node <{}> with port <{}> is already connected",
-                source.0.borrow().name(),
+                source.optical_ref.borrow().name(),
                 src_port
             )));
         }
         if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "target node <{}> with port <{}> is already connected",
-                target.0.borrow().name(),
+                target.optical_ref.borrow().name(),
                 target_port
             )));
         }
-        let src_name = source.0.borrow().name().to_owned();
-        let target_name = target.0.borrow().name().to_owned();
+        let src_name = source.optical_ref.borrow().name().to_owned();
+        let target_name = target.optical_ref.borrow().name().to_owned();
         let edge_index = self
             .0
             .add_edge(src_node, target_node, Light::new(src_port, target_port));

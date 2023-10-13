@@ -45,7 +45,7 @@ impl NodeReference {
     // Create new [`NodeReference`] referring to another existing [`OpticRef`].
     pub fn from_node(node: OpticRef) -> Self {
         Self {
-            reference: Some(Rc::downgrade(&node.0)),
+            reference: Some(Rc::downgrade(&node.optical_ref)),
             props: create_default_props(),
         }
     }
