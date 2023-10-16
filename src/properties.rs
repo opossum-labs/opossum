@@ -1,4 +1,5 @@
 use serde_derive::{Deserialize, Serialize};
+use uuid::Uuid;
 use std::collections::HashMap;
 
 use crate::{
@@ -124,6 +125,11 @@ impl From<Option<LightData>> for Property {
         }
     }
 }
+impl From<Uuid> for Property {
+    fn from(value: Uuid) -> Self {
+        Property { prop: Proptype::Uuid(value) }
+    }
+}
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Proptype {
@@ -137,4 +143,5 @@ pub enum Proptype {
     SpectrometerType(SpectrometerType),
     Metertype(Metertype),
     GroupPortMap(PortMap),
+    Uuid(Uuid)
 }

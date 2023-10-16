@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
+use uuid::Uuid;
+
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
@@ -31,6 +33,7 @@ fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props.set("name", "reference".into());
     props.set("inverted", false.into());
+    props.set("reference id",Uuid::nil().into());
     props
 }
 impl Default for NodeReference {
@@ -44,9 +47,11 @@ impl Default for NodeReference {
 impl NodeReference {
     // Create new [`NodeReference`] referring to another existing [`OpticRef`].
     pub fn from_node(node: OpticRef) -> Self {
+        let mut props=create_default_props();
+        props.set("reference id", node.uuid().into());
         Self {
             reference: Some(Rc::downgrade(&node.optical_ref)),
-            props: create_default_props(),
+            props: props,
         }
     }
 }
