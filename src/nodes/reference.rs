@@ -45,7 +45,7 @@ impl Default for NodeReference {
     }
 }
 impl NodeReference {
-    // Create new [`NodeReference`] referring to another existing [`OpticRef`].
+    /// Create new [`NodeReference`] referring to another existing [`OpticRef`].
     pub fn from_node(node: OpticRef) -> Self {
         let mut props=create_default_props();
         props.set("reference id", node.uuid().into());
