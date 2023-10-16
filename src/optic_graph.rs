@@ -6,6 +6,7 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
+use uuid::Uuid;
 
 use crate::optic_ref::OpticRef;
 use crate::{
@@ -105,6 +106,9 @@ impl OpticGraph {
         self.0
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
+    }
+    pub fn node(self, uuid: Uuid) -> Option<OpticRef> {
+        self.0.node_weights().find(|node| node.uuid()==uuid).cloned()
     }
 }
 impl Serialize for OpticGraph {
