@@ -8,7 +8,7 @@ use serde::{
 };
 use uuid::Uuid;
 
-use crate::optic_ref::OpticRef;
+use crate::{optic_ref::OpticRef, properties::Proptype};
 use crate::{
     error::{OpmResult, OpossumError},
     light::Light,
@@ -234,6 +234,22 @@ impl<'de> Deserialize<'de> for OpticGraph {
                 let edges = edges.ok_or_else(|| de::Error::missing_field("edges"))?;
                 for node in nodes.iter() {
                     g.0.add_node(node.clone());
+                }
+                // assign references to ref nodes (if any)
+                for node in nodes.iter() {
+                    if node.optical_ref.borrow().node_type()=="reference" {
+                        println!("Found reference node: Assign ref");
+                        let mut my_node=node.optical_ref.borrow_mut();
+                        let refnode=my_node.as_refnode_mut().unwrap();
+                        let node_props=refnode.properties().clone();
+                        let uuid=if let Proptype::Uuid(uuid)=node_props.get("reference id").unwrap().prop {
+                            uuid
+                        } else {
+                            Uuid::nil()
+                        };
+                        let ref_node=g.node(uuid).unwrap();
+                        refnode.assign_reference(ref_node);
+                    }
                 }
                 for edge in edges.iter() {
                     let src_idx = g.node_idx(edge.0).ok_or_else(|| {

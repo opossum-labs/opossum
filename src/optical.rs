@@ -4,7 +4,7 @@ use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::nodes::NodeGroup;
+use crate::nodes::{NodeGroup, NodeReference};
 use crate::optic_ports::OpticPorts;
 use crate::properties::{Properties, Property};
 use core::fmt::Debug;
@@ -55,6 +55,9 @@ pub trait Optical: Dottable {
     }
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
+    }
+    fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
+        Err(OpossumError::Other("cannot cast to reference node".into())) 
     }
     /// Return the properties of this [`Optical`].
     ///

@@ -51,8 +51,11 @@ impl NodeReference {
         props.set("reference id", node.uuid().into());
         Self {
             reference: Some(Rc::downgrade(&node.optical_ref)),
-            props: props,
+            props,
         }
+    }
+    pub fn assign_reference(&mut self, node: OpticRef) {
+        self.reference=Some(Rc::downgrade(&node.optical_ref));
     }
 }
 
@@ -100,6 +103,9 @@ impl Optical for NodeReference {
         } else {
             Ok(())
         }
+    }
+    fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
+        Ok(self)
     }
 }
 
