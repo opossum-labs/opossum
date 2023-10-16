@@ -33,7 +33,7 @@ fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props.set("name", "reference".into());
     props.set("inverted", false.into());
-    props.set("reference id",Uuid::nil().into());
+    props.set("reference id", Uuid::nil().into());
     props
 }
 impl Default for NodeReference {
@@ -47,7 +47,7 @@ impl Default for NodeReference {
 impl NodeReference {
     /// Create new [`NodeReference`] referring to another existing [`OpticRef`].
     pub fn from_node(node: OpticRef) -> Self {
-        let mut props=create_default_props();
+        let mut props = create_default_props();
         props.set("reference id", node.uuid().into());
         Self {
             reference: Some(Rc::downgrade(&node.optical_ref)),
@@ -55,7 +55,7 @@ impl NodeReference {
         }
     }
     pub fn assign_reference(&mut self, node: OpticRef) {
-        self.reference=Some(Rc::downgrade(&node.optical_ref));
+        self.reference = Some(Rc::downgrade(&node.optical_ref));
     }
 }
 
@@ -75,7 +75,11 @@ impl Optical for NodeReference {
     }
     fn ports(&self) -> OpticPorts {
         if let Some(rf) = &self.reference {
-            rf.upgrade().unwrap().borrow().ports().clone()
+            let mut ports = rf.upgrade().unwrap().borrow().ports().clone();
+            if self.inverted() {
+                ports.set_inverted(true);
+            }
+            ports
         } else {
             OpticPorts::default()
         }
@@ -156,5 +160,14 @@ mod test {
         let node = NodeReference::from_node(scenery.node(idx).unwrap());
         assert_eq!(node.ports().inputs(), vec!["front"]);
         assert_eq!(node.ports().outputs(), vec!["rear"]);
+    }
+    #[test]
+    fn ports_inverted() {
+        let mut scenery = OpticScenery::default();
+        let idx = scenery.add_node(Dummy::default());
+        let mut node = NodeReference::from_node(scenery.node(idx).unwrap());
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.ports().inputs(), vec!["rear"]);
+        assert_eq!(node.ports().outputs(), vec!["front"]);
     }
 }

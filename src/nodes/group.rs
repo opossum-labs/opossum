@@ -881,4 +881,8 @@ mod test {
         og.map_output_port(sn2_i, "rear", "output").unwrap();
         assert!(og.ports().outputs().contains(&("output".to_string())));
     }
+    #[test]
+    fn ports_inverted() {
+        todo!()
+    }
 }

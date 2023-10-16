@@ -66,7 +66,7 @@ impl Optical for Dummy {
         let mut ports = OpticPorts::new();
         ports.add_input("front").unwrap();
         ports.add_output("rear").unwrap();
-        if self.properties().get_bool("inverted").unwrap().unwrap() {
+        if self.inverted() {
             ports.set_inverted(true)
         }
         ports
