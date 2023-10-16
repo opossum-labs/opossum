@@ -107,8 +107,11 @@ impl OpticGraph {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
-    pub fn node(self, uuid: Uuid) -> Option<OpticRef> {
+    pub fn node(&self, uuid: Uuid) -> Option<OpticRef> {
         self.0.node_weights().find(|node| node.uuid()==uuid).cloned()
+    }
+    pub fn node_idx(&self, uuid: Uuid) -> NodeIndex {
+        self.0.node_indices().find(|idx| self.0.node_weight(*idx).unwrap().uuid()==uuid).unwrap()
     }
 }
 impl Serialize for OpticGraph {
@@ -127,13 +130,13 @@ impl Serialize for OpticGraph {
             .edge_indices()
             .map(|e| {
                 (
-                    g.edge_endpoints(e).unwrap().0,
-                    g.edge_endpoints(e).unwrap().1,
+                    g.node_weight(g.edge_endpoints(e).unwrap().0).unwrap().uuid(),
+                    g.node_weight(g.edge_endpoints(e).unwrap().1).unwrap().uuid(),
                     g.edge_weight(e).unwrap().src_port(),
                     g.edge_weight(e).unwrap().target_port(),
                 )
             })
-            .collect::<Vec<(NodeIndex, NodeIndex, &str, &str)>>();
+            .collect::<Vec<(Uuid, Uuid, &str, &str)>>();
         graph.serialize_field("edges", &edgeidx)?;
         graph.end()
     }
@@ -200,7 +203,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
             {
                 let mut g = OpticGraph::default();
                 let mut nodes: Option<Vec<OpticRef>> = None;
-                let mut edges: Option<Vec<(NodeIndex, NodeIndex, &str, &str)>> = None;
+                let mut edges: Option<Vec<(Uuid, Uuid, &str, &str)>> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Nodes => {
@@ -214,7 +217,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                                 return Err(de::Error::duplicate_field("edges"));
                             }
                             edges =
-                                Some(map.next_value::<Vec<(NodeIndex, NodeIndex, &str, &str)>>()?);
+                                Some(map.next_value::<Vec<(Uuid, Uuid, &str, &str)>>()?);
                         }
                     }
                 }
@@ -224,8 +227,9 @@ impl<'de> Deserialize<'de> for OpticGraph {
                     g.0.add_node(node.clone());
                 }
                 for edge in edges.iter() {
-                    //g.0.add_edge(edge.0, edge.1, Light::new(edge.2, edge.3));
-                    g.connect_nodes(edge.0, edge.2, edge.1, edge.3)
+                    let src_idx=g.node_idx(edge.0);
+                    let target_idx=g.node_idx(edge.1);
+                    g.connect_nodes(src_idx, edge.2, target_idx, edge.3)
                         .map_err(|e| {
                             de::Error::custom(format!("connecting OpticGraph nodes failed: {}", e))
                         })?;
