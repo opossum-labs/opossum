@@ -48,9 +48,9 @@ impl<'de> Deserialize<'de> for OpticRef {
         enum Field {
             NodeType,
             Properties,
-            Id
+            Id,
         }
-        const FIELDS: &[&str] = &["type", "properties","id"];
+        const FIELDS: &[&str] = &["type", "properties", "id"];
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -100,8 +100,8 @@ impl<'de> Deserialize<'de> for OpticRef {
                 let properties = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                let node =
-                    create_node_ref(node_type, None).map_err(|e| de::Error::custom(e.to_string()))?;
+                let node = create_node_ref(node_type, None)
+                    .map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
                     .borrow_mut()
                     .set_properties(&properties)
@@ -142,7 +142,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                 let properties =
                     properties.ok_or_else(|| de::Error::missing_field("properties"))?;
                 let node =
-                    create_node_ref(node_type,id).map_err(|e| de::Error::custom(e.to_string()))?;
+                    create_node_ref(node_type, id).map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
                     .borrow_mut()
                     .set_properties(&properties)
@@ -151,5 +151,22 @@ impl<'de> Deserialize<'de> for OpticRef {
             }
         }
         deserializer.deserialize_struct("OpticRef", FIELDS, OpticRefVisitor)
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::nodes::Dummy;
+    #[test]
+    fn new() {
+        let uuid = Uuid::new_v4();
+        let optic_ref = OpticRef::new(Rc::new(RefCell::new(Dummy::default())), Some(uuid));
+        assert_eq!(optic_ref.uuid, uuid);
+    }
+    #[test]
+    fn uuid() {
+        let uuid = Uuid::new_v4();
+        let optic_ref = OpticRef::new(Rc::new(RefCell::new(Dummy::default())), Some(uuid));
+        assert_eq!(optic_ref.uuid(), uuid);
     }
 }
