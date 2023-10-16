@@ -152,7 +152,7 @@ impl NodeGroup {
                 .0
                 .node_weight(node_idx)
                 .unwrap()
-                .0
+                .optical_ref
                 .borrow()
                 .ports()
                 .inputs()
@@ -176,7 +176,7 @@ impl NodeGroup {
                 .0
                 .node_weight(node_idx)
                 .unwrap()
-                .0
+                .optical_ref
                 .borrow()
                 .ports()
                 .outputs()
@@ -217,7 +217,7 @@ impl NodeGroup {
                 "internal node index not found".into(),
             ))?;
         if !node
-            .0
+            .optical_ref
             .borrow()
             .ports()
             .inputs()
@@ -282,7 +282,7 @@ impl NodeGroup {
                 "internal node index not found".into(),
             ))?;
         if !node
-            .0
+            .optical_ref
             .borrow()
             .ports()
             .outputs()
@@ -379,8 +379,10 @@ impl NodeGroup {
                 self.incoming_edges(idx)
             };
             let node = g_clone.node_weight(idx).unwrap();
-            let outgoing_edges: HashMap<String, Option<LightData>> =
-                node.0.borrow_mut().analyze(incoming_edges, analyzer_type)?;
+            let outgoing_edges: HashMap<String, Option<LightData>> = node
+                .optical_ref
+                .borrow_mut()
+                .analyze(incoming_edges, analyzer_type)?;
             let mut group_sinks = g_clone.externals(Direction::Outgoing);
             // Check if node is group sink node
             if group_sinks.any(|gs| gs == idx) {
@@ -475,7 +477,13 @@ impl NodeGroup {
         light_port: &str,
         mut parent_identifier: String,
     ) -> OpmResult<String> {
-        let node = self.g.0.node_weight(end_node_idx).unwrap().0.borrow();
+        let node = self
+            .g
+            .0
+            .node_weight(end_node_idx)
+            .unwrap()
+            .optical_ref
+            .borrow();
 
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node_idx.index())
@@ -519,11 +527,11 @@ impl NodeGroup {
 
         for node_idx in self.g.0.node_indices() {
             let node = self.g.0.node_weight(node_idx).unwrap();
-            dot_string += &node.0.borrow().to_dot(
+            dot_string += &node.optical_ref.borrow().to_dot(
                 &format!("{}", node_idx.index()),
-                node.0.borrow().name(),
-                node.0.borrow().inverted(),
-                &node.0.borrow().ports(),
+                node.optical_ref.borrow().name(),
+                node.optical_ref.borrow().inverted(),
+                &node.optical_ref.borrow().ports(),
                 parent_identifier.clone(),
                 rankdir,
             )?;
@@ -595,7 +603,7 @@ impl NodeGroup {
     }
     fn invert_graph(&mut self) {
         for node in self.g.0.node_weights_mut() {
-            node.0
+            node.optical_ref
                 .borrow_mut()
                 .set_property("inverted", true.into())
                 .unwrap();

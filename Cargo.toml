@@ -2,33 +2,38 @@
 name = "opossum"
 version = "0.2.0"
 edition = "2021"
-authors = ["Udo Eisenbarth <u.eisenbarth@gsi.de>", "Yannik Zobus <y.zobus@gsi.de>"]
+authors = [
+  "Udo Eisenbarth <u.eisenbarth@gsi.de>",
+  "Yannik Zobus <y.zobus@gsi.de>",
+]
 description = "Open-source Optics Simulation Software and Unified Modeler"
 repository = "https://git.gsi.de/phelix/rust/opossum/"
 license = "GPL-3.0-or-later"
 keywords = ["laser", "optics", "physics", "simulation"]
-categories = [ "science", "simulation"]
+categories = ["science", "simulation"]
 publish = false
 build = "build.rs"
 
 [dependencies]
-petgraph = {version="0", features = ["serde-1"]} # the graph library
+petgraph = { version = "0", features = ["serde-1"] } # the graph library
 uom = "0"
-serde = { version="1" }
+serde = { version = "1" }
 serde_derive = "1"
 serde_yaml = "0"
 serde_json = "1"
 
 # for spectrum
-ndarray= { version="0", features= ["serde"]}
-ndarray-stats="0"
-csv="1"
-plotters="0"
+ndarray = { version = "0", features = ["serde"] }
+ndarray-stats = "0"
+csv = "1"
+plotters = "0"
 
-approx = "0" # assert macros for comparison of floats with tolerance
-clap = { version = "4", features = ["derive"] } # command line argument parser
+approx = "0"                                     # assert macros for comparison of floats with tolerance
+clap = { version = "4", features = ["derive"] }  # command line argument parser
 rprompt = "2.0"
 strum = { version = "0", features = ["derive"] }
+
+uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
 
 chrono = "0"
 
@@ -38,4 +43,7 @@ doc-images = []
 
 [build-dependencies]
 # All features enabled
-vergen = { version = "8", features = ["git", "gitcl"] }
+vergen = { version = "8", features = [
+  "git",
+  "gitcl",
+] } # get git version infos compiled in binary

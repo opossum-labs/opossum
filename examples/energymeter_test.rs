@@ -24,6 +24,6 @@ fn main() -> Result<(), OpossumError> {
     ));
 
     scenery.connect_nodes(i_s, "out1", i_d, "in1")?;
-    scenery.save_to_file(Path::new("energymeter_test.opm"))?;
+    scenery.save_to_file(Path::new("playground/energymeter_test.opm"))?;
     Ok(())
 }

@@ -10,7 +10,8 @@ use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::nodes::NodeGroup;
 use crate::optic_graph::OpticGraph;
-use crate::optical::{LightResult, OpticRef, Optical};
+use crate::optic_ref::OpticRef;
+use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
 use chrono::Local;
 use petgraph::algo::*;
@@ -113,10 +114,10 @@ impl OpticScenery {
 
         for node_idx in self.g.0.node_indices() {
             let node = self.g.0.node_weight(node_idx).unwrap();
-            let node_name = node.0.borrow().name().to_owned();
-            let inverted = node.0.borrow().inverted();
-            let ports = node.0.borrow().ports();
-            dot_string += &node.0.borrow().to_dot(
+            let node_name = node.optical_ref.borrow().name().to_owned();
+            let inverted = node.optical_ref.borrow().inverted();
+            let ports = node.optical_ref.borrow().ports();
+            dot_string += &node.optical_ref.borrow().to_dot(
                 &format!("{}", node_idx.index()),
                 &node_name,
                 inverted,
@@ -156,7 +157,7 @@ impl OpticScenery {
         light_port: &str,
         mut parent_identifier: String,
     ) -> OpmResult<String> {
-        let node = self.g.0.node_weight(end_node).unwrap().0.borrow();
+        let node = self.g.0.node_weight(end_node).unwrap().optical_ref.borrow();
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node.index())
         } else {
@@ -178,20 +179,22 @@ impl OpticScenery {
             let node = self.g.0.node_weight(idx).unwrap();
             let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
             // paranoia: check if all incoming ports are really input ports of the node to be analyzed
-            let input_ports = node.0.borrow().ports().inputs();
+            let input_ports = node.optical_ref.borrow().ports().inputs();
             if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
                 return Err(OpossumError::Analysis("input light data contains port which is not an input port of the node. Data will be discarded.".into()));
             }
             //
+            let node_name= node.optical_ref.borrow().name().to_owned();
+            let node_type=node.optical_ref.borrow().node_type().to_owned();
             let outgoing_edges = node
-                .0
+                .optical_ref
                 .borrow_mut()
                 .analyze(incoming_edges, analyzer_type)
                 .map_err(|e| {
                     format!(
                         "analysis of node {} <{}> failed: {}",
-                        node.0.borrow().name(),
-                        node.0.borrow().node_type(),
+                        node_name,
+                        node_type,
                         e
                     )
                 })?;
@@ -249,11 +252,11 @@ impl OpticScenery {
             .g
             .0
             .node_weights()
-            .filter(|node| node.0.borrow().is_detector());
+            .filter(|node| node.optical_ref.borrow().is_detector());
         let mut detectors: Vec<serde_json::Value> = Vec::new();
         for node in detector_nodes {
-            detectors.push(node.0.borrow().report());
-            node.0.borrow().export_data(report_dir);
+            detectors.push(node.optical_ref.borrow().report());
+            node.optical_ref.borrow().export_data(report_dir);
         }
         let detector_json = serde_json::Value::Array(detectors);
         report.insert("detectors".into(), detector_json);

@@ -21,6 +21,13 @@ pub struct RealLens {
     refractive_index: f64,
     props: Properties,
 }
+fn create_default_props() -> Properties {
+    let mut props = Properties::default();
+    props.set("name", "dummy".into());
+    props.set("inverted", false.into());
+    props
+}
+
 impl RealLens {
     pub fn new(
         aperture: Length,
@@ -36,7 +43,7 @@ impl RealLens {
             center_thickness,
             z_pos,
             refractive_index,
-            props: Properties::default(),
+            props: create_default_props(),
         }
     }
 
@@ -132,7 +139,7 @@ impl Default for RealLens {
             center_thickness: Length::new::<meter>(3.6e-3),
             z_pos: Length::new::<meter>(0.0),
             refractive_index: 1.5068,
-            props: Properties::default(),
+            props: create_default_props(),
         }
     }
 }
