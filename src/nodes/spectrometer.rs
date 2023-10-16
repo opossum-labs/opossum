@@ -221,6 +221,10 @@ mod test {
         assert_eq!(meter.ports().outputs(), vec!["out1"]);
     }
     #[test]
+    fn ports_inverted() {
+        todo!()
+    }
+    #[test]
     fn inverted() {
         let mut node = Spectrometer::default();
         node.set_property("inverted", true.into()).unwrap();

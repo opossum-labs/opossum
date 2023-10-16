@@ -240,6 +240,10 @@ mod test {
         assert_eq!(node.ports().outputs(), vec!["rear"]);
     }
     #[test]
+    fn ports_inverted() {
+        todo!()
+    }
+    #[test]
     fn analyze_ok() {
         let mut node = IdealFilter::new("test", FilterType::Constant(0.5)).unwrap();
         let mut input = LightResult::default();

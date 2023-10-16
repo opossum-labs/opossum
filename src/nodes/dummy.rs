@@ -139,6 +139,14 @@ mod test {
         assert_eq!(node.inverted(), true)
     }
     #[test]
+    fn ports() {
+        todo!()
+    }
+    #[test]
+    fn ports_inverted() {
+        todo!()
+    }
+    #[test]
     fn is_detector() {
         let node = Dummy::default();
         assert_eq!(node.is_detector(), false);

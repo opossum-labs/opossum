@@ -151,6 +151,10 @@ mod test {
         assert_eq!(node.ports().outputs(), vec!["out1"]);
     }
     #[test]
+    fn ports_inverted() {
+        todo!()
+    }
+    #[test]
     fn analyze_ok() {
         let mut node = Detector::default();
         let mut input = LightResult::default();
