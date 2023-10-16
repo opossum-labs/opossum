@@ -184,6 +184,8 @@ impl OpticScenery {
                 return Err(OpossumError::Analysis("input light data contains port which is not an input port of the node. Data will be discarded.".into()));
             }
             //
+            let node_name= node.optical_ref.borrow().name().to_owned();
+            let node_type=node.optical_ref.borrow().node_type().to_owned();
             let outgoing_edges = node
                 .optical_ref
                 .borrow_mut()
@@ -191,8 +193,8 @@ impl OpticScenery {
                 .map_err(|e| {
                     format!(
                         "analysis of node {} <{}> failed: {}",
-                        node.optical_ref.borrow().name(),
-                        node.optical_ref.borrow().node_type(),
+                        node_name,
+                        node_type,
                         e
                     )
                 })?;
