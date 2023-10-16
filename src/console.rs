@@ -7,6 +7,8 @@ use clap::{builder::OsStr, Parser};
 use rprompt::prompt_reply;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
+use std::string::String;
+use clap::builder::Str;
 
 /// Command line arguments for the OPOSSUM application.
 pub struct Args {
@@ -21,7 +23,7 @@ pub struct Args {
 }
 
 #[derive(Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version = Str::from(&get_version()), about, long_about = None)]
 pub struct PartialArgs {
     /// filepath of the opticscenery to read in
     #[arg(short, long)]

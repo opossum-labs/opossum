@@ -37,7 +37,7 @@ mod optic_ref;
 ///
 /// This function returs a `String` which contains the current Git tag/hash combination as well as
 /// the timestamp of this commit.
-fn get_version() -> String {
+pub fn get_version() -> String {
     let timestamp = DateTime::parse_from_rfc3339(env!("VERGEN_GIT_COMMIT_TIMESTAMP")).unwrap();
     format!(
         "{} ({})",
