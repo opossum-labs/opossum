@@ -28,30 +28,31 @@ pub use energy_meter::Metertype;
 
 pub use spectrometer::Spectrometer;
 pub use spectrometer::SpectrometerType;
+use uuid::Uuid;
 
 use crate::error::OpmResult;
 use crate::error::OpossumError;
 
 use crate::optic_ref::OpticRef;
 
-pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
+pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRef> {
     match node_type {
-        "dummy" => Ok(OpticRef::new(Rc::new(RefCell::new(Dummy::default())))),
-        "detector" => Ok(OpticRef::new(Rc::new(RefCell::new(Detector::default())))),
+        "dummy" => Ok(OpticRef::new(Rc::new(RefCell::new(Dummy::default())),uuid)),
+        "detector" => Ok(OpticRef::new(Rc::new(RefCell::new(Detector::default())),uuid)),
         "beam splitter" => Ok(OpticRef::new(Rc::new(
             RefCell::new(BeamSplitter::default()),
-        ))),
-        "energy meter" => Ok(OpticRef::new(Rc::new(RefCell::new(EnergyMeter::default())))),
-        "group" => Ok(OpticRef::new(Rc::new(RefCell::new(NodeGroup::default())))),
-        "ideal filter" => Ok(OpticRef::new(Rc::new(RefCell::new(IdealFilter::default())))),
+        ),uuid)),
+        "energy meter" => Ok(OpticRef::new(Rc::new(RefCell::new(EnergyMeter::default())),uuid)),
+        "group" => Ok(OpticRef::new(Rc::new(RefCell::new(NodeGroup::default())),uuid)),
+        "ideal filter" => Ok(OpticRef::new(Rc::new(RefCell::new(IdealFilter::default())),uuid)),
         "reference" => Ok(OpticRef::new(Rc::new(RefCell::new(
             NodeReference::default(),
-        )))),
-        "real lens" => Ok(OpticRef::new(Rc::new(RefCell::new(RealLens::default())))),
-        "light source" => Ok(OpticRef::new(Rc::new(RefCell::new(Source::default())))),
+        )),uuid)),
+        "real lens" => Ok(OpticRef::new(Rc::new(RefCell::new(RealLens::default())),uuid)),
+        "light source" => Ok(OpticRef::new(Rc::new(RefCell::new(Source::default())),uuid)),
         "spectrometer" => Ok(OpticRef::new(Rc::new(
             RefCell::new(Spectrometer::default()),
-        ))),
+        ),uuid)),
         _ => Err(OpossumError::Other(format!(
             "cannot create node type <{}>",
             node_type

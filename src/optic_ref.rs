@@ -12,15 +12,19 @@ use crate::{nodes::create_node_ref, optical::Optical, properties::Properties};
 #[derive(Debug, Clone)]
 pub struct OpticRef {
     pub optical_ref: Rc<RefCell<dyn Optical>>,
-    pub uuid: Uuid,
+    uuid: Uuid,
 }
 
 impl OpticRef {
-    pub fn new(node: Rc<RefCell<dyn Optical>>) -> Self {
+    pub fn new(node: Rc<RefCell<dyn Optical>>, uuid: Option<Uuid>) -> Self {
         Self {
             optical_ref: node,
-            uuid: Uuid::new_v4(),
+            uuid: uuid.unwrap_or(Uuid::new_v4()),
         }
+    }
+
+    pub fn uuid(&self) -> Uuid {
+        self.uuid
     }
 }
 impl Serialize for OpticRef {
@@ -28,8 +32,9 @@ impl Serialize for OpticRef {
     where
         S: serde::Serializer,
     {
-        let mut node = serializer.serialize_struct("node", 1)?;
+        let mut node = serializer.serialize_struct("node", 3)?;
         node.serialize_field("type", self.optical_ref.borrow().node_type())?;
+        node.serialize_field("id", &self.uuid)?;
         node.serialize_field("properties", &self.optical_ref.borrow().properties())?;
         node.end()
     }
@@ -43,8 +48,9 @@ impl<'de> Deserialize<'de> for OpticRef {
         enum Field {
             NodeType,
             Properties,
+            Id
         }
-        const FIELDS: &[&str] = &["type", "properties"];
+        const FIELDS: &[&str] = &["type", "properties","id"];
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -57,7 +63,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                     type Value = Field;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                        formatter.write_str("`type` or `properties`")
+                        formatter.write_str("`type`, `properties`, or `id`")
                     }
                     fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
                     where
@@ -66,6 +72,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                         match value {
                             "type" => Ok(Field::NodeType),
                             "properties" => Ok(Field::Properties),
+                            "id" => Ok(Field::Id),
                             _ => Err(de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -94,7 +101,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
                 let node =
-                    create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+                    create_node_ref(node_type, None).map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
                     .borrow_mut()
                     .set_properties(&properties)
@@ -108,6 +115,7 @@ impl<'de> Deserialize<'de> for OpticRef {
             {
                 let mut node_type = None;
                 let mut properties = None;
+                let mut id: Option<Uuid> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::NodeType => {
@@ -122,13 +130,19 @@ impl<'de> Deserialize<'de> for OpticRef {
                             }
                             properties = Some(map.next_value::<Properties>()?);
                         }
+                        Field::Id => {
+                            if id.is_some() {
+                                return Err(de::Error::duplicate_field("id"));
+                            }
+                            id = Some(map.next_value()?);
+                        }
                     }
                 }
                 let node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
                 let properties =
                     properties.ok_or_else(|| de::Error::missing_field("properties"))?;
                 let node =
-                    create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+                    create_node_ref(node_type,id).map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
                     .borrow_mut()
                     .set_properties(&properties)

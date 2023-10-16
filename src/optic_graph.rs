@@ -19,7 +19,7 @@ pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
 
 impl OpticGraph {
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        self.0.add_node(OpticRef::new(Rc::new(RefCell::new(node))))
+        self.0.add_node(OpticRef::new(Rc::new(RefCell::new(node)), None))
     }
 
     pub fn connect_nodes(

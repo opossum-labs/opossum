@@ -33,7 +33,7 @@ clap = { version = "4", features = ["derive"] }  # command line argument parser
 rprompt = "2.0"
 strum = { version = "0", features = ["derive"] }
 
-uuid = { version = "1", features = ["v4", "fast-rng"] }
+uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
 
 chrono = "0"
 
