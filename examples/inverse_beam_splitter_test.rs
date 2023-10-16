@@ -34,7 +34,7 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(i_bs, "input1", i_d1, "in1")?;
     scenery.connect_nodes(i_bs, "input2", i_d2, "in1")?;
 
-    scenery.save_to_file(Path::new("inverse_beam_splitter.opm"))?;
+    scenery.save_to_file(Path::new("playground/inverse_beam_splitter.opm"))?;
 
     Ok(())
 }

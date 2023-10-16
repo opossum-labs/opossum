@@ -39,6 +39,6 @@ fn main() -> Result<(), OpossumError> {
     // set_output_port
     scenery.connect_nodes(scene_g1, "out1", scene_g2, "in1")?;
 
-    scenery.save_to_file(Path::new("group_test.opm"))?;
+    scenery.save_to_file(Path::new("playground/group_test.opm"))?;
     Ok(())
 }

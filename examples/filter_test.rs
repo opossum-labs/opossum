@@ -40,6 +40,6 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(i_f, "rear", i_d2, "in1")?;
     scenery.connect_nodes(i_d2, "out1", i_d3, "in1")?;
 
-    scenery.save_to_file(Path::new("filter_test.opm"))?;
+    scenery.save_to_file(Path::new("playground/filter_test.opm"))?;
     Ok(())
 }

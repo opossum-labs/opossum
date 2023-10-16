@@ -36,7 +36,7 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(i_s2, "out1", i_bs, "input2")?;
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_f, "front")?;
     scenery.connect_nodes(i_f, "rear", i_d1, "in1")?;
-    scenery.save_to_file(Path::new("beam_combiner_test.opm"))?;
+    scenery.save_to_file(Path::new("playground/beam_combiner_test.opm"))?;
 
     Ok(())
 }
