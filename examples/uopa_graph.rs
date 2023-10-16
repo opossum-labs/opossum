@@ -156,7 +156,7 @@ fn main() -> Result<(), OpossumError> {
     // scenery.connect_nodes(pump_bs_node1, pump_kepler_node1);
     // scenery.connect_nodes(pump_kepler_node1, dichroic_node1);
 
-    scenery.save_to_file(Path::new("uOPA.opm"))?;
-    scenery_2.save_to_file(Path::new("uOPA_PreAmp.opm"))?;
+    scenery.save_to_file(Path::new("playground/uOPA.opm"))?;
+    scenery_2.save_to_file(Path::new("playground/uOPA_PreAmp.opm"))?;
     Ok(())
 }

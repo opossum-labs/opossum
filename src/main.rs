@@ -15,7 +15,7 @@ fn main() {
     //not necessary, just for fun
     show_intro();
     if let Err(e) = do_it() {
-        println!("Error: {}", e);
+        println!("{}", e);
         std::process::exit(1);
     }
 }

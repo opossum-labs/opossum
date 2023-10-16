@@ -9,7 +9,7 @@ use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Property, Proptype};
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A fake / dummy component without any optical functionality.
 ///
 /// Any [`LightResult`] is directly forwarded without any modification. It is mainly used for

@@ -246,7 +246,7 @@ mod test {
     }
     #[test]
     fn analyze_wrong() {
-        let mut node =Spectrometer::default();
+        let mut node = Spectrometer::default();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spectrum(1.0),

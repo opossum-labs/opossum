@@ -24,7 +24,7 @@ fn main() -> Result<(), OpossumError> {
             spectrum: create_nd_glass_spectrum(1.0),
         }),
     ));
-    let i_bs = scenery.add_node(BeamSplitter::new(0.5).unwrap());
+    let i_bs = scenery.add_node(BeamSplitter::new("bs", 0.5).unwrap());
     let filter_spectrum = Spectrum::from_csv("NE03B.csv")?;
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
@@ -36,7 +36,7 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(i_s2, "out1", i_bs, "input2")?;
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_f, "front")?;
     scenery.connect_nodes(i_f, "rear", i_d1, "in1")?;
-    scenery.save_to_file(Path::new("beam_combiner_test.opm"))?;
+    scenery.save_to_file(Path::new("playground/beam_combiner_test.opm"))?;
 
     Ok(())
 }

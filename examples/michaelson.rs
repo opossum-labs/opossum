@@ -35,6 +35,6 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(m2, "rear", r_bs, "input2")?;
     scenery.connect_nodes(r_bs, "out1_trans1_refl2", det, "in1")?;
 
-    scenery.save_to_file(Path::new("michaelson.opm"))?;
+    scenery.save_to_file(Path::new("playground/michaelson.opm"))?;
     Ok(())
 }

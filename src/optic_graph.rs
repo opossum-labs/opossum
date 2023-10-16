@@ -1,15 +1,18 @@
+use std::{cell::RefCell, rc::Rc};
+
 use petgraph::{algo::is_cyclic_directed, prelude::DiGraph, stable_graph::NodeIndex};
 use serde::{
     de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
-use std::{cell::RefCell, rc::Rc};
+use uuid::Uuid;
 
+use crate::{optic_ref::OpticRef, properties::Proptype};
 use crate::{
     error::{OpmResult, OpossumError},
     light::Light,
-    optical::{OpticRef, Optical},
+    optical::Optical,
 };
 
 #[derive(Debug, Default, Clone)]
@@ -17,7 +20,8 @@ pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
 
 impl OpticGraph {
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        self.0.add_node(OpticRef(Rc::new(RefCell::new(node))))
+        self.0
+            .add_node(OpticRef::new(Rc::new(RefCell::new(node)), None))
     }
 
     pub fn connect_nodes(
@@ -34,7 +38,7 @@ impl OpticGraph {
                 "source node with given index does not exist".into(),
             ))?;
         if !source
-            .0
+            .optical_ref
             .borrow()
             .ports()
             .outputs()
@@ -42,7 +46,7 @@ impl OpticGraph {
         {
             return Err(OpossumError::OpticScenery(format!(
                 "source node {} does not have a port {}",
-                source.0.borrow().name(),
+                source.optical_ref.borrow().name(),
                 src_port
             )));
         }
@@ -53,7 +57,7 @@ impl OpticGraph {
                 "target node with given index does not exist".into(),
             ))?;
         if !target
-            .0
+            .optical_ref
             .borrow()
             .ports()
             .inputs()
@@ -61,7 +65,7 @@ impl OpticGraph {
         {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} does not have a port {}",
-                target.0.borrow().name(),
+                target.optical_ref.borrow().name(),
                 target_port
             )));
         }
@@ -69,19 +73,19 @@ impl OpticGraph {
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "src node <{}> with port <{}> is already connected",
-                source.0.borrow().name(),
+                source.optical_ref.borrow().name(),
                 src_port
             )));
         }
         if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "target node <{}> with port <{}> is already connected",
-                target.0.borrow().name(),
+                target.optical_ref.borrow().name(),
                 target_port
             )));
         }
-        let src_name = source.0.borrow().name().to_owned();
-        let target_name = target.0.borrow().name().to_owned();
+        let src_name = source.optical_ref.borrow().name().to_owned();
+        let target_name = target.optical_ref.borrow().name().to_owned();
         let edge_index = self
             .0
             .add_edge(src_node, target_node, Light::new(src_port, target_port));
@@ -104,6 +108,17 @@ impl OpticGraph {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
+    pub fn node(&self, uuid: Uuid) -> Option<OpticRef> {
+        self.0
+            .node_weights()
+            .find(|node| node.uuid() == uuid)
+            .cloned()
+    }
+    pub fn node_idx(&self, uuid: Uuid) -> Option<NodeIndex> {
+        self.0
+            .node_indices()
+            .find(|idx| self.0.node_weight(*idx).unwrap().uuid() == uuid)
+    }
 }
 impl Serialize for OpticGraph {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -121,13 +136,17 @@ impl Serialize for OpticGraph {
             .edge_indices()
             .map(|e| {
                 (
-                    g.edge_endpoints(e).unwrap().0,
-                    g.edge_endpoints(e).unwrap().1,
+                    g.node_weight(g.edge_endpoints(e).unwrap().0)
+                        .unwrap()
+                        .uuid(),
+                    g.node_weight(g.edge_endpoints(e).unwrap().1)
+                        .unwrap()
+                        .uuid(),
                     g.edge_weight(e).unwrap().src_port(),
                     g.edge_weight(e).unwrap().target_port(),
                 )
             })
-            .collect::<Vec<(NodeIndex, NodeIndex, &str, &str)>>();
+            .collect::<Vec<(Uuid, Uuid, &str, &str)>>();
         graph.serialize_field("edges", &edgeidx)?;
         graph.end()
     }
@@ -194,7 +213,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
             {
                 let mut g = OpticGraph::default();
                 let mut nodes: Option<Vec<OpticRef>> = None;
-                let mut edges: Option<Vec<(NodeIndex, NodeIndex, &str, &str)>> = None;
+                let mut edges: Option<Vec<(Uuid, Uuid, &str, &str)>> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Nodes => {
@@ -207,8 +226,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                             if edges.is_some() {
                                 return Err(de::Error::duplicate_field("edges"));
                             }
-                            edges =
-                                Some(map.next_value::<Vec<(NodeIndex, NodeIndex, &str, &str)>>()?);
+                            edges = Some(map.next_value::<Vec<(Uuid, Uuid, &str, &str)>>()?);
                         }
                     }
                 }
@@ -217,9 +235,30 @@ impl<'de> Deserialize<'de> for OpticGraph {
                 for node in nodes.iter() {
                     g.0.add_node(node.clone());
                 }
+                // assign references to ref nodes (if any)
+                for node in nodes.iter() {
+                    if node.optical_ref.borrow().node_type()=="reference" {
+                        println!("Found reference node: Assign ref");
+                        let mut my_node=node.optical_ref.borrow_mut();
+                        let refnode=my_node.as_refnode_mut().unwrap();
+                        let node_props=refnode.properties().clone();
+                        let uuid=if let Proptype::Uuid(uuid)=node_props.get("reference id").unwrap().prop {
+                            uuid
+                        } else {
+                            Uuid::nil()
+                        };
+                        let ref_node=g.node(uuid).unwrap();
+                        refnode.assign_reference(ref_node);
+                    }
+                }
                 for edge in edges.iter() {
-                    //g.0.add_edge(edge.0, edge.1, Light::new(edge.2, edge.3));
-                    g.connect_nodes(edge.0, edge.2, edge.1, edge.3)
+                    let src_idx = g.node_idx(edge.0).ok_or_else(|| {
+                        de::Error::custom(format!("src id {} does not exist", edge.0))
+                    })?;
+                    let target_idx = g.node_idx(edge.1).ok_or_else(|| {
+                        de::Error::custom(format!("target id {} does not exist", edge.1))
+                    })?;
+                    g.connect_nodes(src_idx, edge.2, target_idx, edge.3)
                         .map_err(|e| {
                             de::Error::custom(format!("connecting OpticGraph nodes failed: {}", e))
                         })?;
@@ -278,5 +317,21 @@ mod test {
         assert!(graph.connect_nodes(n1, "rear", n2, "front").is_ok());
         assert!(graph.connect_nodes(n2, "rear", n1, "front").is_err());
         assert_eq!(graph.0.edge_count(), 1);
+    }
+    #[test]
+    fn node() {
+        let mut graph = OpticGraph::default();
+        let n1 = graph.add_node(Dummy::default());
+        let uuid = graph.0.node_weight(n1).unwrap().uuid();
+        assert!(graph.node(uuid).is_some());
+        assert!(graph.node(Uuid::new_v4()).is_none());
+    }
+    #[test]
+    fn node_id() {
+        let mut graph = OpticGraph::default();
+        let n1 = graph.add_node(Dummy::default());
+        let uuid = graph.0.node_weight(n1).unwrap().uuid();
+        assert_eq!(graph.node_idx(uuid), Some(n1));
+        assert_eq!(graph.node_idx(Uuid::new_v4()), None);
     }
 }

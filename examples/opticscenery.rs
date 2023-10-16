@@ -9,6 +9,6 @@ fn main() -> Result<(), OpossumError> {
     let node1 = scenery.add_node(Dummy::new("dummy1"));
     let node2 = scenery.add_node(Dummy::new("dummy2"));
     scenery.connect_nodes(node1, "rear", node2, "front")?;
-    scenery.save_to_file(Path::new("opticscenery.opm"))?;
+    scenery.save_to_file(Path::new("playground/opticscenery.opm"))?;
     Ok(())
 }

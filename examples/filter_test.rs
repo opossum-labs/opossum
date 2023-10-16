@@ -18,7 +18,7 @@ fn main() -> Result<(), OpossumError> {
             spectrum: create_he_ne_spectrum(1.0),
         }),
     ));
-    let i_bs = scenery.add_node(BeamSplitter::new(0.6).unwrap());
+    let i_bs = scenery.add_node(BeamSplitter::new("bs", 0.6).unwrap());
     let filter_spectrum = Spectrum::from_csv("NE03B.csv")?;
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
@@ -40,6 +40,6 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(i_f, "rear", i_d2, "in1")?;
     scenery.connect_nodes(i_d2, "out1", i_d3, "in1")?;
 
-    scenery.save_to_file(Path::new("filter_test.opm"))?;
+    scenery.save_to_file(Path::new("playground/filter_test.opm"))?;
     Ok(())
 }

@@ -31,6 +31,7 @@ pub use optic_scenery::OpticScenery;
 /// Module for handling the OPOSSUM CLI
 pub mod console;
 mod optic_graph;
+mod optic_ref;
 
 /// Return the version information of the currently built OPOSSUM executable.
 ///
