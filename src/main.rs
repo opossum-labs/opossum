@@ -1,8 +1,7 @@
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
-use opossum::get_version;
-use clap::{Parser, Command};
+use clap::Parser;
 use opossum::error::OpmResult;
 use opossum::{
     OpticScenery,
