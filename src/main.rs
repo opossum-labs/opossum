@@ -6,13 +6,11 @@ use opossum::error::OpmResult;
 use opossum::{
     OpticScenery,
     {
-        console::{show_intro, Args, PartialArgs},
+        console::{Args, PartialArgs},
         error::OpossumError,
     },
 };
 fn main() {
-    //not necessary, just for fun
-    show_intro();
     if let Err(e) = do_it() {
         println!("{}", e);
         std::process::exit(1);
