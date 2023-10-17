@@ -47,14 +47,19 @@ pub struct Spectrometer {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.create("name", "spectrometer".into()).unwrap();
+    props
+        .create("name", "name ofthe spectrometer", "spectrometer".into())
+        .unwrap();
     props
         .create(
             "spectrometer type",
+            "model type of the spectrometer",
             SpectrometerType::IdealSpectrometer.into(),
         )
         .unwrap();
-    props.create("inverted", false.into()).unwrap();
+    props
+        .create("inverted", "inverse propagation?", false.into())
+        .unwrap();
     props
 }
 impl Default for Spectrometer {

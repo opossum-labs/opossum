@@ -31,8 +31,12 @@ pub struct Source {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.create("name", "source".into()).unwrap();
-    props.create("light data", None.into()).unwrap();
+    props
+        .create("name", "name of the light source", "source".into())
+        .unwrap();
+    props
+        .create("light data", "data of the emitted light", None.into())
+        .unwrap();
     props
 }
 

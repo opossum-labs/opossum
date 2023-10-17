@@ -50,7 +50,9 @@ pub struct OpticScenery {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.create("description", "".into()).unwrap();
+    props
+        .create("description", "title of the scenery", "".into())
+        .unwrap();
     props
 }
 

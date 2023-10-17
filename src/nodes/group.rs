@@ -45,15 +45,35 @@ pub struct NodeGroup {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.create("name", "group".into()).unwrap();
-    props.create("inverted", false.into()).unwrap();
-    props.create("expand view", false.into()).unwrap();
-    props.create("graph", OpticGraph::default().into()).unwrap();
     props
-        .create("input port map", PortMap::new().into())
+        .create("name", "name of the optical group", "group".into())
         .unwrap();
     props
-        .create("output port map", PortMap::new().into())
+        .create("inverted", "inverse propagation?", false.into())
+        .unwrap();
+    props
+        .create(
+            "expand view",
+            "show group fully expanded in dot diagram?",
+            false.into(),
+        )
+        .unwrap();
+    props
+        .create("graph", "optical graph", OpticGraph::default().into())
+        .unwrap();
+    props
+        .create(
+            "input port map",
+            "mapping of internal input ports to external ones",
+            PortMap::new().into(),
+        )
+        .unwrap();
+    props
+        .create(
+            "output port map",
+            "mapping of internal output ports to external ones",
+            PortMap::new().into(),
+        )
         .unwrap();
     props
 }

@@ -31,9 +31,19 @@ pub struct NodeReference {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.create("name", "reference".into()).unwrap();
-    props.create("inverted", false.into()).unwrap();
-    props.create("reference id", Uuid::nil().into()).unwrap();
+    props
+        .create("name", "name of the reference node", "reference".into())
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", false.into())
+        .unwrap();
+    props
+        .create(
+            "reference id",
+            "unique id of the referenced node",
+            Uuid::nil().into(),
+        )
+        .unwrap();
     props
 }
 impl Default for NodeReference {

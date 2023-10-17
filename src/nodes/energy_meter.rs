@@ -47,10 +47,18 @@ pub struct EnergyMeter {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.create("name", "energy meter".into()).unwrap();
-    props.create("inverted", false.into()).unwrap();
     props
-        .create("meter type", Metertype::default().into())
+        .create("name", "name of the energy meter", "energy meter".into())
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", false.into())
+        .unwrap();
+    props
+        .create(
+            "meter type",
+            "model type of the meter",
+            Metertype::default().into(),
+        )
         .unwrap();
     props
 }

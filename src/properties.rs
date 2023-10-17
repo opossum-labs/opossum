@@ -14,14 +14,12 @@ pub struct Properties {
     props: HashMap<String, Property>,
 }
 impl Properties {
-    pub fn create(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
-        let mut new_property=Property::new(value);
-        new_property.set_description("".into());
-        if self
-            .props
-            .insert(name.into(), new_property)
-            .is_some()
-        {
+    pub fn create(&mut self, name: &str, description: &str, value: Proptype) -> OpmResult<()> {
+        let new_property = Property {
+            prop: value,
+            description: description.into(),
+        };
+        if self.props.insert(name.into(), new_property).is_some() {
             Err(OpossumError::Properties(format!(
                 "property {} already created",
                 name
@@ -31,18 +29,17 @@ impl Properties {
         }
     }
     pub fn set(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
-        if self
+        let mut property = self
             .props
-            .insert(name.into(), Property::new(value))
-            .is_none()
-        {
-            Err(OpossumError::Properties(format!(
+            .get(name)
+            .ok_or(OpossumError::Properties(format!(
                 "property {} does not exist",
                 name
-            )))
-        } else {
-            Ok(())
-        }
+            )))?
+            .clone();
+        property.set_value(value);
+        self.props.insert(name.into(), property);
+        Ok(())
     }
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, Property> {
         self.props.iter()
@@ -81,19 +78,15 @@ pub struct Property {
     description: String,
 }
 impl Property {
-    pub fn new(prop: Proptype) -> Self {
-        Self { prop, description: "".into() }
-    }
     pub fn prop(&self) -> &Proptype {
         &self.prop
     }
-
     pub fn description(&self) -> &str {
         self.description.as_ref()
     }
 
-    pub fn set_description(&mut self, description: String) {
-        self.description = description;
+    pub fn set_value(&mut self, prop: Proptype) {
+        self.prop = prop;
     }
 }
 impl From<bool> for Proptype {

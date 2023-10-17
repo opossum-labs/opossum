@@ -38,10 +38,18 @@ pub struct IdealFilter {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.create("name", "ideal filter".into()).unwrap();
-    props.create("inverted", false.into()).unwrap();
     props
-        .create("filter type", FilterType::Constant(1.0).into())
+        .create("name", "name of the filter element", "ideal filter".into())
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", false.into())
+        .unwrap();
+    props
+        .create(
+            "filter type",
+            "used filter algorithm",
+            FilterType::Constant(1.0).into(),
+        )
         .unwrap();
     props
 }
