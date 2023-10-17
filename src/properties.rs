@@ -15,9 +15,11 @@ pub struct Properties {
 }
 impl Properties {
     pub fn create(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
+        let mut new_property=Property::new(value);
+        new_property.set_description("".into());
         if self
             .props
-            .insert(name.into(), Property { prop: value })
+            .insert(name.into(), new_property)
             .is_some()
         {
             Err(OpossumError::Properties(format!(
@@ -31,7 +33,7 @@ impl Properties {
     pub fn set(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
         if self
             .props
-            .insert(name.into(), Property { prop: value })
+            .insert(name.into(), Property::new(value))
             .is_none()
         {
             Err(OpossumError::Properties(format!(
@@ -75,13 +77,23 @@ impl Properties {
 #[serde(transparent)]
 pub struct Property {
     prop: Proptype,
+    #[serde(skip)]
+    description: String,
 }
 impl Property {
     pub fn new(prop: Proptype) -> Self {
-        Self { prop }
+        Self { prop, description: "".into() }
     }
     pub fn prop(&self) -> &Proptype {
         &self.prop
+    }
+
+    pub fn description(&self) -> &str {
+        self.description.as_ref()
+    }
+
+    pub fn set_description(&mut self, description: String) {
+        self.description = description;
     }
 }
 impl From<bool> for Proptype {
