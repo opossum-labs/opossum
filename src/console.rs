@@ -149,7 +149,7 @@ impl TryFrom<PartialArgs> for Args {
     fn try_from(part_args: PartialArgs) -> OpmResult<Args> {
         //intro only shown when neither the help, nor the version flag is specified
         show_intro();
-        
+
         let file_path = get_path_args(eval_file_path_input, part_args.file_path.as_deref(), "f")?;
         println!("Path to optical-setup file: {}", file_path.display());
 
