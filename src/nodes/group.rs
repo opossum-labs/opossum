@@ -117,6 +117,13 @@ impl NodeGroup {
         }
         Ok(())
     }
+    /// Synchronize properties with (internal) graph structure.
+    ///
+    pub fn sync_graph(&mut self) {
+        if let Proptype::OpticGraph(g) = &self.props.get("graph").unwrap().prop {
+            self.g = g.clone();
+        }
+    }
     fn input_port_map(&self) -> PortMap {
         let input_port_map = self.props.get("input port map").unwrap().prop.clone();
         if let Proptype::GroupPortMap(input_port_map) = input_port_map {
@@ -139,6 +146,7 @@ impl NodeGroup {
     fn set_output_port_map(&mut self, port_map: PortMap) {
         self.props.set("output port map", port_map.into());
     }
+
     fn input_nodes(&self) -> Vec<NodeIndex> {
         let mut input_nodes: Vec<NodeIndex> = Vec::default();
         for node_idx in self.g.0.node_indices() {
@@ -662,6 +670,9 @@ impl Optical for NodeGroup {
         self.analyze_group(incoming_data, analyzer_type)
     }
     fn as_group(&self) -> OpmResult<&NodeGroup> {
+        Ok(self)
+    }
+    fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
         Ok(self)
     }
     fn properties(&self) -> &Properties {

@@ -199,14 +199,6 @@ impl<'de> Deserialize<'de> for OpticGraph {
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("an OpticGraph")
             }
-            // fn visit_seq<A>(self, mut seq: A) -> std::result::Result<OpticGraph, A::Error>
-            // where
-            //     A: SeqAccess<'de>,
-            // {
-            //     println!("visit seq");
-            //     let g = OpticGraph::default();
-            //     Ok(g)
-            // }
             fn visit_map<A>(self, mut map: A) -> std::result::Result<OpticGraph, A::Error>
             where
                 A: MapAccess<'de>,
@@ -238,7 +230,6 @@ impl<'de> Deserialize<'de> for OpticGraph {
                 // assign references to ref nodes (if any)
                 for node in nodes.iter() {
                     if node.optical_ref.borrow().node_type() == "reference" {
-                        println!("Found reference node: Assign ref");
                         let mut my_node = node.optical_ref.borrow_mut();
                         let refnode = my_node.as_refnode_mut().unwrap();
                         let node_props = refnode.properties().clone();
