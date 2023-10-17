@@ -8,7 +8,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Property, Proptype},
+    properties::{Properties, Proptype},
 };
 
 /// This node represents a source of light.
@@ -124,7 +124,7 @@ impl Optical for Source {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
 }

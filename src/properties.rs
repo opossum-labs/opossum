@@ -14,8 +14,12 @@ pub struct Properties {
     props: HashMap<String, Property>,
 }
 impl Properties {
-    pub fn create(&mut self, name: &str, value: Property) -> OpmResult<()> {
-        if self.props.insert(name.into(), value).is_some() {
+    pub fn create(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
+        if self
+            .props
+            .insert(name.into(), Property { prop: value })
+            .is_some()
+        {
             Err(OpossumError::Properties(format!(
                 "property {} already created",
                 name
@@ -24,8 +28,12 @@ impl Properties {
             Ok(())
         }
     }
-    pub fn set(&mut self, name: &str, value: Property) -> OpmResult<()> {
-        if self.props.insert(name.into(), value).is_none() {
+    pub fn set(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
+        if self
+            .props
+            .insert(name.into(), Property { prop: value })
+            .is_none()
+        {
             Err(OpossumError::Properties(format!(
                 "property {} does not exist",
                 name
@@ -41,7 +49,7 @@ impl Properties {
         self.props.contains_key(key)
     }
     pub fn get(&self, name: &str) -> OpmResult<&Proptype> {
-        if let Some(prop)=self.props.get(name) {
+        if let Some(prop) = self.props.get(name) {
             Ok(prop.prop())
         } else {
             Err(OpossumError::Properties(format!(
@@ -69,96 +77,75 @@ pub struct Property {
     prop: Proptype,
 }
 impl Property {
+    pub fn new(prop: Proptype) -> Self {
+        Self { prop }
+    }
     pub fn prop(&self) -> &Proptype {
         &self.prop
     }
 }
-impl From<bool> for Property {
+impl From<bool> for Proptype {
     fn from(value: bool) -> Self {
-        Property {
-            prop: Proptype::Bool(value),
-        }
+        Proptype::Bool(value)
     }
 }
 
-impl From<f64> for Property {
+impl From<f64> for Proptype {
     fn from(value: f64) -> Self {
-        Property {
-            prop: Proptype::F64(value),
-        }
+        Proptype::F64(value)
     }
 }
 
-impl From<String> for Property {
+impl From<String> for Proptype {
     fn from(value: String) -> Self {
-        Property {
-            prop: Proptype::String(value),
-        }
+        Proptype::String(value)
     }
 }
 
-impl From<&str> for Property {
+impl From<&str> for Proptype {
     fn from(value: &str) -> Self {
-        Property {
-            prop: Proptype::String(value.to_string()),
-        }
+        Proptype::String(value.to_string())
     }
 }
 
-impl From<i32> for Property {
+impl From<i32> for Proptype {
     fn from(value: i32) -> Self {
-        Property {
-            prop: Proptype::I32(value),
-        }
+        Proptype::I32(value)
     }
 }
-impl From<OpticGraph> for Property {
+impl From<OpticGraph> for Proptype {
     fn from(value: OpticGraph) -> Self {
-        Property {
-            prop: Proptype::OpticGraph(value),
-        }
+        Proptype::OpticGraph(value)
     }
 }
-impl From<FilterType> for Property {
+impl From<FilterType> for Proptype {
     fn from(value: FilterType) -> Self {
-        Property {
-            prop: Proptype::FilterType(value),
-        }
+        Proptype::FilterType(value)
     }
 }
-impl From<SpectrometerType> for Property {
+impl From<SpectrometerType> for Proptype {
     fn from(value: SpectrometerType) -> Self {
-        Property {
-            prop: Proptype::SpectrometerType(value),
-        }
+        Proptype::SpectrometerType(value)
     }
 }
-impl From<Metertype> for Property {
+impl From<Metertype> for Proptype {
     fn from(value: Metertype) -> Self {
-        Property {
-            prop: Proptype::Metertype(value),
-        }
+        Proptype::Metertype(value)
     }
 }
-impl From<PortMap> for Property {
+impl From<PortMap> for Proptype {
     fn from(value: PortMap) -> Self {
-        Property {
-            prop: Proptype::GroupPortMap(value),
-        }
+        Proptype::GroupPortMap(value)
     }
 }
-impl From<Option<LightData>> for Property {
+impl From<Option<LightData>> for Proptype {
     fn from(value: Option<LightData>) -> Self {
-        Property {
-            prop: Proptype::LightData(value),
-        }
+        Proptype::LightData(value)
     }
 }
-impl From<Uuid> for Property {
+impl From<Uuid> for Proptype {
     fn from(value: Uuid) -> Self {
-        Property {
-            prop: Proptype::Uuid(value),
-        }
+        Proptype::Uuid(value)
     }
 }
 #[non_exhaustive]

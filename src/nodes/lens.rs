@@ -5,7 +5,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Property, Proptype},
+    properties::{Properties, Proptype},
 };
 use ndarray::{array, Array1};
 use uom::{si::f64::Length, si::length::meter};
@@ -177,7 +177,7 @@ impl Optical for RealLens {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
 }

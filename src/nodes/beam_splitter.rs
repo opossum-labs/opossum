@@ -8,7 +8,7 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Property, Proptype},
+    properties::{Properties, Proptype},
     spectrum::{merge_spectra, Spectrum},
 };
 
@@ -202,7 +202,7 @@ impl Optical for BeamSplitter {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
     fn inverted(&self) -> bool {

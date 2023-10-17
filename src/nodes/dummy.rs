@@ -6,7 +6,7 @@ use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Property, Proptype};
+use crate::properties::{Properties, Proptype};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -88,7 +88,7 @@ impl Optical for Dummy {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
     fn report(&self) -> serde_json::Value {

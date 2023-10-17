@@ -6,7 +6,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::nodes::{NodeGroup, NodeReference};
 use crate::optic_ports::OpticPorts;
-use crate::properties::{Properties, Property};
+use crate::properties::{Properties, Proptype};
 use core::fmt::Debug;
 use std::collections::HashMap;
 use std::path::Path;
@@ -73,12 +73,12 @@ pub trait Optical: Dottable {
     /// # Errors
     ///
     /// This function will return an error if a non-defined property is set or the property has the wrong data type.
-    fn set_property(&mut self, name: &str, property: Property) -> OpmResult<()>;
+    fn set_property(&mut self, name: &str, proptype: Proptype) -> OpmResult<()>;
     fn set_properties(&mut self, properties: &Properties) -> OpmResult<()> {
         let own_properties = self.properties().clone();
         for prop in properties.iter() {
             if own_properties.contains(prop.0) {
-                self.set_property(prop.0, prop.1.clone())?;
+                self.set_property(prop.0, prop.1.prop().clone())?;
             }
         }
         Ok(())

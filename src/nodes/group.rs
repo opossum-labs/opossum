@@ -7,7 +7,7 @@ use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::optic_graph::OpticGraph;
 use crate::optical::LightResult;
-use crate::properties::{Properties, Property, Proptype};
+use crate::properties::{Properties, Proptype};
 use crate::{optic_ports::OpticPorts, optical::Optical};
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -661,7 +661,7 @@ impl Optical for NodeGroup {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
 }

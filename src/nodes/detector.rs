@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{Properties, Property, Proptype};
+use crate::properties::{Properties, Proptype};
 use crate::{
     dottable::Dottable,
     optic_ports::OpticPorts,
@@ -96,7 +96,7 @@ impl Optical for Detector {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
 }
