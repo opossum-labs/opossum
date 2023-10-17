@@ -93,10 +93,24 @@ impl Optical for NodeReference {
             .reference
             .clone()
             .ok_or(OpossumError::Analysis("no reference defined".into()))?;
-        rf.upgrade()
-            .unwrap()
-            .borrow_mut()
-            .analyze(incoming_data, analyzer_type)
+        let ref_node = rf.upgrade().unwrap();
+        let mut ref_node = ref_node.borrow_mut();
+        if self.inverted() {
+            ref_node
+                .set_property("inverted", true.into())
+                .map_err(|_e| {
+                    OpossumError::Analysis(format!(
+                        "referenced node {} <{}> cannot be inverted",
+                        ref_node.name(),
+                        ref_node.node_type()
+                    ))
+                })?;
+        }
+        let output = ref_node.analyze(incoming_data, analyzer_type);
+        if self.inverted() {
+            ref_node.set_property("inverted", false.into())?;
+        }
+        output
     }
     fn properties(&self) -> &Properties {
         &self.props
@@ -121,7 +135,12 @@ impl Dottable for NodeReference {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{nodes::Dummy, OpticScenery};
+    use crate::{
+        lightdata::{DataEnergy, LightData},
+        nodes::{Dummy, Source},
+        spectrum::create_he_ne_spectrum,
+        OpticScenery,
+    };
     #[test]
     fn default() {
         let node = NodeReference::default();
@@ -179,5 +198,63 @@ mod test {
         node.set_property("inverted", true.into()).unwrap();
         assert_eq!(node.ports().inputs(), vec!["rear"]);
         assert_eq!(node.ports().outputs(), vec!["front"]);
+    }
+    #[test]
+    fn analyze() {
+        let mut scenery = OpticScenery::default();
+        let idx = scenery.add_node(Dummy::default());
+        let mut node = NodeReference::from_node(scenery.node(idx).unwrap());
+
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        input.insert("front".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("rear".into()));
+        assert_eq!(output.len(), 1);
+        let output = output.get("rear".into()).unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output, input_light);
+    }
+    #[test]
+    fn analyze_inverse() {
+        let mut scenery = OpticScenery::default();
+        let idx = scenery.add_node(Dummy::default());
+        let mut node = NodeReference::from_node(scenery.node(idx).unwrap());
+        node.set_property("inverted", true.into()).unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        input.insert("rear".into(), Some(input_light.clone()));
+
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("front".into()));
+        assert_eq!(output.len(), 1);
+        let output = output.get("front".into()).unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output, input_light);
+    }
+    #[test]
+    fn analyze_non_invertible_ref() {
+        let mut scenery = OpticScenery::default();
+        let idx = scenery.add_node(Source::default());
+        let mut node = NodeReference::from_node(scenery.node(idx).unwrap());
+        node.set_property("inverted", true.into()).unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        input.insert("rear".into(), Some(input_light.clone()));
+
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_err());
     }
 }
