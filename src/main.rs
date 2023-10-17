@@ -1,6 +1,3 @@
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::Path;
 use clap::Parser;
 use opossum::error::OpmResult;
 use opossum::{
@@ -10,6 +7,9 @@ use opossum::{
         error::OpossumError,
     },
 };
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::Path;
 fn main() {
     //not necessary, just for fun
     show_intro();

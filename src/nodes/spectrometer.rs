@@ -108,6 +108,9 @@ impl Optical for Spectrometer {
         let mut ports = OpticPorts::new();
         ports.add_input("in1").unwrap();
         ports.add_output("out1").unwrap();
+        if self.inverted() {
+            ports.set_inverted(true);
+        }
         ports
     }
     fn analyze(
@@ -222,7 +225,10 @@ mod test {
     }
     #[test]
     fn ports_inverted() {
-        todo!()
+        let mut meter = Spectrometer::default();
+        meter.set_property("inverted", true.into()).unwrap();
+        assert_eq!(meter.ports().inputs(), vec!["out1"]);
+        assert_eq!(meter.ports().outputs(), vec!["in1"]);
     }
     #[test]
     fn inverted() {

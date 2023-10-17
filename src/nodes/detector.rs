@@ -73,6 +73,9 @@ impl Optical for Detector {
     }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
+        if self.inverted() {
+            ports.set_inverted(true);
+        }
         ports.add_input("in1").unwrap();
         ports.add_output("out1").unwrap();
         ports
@@ -152,7 +155,10 @@ mod test {
     }
     #[test]
     fn ports_inverted() {
-        todo!()
+        let mut node = Detector::default();
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.ports().inputs(), vec!["out1"]);
+        assert_eq!(node.ports().outputs(), vec!["in1"]);
     }
     #[test]
     fn analyze_ok() {

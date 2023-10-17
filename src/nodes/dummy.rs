@@ -140,11 +140,16 @@ mod test {
     }
     #[test]
     fn ports() {
-        todo!()
+        let node = Dummy::default();
+        assert_eq!(node.ports().inputs(), vec!["front"]);
+        assert_eq!(node.ports().outputs(), vec!["rear"]);
     }
     #[test]
     fn ports_inverted() {
-        todo!()
+        let mut node = Dummy::default();
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.ports().inputs(), vec!["rear"]);
+        assert_eq!(node.ports().outputs(), vec!["front"]);
     }
     #[test]
     fn is_detector() {

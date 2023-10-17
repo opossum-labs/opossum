@@ -174,6 +174,9 @@ impl Optical for IdealFilter {
         let mut ports = OpticPorts::new();
         ports.add_input("front").unwrap();
         ports.add_output("rear").unwrap();
+        if self.inverted() {
+            ports.set_inverted(true);
+        }
         ports
     }
     fn analyze(
@@ -241,7 +244,10 @@ mod test {
     }
     #[test]
     fn ports_inverted() {
-        todo!()
+        let mut node = IdealFilter::default();
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.ports().inputs(), vec!["rear"]);
+        assert_eq!(node.ports().outputs(), vec!["front"]);
     }
     #[test]
     fn analyze_ok() {

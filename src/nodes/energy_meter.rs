@@ -103,6 +103,9 @@ impl Optical for EnergyMeter {
         let mut ports = OpticPorts::new();
         ports.add_input("in1").unwrap();
         ports.add_output("out1").unwrap();
+        if self.inverted() {
+            ports.set_inverted(true);
+        }
         ports
     }
     fn analyze(
@@ -200,13 +203,15 @@ mod test {
     #[test]
     fn ports() {
         let meter = EnergyMeter::default();
-        let ports = meter.ports();
-        assert_eq!(ports.inputs(), vec!["in1"]);
-        assert_eq!(ports.outputs(), vec!["out1"]);
+        assert_eq!(meter.ports().inputs(), vec!["in1"]);
+        assert_eq!(meter.ports().outputs(), vec!["out1"]);
     }
     #[test]
     fn ports_inverted() {
-        todo!()
+        let mut meter = EnergyMeter::default();
+        meter.set_property("inverted", true.into()).unwrap();
+        assert_eq!(meter.ports().inputs(), vec!["out1"]);
+        assert_eq!(meter.ports().outputs(), vec!["in1"]);
     }
     #[test]
     fn analyze() {

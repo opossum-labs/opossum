@@ -3,12 +3,12 @@ use crate::{
     error::{OpmResult, OpossumError},
     get_version,
 };
+use clap::builder::Str;
 use clap::{builder::OsStr, Parser};
 use rprompt::prompt_reply;
 use std::path::{Path, PathBuf};
-use strum::IntoEnumIterator;
 use std::string::String;
-use clap::builder::Str;
+use strum::IntoEnumIterator;
 
 /// Command line arguments for the OPOSSUM application.
 pub struct Args {

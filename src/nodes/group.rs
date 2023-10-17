@@ -634,6 +634,9 @@ impl Optical for NodeGroup {
     fn node_type(&self) -> &str {
         "group"
     }
+    fn inverted(&self) -> bool {
+        self.props.get_bool("inverted").unwrap().unwrap()
+    }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         for p in self.input_port_map().iter() {
@@ -641,6 +644,9 @@ impl Optical for NodeGroup {
         }
         for p in self.output_port_map().iter() {
             ports.add_output(p.0).unwrap();
+        }
+        if self.inverted() {
+            ports.set_inverted(true);
         }
         ports
     }
@@ -720,7 +726,7 @@ mod test {
         assert!(node.as_group().is_ok());
     }
     #[test]
-    fn net() {
+    fn new() {
         let node = NodeGroup::new("test");
         assert_eq!(node.name(), "test");
     }
@@ -729,6 +735,12 @@ mod test {
         let mut og = NodeGroup::default();
         og.add_node(Dummy::new("n1"));
         assert_eq!(og.g.0.node_count(), 1);
+    }
+    #[test]
+    fn inverted() {
+        let mut og = NodeGroup::default();
+        og.set_property("inverted", true.into()).unwrap();
+        assert_eq!(og.inverted(), true);
     }
     #[test]
     fn connect_nodes() {
@@ -883,6 +895,14 @@ mod test {
     }
     #[test]
     fn ports_inverted() {
-        todo!()
+        let mut og = NodeGroup::default();
+        let sn1_i = og.add_node(Dummy::new("n1"));
+        let sn2_i = og.add_node(Dummy::new("n2"));
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+        og.map_input_port(sn1_i, "front", "input").unwrap();
+        og.map_output_port(sn2_i, "rear", "output").unwrap();
+        og.set_property("inverted", true.into()).unwrap();
+        assert!(og.ports().outputs().contains(&("input".to_string())));
+        assert!(og.ports().inputs().contains(&("output".to_string())));
     }
 }
