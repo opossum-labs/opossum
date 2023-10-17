@@ -56,6 +56,9 @@ pub trait Optical: Dottable {
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
+    fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
+        Err(OpossumError::Other("cannot cast to group".into()))
+    }
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Err(OpossumError::Other("cannot cast to reference node".into()))
     }
