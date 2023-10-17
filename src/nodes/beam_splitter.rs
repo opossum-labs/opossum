@@ -280,6 +280,17 @@ mod test {
         assert_eq!(output_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
     }
     #[test]
+    fn ports_inverted() {
+        let mut node = BeamSplitter::default();
+        node.set_property("inverted", true.into()).unwrap();
+        let mut input_ports = node.ports().inputs();
+        input_ports.sort();
+        assert_eq!(input_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
+        let mut output_ports = node.ports().outputs();
+        output_ports.sort();
+        assert_eq!(output_ports, vec!["input1", "input2"]);
+    }
+    #[test]
     fn analyze_wrong_analyszer() {
         let mut node = BeamSplitter::default();
         let input = LightResult::default();

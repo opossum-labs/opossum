@@ -66,7 +66,7 @@ impl Optical for Dummy {
         let mut ports = OpticPorts::new();
         ports.add_input("front").unwrap();
         ports.add_output("rear").unwrap();
-        if self.properties().get_bool("inverted").unwrap().unwrap() {
+        if self.inverted() {
             ports.set_inverted(true)
         }
         ports
@@ -137,6 +137,19 @@ mod test {
         let mut node = Dummy::default();
         node.set_property("inverted", true.into()).unwrap();
         assert_eq!(node.inverted(), true)
+    }
+    #[test]
+    fn ports() {
+        let node = Dummy::default();
+        assert_eq!(node.ports().inputs(), vec!["front"]);
+        assert_eq!(node.ports().outputs(), vec!["rear"]);
+    }
+    #[test]
+    fn ports_inverted() {
+        let mut node = Dummy::default();
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.ports().inputs(), vec!["rear"]);
+        assert_eq!(node.ports().outputs(), vec!["front"]);
     }
     #[test]
     fn is_detector() {

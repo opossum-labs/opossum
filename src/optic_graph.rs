@@ -8,12 +8,12 @@ use serde::{
 };
 use uuid::Uuid;
 
-use crate::{optic_ref::OpticRef, properties::Proptype};
 use crate::{
     error::{OpmResult, OpossumError},
     light::Light,
     optical::Optical,
 };
+use crate::{optic_ref::OpticRef, properties::Proptype};
 
 #[derive(Debug, Default, Clone)]
 pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
@@ -237,17 +237,19 @@ impl<'de> Deserialize<'de> for OpticGraph {
                 }
                 // assign references to ref nodes (if any)
                 for node in nodes.iter() {
-                    if node.optical_ref.borrow().node_type()=="reference" {
+                    if node.optical_ref.borrow().node_type() == "reference" {
                         println!("Found reference node: Assign ref");
-                        let mut my_node=node.optical_ref.borrow_mut();
-                        let refnode=my_node.as_refnode_mut().unwrap();
-                        let node_props=refnode.properties().clone();
-                        let uuid=if let Proptype::Uuid(uuid)=node_props.get("reference id").unwrap().prop {
+                        let mut my_node = node.optical_ref.borrow_mut();
+                        let refnode = my_node.as_refnode_mut().unwrap();
+                        let node_props = refnode.properties().clone();
+                        let uuid = if let Proptype::Uuid(uuid) =
+                            node_props.get("reference id").unwrap().prop
+                        {
                             uuid
                         } else {
                             Uuid::nil()
                         };
-                        let ref_node=g.node(uuid).unwrap();
+                        let ref_node = g.node(uuid).unwrap();
                         refnode.assign_reference(ref_node);
                     }
                 }

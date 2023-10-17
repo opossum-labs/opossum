@@ -141,9 +141,9 @@ impl<'de> Deserialize<'de> for OpticRef {
                 let node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
                 let properties =
                     properties.ok_or_else(|| de::Error::missing_field("properties"))?;
-                let id = id.ok_or_else(|| de::Error::missing_field("id"))?; 
-                let node =
-                    create_node_ref(node_type, Some(id)).map_err(|e| de::Error::custom(e.to_string()))?;
+                let id = id.ok_or_else(|| de::Error::missing_field("id"))?;
+                let node = create_node_ref(node_type, Some(id))
+                    .map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
                     .borrow_mut()
                     .set_properties(&properties)
