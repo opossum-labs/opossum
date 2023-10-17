@@ -142,6 +142,16 @@ mod test {
         assert!(node.reference.is_some());
     }
     #[test]
+    fn assign_reference() {
+        let mut scenery = OpticScenery::default();
+        let idx = scenery.add_node(Dummy::default());
+        let node_ref = scenery.node(idx).unwrap();
+        let mut node = NodeReference::default();
+        assert!(node.reference.is_none());
+        node.assign_reference(node_ref);
+        assert!(node.reference.is_some());
+    }
+    #[test]
     fn inverted() {
         let mut node = NodeReference::default();
         node.set_property("inverted", true.into()).unwrap();
