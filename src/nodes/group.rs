@@ -125,12 +125,12 @@ impl NodeGroup {
     /// Synchronize properties with (internal) graph structure.
     ///
     pub fn sync_graph(&mut self) {
-        if let Proptype::OpticGraph(g) = &self.props.get("graph").unwrap().prop {
+        if let Proptype::OpticGraph(g) = &self.props.get("graph").unwrap() {
             self.g = g.clone();
         }
     }
     fn input_port_map(&self) -> PortMap {
-        let input_port_map = self.props.get("input port map").unwrap().prop.clone();
+        let input_port_map = self.props.get("input port map").unwrap().clone();
         if let Proptype::GroupPortMap(input_port_map) = input_port_map {
             input_port_map
         } else {
@@ -141,7 +141,7 @@ impl NodeGroup {
         self.props.set("input port map", port_map.into()).unwrap();
     }
     fn output_port_map(&self) -> PortMap {
-        let output_port_map = self.props.get("output port map").unwrap().prop.clone();
+        let output_port_map = self.props.get("output port map").unwrap().clone();
         if let Proptype::GroupPortMap(output_port_map) = output_port_map {
             output_port_map
         } else {
@@ -620,7 +620,7 @@ impl NodeGroup {
 
 impl Optical for NodeGroup {
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             self.node_type()

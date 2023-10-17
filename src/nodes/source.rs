@@ -76,7 +76,7 @@ impl Source {
 impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let light_prop = self.props.get("light data").unwrap();
-        let data = if let Proptype::LightData(data) = &light_prop.prop {
+        let data = if let Proptype::LightData(data) = &light_prop {
             data
         } else {
             &None
@@ -93,7 +93,7 @@ impl Optical for Source {
         "light source"
     }
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             "light source"
@@ -110,7 +110,7 @@ impl Optical for Source {
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
         let light_prop = self.props.get("light data").unwrap();
-        let data = if let Proptype::LightData(data) = &light_prop.prop {
+        let data = if let Proptype::LightData(data) = &light_prop {
             data
         } else {
             &None

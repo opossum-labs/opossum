@@ -146,7 +146,7 @@ impl Default for RealLens {
 
 impl Optical for RealLens {
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             self.node_type()

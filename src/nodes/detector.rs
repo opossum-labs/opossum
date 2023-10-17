@@ -57,10 +57,8 @@ impl Detector {
 }
 impl Optical for Detector {
     fn name(&self) -> &str {
-        if let Some(value) = self.props.get("name") {
-            if let Proptype::String(name) = &value.prop {
-                return name;
-            }
+        if let Proptype::String(name) = self.props.get("name").unwrap() {
+            return name;
         }
         panic!("wrong format");
     }

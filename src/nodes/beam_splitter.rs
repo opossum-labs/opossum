@@ -59,10 +59,8 @@ impl BeamSplitter {
 
     /// Returns the splitting ratio of this [`BeamSplitter`].
     pub fn ratio(&self) -> f64 {
-        if let Some(value) = self.props.get("ratio") {
-            if let Proptype::F64(value) = value.prop {
-                return value;
-            }
+        if let Proptype::F64(value) = self.props.get("ratio").unwrap() {
+            return *value;
         }
         panic!("wrong data format")
     }
@@ -171,7 +169,7 @@ impl Optical for BeamSplitter {
         "beam splitter"
     }
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             self.node_type()

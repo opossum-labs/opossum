@@ -234,9 +234,9 @@ impl<'de> Deserialize<'de> for OpticGraph {
                         let refnode = my_node.as_refnode_mut().unwrap();
                         let node_props = refnode.properties().clone();
                         let uuid = if let Proptype::Uuid(uuid) =
-                            node_props.get("reference id").unwrap().prop
+                            node_props.get("reference id").unwrap()
                         {
-                            uuid
+                            *uuid
                         } else {
                             Uuid::nil()
                         };

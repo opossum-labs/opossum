@@ -209,7 +209,7 @@ impl OpticScenery {
     /// Returns a reference to the description of this [`OpticScenery`].
     pub fn description(&self) -> &str {
         let prop = self.props.get("description").unwrap();
-        if let Proptype::String(dsc) = &prop.prop {
+        if let Proptype::String(dsc) = &prop {
             dsc
         } else {
             ""

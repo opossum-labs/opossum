@@ -81,7 +81,7 @@ impl Spectrometer {
     }
     /// Returns the meter type of this [`Spectrometer`].
     pub fn spectrometer_type(&self) -> SpectrometerType {
-        let meter_type = self.props.get("spectrometer type").unwrap().prop.clone();
+        let meter_type = self.props.get("spectrometer type").unwrap().clone();
         if let Proptype::SpectrometerType(meter_type) = meter_type {
             meter_type
         } else {
@@ -97,7 +97,7 @@ impl Spectrometer {
 }
 impl Optical for Spectrometer {
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             self.node_type()

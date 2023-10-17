@@ -75,9 +75,8 @@ impl IdealFilter {
     }
     /// Returns the filter type of this [`IdealFilter`].
     pub fn filter_type(&self) -> FilterType {
-        let filter_type = self.props.get("filter type").unwrap().prop.clone();
-        if let Proptype::FilterType(filter_type) = filter_type {
-            filter_type
+        if let Proptype::FilterType(filter_type) = self.props.get("filter type").unwrap() {
+            filter_type.clone()
         } else {
             panic!("wrong data type")
         }
@@ -160,7 +159,7 @@ impl IdealFilter {
 
 impl Optical for IdealFilter {
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             self.node_type()

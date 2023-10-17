@@ -40,8 +40,15 @@ impl Properties {
     pub fn contains(&self, key: &str) -> bool {
         self.props.contains_key(key)
     }
-    pub fn get(&self, name: &str) -> Option<&Property> {
-        self.props.get(name)
+    pub fn get(&self, name: &str) -> OpmResult<&Proptype> {
+        if let Some(prop)=self.props.get(name) {
+            Ok(prop.prop())
+        } else {
+            Err(OpossumError::Properties(format!(
+                "property {} does not exist",
+                name
+            )))
+        }
     }
     pub fn get_bool(&self, name: &str) -> OpmResult<Option<bool>> {
         if let Some(property) = self.props.get(name) {
@@ -59,9 +66,13 @@ impl Properties {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
 pub struct Property {
-    pub prop: Proptype,
+    prop: Proptype,
 }
-
+impl Property {
+    pub fn prop(&self) -> &Proptype {
+        &self.prop
+    }
+}
 impl From<bool> for Property {
     fn from(value: bool) -> Self {
         Property {

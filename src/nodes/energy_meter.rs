@@ -76,9 +76,8 @@ impl EnergyMeter {
     }
     /// Returns the meter type of this [`EnergyMeter`].
     pub fn meter_type(&self) -> Metertype {
-        let meter_type = self.props.get("meter type").unwrap().prop.clone();
-        if let Proptype::Metertype(meter_type) = meter_type {
-            meter_type
+        if let Proptype::Metertype(meter_type) = self.props.get("meter type").unwrap() {
+            *meter_type
         } else {
             panic!("wrong data format")
         }
@@ -90,10 +89,8 @@ impl EnergyMeter {
 }
 impl Optical for EnergyMeter {
     fn name(&self) -> &str {
-        if let Some(value) = self.props.get("name") {
-            if let Proptype::String(name) = &value.prop {
-                return name;
-            }
+        if let Proptype::String(name) = self.props.get("name").unwrap() {
+            return name;
         }
         panic!("wrong format");
     }
