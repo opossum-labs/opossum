@@ -22,13 +22,7 @@ pub trait Dottable {
         };
         let mut dot_str = format!("\t{} [\n\t\tshape=plaintext\n", &parent_identifier);
         let mut indent_level = 2;
-        dot_str.push_str(&self.add_html_like_labels(
-            &node_name,
-            &mut indent_level,
-            ports,
-            inverted,
-            rankdir,
-        ));
+        dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports, rankdir));
         Ok(dot_str)
     }
 
@@ -247,7 +241,6 @@ pub trait Dottable {
         node_name: &str,
         indent_level: &mut i32,
         ports: &OpticPorts,
-        inverted: bool,
         rankdir: &str,
     ) -> String {
         let mut dot_str = "\t\tlabel=<\n".to_owned();
@@ -265,12 +258,6 @@ pub trait Dottable {
             (inputs.len() + 1) * 2 + 1
         } else {
             7
-        };
-
-        let port_list = if inverted {
-            (&outputs, &inputs)
-        } else {
-            (&inputs, &outputs)
         };
 
         // Start Table environment
@@ -292,7 +279,7 @@ pub trait Dottable {
                 {
                     dot_str.push_str(&"\t".repeat(*indent_level as usize));
                     dot_str.push_str(&self.create_node_table_cells(
-                        port_list,
+                        (&inputs, &outputs),
                         (&mut in_port_count, &mut out_port_count),
                         (row_num, col_num),
                         node_name,
@@ -309,7 +296,7 @@ pub trait Dottable {
                 {
                     dot_str.push_str(&"\t".repeat(*indent_level as usize));
                     dot_str.push_str(&self.create_node_table_cells(
-                        port_list,
+                        (&inputs, &outputs),
                         (&mut in_port_count, &mut out_port_count),
                         (col_num, row_num),
                         node_name,
