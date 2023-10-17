@@ -956,4 +956,32 @@ mod test {
         let output = group.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_err());
     }
+    #[test]
+    fn analyze_inverse() {
+        let mut group = NodeGroup::default();
+        let g1_n1 = group.add_node(Dummy::new("node1"));
+        let g1_n2 = group.add_node(BeamSplitter::new("test", 0.6).unwrap());
+        group
+            .map_output_port(g1_n2, "out1_trans1_refl2", "output")
+            .unwrap();
+        group.map_input_port(g1_n1, "front", "input").unwrap();
+        group.connect_nodes(g1_n1, "rear", g1_n2, "input1").unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        group.set_property("inverted", true.into()).unwrap();
+        input.insert("output".into(), Some(input_light.clone()));
+        let output = group.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("input"));
+        let output = output.get("input").unwrap().clone().unwrap();
+        let energy = if let LightData::Energy(data) = output {
+            data.spectrum.total_energy()
+        } else {
+            0.0
+        };
+        assert_eq!(energy, 0.6);
+    }
 }
