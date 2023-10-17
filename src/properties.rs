@@ -11,9 +11,8 @@ use crate::{
 /// A general set of (optical) properties.
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct Properties {
-    pub props: HashMap<String, Property>,
+    props: HashMap<String, Property>,
 }
-
 impl Properties {
     pub fn create(&mut self, name: &str, value: Property) -> OpmResult<()> {
         if self.props.insert(name.into(), value).is_some() {
@@ -34,6 +33,12 @@ impl Properties {
         } else {
             Ok(())
         }
+    }
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, Property> {
+        self.props.iter()
+    }
+    pub fn contains(&self, key: &str) -> bool {
+        self.props.contains_key(key)
     }
     pub fn get(&self, name: &str) -> Option<&Property> {
         self.props.get(name)

@@ -75,10 +75,9 @@ pub trait Optical: Dottable {
     /// This function will return an error if a non-defined property is set or the property has the wrong data type.
     fn set_property(&mut self, name: &str, property: Property) -> OpmResult<()>;
     fn set_properties(&mut self, properties: &Properties) -> OpmResult<()> {
-        let own_properties = self.properties().props.clone();
-
-        for prop in properties.props.iter() {
-            if own_properties.contains_key(prop.0) {
+        let own_properties = self.properties().clone();
+        for prop in properties.iter() {
+            if own_properties.contains(prop.0) {
                 self.set_property(prop.0, prop.1.clone())?;
             }
         }
