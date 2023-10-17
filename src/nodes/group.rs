@@ -377,13 +377,7 @@ impl NodeGroup {
                 let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
                 let mut incoming = LightResult::default();
                 for port in assigned_ports {
-                    let input_data =
-                        incoming_data
-                            .get(port.0)
-                            .ok_or(OpossumError::Analysis(format!(
-                                "group port {} not found",
-                                port.0
-                            )))?;
+                    let input_data = incoming_data.get(port.0).unwrap_or(&None);
                     incoming.insert(port.1 .1.to_owned(), input_data.clone());
                 }
                 incoming
@@ -962,7 +956,11 @@ mod test {
         });
         input.insert("wrong".into(), Some(input_light.clone()));
         let output = group.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_err());
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("output"));
+        let output = output.get("output").unwrap().clone();
+        assert!(output.is_none());
     }
     #[test]
     fn analyze_inverse() {

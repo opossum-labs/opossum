@@ -1,22 +1,20 @@
 use opossum::error::OpossumError;
 use opossum::nodes::{BeamSplitter, Dummy, NodeGroup};
 use opossum::OpticScenery;
-use std::fs::File;
-use std::io::Write;
-
 use std::path::Path;
+
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Node Group test section".into());
 
-    let mut group1 = NodeGroup::default();
+    let mut group1 = NodeGroup::new("group 1");
     group1.expand_view(true);
     let g1_n1 = group1.add_node(Dummy::new("node1"));
     let g1_n2 = group1.add_node(BeamSplitter::default());
     group1.map_output_port(g1_n2, "out1_trans1_refl2", "out1")?;
     group1.connect_nodes(g1_n1, "rear", g1_n2, "input1")?;
 
-    let mut nested_group = NodeGroup::default();
+    let mut nested_group = NodeGroup::new("group 1_1");
     let nested_g_n1 = nested_group.add_node(Dummy::new("node1_1"));
     let nested_g_n2 = nested_group.add_node(Dummy::new("node1_2"));
     nested_group.expand_view(true);
@@ -28,7 +26,7 @@ fn main() -> Result<(), OpossumError> {
     let nested_group_index = group1.add_node(nested_group);
     group1.connect_nodes(nested_group_index, "out1", g1_n1, "front")?;
 
-    let mut group2: NodeGroup = NodeGroup::default();
+    let mut group2: NodeGroup = NodeGroup::new("group 2");
     group2.expand_view(true);
     let g2_n1 = group2.add_node(Dummy::new("node2_1"));
     let g2_n2 = group2.add_node(Dummy::new("node2_2"));
@@ -41,9 +39,6 @@ fn main() -> Result<(), OpossumError> {
 
     // set_output_port
     scenery.connect_nodes(scene_g1, "out1", scene_g2, "in1")?;
-
     scenery.save_to_file(Path::new("playground/group_test.opm"))?;
-    let mut output = File::create("blah.dop").unwrap();
-    write!(output, "{}", scenery.to_dot("")?).unwrap();
     Ok(())
 }
