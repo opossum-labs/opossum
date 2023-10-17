@@ -595,7 +595,6 @@ impl NodeGroup {
             &node_name,
             &mut indent_level,
             _ports,
-            inverted,
             rankdir,
         ));
         Ok(dot_str)
