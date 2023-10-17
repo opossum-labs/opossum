@@ -1,6 +1,9 @@
 use opossum::error::OpossumError;
 use opossum::nodes::{BeamSplitter, Dummy, NodeGroup};
 use opossum::OpticScenery;
+use std::fs::File;
+use std::io::Write;
+
 use std::path::Path;
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
@@ -40,5 +43,7 @@ fn main() -> Result<(), OpossumError> {
     scenery.connect_nodes(scene_g1, "out1", scene_g2, "in1")?;
 
     scenery.save_to_file(Path::new("playground/group_test.opm"))?;
+    let mut output = File::create("blah.dop").unwrap();
+    write!(output, "{}", scenery.to_dot("")?).unwrap();
     Ok(())
 }
