@@ -15,11 +15,24 @@ pub struct Properties {
 }
 
 impl Properties {
-    pub fn set(&mut self, name: &str, value: Property) -> Option<()> {
+    pub fn create(&mut self, name: &str, value: Property) -> OpmResult<()> {
         if self.props.insert(name.into(), value).is_some() {
-            Some(())
+            Err(OpossumError::Properties(format!(
+                "property {} already created",
+                name
+            )))
         } else {
-            None
+            Ok(())
+        }
+    }
+    pub fn set(&mut self, name: &str, value: Property) -> OpmResult<()> {
+        if self.props.insert(name.into(), value).is_none() {
+            Err(OpossumError::Properties(format!(
+                "property {} does not exist",
+                name
+            )))
+        } else {
+            Ok(())
         }
     }
     pub fn get(&self, name: &str) -> Option<&Property> {

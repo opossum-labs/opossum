@@ -38,9 +38,11 @@ pub struct IdealFilter {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "ideal filter".into());
-    props.set("inverted", false.into());
-    props.set("filter type", FilterType::Constant(1.0).into());
+    props.create("name", "ideal filter".into()).unwrap();
+    props.create("inverted", false.into()).unwrap();
+    props
+        .create("filter type", FilterType::Constant(1.0).into())
+        .unwrap();
     props
 }
 impl Default for IdealFilter {
@@ -67,8 +69,8 @@ impl IdealFilter {
             }
         }
         let mut props = create_default_props();
-        props.set("filter type", filter_type.into());
-        props.set("name", name.into());
+        props.set("filter type", filter_type.into())?;
+        props.set("name", name.into())?;
         Ok(Self { props })
     }
     /// Returns the filter type of this [`IdealFilter`].
@@ -89,7 +91,7 @@ impl IdealFilter {
     pub fn set_transmission(&mut self, transmission: f64) -> OpmResult<()> {
         if (0.0..=1.0).contains(&transmission) {
             self.props
-                .set("filter type", FilterType::Constant(transmission).into());
+                .set("filter type", FilterType::Constant(transmission).into())?;
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -108,7 +110,7 @@ impl IdealFilter {
             self.props.set(
                 "filter type",
                 FilterType::Constant(f64::powf(10.0, -1.0 * density)).into(),
-            );
+            )?;
             Ok(())
         } else {
             Err(OpossumError::Other("optical densitiy must be >=0".into()))
@@ -195,11 +197,7 @@ impl Optical for IdealFilter {
         &self.props
     }
     fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+        self.props.set(name, prop)
     }
 }
 

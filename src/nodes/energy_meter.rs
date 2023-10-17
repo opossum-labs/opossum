@@ -7,7 +7,6 @@ use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Property, Proptype};
 use crate::{
-    error::OpossumError,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
 };
@@ -48,9 +47,11 @@ pub struct EnergyMeter {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "energy meter".into());
-    props.set("inverted", false.into());
-    props.set("meter type", Metertype::default().into());
+    props.create("name", "energy meter".into()).unwrap();
+    props.create("inverted", false.into()).unwrap();
+    props
+        .create("meter type", Metertype::default().into())
+        .unwrap();
     props
 }
 
@@ -66,8 +67,8 @@ impl EnergyMeter {
     /// Creates a new [`EnergyMeter`] of the given [`Metertype`].
     pub fn new(name: &str, meter_type: Metertype) -> Self {
         let mut props = create_default_props();
-        props.set("name", name.into());
-        props.set("meter type", meter_type.into());
+        props.set("name", name.into()).unwrap();
+        props.set("meter type", meter_type.into()).unwrap();
         EnergyMeter {
             props,
             ..Default::default()
@@ -84,7 +85,7 @@ impl EnergyMeter {
     }
     /// Sets the meter type of this [`EnergyMeter`].
     pub fn set_meter_type(&mut self, meter_type: Metertype) {
-        self.props.set("meter type", meter_type.into());
+        self.props.set("meter type", meter_type.into()).unwrap();
     }
 }
 impl Optical for EnergyMeter {
@@ -132,11 +133,7 @@ impl Optical for EnergyMeter {
         &self.props
     }
     fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+        self.props.set(name, prop)
     }
     fn report(&self) -> serde_json::Value {
         let data = &self.light_data;

@@ -23,8 +23,8 @@ pub struct RealLens {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "dummy".into());
-    props.set("inverted", false.into());
+    props.create("name", "dummy".into()).unwrap();
+    props.create("inverted", false.into()).unwrap();
     props
 }
 
@@ -178,11 +178,7 @@ impl Optical for RealLens {
         &self.props
     }
     fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+        self.props.set(name, prop)
     }
 }
 

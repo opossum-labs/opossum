@@ -31,9 +31,9 @@ pub struct NodeReference {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "reference".into());
-    props.set("inverted", false.into());
-    props.set("reference id", Uuid::nil().into());
+    props.create("name", "reference".into()).unwrap();
+    props.create("inverted", false.into()).unwrap();
+    props.create("reference id", Uuid::nil().into()).unwrap();
     props
 }
 impl Default for NodeReference {
@@ -48,7 +48,7 @@ impl NodeReference {
     /// Create new [`NodeReference`] referring to another existing [`OpticRef`].
     pub fn from_node(node: OpticRef) -> Self {
         let mut props = create_default_props();
-        props.set("reference id", node.uuid().into());
+        props.set("reference id", node.uuid().into()).unwrap();
         Self {
             reference: Some(Rc::downgrade(&node.optical_ref)),
             props,
@@ -116,11 +116,7 @@ impl Optical for NodeReference {
         &self.props
     }
     fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+        self.props.set(name, prop)
     }
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Ok(self)

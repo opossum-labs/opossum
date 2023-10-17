@@ -45,12 +45,16 @@ pub struct NodeGroup {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "group".into());
-    props.set("inverted", false.into());
-    props.set("expand view", false.into());
-    props.set("graph", OpticGraph::default().into());
-    props.set("input port map", PortMap::new().into());
-    props.set("output port map", PortMap::new().into());
+    props.create("name", "group".into()).unwrap();
+    props.create("inverted", false.into()).unwrap();
+    props.create("expand view", false.into()).unwrap();
+    props.create("graph", OpticGraph::default().into()).unwrap();
+    props
+        .create("input port map", PortMap::new().into())
+        .unwrap();
+    props
+        .create("output port map", PortMap::new().into())
+        .unwrap();
     props
 }
 
@@ -66,7 +70,7 @@ impl NodeGroup {
     /// Creates a new [`NodeGroup`].
     pub fn new(name: &str) -> Self {
         let mut props = create_default_props();
-        props.set("name", name.into());
+        props.set("name", name.into()).unwrap();
         Self {
             props,
             ..Default::default()
@@ -78,7 +82,7 @@ impl NodeGroup {
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         let idx = self.g.add_node(node);
-        self.props.set("graph", self.g.clone().into());
+        self.props.set("graph", self.g.clone().into()).unwrap();
         idx
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
@@ -96,7 +100,7 @@ impl NodeGroup {
     ) -> OpmResult<()> {
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port)?;
-        self.props.set("graph", self.g.clone().into());
+        self.props.set("graph", self.g.clone().into()).unwrap();
 
         let in_map = self.input_port_map();
         let invalid_mapping = in_map
@@ -134,7 +138,7 @@ impl NodeGroup {
         }
     }
     fn set_input_port_map(&mut self, port_map: PortMap) {
-        self.props.set("input port map", port_map.into());
+        self.props.set("input port map", port_map.into()).unwrap();
     }
     fn output_port_map(&self) -> PortMap {
         let output_port_map = self.props.get("output port map").unwrap().prop.clone();
@@ -145,7 +149,7 @@ impl NodeGroup {
         }
     }
     fn set_output_port_map(&mut self, port_map: PortMap) {
-        self.props.set("output port map", port_map.into());
+        self.props.set("output port map", port_map.into()).unwrap();
     }
 
     fn input_nodes(&self) -> Vec<NodeIndex> {
@@ -469,7 +473,7 @@ impl NodeGroup {
 
     /// returns the boolean which defines whether the group expands or not.
     pub fn expand_view(&mut self, expand_view: bool) {
-        self.props.set("expand view", expand_view.into());
+        self.props.set("expand view", expand_view.into()).unwrap();
     }
     /// Creates the dot-format string which describes the edge that connects two nodes
     /// parameters:
@@ -658,11 +662,7 @@ impl Optical for NodeGroup {
         &self.props
     }
     fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+        self.props.set(name, prop)
     }
 }
 

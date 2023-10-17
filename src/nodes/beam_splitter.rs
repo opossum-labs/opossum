@@ -33,9 +33,9 @@ pub struct BeamSplitter {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "beam splitter".into());
-    props.set("ratio", 0.5.into());
-    props.set("inverted", false.into());
+    props.create("name", "beam splitter".into()).unwrap();
+    props.create("ratio", 0.5.into()).unwrap();
+    props.create("inverted", false.into()).unwrap();
     props
 }
 impl BeamSplitter {
@@ -47,8 +47,8 @@ impl BeamSplitter {
     pub fn new(name: &str, ratio: f64) -> OpmResult<Self> {
         if (0.0..=1.0).contains(&ratio) {
             let mut props = create_default_props();
-            props.set("ratio", ratio.into());
-            props.set("name", name.into());
+            props.set("ratio", ratio.into())?;
+            props.set("name", name.into())?;
             Ok(Self { props })
         } else {
             Err(OpossumError::Other(
@@ -74,7 +74,7 @@ impl BeamSplitter {
     /// [0.0..1.0].
     pub fn set_ratio(&mut self, ratio: f64) -> OpmResult<()> {
         if (0.0..=1.0).contains(&ratio) {
-            self.props.set("ratio", ratio.into());
+            self.props.set("ratio", ratio.into())?;
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -205,11 +205,7 @@ impl Optical for BeamSplitter {
         &self.props
     }
     fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+        self.props.set(name, prop)
     }
     fn inverted(&self) -> bool {
         self.properties().get_bool("inverted").unwrap().unwrap()

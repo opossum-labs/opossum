@@ -8,7 +8,6 @@ use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Property, Proptype};
 use crate::{
-    error::OpossumError,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
 };
@@ -48,12 +47,14 @@ pub struct Spectrometer {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "spectrometer".into());
-    props.set(
-        "spectrometer type",
-        SpectrometerType::IdealSpectrometer.into(),
-    );
-    props.set("inverted", false.into());
+    props.create("name", "spectrometer".into()).unwrap();
+    props
+        .create(
+            "spectrometer type",
+            SpectrometerType::IdealSpectrometer.into(),
+        )
+        .unwrap();
+    props.create("inverted", false.into()).unwrap();
     props
 }
 impl Default for Spectrometer {
@@ -69,8 +70,10 @@ impl Spectrometer {
     /// Creates a new [`Spectrometer`] of the given [`SpectrometerType`].
     pub fn new(name: &str, spectrometer_type: SpectrometerType) -> Self {
         let mut props = create_default_props();
-        props.set("spectrometer type", spectrometer_type.into());
-        props.set("name", name.into());
+        props
+            .set("spectrometer type", spectrometer_type.into())
+            .unwrap();
+        props.set("name", name.into()).unwrap();
         Spectrometer {
             props,
             ..Default::default()
@@ -87,7 +90,9 @@ impl Spectrometer {
     }
     /// Sets the meter type of this [`Spectrometer`].
     pub fn set_spectrometer_type(&mut self, meter_type: SpectrometerType) {
-        self.props.set("spectrometer type", meter_type.into());
+        self.props
+            .set("spectrometer type", meter_type.into())
+            .unwrap();
     }
 }
 impl Optical for Spectrometer {
@@ -141,11 +146,7 @@ impl Optical for Spectrometer {
         &self.props
     }
     fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+        self.props.set(name, prop)
     }
     fn report(&self) -> serde_json::Value {
         let data = &self.light_data;

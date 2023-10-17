@@ -4,7 +4,6 @@ use crate::lightdata::LightData;
 use crate::properties::{Properties, Property, Proptype};
 use crate::{
     dottable::Dottable,
-    error::OpossumError,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
 };
@@ -33,8 +32,8 @@ pub struct Detector {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "detector".into());
-    props.set("inverted", false.into());
+    props.create("name", "detector".into()).unwrap();
+    props.create("inverted", false.into()).unwrap();
     props
 }
 impl Default for Detector {
@@ -49,7 +48,7 @@ impl Detector {
     /// Creates a new [`Detector`].
     pub fn new(name: &str) -> Self {
         let mut props = create_default_props();
-        props.set("name", name.into());
+        props.set("name", name.into()).unwrap();
         Self {
             props,
             ..Default::default()
@@ -100,11 +99,7 @@ impl Optical for Detector {
         &self.props
     }
     fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+        self.props.set(name, prop)
     }
 }
 
