@@ -12,13 +12,13 @@ use crate::{optic_ports::OpticPorts, optical::Optical};
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::{algo::*, Direction};
-use serde::Serialize;
+use serde_derive::Serialize;
 use std::collections::HashMap;
 
 /// Mappin of group internal ports to externally visble ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 /// A node that represents a group of other [`Optical`]s arranges in a subgraph.
 ///
 /// All unconnected input and output ports of this subgraph could be used as ports of
@@ -38,6 +38,7 @@ pub type PortMap = HashMap<String, (NodeIndex, String)>;
 ///   - `input port map`
 ///   - `output port map`
 pub struct NodeGroup {
+    #[serde(skip)]
     g: OpticGraph,
     props: Properties,
 }
@@ -558,14 +559,6 @@ impl NodeGroup {
             )?;
 
             dot_string.push_str(&format!("  {} -> {} \n", src_edge_str, target_edge_str));
-            // needed when multiple ports can be assigned
-            // for src in src_edge_str.iter(){
-            //     println!("{}", src);
-            //     for target in target_edge_str.iter(){
-            //         println!("{}", target);
-            //         dot_string.push_str(&format!("  {} -> {} \n", src, target));
-            //     };
-            // };
         }
         dot_string += "}";
         Ok(dot_string)
@@ -621,14 +614,6 @@ impl NodeGroup {
     }
 }
 
-impl Serialize for NodeGroup {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_newtype_struct("props", self.properties())
-    }
-}
 impl Optical for NodeGroup {
     fn name(&self) -> &str {
         if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
