@@ -6,7 +6,7 @@ use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -31,10 +31,15 @@ pub struct Dummy {
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props
-        .create("name", "name of the dummy element", "dummy".into())
+        .create(
+            "name",
+            "name of the dummy element",
+            Some(vec![PropCondition::NonEmptyString]),
+            "dummy".into(),
+        )
         .unwrap();
     props
-        .create("inverted", "inverse propagation?", false.into())
+        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
 }

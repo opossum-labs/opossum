@@ -1,3 +1,4 @@
+use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -14,10 +15,17 @@ pub struct Properties {
     props: HashMap<String, Property>,
 }
 impl Properties {
-    pub fn create(&mut self, name: &str, description: &str, value: Proptype) -> OpmResult<()> {
+    pub fn create(
+        &mut self,
+        name: &str,
+        description: &str,
+        conditions: Option<Vec<PropCondition>>,
+        value: Proptype,
+    ) -> OpmResult<()> {
         let new_property = Property {
             prop: value,
             description: description.into(),
+            conditions,
         };
         if self.props.insert(name.into(), new_property).is_some() {
             Err(OpossumError::Properties(format!(
@@ -37,7 +45,7 @@ impl Properties {
                 name
             )))?
             .clone();
-        property.set_value(value);
+        property.set_value(value)?;
         self.props.insert(name.into(), property);
         Ok(())
     }
@@ -76,6 +84,8 @@ pub struct Property {
     prop: Proptype,
     #[serde(skip)]
     description: String,
+    #[serde(skip)]
+    conditions: Option<Vec<PropCondition>>,
 }
 impl Property {
     pub fn prop(&self) -> &Proptype {
@@ -84,9 +94,104 @@ impl Property {
     pub fn description(&self) -> &str {
         self.description.as_ref()
     }
-
-    pub fn set_value(&mut self, prop: Proptype) {
+    pub fn set_value(&mut self, prop: Proptype) -> OpmResult<()> {
+        self.check_conditions(&prop)?;
         self.prop = prop;
+        Ok(())
+    }
+    fn check_conditions(&self, prop: &Proptype) -> OpmResult<()> {
+        if let Some(conditions) = &self.conditions {
+            for condition in conditions.iter() {
+                match condition {
+                    PropCondition::NonEmptyString => {
+                        if let Proptype::String(s) = prop.clone() {
+                            if s.is_empty() {
+                                return Err(OpossumError::Properties(
+                                    "string value must not be empty".into(),
+                                ));
+                            }
+                        }
+                    }
+                    PropCondition::GreaterThan(limit) => match prop {
+                        Proptype::I32(val) => {
+                            if val.as_f64() <= *limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be > {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        Proptype::F64(val) => {
+                            if val <= limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be > {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        _ => {}
+                    },
+                    PropCondition::LessThan(limit) => match prop {
+                        Proptype::I32(val) => {
+                            if val.as_f64() >= *limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be < {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        Proptype::F64(val) => {
+                            if val >= limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be < {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        _ => {}
+                    },
+                    PropCondition::GreaterThanEqual(limit) => match prop {
+                        Proptype::I32(val) => {
+                            if val.as_f64() < *limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be >= {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        Proptype::F64(val) => {
+                            if val < limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be >= {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        _ => {}
+                    },
+                    PropCondition::LessThanEqual(limit) => match prop {
+                        Proptype::I32(val) => {
+                            if val.as_f64() > *limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be <= {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        Proptype::F64(val) => {
+                            if val > limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be <= {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        _ => {}
+                    },
+                }
+            }
+        }
+        Ok(())
     }
 }
 impl From<bool> for Proptype {
@@ -167,4 +272,14 @@ pub enum Proptype {
     Metertype(Metertype),
     GroupPortMap(PortMap),
     Uuid(Uuid),
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub enum PropCondition {
+    NonEmptyString,
+    GreaterThan(f64),
+    LessThan(f64),
+    GreaterThanEqual(f64),
+    LessThanEqual(f64),
 }

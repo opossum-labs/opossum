@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{Properties, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype};
 use crate::{
     dottable::Dottable,
     optic_ports::OpticPorts,
@@ -33,10 +33,15 @@ pub struct Detector {
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props
-        .create("name", "name of the detector", "detector".into())
+        .create(
+            "name",
+            "name of the detector",
+            Some(vec![PropCondition::NonEmptyString]),
+            "detector".into(),
+        )
         .unwrap();
     props
-        .create("inverted", "inverse propagation?", false.into())
+        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
 }

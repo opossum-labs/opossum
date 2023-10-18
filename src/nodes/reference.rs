@@ -9,7 +9,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::optic_ports::OpticPorts;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype};
 
 #[derive(Debug)]
 /// A virtual component referring to another existing component.
@@ -32,15 +32,21 @@ pub struct NodeReference {
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props
-        .create("name", "name of the reference node", "reference".into())
+        .create(
+            "name",
+            "name of the reference node",
+            Some(vec![PropCondition::NonEmptyString]),
+            "reference".into(),
+        )
         .unwrap();
     props
-        .create("inverted", "inverse propagation?", false.into())
+        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
         .create(
             "reference id",
             "unique id of the referenced node",
+            None,
             Uuid::nil().into(),
         )
         .unwrap();

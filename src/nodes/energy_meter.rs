@@ -5,7 +5,7 @@ use serde_json::{json, Number};
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{Properties, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -48,15 +48,21 @@ pub struct EnergyMeter {
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props
-        .create("name", "name of the energy meter", "energy meter".into())
+        .create(
+            "name",
+            "name of the energy meter",
+            Some(vec![PropCondition::NonEmptyString]),
+            "energy meter".into(),
+        )
         .unwrap();
     props
-        .create("inverted", "inverse propagation?", false.into())
+        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
         .create(
             "meter type",
             "model type of the meter",
+            None,
             Metertype::default().into(),
         )
         .unwrap();

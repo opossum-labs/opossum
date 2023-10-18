@@ -7,6 +7,7 @@ use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::optic_graph::OpticGraph;
 use crate::optical::LightResult;
+use crate::properties::PropCondition;
 use crate::properties::{Properties, Proptype};
 use crate::{optic_ports::OpticPorts, optical::Optical};
 use petgraph::prelude::NodeIndex;
@@ -46,25 +47,32 @@ pub struct NodeGroup {
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props
-        .create("name", "name of the optical group", "group".into())
+        .create(
+            "name",
+            "name of the optical group",
+            Some(vec![PropCondition::NonEmptyString]),
+            "group".into(),
+        )
         .unwrap();
     props
-        .create("inverted", "inverse propagation?", false.into())
+        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
         .create(
             "expand view",
             "show group fully expanded in dot diagram?",
+            None,
             false.into(),
         )
         .unwrap();
     props
-        .create("graph", "optical graph", OpticGraph::default().into())
+        .create("graph", "optical graph", None, OpticGraph::default().into())
         .unwrap();
     props
         .create(
             "input port map",
             "mapping of internal input ports to external ones",
+            None,
             PortMap::new().into(),
         )
         .unwrap();
@@ -72,6 +80,7 @@ fn create_default_props() -> Properties {
         .create(
             "output port map",
             "mapping of internal output ports to external ones",
+            None,
             PortMap::new().into(),
         )
         .unwrap();

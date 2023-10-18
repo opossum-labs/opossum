@@ -8,7 +8,7 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Proptype},
+    properties::{PropCondition, Properties, Proptype},
     spectrum::{merge_spectra, Spectrum},
 };
 
@@ -34,13 +34,26 @@ pub struct BeamSplitter {
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
     props
-        .create("name", "name of the beamsplitter", "beam splitter".into())
+        .create(
+            "name",
+            "name of the beamsplitter",
+            Some(vec![PropCondition::NonEmptyString]),
+            "beam splitter".into(),
+        )
         .unwrap();
     props
-        .create("ratio", "splitting ration", 0.5.into())
+        .create(
+            "ratio",
+            "splitting ration",
+            Some(vec![
+                PropCondition::GreaterThanEqual(0.0),
+                PropCondition::LessThanEqual(1.0),
+            ]),
+            0.5.into(),
+        )
         .unwrap();
     props
-        .create("inverted", "inverse propagation?", false.into())
+        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
 }
@@ -51,16 +64,10 @@ impl BeamSplitter {
     /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
     /// [0.0..1.0].
     pub fn new(name: &str, ratio: f64) -> OpmResult<Self> {
-        if (0.0..=1.0).contains(&ratio) {
-            let mut props = create_default_props();
-            props.set("ratio", ratio.into())?;
-            props.set("name", name.into())?;
-            Ok(Self { props })
-        } else {
-            Err(OpossumError::Other(
-                "splitting ratio must be within (0.0..1.0)".into(),
-            ))
-        }
+        let mut props = create_default_props();
+        props.set("ratio", ratio.into())?;
+        props.set("name", name.into())?;
+        Ok(Self { props })
     }
 
     /// Returns the splitting ratio of this [`BeamSplitter`].
@@ -77,14 +84,8 @@ impl BeamSplitter {
     /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
     /// [0.0..1.0].
     pub fn set_ratio(&mut self, ratio: f64) -> OpmResult<()> {
-        if (0.0..=1.0).contains(&ratio) {
-            self.props.set("ratio", ratio.into())?;
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "splitting ration must be within (0.0..1.0)".into(),
-            ))
-        }
+        self.props.set("ratio", ratio.into())?;
+        Ok(())
     }
     fn analyze_energy(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (in1, in2) = if !self.inverted() {
