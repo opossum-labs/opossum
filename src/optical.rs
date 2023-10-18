@@ -1,3 +1,4 @@
+//! Contains the basic trait representing an optical element
 use serde_json::json;
 
 use crate::analyzer::AnalyzerType;

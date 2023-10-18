@@ -1,3 +1,4 @@
+//! The basic structure containing the entire optical model
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
@@ -21,7 +22,7 @@ use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 
-/// Overall optical model and additional metatdata.
+/// Overall optical model and additional metadata.
 ///
 /// All optical elements ([`Optical`]s) have to be added to this structure in order
 /// to be considered for an analysis.

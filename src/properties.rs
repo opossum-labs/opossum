@@ -1,3 +1,4 @@
+//! Module for handling node properties
 use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;

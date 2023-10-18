@@ -28,7 +28,7 @@ impl From<Metertype> for Proptype {
         Proptype::Metertype(value)
     }
 }
-/// (ideal) energy / power meter.
+/// An (ideal) energy / power meter.
 ///
 /// It normally measures the total energy of the incoming light regardless of the wavelength, position, angle, polarization etc...
 ///
