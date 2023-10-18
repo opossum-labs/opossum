@@ -1,5 +1,5 @@
 //! Handling the OPOSSUM CLI
-//! 
+//!
 //! This module handles the command line parsing as well as basic information (e.g. help dialog, version information, etc.).
 use crate::{
     analyzer::AnalyzerType,
