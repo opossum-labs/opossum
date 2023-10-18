@@ -25,6 +25,11 @@ pub enum SpectrometerType {
     /// Ocean Optics HR2000
     HR2000,
 }
+impl From<SpectrometerType> for Proptype {
+    fn from(value: SpectrometerType) -> Self {
+        Proptype::SpectrometerType(value)
+    }
+}
 /// (ideal) spectrometer
 ///
 /// It normally measures / displays the spectrum of the incoming light.

@@ -19,6 +19,11 @@ pub enum FilterType {
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
 }
+impl From<FilterType> for Proptype {
+    fn from(value: FilterType) -> Self {
+        Proptype::FilterType(value)
+    }
+}
 #[derive(Debug)]
 /// An ideal filter with given transmission or optical density.
 ///

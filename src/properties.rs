@@ -108,9 +108,11 @@ impl Property {
         self.description.as_ref()
     }
     pub fn set_value(&mut self, prop: Proptype) -> OpmResult<()> {
-        if let Some(conditions)=&self.conditions {
+        if let Some(conditions) = &self.conditions {
             if conditions.contains(&PropCondition::InternalOnly) {
-                return Err(OpossumError::Properties("property is internally used and public read-only".into())) 
+                return Err(OpossumError::Properties(
+                    "property is internally used and public read-only".into(),
+                ));
             }
         }
         self.check_conditions(&prop)?;
@@ -211,7 +213,7 @@ impl Property {
                         }
                         _ => {}
                     },
-                    PropCondition::InternalOnly => {}, 
+                    PropCondition::InternalOnly => {}
                 }
             }
         }
@@ -235,46 +237,14 @@ impl From<String> for Proptype {
         Proptype::String(value)
     }
 }
-
 impl From<&str> for Proptype {
     fn from(value: &str) -> Self {
         Proptype::String(value.to_string())
     }
 }
-
 impl From<i32> for Proptype {
     fn from(value: i32) -> Self {
         Proptype::I32(value)
-    }
-}
-impl From<OpticGraph> for Proptype {
-    fn from(value: OpticGraph) -> Self {
-        Proptype::OpticGraph(value)
-    }
-}
-impl From<FilterType> for Proptype {
-    fn from(value: FilterType) -> Self {
-        Proptype::FilterType(value)
-    }
-}
-impl From<SpectrometerType> for Proptype {
-    fn from(value: SpectrometerType) -> Self {
-        Proptype::SpectrometerType(value)
-    }
-}
-impl From<Metertype> for Proptype {
-    fn from(value: Metertype) -> Self {
-        Proptype::Metertype(value)
-    }
-}
-impl From<PortMap> for Proptype {
-    fn from(value: PortMap) -> Self {
-        Proptype::GroupPortMap(value)
-    }
-}
-impl From<Option<LightData>> for Proptype {
-    fn from(value: Option<LightData>) -> Self {
-        Proptype::LightData(value)
     }
 }
 impl From<Uuid> for Proptype {

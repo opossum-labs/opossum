@@ -261,7 +261,11 @@ impl<'de> Deserialize<'de> for OpticGraph {
         deserializer.deserialize_struct("OpticGraph", FIELDS, OpticGraphVisitor)
     }
 }
-
+impl From<OpticGraph> for Proptype {
+    fn from(value: OpticGraph) -> Self {
+        Proptype::OpticGraph(value)
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;

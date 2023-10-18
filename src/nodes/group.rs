@@ -18,6 +18,11 @@ use std::collections::HashMap;
 
 /// Mappin of group internal ports to externally visble ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
+impl From<PortMap> for Proptype {
+    fn from(value: PortMap) -> Self {
+        Proptype::GroupPortMap(value)
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 /// A node that represents a group of other [`Optical`]s arranges in a subgraph.
@@ -111,7 +116,9 @@ impl NodeGroup {
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         let idx = self.g.add_node(node);
-        self.props.set_internal("graph", self.g.clone().into()).unwrap();
+        self.props
+            .set_internal("graph", self.g.clone().into())
+            .unwrap();
         idx
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
@@ -129,7 +136,9 @@ impl NodeGroup {
     ) -> OpmResult<()> {
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port)?;
-        self.props.set_internal("graph", self.g.clone().into()).unwrap();
+        self.props
+            .set_internal("graph", self.g.clone().into())
+            .unwrap();
 
         let in_map = self.input_port_map();
         let invalid_mapping = in_map
@@ -167,7 +176,9 @@ impl NodeGroup {
         }
     }
     fn set_input_port_map(&mut self, port_map: PortMap) {
-        self.props.set_internal("input port map", port_map.into()).unwrap();
+        self.props
+            .set_internal("input port map", port_map.into())
+            .unwrap();
     }
     fn output_port_map(&self) -> PortMap {
         let output_port_map = self.props.get("output port map").unwrap().clone();
@@ -178,7 +189,9 @@ impl NodeGroup {
         }
     }
     fn set_output_port_map(&mut self, port_map: PortMap) {
-        self.props.set_internal("output port map", port_map.into()).unwrap();
+        self.props
+            .set_internal("output port map", port_map.into())
+            .unwrap();
     }
 
     fn input_nodes(&self) -> Vec<NodeIndex> {

@@ -5,6 +5,7 @@ use std::path::Path;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
+use crate::properties::Proptype;
 use crate::spectrum::Spectrum;
 
 /// Data structure defining the light properties. The actuals data type used depends on the
@@ -53,4 +54,10 @@ pub struct DataEnergy {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DataGeometric {
     _ray: i32,
+}
+
+impl From<Option<LightData>> for Proptype {
+    fn from(value: Option<LightData>) -> Self {
+        Proptype::LightData(value)
+    }
 }

@@ -23,6 +23,11 @@ pub enum Metertype {
     /// an ideal power meter (currently not used)
     IdealPowerMeter,
 }
+impl From<Metertype> for Proptype {
+    fn from(value: Metertype) -> Self {
+        Proptype::Metertype(value)
+    }
+}
 /// (ideal) energy / power meter.
 ///
 /// It normally measures the total energy of the incoming light regardless of the wavelength, position, angle, polarization etc...
