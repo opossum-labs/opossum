@@ -114,6 +114,10 @@ impl NodeGroup {
     ///
     /// This command just adds an [`Optical`] but does not connect it to existing nodes in the (sub-)graph. The given node is
     /// consumed (owned) by the [`NodeGroup`].
+    ///
+    /// ## Errors
+    ///
+    /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> OpmResult<NodeIndex> {
         if self.inverted() {
             return Err(OpossumError::OpticGroup(
@@ -132,6 +136,14 @@ impl NodeGroup {
     /// rejected and an [`OpossumError::OpticScenery`] is returned, if the graph would form a cycle (loop in the graph). **Note**:
     /// The connection of two internal nodes might affect external port mappings (see [`map_input_port`](NodeGroup::map_input_port())
     /// & [`map_output_port`](NodeGroup::map_output_port()) functions). In this case no longer valid mappings will be deleted.
+    ///
+    /// ## Errors
+    ///
+    /// This function returns an [`OpossumError`] if
+    ///   - the group is set as `inverted`. Connectiing subnodes of an inverted group node would result in strange behaviour.
+    ///   - the source node / port or target node / port does not exist.
+    ///   - the source node / port or target node / port is already connected.
+    ///   - the node connection would form a loop in the graph.
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
