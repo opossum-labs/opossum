@@ -1,3 +1,4 @@
+use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -11,19 +12,71 @@ use crate::{
 /// A general set of (optical) properties.
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct Properties {
-    pub props: HashMap<String, Property>,
+    props: HashMap<String, Property>,
 }
-
 impl Properties {
-    pub fn set(&mut self, name: &str, value: Property) -> Option<()> {
-        if self.props.insert(name.into(), value).is_some() {
-            Some(())
+    pub fn create(
+        &mut self,
+        name: &str,
+        description: &str,
+        conditions: Option<Vec<PropCondition>>,
+        value: Proptype,
+    ) -> OpmResult<()> {
+        let new_property = Property {
+            prop: value,
+            description: description.into(),
+            conditions,
+        };
+        if self.props.insert(name.into(), new_property).is_some() {
+            Err(OpossumError::Properties(format!(
+                "property {} already created",
+                name
+            )))
         } else {
-            None
+            Ok(())
         }
     }
-    pub fn get(&self, name: &str) -> Option<&Property> {
-        self.props.get(name)
+    pub fn set(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
+        let mut property = self
+            .props
+            .get(name)
+            .ok_or(OpossumError::Properties(format!(
+                "property {} does not exist",
+                name
+            )))?
+            .clone();
+        property.set_value(value)?;
+        self.props.insert(name.into(), property);
+        Ok(())
+    }
+    pub fn set_internal(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
+        let mut property = self
+            .props
+            .get(name)
+            .ok_or(OpossumError::Properties(format!(
+                "property {} does not exist",
+                name
+            )))?
+            .clone();
+        property.set_value_internal(value)?;
+        self.props.insert(name.into(), property);
+        Ok(())
+    }
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, Property> {
+        self.props.iter()
+    }
+    pub fn contains(&self, key: &str) -> bool {
+        self.props.contains_key(key)
+    }
+    pub fn get(&self, name: &str) -> OpmResult<&Proptype> {
+        if let Some(prop) = self.props.get(name) {
+            Ok(prop.prop())
+        } else {
+            Err(OpossumError::Properties(format!(
+                "property {} does not exist",
+                name
+            )))
+        }
     }
     pub fn get_bool(&self, name: &str) -> OpmResult<Option<bool>> {
         if let Some(property) = self.props.get(name) {
@@ -41,95 +94,162 @@ impl Properties {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
 pub struct Property {
-    pub prop: Proptype,
+    prop: Proptype,
+    #[serde(skip)]
+    description: String,
+    #[serde(skip)]
+    conditions: Option<Vec<PropCondition>>,
 }
-
-impl From<bool> for Property {
+impl Property {
+    pub fn prop(&self) -> &Proptype {
+        &self.prop
+    }
+    pub fn description(&self) -> &str {
+        self.description.as_ref()
+    }
+    pub fn set_value(&mut self, prop: Proptype) -> OpmResult<()> {
+        if let Some(conditions) = &self.conditions {
+            if conditions.contains(&PropCondition::InternalOnly) {
+                return Err(OpossumError::Properties(
+                    "property is internally used and public read-only".into(),
+                ));
+            }
+        }
+        self.check_conditions(&prop)?;
+        self.prop = prop;
+        Ok(())
+    }
+    pub fn set_value_internal(&mut self, prop: Proptype) -> OpmResult<()> {
+        self.check_conditions(&prop)?;
+        self.prop = prop;
+        Ok(())
+    }
+    fn check_conditions(&self, prop: &Proptype) -> OpmResult<()> {
+        if let Some(conditions) = &self.conditions {
+            for condition in conditions.iter() {
+                match condition {
+                    PropCondition::NonEmptyString => {
+                        if let Proptype::String(s) = prop.clone() {
+                            if s.is_empty() {
+                                return Err(OpossumError::Properties(
+                                    "string value must not be empty".into(),
+                                ));
+                            }
+                        }
+                    }
+                    PropCondition::GreaterThan(limit) => match prop {
+                        Proptype::I32(val) => {
+                            if val.as_f64() <= *limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be > {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        Proptype::F64(val) => {
+                            if val <= limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be > {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        _ => {}
+                    },
+                    PropCondition::LessThan(limit) => match prop {
+                        Proptype::I32(val) => {
+                            if val.as_f64() >= *limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be < {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        Proptype::F64(val) => {
+                            if val >= limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be < {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        _ => {}
+                    },
+                    PropCondition::GreaterThanEqual(limit) => match prop {
+                        Proptype::I32(val) => {
+                            if val.as_f64() < *limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be >= {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        Proptype::F64(val) => {
+                            if val < limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be >= {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        _ => {}
+                    },
+                    PropCondition::LessThanEqual(limit) => match prop {
+                        Proptype::I32(val) => {
+                            if val.as_f64() > *limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be <= {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        Proptype::F64(val) => {
+                            if val > limit {
+                                return Err(OpossumError::Properties(format!(
+                                    "value must be <= {}",
+                                    limit
+                                )));
+                            }
+                        }
+                        _ => {}
+                    },
+                    PropCondition::InternalOnly => {}
+                }
+            }
+        }
+        Ok(())
+    }
+}
+impl From<bool> for Proptype {
     fn from(value: bool) -> Self {
-        Property {
-            prop: Proptype::Bool(value),
-        }
+        Proptype::Bool(value)
     }
 }
 
-impl From<f64> for Property {
+impl From<f64> for Proptype {
     fn from(value: f64) -> Self {
-        Property {
-            prop: Proptype::F64(value),
-        }
+        Proptype::F64(value)
     }
 }
 
-impl From<String> for Property {
+impl From<String> for Proptype {
     fn from(value: String) -> Self {
-        Property {
-            prop: Proptype::String(value),
-        }
+        Proptype::String(value)
     }
 }
-
-impl From<&str> for Property {
+impl From<&str> for Proptype {
     fn from(value: &str) -> Self {
-        Property {
-            prop: Proptype::String(value.to_string()),
-        }
+        Proptype::String(value.to_string())
     }
 }
-
-impl From<i32> for Property {
+impl From<i32> for Proptype {
     fn from(value: i32) -> Self {
-        Property {
-            prop: Proptype::I32(value),
-        }
+        Proptype::I32(value)
     }
 }
-impl From<OpticGraph> for Property {
-    fn from(value: OpticGraph) -> Self {
-        Property {
-            prop: Proptype::OpticGraph(value),
-        }
-    }
-}
-impl From<FilterType> for Property {
-    fn from(value: FilterType) -> Self {
-        Property {
-            prop: Proptype::FilterType(value),
-        }
-    }
-}
-impl From<SpectrometerType> for Property {
-    fn from(value: SpectrometerType) -> Self {
-        Property {
-            prop: Proptype::SpectrometerType(value),
-        }
-    }
-}
-impl From<Metertype> for Property {
-    fn from(value: Metertype) -> Self {
-        Property {
-            prop: Proptype::Metertype(value),
-        }
-    }
-}
-impl From<PortMap> for Property {
-    fn from(value: PortMap) -> Self {
-        Property {
-            prop: Proptype::GroupPortMap(value),
-        }
-    }
-}
-impl From<Option<LightData>> for Property {
-    fn from(value: Option<LightData>) -> Self {
-        Property {
-            prop: Proptype::LightData(value),
-        }
-    }
-}
-impl From<Uuid> for Property {
+impl From<Uuid> for Proptype {
     fn from(value: Uuid) -> Self {
-        Property {
-            prop: Proptype::Uuid(value),
-        }
+        Proptype::Uuid(value)
     }
 }
 #[non_exhaustive]
@@ -146,4 +266,15 @@ pub enum Proptype {
     Metertype(Metertype),
     GroupPortMap(PortMap),
     Uuid(Uuid),
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub enum PropCondition {
+    NonEmptyString,
+    InternalOnly, // DO NOT USE YET (deserialization problems)
+    GreaterThan(f64),
+    LessThan(f64),
+    GreaterThanEqual(f64),
+    LessThanEqual(f64),
 }

@@ -5,7 +5,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Property, Proptype},
+    properties::{PropCondition, Properties, Proptype},
 };
 use ndarray::{array, Array1};
 use uom::{si::f64::Length, si::length::meter};
@@ -23,8 +23,17 @@ pub struct RealLens {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "dummy".into());
-    props.set("inverted", false.into());
+    props
+        .create(
+            "name",
+            "name of the lens",
+            Some(vec![PropCondition::NonEmptyString]),
+            "lens".into(),
+        )
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", None, false.into())
+        .unwrap();
     props
 }
 
@@ -146,7 +155,7 @@ impl Default for RealLens {
 
 impl Optical for RealLens {
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             self.node_type()
@@ -177,12 +186,8 @@ impl Optical for RealLens {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
+        self.props.set(name, prop)
     }
 }
 

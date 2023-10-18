@@ -19,6 +19,8 @@ pub enum OpossumError {
     Spectrum(String),
     /// errors console io
     Console(String),
+    /// errors in connection with properties handling
+    Properties(String),
     /// errors not falling in one of the categories above
     Other(String),
 }
@@ -27,22 +29,25 @@ impl Display for OpossumError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OpossumError::OpticScenery(m) => {
-                write!(f, "Opossum Error::OpticScenery::{}", m)
+                write!(f, "OpticScenery::{}", m)
             }
             OpossumError::OpticGroup(m) => {
-                write!(f, "Opossum Error::OpticGroup::{}", m)
+                write!(f, "OpticGroup::{}", m)
             }
             OpossumError::OpticPort(m) => {
-                write!(f, "Opossum Error::OpticPort::{}", m)
+                write!(f, "OpticPort::{}", m)
             }
             OpossumError::Analysis(m) => {
-                write!(f, "Opossum Error::Analysis::{}", m)
+                write!(f, "Analysis::{}", m)
             }
             OpossumError::Spectrum(m) => {
-                write!(f, "Opossum Spectrum::{}", m)
+                write!(f, "Spectrum::{}", m)
+            }
+            OpossumError::Properties(m) => {
+                write!(f, "Properties::{}", m)
             }
             OpossumError::Console(m) => {
-                write!(f, "Opossum Console::{}", m)
+                write!(f, "Console::{}", m)
             }
             OpossumError::Other(m) => write!(f, "Opossum Error::Other::{}", m),
         }

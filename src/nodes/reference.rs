@@ -9,7 +9,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::optic_ports::OpticPorts;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Property, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype};
 
 #[derive(Debug)]
 /// A virtual component referring to another existing component.
@@ -31,9 +31,25 @@ pub struct NodeReference {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "reference".into());
-    props.set("inverted", false.into());
-    props.set("reference id", Uuid::nil().into());
+    props
+        .create(
+            "name",
+            "name of the reference node",
+            Some(vec![PropCondition::NonEmptyString]),
+            "reference".into(),
+        )
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", None, false.into())
+        .unwrap();
+    props
+        .create(
+            "reference id",
+            "unique id of the referenced node",
+            None,
+            Uuid::nil().into(),
+        )
+        .unwrap();
     props
 }
 impl Default for NodeReference {
@@ -48,7 +64,7 @@ impl NodeReference {
     /// Create new [`NodeReference`] referring to another existing [`OpticRef`].
     pub fn from_node(node: OpticRef) -> Self {
         let mut props = create_default_props();
-        props.set("reference id", node.uuid().into());
+        props.set("reference id", node.uuid().into()).unwrap();
         Self {
             reference: Some(Rc::downgrade(&node.optical_ref)),
             props,
@@ -61,7 +77,7 @@ impl NodeReference {
 
 impl Optical for NodeReference {
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             self.node_type()
@@ -115,12 +131,8 @@ impl Optical for NodeReference {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
+        self.props.set(name, prop)
     }
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Ok(self)

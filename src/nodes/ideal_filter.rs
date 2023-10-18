@@ -7,7 +7,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Property, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype};
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
@@ -18,6 +18,11 @@ pub enum FilterType {
     Constant(f64),
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
+}
+impl From<FilterType> for Proptype {
+    fn from(value: FilterType) -> Self {
+        Proptype::FilterType(value)
+    }
 }
 #[derive(Debug)]
 /// An ideal filter with given transmission or optical density.
@@ -38,9 +43,25 @@ pub struct IdealFilter {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "ideal filter".into());
-    props.set("inverted", false.into());
-    props.set("filter type", FilterType::Constant(1.0).into());
+    props
+        .create(
+            "name",
+            "name of the filter element",
+            Some(vec![PropCondition::NonEmptyString]),
+            "ideal filter".into(),
+        )
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", None, false.into())
+        .unwrap();
+    props
+        .create(
+            "filter type",
+            "used filter algorithm",
+            None,
+            FilterType::Constant(1.0).into(),
+        )
+        .unwrap();
     props
 }
 impl Default for IdealFilter {
@@ -67,15 +88,14 @@ impl IdealFilter {
             }
         }
         let mut props = create_default_props();
-        props.set("filter type", filter_type.into());
-        props.set("name", name.into());
+        props.set("filter type", filter_type.into())?;
+        props.set("name", name.into())?;
         Ok(Self { props })
     }
     /// Returns the filter type of this [`IdealFilter`].
     pub fn filter_type(&self) -> FilterType {
-        let filter_type = self.props.get("filter type").unwrap().prop.clone();
-        if let Proptype::FilterType(filter_type) = filter_type {
-            filter_type
+        if let Proptype::FilterType(filter_type) = self.props.get("filter type").unwrap() {
+            filter_type.clone()
         } else {
             panic!("wrong data type")
         }
@@ -89,7 +109,7 @@ impl IdealFilter {
     pub fn set_transmission(&mut self, transmission: f64) -> OpmResult<()> {
         if (0.0..=1.0).contains(&transmission) {
             self.props
-                .set("filter type", FilterType::Constant(transmission).into());
+                .set("filter type", FilterType::Constant(transmission).into())?;
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -108,7 +128,7 @@ impl IdealFilter {
             self.props.set(
                 "filter type",
                 FilterType::Constant(f64::powf(10.0, -1.0 * density)).into(),
-            );
+            )?;
             Ok(())
         } else {
             Err(OpossumError::Other("optical densitiy must be >=0".into()))
@@ -158,7 +178,7 @@ impl IdealFilter {
 
 impl Optical for IdealFilter {
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             self.node_type()
@@ -194,12 +214,8 @@ impl Optical for IdealFilter {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
+        self.props.set(name, prop)
     }
 }
 

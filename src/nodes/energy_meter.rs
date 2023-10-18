@@ -5,9 +5,8 @@ use serde_json::{json, Number};
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{Properties, Property, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype};
 use crate::{
-    error::OpossumError,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
 };
@@ -23,6 +22,11 @@ pub enum Metertype {
     IdealEnergyMeter,
     /// an ideal power meter (currently not used)
     IdealPowerMeter,
+}
+impl From<Metertype> for Proptype {
+    fn from(value: Metertype) -> Self {
+        Proptype::Metertype(value)
+    }
 }
 /// (ideal) energy / power meter.
 ///
@@ -48,9 +52,25 @@ pub struct EnergyMeter {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "energy meter".into());
-    props.set("inverted", false.into());
-    props.set("meter type", Metertype::default().into());
+    props
+        .create(
+            "name",
+            "name of the energy meter",
+            Some(vec![PropCondition::NonEmptyString]),
+            "energy meter".into(),
+        )
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", None, false.into())
+        .unwrap();
+    props
+        .create(
+            "meter type",
+            "model type of the meter",
+            None,
+            Metertype::default().into(),
+        )
+        .unwrap();
     props
 }
 
@@ -66,8 +86,8 @@ impl EnergyMeter {
     /// Creates a new [`EnergyMeter`] of the given [`Metertype`].
     pub fn new(name: &str, meter_type: Metertype) -> Self {
         let mut props = create_default_props();
-        props.set("name", name.into());
-        props.set("meter type", meter_type.into());
+        props.set("name", name.into()).unwrap();
+        props.set("meter type", meter_type.into()).unwrap();
         EnergyMeter {
             props,
             ..Default::default()
@@ -75,24 +95,21 @@ impl EnergyMeter {
     }
     /// Returns the meter type of this [`EnergyMeter`].
     pub fn meter_type(&self) -> Metertype {
-        let meter_type = self.props.get("meter type").unwrap().prop.clone();
-        if let Proptype::Metertype(meter_type) = meter_type {
-            meter_type
+        if let Proptype::Metertype(meter_type) = self.props.get("meter type").unwrap() {
+            *meter_type
         } else {
             panic!("wrong data format")
         }
     }
     /// Sets the meter type of this [`EnergyMeter`].
     pub fn set_meter_type(&mut self, meter_type: Metertype) {
-        self.props.set("meter type", meter_type.into());
+        self.props.set("meter type", meter_type.into()).unwrap();
     }
 }
 impl Optical for EnergyMeter {
     fn name(&self) -> &str {
-        if let Some(value) = self.props.get("name") {
-            if let Proptype::String(name) = &value.prop {
-                return name;
-            }
+        if let Proptype::String(name) = self.props.get("name").unwrap() {
+            return name;
         }
         panic!("wrong format");
     }
@@ -131,12 +148,8 @@ impl Optical for EnergyMeter {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
+        self.props.set(name, prop)
     }
     fn report(&self) -> serde_json::Value {
         let data = &self.light_data;

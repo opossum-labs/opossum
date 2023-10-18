@@ -50,7 +50,9 @@ pub struct OpticScenery {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("description", "".into());
+    props
+        .create("description", "title of the scenery", None, "".into())
+        .unwrap();
     props
 }
 
@@ -209,7 +211,7 @@ impl OpticScenery {
     /// Returns a reference to the description of this [`OpticScenery`].
     pub fn description(&self) -> &str {
         let prop = self.props.get("description").unwrap();
-        if let Proptype::String(dsc) = &prop.prop {
+        if let Proptype::String(dsc) = &prop {
             dsc
         } else {
             ""

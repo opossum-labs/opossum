@@ -3,10 +3,10 @@ use serde_json::json;
 
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
+use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Property, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -30,8 +30,17 @@ pub struct Dummy {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "dummy".into());
-    props.set("inverted", false.into());
+    props
+        .create(
+            "name",
+            "name of the dummy element",
+            Some(vec![PropCondition::NonEmptyString]),
+            "dummy".into(),
+        )
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", None, false.into())
+        .unwrap();
     props
 }
 
@@ -46,16 +55,14 @@ impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
     pub fn new(name: &str) -> Self {
         let mut props = create_default_props();
-        props.set("name", name.into());
+        props.set("name", name.into()).unwrap();
         Self { props }
     }
 }
 impl Optical for Dummy {
     fn name(&self) -> &str {
-        if let Some(value) = self.props.get("name") {
-            if let Proptype::String(name) = &value.prop {
-                return name;
-            }
+        if let Proptype::String(name) = self.props.get("name").unwrap() {
+            return name;
         }
         panic!("wrong format");
     }
@@ -90,12 +97,8 @@ impl Optical for Dummy {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
+        self.props.set(name, prop)
     }
     fn report(&self) -> serde_json::Value {
         json!({"type": self.node_type(),

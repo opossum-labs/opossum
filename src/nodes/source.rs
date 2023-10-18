@@ -8,7 +8,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Property, Proptype},
+    properties::{PropCondition, Properties, Proptype},
 };
 
 /// This node represents a source of light.
@@ -31,8 +31,17 @@ pub struct Source {
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "source".into());
-    props.set("light data", None.into());
+    props
+        .create(
+            "name",
+            "name of the light source",
+            Some(vec![PropCondition::NonEmptyString]),
+            "source".into(),
+        )
+        .unwrap();
+    props
+        .create("light data", "data of the emitted light", None, None.into())
+        .unwrap();
     props
 }
 
@@ -60,22 +69,25 @@ impl Source {
     /// ```
     pub fn new(name: &str, light: LightData) -> Self {
         let mut props = create_default_props();
-        props.set("name", name.into());
-        props.set("light data", Some(light.clone()).into());
+        props.set("name", name.into()).unwrap();
+        props
+            .set_internal("light data", Some(light.clone()).into())
+            .unwrap();
         Source { props }
     }
 
     /// Sets the light data of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
     pub fn set_light_data(&mut self, light_data: LightData) {
         self.props
-            .set("light data", Some(light_data.clone()).into());
+            .set("light data", Some(light_data.clone()).into())
+            .unwrap();
     }
 }
 
 impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let light_prop = self.props.get("light data").unwrap();
-        let data = if let Proptype::LightData(data) = &light_prop.prop {
+        let data = if let Proptype::LightData(data) = &light_prop {
             data
         } else {
             &None
@@ -92,7 +104,7 @@ impl Optical for Source {
         "light source"
     }
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             "light source"
@@ -109,7 +121,7 @@ impl Optical for Source {
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
         let light_prop = self.props.get("light data").unwrap();
-        let data = if let Proptype::LightData(data) = &light_prop.prop {
+        let data = if let Proptype::LightData(data) = &light_prop {
             data
         } else {
             &None
@@ -123,12 +135,8 @@ impl Optical for Source {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
+        self.props.set(name, prop)
     }
 }
 

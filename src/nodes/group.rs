@@ -7,7 +7,8 @@ use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::optic_graph::OpticGraph;
 use crate::optical::LightResult;
-use crate::properties::{Properties, Property, Proptype};
+use crate::properties::PropCondition;
+use crate::properties::{Properties, Proptype};
 use crate::{optic_ports::OpticPorts, optical::Optical};
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -17,6 +18,11 @@ use std::collections::HashMap;
 
 /// Mappin of group internal ports to externally visble ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
+impl From<PortMap> for Proptype {
+    fn from(value: PortMap) -> Self {
+        Proptype::GroupPortMap(value)
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 /// A node that represents a group of other [`Optical`]s arranges in a subgraph.
@@ -45,12 +51,44 @@ pub struct NodeGroup {
 
 fn create_default_props() -> Properties {
     let mut props = Properties::default();
-    props.set("name", "group".into());
-    props.set("inverted", false.into());
-    props.set("expand view", false.into());
-    props.set("graph", OpticGraph::default().into());
-    props.set("input port map", PortMap::new().into());
-    props.set("output port map", PortMap::new().into());
+    props
+        .create(
+            "name",
+            "name of the optical group",
+            Some(vec![PropCondition::NonEmptyString]),
+            "group".into(),
+        )
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", None, false.into())
+        .unwrap();
+    props
+        .create(
+            "expand view",
+            "show group fully expanded in dot diagram?",
+            None,
+            false.into(),
+        )
+        .unwrap();
+    props
+        .create("graph", "optical graph", None, OpticGraph::default().into())
+        .unwrap();
+    props
+        .create(
+            "input port map",
+            "mapping of internal input ports to external ones",
+            None,
+            PortMap::new().into(),
+        )
+        .unwrap();
+    props
+        .create(
+            "output port map",
+            "mapping of internal output ports to external ones",
+            None,
+            PortMap::new().into(),
+        )
+        .unwrap();
     props
 }
 
@@ -66,7 +104,7 @@ impl NodeGroup {
     /// Creates a new [`NodeGroup`].
     pub fn new(name: &str) -> Self {
         let mut props = create_default_props();
-        props.set("name", name.into());
+        props.set("name", name.into()).unwrap();
         Self {
             props,
             ..Default::default()
@@ -78,7 +116,9 @@ impl NodeGroup {
     /// consumed (owned) by the [`NodeGroup`].
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         let idx = self.g.add_node(node);
-        self.props.set("graph", self.g.clone().into());
+        self.props
+            .set_internal("graph", self.g.clone().into())
+            .unwrap();
         idx
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
@@ -96,7 +136,9 @@ impl NodeGroup {
     ) -> OpmResult<()> {
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port)?;
-        self.props.set("graph", self.g.clone().into());
+        self.props
+            .set_internal("graph", self.g.clone().into())
+            .unwrap();
 
         let in_map = self.input_port_map();
         let invalid_mapping = in_map
@@ -121,12 +163,12 @@ impl NodeGroup {
     /// Synchronize properties with (internal) graph structure.
     ///
     pub fn sync_graph(&mut self) {
-        if let Proptype::OpticGraph(g) = &self.props.get("graph").unwrap().prop {
+        if let Proptype::OpticGraph(g) = &self.props.get("graph").unwrap() {
             self.g = g.clone();
         }
     }
     fn input_port_map(&self) -> PortMap {
-        let input_port_map = self.props.get("input port map").unwrap().prop.clone();
+        let input_port_map = self.props.get("input port map").unwrap().clone();
         if let Proptype::GroupPortMap(input_port_map) = input_port_map {
             input_port_map
         } else {
@@ -134,10 +176,12 @@ impl NodeGroup {
         }
     }
     fn set_input_port_map(&mut self, port_map: PortMap) {
-        self.props.set("input port map", port_map.into());
+        self.props
+            .set_internal("input port map", port_map.into())
+            .unwrap();
     }
     fn output_port_map(&self) -> PortMap {
-        let output_port_map = self.props.get("output port map").unwrap().prop.clone();
+        let output_port_map = self.props.get("output port map").unwrap().clone();
         if let Proptype::GroupPortMap(output_port_map) = output_port_map {
             output_port_map
         } else {
@@ -145,7 +189,9 @@ impl NodeGroup {
         }
     }
     fn set_output_port_map(&mut self, port_map: PortMap) {
-        self.props.set("output port map", port_map.into());
+        self.props
+            .set_internal("output port map", port_map.into())
+            .unwrap();
     }
 
     fn input_nodes(&self) -> Vec<NodeIndex> {
@@ -469,7 +515,7 @@ impl NodeGroup {
 
     /// returns the boolean which defines whether the group expands or not.
     pub fn expand_view(&mut self, expand_view: bool) {
-        self.props.set("expand view", expand_view.into());
+        self.props.set("expand view", expand_view.into()).unwrap();
     }
     /// Creates the dot-format string which describes the edge that connects two nodes
     /// parameters:
@@ -615,7 +661,7 @@ impl NodeGroup {
 
 impl Optical for NodeGroup {
     fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap().prop {
+        if let Proptype::String(name) = &self.props.get("name").unwrap() {
             name
         } else {
             self.node_type()
@@ -656,12 +702,8 @@ impl Optical for NodeGroup {
     fn properties(&self) -> &Properties {
         &self.props
     }
-    fn set_property(&mut self, name: &str, prop: Property) -> OpmResult<()> {
-        if self.props.set(name, prop).is_none() {
-            Err(OpossumError::Other("property not defined".into()))
-        } else {
-            Ok(())
-        }
+    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
+        self.props.set(name, prop)
     }
 }
 
