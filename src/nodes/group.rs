@@ -114,12 +114,21 @@ impl NodeGroup {
     ///
     /// This command just adds an [`Optical`] but does not connect it to existing nodes in the (sub-)graph. The given node is
     /// consumed (owned) by the [`NodeGroup`].
-    pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
+    ///
+    /// ## Errors
+    ///
+    /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
+    pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> OpmResult<NodeIndex> {
+        if self.inverted() {
+            return Err(OpossumError::OpticGroup(
+                "cannot add nodes if group is set as inverted".into(),
+            ));
+        }
         let idx = self.g.add_node(node);
         self.props
             .set_internal("graph", self.g.clone().into())
             .unwrap();
-        idx
+        Ok(idx)
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///
@@ -127,6 +136,14 @@ impl NodeGroup {
     /// rejected and an [`OpossumError::OpticScenery`] is returned, if the graph would form a cycle (loop in the graph). **Note**:
     /// The connection of two internal nodes might affect external port mappings (see [`map_input_port`](NodeGroup::map_input_port())
     /// & [`map_output_port`](NodeGroup::map_output_port()) functions). In this case no longer valid mappings will be deleted.
+    ///
+    /// ## Errors
+    ///
+    /// This function returns an [`OpossumError`] if
+    ///   - the group is set as `inverted`. Connectiing subnodes of an inverted group node would result in strange behaviour.
+    ///   - the source node / port or target node / port does not exist.
+    ///   - the source node / port or target node / port is already connected.
+    ///   - the node connection would form a loop in the graph.
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
@@ -134,6 +151,11 @@ impl NodeGroup {
         target_node: NodeIndex,
         target_port: &str,
     ) -> OpmResult<()> {
+        if self.inverted() {
+            return Err(OpossumError::OpticGroup(
+                "cannot connect nodes if group is set as inverted".into(),
+            ));
+        }
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port)?;
         self.props
@@ -770,8 +792,14 @@ mod test {
     #[test]
     fn add_node() {
         let mut og = NodeGroup::default();
-        og.add_node(Dummy::new("n1"));
+        og.add_node(Dummy::new("n1")).unwrap();
         assert_eq!(og.g.0.node_count(), 1);
+    }
+    #[test]
+    fn add_node_inverted() {
+        let mut og = NodeGroup::default();
+        og.set_property("inverted", true.into()).unwrap();
+        assert!(og.add_node(Dummy::new("n1")).is_err());
     }
     #[test]
     fn inverted() {
@@ -782,8 +810,8 @@ mod test {
     #[test]
     fn connect_nodes() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::new("n1"));
-        let sn2_i = og.add_node(Dummy::new("n2"));
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
+        let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         // wrong port names
         assert!(og.connect_nodes(sn1_i, "wrong", sn2_i, "front").is_err());
         assert_eq!(og.g.0.edge_count(), 0);
@@ -799,10 +827,18 @@ mod test {
         assert_eq!(og.g.0.edge_count(), 1);
     }
     #[test]
+    fn connect_nodes_inverted() {
+        let mut og = NodeGroup::default();
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
+        let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
+        og.set_property("inverted", true.into()).unwrap();
+        assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "front").is_err());
+    }
+    #[test]
     fn connect_nodes_update_port_mapping() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::new("n1"));
-        let sn2_i = og.add_node(Dummy::new("n2"));
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
+        let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
 
         og.map_input_port(sn2_i, "front", "input").unwrap();
         og.map_output_port(sn1_i, "rear", "output").unwrap();
@@ -816,10 +852,10 @@ mod test {
     #[test]
     fn input_nodes() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::new("n1"));
-        let sn2_i = og.add_node(Dummy::new("n2"));
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
+        let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         let sub_node3 = BeamSplitter::new("test", 0.5).unwrap();
-        let sn3_i = og.add_node(sub_node3);
+        let sn3_i = og.add_node(sub_node3).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         og.connect_nodes(sn2_i, "rear", sn3_i, "input1").unwrap();
         assert_eq!(og.input_nodes(), vec![0.into(), 2.into()])
@@ -827,10 +863,10 @@ mod test {
     #[test]
     fn output_nodes() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::new("n1"));
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sub_node1 = BeamSplitter::new("test", 0.5).unwrap();
-        let sn2_i = og.add_node(sub_node1);
-        let sn3_i = og.add_node(Dummy::new("n3"));
+        let sn2_i = og.add_node(sub_node1).unwrap();
+        let sn3_i = og.add_node(Dummy::new("n3")).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
         og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front")
             .unwrap();
@@ -839,8 +875,8 @@ mod test {
     #[test]
     fn map_input_port() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::new("n1"));
-        let sn2_i = og.add_node(Dummy::new("n2"));
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
+        let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
 
         // wrong port name
@@ -862,8 +898,8 @@ mod test {
     #[test]
     fn map_input_port_half_connected_nodes() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::new("n1"));
-        let sn2_i = og.add_node(BeamSplitter::default());
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
+        let sn2_i = og.add_node(BeamSplitter::default()).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
 
         // node port already internally connected
@@ -877,8 +913,8 @@ mod test {
     #[test]
     fn map_output_port() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::new("n1"));
-        let sn2_i = og.add_node(Dummy::new("n2"));
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
+        let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
 
         // wrong port name
@@ -900,8 +936,8 @@ mod test {
     #[test]
     fn map_output_port_half_connected_nodes() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(BeamSplitter::default());
-        let sn2_i = og.add_node(Dummy::new("n2"));
+        let sn1_i = og.add_node(BeamSplitter::default()).unwrap();
+        let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "front")
             .unwrap();
 
@@ -920,8 +956,8 @@ mod test {
     #[test]
     fn ports() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::new("n1"));
-        let sn2_i = og.add_node(Dummy::new("n2"));
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
+        let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         assert!(og.ports().inputs().is_empty());
         assert!(og.ports().outputs().is_empty());
@@ -933,8 +969,8 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::new("n1"));
-        let sn2_i = og.add_node(Dummy::new("n2"));
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
+        let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         og.map_input_port(sn1_i, "front", "input").unwrap();
         og.map_output_port(sn2_i, "rear", "output").unwrap();
@@ -944,8 +980,10 @@ mod test {
     }
     fn prepare_group() -> NodeGroup {
         let mut group = NodeGroup::default();
-        let g1_n1 = group.add_node(Dummy::new("node1"));
-        let g1_n2 = group.add_node(BeamSplitter::new("test", 0.6).unwrap());
+        let g1_n1 = group.add_node(Dummy::new("node1")).unwrap();
+        let g1_n2 = group
+            .add_node(BeamSplitter::new("test", 0.6).unwrap())
+            .unwrap();
         group
             .map_output_port(g1_n2, "out1_trans1_refl2", "output")
             .unwrap();

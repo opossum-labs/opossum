@@ -44,7 +44,7 @@ fn create_default_props() -> Properties {
     props
         .create(
             "ratio",
-            "splitting ration",
+            "splitting ratio",
             Some(vec![
                 PropCondition::GreaterThanEqual(0.0),
                 PropCondition::LessThanEqual(1.0),

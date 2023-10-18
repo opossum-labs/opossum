@@ -267,7 +267,6 @@ pub enum Proptype {
     GroupPortMap(PortMap),
     Uuid(Uuid),
 }
-
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropCondition {
