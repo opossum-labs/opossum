@@ -16,7 +16,7 @@ use petgraph::{algo::*, Direction};
 use serde_derive::Serialize;
 use std::collections::HashMap;
 
-/// Mappin of group internal ports to externally visble ports.
+/// Mappin of group internal ports to externally visible ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
 impl From<PortMap> for Proptype {
     fn from(value: PortMap) -> Self {
@@ -427,7 +427,7 @@ impl NodeGroup {
     ) -> OpmResult<LightResult> {
         let is_inverted = self.props.get_bool("inverted").unwrap().unwrap();
         if is_inverted {
-            self.invert_graph();
+            self.invert_graph()?;
         }
         let g_clone = self.g.0.clone();
         let mut group_srcs = g_clone.externals(Direction::Incoming);
@@ -480,7 +480,7 @@ impl NodeGroup {
             }
         }
         if is_inverted {
-            self.invert_graph();
+            self.invert_graph()?;
         } // revert initial inversion (if necessary)
         Ok(light_result)
     }
@@ -667,17 +667,22 @@ impl NodeGroup {
         ));
         Ok(dot_str)
     }
-    fn invert_graph(&mut self) {
+    fn invert_graph(&mut self) -> OpmResult<()> {
         for node in self.g.0.node_weights_mut() {
             node.optical_ref
                 .borrow_mut()
                 .set_property("inverted", true.into())
-                .unwrap();
+                .map_err(|_| {
+                    OpossumError::OpticGroup(
+                        "group cannot be inverted because it contains a non-invertable node".into(),
+                    )
+                })?;
         }
         for edge in self.g.0.edge_weights_mut() {
             edge.inverse();
         }
         self.g.0.reverse();
+        Ok(())
     }
 }
 
@@ -741,7 +746,7 @@ impl Dottable for NodeGroup {
     ) -> OpmResult<String> {
         let mut cloned_self = self.clone();
         if self.props.get_bool("inverted").unwrap().unwrap() {
-            cloned_self.invert_graph();
+            cloned_self.invert_graph()?;
         }
         if self.shall_expand() {
             cloned_self.to_dot_expanded_view(node_index, name, inverted, parent_identifier, rankdir)
@@ -766,7 +771,7 @@ mod test {
     use super::*;
     use crate::{
         lightdata::DataEnergy,
-        nodes::{BeamSplitter, Dummy},
+        nodes::{BeamSplitter, Dummy, Source},
         optical::Optical,
         spectrum::create_he_ne_spectrum,
     };
@@ -1012,6 +1017,15 @@ mod test {
         assert_eq!(energy, 0.6);
     }
     #[test]
+    fn analyze_empty_group() {
+        let mut group = NodeGroup::default();
+        let input = LightResult::default();
+        let output = group.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
     fn analyze_wrong_input_data() {
         let mut group = prepare_group();
         let mut input = LightResult::default();
@@ -1046,5 +1060,21 @@ mod test {
             0.0
         };
         assert_eq!(energy, 0.6);
+    }
+    #[test]
+    fn analyze_inverse_with_src() {
+        let mut group = NodeGroup::default();
+        let g1_n1 = group.add_node(Source::default()).unwrap();
+        let g1_n2 = group.add_node(Dummy::new("node1")).unwrap();
+        group.map_output_port(g1_n2, "rear", "output").unwrap();
+        group.connect_nodes(g1_n1, "out1", g1_n2, "front").unwrap();
+        group.set_property("inverted", true.into()).unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spectrum(1.0),
+        });
+        input.insert("output".into(), Some(input_light.clone()));
+        let output = group.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_err());
     }
 }

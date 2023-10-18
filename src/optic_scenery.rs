@@ -1,3 +1,4 @@
+//! The basic structure containing the entire optical model
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
@@ -21,7 +22,7 @@ use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 
-/// Overall optical model and additional metatdata.
+/// Overall optical model and additional metadata.
 ///
 /// All optical elements ([`Optical`]s) have to be added to this structure in order
 /// to be considered for an analysis.
@@ -90,7 +91,7 @@ impl OpticScenery {
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port)
     }
-    /// Return a reference to the [`OpticRef`] specified by its node index.
+    /// Return a reference to the optical node specified by its node index.
     ///
     /// This function is mainly useful for setting up a reference node.
     ///

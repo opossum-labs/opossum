@@ -19,16 +19,12 @@ mod light;
 pub mod lightdata;
 pub mod nodes;
 pub mod optic_ports;
-/// The basic structure containing the entire optical model
 mod optic_scenery;
-/// The basic structure representing an optical element
 pub mod optical;
-/// Handling of node properties
 pub mod properties;
 pub mod spectrum;
 use chrono::DateTime;
 pub use optic_scenery::OpticScenery;
-/// Module for handling the OPOSSUM CLI
 pub mod console;
 mod optic_graph;
 mod optic_ref;

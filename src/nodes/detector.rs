@@ -10,7 +10,7 @@ use crate::{
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-/// This node represents an universal detector (so far for test / debugging purposes).
+/// A universal detector (so far for test / debugging purposes).
 ///
 /// Any [`LightData`] coming in will be stored internally for later display / export.
 ///

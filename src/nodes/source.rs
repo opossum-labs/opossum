@@ -11,7 +11,7 @@ use crate::{
     properties::{PropCondition, Properties, Proptype},
 };
 
-/// This node represents a source of light.
+/// A general light source
 ///
 /// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an [`OpticScenery`](crate::OpticScenery).
 ///

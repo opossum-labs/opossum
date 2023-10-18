@@ -1,3 +1,4 @@
+//! Contains the basic trait representing an optical element
 use serde_json::json;
 
 use crate::analyzer::AnalyzerType;
@@ -49,16 +50,31 @@ pub trait Optical: Dottable {
     fn is_detector(&self) -> bool {
         false
     }
-    /// Returns `true` if this [`Optical`] is inverted.
+    /// Returns `true` if this [`Optical`] is inverted. The default implementation returns `false`.
     fn inverted(&self) -> bool {
         false
     }
+    /// Return a downcasted reference of a [`NodeGroup`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the [`Optical`] does not have the [`node_type`](`Optical::node_type`) "group".
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
+    /// Return a downcasted mutable reference of a [`NodeGroup`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the [`Optical`] does not have the [`node_type`](`Optical::node_type`) "group".
     fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
+    /// Return a downcasted mutable reference of a [`NodeReference`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the [`Optical`] does not have the [`node_type`](Optical::node_type) "reference".
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Err(OpossumError::Other("cannot cast to reference node".into()))
     }
@@ -74,7 +90,15 @@ pub trait Optical: Dottable {
     ///
     /// This function will return an error if a non-defined property is set or the property has the wrong data type.
     fn set_property(&mut self, name: &str, proptype: Proptype) -> OpmResult<()>;
-    fn set_properties(&mut self, properties: &Properties) -> OpmResult<()> {
+    /// Set all properties of this [`Optical`].
+    ///
+    /// This is a convenience function. It internally calls [`set_property`](Optical::set_property) for all given properties. **Note**: Properties, which are not
+    /// present for the [`Optical`] are silently igrnored.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the Property conditions while setting a value are not met.
+    fn set_properties(&mut self, properties: Properties) -> OpmResult<()> {
         let own_properties = self.properties().clone();
         for prop in properties.iter() {
             if own_properties.contains(prop.0) {
