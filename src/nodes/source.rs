@@ -70,7 +70,7 @@ impl Source {
     pub fn new(name: &str, light: LightData) -> Self {
         let mut props = create_default_props();
         props.set("name", name.into()).unwrap();
-        props.set("light data", Some(light.clone()).into()).unwrap();
+        props.set_internal("light data", Some(light.clone()).into()).unwrap();
         Source { props }
     }
 

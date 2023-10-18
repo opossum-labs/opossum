@@ -49,6 +49,19 @@ impl Properties {
         self.props.insert(name.into(), property);
         Ok(())
     }
+    pub fn set_internal(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
+        let mut property = self
+            .props
+            .get(name)
+            .ok_or(OpossumError::Properties(format!(
+                "property {} does not exist",
+                name
+            )))?
+            .clone();
+        property.set_value_internal(value)?;
+        self.props.insert(name.into(), property);
+        Ok(())
+    }
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, Property> {
         self.props.iter()
     }
@@ -95,6 +108,16 @@ impl Property {
         self.description.as_ref()
     }
     pub fn set_value(&mut self, prop: Proptype) -> OpmResult<()> {
+        if let Some(conditions)=&self.conditions {
+            if conditions.contains(&PropCondition::InternalOnly) {
+                return Err(OpossumError::Properties("property is internally used and public read-only".into())) 
+            }
+        }
+        self.check_conditions(&prop)?;
+        self.prop = prop;
+        Ok(())
+    }
+    pub fn set_value_internal(&mut self, prop: Proptype) -> OpmResult<()> {
         self.check_conditions(&prop)?;
         self.prop = prop;
         Ok(())
@@ -188,6 +211,7 @@ impl Property {
                         }
                         _ => {}
                     },
+                    PropCondition::InternalOnly => {}, 
                 }
             }
         }
@@ -275,9 +299,10 @@ pub enum Proptype {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PropCondition {
     NonEmptyString,
+    InternalOnly, // DO NOT USE YET (deserialization problems)
     GreaterThan(f64),
     LessThan(f64),
     GreaterThanEqual(f64),
