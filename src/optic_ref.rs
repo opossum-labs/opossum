@@ -104,7 +104,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
                     .borrow_mut()
-                    .set_properties(&properties)
+                    .set_properties(properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 Ok(node)
             }
@@ -146,7 +146,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
                     .borrow_mut()
-                    .set_properties(&properties)
+                    .set_properties(properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 // group node: assign props to graph
                 if node.optical_ref.borrow().node_type() == "group" {

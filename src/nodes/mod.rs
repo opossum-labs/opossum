@@ -35,6 +35,13 @@ use crate::error::OpossumError;
 
 use crate::optic_ref::OpticRef;
 
+/// Factory function creating a new reference of an optical node of the given type.
+///
+/// This function is used internally during deserialization of an OpticGraph.
+///
+/// # Errors
+///
+/// This function will return an [`OpossumError`] if there is no node type of the given name.
 pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRef> {
     match node_type {
         "dummy" => Ok(OpticRef::new(Rc::new(RefCell::new(Dummy::default())), uuid)),

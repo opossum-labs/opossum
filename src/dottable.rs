@@ -1,3 +1,4 @@
+//! Module handling the export of an [`OpticScenery`](crate::optic_scenery::OpticScenery) into the Graphviz `.dot` format.
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 
@@ -25,7 +26,6 @@ pub trait Dottable {
         dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports, rankdir));
         Ok(dot_str)
     }
-
     /// creates a table-cell wrapper around an "inner" string
     fn add_table_cell_container(
         &self,

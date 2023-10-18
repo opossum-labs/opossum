@@ -90,7 +90,7 @@ impl OpticScenery {
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port)
     }
-    /// Return a reference to the [`OpticRef`] specified by its node index.
+    /// Return a reference to the optical node specified by its node index.
     ///
     /// This function is mainly useful for setting up a reference node.
     ///

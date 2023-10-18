@@ -30,7 +30,7 @@ impl From<SpectrometerType> for Proptype {
         Proptype::SpectrometerType(value)
     }
 }
-/// (ideal) spectrometer
+/// An (ideal) spectrometer
 ///
 /// It normally measures / displays the spectrum of the incoming light.
 ///

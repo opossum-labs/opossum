@@ -10,11 +10,27 @@ use crate::{
     optic_graph::OpticGraph,
 };
 /// A general set of (optical) properties.
+///
+/// The property system is used for storing node specific parameters (such as focal length, splitting ratio, filter curve, etc ...).
+/// Properties have to be created once before they can be set and used.
+///
+/// ## Example
+/// ```rust
+/// use opossum::properties::Properties;
+/// let mut props = Properties::default();
+/// props.create("my float", "my floating point value", None, 3.14.into()).unwrap();
+/// props.set("my float", 2.71.into()).unwrap();
+/// ```
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct Properties {
     props: HashMap<String, Property>,
 }
 impl Properties {
+    /// Create a new property with the given name.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OpossumError`] if a property with the same name was already created before.
     pub fn create(
         &mut self,
         name: &str,
@@ -36,6 +52,13 @@ impl Properties {
             Ok(())
         }
     }
+    /// Set the value of the property with the given name.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OpossumError`] if
+    ///   - the property with the given name does not exist (i.e. has not been created before).
+    ///   - property conditions defined during creation are not met.
     pub fn set(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
         let mut property = self
             .props
@@ -62,12 +85,19 @@ impl Properties {
         self.props.insert(name.into(), property);
         Ok(())
     }
+    /// Returns the iter of this [`Properties`].
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, Property> {
         self.props.iter()
     }
+    /// Return `true`if a property with the given name exists.
     pub fn contains(&self, key: &str) -> bool {
         self.props.contains_key(key)
     }
+    /// Return the value of the given property.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the property with the given name does not exist.
     pub fn get(&self, name: &str) -> OpmResult<&Proptype> {
         if let Some(prop) = self.props.get(name) {
             Ok(prop.prop())
@@ -78,6 +108,13 @@ impl Properties {
             )))
         }
     }
+    /// Return the value of a boolean property.
+    ///
+    /// This is convenience function for easier access.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the property with the given name does not exist.
     pub fn get_bool(&self, name: &str) -> OpmResult<Option<bool>> {
         if let Some(property) = self.props.get(name) {
             if let Proptype::Bool(value) = property.prop {
@@ -90,7 +127,10 @@ impl Properties {
         }
     }
 }
-
+/// (optical) Property
+///
+/// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a list of value conditions
+/// (such as "GreaterThan", "NonEmptyString", etc.)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
 pub struct Property {
@@ -101,12 +141,19 @@ pub struct Property {
     conditions: Option<Vec<PropCondition>>,
 }
 impl Property {
+    /// Returns a reference to the actual property value (expressed as [`Proptype`] prop of this [`Property`].
     pub fn prop(&self) -> &Proptype {
         &self.prop
     }
+    /// Returns a reference to the description of this [`Property`].
     pub fn description(&self) -> &str {
         self.description.as_ref()
     }
+    /// Sets the value of this [`Property`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the property conditions are  not met.
     pub fn set_value(&mut self, prop: Proptype) -> OpmResult<()> {
         if let Some(conditions) = &self.conditions {
             if conditions.contains(&PropCondition::InternalOnly) {
@@ -225,13 +272,11 @@ impl From<bool> for Proptype {
         Proptype::Bool(value)
     }
 }
-
 impl From<f64> for Proptype {
     fn from(value: f64) -> Self {
         Proptype::F64(value)
     }
 }
-
 impl From<String> for Proptype {
     fn from(value: String) -> Self {
         Proptype::String(value)
