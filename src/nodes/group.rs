@@ -139,6 +139,11 @@ impl NodeGroup {
         target_node: NodeIndex,
         target_port: &str,
     ) -> OpmResult<()> {
+        if self.inverted() {
+            return Err(OpossumError::OpticGroup(
+                "cannot connect nodes if group is set as inverted".into(),
+            ));
+        }
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port)?;
         self.props
@@ -808,6 +813,14 @@ mod test {
         // correct usage
         assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "front").is_ok());
         assert_eq!(og.g.0.edge_count(), 1);
+    }
+    #[test]
+    fn connect_nodes_inverted() {
+        let mut og = NodeGroup::default();
+        let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
+        let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
+        og.set_property("inverted", true.into()).unwrap();
+        assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "front").is_err());
     }
     #[test]
     fn connect_nodes_update_port_mapping() {
