@@ -1,7 +1,7 @@
 //! Module for handling node properties
 use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, mem};
 use uuid::Uuid;
 
 use crate::{
@@ -163,6 +163,9 @@ impl Property {
                 ));
             }
         }
+        if mem::discriminant(&self.prop) != mem::discriminant(&prop) {
+            return Err(OpossumError::Properties("incompatible value types".into()));
+        }
         self.check_conditions(&prop)?;
         self.prop = prop;
         Ok(())
@@ -322,4 +325,18 @@ pub enum PropCondition {
     LessThan(f64),
     GreaterThanEqual(f64),
     LessThanEqual(f64),
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn property_set_different_type() {
+        let mut prop = Property {
+            prop: Proptype::Bool(true),
+            description: "".into(),
+            conditions: None,
+        };
+        assert!(prop.set_value(Proptype::Bool(false)).is_ok());
+        assert!(prop.set_value(Proptype::F64(3.14)).is_err());
+    }
 }
