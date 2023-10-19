@@ -1,7 +1,6 @@
 /target
 /.vscode
 /book/book
-/book
 # ignore special directory for development
 /playground
 
