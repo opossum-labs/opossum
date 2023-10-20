@@ -8,7 +8,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{PropCondition, Properties, Proptype},
+    properties::{PropCondition, Properties, Proptype, OpticalProperty},
 };
 
 /// A general light source
@@ -40,7 +40,18 @@ fn create_default_props() -> Properties {
         )
         .unwrap();
     props
+        .create(
+            "node_type",
+            "specific optical type of this node",
+            Some(vec![PropCondition::NonEmptyString]),
+            "light source".into(),
+        )
+        .unwrap();
+    props
         .create("light data", "data of the emitted light", None, None.into())
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
 }
@@ -100,16 +111,16 @@ impl Debug for Source {
 }
 
 impl Optical for Source {
-    fn node_type(&self) -> &str {
-        "light source"
-    }
-    fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap() {
-            name
-        } else {
-            "light source"
-        }
-    }
+    // fn node_type(&self) -> &str {
+    //     "light source"
+    // }
+    // fn name(&self) -> &str {
+    //     if let Proptype::String(name) = &self.props.get("name").unwrap() {
+    //         name
+    //     } else {
+    //         "light source"
+    //     }
+    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_output("out1").unwrap();
@@ -152,17 +163,17 @@ mod test {
     #[test]
     fn default() {
         let node = Source::default();
-        assert_eq!(node.name(), "source");
-        assert_eq!(node.node_type(), "light source");
+        assert_eq!(node.properties().name().unwrap(), "source");
+        assert_eq!(node.properties().node_type().unwrap(), "light source");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.inverted(), false);
+        assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "slateblue");
         assert!(node.as_group().is_err());
     }
     #[test]
     fn new() {
         let source = Source::new("test", LightData::Fourier);
-        assert_eq!(source.name(), "test");
+        assert_eq!(source.properties().name().unwrap(), "test");
     }
     #[test]
     fn not_invertable() {

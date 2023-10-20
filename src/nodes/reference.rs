@@ -9,7 +9,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::optic_ports::OpticPorts;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype, OpticalProperty};
 
 #[derive(Debug)]
 /// A virtual component referring to another existing component.
@@ -35,6 +35,14 @@ fn create_default_props() -> Properties {
         .create(
             "name",
             "name of the reference node",
+            Some(vec![PropCondition::NonEmptyString]),
+            "reference".into(),
+        )
+        .unwrap();
+    props
+        .create(
+            "node_type",
+            "specific optical type of this node",
             Some(vec![PropCondition::NonEmptyString]),
             "reference".into(),
         )
@@ -78,23 +86,23 @@ impl NodeReference {
 }
 
 impl Optical for NodeReference {
-    fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap() {
-            name
-        } else {
-            self.node_type()
-        }
-    }
-    fn node_type(&self) -> &str {
-        "reference"
-    }
-    fn inverted(&self) -> bool {
-        self.properties().get_bool("inverted").unwrap().unwrap()
-    }
+    // fn name(&self) -> &str {
+    //     if let Proptype::String(name) = &self.props.get("name").unwrap() {
+    //         name
+    //     } else {
+    //         self.node_type()
+    //     }
+    // }
+    // fn node_type(&self) -> &str {
+    //     "reference"
+    // }
+    // fn inverted(&self) -> bool {
+    //     self.properties().get_bool("inverted").unwrap().unwrap()
+    // }
     fn ports(&self) -> OpticPorts {
         if let Some(rf) = &self.reference {
             let mut ports = rf.upgrade().unwrap().borrow().ports().clone();
-            if self.inverted() {
+            if self.properties().inverted() {
                 ports.set_inverted(true);
             }
             ports
@@ -113,19 +121,19 @@ impl Optical for NodeReference {
             .ok_or(OpossumError::Analysis("no reference defined".into()))?;
         let ref_node = rf.upgrade().unwrap();
         let mut ref_node = ref_node.borrow_mut();
-        if self.inverted() {
+        if self.properties().inverted() {
             ref_node
                 .set_property("inverted", true.into())
                 .map_err(|_e| {
                     OpossumError::Analysis(format!(
                         "referenced node {} <{}> cannot be inverted",
-                        ref_node.name(),
-                        ref_node.node_type()
+                        ref_node.properties().name().unwrap(),
+                        ref_node.properties().node_type().unwrap()
                     ))
                 })?;
         }
         let output = ref_node.analyze(incoming_data, analyzer_type);
-        if self.inverted() {
+        if self.properties().inverted() {
             ref_node.set_property("inverted", false.into())?;
         }
         output
@@ -159,10 +167,10 @@ mod test {
     fn default() {
         let node = NodeReference::default();
         assert!(node.reference.is_none());
-        assert_eq!(node.name(), "reference");
-        assert_eq!(node.node_type(), "reference");
+        assert_eq!(node.properties().name().unwrap(), "reference");
+        assert_eq!(node.properties().node_type().unwrap(), "reference");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.inverted(), false);
+        assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "lightsalmon3");
         assert!(node.as_group().is_err());
     }
@@ -198,7 +206,7 @@ mod test {
     fn inverted() {
         let mut node = NodeReference::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.inverted(), true)
+        assert_eq!(node.properties().inverted(), true)
     }
     #[test]
     fn ports_empty() {

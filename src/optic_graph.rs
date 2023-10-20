@@ -13,7 +13,7 @@ use crate::{
     light::Light,
     optical::Optical,
 };
-use crate::{optic_ref::OpticRef, properties::Proptype};
+use crate::{optic_ref::OpticRef, properties::{OpticalProperty, Proptype}};
 
 #[derive(Debug, Default, Clone)]
 pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
@@ -46,7 +46,7 @@ impl OpticGraph {
         {
             return Err(OpossumError::OpticScenery(format!(
                 "source node {} does not have a port {}",
-                source.optical_ref.borrow().name(),
+                source.optical_ref.borrow().properties().name()?,
                 src_port
             )));
         }
@@ -65,7 +65,7 @@ impl OpticGraph {
         {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} does not have a port {}",
-                target.optical_ref.borrow().name(),
+                target.optical_ref.borrow().properties().name()?,
                 target_port
             )));
         }
@@ -73,19 +73,19 @@ impl OpticGraph {
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "src node <{}> with port <{}> is already connected",
-                source.optical_ref.borrow().name(),
+                source.optical_ref.borrow().properties().name()?,
                 src_port
             )));
         }
         if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "target node <{}> with port <{}> is already connected",
-                target.optical_ref.borrow().name(),
+                target.optical_ref.borrow().properties().name()?,
                 target_port
             )));
         }
-        let src_name = source.optical_ref.borrow().name().to_owned();
-        let target_name = target.optical_ref.borrow().name().to_owned();
+        let src_name = source.optical_ref.borrow().properties().name()?.to_owned();
+        let target_name = target.optical_ref.borrow().properties().name()?.to_owned();
         let edge_index = self
             .0
             .add_edge(src_node, target_node, Light::new(src_port, target_port));
@@ -229,7 +229,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                 }
                 // assign references to ref nodes (if any)
                 for node in nodes.iter() {
-                    if node.optical_ref.borrow().node_type() == "reference" {
+                    if node.optical_ref.borrow().properties().node_type().unwrap() == "reference" {
                         let mut my_node = node.optical_ref.borrow_mut();
                         let refnode = my_node.as_refnode_mut().unwrap();
                         let node_props = refnode.properties().clone();

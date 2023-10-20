@@ -6,7 +6,7 @@ use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype, OpticalProperty};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -39,6 +39,14 @@ fn create_default_props() -> Properties {
         )
         .unwrap();
     props
+        .create(
+            "node_type",
+            "specific optical type of this node",
+            Some(vec![PropCondition::NonEmptyString]),
+            "dummy".into(),
+        )
+        .unwrap();
+    props
         .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
@@ -60,20 +68,20 @@ impl Dummy {
     }
 }
 impl Optical for Dummy {
-    fn name(&self) -> &str {
-        if let Proptype::String(name) = self.props.get("name").unwrap() {
-            return name;
-        }
-        panic!("wrong format");
-    }
-    fn node_type(&self) -> &str {
-        "dummy"
-    }
+    // fn name(&self) -> &str {
+    //     if let Proptype::String(name) = self.props.get("name").unwrap() {
+    //         return name;
+    //     }
+    //     panic!("wrong format");
+    // }
+    // fn node_type(&self) -> &str {
+    //     "dummy"
+    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("front").unwrap();
         ports.add_output("rear").unwrap();
-        if self.inverted() {
+        if self.properties().inverted() {
             ports.set_inverted(true)
         }
         ports
@@ -83,7 +91,7 @@ impl Optical for Dummy {
         incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.inverted() {
+        let (src, target) = if self.properties().inverted() {
             ("rear", "front")
         } else {
             ("front", "rear")
@@ -91,9 +99,9 @@ impl Optical for Dummy {
         let data = incoming_data.get(src).unwrap_or(&None);
         Ok(HashMap::from([(target.into(), data.clone())]))
     }
-    fn inverted(&self) -> bool {
-        self.properties().get_bool("inverted").unwrap().unwrap()
-    }
+    // fn inverted(&self) -> bool {
+    //     self.properties().get_bool("inverted").unwrap().unwrap()
+    // }
     fn properties(&self) -> &Properties {
         &self.props
     }
@@ -101,8 +109,8 @@ impl Optical for Dummy {
         self.props.set(name, prop)
     }
     fn report(&self) -> serde_json::Value {
-        json!({"type": self.node_type(),
-        "name": self.name()})
+        json!({"type": self.properties().node_type().unwrap(),
+        "name": self.properties().name().unwrap()})
     }
 }
 
@@ -118,28 +126,28 @@ mod test {
     #[test]
     fn default() {
         let node = Dummy::default();
-        assert_eq!(node.name(), "dummy");
-        assert_eq!(node.node_type(), "dummy");
+        assert_eq!(node.properties().name().unwrap(), "dummy");
+        assert_eq!(node.properties().node_type().unwrap(), "dummy");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.inverted(), false);
+        assert_eq!(node.properties().inverted(), false);
         assert!(node.as_group().is_err());
     }
     #[test]
     fn new() {
         let node = Dummy::new("Test");
-        assert_eq!(node.name(), "Test");
+        assert_eq!(node.properties().name().unwrap(), "Test");
     }
     #[test]
     fn name_property() {
         let mut node = Dummy::default();
         node.set_property("name", "Test1".into()).unwrap();
-        assert_eq!(node.name(), "Test1")
+        assert_eq!(node.properties().name().unwrap(), "Test1")
     }
     #[test]
     fn inverted() {
         let mut node = Dummy::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.inverted(), true)
+        assert_eq!(node.properties().inverted(), true)
     }
     #[test]
     fn ports() {
@@ -162,7 +170,7 @@ mod test {
     #[test]
     fn node_type() {
         let node = Dummy::default();
-        assert_eq!(node.node_type(), "dummy");
+        assert_eq!(node.properties().node_type().unwrap(), "dummy");
     }
     #[test]
     fn analyze_ok() {
