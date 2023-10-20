@@ -8,7 +8,7 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{PropCondition, Properties, Proptype},
+    properties::{PropCondition, Properties, Proptype, OpticalProperty},
     spectrum::{merge_spectra, Spectrum},
 };
 
@@ -37,14 +37,6 @@ fn create_default_props() -> Properties {
         .create(
             "name",
             "name of the beamsplitter",
-            Some(vec![PropCondition::NonEmptyString]),
-            "beam splitter".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
             Some(vec![PropCondition::NonEmptyString]),
             "beam splitter".into(),
         )

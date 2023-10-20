@@ -8,7 +8,7 @@ use crate::lightdata::LightData;
 use crate::optic_graph::OpticGraph;
 use crate::optical::LightResult;
 use crate::properties::PropCondition;
-use crate::properties::{Properties, Proptype};
+use crate::properties::{Properties, Proptype, OpticalProperty};
 use crate::{optic_ports::OpticPorts, optical::Optical};
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;

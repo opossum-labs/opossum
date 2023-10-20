@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype, OpticalProperty};
 use crate::{
     dottable::Dottable,
     optic_ports::OpticPorts,
@@ -127,8 +127,8 @@ mod test {
     #[test]
     fn default() {
         let node = Detector::default();
-        assert_eq!(node.properties().name().unwrap(), "detector");
-        assert_eq!(node.properties().node_type().unwrap(), "detector");
+        assert_eq!(node.name(), "detector");
+        assert_eq!(node.node_type(), "detector");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "lemonchiffon");
