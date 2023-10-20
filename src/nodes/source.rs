@@ -51,9 +51,6 @@ fn create_default_props() -> Properties {
         .create("light data", "data of the emitted light", None, None.into())
         .unwrap();
     props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
-    props
 }
 
 impl Default for Source {
