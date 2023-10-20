@@ -7,7 +7,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype, OpticalProperty};
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
@@ -47,6 +47,14 @@ fn create_default_props() -> Properties {
         .create(
             "name",
             "name of the filter element",
+            Some(vec![PropCondition::NonEmptyString]),
+            "ideal filter".into(),
+        )
+        .unwrap();
+    props
+        .create(
+            "node_type",
+            "specific optical type of this node",
             Some(vec![PropCondition::NonEmptyString]),
             "ideal filter".into(),
         )
@@ -145,7 +153,7 @@ impl IdealFilter {
     }
     fn analyze_energy(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (mut src, mut target) = ("front", "rear");
-        if self.inverted() {
+        if self.properties().inverted() {
             (src, target) = (target, src)
         }
         let input = incoming_data.get(src);
@@ -177,24 +185,24 @@ impl IdealFilter {
 }
 
 impl Optical for IdealFilter {
-    fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap() {
-            name
-        } else {
-            self.node_type()
-        }
-    }
-    fn node_type(&self) -> &str {
-        "ideal filter"
-    }
-    fn inverted(&self) -> bool {
-        self.properties().get_bool("inverted").unwrap().unwrap()
-    }
+    // fn name(&self) -> &str {
+    //     if let Proptype::String(name) = &self.props.get("name").unwrap() {
+    //         name
+    //     } else {
+    //         self.properties().node_type().unwrap()
+    //     }
+    // }
+    // fn node_type(&self) -> &str {
+    //     "ideal filter"
+    // }
+    // fn inverted(&self) -> bool {
+    //     self.properties().get_bool("inverted").unwrap().unwrap()
+    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("front").unwrap();
         ports.add_output("rear").unwrap();
-        if self.inverted() {
+        if self.properties().inverted() {
             ports.set_inverted(true);
         }
         ports
@@ -233,24 +241,24 @@ mod test {
     fn default() {
         let node = IdealFilter::default();
         assert_eq!(node.filter_type(), FilterType::Constant(1.0));
-        assert_eq!(node.name(), "ideal filter");
-        assert_eq!(node.node_type(), "ideal filter");
+        assert_eq!(node.properties().name().unwrap(), "ideal filter");
+        assert_eq!(node.properties().node_type().unwrap(), "ideal filter");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.inverted(), false);
+        assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "darkgray");
         assert!(node.as_group().is_err());
     }
     #[test]
     fn new() {
         let node = IdealFilter::new("test", FilterType::Constant(0.8)).unwrap();
-        assert_eq!(node.name(), "test");
+        assert_eq!(node.properties().name().unwrap(), "test");
         assert_eq!(node.filter_type(), FilterType::Constant(0.8));
     }
     #[test]
     fn inverted() {
         let mut node = IdealFilter::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.inverted(), true)
+        assert_eq!(node.properties().inverted(), true)
     }
     #[test]
     fn ports() {

@@ -8,7 +8,7 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{PropCondition, Properties, Proptype},
+    properties::{PropCondition, Properties, Proptype, OpticalProperty},
     spectrum::{merge_spectra, Spectrum},
 };
 
@@ -37,6 +37,14 @@ fn create_default_props() -> Properties {
         .create(
             "name",
             "name of the beamsplitter",
+            Some(vec![PropCondition::NonEmptyString]),
+            "beam splitter".into(),
+        )
+        .unwrap();
+    props
+        .create(
+            "node_type",
+            "specific optical type of this node",
             Some(vec![PropCondition::NonEmptyString]),
             "beam splitter".into(),
         )
@@ -88,7 +96,7 @@ impl BeamSplitter {
         Ok(())
     }
     fn analyze_energy(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let (in1, in2) = if !self.inverted() {
+        let (in1, in2) = if !self.properties().inverted() {
             (incoming_data.get("input1"), incoming_data.get("input2"))
         } else {
             (
@@ -149,7 +157,7 @@ impl BeamSplitter {
                 spectrum: out2_spec,
             }))
         }
-        if !self.inverted() {
+        if !self.properties().inverted() {
             Ok(HashMap::from([
                 ("out1_trans1_refl2".into(), out1_data),
                 ("out2_trans2_refl1".into(), out2_data),
@@ -172,16 +180,19 @@ impl Default for BeamSplitter {
     }
 }
 impl Optical for BeamSplitter {
-    fn node_type(&self) -> &str {
-        "beam splitter"
-    }
-    fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap() {
-            name
-        } else {
-            self.node_type()
-        }
-    }
+    // fn node_type(&self) -> &str {
+    //     "beam splitter"
+    // }
+    // fn name(&self) -> &str {
+    //     if let Proptype::String(name) = &self.props.get("name").unwrap() {
+    //         name
+    //     } else {
+    //         self.node_type()
+    //     }
+    // }
+    // fn inverted(&self) -> bool {
+    //     self.properties().get_bool("inverted").unwrap().unwrap()
+    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("input1").unwrap();
@@ -212,9 +223,6 @@ impl Optical for BeamSplitter {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn inverted(&self) -> bool {
-        self.properties().get_bool("inverted").unwrap().unwrap()
-    }
 }
 
 impl Dottable for BeamSplitter {
@@ -226,7 +234,7 @@ impl Dottable for BeamSplitter {
 #[cfg(test)]
 mod test {
     use approx::AbsDiffEq;
-
+    use crate::properties::OpticalProperty;
     use crate::spectrum::create_he_ne_spectrum;
 
     use super::*;
@@ -234,10 +242,10 @@ mod test {
     fn default() {
         let node = BeamSplitter::default();
         assert_eq!(node.ratio(), 0.5);
-        assert_eq!(node.name(), "beam splitter");
-        assert_eq!(node.node_type(), "beam splitter");
+        assert_eq!(node.properties().name().unwrap(), "beam splitter");
+        assert_eq!(node.properties().node_type().unwrap(), "beam splitter");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.inverted(), false);
+        assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "lightpink");
         assert!(node.as_group().is_err());
     }
@@ -246,7 +254,7 @@ mod test {
         let splitter = BeamSplitter::new("test", 0.6);
         assert!(splitter.is_ok());
         let splitter = splitter.unwrap();
-        assert_eq!(splitter.name(), "test");
+        assert_eq!(splitter.properties().name().unwrap(), "test");
         assert_eq!(splitter.ratio(), 0.6);
         assert!(BeamSplitter::new("test", -0.01).is_err());
         assert!(BeamSplitter::new("test", 1.01).is_err());
@@ -268,7 +276,7 @@ mod test {
     fn inverted() {
         let mut node = BeamSplitter::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.inverted(), true)
+        assert_eq!(node.properties().inverted(), true)
     }
     #[test]
     fn ports() {

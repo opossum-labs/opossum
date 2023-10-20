@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype, OpticalProperty};
 use crate::{
     dottable::Dottable,
     optic_ports::OpticPorts,
@@ -41,6 +41,14 @@ fn create_default_props() -> Properties {
         )
         .unwrap();
     props
+        .create(
+            "node_type",
+            "specific optical type of this node",
+            Some(vec![PropCondition::NonEmptyString]),
+            "detector".into(),
+        )
+        .unwrap();
+    props
         .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
@@ -65,21 +73,21 @@ impl Detector {
     }
 }
 impl Optical for Detector {
-    fn name(&self) -> &str {
-        if let Proptype::String(name) = self.props.get("name").unwrap() {
-            return name;
-        }
-        panic!("wrong format");
-    }
-    fn inverted(&self) -> bool {
-        self.properties().get_bool("inverted").unwrap().unwrap()
-    }
-    fn node_type(&self) -> &str {
-        "detector"
-    }
+    // fn name(&self) -> &str {
+    //     if let Proptype::String(name) = self.props.get("name").unwrap() {
+    //         return name;
+    //     }
+    //     panic!("wrong format");
+    // }
+    // fn inverted(&self) -> bool {
+    //     self.properties().get_bool("inverted").unwrap().unwrap()
+    // }
+    // fn node_type(&self) -> &str {
+    //     "detector"
+    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
-        if self.inverted() {
+        if self.properties().inverted() {
             ports.set_inverted(true);
         }
         ports.add_input("in1").unwrap();
@@ -91,7 +99,7 @@ impl Optical for Detector {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        if !self.inverted() {
+        if !self.properties().inverted() {
             let data = incoming_data.get("in1").unwrap_or(&None);
             Ok(HashMap::from([("out1".into(), data.clone())]))
         } else {
@@ -131,23 +139,23 @@ mod test {
     #[test]
     fn default() {
         let node = Detector::default();
-        assert_eq!(node.name(), "detector");
-        assert_eq!(node.node_type(), "detector");
+        assert_eq!(node.properties().name().unwrap(), "detector");
+        assert_eq!(node.properties().node_type().unwrap(), "d");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.inverted(), false);
+        assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "lemonchiffon");
         assert!(node.as_group().is_err());
     }
     #[test]
     fn new() {
         let node = Detector::new("test");
-        assert_eq!(node.name(), "test");
+        assert_eq!(node.properties().name().unwrap(), "test");
     }
     #[test]
     fn inverted() {
         let mut node = Detector::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.inverted(), true)
+        assert_eq!(node.properties().inverted(), true)
     }
     #[test]
     fn ports() {
