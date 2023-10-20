@@ -65,6 +65,8 @@ impl NodeReference {
     pub fn from_node(node: OpticRef) -> Self {
         let mut props = create_default_props();
         props.set("reference id", node.uuid().into()).unwrap();
+        let ref_name = format!("ref ({})", node.optical_ref.borrow().name());
+        props.set("name", Proptype::String(ref_name)).unwrap();
         Self {
             reference: Some(Rc::downgrade(&node.optical_ref)),
             props,
@@ -171,6 +173,16 @@ mod test {
         let node_ref = scenery.node(idx).unwrap();
         let node = NodeReference::from_node(node_ref);
         assert!(node.reference.is_some());
+    }
+    #[test]
+    fn from_node_name() {
+        let mut scenery = OpticScenery::default();
+        let idx = scenery.add_node(Dummy::default());
+        let node_ref = scenery.node(idx).unwrap();
+        let node_name = format!("ref ({})", node_ref.optical_ref.borrow().name());
+        let node = NodeReference::from_node(node_ref);
+
+        assert_eq!(node.name(), node_name);
     }
     #[test]
     fn assign_reference() {
