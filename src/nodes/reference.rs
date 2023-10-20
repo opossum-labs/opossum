@@ -9,7 +9,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::optic_ports::OpticPorts;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{PropCondition, Properties, Proptype, OpticalProperty};
+use crate::properties::{OpticalProperty, PropCondition, Properties, Proptype};
 
 #[derive(Debug)]
 /// A virtual component referring to another existing component.
@@ -86,19 +86,6 @@ impl NodeReference {
 }
 
 impl Optical for NodeReference {
-    // fn name(&self) -> &str {
-    //     if let Proptype::String(name) = &self.props.get("name").unwrap() {
-    //         name
-    //     } else {
-    //         self.node_type()
-    //     }
-    // }
-    // fn node_type(&self) -> &str {
-    //     "reference"
-    // }
-    // fn inverted(&self) -> bool {
-    //     self.properties().get_bool("inverted").unwrap().unwrap()
-    // }
     fn ports(&self) -> OpticPorts {
         if let Some(rf) = &self.reference {
             let mut ports = rf.upgrade().unwrap().borrow().ports().clone();

@@ -129,14 +129,14 @@ impl Properties {
     }
 }
 
-pub trait OpticalProperty{
-    fn name(&self)  -> OpmResult<&str>;
+pub trait OpticalProperty {
+    fn name(&self) -> OpmResult<&str>;
     fn node_type(&self) -> OpmResult<&str>;
     fn inverted(&self) -> bool;
 }
 
-impl OpticalProperty for Properties{
-    fn name(&self) ->OpmResult<&str>{
+impl OpticalProperty for Properties {
+    fn name(&self) -> OpmResult<&str> {
         if let Proptype::String(name) = &self.get("name").unwrap() {
             Ok(name)
         } else {
@@ -144,11 +144,13 @@ impl OpticalProperty for Properties{
         }
     }
 
-    fn node_type(&self) -> OpmResult<&str>{
+    fn node_type(&self) -> OpmResult<&str> {
         if let Proptype::String(node_type) = &self.get("node_type").unwrap() {
             Ok(node_type)
         } else {
-            Err(OpossumError::Properties("Property: \"node_type\" not set!".into()))
+            Err(OpossumError::Properties(
+                "Property: \"node_type\" not set!".into(),
+            ))
         }
     }
 

@@ -7,7 +7,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::nodes::{NodeGroup, NodeReference};
 use crate::optic_ports::OpticPorts;
-use crate::properties::{Properties, Proptype, OpticalProperty};
+use crate::properties::{OpticalProperty, Properties, Proptype};
 use core::fmt::Debug;
 use std::collections::HashMap;
 use std::path::Path;
@@ -38,7 +38,10 @@ pub trait Optical: Dottable {
         _incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        print!("{}: No analyze function defined.", self.properties().node_type()?);
+        print!(
+            "{}: No analyze function defined.",
+            self.properties().node_type()?
+        );
         Ok(LightResult::default())
     }
     /// Export analysis data to file(s) within the given directory path.
@@ -118,6 +121,11 @@ pub trait Optical: Dottable {
 
 impl Debug for dyn Optical {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.properties().name().unwrap(), self.properties().node_type().unwrap())
+        write!(
+            f,
+            "{} ({})",
+            self.properties().name().unwrap(),
+            self.properties().node_type().unwrap()
+        )
     }
 }

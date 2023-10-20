@@ -7,7 +7,11 @@ use serde::{
 };
 use uuid::Uuid;
 
-use crate::{nodes::create_node_ref, optical::Optical, properties::{OpticalProperty, Properties}};
+use crate::{
+    nodes::create_node_ref,
+    optical::Optical,
+    properties::{OpticalProperty, Properties},
+};
 
 #[derive(Debug, Clone)]
 pub struct OpticRef {
@@ -33,7 +37,10 @@ impl Serialize for OpticRef {
         S: serde::Serializer,
     {
         let mut node = serializer.serialize_struct("node", 3)?;
-        node.serialize_field("type", self.optical_ref.borrow().properties().node_type().unwrap())?;
+        node.serialize_field(
+            "type",
+            self.optical_ref.borrow().properties().node_type().unwrap(),
+        )?;
         node.serialize_field("id", &self.uuid)?;
         node.serialize_field("properties", &self.optical_ref.borrow().properties())?;
         node.end()

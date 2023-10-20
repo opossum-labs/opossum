@@ -6,7 +6,7 @@ use uom::si::length::nanometer;
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{PropCondition, Properties, Proptype, OpticalProperty};
+use crate::properties::{OpticalProperty, PropCondition, Properties, Proptype};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -120,19 +120,6 @@ impl Spectrometer {
     }
 }
 impl Optical for Spectrometer {
-    // fn name(&self) -> &str {
-    //     if let Proptype::String(name) = &self.props.get("name").unwrap() {
-    //         name
-    //     } else {
-    //         self.node_type()
-    //     }
-    // }
-    // fn node_type(&self) -> &str {
-    //     "spectrometer"
-    // }
-    // fn inverted(&self) -> bool {
-    //     self.properties().get_bool("inverted").unwrap().unwrap()
-    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("in1").unwrap();
@@ -159,7 +146,10 @@ impl Optical for Spectrometer {
     fn export_data(&self, report_dir: &Path) {
         if let Some(data) = &self.light_data {
             let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!("spectrum_{}.svg", self.properties().name().unwrap()));
+            file_path.push(format!(
+                "spectrum_{}.svg",
+                self.properties().name().unwrap()
+            ));
             data.export(&file_path)
         }
     }
