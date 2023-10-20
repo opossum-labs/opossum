@@ -7,7 +7,11 @@ use serde::{
 };
 use uuid::Uuid;
 
-use crate::{nodes::create_node_ref, optical::Optical, properties::{OpticalProperty, Properties}};
+use crate::{
+    nodes::create_node_ref,
+    optical::Optical,
+    properties::{OpticalProperty, Properties},
+};
 
 #[derive(Debug, Clone)]
 pub struct OpticRef {

@@ -6,7 +6,7 @@ use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{PropCondition, Properties, Proptype, OpticalProperty};
+use crate::properties::{OpticalProperty, PropCondition, Properties, Proptype};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]

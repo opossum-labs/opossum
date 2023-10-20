@@ -7,7 +7,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::nodes::{NodeGroup, NodeReference};
 use crate::optic_ports::OpticPorts;
-use crate::properties::{Properties, Proptype, OpticalProperty};
+use crate::properties::{OpticalProperty, Properties, Proptype};
 use core::fmt::Debug;
 use std::collections::HashMap;
 use std::path::Path;

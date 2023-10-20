@@ -8,7 +8,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{PropCondition, Properties, Proptype, OpticalProperty},
+    properties::{PropCondition, Properties, Proptype},
 };
 
 /// A general light source
@@ -49,6 +49,9 @@ fn create_default_props() -> Properties {
         .unwrap();
     props
         .create("light data", "data of the emitted light", None, None.into())
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
 }
@@ -152,6 +155,7 @@ impl Dottable for Source {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::properties::OpticalProperty;
     use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
     #[test]
     fn default() {

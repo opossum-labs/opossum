@@ -13,7 +13,7 @@ use crate::nodes::NodeGroup;
 use crate::optic_graph::OpticGraph;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Proptype, OpticalProperty};
+use crate::properties::{OpticalProperty, Properties, Proptype};
 use chrono::Local;
 use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
