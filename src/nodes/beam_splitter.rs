@@ -8,7 +8,7 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{PropCondition, Properties, Proptype, OpticalProperty},
+    properties::{OpticalProperty, PropCondition, Properties, Proptype},
     spectrum::{merge_spectra, Spectrum},
 };
 
@@ -180,19 +180,6 @@ impl Default for BeamSplitter {
     }
 }
 impl Optical for BeamSplitter {
-    // fn node_type(&self) -> &str {
-    //     "beam splitter"
-    // }
-    // fn name(&self) -> &str {
-    //     if let Proptype::String(name) = &self.props.get("name").unwrap() {
-    //         name
-    //     } else {
-    //         self.node_type()
-    //     }
-    // }
-    // fn inverted(&self) -> bool {
-    //     self.properties().get_bool("inverted").unwrap().unwrap()
-    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("input1").unwrap();
@@ -233,9 +220,9 @@ impl Dottable for BeamSplitter {
 
 #[cfg(test)]
 mod test {
-    use approx::AbsDiffEq;
     use crate::properties::OpticalProperty;
     use crate::spectrum::create_he_ne_spectrum;
+    use approx::AbsDiffEq;
 
     use super::*;
     #[test]

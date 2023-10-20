@@ -13,7 +13,10 @@ use crate::{
     light::Light,
     optical::Optical,
 };
-use crate::{optic_ref::OpticRef, properties::{OpticalProperty, Proptype}};
+use crate::{
+    optic_ref::OpticRef,
+    properties::{OpticalProperty, Proptype},
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct OpticGraph(pub DiGraph<OpticRef, Light>);

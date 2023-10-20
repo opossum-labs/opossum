@@ -162,16 +162,6 @@ impl Default for RealLens {
 }
 
 impl Optical for RealLens {
-    // fn name(&self) -> &str {
-    //     if let Proptype::String(name) = &self.props.get("name").unwrap() {
-    //         name
-    //     } else {
-    //         self.node_type()
-    //     }
-    // }
-    // fn node_type(&self) -> &str {
-    //     "real lens"
-    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("in1").unwrap();

@@ -13,7 +13,7 @@ use crate::nodes::NodeGroup;
 use crate::optic_graph::OpticGraph;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Proptype, OpticalProperty};
+use crate::properties::{OpticalProperty, Properties, Proptype};
 use chrono::Local;
 use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
@@ -188,7 +188,12 @@ impl OpticScenery {
             }
             //
             let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
-            let node_type = node.optical_ref.borrow().properties().node_type()?.to_owned();
+            let node_type = node
+                .optical_ref
+                .borrow()
+                .properties()
+                .node_type()?
+                .to_owned();
             let outgoing_edges = node
                 .optical_ref
                 .borrow_mut()

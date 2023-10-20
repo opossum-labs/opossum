@@ -5,7 +5,7 @@ use serde_json::{json, Number};
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{PropCondition, Properties, Proptype, OpticalProperty};
+use crate::properties::{OpticalProperty, PropCondition, Properties, Proptype};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -115,15 +115,6 @@ impl EnergyMeter {
     }
 }
 impl Optical for EnergyMeter {
-    // fn name(&self) -> &str {
-    //     if let Proptype::String(name) = self.props.get("name").unwrap() {
-    //         return name;
-    //     }
-    //     panic!("wrong format");
-    // }
-    // fn node_type(&self) -> &str {
-    //     "energy meter"
-    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("in1").unwrap();
@@ -147,9 +138,6 @@ impl Optical for EnergyMeter {
         self.light_data = data.clone();
         Ok(HashMap::from([(target.into(), data.clone())]))
     }
-    // fn inverted(&self) -> bool {
-    //     self.properties().get_bool("inverted").unwrap().unwrap()
-    // }
     fn is_detector(&self) -> bool {
         true
     }

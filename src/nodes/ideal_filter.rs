@@ -7,7 +7,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{PropCondition, Properties, Proptype, OpticalProperty};
+use crate::properties::{OpticalProperty, PropCondition, Properties, Proptype};
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
@@ -185,19 +185,6 @@ impl IdealFilter {
 }
 
 impl Optical for IdealFilter {
-    // fn name(&self) -> &str {
-    //     if let Proptype::String(name) = &self.props.get("name").unwrap() {
-    //         name
-    //     } else {
-    //         self.properties().node_type().unwrap()
-    //     }
-    // }
-    // fn node_type(&self) -> &str {
-    //     "ideal filter"
-    // }
-    // fn inverted(&self) -> bool {
-    //     self.properties().get_bool("inverted").unwrap().unwrap()
-    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("front").unwrap();

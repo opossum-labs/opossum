@@ -8,7 +8,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{PropCondition, Properties, Proptype, OpticalProperty},
+    properties::{PropCondition, Properties, Proptype},
 };
 
 /// A general light source
@@ -49,6 +49,9 @@ fn create_default_props() -> Properties {
         .unwrap();
     props
         .create("light data", "data of the emitted light", None, None.into())
+        .unwrap();
+    props
+        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
 }
@@ -108,16 +111,6 @@ impl Debug for Source {
 }
 
 impl Optical for Source {
-    // fn node_type(&self) -> &str {
-    //     "light source"
-    // }
-    // fn name(&self) -> &str {
-    //     if let Proptype::String(name) = &self.props.get("name").unwrap() {
-    //         name
-    //     } else {
-    //         "light source"
-    //     }
-    // }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_output("out1").unwrap();
@@ -144,7 +137,13 @@ impl Optical for Source {
         &self.props
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        if name != "inverted" {
+            self.props.set(name, prop)
+        } else {
+            Err(OpossumError::Properties(
+                "Cannot change the inversion status of a source node!".into(),
+            ))
+        }
     }
 }
 
@@ -156,6 +155,7 @@ impl Dottable for Source {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::properties::OpticalProperty;
     use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
     #[test]
     fn default() {
