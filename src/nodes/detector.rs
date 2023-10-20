@@ -140,7 +140,7 @@ mod test {
     fn default() {
         let node = Detector::default();
         assert_eq!(node.properties().name().unwrap(), "detector");
-        assert_eq!(node.properties().node_type().unwrap(), "d");
+        assert_eq!(node.properties().node_type().unwrap(), "detector");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "lemonchiffon");
