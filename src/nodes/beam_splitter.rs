@@ -8,7 +8,7 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{OpticalProperty, PropCondition, Properties, Proptype},
+    properties::{PropCondition, Properties, Proptype},
     spectrum::{merge_spectra, Spectrum},
 };
 
@@ -220,7 +220,6 @@ impl Dottable for BeamSplitter {
 
 #[cfg(test)]
 mod test {
-    use crate::properties::OpticalProperty;
     use crate::spectrum::create_he_ne_spectrum;
     use approx::AbsDiffEq;
 
