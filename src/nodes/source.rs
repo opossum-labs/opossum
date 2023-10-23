@@ -155,7 +155,6 @@ impl Dottable for Source {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::properties::OpticalProperty;
     use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spectrum};
     #[test]
     fn default() {

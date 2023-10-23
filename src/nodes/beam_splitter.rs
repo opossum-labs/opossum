@@ -8,7 +8,7 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{OpticalProperty, PropCondition, Properties, Proptype},
+    properties::{PropCondition, Properties, Proptype},
     spectrum::{merge_spectra, Spectrum},
 };
 
