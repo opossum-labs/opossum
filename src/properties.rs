@@ -127,7 +127,45 @@ impl Properties {
             Ok(None)
         }
     }
+
+    /// Returns the name property of this node.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the property "name" and the property "node_type" does not exist.
+    pub fn name(&self) -> OpmResult<&str> {
+        if let Proptype::String(name) = &self.get("name").unwrap() {
+            Ok(name)
+        } else {
+            self.node_type()
+        }
+    }
+
+    /// Returns the node-type property of this node.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the property "node_type" does not exist.
+    pub fn node_type(&self) -> OpmResult<&str> {
+        if let Proptype::String(node_type) = &self.get("node_type").unwrap() {
+            Ok(node_type)
+        } else {
+            Err(OpossumError::Properties(
+                "Property: \"node_type\" not set!".into(),
+            ))
+        }
+    }
+
+    /// Returns the inversion property of thie node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property does not exist.
+    pub fn inverted(&self) -> bool {
+        self.get_bool("inverted").unwrap().unwrap()
+    }
 }
+
 /// (optical) Property
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a list of value conditions

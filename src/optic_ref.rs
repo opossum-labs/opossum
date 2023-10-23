@@ -33,7 +33,10 @@ impl Serialize for OpticRef {
         S: serde::Serializer,
     {
         let mut node = serializer.serialize_struct("node", 3)?;
-        node.serialize_field("type", self.optical_ref.borrow().node_type())?;
+        node.serialize_field(
+            "type",
+            self.optical_ref.borrow().properties().node_type().unwrap(),
+        )?;
         node.serialize_field("id", &self.uuid)?;
         node.serialize_field("properties", &self.optical_ref.borrow().properties())?;
         node.end()
@@ -149,7 +152,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                     .set_properties(properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 // group node: assign props to graph
-                if node.optical_ref.borrow().node_type() == "group" {
+                if node.optical_ref.borrow().properties().node_type().unwrap() == "group" {
                     let mut my_node = node.optical_ref.borrow_mut();
                     let groupnode = my_node.as_group_mut().unwrap();
                     groupnode.sync_graph();

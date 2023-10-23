@@ -17,12 +17,12 @@ pub type LightResult = HashMap<String, Option<LightData>>;
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait Optical: Dottable {
     /// Returns a reference to the name of this [`Optical`].
-    fn name(&self) -> &str; // {
-                            //    self.node_type()
-                            //}
-    /// Return the type of the optical component (lens, filter, ...).
-    fn node_type(&self) -> &str;
-    /// Return the available (input & output) ports of this [`Optical`].
+    // fn name(&self) -> &str; // {
+    //                         //    self.node_type()
+    //                         //}
+    // /// Return the type of the optical component (lens, filter, ...).
+    // fn node_type(&self) -> &str;
+    // /// Return the available (input & output) ports of this [`Optical`].
     fn ports(&self) -> OpticPorts {
         OpticPorts::default()
     }
@@ -38,7 +38,10 @@ pub trait Optical: Dottable {
         _incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        print!("{}: No analyze function defined.", self.node_type());
+        print!(
+            "{}: No analyze function defined.",
+            self.properties().node_type()?
+        );
         Ok(LightResult::default())
     }
     /// Export analysis data to file(s) within the given directory path.
@@ -51,9 +54,9 @@ pub trait Optical: Dottable {
         false
     }
     /// Returns `true` if this [`Optical`] is inverted. The default implementation returns `false`.
-    fn inverted(&self) -> bool {
-        false
-    }
+    // fn inverted(&self) -> bool {
+    //     false
+    // }
     /// Return a downcasted reference of a [`NodeGroup`].
     ///
     /// # Errors
@@ -118,6 +121,11 @@ pub trait Optical: Dottable {
 
 impl Debug for dyn Optical {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.name(), self.node_type())
+        write!(
+            f,
+            "{} ({})",
+            self.properties().name().unwrap(),
+            self.properties().node_type().unwrap()
+        )
     }
 }

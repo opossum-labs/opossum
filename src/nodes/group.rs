@@ -60,6 +60,14 @@ fn create_default_props() -> Properties {
         )
         .unwrap();
     props
+        .create(
+            "node_type",
+            "specific optical type of this node",
+            Some(vec![PropCondition::NonEmptyString]),
+            "group".into(),
+        )
+        .unwrap();
+    props
         .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
@@ -105,6 +113,7 @@ impl NodeGroup {
     pub fn new(name: &str) -> Self {
         let mut props = create_default_props();
         props.set("name", name.into()).unwrap();
+        props.set("node_type", "group".into()).unwrap();
         Self {
             props,
             ..Default::default()
@@ -119,7 +128,7 @@ impl NodeGroup {
     ///
     /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> OpmResult<NodeIndex> {
-        if self.inverted() {
+        if self.properties().inverted() {
             return Err(OpossumError::OpticGroup(
                 "cannot add nodes if group is set as inverted".into(),
             ));
@@ -151,7 +160,7 @@ impl NodeGroup {
         target_node: NodeIndex,
         target_port: &str,
     ) -> OpmResult<()> {
-        if self.inverted() {
+        if self.properties().inverted() {
             return Err(OpossumError::OpticGroup(
                 "cannot connect nodes if group is set as inverted".into(),
             ));
@@ -566,7 +575,7 @@ impl NodeGroup {
             format!("{}_i{}", &parent_identifier, end_node_idx.index())
         };
 
-        if node.node_type() == "group" {
+        if node.properties().node_type()? == "group" {
             let group_node: &NodeGroup = node.as_group()?;
             Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
         } else {
@@ -604,8 +613,8 @@ impl NodeGroup {
             let node = self.g.0.node_weight(node_idx).unwrap();
             dot_string += &node.optical_ref.borrow().to_dot(
                 &format!("{}", node_idx.index()),
-                node.optical_ref.borrow().name(),
-                node.optical_ref.borrow().inverted(),
+                node.optical_ref.borrow().properties().name()?,
+                node.optical_ref.borrow().properties().inverted(),
                 &node.optical_ref.borrow().ports(),
                 parent_identifier.clone(),
                 rankdir,
@@ -687,19 +696,6 @@ impl NodeGroup {
 }
 
 impl Optical for NodeGroup {
-    fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap() {
-            name
-        } else {
-            self.node_type()
-        }
-    }
-    fn node_type(&self) -> &str {
-        "group"
-    }
-    fn inverted(&self) -> bool {
-        self.props.get_bool("inverted").unwrap().unwrap()
-    }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         for p in self.input_port_map().iter() {
@@ -708,7 +704,7 @@ impl Optical for NodeGroup {
         for p in self.output_port_map().iter() {
             ports.add_output(p.0).unwrap();
         }
-        if self.inverted() {
+        if self.properties().inverted() {
             ports.set_inverted(true);
         }
         ports
@@ -782,17 +778,17 @@ mod test {
         assert_eq!(node.g.0.edge_count(), 0);
         assert!(node.input_port_map().is_empty());
         assert!(node.output_port_map().is_empty());
-        assert_eq!(node.name(), "group");
-        assert_eq!(node.node_type(), "group");
+        assert_eq!(node.properties().name().unwrap(), "group");
+        assert_eq!(node.properties().node_type().unwrap(), "group");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.inverted(), false);
+        assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "yellow");
         assert!(node.as_group().is_ok());
     }
     #[test]
     fn new() {
         let node = NodeGroup::new("test");
-        assert_eq!(node.name(), "test");
+        assert_eq!(node.properties().name().unwrap(), "test");
     }
     #[test]
     fn add_node() {
@@ -810,7 +806,7 @@ mod test {
     fn inverted() {
         let mut og = NodeGroup::default();
         og.set_property("inverted", true.into()).unwrap();
-        assert_eq!(og.inverted(), true);
+        assert_eq!(og.properties().inverted(), true);
     }
     #[test]
     fn connect_nodes() {

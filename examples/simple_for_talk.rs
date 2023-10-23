@@ -1,5 +1,5 @@
 use opossum::error::OpossumError;
-use opossum::nodes::{Dummy, Source, EnergyMeter};
+use opossum::nodes::{Dummy, EnergyMeter, Source};
 use opossum::OpticScenery;
 use std::path::Path;
 

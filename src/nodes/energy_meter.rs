@@ -61,6 +61,14 @@ fn create_default_props() -> Properties {
         )
         .unwrap();
     props
+        .create(
+            "node_type",
+            "specific optical type of this node",
+            Some(vec![PropCondition::NonEmptyString]),
+            "energy meter".into(),
+        )
+        .unwrap();
+    props
         .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
@@ -107,20 +115,11 @@ impl EnergyMeter {
     }
 }
 impl Optical for EnergyMeter {
-    fn name(&self) -> &str {
-        if let Proptype::String(name) = self.props.get("name").unwrap() {
-            return name;
-        }
-        panic!("wrong format");
-    }
-    fn node_type(&self) -> &str {
-        "energy meter"
-    }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("in1").unwrap();
         ports.add_output("out1").unwrap();
-        if self.inverted() {
+        if self.properties().inverted() {
             ports.set_inverted(true);
         }
         ports
@@ -130,7 +129,7 @@ impl Optical for EnergyMeter {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.inverted() {
+        let (src, target) = if self.properties().inverted() {
             ("out1", "in1")
         } else {
             ("in1", "out1")
@@ -138,9 +137,6 @@ impl Optical for EnergyMeter {
         let data = incoming_data.get(src).unwrap_or(&None);
         self.light_data = data.clone();
         Ok(HashMap::from([(target.into(), data.clone())]))
-    }
-    fn inverted(&self) -> bool {
-        self.properties().get_bool("inverted").unwrap().unwrap()
     }
     fn is_detector(&self) -> bool {
         true
@@ -158,8 +154,8 @@ impl Optical for EnergyMeter {
             energy_data =
                 serde_json::Value::Number(Number::from_f64(e.spectrum.total_energy()).unwrap())
         }
-        json!({"type": self.node_type(),
-        "name": self.name(),
+        json!({"type": self.properties().node_type().unwrap(),
+        "name": self.properties().name().unwrap(),
         "energy": energy_data})
     }
 }
@@ -187,10 +183,10 @@ mod test {
         let node = EnergyMeter::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.meter_type(), Metertype::IdealEnergyMeter);
-        assert_eq!(node.name(), "energy meter");
-        assert_eq!(node.node_type(), "energy meter");
+        assert_eq!(node.properties().name().unwrap(), "energy meter");
+        assert_eq!(node.properties().node_type().unwrap(), "energy meter");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.inverted(), false);
+        assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "whitesmoke");
         assert!(node.as_group().is_err());
     }
@@ -199,13 +195,13 @@ mod test {
         let meter = EnergyMeter::new("test", Metertype::IdealPowerMeter);
         assert!(meter.light_data.is_none());
         assert_eq!(meter.meter_type(), Metertype::IdealPowerMeter);
-        assert_eq!(meter.name(), "test");
+        assert_eq!(meter.properties().name().unwrap(), "test");
     }
     #[test]
     fn inverted() {
         let mut meter = EnergyMeter::new("test", Metertype::IdealPowerMeter);
         meter.set_property("inverted", true.into()).unwrap();
-        assert_eq!(meter.inverted(), true);
+        assert_eq!(meter.properties().inverted(), true);
     }
     #[test]
     fn set_meter_type() {

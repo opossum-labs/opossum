@@ -117,8 +117,8 @@ impl OpticScenery {
 
         for node_idx in self.g.0.node_indices() {
             let node = self.g.0.node_weight(node_idx).unwrap();
-            let node_name = node.optical_ref.borrow().name().to_owned();
-            let inverted = node.optical_ref.borrow().inverted();
+            let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
+            let inverted = node.optical_ref.borrow().properties().inverted();
             let ports = node.optical_ref.borrow().ports();
             dot_string += &node.optical_ref.borrow().to_dot(
                 &format!("{}", node_idx.index()),
@@ -167,7 +167,7 @@ impl OpticScenery {
             format!("{}_i{}", &parent_identifier, end_node.index())
         };
 
-        if node.node_type() == "group" {
+        if node.properties().node_type()? == "group" {
             let group_node: &NodeGroup = node.as_group()?;
             Ok(group_node.get_mapped_port_str(light_port, parent_identifier)?)
         } else {
@@ -187,8 +187,13 @@ impl OpticScenery {
                 return Err(OpossumError::Analysis("input light data contains port which is not an input port of the node. Data will be discarded.".into()));
             }
             //
-            let node_name = node.optical_ref.borrow().name().to_owned();
-            let node_type = node.optical_ref.borrow().node_type().to_owned();
+            let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
+            let node_type = node
+                .optical_ref
+                .borrow()
+                .properties()
+                .node_type()?
+                .to_owned();
             let outgoing_edges = node
                 .optical_ref
                 .borrow_mut()

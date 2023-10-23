@@ -62,6 +62,14 @@ fn create_default_props() -> Properties {
         .unwrap();
     props
         .create(
+            "node_type",
+            "specific optical type of this node",
+            Some(vec![PropCondition::NonEmptyString]),
+            "spectrometer".into(),
+        )
+        .unwrap();
+    props
+        .create(
             "spectrometer type",
             "model type of the spectrometer",
             None,
@@ -112,24 +120,11 @@ impl Spectrometer {
     }
 }
 impl Optical for Spectrometer {
-    fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap() {
-            name
-        } else {
-            self.node_type()
-        }
-    }
-    fn node_type(&self) -> &str {
-        "spectrometer"
-    }
-    fn inverted(&self) -> bool {
-        self.properties().get_bool("inverted").unwrap().unwrap()
-    }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         ports.add_input("in1").unwrap();
         ports.add_output("out1").unwrap();
-        if self.inverted() {
+        if self.properties().inverted() {
             ports.set_inverted(true);
         }
         ports
@@ -139,7 +134,7 @@ impl Optical for Spectrometer {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.inverted() {
+        let (src, target) = if self.properties().inverted() {
             ("out1", "in1")
         } else {
             ("in1", "out1")
@@ -151,7 +146,10 @@ impl Optical for Spectrometer {
     fn export_data(&self, report_dir: &Path) {
         if let Some(data) = &self.light_data {
             let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!("spectrum_{}.svg", self.name()));
+            file_path.push(format!(
+                "spectrum_{}.svg",
+                self.properties().name().unwrap()
+            ));
             data.export(&file_path)
         }
     }
@@ -170,8 +168,8 @@ impl Optical for Spectrometer {
         if let Some(LightData::Energy(e)) = data {
             energy_data = e.spectrum.to_json();
         }
-        json!({"type": self.node_type(),
-        "name": self.name(),
+        json!({"type": self.properties().node_type().unwrap(),
+        "name": self.properties().name().unwrap(),
         "energy": energy_data})
     }
 }
@@ -214,17 +212,17 @@ mod test {
             node.spectrometer_type(),
             SpectrometerType::IdealSpectrometer
         );
-        assert_eq!(node.name(), "spectrometer");
-        assert_eq!(node.node_type(), "spectrometer");
+        assert_eq!(node.properties().name().unwrap(), "spectrometer");
+        assert_eq!(node.properties().node_type().unwrap(), "spectrometer");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.inverted(), false);
+        assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "lightseagreen");
         assert!(node.as_group().is_err());
     }
     #[test]
     fn new() {
         let meter = Spectrometer::new("test", SpectrometerType::HR2000);
-        assert_eq!(meter.name(), "test");
+        assert_eq!(meter.properties().name().unwrap(), "test");
         assert!(meter.light_data.is_none());
         assert_eq!(meter.spectrometer_type(), SpectrometerType::HR2000);
     }
@@ -251,7 +249,7 @@ mod test {
     fn inverted() {
         let mut node = Spectrometer::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.inverted(), true)
+        assert_eq!(node.properties().inverted(), true)
     }
     #[test]
     fn analyze_ok() {

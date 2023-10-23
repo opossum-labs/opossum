@@ -40,6 +40,14 @@ fn create_default_props() -> Properties {
         )
         .unwrap();
     props
+        .create(
+            "node_type",
+            "specific optical type of this node",
+            Some(vec![PropCondition::NonEmptyString]),
+            "reference".into(),
+        )
+        .unwrap();
+    props
         .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
@@ -65,7 +73,10 @@ impl NodeReference {
     pub fn from_node(node: OpticRef) -> Self {
         let mut props = create_default_props();
         props.set("reference id", node.uuid().into()).unwrap();
-        let ref_name = format!("ref ({})", node.optical_ref.borrow().name());
+        let ref_name = format!(
+            "ref ({})",
+            node.optical_ref.borrow().properties().name().unwrap()
+        );
         props.set("name", Proptype::String(ref_name)).unwrap();
         Self {
             reference: Some(Rc::downgrade(&node.optical_ref)),
@@ -78,23 +89,10 @@ impl NodeReference {
 }
 
 impl Optical for NodeReference {
-    fn name(&self) -> &str {
-        if let Proptype::String(name) = &self.props.get("name").unwrap() {
-            name
-        } else {
-            self.node_type()
-        }
-    }
-    fn node_type(&self) -> &str {
-        "reference"
-    }
-    fn inverted(&self) -> bool {
-        self.properties().get_bool("inverted").unwrap().unwrap()
-    }
     fn ports(&self) -> OpticPorts {
         if let Some(rf) = &self.reference {
             let mut ports = rf.upgrade().unwrap().borrow().ports().clone();
-            if self.inverted() {
+            if self.properties().inverted() {
                 ports.set_inverted(true);
             }
             ports
@@ -113,19 +111,19 @@ impl Optical for NodeReference {
             .ok_or(OpossumError::Analysis("no reference defined".into()))?;
         let ref_node = rf.upgrade().unwrap();
         let mut ref_node = ref_node.borrow_mut();
-        if self.inverted() {
+        if self.properties().inverted() {
             ref_node
                 .set_property("inverted", true.into())
                 .map_err(|_e| {
                     OpossumError::Analysis(format!(
                         "referenced node {} <{}> cannot be inverted",
-                        ref_node.name(),
-                        ref_node.node_type()
+                        ref_node.properties().name().unwrap(),
+                        ref_node.properties().node_type().unwrap()
                     ))
                 })?;
         }
         let output = ref_node.analyze(incoming_data, analyzer_type);
-        if self.inverted() {
+        if self.properties().inverted() {
             ref_node.set_property("inverted", false.into())?;
         }
         output
@@ -159,10 +157,10 @@ mod test {
     fn default() {
         let node = NodeReference::default();
         assert!(node.reference.is_none());
-        assert_eq!(node.name(), "reference");
-        assert_eq!(node.node_type(), "reference");
+        assert_eq!(node.properties().name().unwrap(), "reference");
+        assert_eq!(node.properties().node_type().unwrap(), "reference");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.inverted(), false);
+        assert_eq!(node.properties().inverted(), false);
         assert_eq!(node.node_color(), "lightsalmon3");
         assert!(node.as_group().is_err());
     }
@@ -179,10 +177,13 @@ mod test {
         let mut scenery = OpticScenery::default();
         let idx = scenery.add_node(Dummy::default());
         let node_ref = scenery.node(idx).unwrap();
-        let node_name = format!("ref ({})", node_ref.optical_ref.borrow().name());
+        let node_name = format!(
+            "ref ({})",
+            node_ref.optical_ref.borrow().properties().name().unwrap()
+        );
         let node = NodeReference::from_node(node_ref);
 
-        assert_eq!(node.name(), node_name);
+        assert_eq!(node.properties().name().unwrap(), node_name);
     }
     #[test]
     fn assign_reference() {
@@ -198,7 +199,7 @@ mod test {
     fn inverted() {
         let mut node = NodeReference::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.inverted(), true)
+        assert_eq!(node.properties().inverted(), true)
     }
     #[test]
     fn ports_empty() {
