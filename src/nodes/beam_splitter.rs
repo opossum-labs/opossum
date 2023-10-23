@@ -43,6 +43,14 @@ fn create_default_props() -> Properties {
         .unwrap();
     props
         .create(
+            "node_type",
+            "node type of the beamsplitter",
+            Some(vec![PropCondition::NonEmptyString]),
+            "beam splitter".into(),
+        )
+        .unwrap();
+    props
+        .create(
             "ratio",
             "splitting ratio",
             Some(vec![
@@ -67,6 +75,8 @@ impl BeamSplitter {
         let mut props = create_default_props();
         props.set("ratio", ratio.into())?;
         props.set("name", name.into())?;
+        props.set("node_type", "beam splitter".into())?;
+        props.set("inverted", Proptype::Bool(false))?;
         Ok(Self { props })
     }
 

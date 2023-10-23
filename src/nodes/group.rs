@@ -113,6 +113,7 @@ impl NodeGroup {
     pub fn new(name: &str) -> Self {
         let mut props = create_default_props();
         props.set("name", name.into()).unwrap();
+        props.set("node_type", "group".into()).unwrap();
         Self {
             props,
             ..Default::default()

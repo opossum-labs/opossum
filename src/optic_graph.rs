@@ -240,7 +240,10 @@ impl<'de> Deserialize<'de> for OpticGraph {
                                 Uuid::nil()
                             };
                         let ref_node = g.node(uuid).unwrap();
-                        let ref_name = format!("ref ({})", ref_node.optical_ref.borrow().name());
+                        let ref_name = format!(
+                            "ref ({})",
+                            ref_node.optical_ref.borrow().properties().name().unwrap()
+                        );
                         refnode.assign_reference(ref_node);
 
                         refnode
