@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{OpticalProperty, PropCondition, Properties, Proptype};
+use crate::properties::{PropCondition, Properties, Proptype};
 use crate::{
     dottable::Dottable,
     optic_ports::OpticPorts,

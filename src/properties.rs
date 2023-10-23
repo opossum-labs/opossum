@@ -127,16 +127,13 @@ impl Properties {
             Ok(None)
         }
     }
-}
 
-pub trait OpticalProperty {
-    fn name(&self) -> OpmResult<&str>;
-    fn node_type(&self) -> OpmResult<&str>;
-    fn inverted(&self) -> bool;
-}
-
-impl OpticalProperty for Properties {
-    fn name(&self) -> OpmResult<&str> {
+    /// Returns the name property of this node.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the property "name" and the property "node_type" does not exist.
+    pub fn name(&self) -> OpmResult<&str> {
         if let Proptype::String(name) = &self.get("name").unwrap() {
             Ok(name)
         } else {
@@ -144,7 +141,12 @@ impl OpticalProperty for Properties {
         }
     }
 
-    fn node_type(&self) -> OpmResult<&str> {
+    /// Returns the node-type property of this node.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the property "node_type" does not exist.
+    pub fn node_type(&self) -> OpmResult<&str> {
         if let Proptype::String(node_type) = &self.get("node_type").unwrap() {
             Ok(node_type)
         } else {
@@ -154,7 +156,12 @@ impl OpticalProperty for Properties {
         }
     }
 
-    fn inverted(&self) -> bool {
+    /// Returns the inversion property of thie node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property does not exist.
+    pub fn inverted(&self) -> bool {
         self.get_bool("inverted").unwrap().unwrap()
     }
 }
