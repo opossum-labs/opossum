@@ -36,7 +36,7 @@ fn do_it() -> OpmResult<()> {
     dot_path.set_extension("dot");
     print!("Write diagram to {}...", dot_path.display());
     let mut output = File::create(dot_path).unwrap();
-    write!(output, "{}", scenery.to_dot("")?).unwrap();
+    write!(output, "{}", scenery.to_dot("LR")?).unwrap();
     println!("Success");
     print!("\nAnalyzing...");
     scenery.analyze(&opossum_args.analyzer)?;
