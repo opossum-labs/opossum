@@ -108,6 +108,11 @@ mod test {
         assert_eq!(node.properties().name().unwrap(), "Test1")
     }
     #[test]
+    fn node_type_readonly() {
+        let mut node = Dummy::default();
+        assert!(node.set_property("node_type", "other".into()).is_err());
+    }
+    #[test]
     fn inverted() {
         let mut node = Dummy::default();
         node.set_property("inverted", true.into()).unwrap();

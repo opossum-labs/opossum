@@ -41,7 +41,7 @@ impl Properties {
             .create(
                 "node_type",
                 "specific optical type of this node",
-                Some(vec![PropCondition::NonEmptyString]),
+                Some(vec![PropCondition::NonEmptyString, PropCondition::ReadOnly]),
                 node_type.into(),
             )
             .unwrap();
@@ -326,6 +326,9 @@ impl Property {
                         _ => {}
                     },
                     PropCondition::InternalOnly => {}
+                    PropCondition::ReadOnly => {
+                        return Err(OpossumError::Properties("propertyy is read-only".into()));
+                    }
                 }
             }
         }
@@ -382,6 +385,7 @@ pub enum Proptype {
 pub enum PropCondition {
     NonEmptyString,
     InternalOnly, // DO NOT USE YET (deserialization problems)
+    ReadOnly,     // can only be set during creation
     GreaterThan(f64),
     LessThan(f64),
     GreaterThanEqual(f64),
