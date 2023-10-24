@@ -5,7 +5,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{PropCondition, Properties, Proptype},
+    properties::{Properties, Proptype},
 };
 use ndarray::{array, Array1};
 use uom::{si::f64::Length, si::length::meter};
@@ -22,27 +22,7 @@ pub struct RealLens {
     props: Properties,
 }
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the lens",
-            Some(vec![PropCondition::NonEmptyString]),
-            "lens".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "lens".into(),
-        )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
-    props
+    Properties::new("lens", "lens")
 }
 
 impl RealLens {

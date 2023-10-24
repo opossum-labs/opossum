@@ -32,23 +32,7 @@ pub struct BeamSplitter {
 }
 
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the beamsplitter",
-            Some(vec![PropCondition::NonEmptyString]),
-            "beam splitter".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "node type of the beamsplitter",
-            Some(vec![PropCondition::NonEmptyString]),
-            "beam splitter".into(),
-        )
-        .unwrap();
+    let mut props = Properties::new("beam splitter", "beam splitter");
     props
         .create(
             "ratio",
@@ -59,9 +43,6 @@ fn create_default_props() -> Properties {
             ]),
             0.5.into(),
         )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
 }
@@ -75,8 +56,6 @@ impl BeamSplitter {
         let mut props = create_default_props();
         props.set("ratio", ratio.into())?;
         props.set("name", name.into())?;
-        props.set("node_type", "beam splitter".into())?;
-        props.set("inverted", Proptype::Bool(false))?;
         Ok(Self { props })
     }
 

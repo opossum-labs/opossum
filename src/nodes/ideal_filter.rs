@@ -7,7 +7,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{Properties, Proptype};
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
@@ -42,26 +42,7 @@ pub struct IdealFilter {
 }
 
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the filter element",
-            Some(vec![PropCondition::NonEmptyString]),
-            "ideal filter".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "ideal filter".into(),
-        )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
+    let mut props = Properties::new("ideal filter", "ideal filter");
     props
         .create(
             "filter type",

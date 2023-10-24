@@ -7,7 +7,6 @@ use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::optic_graph::OpticGraph;
 use crate::optical::LightResult;
-use crate::properties::PropCondition;
 use crate::properties::{Properties, Proptype};
 use crate::{optic_ports::OpticPorts, optical::Optical};
 use petgraph::prelude::NodeIndex;
@@ -50,26 +49,7 @@ pub struct NodeGroup {
 }
 
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the optical group",
-            Some(vec![PropCondition::NonEmptyString]),
-            "group".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "group".into(),
-        )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
+    let mut props = Properties::new("group", "group");
     props
         .create(
             "expand view",
@@ -113,7 +93,6 @@ impl NodeGroup {
     pub fn new(name: &str) -> Self {
         let mut props = create_default_props();
         props.set("name", name.into()).unwrap();
-        props.set("node_type", "group".into()).unwrap();
         Self {
             props,
             ..Default::default()
