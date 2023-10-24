@@ -8,7 +8,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{PropCondition, Properties, Proptype},
+    properties::{Properties, Proptype},
 };
 
 /// A general light source
@@ -30,28 +30,9 @@ pub struct Source {
     props: Properties,
 }
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the light source",
-            Some(vec![PropCondition::NonEmptyString]),
-            "source".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "light source".into(),
-        )
-        .unwrap();
+    let mut props = Properties::new("source", "light source");
     props
         .create("light data", "data of the emitted light", None, None.into())
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
 }

@@ -6,7 +6,7 @@ use uom::si::length::nanometer;
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{Properties, Proptype};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -51,23 +51,7 @@ pub struct Spectrometer {
     props: Properties,
 }
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name ofthe spectrometer",
-            Some(vec![PropCondition::NonEmptyString]),
-            "spectrometer".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "spectrometer".into(),
-        )
-        .unwrap();
+    let mut props = Properties::new("spectrometer", "spectrometer");
     props
         .create(
             "spectrometer type",
@@ -75,9 +59,6 @@ fn create_default_props() -> Properties {
             None,
             SpectrometerType::IdealSpectrometer.into(),
         )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
         .unwrap();
     props
 }

@@ -27,6 +27,29 @@ pub struct Properties {
     props: HashMap<String, Property>,
 }
 impl Properties {
+    pub fn new(name: &str, node_type: &str) -> Self {
+        let mut properties = Self::default();
+        properties
+            .create(
+                "name",
+                "name of the optical element",
+                Some(vec![PropCondition::NonEmptyString]),
+                name.into(),
+            )
+            .unwrap();
+        properties
+            .create(
+                "node_type",
+                "specific optical type of this node",
+                Some(vec![PropCondition::NonEmptyString]),
+                node_type.into(),
+            )
+            .unwrap();
+        properties
+            .create("inverted", "inverse propagation?", None, false.into())
+            .unwrap();
+        properties
+    }
     /// Create a new property with the given name.
     ///
     /// # Errors
