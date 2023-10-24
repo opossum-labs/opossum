@@ -65,13 +65,17 @@ pub trait Optical: Dottable {
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
-    /// Return a downcasted mutable reference of a [`NodeGroup`].
+    /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
+    /// function does nothing and returns no error.
+    ///
+    /// Currently thsi function is needed for group nodes whose internal graph structure must be synchronized with the
+    /// graph stored in theirs properties
     ///
     /// # Errors
     ///
-    /// This function will return an error if the [`Optical`] does not have the [`node_type`](`Optical::node_type`) "group".
-    fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
-        Err(OpossumError::Other("cannot cast to group".into()))
+    /// This function will return an error if the overwritten function generates an error.
+    fn after_deserialization_hook(&mut self) -> OpmResult<()> {
+        Ok(())
     }
     /// Return a downcasted mutable reference of a [`NodeReference`].
     ///
