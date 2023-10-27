@@ -24,6 +24,7 @@ use crate::{
 /// props.set("my float", 2.71.into()).unwrap();
 /// ```
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
+#[serde(transparent)]
 pub struct Properties {
     props: HashMap<String, Property>,
 }
@@ -105,7 +106,7 @@ impl Properties {
         self.props.insert(name.into(), property);
         Ok(())
     }
-    pub fn set_internal(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
+    pub fn set_unchecked(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
         let mut property = self
             .props
             .get(name)
@@ -114,7 +115,7 @@ impl Properties {
                 name
             )))?
             .clone();
-        property.set_value_internal(value)?;
+        property.set_value_unchecked(value)?;
         self.props.insert(name.into(), property);
         Ok(())
     }
@@ -240,7 +241,7 @@ impl Property {
         self.prop = prop;
         Ok(())
     }
-    pub fn set_value_internal(&mut self, prop: Proptype) -> OpmResult<()> {
+    pub fn set_value_unchecked(&mut self, prop: Proptype) -> OpmResult<()> {
         self.check_conditions(&prop)?;
         self.prop = prop;
         Ok(())
@@ -336,7 +337,7 @@ impl Property {
                     },
                     PropCondition::InternalOnly => {}
                     PropCondition::ReadOnly => {
-                        return Err(OpossumError::Properties("propertyy is read-only".into()));
+                        return Err(OpossumError::Properties("property is read-only".into()));
                     }
                 }
             }
