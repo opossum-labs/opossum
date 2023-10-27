@@ -40,7 +40,7 @@ chrono = "0"
 embed-doc-image = "0" # allows for embedded images in the rust API doc
 
 ncollide2d = "0"
-nalgebra = "0"
+nalgebra = { version= "0", features = ["serde-serialize"] }
 [features]
 doc-images = []
 

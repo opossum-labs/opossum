@@ -1,16 +1,16 @@
 //! Module for handling optical (2D) apertures
-//! 
+//!
 //! An [`Aperture`] commonly defines the shape of an optical element which transmits or obstructs an incoming optical ray.
 //! Currently there are "binary" shapes which either fully transmits or fully blocks a ray at a given point. Furthermore, an variable
 //! transmission Gaussian aperture exists. Finally a set of apertures can be stacked on top of each other in order form aperture shapes
 //! of higher complexity.
-//! 
-//! Apertures a defined by their respective configuration struct. For the calculation the function 
+//!
+//! Apertures a defined by their respective configuration struct. For the calculation the function
 //! [`apodization_factor`](Aperture::apodization_factor()) is used.
 //! ```rust
 //! use nalgebra::Point2;
 //! use opossum::aperture::{Aperture, ApertureType, CircleConfig};
-//! 
+//!
 //! let c = CircleConfig::new(1.0, Point2::new(1.0, 1.0)).unwrap();
 //! let ap = Aperture::BinaryCircle(c);
 //! assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 1.0);
@@ -21,7 +21,7 @@
 //! ```rust
 //! use nalgebra::Point2;
 //! use opossum::aperture::{Aperture, ApertureType, Apodize, CircleConfig};
-//! 
+//!
 //! let mut c = CircleConfig::new(1.0, Point2::new(1.0, 1.0)).unwrap();
 //! c.set_aperture_type(ApertureType::Obstruction);
 //! let ap = Aperture::BinaryCircle(c);
@@ -34,19 +34,22 @@ use ncollide2d::{
     query::PointQuery,
     shape::{Ball, Cuboid, Polyline},
 };
+use serde_derive::Serialize;
 
 /// The apodization type of an [`Aperture`].
-/// 
+///
 /// Each aperture can act as a "hole" or "obstruction"
+#[derive(Default, Serialize)]
 pub enum ApertureType {
     /// the [`Aperture`] shape acts as a hole. The inner part of the shape is transparent.
+    #[default]
     Hole,
     /// the [`Aperture`] shape represents an obstruction. The inner part of the shape is opaque.
     Obstruction,
 }
 
 /// Different aperture types
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub enum Aperture {
     /// completely transparent aperture. This is the default.
     #[default]
@@ -55,7 +58,7 @@ pub enum Aperture {
     BinaryCircle(CircleConfig),
     /// binary (either transparent or opaque) rectangular aperture defined by width and height as well as its center point
     BinaryRectangle(RectangleConfig),
-    /// binary (either transparent or opaque) polygonial aperture defined by a set of 2D points. This polygon can also be 
+    /// binary (either transparent or opaque) polygonial aperture defined by a set of 2D points. This polygon can also be
     /// non-convex but should not intersect.
     BinaryPolygon(PolygonConfig),
     /// variable transmission aperture using a 2D Gaussian function.
@@ -85,14 +88,15 @@ pub trait Apodize {
     fn apodize(&self, point: &Point2<f64>) -> f64;
 }
 /// Configuration data for a circular aperture.
+#[derive(Serialize)]
 pub struct CircleConfig {
-    ball: Ball<f64>,
-    translation: Isometry2<f64>,
+    radius: f64,
+    center: Point2<f64>,
     aperture_type: ApertureType,
 }
 impl CircleConfig {
     /// Create a new [`CircleConfig`] from a given radius and a center point.
-    /// 
+    ///
     /// By default the aperture has the aperture type [`ApertureType::Hole`].
     ///
     /// # Errors
@@ -101,9 +105,9 @@ impl CircleConfig {
     pub fn new(radius: f64, center: Point2<f64>) -> OpmResult<Self> {
         if radius.is_normal() && radius.is_sign_positive() {
             Ok(Self {
-                ball: Ball::new(radius),
-                translation: Isometry2::translation(center.coords[0], center.coords[1]),
-                aperture_type: ApertureType::Hole,
+                radius,
+                center,
+                aperture_type: ApertureType::default(),
             })
         } else {
             Err(OpossumError::Other("radius must be positive".into()))
@@ -115,7 +119,9 @@ impl Apodize for CircleConfig {
         self.aperture_type = aperture_type;
     }
     fn apodize(&self, point: &Point2<f64>) -> f64 {
-        let mut transmission = if self.ball.contains_point(&self.translation, point) {
+        let ball = Ball::new(self.radius);
+        let translation = Isometry2::translation(self.center.coords[0], self.center.coords[1]);
+        let mut transmission = if ball.contains_point(&translation, point) {
             1.0
         } else {
             0.0
@@ -127,9 +133,11 @@ impl Apodize for CircleConfig {
     }
 }
 /// Configuration data for a rectangular aperture.
+#[derive(Serialize)]
 pub struct RectangleConfig {
-    rectangle: Cuboid<f64>,
-    translation: Isometry2<f64>,
+    width: f64,
+    height: f64,
+    center: Point2<f64>,
     aperture_type: ApertureType,
 }
 impl RectangleConfig {
@@ -148,11 +156,10 @@ impl RectangleConfig {
             && center.coords[1].is_finite()
         {
             Ok(Self {
-                rectangle: Cuboid {
-                    half_extents: Vector2::new(width / 2.0, height / 2.0),
-                },
-                translation: Isometry2::translation(center.coords[0], center.coords[1]),
-                aperture_type: ApertureType::Hole,
+                width,
+                height,
+                center,
+                aperture_type: ApertureType::default(),
             })
         } else {
             Err(OpossumError::Other(
@@ -166,7 +173,11 @@ impl Apodize for RectangleConfig {
         self.aperture_type = aperture_type;
     }
     fn apodize(&self, point: &Point2<f64>) -> f64 {
-        let mut transmission = if self.rectangle.contains_point(&self.translation, point) {
+        let rectangle = Cuboid {
+            half_extents: Vector2::new(self.width / 2.0, self.height / 2.0),
+        };
+        let translation = Isometry2::translation(self.center.coords[0], self.center.coords[1]);
+        let mut transmission = if rectangle.contains_point(&translation, point) {
             1.0
         } else {
             0.0
@@ -178,13 +189,14 @@ impl Apodize for RectangleConfig {
     }
 }
 /// Configuration of a polygonal aperture defined by a given set of points.
+#[derive(Serialize)]
 pub struct PolygonConfig {
-    polygon: Box<Polyline<f64>>, // reduce the size of the Aperture enum ...
+    points: Vec<Point2<f64>>,
     aperture_type: ApertureType,
 }
 impl PolygonConfig {
     /// Create a new polygonal aperture configuration by a set of given 2D points.
-    /// 
+    ///
     /// The order of the points must follow the outline of the polygon. Otherwise intersections may occur.
     /// By default the aperture has the aperture type [`ApertureType::Hole`].
     ///
@@ -196,8 +208,8 @@ impl PolygonConfig {
             return Err(OpossumError::Other("less than 3 points given".into()));
         }
         Ok(Self {
-            polygon: Box::new(Polyline::new(points, None)),
-            aperture_type: ApertureType::Hole,
+            points,
+            aperture_type: ApertureType::default(),
         })
     }
 }
@@ -206,7 +218,8 @@ impl Apodize for PolygonConfig {
         self.aperture_type = aperture_type;
     }
     fn apodize(&self, point: &Point2<f64>) -> f64 {
-        let mut transmission = if self.polygon.contains_point(&Isometry2::identity(), point) {
+        let polygon = Polyline::new(self.points.clone(), None);
+        let mut transmission = if polygon.contains_point(&Isometry2::identity(), point) {
             1.0
         } else {
             0.0
@@ -218,6 +231,7 @@ impl Apodize for PolygonConfig {
     }
 }
 /// Configuration data for a Gaussian aperture.
+#[derive(Serialize)]
 pub struct GaussianConfig {
     waist: (f64, f64),
     center: Point2<f64>,
@@ -225,11 +239,11 @@ pub struct GaussianConfig {
 }
 impl GaussianConfig {
     /// Create a Gaussian aperture configurartion given by (sigma_x, sigma_y) as well as the center point.
-    /// 
+    ///
     /// By default the aperture has the aperture type [`ApertureType::Hole`].
     /// # Errors
     ///
-    /// This function will return an error if the given waists are negative and / or the center point is indefinite. 
+    /// This function will return an error if the given waists are negative and / or the center point is indefinite.
     pub fn new(waist: (f64, f64), center: Point2<f64>) -> OpmResult<Self> {
         if waist.0.is_normal()
             && waist.0.is_sign_positive()
@@ -241,7 +255,7 @@ impl GaussianConfig {
             Ok(Self {
                 waist,
                 center,
-                aperture_type: ApertureType::Hole,
+                aperture_type: ApertureType::default(),
             })
         } else {
             Err(OpossumError::Other("parameters out of range".into()))
@@ -268,19 +282,20 @@ impl Apodize for GaussianConfig {
     }
 }
 /// Configuration of an aperture stack
+#[derive(Serialize)]
 pub struct StackConfig {
     apertures: Vec<Aperture>,
     aperture_type: ApertureType,
 }
 impl StackConfig {
     /// Creates a new [`StackConfig`] by a given set of apertures.
-    /// 
+    ///
     /// All aperture transmissions are multiplied, thus realizing a "subtrative" aperture. After that the transmission can be "inverted"
     /// (`transmission = 1.0 - transmission`) by setting the aperture type to [`ApertureType::Obstruction`].
     pub fn new(apertures: Vec<Aperture>) -> Self {
         Self {
             apertures,
-            aperture_type: ApertureType::Hole,
+            aperture_type: ApertureType::default(),
         }
     }
 }
