@@ -28,7 +28,10 @@
 //! assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 0.0);
 //! assert_eq!(ap.apodization_factor(&Point2::new(0.0, 0.0)), 1.0);
 //! ```
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    properties::Proptype,
+};
 use nalgebra::{Isometry2, Point2, Vector2};
 use ncollide2d::{
     query::PointQuery,
@@ -39,7 +42,7 @@ use serde_derive::{Deserialize, Serialize};
 /// The apodization type of an [`Aperture`].
 ///
 /// Each aperture can act as a "hole" or "obstruction"
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub enum ApertureType {
     /// the [`Aperture`] shape acts as a hole. The inner part of the shape is transparent.
     #[default]
@@ -49,7 +52,7 @@ pub enum ApertureType {
 }
 
 /// Different aperture types
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub enum Aperture {
     /// completely transparent aperture. This is the default.
     #[default]
@@ -82,13 +85,18 @@ impl Aperture {
     }
 }
 
+impl From<Aperture> for Proptype {
+    fn from(value: Aperture) -> Self {
+        Proptype::Aperture(value)
+    }
+}
 pub trait Apodize {
     /// Set the apodizition type of the aperture.
     fn set_aperture_type(&mut self, aperture_type: ApertureType);
     fn apodize(&self, point: &Point2<f64>) -> f64;
 }
 /// Configuration data for a circular aperture.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CircleConfig {
     radius: f64,
     center: Point2<f64>,
@@ -133,7 +141,7 @@ impl Apodize for CircleConfig {
     }
 }
 /// Configuration data for a rectangular aperture.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RectangleConfig {
     width: f64,
     height: f64,
@@ -189,7 +197,7 @@ impl Apodize for RectangleConfig {
     }
 }
 /// Configuration of a polygonal aperture defined by a given set of points.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolygonConfig {
     points: Vec<Point2<f64>>,
     aperture_type: ApertureType,
@@ -231,7 +239,7 @@ impl Apodize for PolygonConfig {
     }
 }
 /// Configuration data for a Gaussian aperture.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GaussianConfig {
     waist: (f64, f64),
     center: Point2<f64>,
@@ -282,7 +290,7 @@ impl Apodize for GaussianConfig {
     }
 }
 /// Configuration of an aperture stack
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StackConfig {
     apertures: Vec<Aperture>,
     aperture_type: ApertureType,
