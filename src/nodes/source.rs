@@ -63,7 +63,7 @@ impl Source {
         let mut props = create_default_props();
         props.set("name", name.into()).unwrap();
         props
-            .set_internal("light data", Some(light.clone()).into())
+            .set_unchecked("light data", Some(light.clone()).into())
             .unwrap();
         Source { props }
     }

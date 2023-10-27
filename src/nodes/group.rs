@@ -114,7 +114,7 @@ impl NodeGroup {
         }
         let idx = self.g.add_node(node);
         self.props
-            .set_internal("graph", self.g.clone().into())
+            .set_unchecked("graph", self.g.clone().into())
             .unwrap();
         Ok(idx)
     }
@@ -147,7 +147,7 @@ impl NodeGroup {
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port)?;
         self.props
-            .set_internal("graph", self.g.clone().into())
+            .set_unchecked("graph", self.g.clone().into())
             .unwrap();
 
         let in_map = self.input_port_map();
@@ -181,7 +181,7 @@ impl NodeGroup {
     }
     fn set_input_port_map(&mut self, port_map: PortMap) {
         self.props
-            .set_internal("input port map", port_map.into())
+            .set_unchecked("input port map", port_map.into())
             .unwrap();
     }
     fn output_port_map(&self) -> PortMap {
@@ -194,7 +194,7 @@ impl NodeGroup {
     }
     fn set_output_port_map(&mut self, port_map: PortMap) {
         self.props
-            .set_internal("output port map", port_map.into())
+            .set_unchecked("output port map", port_map.into())
             .unwrap();
     }
 

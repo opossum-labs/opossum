@@ -108,7 +108,7 @@ pub trait Optical: Dottable {
     fn set_properties(&mut self, properties: Properties) -> OpmResult<()> {
         let own_properties = self.properties().clone();
         for prop in properties.iter() {
-            if own_properties.contains(prop.0) {
+            if own_properties.contains(prop.0) && prop.0 != "node_type" {
                 self.set_property(prop.0, prop.1.prop().clone())?;
             }
         }
