@@ -61,7 +61,7 @@ pub trait Optical: Dottable {
     ///
     /// # Errors
     ///
-    /// This function will return an error if the [`Optical`] does not have the [`node_type`](`Optical::node_type`) "group".
+    /// This function will return an error if the [`Optical`] does not have the `node_type` property "group".
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
@@ -81,7 +81,7 @@ pub trait Optical: Dottable {
     ///
     /// # Errors
     ///
-    /// This function will return an error if the [`Optical`] does not have the [`node_type`](Optical::node_type) "reference".
+    /// This function will return an error if the [`Optical`] does not have the `node_type` property "reference".
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Err(OpossumError::Other("cannot cast to reference node".into()))
     }
