@@ -5,6 +5,7 @@ use std::{collections::HashMap, mem};
 use uuid::Uuid;
 
 use crate::{
+    aperture::Aperture,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{FilterType, Metertype, PortMap, SpectrometerType},
@@ -47,6 +48,14 @@ impl Properties {
             .unwrap();
         properties
             .create("inverted", "inverse propagation?", None, false.into())
+            .unwrap();
+        properties
+            .create(
+                "aperture",
+                "input aperture of the optical element",
+                None,
+                Aperture::default().into(),
+            )
             .unwrap();
         properties
     }
@@ -379,6 +388,7 @@ pub enum Proptype {
     Metertype(Metertype),
     GroupPortMap(PortMap),
     Uuid(Uuid),
+    Aperture(Aperture),
 }
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
