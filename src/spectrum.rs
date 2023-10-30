@@ -1,8 +1,10 @@
 #![warn(missing_docs)]
 //! Module for handling optical spectra
 use crate::error::{OpmResult, OpossumError};
+use crate::plottable::{self, Plottable};
 use csv::ReaderBuilder;
 use itertools_num::linspace;
+use plotters::data::fitting_range;
 use plotters::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
@@ -10,6 +12,7 @@ use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::ops::Range;
+use std::path::Path;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
 use uom::si::length::meter;
@@ -351,48 +354,6 @@ impl Spectrum {
             })
             .collect();
     }
-    /// Generate a plot of this [`Spectrum`].
-    ///
-    /// Generate a x/y spectrum plot as SVG graphics with the given filename. This function is meant mainly for debugging purposes.
-    ///
-    /// # Panics
-    ///
-    /// ???
-    pub fn to_plot(&self, file_path: &std::path::Path) {
-        let root = SVGBackend::new(file_path, (800, 600)).into_drawing_area();
-        root.fill(&WHITE).unwrap();
-        let x_left = self.data.first().unwrap().0;
-        let x_right = self.data.last().unwrap().0;
-        let y_top = self
-            .data_vec()
-            .iter()
-            .skip_while(|y| y.is_nan())
-            .copied()
-            .fold(f64::NAN, f64::max);
-        let mut chart = ChartBuilder::on(&root)
-            .margin(5)
-            .x_label_area_size(40)
-            .y_label_area_size(40)
-            .build_cartesian_2d(x_left * 1.0E9..x_right * 1.0E9, 0.0..y_top * 1E-9)
-            .unwrap();
-
-        chart
-            .configure_mesh()
-            .x_desc("wavelength (nm)")
-            .y_desc("value (1/nm)")
-            .draw()
-            .unwrap();
-        chart
-            .draw_series(LineSeries::new(
-                self.data
-                    .iter()
-                    .map(|data| (data.0 * 1.0E9, data.1 * 1.0E-9))
-                    .collect::<Vec<(f64, f64)>>(),
-                &RED,
-            ))
-            .unwrap();
-        root.present().unwrap();
-    }
     /// Generate JSON representation.
     ///
     /// Generate a JSON representation of this [`Spectrum`]. This function is mainly used for generating reports.
@@ -529,6 +490,40 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
         s_out.resample(&s1.unwrap());
         s_out.add(&s2.unwrap());
         Some(s_out)
+    }
+}
+impl Plottable for Spectrum {
+    fn to_plot(&self, file_path: &Path) -> OpmResult<()> {
+        let root = plottable::prepare_drawing_area(file_path);
+        let x_left = self.data.first().unwrap().0;
+        let x_right = self.data.last().unwrap().0;
+        let y_range = fitting_range(self.data_vec().iter());
+        let mut chart = ChartBuilder::on(&root)
+            .margin(5)
+            .x_label_area_size(40)
+            .y_label_area_size(40)
+            .build_cartesian_2d(x_left * 1.0E9..x_right * 1.0E9, 0.0..y_range.end * 1E-9)
+            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {}", e)))?;
+
+        chart
+            .configure_mesh()
+            .x_desc("wavelength (nm)")
+            .y_desc("value (1/nm)")
+            .draw()
+            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {}", e)))?;
+
+        chart
+            .draw_series(LineSeries::new(
+                self.data
+                    .iter()
+                    .map(|data| (data.0 * 1.0E9, data.1 * 1.0E-9))
+                    .collect::<Vec<(f64, f64)>>(),
+                &RED,
+            ))
+            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {}", e)))?;
+        root.present()
+            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {}", e)))?;
+        Ok(())
     }
 }
 #[cfg(test)]

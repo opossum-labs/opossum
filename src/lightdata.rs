@@ -5,6 +5,7 @@ use std::path::Path;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
+use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::spectrum::Spectrum;
 
@@ -25,7 +26,7 @@ impl LightData {
     pub fn export(&self, file_path: &Path) {
         match self {
             LightData::Energy(d) => {
-                d.spectrum.to_plot(file_path);
+                d.to_plot(file_path).unwrap();
             }
             _ => println!("no export function defined for this type of LightData"),
         }
@@ -51,6 +52,11 @@ pub struct DataEnergy {
     pub spectrum: Spectrum,
 }
 
+impl Plottable for DataEnergy {
+    fn to_plot(&self, file_path: &Path) -> crate::error::OpmResult<()> {
+        self.spectrum.to_plot(file_path)
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DataGeometric {
     _ray: i32,

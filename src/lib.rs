@@ -22,6 +22,7 @@ pub mod nodes;
 pub mod optic_ports;
 mod optic_scenery;
 pub mod optical;
+pub mod plottable;
 pub mod properties;
 pub mod spectrum;
 use chrono::DateTime;
