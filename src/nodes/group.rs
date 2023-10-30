@@ -741,6 +741,8 @@ impl Dottable for NodeGroup {
 
 #[cfg(test)]
 mod test {
+    use approx::assert_abs_diff_eq;
+
     use super::*;
     use crate::{
         lightdata::DataEnergy,
@@ -987,7 +989,7 @@ mod test {
         } else {
             0.0
         };
-        assert_eq!(energy, 0.6);
+        assert_abs_diff_eq!(energy, 0.6, epsilon = f64::EPSILON);
     }
     #[test]
     fn analyze_empty_group() {
@@ -1032,7 +1034,7 @@ mod test {
         } else {
             0.0
         };
-        assert_eq!(energy, 0.6);
+        assert_abs_diff_eq!(energy, 0.6, epsilon = f64::EPSILON);
     }
     #[test]
     fn analyze_inverse_with_src() {
