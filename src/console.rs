@@ -56,7 +56,7 @@ fn eval_file_path_input(file_path: &str) -> Option<PathBuf> {
 fn eval_analyzer_input(analyzer_input: &str) -> Option<AnalyzerType> {
     match analyzer_input {
         "e" => Some(AnalyzerType::Energy),
-        "p" => Some(AnalyzerType::ParAxialRayTrace),
+        "r" => Some(AnalyzerType::RayTrace),
         _ => None,
     }
 }
@@ -82,7 +82,7 @@ fn create_prompt_str(flag: &str, init_str: &str) -> OpmResult<String> {
             for a_type in AnalyzerType::iter(){
                 prompt_str += match a_type {
                     AnalyzerType::Energy => "e for energy analysis\n",
-                    AnalyzerType::ParAxialRayTrace=> "p for paraxial ray-tracing analysis\n", 
+                    AnalyzerType::RayTrace=> "r for ray-tracing analysis\n", 
                 };
             }
             Ok(prompt_str)
@@ -266,10 +266,7 @@ mod test {
     #[test]
     fn eval_analyzer_input_test() {
         assert_eq!(eval_analyzer_input("e").unwrap(), AnalyzerType::Energy);
-        assert_eq!(
-            eval_analyzer_input("p").unwrap(),
-            AnalyzerType::ParAxialRayTrace
-        );
+        assert_eq!(eval_analyzer_input("r").unwrap(), AnalyzerType::RayTrace);
     }
     #[test]
     fn eval_report_directory_input_test() {

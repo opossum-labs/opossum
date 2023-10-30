@@ -270,9 +270,7 @@ mod test {
     fn analyze_wrong_analyszer() {
         let mut node = BeamSplitter::default();
         let input = LightResult::default();
-        assert!(node
-            .analyze(input, &AnalyzerType::ParAxialRayTrace)
-            .is_err());
+        assert!(node.analyze(input, &AnalyzerType::RayTrace).is_err());
     }
     #[test]
     fn analyze_empty_input() {
