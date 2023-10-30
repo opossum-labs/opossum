@@ -10,12 +10,7 @@ use opossum::{
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
-fn main() {
-    if let Err(e) = do_it() {
-        eprintln!("{}", e);
-        std::process::exit(1);
-    }
-}
+
 fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
     print!("\nReading model...");
     let _ = io::stdout().flush();
@@ -28,7 +23,7 @@ fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
     Ok(scenery)
 }
 
-fn do_it() -> OpmResult<()> {
+fn main() -> OpmResult<()> {
     let opossum_args = Args::try_from(PartialArgs::parse())?;
     let mut scenery = read_and_parse_model(&opossum_args.file_path)?;
 
@@ -37,8 +32,10 @@ fn do_it() -> OpmResult<()> {
     dot_path.set_extension("dot");
     print!("Write diagram to {}...", dot_path.display());
     let _ = io::stdout().flush();
-    let mut output = File::create(dot_path).unwrap();
-    write!(output, "{}", scenery.to_dot("LR")?).unwrap();
+    let mut output = File::create(dot_path)
+        .map_err(|e| OpossumError::Other(format!("dot file creation failed: {}", e)))?;
+    write!(output, "{}", scenery.to_dot("LR")?)
+        .map_err(|e| OpossumError::Other(format!("writing dot file failed: {}", e)))?;
     println!("Success");
     print!("\nAnalyzing...");
     let _ = io::stdout().flush();
@@ -48,13 +45,14 @@ fn do_it() -> OpmResult<()> {
     report_path.push("report.json");
     print!("Write detector report to {}...", report_path.display());
     let _ = io::stdout().flush();
-    let mut output = File::create(report_path).unwrap();
+    let mut output = File::create(report_path)
+        .map_err(|e| OpossumError::Other(format!("report file creation failed: {}", e)))?;
     write!(
         output,
         "{}",
         serde_json::to_string_pretty(&scenery.report(&opossum_args.report_directory)).unwrap()
     )
-    .unwrap();
+    .map_err(|e| OpossumError::Other(format!("writing report file failed: {}", e)))?;
     println!("Success");
     Ok(())
 }
