@@ -7,7 +7,6 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
 };
-use ndarray::{array, Array1};
 use uom::{si::f64::Length, si::length::meter};
 
 pub struct IdealLens;
@@ -15,7 +14,7 @@ pub struct IdealLens;
 #[derive(Debug)]
 pub struct RealLens {
     aperture: Length,
-    curvatures: Array1<Length>,
+    curvatures: Vec<Length>,
     center_thickness: Length,
     z_pos: Length,
     refractive_index: f64,
@@ -36,7 +35,7 @@ impl RealLens {
     ) -> Self {
         Self {
             aperture,
-            curvatures: array![front_curvature, rear_curvature],
+            curvatures: vec![front_curvature, rear_curvature],
             center_thickness,
             z_pos,
             refractive_index,
@@ -52,14 +51,14 @@ impl RealLens {
         self.aperture = Length::new::<meter>(aperture);
     }
 
-    pub fn get_curvatures(&self) -> &Array1<Length> {
+    pub fn get_curvatures(&self) -> &Vec<Length> {
         &self.curvatures
     }
 
     pub fn set_curvatures(&mut self, curvature_1: f64, curvature_2: f64) {
-        self.curvatures = array![
+        self.curvatures = vec![
             Length::new::<meter>(curvature_1),
-            Length::new::<meter>(curvature_2)
+            Length::new::<meter>(curvature_2),
         ];
     }
 
@@ -129,9 +128,9 @@ impl Default for RealLens {
     fn default() -> Self {
         Self {
             aperture: Length::new::<meter>(25e-3),
-            curvatures: array![
+            curvatures: vec![
                 Length::new::<meter>(51.5e-3),
-                Length::new::<meter>(f64::INFINITY)
+                Length::new::<meter>(f64::INFINITY),
             ],
             center_thickness: Length::new::<meter>(3.6e-3),
             z_pos: Length::new::<meter>(0.0),
