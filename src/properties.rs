@@ -1,4 +1,5 @@
 //! Module for handling node properties
+use genpdf::style;
 use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::{collections::HashMap, mem};
@@ -10,6 +11,7 @@ use crate::{
     lightdata::LightData,
     nodes::{FilterType, Metertype, PortMap, SpectrometerType},
     optic_graph::OpticGraph,
+    reporter::PdfReportable,
 };
 /// A general set of (optical) properties.
 ///
@@ -198,7 +200,22 @@ impl Properties {
         self.get_bool("inverted").unwrap().unwrap()
     }
 }
-
+impl PdfReportable for Properties {
+    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let mut list = genpdf::elements::UnorderedList::default();
+        for property in self.props.iter() {
+            let mut list_element = genpdf::elements::LinearLayout::vertical();
+            let property_name = genpdf::elements::Paragraph::default()
+                .styled_string(property.0, style::Effect::Bold);
+            list_element.push(property_name);
+            list_element.push(property.1.pdf_report());
+            list.push(list_element);
+        }
+        layout.push(list);
+        layout
+    }
+}
 /// (optical) Property
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a list of value conditions
@@ -345,6 +362,11 @@ impl Property {
         Ok(())
     }
 }
+impl PdfReportable for Property {
+    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+        self.prop.pdf_report()
+    }
+}
 impl From<bool> for Proptype {
     fn from(value: bool) -> Self {
         Proptype::Bool(value)
@@ -390,6 +412,23 @@ pub enum Proptype {
     GroupPortMap(PortMap),
     Uuid(Uuid),
     Aperture(Aperture),
+}
+
+impl PdfReportable for Proptype {
+    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        match self {
+            Proptype::String(value) => l.push(genpdf::elements::Paragraph::new(value)),
+            Proptype::I32(value) => l.push(genpdf::elements::Paragraph::new(format!("{}", value))),
+            Proptype::F64(value) => l.push(genpdf::elements::Paragraph::new(format!("{}", value))),
+            Proptype::Bool(value) => l.push(genpdf::elements::Paragraph::new(value.to_string())),
+            _ => l.push(
+                genpdf::elements::Paragraph::default()
+                    .styled_string("unknown poperty type", style::Effect::Italic),
+            ),
+        }
+        l
+    }
 }
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
