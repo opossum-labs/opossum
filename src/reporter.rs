@@ -1,30 +1,33 @@
 use chrono::{DateTime, Local};
 use genpdf::{self, elements, style, Alignment, Scale};
+use serde_derive::Serialize;
 
 use crate::properties::Properties;
+#[derive(Serialize)]
 pub struct AnalysisReport {
     opossum_version: String,
     analysis_timestamp: DateTime<Local>,
-    detector_reports: Vec<DetectorReport>,
+    node_reports: Vec<NodeReport>,
 }
 impl AnalysisReport {
     pub fn new(opossum_version: String, analysis_timestamp: DateTime<Local>) -> Self {
         Self {
             opossum_version,
             analysis_timestamp,
-            detector_reports: Default::default(),
+            node_reports: Default::default(),
         }
     }
-    pub fn add_detector(&mut self, report: DetectorReport) {
-        self.detector_reports.push(report);
+    pub fn add_detector(&mut self, report: NodeReport) {
+        self.node_reports.push(report);
     }
 }
-pub struct DetectorReport {
+#[derive(Serialize)]
+pub struct NodeReport {
     detector_type: String,
     name: String,
     properties: Properties,
 }
-impl DetectorReport {
+impl NodeReport {
     pub fn new(detector_type: String, name: String, properties: Properties) -> Self {
         Self {
             detector_type,
@@ -71,8 +74,9 @@ impl ReportGenerator {
 
         let p = elements::Paragraph::default().styled_string(
             format!(
-                "OPOSSUM version: {}, Date: {}",
-                self.report.opossum_version, self.report.analysis_timestamp
+                "OPOSSUM v{}, Date: {}",
+                self.report.opossum_version,
+                self.report.analysis_timestamp.format("%Y-%m-%d %H:%M:%S")
             ),
             style::Style::new().with_font_size(8),
         );
@@ -80,7 +84,7 @@ impl ReportGenerator {
         doc.push(genpdf::elements::Break::new(2));
         let p = elements::Paragraph::default().styled_string("Detectors", style::Effect::Bold);
         doc.push(p);
-        for detector in self.report.detector_reports.iter() {
+        for detector in self.report.node_reports.iter() {
             let p = elements::Paragraph::default()
                 .string(format!("{} - {}", detector.name, detector.detector_type));
             doc.push(p);

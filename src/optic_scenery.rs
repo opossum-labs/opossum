@@ -14,6 +14,7 @@ use crate::optic_graph::OpticGraph;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
+use crate::reporter::AnalysisReport;
 use chrono::Local;
 use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
@@ -249,24 +250,18 @@ impl OpticScenery {
             }
         } // else outgoing edge not connected
     }
-    pub fn report(&self, report_dir: &Path) -> serde_json::Value {
-        let mut report = serde_json::Map::new();
-        report.insert("opossum version".into(), get_version().into());
-        report.insert("analysis timestamp".into(), Local::now().to_string().into());
-
+    pub fn report(&self, report_dir: &Path) -> AnalysisReport {
+        let analysis_report = AnalysisReport::new(get_version(), Local::now());
         let detector_nodes = self
             .g
             .0
             .node_weights()
             .filter(|node| node.optical_ref.borrow().is_detector());
-        let mut detectors: Vec<serde_json::Value> = Vec::new();
         for node in detector_nodes {
-            detectors.push(node.optical_ref.borrow().report());
+            //     detectors.push(node.optical_ref.borrow().report());
             node.optical_ref.borrow().export_data(report_dir);
         }
-        let detector_json = serde_json::Value::Array(detectors);
-        report.insert("detectors".into(), detector_json);
-        serde_json::Value::Object(report)
+        analysis_report
     }
     pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
         let serialized = serde_json::to_string_pretty(&self).map_err(|e| {

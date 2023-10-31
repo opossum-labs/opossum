@@ -2,7 +2,7 @@ use chrono::DateTime;
 use opossum::{
     error::OpmResult,
     properties::Properties,
-    reporter::{AnalysisReport, DetectorReport, ReportGenerator},
+    reporter::{AnalysisReport, NodeReport, ReportGenerator},
     spectrum::create_he_ne_spectrum,
 };
 
@@ -19,7 +19,7 @@ fn main() -> OpmResult<()> {
     props
         .create("spectrum", "", None, create_he_ne_spectrum(1.0).into())
         .unwrap();
-    let detector = DetectorReport::new("powermeter".into(), "my powermeter".into(), props);
+    let detector = NodeReport::new("powermeter".into(), "my powermeter".into(), props);
     report.add_detector(detector);
     let generator = ReportGenerator::new(report);
     generator.generate_pdf();
