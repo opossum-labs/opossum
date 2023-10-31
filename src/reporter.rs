@@ -77,6 +77,7 @@ impl ReportGenerator {
             style::Style::new().with_font_size(8),
         );
         doc.push(p);
+        doc.push(genpdf::elements::Break::new(2));
         let p = elements::Paragraph::default().styled_string("Detectors", style::Effect::Bold);
         doc.push(p);
         for detector in self.report.detector_reports.iter() {

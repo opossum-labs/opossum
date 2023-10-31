@@ -3,6 +3,7 @@ use opossum::{
     error::OpmResult,
     properties::Properties,
     reporter::{AnalysisReport, DetectorReport, ReportGenerator},
+    spectrum::create_he_ne_spectrum,
 };
 
 fn main() -> OpmResult<()> {
@@ -15,6 +16,9 @@ fn main() -> OpmResult<()> {
         .create("total energy", "energy of detector", None, 1.012345.into())
         .unwrap();
     props.create("my bool", "", None, true.into()).unwrap();
+    props
+        .create("spectrum", "", None, create_he_ne_spectrum(1.0).into())
+        .unwrap();
     let detector = DetectorReport::new("powermeter".into(), "my powermeter".into(), props);
     report.add_detector(detector);
     let generator = ReportGenerator::new(report);

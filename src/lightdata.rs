@@ -6,6 +6,7 @@ use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
 use crate::properties::Proptype;
+use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 
 /// Data structure defining the light properties. The actuals data type used depends on the
@@ -50,7 +51,11 @@ impl Display for LightData {
 pub struct DataEnergy {
     pub spectrum: Spectrum,
 }
-
+impl PdfReportable for DataEnergy {
+    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+        self.spectrum.pdf_report()
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DataGeometric {
     _ray: i32,

@@ -1,8 +1,12 @@
 #![warn(missing_docs)]
 //! Module for handling optical spectra
 use crate::error::{OpmResult, OpossumError};
+use crate::properties::Proptype;
+use crate::reporter::PdfReportable;
 use csv::ReaderBuilder;
+use image::{DynamicImage, RgbImage};
 use itertools_num::linspace;
+use plotters::backend::PixelFormat;
 use plotters::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
@@ -393,12 +397,54 @@ impl Spectrum {
             .unwrap();
         root.present().unwrap();
     }
+
     /// Generate JSON representation.
     ///
     /// Generate a JSON representation of this [`Spectrum`]. This function is mainly used for generating reports.
     pub fn to_json(&self) -> serde_json::Value {
         let data_as_vec = self.data.to_vec();
         json!(data_as_vec)
+    }
+}
+impl PdfReportable for Spectrum {
+    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let image_width = 800_u32;
+        let image_height = 600_u32;
+        let mut image_buffer = vec![
+            0;
+            (image_width * image_height) as usize
+                * plotters::backend::RGBPixel::PIXEL_SIZE
+        ];
+        {
+            let plot_root =
+                BitMapBackend::with_buffer(&mut image_buffer, (image_width, image_height))
+                    .into_drawing_area();
+            plot_root.fill(&WHITE).unwrap();
+            ChartBuilder::on(&plot_root)
+                .margin(5)
+                .x_label_area_size(40)
+                .y_label_area_size(40)
+                .build_cartesian_2d(0.0..1.0, 0.0..1.0)
+                .unwrap()
+                .configure_mesh()
+                .x_desc("wavelength (nm)")
+                .y_desc("value (1/nm)")
+                .draw()
+                .unwrap();
+            plot_root.present().unwrap();
+        }
+        let img = RgbImage::from_raw(image_width, image_height, image_buffer).unwrap();
+        layout.push(
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img.clone()))
+                .unwrap(),
+        );
+        layout
+    }
+}
+impl From<Spectrum> for Proptype {
+    fn from(value: Spectrum) -> Self {
+        Proptype::Spectrum(value)
     }
 }
 impl Display for Spectrum {
