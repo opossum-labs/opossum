@@ -43,7 +43,7 @@ itertools-num="0"
 ncollide2d = "0.33"
 nalgebra = { version= "0", features = ["serde-serialize"] }
 
-genpdf="0"
+genpdf={ version="0", features = ["images"] }
 
 [features]
 doc-images = []

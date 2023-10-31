@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use genpdf::{self, fonts::Builtin};
+use genpdf::{self, elements, Alignment, Scale};
 pub struct AnalysisReport {
     opossum_version: String,
     analysis_timestamp: DateTime<Local>,
@@ -29,13 +29,21 @@ impl ReportGenerator {
         // Create a document and set the default font family
         let mut doc = genpdf::Document::new(font_family);
         // Change the default settings
-        doc.set_title("Demo document");
+        doc.set_title("OPOSSUM Analysis report");
         // Customize the pages
         let mut decorator = genpdf::SimplePageDecorator::new();
         decorator.set_margins(10);
         doc.set_page_decorator(decorator);
+        let image = elements::Image::from_path("logo/Logo_square.png")
+            .expect("Failed to load image")
+            .with_scale(Scale::new(0.2, 0.2))
+            .with_alignment(Alignment::Center);
+        doc.push(image);
+        let p = elements::Paragraph::default()
+            .string("Analysis Report")
+            .aligned(genpdf::Alignment::Center);
         // Add one or more elements
-        doc.push(genpdf::elements::Paragraph::new("This is a demo document."));
+        doc.push(p);
         // Render the document and write it to a file
         doc.render_to_file("./playground/output.pdf")
             .expect("Failed to write PDF file");
