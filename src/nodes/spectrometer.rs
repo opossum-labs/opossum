@@ -1,12 +1,12 @@
 #![warn(missing_docs)]
 use serde_derive::{Deserialize, Serialize};
-use serde_json::json;
 use uom::si::length::nanometer;
 
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Proptype};
+use crate::reporter::NodeReport;
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -143,15 +143,17 @@ impl Optical for Spectrometer {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn report(&self) -> serde_json::Value {
+    fn report(&self) -> Option<NodeReport> {
+        let mut props= Properties::default();
         let data = &self.light_data;
-        let mut energy_data = serde_json::Value::Null;
         if let Some(LightData::Energy(e)) = data {
-            energy_data = e.spectrum.to_json();
+            props.create("Spectrum", "Output spectrum", None, e.spectrum.clone().into()).unwrap();
         }
-        json!({"type": self.properties().node_type().unwrap(),
-        "name": self.properties().name().unwrap(),
-        "energy": energy_data})
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            props,
+        ))
     }
 }
 

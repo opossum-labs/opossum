@@ -1,12 +1,11 @@
 #![warn(missing_docs)]
-use serde_json::json;
-
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
+use crate::reporter::NodeReport;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -72,9 +71,12 @@ impl Optical for Dummy {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn report(&self) -> serde_json::Value {
-        json!({"type": self.properties().node_type().unwrap(),
-        "name": self.properties().name().unwrap()})
+    fn report(&self) -> Option<NodeReport> {
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            self.props.clone(),
+        ))
     }
 }
 

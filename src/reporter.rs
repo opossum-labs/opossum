@@ -30,10 +30,10 @@ pub struct NodeReport {
     properties: Properties,
 }
 impl NodeReport {
-    pub fn new(detector_type: String, name: String, properties: Properties) -> Self {
+    pub fn new(detector_type: &str, name: &str, properties: Properties) -> Self {
         Self {
-            detector_type,
-            name,
+            detector_type: detector_type.to_owned(),
+            name: name.to_owned(),
             properties,
         }
     }
@@ -100,6 +100,7 @@ impl ReportGenerator {
         let p = elements::Paragraph::default().styled_string("Detectors", style::Effect::Bold);
         doc.push(p);
         for detector in self.report.node_reports.iter() {
+            doc.push(genpdf::elements::Break::new(1));
             let p = elements::Paragraph::default()
                 .string(format!("{} - {}", detector.name, detector.detector_type));
             doc.push(p);

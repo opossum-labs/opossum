@@ -251,14 +251,16 @@ impl OpticScenery {
         } // else outgoing edge not connected
     }
     pub fn report(&self, report_dir: &Path) -> AnalysisReport {
-        let analysis_report = AnalysisReport::new(get_version(), Local::now());
+        let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
         let detector_nodes = self
             .g
             .0
             .node_weights()
             .filter(|node| node.optical_ref.borrow().is_detector());
         for node in detector_nodes {
-            //     detectors.push(node.optical_ref.borrow().report());
+            if let Some(node_report) = node.optical_ref.borrow().report() {
+                analysis_report.add_detector(node_report);
+            }
             node.optical_ref.borrow().export_data(report_dir);
         }
         analysis_report

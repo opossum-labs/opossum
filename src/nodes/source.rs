@@ -121,9 +121,14 @@ impl Optical for Source {
         if name != "inverted" {
             self.props.set(name, prop)
         } else {
-            Err(OpossumError::Properties(
-                "Cannot change the inversion status of a source node!".into(),
-            ))
+            let inverted = self.props.get_bool("inverted").unwrap().unwrap();
+            if inverted {
+                Err(OpossumError::Properties(
+                    "Cannot change the inversion status of a source node!".into(),
+                ))
+            } else {
+                Ok(())
+            }
         }
     }
 }
