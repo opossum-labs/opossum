@@ -1,10 +1,13 @@
 //! Data structures containing the light information flowing between [`Opticals`](crate::optical::Optical).
+use plotters::coord::Shift;
+use plotters::prelude::{DrawingArea, DrawingBackend};
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::path::Path;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
+use crate::error::OpmResult;
 use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
@@ -27,7 +30,7 @@ impl LightData {
     pub fn export(&self, file_path: &Path) {
         match self {
             LightData::Energy(d) => {
-                d.to_plot(file_path).unwrap();
+                d.to_svg_plot(file_path).unwrap();
             }
             _ => println!("no export function defined for this type of LightData"),
         }
@@ -58,8 +61,8 @@ impl PdfReportable for DataEnergy {
     }
 }
 impl Plottable for DataEnergy {
-    fn to_plot(&self, file_path: &Path) -> crate::error::OpmResult<()> {
-        self.spectrum.to_plot(file_path)
+    fn chart<B: DrawingBackend>(&self, root: &DrawingArea<B, Shift>) -> OpmResult<()> {
+        self.spectrum.chart(root)
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

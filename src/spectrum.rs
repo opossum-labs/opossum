@@ -1,13 +1,13 @@
 #![warn(missing_docs)]
 //! Module for handling optical spectra
 use crate::error::{OpmResult, OpossumError};
+use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
-use crate::plottable::{self, Plottable};
 use csv::ReaderBuilder;
-use image::{DynamicImage, RgbImage};
+use image::DynamicImage;
 use itertools_num::linspace;
-use plotters::backend::PixelFormat;
+use plotters::coord::Shift;
 use plotters::data::fitting_range;
 use plotters::prelude::*;
 use serde_derive::{Deserialize, Serialize};
@@ -16,7 +16,6 @@ use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::ops::Range;
-use std::path::Path;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
 use uom::si::length::meter;
@@ -369,35 +368,9 @@ impl Spectrum {
 impl PdfReportable for Spectrum {
     fn pdf_report(&self) -> genpdf::elements::LinearLayout {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let image_width = 800_u32;
-        let image_height = 600_u32;
-        let mut image_buffer = vec![
-            0;
-            (image_width * image_height) as usize
-                * plotters::backend::RGBPixel::PIXEL_SIZE
-        ];
-        {
-            let plot_root =
-                BitMapBackend::with_buffer(&mut image_buffer, (image_width, image_height))
-                    .into_drawing_area();
-            plot_root.fill(&WHITE).unwrap();
-            ChartBuilder::on(&plot_root)
-                .margin(5)
-                .x_label_area_size(40)
-                .y_label_area_size(40)
-                .build_cartesian_2d(0.0..1.0, 0.0..1.0)
-                .unwrap()
-                .configure_mesh()
-                .x_desc("wavelength (nm)")
-                .y_desc("value (1/nm)")
-                .draw()
-                .unwrap();
-            plot_root.present().unwrap();
-        }
-        let img = RgbImage::from_raw(image_width, image_height, image_buffer).unwrap();
+        let img = self.to_img_buf_plot().unwrap();
         layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img.clone()))
-                .unwrap(),
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img)).unwrap(),
         );
         layout
     }
@@ -538,12 +511,11 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
     }
 }
 impl Plottable for Spectrum {
-    fn to_plot(&self, file_path: &Path) -> OpmResult<()> {
-        let root = plottable::prepare_drawing_area(file_path);
+    fn chart<B: DrawingBackend>(&self, root: &DrawingArea<B, Shift>) -> OpmResult<()> {
         let x_left = self.data.first().unwrap().0;
         let x_right = self.data.last().unwrap().0;
         let y_range = fitting_range(self.data_vec().iter());
-        let mut chart = ChartBuilder::on(&root)
+        let mut chart = ChartBuilder::on(root)
             .margin(5)
             .x_label_area_size(40)
             .y_label_area_size(40)

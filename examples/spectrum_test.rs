@@ -37,12 +37,12 @@ fn main() -> Result<(), OpossumError> {
         0.02,
     )?;
     s.sub(&s3);
-    s.to_plot(Path::new("spectrum.svg"))?;
+    s.to_svg_plot(Path::new("spectrum.svg"))?;
 
     let s4 = Spectrum::from_csv("NE03B.csv")?;
-    s4.to_plot(Path::new("ne03b_raw.svg"))?;
+    s4.to_svg_plot(Path::new("ne03b_raw.svg"))?;
     let mut s5 = create_visible_spectrum();
     s5.resample(&s4);
-    s5.to_plot(Path::new("ne03b.svg"))?;
+    s5.to_svg_plot(Path::new("ne03b.svg"))?;
     Ok(())
 }
