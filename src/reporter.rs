@@ -71,16 +71,29 @@ impl ReportGenerator {
             .aligned(genpdf::Alignment::Center);
         // Add one or more elements
         doc.push(p);
-
-        let p = elements::Paragraph::default().styled_string(
-            format!(
-                "OPOSSUM v{}, Date: {}",
-                self.report.opossum_version,
-                self.report.analysis_timestamp.format("%Y-%m-%d %H:%M:%S")
-            ),
-            style::Style::new().with_font_size(8),
+        let mut table = elements::TableLayout::new(vec![1, 1]);
+        let mut table_row = table.row();
+        table_row.push_element(
+            elements::Paragraph::default()
+                .styled_string(
+                    format!("OPOSSUM v{}", self.report.opossum_version),
+                    style::Style::new().with_font_size(8),
+                )
+                .aligned(Alignment::Left),
         );
-        doc.push(p);
+        table_row.push_element(
+            elements::Paragraph::default()
+                .styled_string(
+                    format!(
+                        "Date: {}",
+                        self.report.analysis_timestamp.format("%Y-%m-%d %H:%M:%S")
+                    ),
+                    style::Style::new().with_font_size(8),
+                )
+                .aligned(Alignment::Right),
+        );
+        table_row.push().unwrap();
+        doc.push(table);
         doc.push(genpdf::elements::Break::new(2));
         let p = elements::Paragraph::default().styled_string("Detectors", style::Effect::Bold);
         doc.push(p);
