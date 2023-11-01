@@ -1,5 +1,5 @@
 //! Module for handling node properties
-use genpdf::style;
+use genpdf::{elements::TableLayout, style};
 use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::{collections::HashMap, mem};
@@ -204,16 +204,17 @@ impl Properties {
 impl PdfReportable for Properties {
     fn pdf_report(&self) -> genpdf::elements::LinearLayout {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let mut list = genpdf::elements::UnorderedList::default();
+        let mut table = TableLayout::new(vec![1, 5]);
         for property in self.props.iter() {
-            let mut list_element = genpdf::elements::LinearLayout::vertical();
+            let mut table_row = table.row();
             let property_name = genpdf::elements::Paragraph::default()
-                .styled_string(property.0, style::Effect::Bold);
-            list_element.push(property_name);
-            list_element.push(property.1.pdf_report());
-            list.push(list_element);
+                .styled_string(format!("{}: ", property.0), style::Effect::Bold)
+                .aligned(genpdf::Alignment::Right);
+            table_row.push_element(property_name);
+            table_row.push_element(property.1.pdf_report());
+            table_row.push().unwrap();
         }
-        layout.push(list);
+        layout.push(table);
         layout
     }
 }
@@ -415,7 +416,6 @@ pub enum Proptype {
     Aperture(Aperture),
     Spectrum(Spectrum),
 }
-
 impl PdfReportable for Proptype {
     fn pdf_report(&self) -> genpdf::elements::LinearLayout {
         let mut l = genpdf::elements::LinearLayout::vertical();

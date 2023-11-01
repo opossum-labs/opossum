@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use chrono::{DateTime, Local};
 use genpdf::{self, elements, style, Alignment, Scale};
 use serde_derive::Serialize;
@@ -50,7 +52,7 @@ impl ReportGenerator {
         Self { report }
     }
 
-    pub fn generate_pdf(&self) {
+    pub fn generate_pdf(&self, path: &Path) {
         let font_family = genpdf::fonts::from_files("./fonts", "LiberationSans", None)
             .expect("Failed to load font family");
         // Create a document and set the default font family
@@ -104,7 +106,6 @@ impl ReportGenerator {
             doc.push(detector.properties.pdf_report());
         }
         // Render the document and write it to a file
-        doc.render_to_file("./playground/output.pdf")
-            .expect("Failed to write PDF file");
+        doc.render_to_file(path).expect("Failed to write PDF file");
     }
 }

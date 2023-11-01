@@ -56,7 +56,9 @@ fn main() -> OpmResult<()> {
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {}", e)))?;
     let pdf_generator = ReportGenerator::new(analysis_report);
-    pdf_generator.generate_pdf();
+    let mut report_path = opossum_args.report_directory.clone();
+    report_path.push("report.pdf");
+    pdf_generator.generate_pdf(&report_path);
     println!("Success");
     Ok(())
 }

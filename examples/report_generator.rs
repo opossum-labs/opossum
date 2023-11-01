@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use chrono::DateTime;
 use opossum::{
     error::OpmResult,
@@ -22,6 +24,6 @@ fn main() -> OpmResult<()> {
     let detector = NodeReport::new("powermeter".into(), "my powermeter".into(), props);
     report.add_detector(detector);
     let generator = ReportGenerator::new(report);
-    generator.generate_pdf();
+    generator.generate_pdf(Path::new("./playground/output.pdf"));
     Ok(())
 }
