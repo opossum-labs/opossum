@@ -158,18 +158,23 @@ impl Spectrum {
             } else {
                 let lower_lambda = lambdas.get(idx - 1).unwrap();
                 let upper_lambda = lambdas.get(idx).unwrap();
+                println!("lower_lambda: {}, upper_lambda: {}", lower_lambda, upper_lambda);
                 let delta = upper_lambda - lower_lambda;
-                self.data[idx - 1].1 +=
-                    value * (1.0 - (wavelength_in_micrometers - lower_lambda) / delta) / delta;
-                self.data[idx].1 +=
-                    value * (wavelength_in_micrometers - lower_lambda) / delta / delta;
+                let energy_per_micrometer = value / delta;
+                println!("energy: {}, delta: {}, energy/um: {}", value, delta, energy_per_micrometer);
+                let energy_part= energy_per_micrometer * (wavelength_in_micrometers - lower_lambda) / delta;
+                self.data[idx].1 += energy_part;
+                self.data[idx-1].1 += energy_per_micrometer - energy_part;
             }
             Ok(())
         } else {
             Err(OpossumError::Spectrum("insertion point not found".into()))
         }
     }
-
+    /// Returns the iterator of this [`Spectrum`].
+    pub fn iter(&self) -> std::slice::Iter<'_, (f64, f64)> {
+        self.data.iter()
+    }
     /// Adds an emission line to this [`Spectrum`].
     ///
     /// This function adds a laser line (following a [Lorentzian](https://en.wikipedia.org/wiki/Cauchy_distribution) function) with a given
@@ -539,7 +544,7 @@ impl Plottable for Spectrum {
 #[cfg(test)]
 mod test {
     use super::*;
-    use approx::AbsDiffEq;
+    use approx::{assert_abs_diff_eq, AbsDiffEq};
     fn prep() -> Spectrum {
         Spectrum::new(
             Length::new::<micrometer>(1.0)..Length::new::<micrometer>(4.0),
@@ -763,6 +768,20 @@ mod test {
             .unwrap();
         assert!(s.scale_vertical(0.5).is_ok());
         assert_eq!(s.data_vec(), vec![0.0, 0.25, 0.25, 0.0]);
+    }
+    #[test]
+    fn scale_vertical2() {
+        let mut s = create_he_ne_spectrum(1.0);
+        let s2 = create_he_ne_spectrum(0.6);
+        s.scale_vertical(0.6).unwrap();
+        let mut expected_spectrum = s2.iter();
+        for value in s.iter() {
+            assert_abs_diff_eq!(
+                value.1,
+                expected_spectrum.next().unwrap().1,
+                epsilon = f64::EPSILON
+            );
+        }
     }
     #[test]
     fn he_ne_spectrum() {
