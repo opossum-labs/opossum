@@ -6,7 +6,7 @@ use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Proptype};
-use crate::reporter::NodeReport;
+use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -28,6 +28,19 @@ pub enum SpectrometerType {
 impl From<SpectrometerType> for Proptype {
     fn from(value: SpectrometerType) -> Self {
         Proptype::SpectrometerType(value)
+    }
+}
+impl PdfReportable for SpectrometerType {
+    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+        let element = match self {
+            SpectrometerType::IdealSpectrometer => {
+                genpdf::elements::Text::new("ideal spectrometer")
+            }
+            SpectrometerType::HR2000 => genpdf::elements::Text::new("Ocean Optics HR2000"),
+        };
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        l.push(element);
+        l
     }
 }
 /// An (ideal) spectrometer
@@ -153,6 +166,14 @@ impl Optical for Spectrometer {
                     "Output spectrum",
                     None,
                     e.spectrum.clone().into(),
+                )
+                .unwrap();
+            props
+                .create(
+                    "Model",
+                    "Spectrometer model",
+                    None,
+                    self.props.get("spectrometer type").unwrap().to_owned(),
                 )
                 .unwrap();
         }

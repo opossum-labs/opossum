@@ -160,9 +160,10 @@ impl Spectrum {
                 let upper_lambda = lambdas.get(idx).unwrap();
                 let delta = upper_lambda - lower_lambda;
                 let energy_per_micrometer = value / delta;
-                let energy_part= energy_per_micrometer * (wavelength_in_micrometers - lower_lambda) / delta;
+                let energy_part =
+                    energy_per_micrometer * (wavelength_in_micrometers - lower_lambda) / delta;
                 self.data[idx].1 += energy_part;
-                self.data[idx-1].1 += energy_per_micrometer - energy_part;
+                self.data[idx - 1].1 += energy_per_micrometer - energy_part;
             }
             Ok(())
         } else {
@@ -515,7 +516,7 @@ impl Plottable for Spectrum {
             .margin(5)
             .x_label_area_size(40)
             .y_label_area_size(40)
-            .build_cartesian_2d(x_left * 1.0E9..x_right * 1.0E9, 0.0..y_range.end * 1E-9)
+            .build_cartesian_2d(x_left * 1.0E3..x_right * 1.0E3, 0.0..y_range.end * 1E-3)
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {}", e)))?;
 
         chart

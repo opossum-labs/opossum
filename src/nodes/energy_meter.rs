@@ -3,7 +3,7 @@ use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Proptype};
-use crate::reporter::NodeReport;
+use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -25,6 +25,17 @@ pub enum Metertype {
 impl From<Metertype> for Proptype {
     fn from(value: Metertype) -> Self {
         Proptype::Metertype(value)
+    }
+}
+impl PdfReportable for Metertype {
+    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+        let element = match self {
+            Metertype::IdealEnergyMeter => genpdf::elements::Text::new("ideal energy meter"),
+            Metertype::IdealPowerMeter => genpdf::elements::Text::new("ideal power meter"),
+        };
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        l.push(element);
+        l
     }
 }
 /// An (ideal) energy / power meter.
@@ -137,6 +148,14 @@ impl Optical for EnergyMeter {
                     "Output energy",
                     None,
                     e.spectrum.total_energy().into(),
+                )
+                .unwrap();
+            props
+                .create(
+                    "Model",
+                    "type of meter",
+                    None,
+                    self.props.get("meter type").unwrap().to_owned(),
                 )
                 .unwrap();
         };

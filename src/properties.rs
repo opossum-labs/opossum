@@ -425,6 +425,8 @@ impl PdfReportable for Proptype {
             Proptype::F64(value) => l.push(genpdf::elements::Paragraph::new(format!("{}", value))),
             Proptype::Bool(value) => l.push(genpdf::elements::Paragraph::new(value.to_string())),
             Proptype::Spectrum(value) => l.push(value.pdf_report()),
+            Proptype::Metertype(value) => l.push(value.pdf_report()),
+            Proptype::SpectrometerType(value) => l.push(value.pdf_report()),
             _ => l.push(
                 genpdf::elements::Paragraph::default()
                     .styled_string("unknown poperty type", style::Effect::Italic),

@@ -299,9 +299,11 @@ mod test {
             .unwrap()
             .clone()
             .unwrap();
-        let energy=if let LightData::Energy(e) = result {
+        let energy = if let LightData::Energy(e) = result {
             e.spectrum.total_energy()
-        } else { 0.0};
+        } else {
+            0.0
+        };
         assert_eq!(energy, 0.6);
         let result = output
             .clone()
@@ -309,9 +311,11 @@ mod test {
             .unwrap()
             .clone()
             .unwrap();
-        let energy=if let LightData::Energy(e) = result {
+        let energy = if let LightData::Energy(e) = result {
             e.spectrum.total_energy()
-        } else { 0.0};
+        } else {
+            0.0
+        };
         assert_eq!(energy, 0.4);
     }
     #[test]
