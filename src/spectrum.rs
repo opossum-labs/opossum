@@ -6,7 +6,6 @@ use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
 use csv::ReaderBuilder;
 use image::DynamicImage;
-use itertools_num::linspace;
 use plotters::coord::Shift;
 use plotters::data::fitting_range;
 use plotters::prelude::*;
@@ -18,8 +17,7 @@ use std::fs::File;
 use std::ops::Range;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
-//use uom::si::length::meter;
-use uom::si::{f64::Length, length::nanometer, length::micrometer};
+use uom::si::{f64::Length, length::micrometer, length::nanometer};
 
 /// Structure for handling spectral data.
 ///
@@ -53,12 +51,12 @@ impl Spectrum {
             ));
         }
         let number_of_elements = ((range.end - range.start) / resolution).value.round() as usize;
-        let lambdas: Vec<f64> = linspace::<f64>(
-            range.start.get::<micrometer>(),
-            (range.end - resolution).get::<micrometer>(),
-            number_of_elements,
-        )
-        .collect();
+        let start = range.start.get::<micrometer>();
+        let step = resolution.get::<micrometer>();
+        let mut lambdas: Vec<f64> = Vec::new();
+        for i in 0..number_of_elements {
+            lambdas.push(start + i as f64 * step);
+        }
         let data = lambdas.iter().map(|lambda| (*lambda, 0.0)).collect();
         Ok(Self { data })
     }
@@ -161,16 +159,10 @@ impl Spectrum {
                 let lower_lambda = lambdas.get(idx - 1).unwrap();
                 let upper_lambda = lambdas.get(idx).unwrap();
                 let delta = upper_lambda - lower_lambda;
-                println!(
-                    "lower lambda={}, upper lambda={}, delta={}",
-                    lower_lambda * 1.0E6,
-                    upper_lambda * 1.0E6,
-                    delta * 1.0E6
-                );
                 self.data[idx - 1].1 +=
                     value * (1.0 - (wavelength_in_micrometers - lower_lambda) / delta) / delta;
-                self.data[idx].1 += value * (wavelength_in_micrometers - lower_lambda) / delta / delta;
-                println!("total={}", self.data[idx - 1].1 + self.data[idx].1);
+                self.data[idx].1 +=
+                    value * (wavelength_in_micrometers - lower_lambda) / delta / delta;
             }
             Ok(())
         } else {
@@ -214,7 +206,8 @@ impl Spectrum {
             .map(|data| {
                 (
                     data.0,
-                    data.1 + energy * lorentz(wavelength_in_micrometers, width_in_micrometers, data.0),
+                    data.1
+                        + energy * lorentz(wavelength_in_micrometers, width_in_micrometers, data.0),
                 )
             })
             .collect();
@@ -641,7 +634,8 @@ mod test {
     fn set_single_peak() {
         let mut s = prep();
         assert_eq!(
-            s.add_single_peak(Length::new::<micrometer>(2.0), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+                .is_ok(),
             true
         );
         assert_eq!(s.data[2].1, 2.0);
@@ -650,7 +644,8 @@ mod test {
     fn set_single_peak_interpolated() {
         let mut s = prep();
         assert_eq!(
-            s.add_single_peak(Length::new::<micrometer>(2.25), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<micrometer>(2.25), 1.0)
+                .is_ok(),
             true
         );
         assert_eq!(s.data[2].1, 1.0);
@@ -659,15 +654,19 @@ mod test {
     #[test]
     fn set_single_peak_additive() {
         let mut s = prep();
-        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0).unwrap();
-        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         assert_eq!(s.data[2].1, 4.0);
     }
     #[test]
     fn set_single_peak_interp_additive() {
         let mut s = prep();
-        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0).unwrap();
-        s.add_single_peak(Length::new::<micrometer>(2.25), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.25), 1.0)
+            .unwrap();
         assert_eq!(s.data[2].1, 3.0);
         assert_eq!(s.data[3].1, 1.0);
     }
@@ -675,7 +674,8 @@ mod test {
     fn set_single_peak_lower_bound() {
         let mut s = prep();
         assert_eq!(
-            s.add_single_peak(Length::new::<micrometer>(1.0), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<micrometer>(1.0), 1.0)
+                .is_ok(),
             true
         );
         assert_eq!(s.data[0].1, 2.0);
@@ -683,9 +683,15 @@ mod test {
     #[test]
     fn set_single_peak_wrong_params() {
         let mut s = prep();
-        assert!(s.add_single_peak(Length::new::<micrometer>(0.5), 1.0).is_err());
-        assert!(s.add_single_peak(Length::new::<micrometer>(4.0), 1.0).is_err());
-        assert!(s.add_single_peak(Length::new::<micrometer>(1.5), -1.0).is_err());
+        assert!(s
+            .add_single_peak(Length::new::<micrometer>(0.5), 1.0)
+            .is_err());
+        assert!(s
+            .add_single_peak(Length::new::<micrometer>(4.0), 1.0)
+            .is_err());
+        assert!(s
+            .add_single_peak(Length::new::<micrometer>(1.5), -1.0)
+            .is_err());
     }
     #[test]
     fn add_lorentzian() {
@@ -695,7 +701,11 @@ mod test {
         )
         .unwrap();
         assert!(s
-            .add_lorentzian_peak(Length::new::<micrometer>(25.0), Length::new::<micrometer>(0.5), 2.0)
+            .add_lorentzian_peak(
+                Length::new::<micrometer>(25.0),
+                Length::new::<micrometer>(0.5),
+                2.0
+            )
             .is_ok());
         assert!(s.total_energy().abs_diff_eq(&2.0, 0.1));
     }
@@ -703,19 +713,32 @@ mod test {
     fn add_lorentzian_wrong_params() {
         let mut s = prep();
         assert!(s
-            .add_lorentzian_peak(Length::new::<micrometer>(-5.0), Length::new::<micrometer>(0.5), 2.0)
+            .add_lorentzian_peak(
+                Length::new::<micrometer>(-5.0),
+                Length::new::<micrometer>(0.5),
+                2.0
+            )
             .is_err());
         assert!(s
-            .add_lorentzian_peak(Length::new::<micrometer>(2.0), Length::new::<micrometer>(-0.5), 2.0)
+            .add_lorentzian_peak(
+                Length::new::<micrometer>(2.0),
+                Length::new::<micrometer>(-0.5),
+                2.0
+            )
             .is_err());
         assert!(s
-            .add_lorentzian_peak(Length::new::<micrometer>(2.0), Length::new::<micrometer>(0.5), -2.0)
+            .add_lorentzian_peak(
+                Length::new::<micrometer>(2.0),
+                Length::new::<micrometer>(0.5),
+                -2.0
+            )
             .is_err());
     }
     #[test]
     fn total_energy() {
         let mut s = prep();
-        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         assert_eq!(s.total_energy(), 1.0);
     }
     #[test]
@@ -725,7 +748,8 @@ mod test {
             Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s.add_single_peak(Length::new::<micrometer>(1.5), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(1.5), 1.0)
+            .unwrap();
         assert_eq!(s.total_energy(), 1.0);
     }
     #[test]
@@ -735,7 +759,8 @@ mod test {
             Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s.add_single_peak(Length::new::<micrometer>(2.5), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.5), 1.0)
+            .unwrap();
         assert!(s.scale_vertical(0.5).is_ok());
         assert_eq!(s.data_vec(), vec![0.0, 0.25, 0.25, 0.0]);
     }
@@ -774,7 +799,8 @@ mod test {
             Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
         assert_eq!(s1.data, s2.data);
         assert_eq!(s1.total_energy(), s2.total_energy());
@@ -786,13 +812,15 @@ mod test {
             Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s1.add_single_peak(Length::new::<micrometer>(3.0), 1.0).unwrap();
+        s1.add_single_peak(Length::new::<micrometer>(3.0), 1.0)
+            .unwrap();
         let mut s2 = Spectrum::new(
             Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
             Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
         assert_eq!(s1.data, s2.data);
         assert_eq!(s1.total_energy(), s2.total_energy());
@@ -809,10 +837,15 @@ mod test {
             Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
-        assert_eq!(s1.data_vec(), vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
+        assert!(s1
+            .data_vec()
+            .iter()
+            .zip(vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0])
+            .all(|v| (*v.0).abs_diff_eq(&v.1, f64::EPSILON)));
     }
     #[test]
     fn resample_interp2() {
@@ -826,7 +859,8 @@ mod test {
             Length::new::<micrometer>(0.5),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
         assert_eq!(s1.data_vec(), vec![0.0, 1.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
@@ -843,7 +877,8 @@ mod test {
             Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<micrometer>(4.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(4.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
         assert_eq!(s1.data_vec(), vec![0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
@@ -860,7 +895,8 @@ mod test {
             Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
         assert_eq!(s1.data_vec(), vec![0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
@@ -868,18 +904,22 @@ mod test {
     #[test]
     fn add() {
         let mut s = prep();
-        s.add_single_peak(Length::new::<micrometer>(1.75), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(1.75), 1.0)
+            .unwrap();
         let mut s2 = prep();
-        s2.add_single_peak(Length::new::<micrometer>(2.25), 0.5).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.25), 0.5)
+            .unwrap();
         s.add(&s2);
         assert_eq!(s.data_vec(), vec![0.0, 1.0, 1.5, 0.5, 0.0, 0.0]);
     }
     #[test]
     fn sub() {
         let mut s = prep();
-        s.add_single_peak(Length::new::<micrometer>(1.75), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(1.75), 1.0)
+            .unwrap();
         let mut s2 = prep();
-        s2.add_single_peak(Length::new::<micrometer>(2.25), 0.5).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.25), 0.5)
+            .unwrap();
         s.sub(&s2);
         assert_eq!(s.data_vec(), vec![0.0, 1.0, 0.5, 0.0, 0.0, 0.0]);
     }

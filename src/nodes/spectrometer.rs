@@ -144,10 +144,17 @@ impl Optical for Spectrometer {
         self.props.set(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
-        let mut props= Properties::default();
+        let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Energy(e)) = data {
-            props.create("Spectrum", "Output spectrum", None, e.spectrum.clone().into()).unwrap();
+            props
+                .create(
+                    "Spectrum",
+                    "Output spectrum",
+                    None,
+                    e.spectrum.clone().into(),
+                )
+                .unwrap();
         }
         Some(NodeReport::new(
             self.properties().node_type().unwrap(),
