@@ -8,6 +8,7 @@ use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
+use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
@@ -22,6 +23,20 @@ pub enum FilterType {
 impl From<FilterType> for Proptype {
     fn from(value: FilterType) -> Self {
         Proptype::FilterType(value)
+    }
+}
+impl PdfReportable for FilterType {
+    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        match self {
+            FilterType::Constant(value) => {
+                l.push(genpdf::elements::Text::new(format!("fixed attenuation: {}", value)))},
+            FilterType::Spectrum(spectrum) => {
+                l.push(genpdf::elements::Text::new("transmission spectrum"));
+                l.push(spectrum.pdf_report());
+            }
+        };
+        l
     }
 }
 #[derive(Debug)]
