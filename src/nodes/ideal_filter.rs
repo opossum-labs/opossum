@@ -29,8 +29,10 @@ impl PdfReportable for FilterType {
     fn pdf_report(&self) -> genpdf::elements::LinearLayout {
         let mut l = genpdf::elements::LinearLayout::vertical();
         match self {
-            FilterType::Constant(value) => {
-                l.push(genpdf::elements::Text::new(format!("fixed attenuation: {}", value)))},
+            FilterType::Constant(value) => l.push(genpdf::elements::Text::new(format!(
+                "fixed attenuation: {}",
+                value
+            ))),
             FilterType::Spectrum(spectrum) => {
                 l.push(genpdf::elements::Text::new("transmission spectrum"));
                 l.push(spectrum.pdf_report());
