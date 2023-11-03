@@ -1,7 +1,7 @@
 //! The basic structure containing the entire optical model
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Cursor, Write};
 use std::path::Path;
 
 use crate::analyzer::AnalyzerType;
@@ -14,14 +14,18 @@ use crate::optic_graph::OpticGraph;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
-use crate::reporter::AnalysisReport;
+use crate::reporter::{AnalysisReport, PdfReportable};
 use chrono::Local;
+use genpdf::Alignment;
+use image::io::Reader;
+use image::DynamicImage;
 use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
+use tempfile::NamedTempFile;
 
 /// Overall optical model and additional metadata.
 ///
@@ -144,6 +148,22 @@ impl OpticScenery {
         dot_string.push_str("}\n");
         Ok(dot_string)
     }
+    pub fn to_dot_img(&self) -> OpmResult<DynamicImage> {
+        let dot_string = self.to_dot("")?;
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(dot_string.as_bytes()).unwrap();
+        let r = std::process::Command::new("dot")
+            .arg(f.path())
+            .arg("-Tpng")
+            .output()
+            .unwrap();
+        let img = Reader::new(Cursor::new(r.stdout))
+            .with_guessed_format()
+            .unwrap()
+            .decode()
+            .unwrap();
+        Ok(img)
+    }
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
         let mut dot_string = String::from("digraph {\n\tfontsize = 8\n");
@@ -252,6 +272,7 @@ impl OpticScenery {
     }
     pub fn report(&self, report_dir: &Path) -> AnalysisReport {
         let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
+        analysis_report.add_scenery(self);
         let detector_nodes = self
             .g
             .0
@@ -396,6 +417,17 @@ impl<'de> Deserialize<'de> for OpticScenery {
             }
         }
         deserializer.deserialize_struct("OpticScenery", FIELDS, OpticSceneryVisitor)
+    }
+}
+impl PdfReportable for OpticScenery {
+    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        let diagram = self.to_dot_img().unwrap();
+        let img = genpdf::elements::Image::from_dynamic_image(diagram)
+            .unwrap()
+            .with_alignment(Alignment::Center);
+        l.push(img);
+        l
     }
 }
 #[cfg(test)]
