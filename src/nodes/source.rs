@@ -34,6 +34,9 @@ fn create_default_props() -> Properties {
     props
         .create("light data", "data of the emitted light", None, None.into())
         .unwrap();
+    let mut ports = OpticPorts::new();
+    ports.create_output("out1").unwrap();
+    props.set("apertures", ports.into()).unwrap();
     props
 }
 
@@ -92,11 +95,6 @@ impl Debug for Source {
 }
 
 impl Optical for Source {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_output("out1").unwrap();
-        ports
-    }
     fn analyze(
         &mut self,
         _incoming_edges: LightResult,
@@ -170,8 +168,8 @@ mod test {
     #[test]
     fn ports() {
         let node = Source::default();
-        assert!(node.ports().inputs().is_empty());
-        assert_eq!(node.ports().outputs(), vec!["out1"]);
+        assert!(node.ports().input_names().is_empty());
+        assert_eq!(node.ports().output_names(), vec!["out1"]);
     }
     #[test]
     fn analyze_empty() {

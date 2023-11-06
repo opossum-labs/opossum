@@ -44,6 +44,12 @@ fn create_default_props() -> Properties {
             0.5.into(),
         )
         .unwrap();
+    let mut ports = OpticPorts::new();
+    ports.create_input("input1").unwrap();
+    ports.create_input("input2").unwrap();
+    ports.create_output("out1_trans1_refl2").unwrap();
+    ports.create_output("out2_trans2_refl1").unwrap();
+    props.set("apertures", ports.into()).unwrap();
     props
 }
 impl BeamSplitter {
@@ -161,18 +167,6 @@ impl Default for BeamSplitter {
     }
 }
 impl Optical for BeamSplitter {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_input("input1").unwrap();
-        ports.add_input("input2").unwrap();
-        ports.add_output("out1_trans1_refl2").unwrap();
-        ports.add_output("out2_trans2_refl1").unwrap();
-        if self.properties().get_bool("inverted").unwrap().unwrap() {
-            ports.set_inverted(true)
-        }
-        ports
-    }
-
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -248,10 +242,10 @@ mod test {
     #[test]
     fn ports() {
         let node = BeamSplitter::default();
-        let mut input_ports = node.ports().inputs();
+        let mut input_ports = node.ports().input_names();
         input_ports.sort();
         assert_eq!(input_ports, vec!["input1", "input2"]);
-        let mut output_ports = node.ports().outputs();
+        let mut output_ports = node.ports().output_names();
         output_ports.sort();
         assert_eq!(output_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
     }
@@ -259,10 +253,10 @@ mod test {
     fn ports_inverted() {
         let mut node = BeamSplitter::default();
         node.set_property("inverted", true.into()).unwrap();
-        let mut input_ports = node.ports().inputs();
+        let mut input_ports = node.ports().input_names();
         input_ports.sort();
         assert_eq!(input_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
-        let mut output_ports = node.ports().outputs();
+        let mut output_ports = node.ports().output_names();
         output_ports.sort();
         assert_eq!(output_ports, vec!["input1", "input2"]);
     }

@@ -11,6 +11,7 @@ use crate::{
     lightdata::LightData,
     nodes::{FilterType, Metertype, PortMap, SpectrometerType},
     optic_graph::OpticGraph,
+    optic_ports::OpticPorts,
     reporter::PdfReportable,
     spectrum::Spectrum,
 };
@@ -55,10 +56,10 @@ impl Properties {
             .unwrap();
         properties
             .create(
-                "aperture",
-                "input aperture of the optical element",
+                "apertures",
+                "input and output apertures of the optical element",
                 None,
-                Aperture::default().into(),
+                OpticPorts::default().into(),
             )
             .unwrap();
         properties
@@ -413,6 +414,7 @@ pub enum Proptype {
     Metertype(Metertype),
     GroupPortMap(PortMap),
     Uuid(Uuid),
+    OpticPorts(OpticPorts),
     Aperture(Aperture),
     Spectrum(Spectrum),
 }

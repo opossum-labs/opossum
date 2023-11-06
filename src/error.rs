@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Opossum specfic error structures
 use std::{error::Error, fmt::Display};
 

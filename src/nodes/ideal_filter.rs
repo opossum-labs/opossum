@@ -68,6 +68,10 @@ fn create_default_props() -> Properties {
             FilterType::Constant(1.0).into(),
         )
         .unwrap();
+    let mut ports = OpticPorts::new();
+    ports.create_input("front").unwrap();
+    ports.create_output("rear").unwrap();
+    props.set("apertures", ports.into()).unwrap();
     props
 }
 impl Default for IdealFilter {
@@ -185,8 +189,8 @@ impl IdealFilter {
 impl Optical for IdealFilter {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
-        ports.add_input("front").unwrap();
-        ports.add_output("rear").unwrap();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
         if self.properties().inverted() {
             ports.set_inverted(true);
         }
@@ -248,15 +252,15 @@ mod test {
     #[test]
     fn ports() {
         let node = IdealFilter::default();
-        assert_eq!(node.ports().inputs(), vec!["front"]);
-        assert_eq!(node.ports().outputs(), vec!["rear"]);
+        assert_eq!(node.ports().input_names(), vec!["front"]);
+        assert_eq!(node.ports().output_names(), vec!["rear"]);
     }
     #[test]
     fn ports_inverted() {
         let mut node = IdealFilter::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.ports().inputs(), vec!["rear"]);
-        assert_eq!(node.ports().outputs(), vec!["front"]);
+        assert_eq!(node.ports().input_names(), vec!["rear"]);
+        assert_eq!(node.ports().output_names(), vec!["front"]);
     }
     #[test]
     fn analyze_ok() {

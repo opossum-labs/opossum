@@ -29,29 +29,26 @@ pub struct Dummy {
 
 impl Default for Dummy {
     fn default() -> Self {
-        Self {
-            props: Properties::new("dummy", "dummy"),
-        }
+        let mut ports = OpticPorts::new();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
+        let mut props = Properties::new("dummy", "dummy");
+        props.set("apertures", ports.into()).unwrap();
+        Self { props }
     }
 }
 impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
     pub fn new(name: &str) -> Self {
-        Self {
-            props: Properties::new(name, "dummy"),
-        }
+        let mut ports = OpticPorts::new();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
+        let mut props = Properties::new(name, "dummy");
+        props.set("apertures", ports.into()).unwrap();
+        Self { props }
     }
 }
 impl Optical for Dummy {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_input("front").unwrap();
-        ports.add_output("rear").unwrap();
-        if self.properties().inverted() {
-            ports.set_inverted(true)
-        }
-        ports
-    }
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -123,15 +120,15 @@ mod test {
     #[test]
     fn ports() {
         let node = Dummy::default();
-        assert_eq!(node.ports().inputs(), vec!["front"]);
-        assert_eq!(node.ports().outputs(), vec!["rear"]);
+        assert_eq!(node.ports().input_names(), vec!["front"]);
+        assert_eq!(node.ports().output_names(), vec!["rear"]);
     }
     #[test]
     fn ports_inverted() {
         let mut node = Dummy::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.ports().inputs(), vec!["rear"]);
-        assert_eq!(node.ports().outputs(), vec!["front"]);
+        assert_eq!(node.ports().input_names(), vec!["rear"]);
+        assert_eq!(node.ports().output_names(), vec!["front"]);
     }
     #[test]
     fn is_detector() {

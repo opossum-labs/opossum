@@ -185,16 +185,16 @@ mod test {
     #[test]
     fn ports_empty() {
         let node = NodeReference::default();
-        assert!(node.ports().inputs().is_empty());
-        assert!(node.ports().outputs().is_empty());
+        assert!(node.ports().input_names().is_empty());
+        assert!(node.ports().output_names().is_empty());
     }
     #[test]
     fn ports_non_empty() {
         let mut scenery = OpticScenery::default();
         let idx = scenery.add_node(Dummy::default());
         let node = NodeReference::from_node(scenery.node(idx).unwrap());
-        assert_eq!(node.ports().inputs(), vec!["front"]);
-        assert_eq!(node.ports().outputs(), vec!["rear"]);
+        assert_eq!(node.ports().input_names(), vec!["front"]);
+        assert_eq!(node.ports().output_names(), vec!["rear"]);
     }
     #[test]
     fn ports_inverted() {
@@ -202,8 +202,8 @@ mod test {
         let idx = scenery.add_node(Dummy::default());
         let mut node = NodeReference::from_node(scenery.node(idx).unwrap());
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.ports().inputs(), vec!["rear"]);
-        assert_eq!(node.ports().outputs(), vec!["front"]);
+        assert_eq!(node.ports().input_names(), vec!["rear"]);
+        assert_eq!(node.ports().output_names(), vec!["front"]);
     }
     #[test]
     fn analyze() {
