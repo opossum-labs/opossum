@@ -34,12 +34,28 @@ pub trait Optical: Dottable {
             panic!("property <apertures> not found")
         }
     }
-    fn set_input_aperture(&mut self, port_name: &str, _aperture: Aperture) -> OpmResult<()> {
-        if self.ports().check_if_port_exists(port_name) {
+    fn set_input_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
+        let mut ports = self.ports();
+        if ports.inputs().contains_key(port_name) {
+            ports.set_input_aperture(port_name, aperture)?;
+            self.set_property("apertures", ports.into())?;
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
-                "port name <{}> does not exist",
+                "input port name <{}> does not exist",
+                port_name
+            )))
+        }
+    }
+    fn set_output_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
+        let mut ports = self.ports();
+        if ports.outputs().contains_key(port_name) {
+            ports.set_output_aperture(port_name, aperture)?;
+            self.set_property("apertures", ports.into())?;
+            Ok(())
+        } else {
+            Err(OpossumError::OpticPort(format!(
+                "output port name <{}> does not exist",
                 port_name
             )))
         }
@@ -126,8 +142,18 @@ pub trait Optical: Dottable {
     fn set_properties(&mut self, properties: Properties) -> OpmResult<()> {
         let own_properties = self.properties().clone();
         for prop in properties.iter() {
-            if own_properties.contains(prop.0) && prop.0 != "node_type" {
-                self.set_property(prop.0, prop.1.prop().clone())?;
+            if own_properties.contains(prop.0) {
+                match prop.0.as_str() {
+                    "node_type" => {}
+                    "apertures" => {
+                        let mut ports = self.ports();
+                        if let Proptype::OpticPorts(ports_to_be_set) = prop.1.prop().clone() {
+                            ports.set_apertures(ports_to_be_set)?;
+                            self.set_property("apertures", ports.into())?;
+                        }
+                    }
+                    _ => self.set_property(prop.0, prop.1.prop().clone())?,
+                };
             }
         }
         Ok(())

@@ -12,6 +12,7 @@ use std::{collections::BTreeMap, fmt::Display};
 pub struct OpticPorts {
     inputs: BTreeMap<String, Aperture>,
     outputs: BTreeMap<String, Aperture>,
+    #[serde(skip)]
     inverted: bool,
 }
 
@@ -100,6 +101,15 @@ impl OpticPorts {
                 port_name
             )))
         }
+    }
+    pub fn set_apertures(&mut self, set_ports: OpticPorts) -> OpmResult<()> {
+        for set_port in set_ports.inputs {
+            self.set_input_aperture(&set_port.0, set_port.1)?;
+        }
+        for set_port in set_ports.outputs {
+            self.set_output_aperture(&set_port.0, set_port.1)?;
+        }
+        Ok(())
     }
     pub fn check_if_port_exists(&self, port_name: &str) -> bool {
         self.inputs.contains_key(port_name) || self.outputs.contains_key(port_name)
