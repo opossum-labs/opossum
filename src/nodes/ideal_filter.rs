@@ -8,6 +8,7 @@ use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
+use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
@@ -22,6 +23,22 @@ pub enum FilterType {
 impl From<FilterType> for Proptype {
     fn from(value: FilterType) -> Self {
         Proptype::FilterType(value)
+    }
+}
+impl PdfReportable for FilterType {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        match self {
+            FilterType::Constant(value) => l.push(genpdf::elements::Text::new(format!(
+                "fixed attenuation: {}",
+                value
+            ))),
+            FilterType::Spectrum(spectrum) => {
+                l.push(genpdf::elements::Text::new("transmission spectrum"));
+                l.push(spectrum.pdf_report()?);
+            }
+        };
+        Ok(l)
     }
 }
 #[derive(Debug)]
@@ -252,9 +269,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("rear".into()));
+        assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear".into()).unwrap();
+        let output = output.get("rear").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         let expected_output_light = LightData::Energy(DataEnergy {
@@ -285,9 +302,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("front".into()));
+        assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
-        let output = output.get("front".into()).unwrap();
+        let output = output.get("front").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         let expected_output_light = LightData::Energy(DataEnergy {

@@ -1,12 +1,11 @@
 #![warn(missing_docs)]
-use serde_json::json;
-
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
+use crate::reporter::NodeReport;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -72,9 +71,12 @@ impl Optical for Dummy {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn report(&self) -> serde_json::Value {
-        json!({"type": self.properties().node_type().unwrap(),
-        "name": self.properties().name().unwrap()})
+    fn report(&self) -> Option<NodeReport> {
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            self.props.clone(),
+        ))
     }
 }
 
@@ -152,9 +154,9 @@ mod test {
         let output = dummy.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("rear".into()));
+        assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear".into()).unwrap();
+        let output = output.get("rear").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
@@ -170,7 +172,7 @@ mod test {
         let output = dummy.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        let output = output.get("rear".into()).unwrap();
+        let output = output.get("rear").unwrap();
         assert!(output.is_none());
     }
     #[test]
@@ -186,9 +188,9 @@ mod test {
         let output = dummy.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("front".into()));
+        assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
-        let output = output.get("front".into()).unwrap();
+        let output = output.get("front").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);

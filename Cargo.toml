@@ -35,14 +35,17 @@ strum = { version = "0", features = ["derive"] }
 
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
 
-chrono = "0"
+chrono = { version= "0", features = ["serde"] }
 
 embed-doc-image = "0" # allows for embedded images in the rust API doc
 
 itertools-num="0"
-
 ncollide2d = "0.33"
 nalgebra = { version= "0", features = ["serde-serialize"] }
+
+genpdf={ version="0", features = ["images"] }
+image="0"
+tempfile="3"
 [features]
 doc-images = []
 

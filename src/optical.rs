@@ -1,6 +1,4 @@
 //! Contains the basic trait representing an optical element
-use serde_json::json;
-
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
@@ -8,6 +6,7 @@ use crate::lightdata::LightData;
 use crate::nodes::{NodeGroup, NodeReference};
 use crate::optic_ports::OpticPorts;
 use crate::properties::{Properties, Proptype};
+use crate::reporter::NodeReport;
 use core::fmt::Debug;
 use std::collections::HashMap;
 use std::path::Path;
@@ -118,8 +117,8 @@ pub trait Optical: Dottable {
     ///
     /// This function must be overridden for generating output in the analysis report. Mainly detector nodes use this feature.
     /// The default implementation is to return a JSON `null` value.
-    fn report(&self) -> serde_json::Value {
-        json!(null)
+    fn report(&self) -> Option<NodeReport> {
+        None
     }
 }
 

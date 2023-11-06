@@ -1,8 +1,13 @@
 #![warn(missing_docs)]
 //! Module for handling optical spectra
 use crate::error::{OpmResult, OpossumError};
+use crate::plottable::Plottable;
+use crate::properties::Proptype;
+use crate::reporter::PdfReportable;
 use csv::ReaderBuilder;
-use itertools_num::linspace;
+use image::DynamicImage;
+use plotters::coord::Shift;
+use plotters::data::fitting_range;
 use plotters::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
@@ -12,8 +17,7 @@ use std::fs::File;
 use std::ops::Range;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
-use uom::si::length::meter;
-use uom::si::{f64::Length, length::nanometer};
+use uom::si::{f64::Length, length::micrometer, length::nanometer};
 
 /// Structure for handling spectral data.
 ///
@@ -21,7 +25,7 @@ use uom::si::{f64::Length, length::nanometer};
 /// is still limited, the structure is prepared for handling also non-equidistant wavelength slots.  
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Spectrum {
-    data: Vec<(f64, f64)>, // (wavelength in meters, data in 1/meters)
+    data: Vec<(f64, f64)>, // (wavelength in micrometers, data in 1/micrometers)
 }
 impl Spectrum {
     /// Create a new (empty) spectrum of a given wavelength range and (equidistant) resolution.
@@ -47,12 +51,12 @@ impl Spectrum {
             ));
         }
         let number_of_elements = ((range.end - range.start) / resolution).value.round() as usize;
-        let lambdas: Vec<f64> = linspace::<f64>(
-            range.start.get::<meter>(),
-            (range.end - resolution).get::<meter>(),
-            number_of_elements,
-        )
-        .collect();
+        let start = range.start.get::<micrometer>();
+        let step = resolution.get::<micrometer>();
+        let mut lambdas: Vec<f64> = Vec::new();
+        for i in 0..number_of_elements {
+            lambdas.push(start + i as f64 * step);
+        }
         let data = lambdas.iter().map(|lambda| (*lambda, 0.0)).collect();
         Ok(Self { data })
     }
@@ -92,7 +96,7 @@ impl Spectrum {
                 .unwrap()
                 .parse::<f64>()
                 .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
-            datas.push((lambda * 1.0E-9, data * 0.01)); // (nanometers -> meters, percent -> transmisison)
+            datas.push((lambda * 1.0E-3, data * 0.01)); // (nanometers -> micrometers, percent -> transmisison)
         }
         if datas.is_empty() {
             return Err(OpossumError::Spectrum(
@@ -112,8 +116,8 @@ impl Spectrum {
     }
     /// Returns the wavelength range of this [`Spectrum`].
     pub fn range(&self) -> Range<Length> {
-        Length::new::<meter>(self.data.first().unwrap().0)
-            ..Length::new::<meter>(self.data.last().unwrap().0)
+        Length::new::<micrometer>(self.data.first().unwrap().0)
+            ..Length::new::<micrometer>(self.data.last().unwrap().0)
     }
     /// Returns the average wavelenth resolution of this [`Spectrum`].
     ///
@@ -136,7 +140,7 @@ impl Spectrum {
     ///   - the energy is negative
     pub fn add_single_peak(&mut self, wavelength: Length, value: f64) -> OpmResult<()> {
         let spectrum_range = self.data.first().unwrap().0..self.data.last().unwrap().0;
-        if !spectrum_range.contains(&wavelength.get::<meter>()) {
+        if !spectrum_range.contains(&wavelength.get::<micrometer>()) {
             return Err(OpossumError::Spectrum(
                 "wavelength is not in spectrum range".into(),
             ));
@@ -144,9 +148,9 @@ impl Spectrum {
         if value < 0.0 {
             return Err(OpossumError::Spectrum("energy must be positive".into()));
         }
-        let wavelength_in_meters = wavelength.get::<meter>();
+        let wavelength_in_micrometers = wavelength.get::<micrometer>();
         let lambdas: Vec<f64> = self.lambda_vec();
-        let idx = lambdas.iter().position(|w| *w >= wavelength_in_meters);
+        let idx = lambdas.iter().position(|w| *w >= wavelength_in_micrometers);
         if let Some(idx) = idx {
             if idx == 0 {
                 let delta = lambdas.get(1).unwrap() - lambdas.first().unwrap();
@@ -155,23 +159,21 @@ impl Spectrum {
                 let lower_lambda = lambdas.get(idx - 1).unwrap();
                 let upper_lambda = lambdas.get(idx).unwrap();
                 let delta = upper_lambda - lower_lambda;
-                println!(
-                    "lower lambda={}, upper lambda={}, delta={}",
-                    lower_lambda * 1.0E9,
-                    upper_lambda * 1.0E9,
-                    delta * 1.0E9
-                );
-                self.data[idx - 1].1 +=
-                    value * (1.0 - (wavelength_in_meters - lower_lambda) / delta) / delta;
-                self.data[idx].1 += value * (wavelength_in_meters - lower_lambda) / delta / delta;
-                println!("total={}", self.data[idx - 1].1 + self.data[idx].1);
+                let energy_per_micrometer = value / delta;
+                let energy_part =
+                    energy_per_micrometer * (wavelength_in_micrometers - lower_lambda) / delta;
+                self.data[idx].1 += energy_part;
+                self.data[idx - 1].1 += energy_per_micrometer - energy_part;
             }
             Ok(())
         } else {
             Err(OpossumError::Spectrum("insertion point not found".into()))
         }
     }
-
+    /// Returns the iterator of this [`Spectrum`].
+    pub fn iter(&self) -> std::slice::Iter<'_, (f64, f64)> {
+        self.data.iter()
+    }
     /// Adds an emission line to this [`Spectrum`].
     ///
     /// This function adds a laser line (following a [Lorentzian](https://en.wikipedia.org/wiki/Cauchy_distribution) function) with a given
@@ -200,15 +202,16 @@ impl Spectrum {
         if energy < 0.0 {
             return Err(OpossumError::Spectrum("energy must be positive".into()));
         }
-        let wavelength_in_meters = center.get::<meter>();
-        let width_in_meters = width.get::<meter>();
+        let wavelength_in_micrometers = center.get::<micrometer>();
+        let width_in_micrometers = width.get::<micrometer>();
         let spectrum: Vec<(f64, f64)> = self
             .data
             .iter()
             .map(|data| {
                 (
                     data.0,
-                    data.1 + energy * lorentz(wavelength_in_meters, width_in_meters, data.0),
+                    data.1
+                        + energy * lorentz(wavelength_in_micrometers, width_in_micrometers, data.0),
                 )
             })
             .collect();
@@ -351,54 +354,28 @@ impl Spectrum {
             })
             .collect();
     }
-    /// Generate a plot of this [`Spectrum`].
-    ///
-    /// Generate a x/y spectrum plot as SVG graphics with the given filename. This function is meant mainly for debugging purposes.
-    ///
-    /// # Panics
-    ///
-    /// ???
-    pub fn to_plot(&self, file_path: &std::path::Path) {
-        let root = SVGBackend::new(file_path, (800, 600)).into_drawing_area();
-        root.fill(&WHITE).unwrap();
-        let x_left = self.data.first().unwrap().0;
-        let x_right = self.data.last().unwrap().0;
-        let y_top = self
-            .data_vec()
-            .iter()
-            .skip_while(|y| y.is_nan())
-            .copied()
-            .fold(f64::NAN, f64::max);
-        let mut chart = ChartBuilder::on(&root)
-            .margin(5)
-            .x_label_area_size(40)
-            .y_label_area_size(40)
-            .build_cartesian_2d(x_left * 1.0E9..x_right * 1.0E9, 0.0..y_top * 1E-9)
-            .unwrap();
-
-        chart
-            .configure_mesh()
-            .x_desc("wavelength (nm)")
-            .y_desc("value (1/nm)")
-            .draw()
-            .unwrap();
-        chart
-            .draw_series(LineSeries::new(
-                self.data
-                    .iter()
-                    .map(|data| (data.0 * 1.0E9, data.1 * 1.0E-9))
-                    .collect::<Vec<(f64, f64)>>(),
-                &RED,
-            ))
-            .unwrap();
-        root.present().unwrap();
-    }
     /// Generate JSON representation.
     ///
     /// Generate a JSON representation of this [`Spectrum`]. This function is mainly used for generating reports.
     pub fn to_json(&self) -> serde_json::Value {
         let data_as_vec = self.data.to_vec();
         json!(data_as_vec)
+    }
+}
+impl PdfReportable for Spectrum {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let img = self.to_img_buf_plot().unwrap();
+        layout.push(
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
+                .map_err(|e| format!("adding of image failed: {}", e))?,
+        );
+        Ok(layout)
+    }
+}
+impl From<Spectrum> for Proptype {
+    fn from(value: Spectrum) -> Self {
+        Proptype::Spectrum(value)
     }
 }
 impl Display for Spectrum {
@@ -408,7 +385,7 @@ impl Display for Spectrum {
             writeln!(
                 f,
                 "{:7.2} -> {}",
-                fmt_length.with(Length::new::<meter>(value.0)),
+                fmt_length.with(Length::new::<micrometer>(value.0)),
                 value.1
             )
             .unwrap();
@@ -424,7 +401,7 @@ impl Debug for Spectrum {
             writeln!(
                 f,
                 "{:7.2} -> {}",
-                fmt_length.with(Length::new::<meter>(value.0)),
+                fmt_length.with(Length::new::<micrometer>(value.0)),
                 value.1
             )
             .unwrap();
@@ -531,22 +508,55 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
         Some(s_out)
     }
 }
+impl Plottable for Spectrum {
+    fn chart<B: DrawingBackend>(&self, root: &DrawingArea<B, Shift>) -> OpmResult<()> {
+        let x_left = self.data.first().unwrap().0;
+        let x_right = self.data.last().unwrap().0;
+        let y_range = fitting_range(self.data_vec().iter());
+        let mut chart = ChartBuilder::on(root)
+            .margin(5)
+            .x_label_area_size(40)
+            .y_label_area_size(40)
+            .build_cartesian_2d(x_left * 1.0E3..x_right * 1.0E3, 0.0..y_range.end * 1E-3)
+            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {}", e)))?;
+
+        chart
+            .configure_mesh()
+            .x_desc("wavelength (nm)")
+            .y_desc("value (1/nm)")
+            .draw()
+            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {}", e)))?;
+
+        chart
+            .draw_series(LineSeries::new(
+                self.data
+                    .iter()
+                    .map(|data| (data.0 * 1.0E3, data.1 * 1.0E-3))
+                    .collect::<Vec<(f64, f64)>>(),
+                &RED,
+            ))
+            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {}", e)))?;
+        root.present()
+            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {}", e)))?;
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
     use approx::AbsDiffEq;
     fn prep() -> Spectrum {
         Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(0.5),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(4.0),
+            Length::new::<micrometer>(0.5),
         )
         .unwrap()
     }
     #[test]
     fn new() {
         let s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(0.5),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(4.0),
+            Length::new::<micrometer>(0.5),
         );
         assert!(s.is_ok());
         assert_eq!(
@@ -564,30 +574,30 @@ mod test {
     #[test]
     fn visible_spectrum() {
         let s = create_visible_spectrum();
-        assert_eq!(s.lambda_vec().first().unwrap(), &380.0E-9);
-        assert_eq!(s.lambda_vec().last().unwrap(), &749.9E-9);
+        assert_eq!(s.lambda_vec().first().unwrap(), &0.38);
+        assert_eq!(s.lambda_vec().last().unwrap(), &0.7499);
     }
     #[test]
     fn new_negative_resolution() {
         let s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(-0.5),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(4.0),
+            Length::new::<micrometer>(-0.5),
         );
         assert!(s.is_err());
     }
     #[test]
     fn new_wrong_range() {
         let s = Spectrum::new(
-            Length::new::<meter>(4.0)..Length::new::<meter>(1.0),
-            Length::new::<meter>(0.5),
+            Length::new::<micrometer>(4.0)..Length::new::<micrometer>(1.0),
+            Length::new::<micrometer>(0.5),
         );
         assert!(s.is_err());
     }
     #[test]
     fn new_negative_range() {
         let s = Spectrum::new(
-            Length::new::<meter>(-1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(0.5),
+            Length::new::<micrometer>(-1.0)..Length::new::<micrometer>(4.0),
+            Length::new::<micrometer>(0.5),
         );
         assert!(s.is_err());
     }
@@ -598,7 +608,7 @@ mod test {
         let lambdas = s.clone().unwrap().lambda_vec();
         assert!(lambdas
             .into_iter()
-            .zip(vec![500.0E-9, 501.0E-9, 502.0E-9, 503.0E-9, 504.0E-9, 505.0E-9].iter())
+            .zip(vec![500.0E-3, 501.0E-3, 502.0E-3, 503.0E-3, 504.0E-3, 505.0E-3].iter())
             .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
         let datas = s.unwrap().data_vec();
         assert!(datas
@@ -618,18 +628,19 @@ mod test {
         let s = prep();
         assert_eq!(
             s.range(),
-            Length::new::<meter>(1.0)..Length::new::<meter>(3.5)
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(3.5)
         )
     }
     #[test]
     fn estimate_resolution() {
-        assert_eq!(prep().average_resolution().get::<meter>(), 0.5);
+        assert_eq!(prep().average_resolution().get::<micrometer>(), 0.5);
     }
     #[test]
     fn set_single_peak() {
         let mut s = prep();
         assert_eq!(
-            s.add_single_peak(Length::new::<meter>(2.0), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+                .is_ok(),
             true
         );
         assert_eq!(s.data[2].1, 2.0);
@@ -638,7 +649,8 @@ mod test {
     fn set_single_peak_interpolated() {
         let mut s = prep();
         assert_eq!(
-            s.add_single_peak(Length::new::<meter>(2.25), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<micrometer>(2.25), 1.0)
+                .is_ok(),
             true
         );
         assert_eq!(s.data[2].1, 1.0);
@@ -647,15 +659,19 @@ mod test {
     #[test]
     fn set_single_peak_additive() {
         let mut s = prep();
-        s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
-        s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         assert_eq!(s.data[2].1, 4.0);
     }
     #[test]
     fn set_single_peak_interp_additive() {
         let mut s = prep();
-        s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
-        s.add_single_peak(Length::new::<meter>(2.25), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.25), 1.0)
+            .unwrap();
         assert_eq!(s.data[2].1, 3.0);
         assert_eq!(s.data[3].1, 1.0);
     }
@@ -663,7 +679,8 @@ mod test {
     fn set_single_peak_lower_bound() {
         let mut s = prep();
         assert_eq!(
-            s.add_single_peak(Length::new::<meter>(1.0), 1.0).is_ok(),
+            s.add_single_peak(Length::new::<micrometer>(1.0), 1.0)
+                .is_ok(),
             true
         );
         assert_eq!(s.data[0].1, 2.0);
@@ -671,19 +688,29 @@ mod test {
     #[test]
     fn set_single_peak_wrong_params() {
         let mut s = prep();
-        assert!(s.add_single_peak(Length::new::<meter>(0.5), 1.0).is_err());
-        assert!(s.add_single_peak(Length::new::<meter>(4.0), 1.0).is_err());
-        assert!(s.add_single_peak(Length::new::<meter>(1.5), -1.0).is_err());
+        assert!(s
+            .add_single_peak(Length::new::<micrometer>(0.5), 1.0)
+            .is_err());
+        assert!(s
+            .add_single_peak(Length::new::<micrometer>(4.0), 1.0)
+            .is_err());
+        assert!(s
+            .add_single_peak(Length::new::<micrometer>(1.5), -1.0)
+            .is_err());
     }
     #[test]
     fn add_lorentzian() {
         let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(50.0),
-            Length::new::<meter>(0.1),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(50.0),
+            Length::new::<micrometer>(0.1),
         )
         .unwrap();
         assert!(s
-            .add_lorentzian_peak(Length::new::<meter>(25.0), Length::new::<meter>(0.5), 2.0)
+            .add_lorentzian_peak(
+                Length::new::<micrometer>(25.0),
+                Length::new::<micrometer>(0.5),
+                2.0
+            )
             .is_ok());
         assert!(s.total_energy().abs_diff_eq(&2.0, 0.1));
     }
@@ -691,41 +718,71 @@ mod test {
     fn add_lorentzian_wrong_params() {
         let mut s = prep();
         assert!(s
-            .add_lorentzian_peak(Length::new::<meter>(-5.0), Length::new::<meter>(0.5), 2.0)
+            .add_lorentzian_peak(
+                Length::new::<micrometer>(-5.0),
+                Length::new::<micrometer>(0.5),
+                2.0
+            )
             .is_err());
         assert!(s
-            .add_lorentzian_peak(Length::new::<meter>(2.0), Length::new::<meter>(-0.5), 2.0)
+            .add_lorentzian_peak(
+                Length::new::<micrometer>(2.0),
+                Length::new::<micrometer>(-0.5),
+                2.0
+            )
             .is_err());
         assert!(s
-            .add_lorentzian_peak(Length::new::<meter>(2.0), Length::new::<meter>(0.5), -2.0)
+            .add_lorentzian_peak(
+                Length::new::<micrometer>(2.0),
+                Length::new::<micrometer>(0.5),
+                -2.0
+            )
             .is_err());
     }
     #[test]
     fn total_energy() {
         let mut s = prep();
-        s.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         assert_eq!(s.total_energy(), 1.0);
     }
     #[test]
     fn total_energy2() {
         let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(4.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s.add_single_peak(Length::new::<meter>(1.5), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(1.5), 1.0)
+            .unwrap();
         assert_eq!(s.total_energy(), 1.0);
     }
     #[test]
     fn scale_vertical() {
         let mut s = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s.add_single_peak(Length::new::<meter>(2.5), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(2.5), 1.0)
+            .unwrap();
         assert!(s.scale_vertical(0.5).is_ok());
         assert_eq!(s.data_vec(), vec![0.0, 0.25, 0.25, 0.0]);
+    }
+    #[test]
+    fn scale_vertical2() {
+        let mut s = create_he_ne_spectrum(1.0);
+        let s2 = create_he_ne_spectrum(0.6);
+        s.scale_vertical(0.6).unwrap();
+        assert_eq!(s.total_energy(), s2.total_energy());
+        // let mut expected_spectrum = s2.iter();
+        // for value in s.iter() {
+        //     assert_abs_diff_eq!(
+        //         value.1,
+        //         expected_spectrum.next().unwrap().1,
+        //         epsilon = f64::EPSILON
+        //     );
+        // }
     }
     #[test]
     fn he_ne_spectrum() {
@@ -753,16 +810,17 @@ mod test {
     #[test]
     fn resample() {
         let mut s1 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
         let mut s2 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
         assert_eq!(s1.data, s2.data);
         assert_eq!(s1.total_energy(), s2.total_energy());
@@ -770,17 +828,19 @@ mod test {
     #[test]
     fn resample_delete_old_data() {
         let mut s1 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s1.add_single_peak(Length::new::<meter>(3.0), 1.0).unwrap();
+        s1.add_single_peak(Length::new::<micrometer>(3.0), 1.0)
+            .unwrap();
         let mut s2 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
         assert_eq!(s1.data, s2.data);
         assert_eq!(s1.total_energy(), s2.total_energy());
@@ -788,33 +848,39 @@ mod test {
     #[test]
     fn resample_interp() {
         let mut s1 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(0.5),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
+            Length::new::<micrometer>(0.5),
         )
         .unwrap();
         let mut s2 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(6.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(6.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
-        assert_eq!(s1.data_vec(), vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
+        assert!(s1
+            .data_vec()
+            .iter()
+            .zip(vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0])
+            .all(|v| (*v.0).abs_diff_eq(&v.1, f64::EPSILON)));
     }
     #[test]
     fn resample_interp2() {
         let mut s1 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(5.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
         let mut s2 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(6.0),
-            Length::new::<meter>(0.5),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(6.0),
+            Length::new::<micrometer>(0.5),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
         assert_eq!(s1.data_vec(), vec![0.0, 1.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), s2.total_energy());
@@ -822,16 +888,17 @@ mod test {
     #[test]
     fn resample_right_outside() {
         let mut s1 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(4.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
         let mut s2 = Spectrum::new(
-            Length::new::<meter>(4.0)..Length::new::<meter>(6.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(4.0)..Length::new::<micrometer>(6.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<meter>(4.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(4.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
         assert_eq!(s1.data_vec(), vec![0.0, 0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
@@ -839,16 +906,17 @@ mod test {
     #[test]
     fn resample_left_outside() {
         let mut s1 = Spectrum::new(
-            Length::new::<meter>(4.0)..Length::new::<meter>(6.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(4.0)..Length::new::<micrometer>(6.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
         let mut s2 = Spectrum::new(
-            Length::new::<meter>(1.0)..Length::new::<meter>(4.0),
-            Length::new::<meter>(1.0),
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(4.0),
+            Length::new::<micrometer>(1.0),
         )
         .unwrap();
-        s2.add_single_peak(Length::new::<meter>(2.0), 1.0).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.0), 1.0)
+            .unwrap();
         s1.resample(&s2);
         assert_eq!(s1.data_vec(), vec![0.0, 0.0]);
         assert_eq!(s1.total_energy(), 0.0);
@@ -856,18 +924,22 @@ mod test {
     #[test]
     fn add() {
         let mut s = prep();
-        s.add_single_peak(Length::new::<meter>(1.75), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(1.75), 1.0)
+            .unwrap();
         let mut s2 = prep();
-        s2.add_single_peak(Length::new::<meter>(2.25), 0.5).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.25), 0.5)
+            .unwrap();
         s.add(&s2);
         assert_eq!(s.data_vec(), vec![0.0, 1.0, 1.5, 0.5, 0.0, 0.0]);
     }
     #[test]
     fn sub() {
         let mut s = prep();
-        s.add_single_peak(Length::new::<meter>(1.75), 1.0).unwrap();
+        s.add_single_peak(Length::new::<micrometer>(1.75), 1.0)
+            .unwrap();
         let mut s2 = prep();
-        s2.add_single_peak(Length::new::<meter>(2.25), 0.5).unwrap();
+        s2.add_single_peak(Length::new::<micrometer>(2.25), 0.5)
+            .unwrap();
         s.sub(&s2);
         assert_eq!(s.data_vec(), vec![0.0, 1.0, 0.5, 0.0, 0.0, 0.0]);
     }

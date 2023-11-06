@@ -3,12 +3,12 @@
 
 <svg
    width="162mm"
-   height="162mm"
-   viewBox="0 0 162 162"
+   height="134.63649mm"
+   viewBox="0 0 162 134.63649"
    version="1.1"
    id="svg1"
    inkscape:version="1.3 (0e150ed6c4, 2023-07-21)"
-   sodipodi:docname="Logo_ascii_rect.svg"
+   sodipodi:docname="Logo_square.svg"
    inkscape:export-filename="Logo_ascii.png"
    inkscape:export-xdpi="300"
    inkscape:export-ydpi="300"
@@ -26,15 +26,16 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
-     inkscape:zoom="1.8451378"
-     inkscape:cx="298.3517"
-     inkscape:cy="457.96037"
-     inkscape:window-width="1920"
-     inkscape:window-height="1001"
-     inkscape:window-x="2391"
-     inkscape:window-y="136"
+     inkscape:zoom="0.65235473"
+     inkscape:cx="298.91713"
+     inkscape:cy="405.45426"
+     inkscape:window-width="1680"
+     inkscape:window-height="997"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
      inkscape:window-maximized="1"
-     inkscape:current-layer="layer1" />
+     inkscape:current-layer="layer1"
+     inkscape:export-bgcolor="#ffffffff" />
   <defs
      id="defs1">
     <inkscape:path-effect
@@ -654,7 +655,7 @@
      inkscape:label="Ebene 1"
      inkscape:groupmode="layer"
      id="layer1"
-     transform="translate(-143.09404,33.337499)">
+     transform="translate(-143.09404,19.337502)">
     <g
        id="g3"
        transform="translate(0,14)">

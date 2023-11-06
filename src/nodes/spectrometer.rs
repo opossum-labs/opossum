@@ -1,12 +1,12 @@
 #![warn(missing_docs)]
 use serde_derive::{Deserialize, Serialize};
-use serde_json::json;
 use uom::si::length::nanometer;
 
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Proptype};
+use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -28,6 +28,19 @@ pub enum SpectrometerType {
 impl From<SpectrometerType> for Proptype {
     fn from(value: SpectrometerType) -> Self {
         Proptype::SpectrometerType(value)
+    }
+}
+impl PdfReportable for SpectrometerType {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let element = match self {
+            SpectrometerType::IdealSpectrometer => {
+                genpdf::elements::Text::new("ideal spectrometer")
+            }
+            SpectrometerType::HR2000 => genpdf::elements::Text::new("Ocean Optics HR2000"),
+        };
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        l.push(element);
+        Ok(l)
     }
 }
 /// An (ideal) spectrometer
@@ -143,15 +156,32 @@ impl Optical for Spectrometer {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn report(&self) -> serde_json::Value {
+    fn report(&self) -> Option<NodeReport> {
+        let mut props = Properties::default();
         let data = &self.light_data;
-        let mut energy_data = serde_json::Value::Null;
         if let Some(LightData::Energy(e)) = data {
-            energy_data = e.spectrum.to_json();
+            props
+                .create(
+                    "Spectrum",
+                    "Output spectrum",
+                    None,
+                    e.spectrum.clone().into(),
+                )
+                .unwrap();
+            props
+                .create(
+                    "Model",
+                    "Spectrometer model",
+                    None,
+                    self.props.get("spectrometer type").unwrap().to_owned(),
+                )
+                .unwrap();
         }
-        json!({"type": self.properties().node_type().unwrap(),
-        "name": self.properties().name().unwrap(),
-        "energy": energy_data})
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            props,
+        ))
     }
 }
 
@@ -243,9 +273,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("out1".into()));
+        assert!(output.contains_key("out1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("out1".into()).unwrap();
+        let output = output.get("out1").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
@@ -261,7 +291,7 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        let output = output.get("out1".into()).unwrap();
+        let output = output.get("out1").unwrap();
         assert!(output.is_none());
     }
     #[test]
@@ -277,9 +307,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("in1".into()));
+        assert!(output.contains_key("in1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("in1".into()).unwrap();
+        let output = output.get("in1").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);

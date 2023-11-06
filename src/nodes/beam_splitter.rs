@@ -293,25 +293,30 @@ mod test {
             })),
         );
         let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
-        let output1_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spectrum(0.6),
-        });
-        assert_eq!(
-            output
-                .clone()
-                .get("out1_trans1_refl2")
-                .unwrap()
-                .clone()
-                .unwrap(),
-            output1_light
-        );
-        let output2_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spectrum(0.4),
-        });
-        assert_eq!(
-            output.get("out2_trans2_refl1").unwrap().clone().unwrap(),
-            output2_light
-        );
+        let result = output
+            .clone()
+            .get("out1_trans1_refl2")
+            .unwrap()
+            .clone()
+            .unwrap();
+        let energy = if let LightData::Energy(e) = result {
+            e.spectrum.total_energy()
+        } else {
+            0.0
+        };
+        assert_eq!(energy, 0.6);
+        let result = output
+            .clone()
+            .get("out2_trans2_refl1")
+            .unwrap()
+            .clone()
+            .unwrap();
+        let energy = if let LightData::Energy(e) = result {
+            e.spectrum.total_energy()
+        } else {
+            0.0
+        };
+        assert_eq!(energy, 0.4);
     }
     #[test]
     fn analyze_two_input() {

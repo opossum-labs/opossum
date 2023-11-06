@@ -1,5 +1,6 @@
 use clap::Parser;
 use opossum::error::OpmResult;
+use opossum::reporter::ReportGenerator;
 use opossum::{
     OpticScenery,
     {
@@ -47,12 +48,17 @@ fn main() -> OpmResult<()> {
     let _ = io::stdout().flush();
     let mut output = File::create(report_path)
         .map_err(|e| OpossumError::Other(format!("report file creation failed: {}", e)))?;
+    let analysis_report = scenery.report(&opossum_args.report_directory);
     write!(
         output,
         "{}",
-        serde_json::to_string_pretty(&scenery.report(&opossum_args.report_directory)).unwrap()
+        serde_json::to_string_pretty(&analysis_report).unwrap()
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {}", e)))?;
+    let pdf_generator = ReportGenerator::new(analysis_report);
+    let mut report_path = opossum_args.report_directory.clone();
+    report_path.push("report.pdf");
+    pdf_generator.generate_pdf(&report_path)?;
     println!("Success");
     Ok(())
 }

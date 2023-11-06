@@ -121,9 +121,18 @@ impl Optical for Source {
         if name != "inverted" {
             self.props.set(name, prop)
         } else {
-            Err(OpossumError::Properties(
-                "Cannot change the inversion status of a source node!".into(),
-            ))
+            let inverted = if let Proptype::Bool(inverted) = prop {
+                inverted
+            } else {
+                false
+            };
+            if inverted {
+                Err(OpossumError::Properties(
+                    "Cannot change the inversion status of a source node!".into(),
+                ))
+            } else {
+                Ok(())
+            }
         }
     }
 }
@@ -155,6 +164,7 @@ mod test {
     #[test]
     fn not_invertable() {
         let mut node = Source::default();
+        assert!(node.set_property("inverted", false.into()).is_ok());
         assert!(node.set_property("inverted", true.into()).is_err());
     }
     #[test]
@@ -179,9 +189,9 @@ mod test {
         let output = node.analyze(incoming_data, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("out1".into()));
+        assert!(output.contains_key("out1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("out1".into()).unwrap();
+        let output = output.get("out1").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, light);

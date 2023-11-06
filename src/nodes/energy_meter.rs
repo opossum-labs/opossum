@@ -1,15 +1,14 @@
 #![warn(missing_docs)]
-use serde_derive::{Deserialize, Serialize};
-use serde_json::{json, Number};
-
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Proptype};
+use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
 };
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -26,6 +25,17 @@ pub enum Metertype {
 impl From<Metertype> for Proptype {
     fn from(value: Metertype) -> Self {
         Proptype::Metertype(value)
+    }
+}
+impl PdfReportable for Metertype {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let element = match self {
+            Metertype::IdealEnergyMeter => genpdf::elements::Text::new("ideal energy meter"),
+            Metertype::IdealPowerMeter => genpdf::elements::Text::new("ideal power meter"),
+        };
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        l.push(element);
+        Ok(l)
     }
 }
 /// An (ideal) energy / power meter.
@@ -128,16 +138,32 @@ impl Optical for EnergyMeter {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn report(&self) -> serde_json::Value {
+    fn report(&self) -> Option<NodeReport> {
+        let mut props = Properties::default();
         let data = &self.light_data;
-        let mut energy_data = serde_json::Value::Null;
         if let Some(LightData::Energy(e)) = data {
-            energy_data =
-                serde_json::Value::Number(Number::from_f64(e.spectrum.total_energy()).unwrap())
-        }
-        json!({"type": self.properties().node_type().unwrap(),
-        "name": self.properties().name().unwrap(),
-        "energy": energy_data})
+            props
+                .create(
+                    "Energy",
+                    "Output energy",
+                    None,
+                    e.spectrum.total_energy().into(),
+                )
+                .unwrap();
+            props
+                .create(
+                    "Model",
+                    "type of meter",
+                    None,
+                    self.props.get("meter type").unwrap().to_owned(),
+                )
+                .unwrap();
+        };
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            props,
+        ))
     }
 }
 

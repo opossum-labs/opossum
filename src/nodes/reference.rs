@@ -219,9 +219,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("rear".into()));
+        assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear".into()).unwrap();
+        let output = output.get("rear").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
@@ -241,9 +241,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("front".into()));
+        assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
-        let output = output.get("front".into()).unwrap();
+        let output = output.get("front").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
