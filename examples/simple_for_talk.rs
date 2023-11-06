@@ -1,5 +1,5 @@
 use nalgebra::Point2;
-use opossum::aperture::{CircleConfig, Aperture};
+use opossum::aperture::{Aperture, CircleConfig};
 use opossum::error::OpossumError;
 use opossum::lightdata::{DataEnergy, LightData};
 use opossum::nodes::{Dummy, EnergyMeter, Source};
@@ -19,7 +19,8 @@ fn main() -> Result<(), OpossumError> {
     ));
     let mut dummy = Dummy::new("optic");
     dummy.set_input_aperture(
-        "front", Aperture::BinaryCircle(CircleConfig::new(1.5, Point2::new(1.0, 1.0))?),
+        "front",
+        Aperture::BinaryCircle(CircleConfig::new(1.5, Point2::new(1.0, 1.0))?),
     )?;
     let node2 = scenery.add_node(dummy);
     let node3 = scenery.add_node(EnergyMeter::default());

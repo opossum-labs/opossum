@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! Handling of input and output ports of optical elements.
-//! 
+//!
 //! An optical ports represents an interface of an optical element. The ports defines the way how nodes can be connected to each other.
 //! For example, a simple filter contains one input and one output port. Each port has a (distinct) name and an [`Aperture`] (which is set to
 //! [`Aperture::None`] by default). Furthermore, [`OpticPorts`] can be inverted (see inverted optic nodes). In this case input and output nodes
@@ -9,19 +9,19 @@
 //! use opossum::optic_ports::OpticPorts;
 //! use nalgebra::Point2;
 //! use opossum::aperture::{CircleConfig, Aperture};
-//! 
+//!
 //! let mut ports=OpticPorts::new();
 //! ports.create_input("my input").unwrap();
 //! let circle_config = CircleConfig::new(1.5, Point2::new(1.0, 1.0)).unwrap();
 //! ports.set_input_aperture("my input", Aperture::BinaryCircle(circle_config)).unwrap();
 //! ```
- 
-use serde_derive::{Deserialize, Serialize};
+
 use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},
     properties::Proptype,
 };
+use serde_derive::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
 
 /// Structure defining the optical ports (input / output terminals) of an [`Optical`](crate::optical::Optical).
@@ -83,7 +83,7 @@ impl OpticPorts {
         }
     }
     /// Add a new input port with the given name.
-    /// 
+    ///
     /// The port aperture is set to [`Aperture::None`].
     ///
     /// # Errors
@@ -100,7 +100,7 @@ impl OpticPorts {
         }
     }
     /// Add a new output port with the given name.
-    /// 
+    ///
     /// The port aperture is set to [`Aperture::None`].
     ///
     /// # Errors
@@ -117,7 +117,7 @@ impl OpticPorts {
         }
     }
     /// Sets the aperture of an input port with the given name.
-    /// 
+    ///
     /// The input port must have already been created before.
     ///
     /// # Errors
@@ -135,7 +135,7 @@ impl OpticPorts {
         }
     }
     /// Sets the aperture of an output port with the given name.
-    /// 
+    ///
     /// The output port must have already been created before.
     ///
     /// # Errors
@@ -153,7 +153,7 @@ impl OpticPorts {
         }
     }
     /// Sets the (input & ouput port) apertures of this [`OpticPorts`] from another [`OpticPorts`].
-    /// 
+    ///
     /// This is a convenience function during deserialization of an optical element.
     ///
     /// # Errors
@@ -169,7 +169,7 @@ impl OpticPorts {
         Ok(())
     }
     /// Mark the [`OpticPorts`] as `inverted`.
-    /// 
+    ///
     /// This swaps input and output ports.
     pub fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;
