@@ -1087,6 +1087,7 @@ dependencies = [
  "ncollide2d",
  "petgraph",
  "plotters",
+ "rand",
  "rprompt",
  "serde",
  "serde_derive",
