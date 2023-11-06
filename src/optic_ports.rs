@@ -1,5 +1,22 @@
+#![warn(missing_docs)]
+//! Handling of input and output ports of optical elements.
+//! 
+//! An optical ports represents an interface of an optical element. The ports defines the way how nodes can be connected to each other.
+//! For example, a simple filter contains one input and one output port. Each port has a (distinct) name and an [`Aperture`] (which is set to
+//! [`Aperture::None`] by default). Furthermore, [`OpticPorts`] can be inverted (see inverted optic nodes). In this case input and output nodes
+//! are swapped.
+//! ```rust
+//! use opossum::optic_ports::OpticPorts;
+//! use nalgebra::Point2;
+//! use opossum::aperture::{CircleConfig, Aperture};
+//! 
+//! let mut ports=OpticPorts::new();
+//! ports.create_input("my input").unwrap();
+//! let circle_config = CircleConfig::new(1.5, Point2::new(1.0, 1.0)).unwrap();
+//! ports.set_input_aperture("my input", Aperture::BinaryCircle(circle_config)).unwrap();
+//! ```
+ 
 use serde_derive::{Deserialize, Serialize};
-
 use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},
@@ -17,9 +34,11 @@ pub struct OpticPorts {
 }
 
 impl OpticPorts {
+    /// Creates a new (empty) [`OpticPorts`] structure.
     pub fn new() -> Self {
         Self::default()
     }
+    /// Returns the input port names of this [`OpticPorts`].
     pub fn input_names(&self) -> Vec<String> {
         if self.inverted {
             self.outputs
@@ -33,6 +52,7 @@ impl OpticPorts {
                 .collect::<Vec<String>>()
         }
     }
+    /// Returns the output port names of this [`OpticPorts`].
     pub fn output_names(&self) -> Vec<String> {
         if self.inverted {
             self.inputs
@@ -46,6 +66,7 @@ impl OpticPorts {
                 .collect::<Vec<String>>()
         }
     }
+    /// Returns a reference to the input ports of this [`OpticPorts`].
     pub fn inputs(&self) -> &BTreeMap<String, Aperture> {
         if self.inverted {
             &self.outputs
@@ -53,6 +74,7 @@ impl OpticPorts {
             &self.inputs
         }
     }
+    /// Returns a reference to the output ports of this [`OpticPorts`].
     pub fn outputs(&self) -> &BTreeMap<String, Aperture> {
         if self.inverted {
             &self.inputs
@@ -60,9 +82,16 @@ impl OpticPorts {
             &self.outputs
         }
     }
-    pub fn create_input(&mut self, name: &str) -> OpmResult<Vec<String>> {
+    /// Add a new input port with the given name.
+    /// 
+    /// The port aperture is set to [`Aperture::None`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the input port name already exists.
+    pub fn create_input(&mut self, name: &str) -> OpmResult<()> {
         if self.inputs.insert(name.into(), Aperture::None).is_none() {
-            Ok(self.input_names())
+            Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
                 "input port with name {} already exists",
@@ -70,9 +99,16 @@ impl OpticPorts {
             )))
         }
     }
-    pub fn create_output(&mut self, name: &str) -> OpmResult<Vec<String>> {
+    /// Add a new output port with the given name.
+    /// 
+    /// The port aperture is set to [`Aperture::None`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the output port name already exists.
+    pub fn create_output(&mut self, name: &str) -> OpmResult<()> {
         if self.outputs.insert(name.into(), Aperture::None).is_none() {
-            Ok(self.output_names())
+            Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
                 "output port with name {} already exists",
@@ -80,6 +116,13 @@ impl OpticPorts {
             )))
         }
     }
+    /// Sets the aperture of an input port with the given name.
+    /// 
+    /// The input port must have already been created before.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the port name does not exist.
     pub fn set_input_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
         if self.inputs.contains_key(port_name) {
             self.inputs.insert(port_name.to_owned(), aperture);
@@ -91,6 +134,13 @@ impl OpticPorts {
             )))
         }
     }
+    /// Sets the aperture of an output port with the given name.
+    /// 
+    /// The output port must have already been created before.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the port name does not exist.
     pub fn set_output_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
         if self.outputs.contains_key(port_name) {
             self.outputs.insert(port_name.to_owned(), aperture);
@@ -102,6 +152,13 @@ impl OpticPorts {
             )))
         }
     }
+    /// Sets the (input & ouput port) apertures of this [`OpticPorts`] from another [`OpticPorts`].
+    /// 
+    /// This is a convenience function during deserialization of an optical element.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the port names in `set_ports` are not found.
     pub fn set_apertures(&mut self, set_ports: OpticPorts) -> OpmResult<()> {
         for set_port in set_ports.inputs {
             self.set_input_aperture(&set_port.0, set_port.1)?;
@@ -111,14 +168,11 @@ impl OpticPorts {
         }
         Ok(())
     }
-    pub fn check_if_port_exists(&self, port_name: &str) -> bool {
-        self.inputs.contains_key(port_name) || self.outputs.contains_key(port_name)
-    }
+    /// Mark the [`OpticPorts`] as `inverted`.
+    /// 
+    /// This swaps input and output ports.
     pub fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;
-    }
-    pub fn inverted(&self) -> bool {
-        self.inverted
     }
 }
 impl From<OpticPorts> for Proptype {
@@ -169,14 +223,14 @@ mod test {
     #[test]
     fn add_input_twice() {
         let mut ports = OpticPorts::new();
-        assert_eq!(ports.create_input("Test").unwrap(), vec!["Test"]);
+        assert!(ports.create_input("Test").is_ok());
         assert!(ports.create_input("Test").is_err());
         assert_eq!(ports.inputs.len(), 1);
     }
     #[test]
     fn add_output_ok() {
         let mut ports = OpticPorts::new();
-        assert_eq!(ports.create_output("Test").unwrap(), vec!["Test"]);
+        assert!(ports.create_output("Test").is_ok());
         assert_eq!(ports.outputs.len(), 1);
     }
     #[test]
@@ -237,12 +291,6 @@ mod test {
         let mut ports = OpticPorts::new();
         ports.set_inverted(true);
         assert_eq!(ports.inverted, true);
-    }
-    #[test]
-    fn inverted() {
-        let mut ports = OpticPorts::new();
-        ports.set_inverted(true);
-        assert_eq!(ports.inverted(), true);
     }
     #[test]
     fn display_empty() {
