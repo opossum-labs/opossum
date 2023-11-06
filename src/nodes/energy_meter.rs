@@ -1,15 +1,14 @@
 #![warn(missing_docs)]
-use serde_derive::{Deserialize, Serialize};
-use serde_json::{json, Number};
-
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{Properties, Proptype};
+use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
 };
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -26,6 +25,17 @@ pub enum Metertype {
 impl From<Metertype> for Proptype {
     fn from(value: Metertype) -> Self {
         Proptype::Metertype(value)
+    }
+}
+impl PdfReportable for Metertype {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let element = match self {
+            Metertype::IdealEnergyMeter => genpdf::elements::Text::new("ideal energy meter"),
+            Metertype::IdealPowerMeter => genpdf::elements::Text::new("ideal power meter"),
+        };
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        l.push(element);
+        Ok(l)
     }
 }
 /// An (ideal) energy / power meter.
@@ -51,26 +61,7 @@ pub struct EnergyMeter {
 }
 
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the energy meter",
-            Some(vec![PropCondition::NonEmptyString]),
-            "energy meter".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "energy meter".into(),
-        )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
+    let mut props = Properties::new("energy meter", "energy meter");
     props
         .create(
             "meter type",
@@ -79,6 +70,10 @@ fn create_default_props() -> Properties {
             Metertype::default().into(),
         )
         .unwrap();
+    let mut ports = OpticPorts::new();
+    ports.create_input("in1").unwrap();
+    ports.create_output("out1").unwrap();
+    props.set("apertures", ports.into()).unwrap();
     props
 }
 
@@ -115,15 +110,6 @@ impl EnergyMeter {
     }
 }
 impl Optical for EnergyMeter {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_input("in1").unwrap();
-        ports.add_output("out1").unwrap();
-        if self.properties().inverted() {
-            ports.set_inverted(true);
-        }
-        ports
-    }
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -147,16 +133,32 @@ impl Optical for EnergyMeter {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn report(&self) -> serde_json::Value {
+    fn report(&self) -> Option<NodeReport> {
+        let mut props = Properties::default();
         let data = &self.light_data;
-        let mut energy_data = serde_json::Value::Null;
         if let Some(LightData::Energy(e)) = data {
-            energy_data =
-                serde_json::Value::Number(Number::from_f64(e.spectrum.total_energy()).unwrap())
-        }
-        json!({"type": self.properties().node_type().unwrap(),
-        "name": self.properties().name().unwrap(),
-        "energy": energy_data})
+            props
+                .create(
+                    "Energy",
+                    "Output energy",
+                    None,
+                    e.spectrum.total_energy().into(),
+                )
+                .unwrap();
+            props
+                .create(
+                    "Model",
+                    "type of meter",
+                    None,
+                    self.props.get("meter type").unwrap().to_owned(),
+                )
+                .unwrap();
+        };
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            props,
+        ))
     }
 }
 
@@ -212,15 +214,15 @@ mod test {
     #[test]
     fn ports() {
         let meter = EnergyMeter::default();
-        assert_eq!(meter.ports().inputs(), vec!["in1"]);
-        assert_eq!(meter.ports().outputs(), vec!["out1"]);
+        assert_eq!(meter.ports().input_names(), vec!["in1"]);
+        assert_eq!(meter.ports().output_names(), vec!["out1"]);
     }
     #[test]
     fn ports_inverted() {
         let mut meter = EnergyMeter::default();
         meter.set_property("inverted", true.into()).unwrap();
-        assert_eq!(meter.ports().inputs(), vec!["out1"]);
-        assert_eq!(meter.ports().outputs(), vec!["in1"]);
+        assert_eq!(meter.ports().input_names(), vec!["out1"]);
+        assert_eq!(meter.ports().output_names(), vec!["in1"]);
     }
     #[test]
     fn analyze() {

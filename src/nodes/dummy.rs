@@ -1,12 +1,11 @@
 #![warn(missing_docs)]
-use serde_json::json;
-
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{Properties, Proptype};
+use crate::reporter::NodeReport;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -28,55 +27,28 @@ pub struct Dummy {
     props: Properties,
 }
 
-fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the dummy element",
-            Some(vec![PropCondition::NonEmptyString]),
-            "dummy".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "dummy".into(),
-        )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
-    props
-}
-
 impl Default for Dummy {
     fn default() -> Self {
-        Self {
-            props: create_default_props(),
-        }
+        let mut ports = OpticPorts::new();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
+        let mut props = Properties::new("dummy", "dummy");
+        props.set("apertures", ports.into()).unwrap();
+        Self { props }
     }
 }
 impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
     pub fn new(name: &str) -> Self {
-        let mut props = create_default_props();
-        props.set("name", name.into()).unwrap();
+        let mut ports = OpticPorts::new();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
+        let mut props = Properties::new(name, "dummy");
+        props.set("apertures", ports.into()).unwrap();
         Self { props }
     }
 }
 impl Optical for Dummy {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_input("front").unwrap();
-        ports.add_output("rear").unwrap();
-        if self.properties().inverted() {
-            ports.set_inverted(true)
-        }
-        ports
-    }
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -96,9 +68,12 @@ impl Optical for Dummy {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn report(&self) -> serde_json::Value {
-        json!({"type": self.properties().node_type().unwrap(),
-        "name": self.properties().name().unwrap()})
+    fn report(&self) -> Option<NodeReport> {
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            self.props.clone(),
+        ))
     }
 }
 
@@ -132,6 +107,11 @@ mod test {
         assert_eq!(node.properties().name().unwrap(), "Test1")
     }
     #[test]
+    fn node_type_readonly() {
+        let mut node = Dummy::default();
+        assert!(node.set_property("node_type", "other".into()).is_err());
+    }
+    #[test]
     fn inverted() {
         let mut node = Dummy::default();
         node.set_property("inverted", true.into()).unwrap();
@@ -140,15 +120,15 @@ mod test {
     #[test]
     fn ports() {
         let node = Dummy::default();
-        assert_eq!(node.ports().inputs(), vec!["front"]);
-        assert_eq!(node.ports().outputs(), vec!["rear"]);
+        assert_eq!(node.ports().input_names(), vec!["front"]);
+        assert_eq!(node.ports().output_names(), vec!["rear"]);
     }
     #[test]
     fn ports_inverted() {
         let mut node = Dummy::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.ports().inputs(), vec!["rear"]);
-        assert_eq!(node.ports().outputs(), vec!["front"]);
+        assert_eq!(node.ports().input_names(), vec!["rear"]);
+        assert_eq!(node.ports().output_names(), vec!["front"]);
     }
     #[test]
     fn is_detector() {
@@ -171,9 +151,9 @@ mod test {
         let output = dummy.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("rear".into()));
+        assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear".into()).unwrap();
+        let output = output.get("rear").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
@@ -189,7 +169,7 @@ mod test {
         let output = dummy.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        let output = output.get("rear".into()).unwrap();
+        let output = output.get("rear").unwrap();
         assert!(output.is_none());
     }
     #[test]
@@ -205,9 +185,9 @@ mod test {
         let output = dummy.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("front".into()));
+        assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
-        let output = output.get("front".into()).unwrap();
+        let output = output.get("front").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);

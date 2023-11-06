@@ -24,14 +24,14 @@ impl AnalyzerEnergy {
 #[derive(EnumIter, PartialEq, Debug)]
 pub enum AnalyzerType {
     Energy,
-    ParAxialRayTrace,
+    RayTrace,
 }
 
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = match self {
             AnalyzerType::Energy => "energy",
-            AnalyzerType::ParAxialRayTrace => "paraxial ray tracing",
+            AnalyzerType::RayTrace => "ray tracing",
         };
         write!(f, "{}", msg)
     }

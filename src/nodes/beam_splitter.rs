@@ -32,23 +32,7 @@ pub struct BeamSplitter {
 }
 
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the beamsplitter",
-            Some(vec![PropCondition::NonEmptyString]),
-            "beam splitter".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "node type of the beamsplitter",
-            Some(vec![PropCondition::NonEmptyString]),
-            "beam splitter".into(),
-        )
-        .unwrap();
+    let mut props = Properties::new("beam splitter", "beam splitter");
     props
         .create(
             "ratio",
@@ -60,9 +44,12 @@ fn create_default_props() -> Properties {
             0.5.into(),
         )
         .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
+    let mut ports = OpticPorts::new();
+    ports.create_input("input1").unwrap();
+    ports.create_input("input2").unwrap();
+    ports.create_output("out1_trans1_refl2").unwrap();
+    ports.create_output("out2_trans2_refl1").unwrap();
+    props.set("apertures", ports.into()).unwrap();
     props
 }
 impl BeamSplitter {
@@ -75,8 +62,6 @@ impl BeamSplitter {
         let mut props = create_default_props();
         props.set("ratio", ratio.into())?;
         props.set("name", name.into())?;
-        props.set("node_type", "beam splitter".into())?;
-        props.set("inverted", Proptype::Bool(false))?;
         Ok(Self { props })
     }
 
@@ -182,18 +167,6 @@ impl Default for BeamSplitter {
     }
 }
 impl Optical for BeamSplitter {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_input("input1").unwrap();
-        ports.add_input("input2").unwrap();
-        ports.add_output("out1_trans1_refl2").unwrap();
-        ports.add_output("out2_trans2_refl1").unwrap();
-        if self.properties().get_bool("inverted").unwrap().unwrap() {
-            ports.set_inverted(true)
-        }
-        ports
-    }
-
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -269,10 +242,10 @@ mod test {
     #[test]
     fn ports() {
         let node = BeamSplitter::default();
-        let mut input_ports = node.ports().inputs();
+        let mut input_ports = node.ports().input_names();
         input_ports.sort();
         assert_eq!(input_ports, vec!["input1", "input2"]);
-        let mut output_ports = node.ports().outputs();
+        let mut output_ports = node.ports().output_names();
         output_ports.sort();
         assert_eq!(output_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
     }
@@ -280,10 +253,10 @@ mod test {
     fn ports_inverted() {
         let mut node = BeamSplitter::default();
         node.set_property("inverted", true.into()).unwrap();
-        let mut input_ports = node.ports().inputs();
+        let mut input_ports = node.ports().input_names();
         input_ports.sort();
         assert_eq!(input_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
-        let mut output_ports = node.ports().outputs();
+        let mut output_ports = node.ports().output_names();
         output_ports.sort();
         assert_eq!(output_ports, vec!["input1", "input2"]);
     }
@@ -291,9 +264,7 @@ mod test {
     fn analyze_wrong_analyszer() {
         let mut node = BeamSplitter::default();
         let input = LightResult::default();
-        assert!(node
-            .analyze(input, &AnalyzerType::ParAxialRayTrace)
-            .is_err());
+        assert!(node.analyze(input, &AnalyzerType::RayTrace).is_err());
     }
     #[test]
     fn analyze_empty_input() {
@@ -316,25 +287,30 @@ mod test {
             })),
         );
         let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
-        let output1_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spectrum(0.6),
-        });
-        assert_eq!(
-            output
-                .clone()
-                .get("out1_trans1_refl2")
-                .unwrap()
-                .clone()
-                .unwrap(),
-            output1_light
-        );
-        let output2_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spectrum(0.4),
-        });
-        assert_eq!(
-            output.get("out2_trans2_refl1").unwrap().clone().unwrap(),
-            output2_light
-        );
+        let result = output
+            .clone()
+            .get("out1_trans1_refl2")
+            .unwrap()
+            .clone()
+            .unwrap();
+        let energy = if let LightData::Energy(e) = result {
+            e.spectrum.total_energy()
+        } else {
+            0.0
+        };
+        assert_eq!(energy, 0.6);
+        let result = output
+            .clone()
+            .get("out2_trans2_refl1")
+            .unwrap()
+            .clone()
+            .unwrap();
+        let energy = if let LightData::Energy(e) = result {
+            e.spectrum.total_energy()
+        } else {
+            0.0
+        };
+        assert_eq!(energy, 0.4);
     }
     #[test]
     fn analyze_two_input() {

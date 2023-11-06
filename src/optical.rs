@@ -1,13 +1,13 @@
 //! Contains the basic trait representing an optical element
-use serde_json::json;
-
 use crate::analyzer::AnalyzerType;
+use crate::aperture::Aperture;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::nodes::{NodeGroup, NodeReference};
 use crate::optic_ports::OpticPorts;
 use crate::properties::{Properties, Proptype};
+use crate::reporter::NodeReport;
 use core::fmt::Debug;
 use std::collections::HashMap;
 use std::path::Path;
@@ -24,7 +24,41 @@ pub trait Optical: Dottable {
     // fn node_type(&self) -> &str;
     // /// Return the available (input & output) ports of this [`Optical`].
     fn ports(&self) -> OpticPorts {
-        OpticPorts::default()
+        if let Proptype::OpticPorts(ports) = self.properties().get("apertures").unwrap() {
+            let mut ports = ports.clone();
+            if self.properties().get_bool("inverted").unwrap().unwrap() {
+                ports.set_inverted(true);
+            }
+            ports
+        } else {
+            panic!("property <apertures> not found")
+        }
+    }
+    fn set_input_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
+        let mut ports = self.ports();
+        if ports.inputs().contains_key(port_name) {
+            ports.set_input_aperture(port_name, aperture)?;
+            self.set_property("apertures", ports.into())?;
+            Ok(())
+        } else {
+            Err(OpossumError::OpticPort(format!(
+                "input port name <{}> does not exist",
+                port_name
+            )))
+        }
+    }
+    fn set_output_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
+        let mut ports = self.ports();
+        if ports.outputs().contains_key(port_name) {
+            ports.set_output_aperture(port_name, aperture)?;
+            self.set_property("apertures", ports.into())?;
+            Ok(())
+        } else {
+            Err(OpossumError::OpticPort(format!(
+                "output port name <{}> does not exist",
+                port_name
+            )))
+        }
     }
     /// Perform an analysis of this element. The type of analysis is given by an [`AnalyzerType`].
     ///
@@ -61,23 +95,27 @@ pub trait Optical: Dottable {
     ///
     /// # Errors
     ///
-    /// This function will return an error if the [`Optical`] does not have the [`node_type`](`Optical::node_type`) "group".
+    /// This function will return an error if the [`Optical`] does not have the `node_type` property "group".
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
-    /// Return a downcasted mutable reference of a [`NodeGroup`].
+    /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
+    /// function does nothing and returns no error.
+    ///
+    /// Currently thsi function is needed for group nodes whose internal graph structure must be synchronized with the
+    /// graph stored in theirs properties
     ///
     /// # Errors
     ///
-    /// This function will return an error if the [`Optical`] does not have the [`node_type`](`Optical::node_type`) "group".
-    fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
-        Err(OpossumError::Other("cannot cast to group".into()))
+    /// This function will return an error if the overwritten function generates an error.
+    fn after_deserialization_hook(&mut self) -> OpmResult<()> {
+        Ok(())
     }
     /// Return a downcasted mutable reference of a [`NodeReference`].
     ///
     /// # Errors
     ///
-    /// This function will return an error if the [`Optical`] does not have the [`node_type`](Optical::node_type) "reference".
+    /// This function will return an error if the [`Optical`] does not have the `node_type` property "reference".
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Err(OpossumError::Other("cannot cast to reference node".into()))
     }
@@ -105,7 +143,17 @@ pub trait Optical: Dottable {
         let own_properties = self.properties().clone();
         for prop in properties.iter() {
             if own_properties.contains(prop.0) {
-                self.set_property(prop.0, prop.1.prop().clone())?;
+                match prop.0.as_str() {
+                    "node_type" => {}
+                    "apertures" => {
+                        let mut ports = self.ports();
+                        if let Proptype::OpticPorts(ports_to_be_set) = prop.1.prop().clone() {
+                            ports.set_apertures(ports_to_be_set)?;
+                            self.set_property("apertures", ports.into())?;
+                        }
+                    }
+                    _ => self.set_property(prop.0, prop.1.prop().clone())?,
+                };
             }
         }
         Ok(())
@@ -114,8 +162,8 @@ pub trait Optical: Dottable {
     ///
     /// This function must be overridden for generating output in the analysis report. Mainly detector nodes use this feature.
     /// The default implementation is to return a JSON `null` value.
-    fn report(&self) -> serde_json::Value {
-        json!(null)
+    fn report(&self) -> Option<NodeReport> {
+        None
     }
 }
 

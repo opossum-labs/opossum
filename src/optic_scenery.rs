@@ -1,7 +1,7 @@
 //! The basic structure containing the entire optical model
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Cursor, Write};
 use std::path::Path;
 
 use crate::analyzer::AnalyzerType;
@@ -14,13 +14,18 @@ use crate::optic_graph::OpticGraph;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
+use crate::reporter::{AnalysisReport, PdfReportable};
 use chrono::Local;
+use genpdf::Alignment;
+use image::io::Reader;
+use image::DynamicImage;
 use petgraph::algo::*;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
+use tempfile::NamedTempFile;
 
 /// Overall optical model and additional metadata.
 ///
@@ -143,9 +148,31 @@ impl OpticScenery {
         dot_string.push_str("}\n");
         Ok(dot_string)
     }
+    pub fn to_dot_img(&self) -> OpmResult<DynamicImage> {
+        let dot_string = self.to_dot("")?;
+        let mut f = NamedTempFile::new()
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {}", e)))?;
+        f.write_all(dot_string.as_bytes())
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {}", e)))?;
+        let r = std::process::Command::new("dot")
+            .arg(f.path())
+            .arg("-Tpng")
+            .output()
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {}", e)))?;
+        let img = Reader::new(Cursor::new(r.stdout))
+            .with_guessed_format()
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {}", e)))?
+            .decode()
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {}", e)))?
+            .into_rgb8();
+        let img = DynamicImage::ImageRgb8(img);
+        Ok(img)
+    }
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
         let mut dot_string = String::from("digraph {\n\tfontsize = 8\n");
+        dot_string.push_str("\tsize = 5.0;\n");
+        dot_string.push_str("\tdpi = 400.0;\n");
         dot_string.push_str("\tcompound = true;\n");
         dot_string.push_str(&format!("\trankdir = \"{}\";\n", rankdir));
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description()));
@@ -182,7 +209,7 @@ impl OpticScenery {
             let node = self.g.0.node_weight(idx).unwrap();
             let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
             // paranoia: check if all incoming ports are really input ports of the node to be analyzed
-            let input_ports = node.optical_ref.borrow().ports().inputs();
+            let input_ports = node.optical_ref.borrow().ports().input_names();
             if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
                 return Err(OpossumError::Analysis("input light data contains port which is not an input port of the node. Data will be discarded.".into()));
             }
@@ -249,24 +276,21 @@ impl OpticScenery {
             }
         } // else outgoing edge not connected
     }
-    pub fn report(&self, report_dir: &Path) -> serde_json::Value {
-        let mut report = serde_json::Map::new();
-        report.insert("opossum version".into(), get_version().into());
-        report.insert("analysis timestamp".into(), Local::now().to_string().into());
-
+    pub fn report(&self, report_dir: &Path) -> AnalysisReport {
+        let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
+        analysis_report.add_scenery(self);
         let detector_nodes = self
             .g
             .0
             .node_weights()
             .filter(|node| node.optical_ref.borrow().is_detector());
-        let mut detectors: Vec<serde_json::Value> = Vec::new();
         for node in detector_nodes {
-            detectors.push(node.optical_ref.borrow().report());
+            if let Some(node_report) = node.optical_ref.borrow().report() {
+                analysis_report.add_detector(node_report);
+            }
             node.optical_ref.borrow().export_data(report_dir);
         }
-        let detector_json = serde_json::Value::Array(detectors);
-        report.insert("detectors".into(), detector_json);
-        serde_json::Value::Object(report)
+        analysis_report
     }
     pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
         let serialized = serde_json::to_string_pretty(&self).map_err(|e| {
@@ -401,12 +425,22 @@ impl<'de> Deserialize<'de> for OpticScenery {
         deserializer.deserialize_struct("OpticScenery", FIELDS, OpticSceneryVisitor)
     }
 }
+impl PdfReportable for OpticScenery {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        let diagram = self.to_dot_img()?;
+        let img = genpdf::elements::Image::from_dynamic_image(diagram)
+            .map_err(|e| format!("failed to add diagram to report: {}", e))?
+            .with_alignment(Alignment::Center);
+        l.push(img);
+        Ok(l)
+    }
+}
 #[cfg(test)]
 mod test {
-    use crate::nodes::Metertype;
-
     use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
+    use crate::nodes::Metertype;
     use std::{fs::File, io::Read};
     #[test]
     fn new() {

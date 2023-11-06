@@ -9,7 +9,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::optic_ports::OpticPorts;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{Properties, Proptype};
 
 #[derive(Debug)]
 /// A virtual component referring to another existing component.
@@ -30,26 +30,7 @@ pub struct NodeReference {
     props: Properties,
 }
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the reference node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "reference".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "reference".into(),
-        )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
+    let mut props = Properties::new("reference", "reference");
     props
         .create(
             "reference id",
@@ -204,16 +185,16 @@ mod test {
     #[test]
     fn ports_empty() {
         let node = NodeReference::default();
-        assert!(node.ports().inputs().is_empty());
-        assert!(node.ports().outputs().is_empty());
+        assert!(node.ports().input_names().is_empty());
+        assert!(node.ports().output_names().is_empty());
     }
     #[test]
     fn ports_non_empty() {
         let mut scenery = OpticScenery::default();
         let idx = scenery.add_node(Dummy::default());
         let node = NodeReference::from_node(scenery.node(idx).unwrap());
-        assert_eq!(node.ports().inputs(), vec!["front"]);
-        assert_eq!(node.ports().outputs(), vec!["rear"]);
+        assert_eq!(node.ports().input_names(), vec!["front"]);
+        assert_eq!(node.ports().output_names(), vec!["rear"]);
     }
     #[test]
     fn ports_inverted() {
@@ -221,8 +202,8 @@ mod test {
         let idx = scenery.add_node(Dummy::default());
         let mut node = NodeReference::from_node(scenery.node(idx).unwrap());
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.ports().inputs(), vec!["rear"]);
-        assert_eq!(node.ports().outputs(), vec!["front"]);
+        assert_eq!(node.ports().input_names(), vec!["rear"]);
+        assert_eq!(node.ports().output_names(), vec!["front"]);
     }
     #[test]
     fn analyze() {
@@ -238,9 +219,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("rear".into()));
+        assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear".into()).unwrap();
+        let output = output.get("rear").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
@@ -260,9 +241,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("front".into()));
+        assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
-        let output = output.get("front".into()).unwrap();
+        let output = output.get("front").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);

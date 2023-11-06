@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{Properties, Proptype};
 use crate::{
     dottable::Dottable,
     optic_ports::OpticPorts,
@@ -30,42 +30,27 @@ pub struct Detector {
     light_data: Option<LightData>,
     props: Properties,
 }
-fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the detector",
-            Some(vec![PropCondition::NonEmptyString]),
-            "detector".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "detector".into(),
-        )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
-    props
-}
 impl Default for Detector {
     fn default() -> Self {
+        let mut ports = OpticPorts::new();
+        ports.create_input("in1").unwrap();
+        ports.create_output("out1").unwrap();
+        let mut props = Properties::new("detector", "detector");
+        props.set("apertures", ports.into()).unwrap();
         Self {
             light_data: Default::default(),
-            props: create_default_props(),
+            props,
         }
     }
 }
 impl Detector {
     /// Creates a new [`Detector`].
     pub fn new(name: &str) -> Self {
-        let mut props = create_default_props();
-        props.set("name", name.into()).unwrap();
+        let mut ports = OpticPorts::new();
+        ports.create_input("in1").unwrap();
+        ports.create_output("out1").unwrap();
+        let mut props = Properties::new(name, "detector");
+        props.set("apertures", ports.into()).unwrap();
         Self {
             props,
             ..Default::default()
@@ -73,15 +58,6 @@ impl Detector {
     }
 }
 impl Optical for Detector {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        if self.properties().inverted() {
-            ports.set_inverted(true);
-        }
-        ports.add_input("in1").unwrap();
-        ports.add_output("out1").unwrap();
-        ports
-    }
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -148,15 +124,15 @@ mod test {
     #[test]
     fn ports() {
         let node = Detector::default();
-        assert_eq!(node.ports().inputs(), vec!["in1"]);
-        assert_eq!(node.ports().outputs(), vec!["out1"]);
+        assert_eq!(node.ports().input_names(), vec!["in1"]);
+        assert_eq!(node.ports().output_names(), vec!["out1"]);
     }
     #[test]
     fn ports_inverted() {
         let mut node = Detector::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.ports().inputs(), vec!["out1"]);
-        assert_eq!(node.ports().outputs(), vec!["in1"]);
+        assert_eq!(node.ports().input_names(), vec!["out1"]);
+        assert_eq!(node.ports().output_names(), vec!["in1"]);
     }
     #[test]
     fn analyze_ok() {
@@ -169,9 +145,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("out1".into()));
+        assert!(output.contains_key("out1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("out1".into()).unwrap();
+        let output = output.get("out1").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
@@ -187,7 +163,7 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        let output = output.get("out1".into()).unwrap();
+        let output = output.get("out1").unwrap();
         assert!(output.is_none());
     }
     #[test]
@@ -198,14 +174,14 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spectrum(1.0),
         });
-        input.insert("out1".into(), Some(input_light.clone()));
+        input.insert("out1".to_string(), Some(input_light.clone()));
 
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("in1".into()));
+        assert!(output.contains_key("in1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("in1".into()).unwrap();
+        let output = output.get("in1").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);

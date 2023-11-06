@@ -7,7 +7,8 @@ use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::{DataEnergy, LightData};
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{Properties, Proptype};
+use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use std::collections::HashMap;
 
@@ -22,6 +23,22 @@ pub enum FilterType {
 impl From<FilterType> for Proptype {
     fn from(value: FilterType) -> Self {
         Proptype::FilterType(value)
+    }
+}
+impl PdfReportable for FilterType {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        match self {
+            FilterType::Constant(value) => l.push(genpdf::elements::Text::new(format!(
+                "fixed attenuation: {}",
+                value
+            ))),
+            FilterType::Spectrum(spectrum) => {
+                l.push(genpdf::elements::Text::new("transmission spectrum"));
+                l.push(spectrum.pdf_report()?);
+            }
+        };
+        Ok(l)
     }
 }
 #[derive(Debug)]
@@ -42,26 +59,7 @@ pub struct IdealFilter {
 }
 
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the filter element",
-            Some(vec![PropCondition::NonEmptyString]),
-            "ideal filter".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "ideal filter".into(),
-        )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
+    let mut props = Properties::new("ideal filter", "ideal filter");
     props
         .create(
             "filter type",
@@ -70,6 +68,10 @@ fn create_default_props() -> Properties {
             FilterType::Constant(1.0).into(),
         )
         .unwrap();
+    let mut ports = OpticPorts::new();
+    ports.create_input("front").unwrap();
+    ports.create_output("rear").unwrap();
+    props.set("apertures", ports.into()).unwrap();
     props
 }
 impl Default for IdealFilter {
@@ -187,8 +189,8 @@ impl IdealFilter {
 impl Optical for IdealFilter {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
-        ports.add_input("front").unwrap();
-        ports.add_output("rear").unwrap();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
         if self.properties().inverted() {
             ports.set_inverted(true);
         }
@@ -250,15 +252,15 @@ mod test {
     #[test]
     fn ports() {
         let node = IdealFilter::default();
-        assert_eq!(node.ports().inputs(), vec!["front"]);
-        assert_eq!(node.ports().outputs(), vec!["rear"]);
+        assert_eq!(node.ports().input_names(), vec!["front"]);
+        assert_eq!(node.ports().output_names(), vec!["rear"]);
     }
     #[test]
     fn ports_inverted() {
         let mut node = IdealFilter::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.ports().inputs(), vec!["rear"]);
-        assert_eq!(node.ports().outputs(), vec!["front"]);
+        assert_eq!(node.ports().input_names(), vec!["rear"]);
+        assert_eq!(node.ports().output_names(), vec!["front"]);
     }
     #[test]
     fn analyze_ok() {
@@ -271,9 +273,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("rear".into()));
+        assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear".into()).unwrap();
+        let output = output.get("rear").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         let expected_output_light = LightData::Energy(DataEnergy {
@@ -304,9 +306,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("front".into()));
+        assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
-        let output = output.get("front".into()).unwrap();
+        let output = output.get("front").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         let expected_output_light = LightData::Energy(DataEnergy {

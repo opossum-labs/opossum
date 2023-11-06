@@ -8,7 +8,7 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{PropCondition, Properties, Proptype},
+    properties::{Properties, Proptype},
 };
 
 /// A general light source
@@ -30,29 +30,13 @@ pub struct Source {
     props: Properties,
 }
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the light source",
-            Some(vec![PropCondition::NonEmptyString]),
-            "source".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "light source".into(),
-        )
-        .unwrap();
+    let mut props = Properties::new("source", "light source");
     props
         .create("light data", "data of the emitted light", None, None.into())
         .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
+    let mut ports = OpticPorts::new();
+    ports.create_output("out1").unwrap();
+    props.set("apertures", ports.into()).unwrap();
     props
 }
 
@@ -82,7 +66,7 @@ impl Source {
         let mut props = create_default_props();
         props.set("name", name.into()).unwrap();
         props
-            .set_internal("light data", Some(light.clone()).into())
+            .set_unchecked("light data", Some(light.clone()).into())
             .unwrap();
         Source { props }
     }
@@ -111,11 +95,6 @@ impl Debug for Source {
 }
 
 impl Optical for Source {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_output("out1").unwrap();
-        ports
-    }
     fn analyze(
         &mut self,
         _incoming_edges: LightResult,
@@ -140,9 +119,18 @@ impl Optical for Source {
         if name != "inverted" {
             self.props.set(name, prop)
         } else {
-            Err(OpossumError::Properties(
-                "Cannot change the inversion status of a source node!".into(),
-            ))
+            let inverted = if let Proptype::Bool(inverted) = prop {
+                inverted
+            } else {
+                false
+            };
+            if inverted {
+                Err(OpossumError::Properties(
+                    "Cannot change the inversion status of a source node!".into(),
+                ))
+            } else {
+                Ok(())
+            }
         }
     }
 }
@@ -174,13 +162,14 @@ mod test {
     #[test]
     fn not_invertable() {
         let mut node = Source::default();
+        assert!(node.set_property("inverted", false.into()).is_ok());
         assert!(node.set_property("inverted", true.into()).is_err());
     }
     #[test]
     fn ports() {
         let node = Source::default();
-        assert!(node.ports().inputs().is_empty());
-        assert_eq!(node.ports().outputs(), vec!["out1"]);
+        assert!(node.ports().input_names().is_empty());
+        assert_eq!(node.ports().output_names(), vec!["out1"]);
     }
     #[test]
     fn analyze_empty() {
@@ -198,9 +187,9 @@ mod test {
         let output = node.analyze(incoming_data, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("out1".into()));
+        assert!(output.contains_key("out1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("out1".into()).unwrap();
+        let output = output.get("out1").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, light);

@@ -1,14 +1,19 @@
 //! Module for handling node properties
+use genpdf::{elements::TableLayout, style};
 use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::{collections::HashMap, mem};
 use uuid::Uuid;
 
 use crate::{
+    aperture::Aperture,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{FilterType, Metertype, PortMap, SpectrometerType},
     optic_graph::OpticGraph,
+    optic_ports::OpticPorts,
+    reporter::PdfReportable,
+    spectrum::Spectrum,
 };
 /// A general set of (optical) properties.
 ///
@@ -23,10 +28,42 @@ use crate::{
 /// props.set("my float", 2.71.into()).unwrap();
 /// ```
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
+#[serde(transparent)]
 pub struct Properties {
     props: HashMap<String, Property>,
 }
 impl Properties {
+    pub fn new(name: &str, node_type: &str) -> Self {
+        let mut properties = Self::default();
+        properties
+            .create(
+                "name",
+                "name of the optical element",
+                Some(vec![PropCondition::NonEmptyString]),
+                name.into(),
+            )
+            .unwrap();
+        properties
+            .create(
+                "node_type",
+                "specific optical type of this node",
+                Some(vec![PropCondition::NonEmptyString, PropCondition::ReadOnly]),
+                node_type.into(),
+            )
+            .unwrap();
+        properties
+            .create("inverted", "inverse propagation?", None, false.into())
+            .unwrap();
+        properties
+            .create(
+                "apertures",
+                "input and output apertures of the optical element",
+                None,
+                OpticPorts::default().into(),
+            )
+            .unwrap();
+        properties
+    }
     /// Create a new property with the given name.
     ///
     /// # Errors
@@ -73,7 +110,7 @@ impl Properties {
         self.props.insert(name.into(), property);
         Ok(())
     }
-    pub fn set_internal(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
+    pub fn set_unchecked(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
         let mut property = self
             .props
             .get(name)
@@ -82,7 +119,7 @@ impl Properties {
                 name
             )))?
             .clone();
-        property.set_value_internal(value)?;
+        property.set_value_unchecked(value)?;
         self.props.insert(name.into(), property);
         Ok(())
     }
@@ -165,7 +202,23 @@ impl Properties {
         self.get_bool("inverted").unwrap().unwrap()
     }
 }
-
+impl PdfReportable for Properties {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let mut table = TableLayout::new(vec![1, 5]);
+        for property in self.props.iter() {
+            let mut table_row = table.row();
+            let property_name = genpdf::elements::Paragraph::default()
+                .styled_string(format!("{}: ", property.0), style::Effect::Bold)
+                .aligned(genpdf::Alignment::Right);
+            table_row.push_element(property_name);
+            table_row.push_element(property.1.pdf_report()?);
+            table_row.push().unwrap();
+        }
+        layout.push(table);
+        Ok(layout)
+    }
+}
 /// (optical) Property
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a list of value conditions
@@ -208,7 +261,7 @@ impl Property {
         self.prop = prop;
         Ok(())
     }
-    pub fn set_value_internal(&mut self, prop: Proptype) -> OpmResult<()> {
+    pub fn set_value_unchecked(&mut self, prop: Proptype) -> OpmResult<()> {
         self.check_conditions(&prop)?;
         self.prop = prop;
         Ok(())
@@ -303,10 +356,18 @@ impl Property {
                         _ => {}
                     },
                     PropCondition::InternalOnly => {}
+                    PropCondition::ReadOnly => {
+                        return Err(OpossumError::Properties("property is read-only".into()));
+                    }
                 }
             }
         }
         Ok(())
+    }
+}
+impl PdfReportable for Property {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        self.prop.pdf_report()
     }
 }
 impl From<bool> for Proptype {
@@ -353,12 +414,36 @@ pub enum Proptype {
     Metertype(Metertype),
     GroupPortMap(PortMap),
     Uuid(Uuid),
+    OpticPorts(OpticPorts),
+    Aperture(Aperture),
+    Spectrum(Spectrum),
+}
+impl PdfReportable for Proptype {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        match self {
+            Proptype::String(value) => l.push(genpdf::elements::Paragraph::new(value)),
+            Proptype::I32(value) => l.push(genpdf::elements::Paragraph::new(format!("{}", value))),
+            Proptype::F64(value) => l.push(genpdf::elements::Paragraph::new(format!("{}", value))),
+            Proptype::Bool(value) => l.push(genpdf::elements::Paragraph::new(value.to_string())),
+            Proptype::FilterType(value) => l.push(value.pdf_report()?),
+            Proptype::SpectrometerType(value) => l.push(value.pdf_report()?),
+            Proptype::Metertype(value) => l.push(value.pdf_report()?),
+            Proptype::Spectrum(value) => l.push(value.pdf_report()?),
+            _ => l.push(
+                genpdf::elements::Paragraph::default()
+                    .styled_string("unknown poperty type", style::Effect::Italic),
+            ),
+        }
+        Ok(l)
+    }
 }
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropCondition {
     NonEmptyString,
     InternalOnly, // DO NOT USE YET (deserialization problems)
+    ReadOnly,     // can only be set during creation
     GreaterThan(f64),
     LessThan(f64),
     GreaterThanEqual(f64),

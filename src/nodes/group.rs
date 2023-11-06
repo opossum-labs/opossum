@@ -7,7 +7,6 @@ use crate::light::Light;
 use crate::lightdata::LightData;
 use crate::optic_graph::OpticGraph;
 use crate::optical::LightResult;
-use crate::properties::PropCondition;
 use crate::properties::{Properties, Proptype};
 use crate::{optic_ports::OpticPorts, optical::Optical};
 use petgraph::prelude::NodeIndex;
@@ -50,26 +49,7 @@ pub struct NodeGroup {
 }
 
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name of the optical group",
-            Some(vec![PropCondition::NonEmptyString]),
-            "group".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "group".into(),
-        )
-        .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
+    let mut props = Properties::new("group", "group");
     props
         .create(
             "expand view",
@@ -113,7 +93,6 @@ impl NodeGroup {
     pub fn new(name: &str) -> Self {
         let mut props = create_default_props();
         props.set("name", name.into()).unwrap();
-        props.set("node_type", "group".into()).unwrap();
         Self {
             props,
             ..Default::default()
@@ -135,7 +114,7 @@ impl NodeGroup {
         }
         let idx = self.g.add_node(node);
         self.props
-            .set_internal("graph", self.g.clone().into())
+            .set_unchecked("graph", self.g.clone().into())
             .unwrap();
         Ok(idx)
     }
@@ -168,7 +147,7 @@ impl NodeGroup {
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port)?;
         self.props
-            .set_internal("graph", self.g.clone().into())
+            .set_unchecked("graph", self.g.clone().into())
             .unwrap();
 
         let in_map = self.input_port_map();
@@ -191,13 +170,7 @@ impl NodeGroup {
         }
         Ok(())
     }
-    /// Synchronize properties with (internal) graph structure.
-    ///
-    pub fn sync_graph(&mut self) {
-        if let Proptype::OpticGraph(g) = &self.props.get("graph").unwrap() {
-            self.g = g.clone();
-        }
-    }
+
     fn input_port_map(&self) -> PortMap {
         let input_port_map = self.props.get("input port map").unwrap().clone();
         if let Proptype::GroupPortMap(input_port_map) = input_port_map {
@@ -208,7 +181,7 @@ impl NodeGroup {
     }
     fn set_input_port_map(&mut self, port_map: PortMap) {
         self.props
-            .set_internal("input port map", port_map.into())
+            .set_unchecked("input port map", port_map.into())
             .unwrap();
     }
     fn output_port_map(&self) -> PortMap {
@@ -221,7 +194,7 @@ impl NodeGroup {
     }
     fn set_output_port_map(&mut self, port_map: PortMap) {
         self.props
-            .set_internal("output port map", port_map.into())
+            .set_unchecked("output port map", port_map.into())
             .unwrap();
     }
 
@@ -241,7 +214,7 @@ impl NodeGroup {
                 .optical_ref
                 .borrow()
                 .ports()
-                .inputs()
+                .input_names()
                 .len();
             if input_ports != incoming_edges {
                 input_nodes.push(node_idx);
@@ -265,7 +238,7 @@ impl NodeGroup {
                 .optical_ref
                 .borrow()
                 .ports()
-                .outputs()
+                .output_names()
                 .len();
             if output_ports != outgoing_edges {
                 output_nodes.push(node_idx);
@@ -306,7 +279,7 @@ impl NodeGroup {
             .optical_ref
             .borrow()
             .ports()
-            .inputs()
+            .input_names()
             .contains(&(internal_name.to_string()))
         {
             return Err(OpossumError::OpticGroup(
@@ -371,7 +344,7 @@ impl NodeGroup {
             .optical_ref
             .borrow()
             .ports()
-            .outputs()
+            .output_names()
             .contains(&(internal_name.to_string()))
         {
             return Err(OpossumError::OpticGroup(
@@ -699,10 +672,10 @@ impl Optical for NodeGroup {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         for p in self.input_port_map().iter() {
-            ports.add_input(p.0).unwrap();
+            ports.create_input(p.0).unwrap();
         }
         for p in self.output_port_map().iter() {
-            ports.add_output(p.0).unwrap();
+            ports.create_output(p.0).unwrap();
         }
         if self.properties().inverted() {
             ports.set_inverted(true);
@@ -719,14 +692,18 @@ impl Optical for NodeGroup {
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Ok(self)
     }
-    fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
-        Ok(self)
-    }
     fn properties(&self) -> &Properties {
         &self.props
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
+    }
+    fn after_deserialization_hook(&mut self) -> OpmResult<()> {
+        // Synchronize properties with (internal) graph structure.
+        if let Proptype::OpticGraph(g) = &self.props.get("graph")? {
+            self.g = g.clone();
+        }
+        Ok(())
     }
 }
 
@@ -764,6 +741,8 @@ impl Dottable for NodeGroup {
 
 #[cfg(test)]
 mod test {
+    use approx::assert_abs_diff_eq;
+
     use super::*;
     use crate::{
         lightdata::DataEnergy,
@@ -960,12 +939,12 @@ mod test {
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
-        assert!(og.ports().inputs().is_empty());
-        assert!(og.ports().outputs().is_empty());
+        assert!(og.ports().input_names().is_empty());
+        assert!(og.ports().output_names().is_empty());
         og.map_input_port(sn1_i, "front", "input").unwrap();
-        assert!(og.ports().inputs().contains(&("input".to_string())));
+        assert!(og.ports().input_names().contains(&("input".to_string())));
         og.map_output_port(sn2_i, "rear", "output").unwrap();
-        assert!(og.ports().outputs().contains(&("output".to_string())));
+        assert!(og.ports().output_names().contains(&("output".to_string())));
     }
     #[test]
     fn ports_inverted() {
@@ -976,8 +955,8 @@ mod test {
         og.map_input_port(sn1_i, "front", "input").unwrap();
         og.map_output_port(sn2_i, "rear", "output").unwrap();
         og.set_property("inverted", true.into()).unwrap();
-        assert!(og.ports().outputs().contains(&("input".to_string())));
-        assert!(og.ports().inputs().contains(&("output".to_string())));
+        assert!(og.ports().output_names().contains(&("input".to_string())));
+        assert!(og.ports().input_names().contains(&("output".to_string())));
     }
     fn prepare_group() -> NodeGroup {
         let mut group = NodeGroup::default();
@@ -1010,7 +989,7 @@ mod test {
         } else {
             0.0
         };
-        assert_eq!(energy, 0.6);
+        assert_abs_diff_eq!(energy, 0.6, epsilon = f64::EPSILON);
     }
     #[test]
     fn analyze_empty_group() {
@@ -1055,7 +1034,7 @@ mod test {
         } else {
             0.0
         };
-        assert_eq!(energy, 0.6);
+        assert_abs_diff_eq!(energy, 0.6, epsilon = f64::EPSILON);
     }
     #[test]
     fn analyze_inverse_with_src() {

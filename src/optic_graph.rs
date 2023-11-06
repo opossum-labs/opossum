@@ -41,7 +41,7 @@ impl OpticGraph {
             .optical_ref
             .borrow()
             .ports()
-            .outputs()
+            .output_names()
             .contains(&src_port.into())
         {
             return Err(OpossumError::OpticScenery(format!(
@@ -60,7 +60,7 @@ impl OpticGraph {
             .optical_ref
             .borrow()
             .ports()
-            .inputs()
+            .input_names()
             .contains(&target_port.into())
         {
             return Err(OpossumError::OpticScenery(format!(

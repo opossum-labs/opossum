@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Module handling the export of an [`OpticScenery`](crate::optic_scenery::OpticScenery) into the Graphviz `.dot` format.
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
@@ -76,7 +77,6 @@ pub trait Dottable {
             port_index
         )
     }
-
     /// create the dot-string that describes the ports, including their row/table/cell wrappers
     fn create_port_cells_str(
         &self,
@@ -86,9 +86,9 @@ pub trait Dottable {
         ports: &OpticPorts,
     ) -> String {
         let mut ports = if input_flag {
-            ports.inputs()
+            ports.input_names()
         } else {
-            ports.outputs()
+            ports.output_names()
         };
         ports.sort();
         let mut dot_str = self.create_html_like_container("row", indent_level, true, 1);
@@ -113,12 +113,11 @@ pub trait Dottable {
         dot_str.push_str(&self.create_html_like_container("row", indent_level, false, indent_incr));
         dot_str
     }
-
     /// Returns the color of the node.
     fn node_color(&self) -> &str {
         "lightgray"
     }
-
+    /// Create a row string.
     fn create_main_node_row_str(&self, node_name: &str, indent_level: &mut i32) -> String {
         let mut dot_str = self.create_html_like_container("row", indent_level, true, 1);
         dot_str.push_str(&format!("{}<TD BORDER=\"1\" BGCOLOR=\"{}\" ALIGN=\"CENTER\" WIDTH=\"80\" CELLPADDING=\"10\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level as usize), self.node_color(), node_name));
@@ -127,7 +126,6 @@ pub trait Dottable {
 
         dot_str
     }
-
     /// starts or ends an html-like container
     fn create_html_like_container(
         &self,
@@ -167,6 +165,7 @@ pub trait Dottable {
         new_str
     }
 
+    /// Create the code for table cells of an optical node.
     fn create_node_table_cells(
         &self,
         ports: (&Vec<String>, &Vec<String>),
@@ -245,8 +244,8 @@ pub trait Dottable {
     ) -> String {
         let mut dot_str = "\t\tlabel=<\n".to_owned();
 
-        let mut inputs = ports.inputs();
-        let mut outputs = ports.outputs();
+        let mut inputs = ports.input_names();
+        let mut outputs = ports.output_names();
         let mut in_port_count = 0;
         let mut out_port_count = 0;
         inputs.sort();

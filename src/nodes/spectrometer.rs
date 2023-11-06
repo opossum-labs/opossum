@@ -1,12 +1,12 @@
 #![warn(missing_docs)]
 use serde_derive::{Deserialize, Serialize};
-use serde_json::json;
 use uom::si::length::nanometer;
 
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::properties::{PropCondition, Properties, Proptype};
+use crate::properties::{Properties, Proptype};
+use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -30,6 +30,19 @@ impl From<SpectrometerType> for Proptype {
         Proptype::SpectrometerType(value)
     }
 }
+impl PdfReportable for SpectrometerType {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let element = match self {
+            SpectrometerType::IdealSpectrometer => {
+                genpdf::elements::Text::new("ideal spectrometer")
+            }
+            SpectrometerType::HR2000 => genpdf::elements::Text::new("Ocean Optics HR2000"),
+        };
+        let mut l = genpdf::elements::LinearLayout::vertical();
+        l.push(element);
+        Ok(l)
+    }
+}
 /// An (ideal) spectrometer
 ///
 /// It normally measures / displays the spectrum of the incoming light.
@@ -51,23 +64,7 @@ pub struct Spectrometer {
     props: Properties,
 }
 fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create(
-            "name",
-            "name ofthe spectrometer",
-            Some(vec![PropCondition::NonEmptyString]),
-            "spectrometer".into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "node_type",
-            "specific optical type of this node",
-            Some(vec![PropCondition::NonEmptyString]),
-            "spectrometer".into(),
-        )
-        .unwrap();
+    let mut props = Properties::new("spectrometer", "spectrometer");
     props
         .create(
             "spectrometer type",
@@ -76,9 +73,10 @@ fn create_default_props() -> Properties {
             SpectrometerType::IdealSpectrometer.into(),
         )
         .unwrap();
-    props
-        .create("inverted", "inverse propagation?", None, false.into())
-        .unwrap();
+    let mut ports = OpticPorts::new();
+    ports.create_input("in1").unwrap();
+    ports.create_output("out1").unwrap();
+    props.set("apertures", ports.into()).unwrap();
     props
 }
 impl Default for Spectrometer {
@@ -120,15 +118,6 @@ impl Spectrometer {
     }
 }
 impl Optical for Spectrometer {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_input("in1").unwrap();
-        ports.add_output("out1").unwrap();
-        if self.properties().inverted() {
-            ports.set_inverted(true);
-        }
-        ports
-    }
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -162,15 +151,32 @@ impl Optical for Spectrometer {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn report(&self) -> serde_json::Value {
+    fn report(&self) -> Option<NodeReport> {
+        let mut props = Properties::default();
         let data = &self.light_data;
-        let mut energy_data = serde_json::Value::Null;
         if let Some(LightData::Energy(e)) = data {
-            energy_data = e.spectrum.to_json();
+            props
+                .create(
+                    "Spectrum",
+                    "Output spectrum",
+                    None,
+                    e.spectrum.clone().into(),
+                )
+                .unwrap();
+            props
+                .create(
+                    "Model",
+                    "Spectrometer model",
+                    None,
+                    self.props.get("spectrometer type").unwrap().to_owned(),
+                )
+                .unwrap();
         }
-        json!({"type": self.properties().node_type().unwrap(),
-        "name": self.properties().name().unwrap(),
-        "energy": energy_data})
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            props,
+        ))
     }
 }
 
@@ -235,15 +241,15 @@ mod test {
     #[test]
     fn ports() {
         let meter = Spectrometer::default();
-        assert_eq!(meter.ports().inputs(), vec!["in1"]);
-        assert_eq!(meter.ports().outputs(), vec!["out1"]);
+        assert_eq!(meter.ports().input_names(), vec!["in1"]);
+        assert_eq!(meter.ports().output_names(), vec!["out1"]);
     }
     #[test]
     fn ports_inverted() {
         let mut meter = Spectrometer::default();
         meter.set_property("inverted", true.into()).unwrap();
-        assert_eq!(meter.ports().inputs(), vec!["out1"]);
-        assert_eq!(meter.ports().outputs(), vec!["in1"]);
+        assert_eq!(meter.ports().input_names(), vec!["out1"]);
+        assert_eq!(meter.ports().output_names(), vec!["in1"]);
     }
     #[test]
     fn inverted() {
@@ -262,9 +268,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("out1".into()));
+        assert!(output.contains_key("out1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("out1".into()).unwrap();
+        let output = output.get("out1").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
@@ -280,7 +286,7 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        let output = output.get("out1".into()).unwrap();
+        let output = output.get("out1").unwrap();
         assert!(output.is_none());
     }
     #[test]
@@ -296,9 +302,9 @@ mod test {
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("in1".into()));
+        assert!(output.contains_key("in1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("in1".into()).unwrap();
+        let output = output.get("in1").unwrap();
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
