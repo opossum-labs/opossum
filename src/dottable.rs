@@ -86,9 +86,9 @@ pub trait Dottable {
         ports: &OpticPorts,
     ) -> String {
         let mut ports = if input_flag {
-            ports.inputs()
+            ports.input_names()
         } else {
-            ports.outputs()
+            ports.output_names()
         };
         ports.sort();
         let mut dot_str = self.create_html_like_container("row", indent_level, true, 1);
@@ -245,8 +245,8 @@ pub trait Dottable {
     ) -> String {
         let mut dot_str = "\t\tlabel=<\n".to_owned();
 
-        let mut inputs = ports.inputs();
-        let mut outputs = ports.outputs();
+        let mut inputs = ports.input_names();
+        let mut outputs = ports.output_names();
         let mut in_port_count = 0;
         let mut out_port_count = 0;
         inputs.sort();

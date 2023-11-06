@@ -246,15 +246,15 @@ mod test {
     #[test]
     fn ports() {
         let meter = Spectrometer::default();
-        assert_eq!(meter.ports().inputs(), vec!["in1"]);
-        assert_eq!(meter.ports().outputs(), vec!["out1"]);
+        assert_eq!(meter.ports().input_names(), vec!["in1"]);
+        assert_eq!(meter.ports().output_names(), vec!["out1"]);
     }
     #[test]
     fn ports_inverted() {
         let mut meter = Spectrometer::default();
         meter.set_property("inverted", true.into()).unwrap();
-        assert_eq!(meter.ports().inputs(), vec!["out1"]);
-        assert_eq!(meter.ports().outputs(), vec!["in1"]);
+        assert_eq!(meter.ports().input_names(), vec!["out1"]);
+        assert_eq!(meter.ports().output_names(), vec!["in1"]);
     }
     #[test]
     fn inverted() {

@@ -170,8 +170,8 @@ mod test {
     #[test]
     fn ports() {
         let node = Source::default();
-        assert!(node.ports().inputs().is_empty());
-        assert_eq!(node.ports().outputs(), vec!["out1"]);
+        assert!(node.ports().input_names().is_empty());
+        assert_eq!(node.ports().output_names(), vec!["out1"]);
     }
     #[test]
     fn analyze_empty() {

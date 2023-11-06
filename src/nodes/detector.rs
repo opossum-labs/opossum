@@ -123,15 +123,15 @@ mod test {
     #[test]
     fn ports() {
         let node = Detector::default();
-        assert_eq!(node.ports().inputs(), vec!["in1"]);
-        assert_eq!(node.ports().outputs(), vec!["out1"]);
+        assert_eq!(node.ports().input_names(), vec!["in1"]);
+        assert_eq!(node.ports().output_names(), vec!["out1"]);
     }
     #[test]
     fn ports_inverted() {
         let mut node = Detector::default();
         node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.ports().inputs(), vec!["out1"]);
-        assert_eq!(node.ports().outputs(), vec!["in1"]);
+        assert_eq!(node.ports().input_names(), vec!["out1"]);
+        assert_eq!(node.ports().output_names(), vec!["in1"]);
     }
     #[test]
     fn analyze_ok() {

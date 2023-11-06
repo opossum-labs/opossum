@@ -248,10 +248,10 @@ mod test {
     #[test]
     fn ports() {
         let node = BeamSplitter::default();
-        let mut input_ports = node.ports().inputs();
+        let mut input_ports = node.ports().input_names();
         input_ports.sort();
         assert_eq!(input_ports, vec!["input1", "input2"]);
-        let mut output_ports = node.ports().outputs();
+        let mut output_ports = node.ports().output_names();
         output_ports.sort();
         assert_eq!(output_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
     }
@@ -259,10 +259,10 @@ mod test {
     fn ports_inverted() {
         let mut node = BeamSplitter::default();
         node.set_property("inverted", true.into()).unwrap();
-        let mut input_ports = node.ports().inputs();
+        let mut input_ports = node.ports().input_names();
         input_ports.sort();
         assert_eq!(input_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
-        let mut output_ports = node.ports().outputs();
+        let mut output_ports = node.ports().output_names();
         output_ports.sort();
         assert_eq!(output_ports, vec!["input1", "input2"]);
     }

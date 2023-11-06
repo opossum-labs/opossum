@@ -214,7 +214,7 @@ impl NodeGroup {
                 .optical_ref
                 .borrow()
                 .ports()
-                .inputs()
+                .input_names()
                 .len();
             if input_ports != incoming_edges {
                 input_nodes.push(node_idx);
@@ -238,7 +238,7 @@ impl NodeGroup {
                 .optical_ref
                 .borrow()
                 .ports()
-                .outputs()
+                .output_names()
                 .len();
             if output_ports != outgoing_edges {
                 output_nodes.push(node_idx);
@@ -279,7 +279,7 @@ impl NodeGroup {
             .optical_ref
             .borrow()
             .ports()
-            .inputs()
+            .input_names()
             .contains(&(internal_name.to_string()))
         {
             return Err(OpossumError::OpticGroup(
@@ -344,7 +344,7 @@ impl NodeGroup {
             .optical_ref
             .borrow()
             .ports()
-            .outputs()
+            .output_names()
             .contains(&(internal_name.to_string()))
         {
             return Err(OpossumError::OpticGroup(
@@ -939,12 +939,12 @@ mod test {
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
-        assert!(og.ports().inputs().is_empty());
-        assert!(og.ports().outputs().is_empty());
+        assert!(og.ports().input_names().is_empty());
+        assert!(og.ports().output_names().is_empty());
         og.map_input_port(sn1_i, "front", "input").unwrap();
-        assert!(og.ports().inputs().contains(&("input".to_string())));
+        assert!(og.ports().input_names().contains(&("input".to_string())));
         og.map_output_port(sn2_i, "rear", "output").unwrap();
-        assert!(og.ports().outputs().contains(&("output".to_string())));
+        assert!(og.ports().output_names().contains(&("output".to_string())));
     }
     #[test]
     fn ports_inverted() {
@@ -955,8 +955,8 @@ mod test {
         og.map_input_port(sn1_i, "front", "input").unwrap();
         og.map_output_port(sn2_i, "rear", "output").unwrap();
         og.set_property("inverted", true.into()).unwrap();
-        assert!(og.ports().outputs().contains(&("input".to_string())));
-        assert!(og.ports().inputs().contains(&("output".to_string())));
+        assert!(og.ports().output_names().contains(&("input".to_string())));
+        assert!(og.ports().input_names().contains(&("output".to_string())));
     }
     fn prepare_group() -> NodeGroup {
         let mut group = NodeGroup::default();

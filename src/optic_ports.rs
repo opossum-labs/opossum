@@ -1,13 +1,16 @@
 use serde_derive::Serialize;
 
-use crate::error::{OpmResult, OpossumError};
-use std::{collections::HashSet, fmt::Display};
+use crate::{
+    aperture::Aperture,
+    error::{OpmResult, OpossumError},
+};
+use std::{collections::BTreeMap, fmt::Display};
 
 /// Structure defining the optical ports (input / output terminals) of an [`Optical`](crate::optical::Optical).
 #[derive(Default, Debug, Clone, Serialize)]
 pub struct OpticPorts {
-    inputs: HashSet<String>,
-    outputs: HashSet<String>,
+    inputs: BTreeMap<String, Option<Aperture>>,
+    outputs: BTreeMap<String, Option<Aperture>>,
     inverted: bool,
 }
 
@@ -15,23 +18,50 @@ impl OpticPorts {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn inputs(&self) -> Vec<String> {
+    pub fn input_names(&self) -> Vec<String> {
         if self.inverted {
-            self.outputs.clone().into_iter().collect::<Vec<String>>()
+            self.outputs
+                .iter()
+                .map(|p| p.0.clone())
+                .collect::<Vec<String>>()
         } else {
-            self.inputs.clone().into_iter().collect::<Vec<String>>()
+            self.inputs
+                .iter()
+                .map(|p| p.0.clone())
+                .collect::<Vec<String>>()
         }
     }
-    pub fn outputs(&self) -> Vec<String> {
+    pub fn output_names(&self) -> Vec<String> {
         if self.inverted {
-            self.inputs.clone().into_iter().collect::<Vec<String>>()
+            self.inputs
+                .iter()
+                .map(|p| p.0.clone())
+                .collect::<Vec<String>>()
         } else {
-            self.outputs.clone().into_iter().collect::<Vec<String>>()
+            self.outputs
+                .iter()
+                .map(|p| p.0.clone())
+                .collect::<Vec<String>>()
         }
     }
+    pub fn inputs(&self) -> &BTreeMap<String, Option<Aperture>> {
+        if self.inverted {
+            &self.outputs
+        } else {
+            &self.inputs
+        }
+    }
+    pub fn outputs(&self) -> &BTreeMap<String, Option<Aperture>> {
+        if self.inverted {
+            &self.inputs
+        } else {
+            &self.outputs
+        }
+    }
+
     pub fn add_input(&mut self, name: &str) -> OpmResult<Vec<String>> {
-        if self.inputs.insert(name.into()) {
-            Ok(self.inputs())
+        if self.inputs.insert(name.into(), None).is_none() {
+            Ok(self.input_names())
         } else {
             Err(OpossumError::OpticPort(format!(
                 "input port with name {} already exists",
@@ -40,8 +70,8 @@ impl OpticPorts {
         }
     }
     pub fn add_output(&mut self, name: &str) -> OpmResult<Vec<String>> {
-        if self.outputs.insert(name.into()) {
-            Ok(self.outputs())
+        if self.outputs.insert(name.into(), None).is_none() {
+            Ok(self.output_names())
         } else {
             Err(OpossumError::OpticPort(format!(
                 "output port with name {} already exists",
@@ -49,15 +79,12 @@ impl OpticPorts {
             )))
         }
     }
-
     pub fn check_if_port_exists(&self, port_name: &str) -> bool {
-        self.inputs.contains(port_name) || self.outputs.contains(port_name)
+        self.inputs.contains_key(port_name) || self.outputs.contains_key(port_name)
     }
-
     pub fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;
     }
-
     pub fn inverted(&self) -> bool {
         self.inverted
     }
@@ -67,20 +94,16 @@ impl Display for OpticPorts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "inputs:").unwrap();
         if !&self.inputs.is_empty() {
-            let mut ports = self.inputs();
-            ports.sort();
-            for port in ports {
-                writeln!(f, "  <{}>", port).unwrap();
+            for port in self.inputs() {
+                writeln!(f, "  <{}> {:?}", port.0, port.1).unwrap();
             }
         } else {
             writeln!(f, "  None").unwrap();
         }
         writeln!(f, "output:").unwrap();
         if !&self.outputs.is_empty() {
-            let mut ports = self.outputs();
-            ports.sort();
-            for port in ports {
-                writeln!(f, "  <{}>", port).unwrap();
+            for port in self.outputs() {
+                writeln!(f, "  <{}> {:?}", port.0, port.1).unwrap();
             }
         } else {
             writeln!(f, "  None").unwrap();
@@ -134,7 +157,7 @@ mod test {
         ports.add_input("Test2").unwrap();
         ports.add_output("Test3").unwrap();
         ports.add_output("Test4").unwrap();
-        let mut v = ports.inputs();
+        let mut v = ports.input_names();
         v.sort();
         assert_eq!(v, vec!["Test1".to_string(), "Test2".to_string()]);
     }
@@ -146,7 +169,7 @@ mod test {
         ports.add_input("Test2").unwrap();
         ports.add_output("Test3").unwrap();
         ports.add_output("Test4").unwrap();
-        let mut v = ports.inputs();
+        let mut v = ports.input_names();
         v.sort();
         assert_eq!(v, vec!["Test3".to_string(), "Test4".to_string()]);
     }
@@ -157,7 +180,7 @@ mod test {
         ports.add_input("Test2").unwrap();
         ports.add_output("Test3").unwrap();
         ports.add_output("Test4").unwrap();
-        let mut v = ports.outputs();
+        let mut v = ports.output_names();
         v.sort();
         assert_eq!(v, vec!["Test3".to_string(), "Test4".to_string()]);
     }
@@ -169,7 +192,7 @@ mod test {
         ports.add_input("Test2").unwrap();
         ports.add_output("Test3").unwrap();
         ports.add_output("Test4").unwrap();
-        let mut v = ports.outputs();
+        let mut v = ports.output_names();
         v.sort();
         assert_eq!(v, vec!["Test1".to_string(), "Test2".to_string()]);
     }
@@ -202,7 +225,8 @@ mod test {
         ports.add_output("test4").unwrap();
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1>\n  <test2>\noutput:\n  <test3>\n  <test4>\n".to_owned()
+            "inputs:\n  <test1> None\n  <test2> None\noutput:\n  <test3> None\n  <test4> None\n"
+                .to_owned()
         );
     }
     #[test]
@@ -215,7 +239,7 @@ mod test {
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test3>\n  <test4>\noutput:\n  <test1>\n  <test2>\nports are inverted\n"
+            "inputs:\n  <test3> None\n  <test4> None\noutput:\n  <test1> None\n  <test2> None\nports are inverted\n"
                 .to_owned()
         );
     }

@@ -209,7 +209,7 @@ impl OpticScenery {
             let node = self.g.0.node_weight(idx).unwrap();
             let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
             // paranoia: check if all incoming ports are really input ports of the node to be analyzed
-            let input_ports = node.optical_ref.borrow().ports().inputs();
+            let input_ports = node.optical_ref.borrow().ports().input_names();
             if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
                 return Err(OpossumError::Analysis("input light data contains port which is not an input port of the node. Data will be discarded.".into()));
             }
