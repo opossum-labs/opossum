@@ -28,14 +28,14 @@ impl From<Metertype> for Proptype {
     }
 }
 impl PdfReportable for Metertype {
-    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let element = match self {
             Metertype::IdealEnergyMeter => genpdf::elements::Text::new("ideal energy meter"),
             Metertype::IdealPowerMeter => genpdf::elements::Text::new("ideal power meter"),
         };
         let mut l = genpdf::elements::LinearLayout::vertical();
         l.push(element);
-        l
+        Ok(l)
     }
 }
 /// An (ideal) energy / power meter.

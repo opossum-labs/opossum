@@ -363,13 +363,14 @@ impl Spectrum {
     }
 }
 impl PdfReportable for Spectrum {
-    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
         let img = self.to_img_buf_plot().unwrap();
         layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img)).unwrap(),
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
+                .map_err(|e| format!("adding of image failed: {}", e))?,
         );
-        layout
+        Ok(layout)
     }
 }
 impl From<Spectrum> for Proptype {

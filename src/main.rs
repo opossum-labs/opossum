@@ -58,7 +58,7 @@ fn main() -> OpmResult<()> {
     let pdf_generator = ReportGenerator::new(analysis_report);
     let mut report_path = opossum_args.report_directory.clone();
     report_path.push("report.pdf");
-    pdf_generator.generate_pdf(&report_path);
+    pdf_generator.generate_pdf(&report_path)?;
     println!("Success");
     Ok(())
 }

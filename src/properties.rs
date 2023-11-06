@@ -202,7 +202,7 @@ impl Properties {
     }
 }
 impl PdfReportable for Properties {
-    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
         let mut table = TableLayout::new(vec![1, 5]);
         for property in self.props.iter() {
@@ -211,11 +211,11 @@ impl PdfReportable for Properties {
                 .styled_string(format!("{}: ", property.0), style::Effect::Bold)
                 .aligned(genpdf::Alignment::Right);
             table_row.push_element(property_name);
-            table_row.push_element(property.1.pdf_report());
+            table_row.push_element(property.1.pdf_report()?);
             table_row.push().unwrap();
         }
         layout.push(table);
-        layout
+        Ok(layout)
     }
 }
 /// (optical) Property
@@ -365,7 +365,7 @@ impl Property {
     }
 }
 impl PdfReportable for Property {
-    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         self.prop.pdf_report()
     }
 }
@@ -417,23 +417,23 @@ pub enum Proptype {
     Spectrum(Spectrum),
 }
 impl PdfReportable for Proptype {
-    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut l = genpdf::elements::LinearLayout::vertical();
         match self {
             Proptype::String(value) => l.push(genpdf::elements::Paragraph::new(value)),
             Proptype::I32(value) => l.push(genpdf::elements::Paragraph::new(format!("{}", value))),
             Proptype::F64(value) => l.push(genpdf::elements::Paragraph::new(format!("{}", value))),
             Proptype::Bool(value) => l.push(genpdf::elements::Paragraph::new(value.to_string())),
-            Proptype::FilterType(value) => l.push(value.pdf_report()),
-            Proptype::SpectrometerType(value) => l.push(value.pdf_report()),
-            Proptype::Metertype(value) => l.push(value.pdf_report()),
-            Proptype::Spectrum(value) => l.push(value.pdf_report()),
+            Proptype::FilterType(value) => l.push(value.pdf_report()?),
+            Proptype::SpectrometerType(value) => l.push(value.pdf_report()?),
+            Proptype::Metertype(value) => l.push(value.pdf_report()?),
+            Proptype::Spectrum(value) => l.push(value.pdf_report()?),
             _ => l.push(
                 genpdf::elements::Paragraph::default()
                     .styled_string("unknown poperty type", style::Effect::Italic),
             ),
         }
-        l
+        Ok(l)
     }
 }
 #[non_exhaustive]

@@ -1,5 +1,7 @@
 digraph {
 	fontsize = 8
+	size = 5.0;
+	dpi = 400.0;
 	compound = true;
 	rankdir = "LR";
 	label="Test"

@@ -31,7 +31,7 @@ impl From<SpectrometerType> for Proptype {
     }
 }
 impl PdfReportable for SpectrometerType {
-    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let element = match self {
             SpectrometerType::IdealSpectrometer => {
                 genpdf::elements::Text::new("ideal spectrometer")
@@ -40,7 +40,7 @@ impl PdfReportable for SpectrometerType {
         };
         let mut l = genpdf::elements::LinearLayout::vertical();
         l.push(element);
-        l
+        Ok(l)
     }
 }
 /// An (ideal) spectrometer

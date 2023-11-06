@@ -150,23 +150,29 @@ impl OpticScenery {
     }
     pub fn to_dot_img(&self) -> OpmResult<DynamicImage> {
         let dot_string = self.to_dot("")?;
-        let mut f = NamedTempFile::new().unwrap();
-        f.write_all(dot_string.as_bytes()).unwrap();
+        let mut f = NamedTempFile::new()
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {}", e)))?;
+        f.write_all(dot_string.as_bytes())
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {}", e)))?;
         let r = std::process::Command::new("dot")
             .arg(f.path())
             .arg("-Tpng")
             .output()
-            .unwrap();
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {}", e)))?;
         let img = Reader::new(Cursor::new(r.stdout))
             .with_guessed_format()
-            .unwrap()
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {}", e)))?
             .decode()
-            .unwrap();
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {}", e)))?
+            .into_rgb8();
+        let img = DynamicImage::ImageRgb8(img);
         Ok(img)
     }
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
         let mut dot_string = String::from("digraph {\n\tfontsize = 8\n");
+        dot_string.push_str("\tsize = 5.0;\n");
+        dot_string.push_str("\tdpi = 400.0;\n");
         dot_string.push_str("\tcompound = true;\n");
         dot_string.push_str(&format!("\trankdir = \"{}\";\n", rankdir));
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description()));
@@ -420,22 +426,21 @@ impl<'de> Deserialize<'de> for OpticScenery {
     }
 }
 impl PdfReportable for OpticScenery {
-    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut l = genpdf::elements::LinearLayout::vertical();
-        let diagram = self.to_dot_img().unwrap();
+        let diagram = self.to_dot_img()?;
         let img = genpdf::elements::Image::from_dynamic_image(diagram)
-            .unwrap()
+            .map_err(|e| format!("failed to add diagram to report: {}", e))?
             .with_alignment(Alignment::Center);
         l.push(img);
-        l
+        Ok(l)
     }
 }
 #[cfg(test)]
 mod test {
-    use crate::nodes::Metertype;
-
     use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
+    use crate::nodes::Metertype;
     use std::{fs::File, io::Read};
     #[test]
     fn new() {

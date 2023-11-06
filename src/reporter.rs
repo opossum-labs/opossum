@@ -4,7 +4,7 @@ use chrono::{DateTime, Local};
 use genpdf::{self, elements, style, Alignment, Scale};
 use serde_derive::Serialize;
 
-use crate::{properties::Properties, OpticScenery};
+use crate::{error::OpmResult, properties::Properties, OpticScenery};
 #[derive(Serialize, Debug)]
 pub struct AnalysisReport {
     opossum_version: String,
@@ -45,7 +45,7 @@ impl NodeReport {
 }
 
 pub trait PdfReportable {
-    fn pdf_report(&self) -> genpdf::elements::LinearLayout;
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout>;
 }
 
 pub struct ReportGenerator {
@@ -91,7 +91,7 @@ impl ReportGenerator {
         table_row.push().unwrap();
         doc.push(table);
     }
-    fn add_scenery_report(&self, doc: &mut genpdf::Document) {
+    fn add_scenery_report(&self, doc: &mut genpdf::Document) -> OpmResult<()> {
         if let Some(scenery) = &self.report.scenery {
             doc.push(genpdf::elements::Break::new(2));
             let p = elements::Paragraph::default().styled_string(
@@ -99,10 +99,11 @@ impl ReportGenerator {
                 style::Effect::Bold,
             );
             doc.push(p);
-            doc.push(scenery.pdf_report());
+            doc.push(scenery.pdf_report()?);
         }
+        Ok(())
     }
-    fn add_node_reports(&self, doc: &mut genpdf::Document) {
+    fn add_node_reports(&self, doc: &mut genpdf::Document) -> OpmResult<()> {
         if !self.report.node_reports.is_empty() {
             doc.push(genpdf::elements::Break::new(2));
             let p = elements::Paragraph::default().styled_string("Detectors", style::Effect::Bold);
@@ -112,13 +113,14 @@ impl ReportGenerator {
                 let p = elements::Paragraph::default()
                     .string(format!("{} - {}", detector.name, detector.detector_type));
                 doc.push(p);
-                doc.push(detector.properties.pdf_report());
+                doc.push(detector.properties.pdf_report()?);
             }
         }
+        Ok(())
     }
-    pub fn generate_pdf(&self, path: &Path) {
+    pub fn generate_pdf(&self, path: &Path) -> OpmResult<()> {
         let font_family = genpdf::fonts::from_files("./fonts", "LiberationSans", None)
-            .expect("Failed to load font family");
+            .map_err(|e| format!("failed to load font family: {}", e))?;
         // Create a document and set the default font family
         let mut doc = genpdf::Document::new(font_family);
         // Change the default settings
@@ -129,8 +131,11 @@ impl ReportGenerator {
         doc.set_page_decorator(decorator);
 
         self.add_report_title(&mut doc);
-        self.add_scenery_report(&mut doc);
-        self.add_node_reports(&mut doc);
-        doc.render_to_file(path).expect("Failed to write PDF file");
+        self.add_scenery_report(&mut doc)?;
+        doc.push(genpdf::elements::PageBreak::new());
+        self.add_node_reports(&mut doc)?;
+        doc.render_to_file(path)
+            .map_err(|e| format!("failed to write file: {}", e))?;
+        Ok(())
     }
 }

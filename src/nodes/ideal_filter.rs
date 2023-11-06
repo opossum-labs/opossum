@@ -26,7 +26,7 @@ impl From<FilterType> for Proptype {
     }
 }
 impl PdfReportable for FilterType {
-    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut l = genpdf::elements::LinearLayout::vertical();
         match self {
             FilterType::Constant(value) => l.push(genpdf::elements::Text::new(format!(
@@ -35,10 +35,10 @@ impl PdfReportable for FilterType {
             ))),
             FilterType::Spectrum(spectrum) => {
                 l.push(genpdf::elements::Text::new("transmission spectrum"));
-                l.push(spectrum.pdf_report());
+                l.push(spectrum.pdf_report()?);
             }
         };
-        l
+        Ok(l)
     }
 }
 #[derive(Debug)]

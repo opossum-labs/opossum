@@ -56,7 +56,7 @@ pub struct DataEnergy {
     pub spectrum: Spectrum,
 }
 impl PdfReportable for DataEnergy {
-    fn pdf_report(&self) -> genpdf::elements::LinearLayout {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         self.spectrum.pdf_report()
     }
 }
