@@ -70,6 +70,10 @@ fn create_default_props() -> Properties {
             Metertype::default().into(),
         )
         .unwrap();
+    let mut ports = OpticPorts::new();
+    ports.create_input("in1").unwrap();
+    ports.create_output("out1").unwrap();
+    props.set("apertures", ports.into()).unwrap();
     props
 }
 
@@ -106,15 +110,6 @@ impl EnergyMeter {
     }
 }
 impl Optical for EnergyMeter {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_input("in1").unwrap();
-        ports.add_output("out1").unwrap();
-        if self.properties().inverted() {
-            ports.set_inverted(true);
-        }
-        ports
-    }
     fn analyze(
         &mut self,
         incoming_data: LightResult,

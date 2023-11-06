@@ -32,31 +32,32 @@ pub struct Detector {
 }
 impl Default for Detector {
     fn default() -> Self {
+        let mut ports = OpticPorts::new();
+        ports.create_input("in1").unwrap();
+        ports.create_output("out1").unwrap();
+        let mut props = Properties::new("detector", "detector");
+        props.set("apertures", ports.into()).unwrap();
         Self {
             light_data: Default::default(),
-            props: Properties::new("detector", "detector"),
+            props,
         }
     }
 }
 impl Detector {
     /// Creates a new [`Detector`].
     pub fn new(name: &str) -> Self {
+        let mut ports = OpticPorts::new();
+        ports.create_input("in1").unwrap();
+        ports.create_output("out1").unwrap();
+        let mut props = Properties::new(name, "detector");
+        props.set("apertures", ports.into()).unwrap();
         Self {
-            props: Properties::new(name, "detector"),
+            props,
             ..Default::default()
         }
     }
 }
 impl Optical for Detector {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        if self.properties().inverted() {
-            ports.set_inverted(true);
-        }
-        ports.add_input("in1").unwrap();
-        ports.add_output("out1").unwrap();
-        ports
-    }
     fn analyze(
         &mut self,
         incoming_data: LightResult,

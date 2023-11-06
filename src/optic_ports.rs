@@ -1,16 +1,17 @@
-use serde_derive::Serialize;
+use serde_derive::{Deserialize, Serialize};
 
 use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},
+    properties::Proptype,
 };
 use std::{collections::BTreeMap, fmt::Display};
 
 /// Structure defining the optical ports (input / output terminals) of an [`Optical`](crate::optical::Optical).
-#[derive(Default, Debug, Clone, Serialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct OpticPorts {
-    inputs: BTreeMap<String, Option<Aperture>>,
-    outputs: BTreeMap<String, Option<Aperture>>,
+    inputs: BTreeMap<String, Aperture>,
+    outputs: BTreeMap<String, Aperture>,
     inverted: bool,
 }
 
@@ -44,23 +45,22 @@ impl OpticPorts {
                 .collect::<Vec<String>>()
         }
     }
-    pub fn inputs(&self) -> &BTreeMap<String, Option<Aperture>> {
+    pub fn inputs(&self) -> &BTreeMap<String, Aperture> {
         if self.inverted {
             &self.outputs
         } else {
             &self.inputs
         }
     }
-    pub fn outputs(&self) -> &BTreeMap<String, Option<Aperture>> {
+    pub fn outputs(&self) -> &BTreeMap<String, Aperture> {
         if self.inverted {
             &self.inputs
         } else {
             &self.outputs
         }
     }
-
-    pub fn add_input(&mut self, name: &str) -> OpmResult<Vec<String>> {
-        if self.inputs.insert(name.into(), None).is_none() {
+    pub fn create_input(&mut self, name: &str) -> OpmResult<Vec<String>> {
+        if self.inputs.insert(name.into(), Aperture::None).is_none() {
             Ok(self.input_names())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -69,13 +69,35 @@ impl OpticPorts {
             )))
         }
     }
-    pub fn add_output(&mut self, name: &str) -> OpmResult<Vec<String>> {
-        if self.outputs.insert(name.into(), None).is_none() {
+    pub fn create_output(&mut self, name: &str) -> OpmResult<Vec<String>> {
+        if self.outputs.insert(name.into(), Aperture::None).is_none() {
             Ok(self.output_names())
         } else {
             Err(OpossumError::OpticPort(format!(
                 "output port with name {} already exists",
                 name
+            )))
+        }
+    }
+    pub fn set_input_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
+        if self.inputs.contains_key(port_name) {
+            self.inputs.insert(port_name.to_owned(), aperture);
+            Ok(())
+        } else {
+            Err(OpossumError::OpticPort(format!(
+                "input port <{}> does not exist",
+                port_name
+            )))
+        }
+    }
+    pub fn set_output_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
+        if self.outputs.contains_key(port_name) {
+            self.outputs.insert(port_name.to_owned(), aperture);
+            Ok(())
+        } else {
+            Err(OpossumError::OpticPort(format!(
+                "output port <{}> does not exist",
+                port_name
             )))
         }
     }
@@ -89,7 +111,11 @@ impl OpticPorts {
         self.inverted
     }
 }
-
+impl From<OpticPorts> for Proptype {
+    fn from(value: OpticPorts) -> Self {
+        Proptype::OpticPorts(value)
+    }
+}
 impl Display for OpticPorts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "inputs:").unwrap();
@@ -127,36 +153,36 @@ mod test {
     #[test]
     fn add_input_ok() {
         let mut ports = OpticPorts::new();
-        assert!(ports.add_input("Test").is_ok());
+        assert!(ports.create_input("Test").is_ok());
         assert_eq!(ports.inputs.len(), 1);
     }
     #[test]
     fn add_input_twice() {
         let mut ports = OpticPorts::new();
-        assert_eq!(ports.add_input("Test").unwrap(), vec!["Test"]);
-        assert!(ports.add_input("Test").is_err());
+        assert_eq!(ports.create_input("Test").unwrap(), vec!["Test"]);
+        assert!(ports.create_input("Test").is_err());
         assert_eq!(ports.inputs.len(), 1);
     }
     #[test]
     fn add_output_ok() {
         let mut ports = OpticPorts::new();
-        assert_eq!(ports.add_output("Test").unwrap(), vec!["Test"]);
+        assert_eq!(ports.create_output("Test").unwrap(), vec!["Test"]);
         assert_eq!(ports.outputs.len(), 1);
     }
     #[test]
     fn add_output_twice() {
         let mut ports = OpticPorts::new();
-        assert!(ports.add_output("Test").is_ok());
-        assert!(ports.add_output("Test").is_err());
+        assert!(ports.create_output("Test").is_ok());
+        assert!(ports.create_output("Test").is_err());
         assert_eq!(ports.outputs.len(), 1);
     }
     #[test]
     fn inputs() {
         let mut ports = OpticPorts::new();
-        ports.add_input("Test1").unwrap();
-        ports.add_input("Test2").unwrap();
-        ports.add_output("Test3").unwrap();
-        ports.add_output("Test4").unwrap();
+        ports.create_input("Test1").unwrap();
+        ports.create_input("Test2").unwrap();
+        ports.create_output("Test3").unwrap();
+        ports.create_output("Test4").unwrap();
         let mut v = ports.input_names();
         v.sort();
         assert_eq!(v, vec!["Test1".to_string(), "Test2".to_string()]);
@@ -165,10 +191,10 @@ mod test {
     fn inputs_inverted() {
         let mut ports = OpticPorts::new();
         ports.set_inverted(true);
-        ports.add_input("Test1").unwrap();
-        ports.add_input("Test2").unwrap();
-        ports.add_output("Test3").unwrap();
-        ports.add_output("Test4").unwrap();
+        ports.create_input("Test1").unwrap();
+        ports.create_input("Test2").unwrap();
+        ports.create_output("Test3").unwrap();
+        ports.create_output("Test4").unwrap();
         let mut v = ports.input_names();
         v.sort();
         assert_eq!(v, vec!["Test3".to_string(), "Test4".to_string()]);
@@ -176,10 +202,10 @@ mod test {
     #[test]
     fn outputs() {
         let mut ports = OpticPorts::new();
-        ports.add_input("Test1").unwrap();
-        ports.add_input("Test2").unwrap();
-        ports.add_output("Test3").unwrap();
-        ports.add_output("Test4").unwrap();
+        ports.create_input("Test1").unwrap();
+        ports.create_input("Test2").unwrap();
+        ports.create_output("Test3").unwrap();
+        ports.create_output("Test4").unwrap();
         let mut v = ports.output_names();
         v.sort();
         assert_eq!(v, vec!["Test3".to_string(), "Test4".to_string()]);
@@ -188,10 +214,10 @@ mod test {
     fn outputs_inverted() {
         let mut ports = OpticPorts::new();
         ports.set_inverted(true);
-        ports.add_input("Test1").unwrap();
-        ports.add_input("Test2").unwrap();
-        ports.add_output("Test3").unwrap();
-        ports.add_output("Test4").unwrap();
+        ports.create_input("Test1").unwrap();
+        ports.create_input("Test2").unwrap();
+        ports.create_output("Test3").unwrap();
+        ports.create_output("Test4").unwrap();
         let mut v = ports.output_names();
         v.sort();
         assert_eq!(v, vec!["Test1".to_string(), "Test2".to_string()]);
@@ -219,10 +245,10 @@ mod test {
     #[test]
     fn display_entries() {
         let mut ports = OpticPorts::new();
-        ports.add_input("test1").unwrap();
-        ports.add_input("test2").unwrap();
-        ports.add_output("test3").unwrap();
-        ports.add_output("test4").unwrap();
+        ports.create_input("test1").unwrap();
+        ports.create_input("test2").unwrap();
+        ports.create_output("test3").unwrap();
+        ports.create_output("test4").unwrap();
         assert_eq!(
             ports.to_string(),
             "inputs:\n  <test1> None\n  <test2> None\noutput:\n  <test3> None\n  <test4> None\n"
@@ -232,10 +258,10 @@ mod test {
     #[test]
     fn display_entries_inverted() {
         let mut ports = OpticPorts::new();
-        ports.add_input("test1").unwrap();
-        ports.add_input("test2").unwrap();
-        ports.add_output("test3").unwrap();
-        ports.add_output("test4").unwrap();
+        ports.create_input("test1").unwrap();
+        ports.create_input("test2").unwrap();
+        ports.create_output("test3").unwrap();
+        ports.create_output("test4").unwrap();
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),

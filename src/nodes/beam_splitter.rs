@@ -44,6 +44,12 @@ fn create_default_props() -> Properties {
             0.5.into(),
         )
         .unwrap();
+    let mut ports = OpticPorts::new();
+    ports.create_input("input1").unwrap();
+    ports.create_input("input2").unwrap();
+    ports.create_output("out1_trans1_refl2").unwrap();
+    ports.create_output("out2_trans2_refl1").unwrap();
+    props.set("apertures", ports.into()).unwrap();
     props
 }
 impl BeamSplitter {
@@ -161,18 +167,6 @@ impl Default for BeamSplitter {
     }
 }
 impl Optical for BeamSplitter {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_input("input1").unwrap();
-        ports.add_input("input2").unwrap();
-        ports.add_output("out1_trans1_refl2").unwrap();
-        ports.add_output("out2_trans2_refl1").unwrap();
-        if self.properties().get_bool("inverted").unwrap().unwrap() {
-            ports.set_inverted(true)
-        }
-        ports
-    }
-
     fn analyze(
         &mut self,
         incoming_data: LightResult,

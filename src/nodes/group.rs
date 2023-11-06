@@ -672,10 +672,10 @@ impl Optical for NodeGroup {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         for p in self.input_port_map().iter() {
-            ports.add_input(p.0).unwrap();
+            ports.create_input(p.0).unwrap();
         }
         for p in self.output_port_map().iter() {
-            ports.add_output(p.0).unwrap();
+            ports.create_output(p.0).unwrap();
         }
         if self.properties().inverted() {
             ports.set_inverted(true);

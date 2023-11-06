@@ -21,7 +21,12 @@ pub struct RealLens {
     props: Properties,
 }
 fn create_default_props() -> Properties {
-    Properties::new("lens", "lens")
+    let mut props = Properties::new("lens", "lens");
+    let mut ports = OpticPorts::new();
+    ports.create_input("in1").unwrap();
+    ports.create_output("out1").unwrap();
+    props.set("apertures", ports.into()).unwrap();
+    props
 }
 
 impl RealLens {
@@ -141,13 +146,6 @@ impl Default for RealLens {
 }
 
 impl Optical for RealLens {
-    fn ports(&self) -> OpticPorts {
-        let mut ports = OpticPorts::new();
-        ports.add_input("in1").unwrap();
-        ports.add_output("out1").unwrap();
-        ports
-    }
-
     fn analyze(
         &mut self,
         incoming_data: LightResult,
