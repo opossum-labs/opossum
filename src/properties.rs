@@ -12,6 +12,7 @@ use crate::{
     nodes::{FilterType, Metertype, PortMap, SpectrometerType},
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
+    rays::Rays,
     reporter::PdfReportable,
     spectrum::Spectrum,
 };
@@ -417,6 +418,7 @@ pub enum Proptype {
     OpticPorts(OpticPorts),
     Aperture(Aperture),
     Spectrum(Spectrum),
+    Rays(Rays),
 }
 impl PdfReportable for Proptype {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
@@ -430,6 +432,7 @@ impl PdfReportable for Proptype {
             Proptype::SpectrometerType(value) => l.push(value.pdf_report()?),
             Proptype::Metertype(value) => l.push(value.pdf_report()?),
             Proptype::Spectrum(value) => l.push(value.pdf_report()?),
+            Proptype::Rays(value) => l.push(value.pdf_report()?),
             _ => l.push(
                 genpdf::elements::Paragraph::default()
                     .styled_string("unknown poperty type", style::Effect::Italic),

@@ -3,6 +3,9 @@
 use crate::aperture::Aperture;
 use crate::error::OpossumError;
 use crate::plottable::Plottable;
+use crate::properties::Proptype;
+use crate::reporter::PdfReportable;
+use image::DynamicImage;
 use nalgebra::{point, Point2, Point3};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
@@ -157,6 +160,22 @@ impl Rays {
             }
         }
         self.rays = new_rays;
+    }
+}
+impl From<Rays> for Proptype {
+    fn from(value: Rays) -> Self {
+        Proptype::Rays(value)
+    }
+}
+impl PdfReportable for Rays {
+    fn pdf_report(&self) -> crate::error::OpmResult<genpdf::elements::LinearLayout> {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let img = self.to_img_buf_plot().unwrap();
+        layout.push(
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
+                .map_err(|e| format!("adding of image failed: {}", e))?,
+        );
+        Ok(layout)
     }
 }
 impl Plottable for Rays {
