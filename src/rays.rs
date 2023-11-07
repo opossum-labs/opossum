@@ -5,6 +5,8 @@ use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
 use plotters::style::RED;
 use rand::Rng;
+use sobol::params::JoeKuoD6;
+use sobol::Sobol;
 use uom::si::f64::{Energy, Length};
 
 use crate::error::OpossumError;
@@ -15,20 +17,20 @@ use crate::plottable::Plottable;
 pub struct Ray {
     ///Stores all positions of the ray
     pos: Point3<f64>, // this should be a vector of points?
-    // ///stores the current propagation direction of the ray
-    // dir: Vector3<f64>,
-    // ///stores the polarization vector (Jones vector) of the ray
-    // pol: Vector2<Complex<f64>>,
-    // ///energy of the ray
-    // e: Energy,
-    // ///Wavelength of the ray in nm
-    // wvl: Length,
-    // ///id of the ray
-    // id: usize,
-    // ///Bounce count of the ray. Necessary to check if the maximum number of bounces is reached
-    // bounce: usize,
-    // //True if ray is allowd to further propagate, false else
-    // //valid:  bool,
+                      // ///stores the current propagation direction of the ray
+                      // dir: Vector3<f64>,
+                      // ///stores the polarization vector (Jones vector) of the ray
+                      // pol: Vector2<Complex<f64>>,
+                      // ///energy of the ray
+                      // e: Energy,
+                      // ///Wavelength of the ray in nm
+                      // wvl: Length,
+                      // ///id of the ray
+                      // id: usize,
+                      // ///Bounce count of the ray. Necessary to check if the maximum number of bounces is reached
+                      // bounce: usize,
+                      // //True if ray is allowd to further propagate, false else
+                      // //valid:  bool,
 }
 impl Ray {
     /// Create a new collimated ray.
@@ -57,19 +59,20 @@ pub struct Rays {
 
 /// Strategy for the creation of a 2D point set
 pub enum DistributionStrategy {
-    /// Hexagonal distribution with a given number of rings
+    /// Circular, hexapolar distribution with a given number of rings within a given radius
     Hexapolar(u8),
-    /// Random distribution of 2D points with a given number of points
+    /// Square, random distribution with a given number of points within a given side length
     Random(usize),
-    //Sobol(usize),
+    /// Square, low-discrepancy quasirandom distribution with a given number of points within a given side length
+    Sobol(usize),
 }
 impl DistributionStrategy {
-    /// Generate a vector of 2D points within a given radius around (0.0,0.0).
-    pub fn generate(&self, radius: f64) -> Vec<Point2<f64>> {
+    /// Generate a vector of 2D points within a given size (which depends on the concrete strategy)
+    pub fn generate(&self, size: f64) -> Vec<Point2<f64>> {
         match self {
-            DistributionStrategy::Hexapolar(rings) => hexapolar(*rings, radius),
-            DistributionStrategy::Random(nr_of_rays) => random(*nr_of_rays, radius),
-            //DistributionStrategy::Sobol(nr_of_rays) => sobol(*nr_of_rays, radius),
+            DistributionStrategy::Hexapolar(rings) => hexapolar(*rings, size),
+            DistributionStrategy::Random(nr_of_rays) => random(*nr_of_rays, size),
+            DistributionStrategy::Sobol(nr_of_rays) => sobol(*nr_of_rays, size),
         }
     }
 }
@@ -88,20 +91,27 @@ fn hexapolar(rings: u8, radius: f64) -> Vec<Point2<f64>> {
     }
     points
 }
-fn random(nr_of_rays: usize, radius: f64) -> Vec<Point2<f64>> {
+fn random(nr_of_rays: usize, side_length: f64) -> Vec<Point2<f64>> {
     let mut points: Vec<Point2<f64>> = Vec::new();
     let mut rng = rand::thread_rng();
     for _ in 0..nr_of_rays {
-        let angle = rng.gen_range(0.0..2.0 * std::f64::consts::PI);
-        let radius = rng.gen_range(0.0..radius);
-        let point = angle.sin_cos();
-        points.push(point![radius * point.0, radius * point.1]);
+        points.push(point![
+            rng.gen_range(-side_length..side_length),
+            rng.gen_range(-side_length..side_length)
+        ]);
     }
     points
 }
-// fn sobol(nr_of_rays: usize, radius: f64) -> Vec<Point2<f64>> {
-//     vec![]
-// }
+fn sobol(nr_of_rays: usize, side_length: f64) -> Vec<Point2<f64>> {
+    let mut points: Vec<Point2<f64>> = Vec::new();
+    let params = JoeKuoD6::minimal();
+    let seq = Sobol::<f64>::new(2, &params);
+    let offset=side_length / 2.0;
+    for point in seq.take(nr_of_rays) {
+        points.push(point!(point[0]-offset, point[1]-offset));
+    }
+    points
+}
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis).
     pub fn new_uniform_collimated(
