@@ -1,8 +1,11 @@
 use std::path::Path;
 
+use nalgebra::point;
 use opossum::{
+    aperture::{Aperture, CircleConfig},
     error::OpmResult,
     nodes::{create_ray_source, EnergyMeter, SpotDiagram},
+    optical::Optical,
     OpticScenery,
 };
 use uom::si::{energy::joule, f64::Energy};
@@ -10,7 +13,12 @@ use uom::si::{energy::joule, f64::Energy};
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Raysource demo");
-    let i_s = scenery.add_node(create_ray_source(1.0, Energy::new::<joule>(1.0)));
+    let mut source = create_ray_source(1.0, Energy::new::<joule>(1.0));
+    let aperture = Aperture::BinaryCircle(CircleConfig::new(1.0, point![0.5, 0.5])?);
+    let mut ports = source.ports();
+    ports.set_output_aperture("out1", aperture)?;
+    source.set_property("apertures", ports.into())?;
+    let i_s = scenery.add_node(source);
     let i_d = scenery.add_node(EnergyMeter::default());
     let i_sd = scenery.add_node(SpotDiagram::default());
     scenery.connect_nodes(i_s, "out1", i_d, "in1")?;
