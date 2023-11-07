@@ -93,7 +93,6 @@ impl Debug for Source {
         }
     }
 }
-
 impl Optical for Source {
     fn analyze(
         &mut self,
@@ -101,13 +100,8 @@ impl Optical for Source {
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
         let light_prop = self.props.get("light data").unwrap();
-        let data = if let Proptype::LightData(data) = &light_prop {
-            data
-        } else {
-            &None
-        };
-        if data.is_some() {
-            Ok(HashMap::from([("out1".into(), data.to_owned())]))
+        if let Proptype::LightData(Some(data)) = &light_prop {
+            Ok(HashMap::from([("out1".into(), Some(data.to_owned()))]))
         } else {
             Err(OpossumError::Analysis("no light data defined".into()))
         }

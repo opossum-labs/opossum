@@ -9,9 +9,9 @@ use crate::{
     optical::{LightResult, Optical},
 };
 use serde_derive::{Deserialize, Serialize};
-use uom::si::energy::joule;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use uom::si::energy::joule;
 
 #[non_exhaustive]
 #[derive(Debug, Default, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -134,7 +134,7 @@ impl Optical for EnergyMeter {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn report(&self) -> Option<NodeReport> { 
+    fn report(&self) -> Option<NodeReport> {
         let mut energy: Option<f64> = None;
         if let Some(light_data) = &self.light_data {
             energy = match light_data {
@@ -144,23 +144,13 @@ impl Optical for EnergyMeter {
             };
         };
         let mut props = Properties::default();
-        if let Some(e)=energy {
+        if let Some(e) = energy {
             props
-                .create(
-                    "Energy",
-                    "Output energy",
-                    None,
-                    e.into(),
-                )
+                .create("Energy", "Output energy", None, e.into())
                 .unwrap();
         } else {
             props
-                .create(
-                    "Energy",
-                    "Output energy",
-                    None,
-                    "no info".into(),
-                )
+                .create("Energy", "Output energy", None, "no info".into())
                 .unwrap();
         }
         props
