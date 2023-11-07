@@ -9,6 +9,7 @@ use crate::{
     optical::{LightResult, Optical},
 };
 use serde_derive::{Deserialize, Serialize};
+use uom::si::energy::joule;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -133,27 +134,43 @@ impl Optical for EnergyMeter {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
     }
-    fn report(&self) -> Option<NodeReport> {
+    fn report(&self) -> Option<NodeReport> { 
+        let mut energy: Option<f64> = None;
+        if let Some(light_data) = &self.light_data {
+            energy = match light_data {
+                LightData::Energy(e) => Some(e.spectrum.total_energy()),
+                LightData::Geometric(r) => Some(r.total_energy().get::<joule>()),
+                _ => None,
+            };
+        };
         let mut props = Properties::default();
-        let data = &self.light_data;
-        if let Some(LightData::Energy(e)) = data {
+        if let Some(e)=energy {
             props
                 .create(
                     "Energy",
                     "Output energy",
                     None,
-                    e.spectrum.total_energy().into(),
+                    e.into(),
                 )
                 .unwrap();
+        } else {
             props
                 .create(
-                    "Model",
-                    "type of meter",
+                    "Energy",
+                    "Output energy",
                     None,
-                    self.props.get("meter type").unwrap().to_owned(),
+                    "no info".into(),
                 )
                 .unwrap();
-        };
+        }
+        props
+            .create(
+                "Model",
+                "type of meter",
+                None,
+                self.props.get("meter type").unwrap().to_owned(),
+            )
+            .unwrap();
         Some(NodeReport::new(
             self.properties().node_type().unwrap(),
             self.properties().name().unwrap(),
