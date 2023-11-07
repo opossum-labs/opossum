@@ -2,15 +2,22 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use uom::si::{f64::{Energy, Length}, length::nanometer};
+
 use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Proptype},
+    properties::{Properties, Proptype}, rays::{Rays, DistributionStrategy},
 };
 
+pub fn create_ray_source(radius: f64, energy: Energy) -> Source {
+    let rays=Rays::new_uniform_collimated(radius, Length::new::<nanometer>(1053.0), energy, DistributionStrategy::Hexapolar(3));
+    let light=LightData::Geometric(rays);
+    Source::new("ray source", light)
+}
 /// A general light source
 ///
 /// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an [`OpticScenery`](crate::OpticScenery).
@@ -101,6 +108,15 @@ impl Optical for Source {
     ) -> OpmResult<LightResult> {
         let light_prop = self.props.get("light data").unwrap();
         if let Proptype::LightData(Some(data)) = &light_prop {
+            if let Ok(Proptype::OpticPorts(ports))=self.props.get("apertures") {
+                if let Some(aperture)=ports.outputs().get("out1") {
+                    if let LightData::Geometric(rays)=data {
+                        let mut newrays=rays.clone();
+                        newrays.apodize(aperture);
+                        return  Ok(HashMap::from([("out1".into(), Some(LightData::Geometric(newrays)))]))
+                    }
+                }
+            }
             Ok(HashMap::from([("out1".into(), Some(data.to_owned()))]))
         } else {
             Err(OpossumError::Analysis("no light data defined".into()))
