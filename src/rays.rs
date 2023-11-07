@@ -1,55 +1,64 @@
 #![warn(missing_docs)]
 //! Module for handling rays
+use crate::aperture::Aperture;
+use crate::error::OpossumError;
+use crate::plottable::Plottable;
 use nalgebra::{point, Point2, Point3};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
 use plotters::style::RED;
 use rand::Rng;
-use sobol::params::JoeKuoD6;
-use sobol::Sobol;
+use serde_derive::{Deserialize, Serialize};
+use sobol::{params::JoeKuoD6, Sobol};
+use uom::num_traits::Zero;
 use uom::si::f64::{Energy, Length};
 
-use crate::error::OpossumError;
-use crate::plottable::Plottable;
-
-///Struct that contains all informatino about a ray
-#[derive(Debug)]
+///Struct that contains all information about an optical ray
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {
     ///Stores all positions of the ray
     pos: Point3<f64>, // this should be a vector of points?
-                      // ///stores the current propagation direction of the ray
-                      // dir: Vector3<f64>,
-                      // ///stores the polarization vector (Jones vector) of the ray
-                      // pol: Vector2<Complex<f64>>,
-                      // ///energy of the ray
-                      // e: Energy,
-                      // ///Wavelength of the ray in nm
-                      // wvl: Length,
-                      // ///id of the ray
-                      // id: usize,
-                      // ///Bounce count of the ray. Necessary to check if the maximum number of bounces is reached
-                      // bounce: usize,
-                      // //True if ray is allowd to further propagate, false else
-                      // //valid:  bool,
+    // ///stores the current propagation direction of the ray
+    // dir: Vector3<f64>,
+    // ///stores the polarization vector (Jones vector) of the ray
+    // pol: Vector2<Complex<f64>>,
+    ///energy of the ray
+    e: Energy,
+    ///Wavelength of the ray in nm
+    wvl: Length,
+    // ///id of the ray
+    // id: usize,
+    // ///Bounce count of the ray. Necessary to check if the maximum number of bounces is reached
+    // bounce: usize,
+    // //True if ray is allowd to further propagate, false else
+    // //valid:  bool,
 }
 impl Ray {
     /// Create a new collimated ray.
     ///
     /// Generate a ray a horizontally polarized ray collinear with the z axis (optical axis).
-    pub fn new_collimated(position: Point2<f64>, _wave_length: Length, _energy: Energy) -> Self {
+    pub fn new_collimated(position: Point2<f64>, wave_length: Length, energy: Energy) -> Self {
         Self {
             pos: Point3::new(position.x, position.y, 0.0),
             //dir: Vector3::new(0.0, 0.0, 1.0),
-            // pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
-            // e: energy,
-            // wvl: wave_length,
-            // id: 0,
-            // bounce: 0,
+            //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
+            e: energy,
+            wvl: wave_length,
+            //id: 0,
+            //bounce: 0,
         }
+    }
+    /// Returns the energy of this [`Ray`].
+    pub fn energy(&self) -> Energy {
+        self.e
+    }
+    /// Returns the wavelength of this [`Ray`].
+    pub fn wavelength(&self) -> Length {
+        self.wvl
     }
 }
 ///Struct containing all relevant information of a created bundle of rays
-#[derive(Debug)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Rays {
     ///vector containing rays
     rays: Vec<Ray>,
@@ -106,21 +115,21 @@ fn sobol(nr_of_rays: usize, side_length: f64) -> Vec<Point2<f64>> {
     let mut points: Vec<Point2<f64>> = Vec::new();
     let params = JoeKuoD6::minimal();
     let seq = Sobol::<f64>::new(2, &params);
-    let offset=side_length / 2.0;
+    let offset = side_length / 2.0;
     for point in seq.take(nr_of_rays) {
-        points.push(point!(point[0]-offset, point[1]-offset));
+        points.push(point!(point[0] - offset, point[1] - offset));
     }
     points
 }
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis).
     pub fn new_uniform_collimated(
-        radius: f64,
+        size: f64,
         wave_length: Length,
         energy: Energy,
         strategy: DistributionStrategy,
     ) -> Self {
-        let points: Vec<Point2<f64>> = strategy.generate(radius);
+        let points: Vec<Point2<f64>> = strategy.generate(size);
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::new();
         for point in points {
@@ -128,6 +137,26 @@ impl Rays {
             rays.push(ray);
         }
         Self { rays }
+    }
+    /// Returns the total energy of this [`Rays`].
+    ///
+    /// This simply sums up all energies of the individual rays.
+    pub fn total_energy(&self) -> Energy {
+        self.rays.iter().fold(Energy::zero(), |a, b| a + b.e)
+    }
+    /// Apodize (cut out or attenuate) the ray bundle by a given [`Aperture`].
+    pub fn apodize(&mut self, aperture: &Aperture) {
+        let mut new_rays: Vec<Ray> = Vec::new();
+        for ray in self.rays.iter() {
+            let pos = point![ray.pos.x, ray.pos.y];
+            let ap_factor = aperture.apodization_factor(&pos);
+            if ap_factor > 0.0 {
+                let mut new_ray = ray.clone();
+                new_ray.e *= ap_factor;
+                new_rays.push(new_ray);
+            }
+        }
+        self.rays = new_rays;
     }
 }
 impl Plottable for Rays {
@@ -188,9 +217,8 @@ impl Plottable for Rays {
 }
 #[cfg(test)]
 mod test {
-    use uom::si::{energy::joule, length::nanometer};
-
     use super::*;
+    use uom::si::{energy::joule, length::nanometer};
     #[test]
     fn strategy_hexapolar() {
         let strategy = DistributionStrategy::Hexapolar(0);
@@ -214,5 +242,9 @@ mod test {
             DistributionStrategy::Hexapolar(2),
         );
         assert_eq!(rays.rays.len(), 19);
+        assert!(
+            Energy::abs(rays.total_energy() - Energy::new::<joule>(1.0))
+                < Energy::new::<joule>(10.0 * f64::EPSILON)
+        );
     }
 }

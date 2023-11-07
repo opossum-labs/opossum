@@ -10,6 +10,7 @@ use uom::si::{energy::joule, f64::Energy};
 use crate::error::OpmResult;
 use crate::plottable::Plottable;
 use crate::properties::Proptype;
+use crate::rays::Rays;
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 
@@ -22,7 +23,7 @@ pub enum LightData {
     /// data type used for energy analysis.
     Energy(DataEnergy),
     /// data type used for geometric optics analysis (ray tracing)
-    Geometric(DataGeometric),
+    Geometric(Rays),
     /// placeholder value for future Fourier optics analysis, nothing implementd yet.
     Fourier,
 }
@@ -65,11 +66,6 @@ impl Plottable for DataEnergy {
         self.spectrum.chart(root)
     }
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct DataGeometric {
-    _ray: i32,
-}
-
 impl From<Option<LightData>> for Proptype {
     fn from(value: Option<LightData>) -> Self {
         Proptype::LightData(value)
