@@ -9,6 +9,7 @@ mod lens;
 mod reference;
 mod source;
 mod spectrometer;
+mod spot_diagram;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -21,6 +22,7 @@ pub use group::PortMap;
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::{IdealLens, RealLens};
 pub use reference::NodeReference;
+pub use source::create_ray_source;
 pub use source::Source;
 
 pub use energy_meter::EnergyMeter;
@@ -28,6 +30,9 @@ pub use energy_meter::Metertype;
 
 pub use spectrometer::Spectrometer;
 pub use spectrometer::SpectrometerType;
+
+pub use spot_diagram::SpotDiagram;
+
 use uuid::Uuid;
 
 use crate::error::OpmResult;
@@ -79,6 +84,10 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         )),
         "spectrometer" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Spectrometer::default())),
+            uuid,
+        )),
+        "spot diagram" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(SpotDiagram::default())),
             uuid,
         )),
         _ => Err(OpossumError::Other(format!(

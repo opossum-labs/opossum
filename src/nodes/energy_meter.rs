@@ -11,6 +11,7 @@ use crate::{
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
+use uom::si::energy::joule;
 
 #[non_exhaustive]
 #[derive(Debug, Default, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -134,26 +135,32 @@ impl Optical for EnergyMeter {
         self.props.set(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
-        let mut props = Properties::default();
-        let data = &self.light_data;
-        if let Some(LightData::Energy(e)) = data {
-            props
-                .create(
-                    "Energy",
-                    "Output energy",
-                    None,
-                    e.spectrum.total_energy().into(),
-                )
-                .unwrap();
-            props
-                .create(
-                    "Model",
-                    "type of meter",
-                    None,
-                    self.props.get("meter type").unwrap().to_owned(),
-                )
-                .unwrap();
+        let mut energy: Option<f64> = None;
+        if let Some(light_data) = &self.light_data {
+            energy = match light_data {
+                LightData::Energy(e) => Some(e.spectrum.total_energy()),
+                LightData::Geometric(r) => Some(r.total_energy().get::<joule>()),
+                _ => None,
+            };
         };
+        let mut props = Properties::default();
+        if let Some(e) = energy {
+            props
+                .create("Energy", "Output energy", None, e.into())
+                .unwrap();
+        } else {
+            props
+                .create("Energy", "Output energy", None, "no info".into())
+                .unwrap();
+        }
+        props
+            .create(
+                "Model",
+                "type of meter",
+                None,
+                self.props.get("meter type").unwrap().to_owned(),
+            )
+            .unwrap();
         Some(NodeReport::new(
             self.properties().node_type().unwrap(),
             self.properties().name().unwrap(),

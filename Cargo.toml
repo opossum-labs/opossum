@@ -16,7 +16,7 @@ build = "build.rs"
 
 [dependencies]
 petgraph = { version = "0", features = ["serde-1"] } # the graph library
-uom = "0"
+uom = {version="0", features = ["serde"] }
 serde = { version = "1" }
 serde_derive = "1"
 serde_yaml = "0"
