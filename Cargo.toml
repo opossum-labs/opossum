@@ -44,8 +44,10 @@ ncollide2d = "0.33"
 nalgebra = { version= "0", features = ["serde-serialize"] }
 
 genpdf={ version="0", features = ["images"] }
-image="0"
+image="0.23"
 tempfile="3"
+rand="0"
+sobol="1"
 [features]
 doc-images = []
 

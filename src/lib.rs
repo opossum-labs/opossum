@@ -30,6 +30,7 @@ pub use optic_scenery::OpticScenery;
 pub mod console;
 mod optic_graph;
 mod optic_ref;
+pub mod rays;
 pub mod reporter;
 
 /// Return the version information of the currently built OPOSSUM executable.
