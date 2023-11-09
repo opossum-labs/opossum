@@ -49,8 +49,8 @@ test_windows:
   tags:
     - windows
   script:
-    - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
-    - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
+    # - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
+    # - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
     - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
 #    - rustup default nightly
 #    - cargo install junitify
@@ -68,8 +68,8 @@ clippy:
   tags:
     - windows
   script:
-    - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
-    - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
+    # - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
+    # - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
     - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - cargo clippy --workspace
     - cargo clean
@@ -84,8 +84,8 @@ build-windows:
   tags:
     - windows
   script:
-    - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
-    - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
+    # - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
+    # - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
     - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - cargo build --release
   dependencies:
@@ -114,8 +114,8 @@ build-doc:
   tags:
     - windows
   script:
-    - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
-    - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
+    # - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
+    # - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
     - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - cargo doc --no-deps
   dependencies:
