@@ -1,10 +1,8 @@
-use opossum::analyzer::AnalyzerEnergy;
 use opossum::error::OpossumError;
 use opossum::nodes::{Dummy, NodeReference};
 use opossum::optical::Optical;
 use opossum::OpticScenery;
-use std::fs::File;
-use std::io::Write;
+use std::path::Path;
 
 fn main() -> Result<(), OpossumError> {
     let mut scenery = OpticScenery::new();
@@ -45,15 +43,6 @@ fn main() -> Result<(), OpossumError> {
     // group.connect_nodes(g_n2, "rear", g_n3, "front").unwrap();
     // group.connect_nodes(g_n3, "rear", g_n4, "in1").unwrap();
     // scenery.add_node(OpticNode::new("CamBox", group));
-    let path = "graph.dot";
-    let mut output = File::create(path).unwrap();
-    write!(output, "{}", scenery.to_dot("LR")?).unwrap();
-    // write!(output, "{}", scenery.to_dot()).unwrap();
-
-    let mut analyzer = AnalyzerEnergy::new(&scenery);
-    print!("Analyze...");
-    analyzer.analyze()?;
-    println!("Sucessful");
-
+    scenery.save_to_file(Path::new("playground/pa_doublepass.opm"))?;
     Ok(())
 }
