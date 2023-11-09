@@ -2,7 +2,7 @@
 //!
 //! This module handles the command line parsing as well as basic information (e.g. help dialog, version information, etc.).
 use crate::{
-    analyzer::AnalyzerType,
+    analyzer::{AnalyzerType, RayTraceConfig},
     error::{OpmResult, OpossumError},
     get_version,
 };
@@ -56,7 +56,7 @@ fn eval_file_path_input(file_path: &str) -> Option<PathBuf> {
 fn eval_analyzer_input(analyzer_input: &str) -> Option<AnalyzerType> {
     match analyzer_input {
         "e" => Some(AnalyzerType::Energy),
-        "r" => Some(AnalyzerType::RayTrace),
+        "r" => Some(AnalyzerType::RayTrace(RayTraceConfig::default())),
         _ => None,
     }
 }
@@ -82,7 +82,7 @@ fn create_prompt_str(flag: &str, init_str: &str) -> OpmResult<String> {
             for a_type in AnalyzerType::iter(){
                 prompt_str += match a_type {
                     AnalyzerType::Energy => "e for energy analysis\n",
-                    AnalyzerType::RayTrace=> "r for ray-tracing analysis\n", 
+                    AnalyzerType::RayTrace(_) => "r for ray-tracing analysis\n", 
                 };
             }
             Ok(prompt_str)
@@ -230,6 +230,8 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
 
 #[cfg(test)]
 mod test {
+    use crate::analyzer::RayTraceConfig;
+
     use super::*;
     #[test]
     fn file_path_is_valid_test() {
@@ -266,7 +268,10 @@ mod test {
     #[test]
     fn eval_analyzer_input_test() {
         assert_eq!(eval_analyzer_input("e").unwrap(), AnalyzerType::Energy);
-        assert_eq!(eval_analyzer_input("r").unwrap(), AnalyzerType::RayTrace);
+        assert_eq!(
+            eval_analyzer_input("r").unwrap(),
+            AnalyzerType::RayTrace(RayTraceConfig::default())
+        );
     }
     #[test]
     fn eval_report_directory_input_test() {

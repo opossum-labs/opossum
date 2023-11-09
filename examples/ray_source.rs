@@ -4,7 +4,7 @@ use nalgebra::point;
 use opossum::{
     aperture::{Aperture, CircleConfig},
     error::OpmResult,
-    nodes::{create_ray_source, EnergyMeter, SpotDiagram, Dummy},
+    nodes::{create_ray_source, Dummy, EnergyMeter, SpotDiagram},
     optical::Optical,
     OpticScenery,
 };
@@ -19,8 +19,8 @@ fn main() -> OpmResult<()> {
     ports.set_output_aperture("out1", aperture)?;
     source.set_property("apertures", ports.into())?;
     let i_s = scenery.add_node(source);
-    let dummy=Dummy::default();
-    let i_dummy=scenery.add_node(dummy);
+    let dummy = Dummy::default();
+    let i_dummy = scenery.add_node(dummy);
     let i_d = scenery.add_node(EnergyMeter::default());
     let i_sd = scenery.add_node(SpotDiagram::default());
     scenery.connect_nodes(i_s, "out1", i_dummy, "front")?;

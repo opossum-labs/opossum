@@ -195,7 +195,7 @@ impl Dottable for BeamSplitter {
 
 #[cfg(test)]
 mod test {
-    use crate::spectrum::create_he_ne_spectrum;
+    use crate::{analyzer::RayTraceConfig, spectrum::create_he_ne_spectrum};
     use approx::AbsDiffEq;
 
     use super::*;
@@ -264,7 +264,9 @@ mod test {
     fn analyze_wrong_analyszer() {
         let mut node = BeamSplitter::default();
         let input = LightResult::default();
-        assert!(node.analyze(input, &AnalyzerType::RayTrace).is_err());
+        assert!(node
+            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
+            .is_err());
     }
     #[test]
     fn analyze_empty_input() {

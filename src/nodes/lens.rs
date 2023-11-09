@@ -155,7 +155,7 @@ impl Optical for RealLens {
             AnalyzerType::Energy => Err(OpossumError::Analysis(
                 "Energy Analysis is not yet implemented for Lens Nodes".into(),
             )),
-            AnalyzerType::RayTrace => self.analyze_ray_trace(incoming_data),
+            AnalyzerType::RayTrace(_) => self.analyze_ray_trace(incoming_data),
         }
     }
     fn properties(&self) -> &Properties {
