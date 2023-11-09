@@ -49,9 +49,7 @@ test_windows:
   tags:
     - windows
   script:
-    # - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
-    # - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
-    - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
+#    - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
 #    - rustup default nightly
 #    - cargo install junitify
     # junitify does not find some files under windows ???
@@ -68,9 +66,7 @@ clippy:
   tags:
     - windows
   script:
-    # - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
-    # - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
-    - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
+    #- $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - cargo clippy --workspace
     - cargo clean
   dependencies:
@@ -84,9 +80,7 @@ build-windows:
   tags:
     - windows
   script:
-    # - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
-    # - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
-    - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
+#    - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - cargo build --release
   dependencies:
     - test_windows
@@ -114,9 +108,7 @@ build-doc:
   tags:
     - windows
   script:
-    # - $Env:CARGO_HOME="C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo"
-    # - $Env:CARGO_TARGET_DIR="C:\Users\ueisenb\Appdata\Local\0_gsi_executables\gitlab-runner\target"
-    - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
+#    - $Env:Path += ";C:\Users\ueisenb\AppData\Local\0_gsi_executables\.cargo\bin"
     - cargo doc --no-deps
   dependencies:
     - test_windows
