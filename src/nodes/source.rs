@@ -119,18 +119,6 @@ impl Optical for Source {
     ) -> OpmResult<LightResult> {
         let light_prop = self.props.get("light data").unwrap();
         if let Proptype::LightData(Some(data)) = &light_prop {
-            if let Ok(Proptype::OpticPorts(ports)) = self.props.get("apertures") {
-                if let Some(aperture) = ports.outputs().get("out1") {
-                    if let LightData::Geometric(rays) = data {
-                        let mut newrays = rays.clone();
-                        newrays.apodize(aperture);
-                        return Ok(HashMap::from([(
-                            "out1".into(),
-                            Some(LightData::Geometric(newrays)),
-                        )]));
-                    }
-                }
-            }
             Ok(HashMap::from([("out1".into(), Some(data.to_owned()))]))
         } else {
             Err(OpossumError::Analysis("no light data defined".into()))
