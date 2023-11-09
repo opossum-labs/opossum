@@ -201,7 +201,7 @@ impl OpticScenery {
             Ok(format!("i{}:{}", end_node.index(), light_port))
         }
     }
-    
+
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> OpmResult<()> {
         let sorted = toposort(&self.g.0, None)
@@ -214,7 +214,7 @@ impl OpticScenery {
             if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
                 return Err(OpossumError::Analysis("input light data contains port which is not an input port of the node. Data will be discarded.".into()));
             }
-            incoming_edges=apodize_incoming_light(incoming_edges, node)?;
+            incoming_edges = apodize_incoming_light(incoming_edges, node)?;
             //
             let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
             let node_type = node
@@ -233,7 +233,7 @@ impl OpticScenery {
                         node_name, node_type, e
                     )
                 })?;
-            outgoing_edges=apodize_outgoing_light(outgoing_edges, node)?;
+            outgoing_edges = apodize_outgoing_light(outgoing_edges, node)?;
             for outgoing_edge in outgoing_edges {
                 self.set_outgoing_edge_data(idx, outgoing_edge.0, outgoing_edge.1)
             }
@@ -316,18 +316,24 @@ impl OpticScenery {
         Ok(())
     }
 }
-fn apodize_incoming_light(incoming_edges: HashMap<String, Option<LightData>>, node: &OpticRef) -> OpmResult<HashMap<String, Option<LightData>>> {
-    let mut apodized_edges:HashMap<String, Option<LightData>>=HashMap::new();
-    let ports=node.optical_ref.borrow().ports();
-    let input_ports=ports.inputs();
+fn apodize_incoming_light(
+    incoming_edges: HashMap<String, Option<LightData>>,
+    node: &OpticRef,
+) -> OpmResult<HashMap<String, Option<LightData>>> {
+    let mut apodized_edges: HashMap<String, Option<LightData>> = HashMap::new();
+    let ports = node.optical_ref.borrow().ports();
+    let input_ports = ports.inputs();
     for edge in incoming_edges {
         if let Some(LightData::Geometric(rays)) = edge.1 {
-            if let Some(aperture)=input_ports.get(&edge.0) {
-                let mut apodized_rays=rays.clone();
+            if let Some(aperture) = input_ports.get(&edge.0) {
+                let mut apodized_rays = rays.clone();
                 apodized_rays.apodize(aperture);
                 apodized_edges.insert(edge.0, Some(LightData::Geometric(apodized_rays)));
             } else {
-                return Err(OpossumError::OpticScenery(format!("input port {} not found", edge.0)));
+                return Err(OpossumError::OpticScenery(format!(
+                    "input port {} not found",
+                    edge.0
+                )));
             }
         } else {
             apodized_edges.insert(edge.0, edge.1);
@@ -335,18 +341,24 @@ fn apodize_incoming_light(incoming_edges: HashMap<String, Option<LightData>>, no
     }
     Ok(apodized_edges)
 }
-fn apodize_outgoing_light(outgoing_edges: HashMap<String, Option<LightData>>, node: &OpticRef) -> OpmResult<HashMap<String, Option<LightData>>> {
-    let mut apodized_edges:HashMap<String, Option<LightData>>=HashMap::new();
-    let ports=node.optical_ref.borrow().ports();
-    let outgoing_ports=ports.outputs();
+fn apodize_outgoing_light(
+    outgoing_edges: HashMap<String, Option<LightData>>,
+    node: &OpticRef,
+) -> OpmResult<HashMap<String, Option<LightData>>> {
+    let mut apodized_edges: HashMap<String, Option<LightData>> = HashMap::new();
+    let ports = node.optical_ref.borrow().ports();
+    let outgoing_ports = ports.outputs();
     for edge in outgoing_edges {
         if let Some(LightData::Geometric(rays)) = edge.1 {
-            if let Some(aperture)=outgoing_ports.get(&edge.0) {
-                let mut apodized_rays=rays.clone();
+            if let Some(aperture) = outgoing_ports.get(&edge.0) {
+                let mut apodized_rays = rays.clone();
                 apodized_rays.apodize(aperture);
                 apodized_edges.insert(edge.0, Some(LightData::Geometric(apodized_rays)));
             } else {
-                return Err(OpossumError::OpticScenery(format!("input port {} not found", edge.0)));
+                return Err(OpossumError::OpticScenery(format!(
+                    "input port {} not found",
+                    edge.0
+                )));
             }
         } else {
             apodized_edges.insert(edge.0, edge.1);

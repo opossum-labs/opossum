@@ -24,14 +24,26 @@ impl AnalyzerEnergy {
 #[derive(EnumIter, PartialEq, Debug)]
 pub enum AnalyzerType {
     Energy,
-    RayTrace,
+    RayTrace(RayTraceConfig),
 }
 
+#[derive(Default, Debug, PartialEq)]
+enum RayTracingMode {
+    #[default]
+    Sequential,
+    // SemiSequential,
+    // NonSequential
+}
+
+#[derive(Default, PartialEq, Debug)]
+pub struct RayTraceConfig {
+    mode: RayTracingMode,
+}
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = match self {
             AnalyzerType::Energy => "energy",
-            AnalyzerType::RayTrace => "ray tracing",
+            AnalyzerType::RayTrace(_) => "ray tracing",
         };
         write!(f, "{}", msg)
     }
