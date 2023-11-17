@@ -1,0 +1,11 @@
+/.vscode
+# ignore special directory for development
+/playground
+
+*.dot
+*.svg
+# exclude OPOSSUM model files
+*.opm
+# include dot files in /files_for_testing/*
+!/files_for_testing/**
+!/logo/**

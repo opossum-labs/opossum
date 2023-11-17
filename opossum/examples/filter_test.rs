@@ -1,0 +1,45 @@
+use std::path::Path;
+
+use opossum::{
+    error::OpmResult,
+    lightdata::{DataEnergy, LightData},
+    nodes::{BeamSplitter, EnergyMeter, FilterType, IdealFilter, Source, Spectrometer},
+    spectrum::{create_he_ne_spec, Spectrum},
+    OpticScenery,
+};
+
+fn main() -> OpmResult<()> {
+    let mut scenery = OpticScenery::new();
+    scenery.set_description("filter system demo")?;
+
+    let i_s = scenery.add_node(Source::new(
+        "Source",
+        &LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0)?,
+        }),
+    ));
+    let i_bs = scenery.add_node(BeamSplitter::new("bs", 0.6).unwrap());
+    let filter_spectrum = Spectrum::from_csv("NE03B.csv")?;
+    let i_f = scenery.add_node(IdealFilter::new(
+        "filter",
+        FilterType::Spectrum(filter_spectrum),
+    )?);
+    let i_d1 = scenery.add_node(EnergyMeter::new(
+        "Energy meter 1",
+        opossum::nodes::Metertype::IdealEnergyMeter,
+    ));
+    let i_d2 = scenery.add_node(Spectrometer::default());
+    let i_d3 = scenery.add_node(EnergyMeter::new(
+        "Energy meter 2",
+        opossum::nodes::Metertype::IdealEnergyMeter,
+    ));
+
+    scenery.connect_nodes(i_s, "out1", i_bs, "input1")?;
+    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1")?;
+    scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front")?;
+    scenery.connect_nodes(i_f, "rear", i_d2, "in1")?;
+    scenery.connect_nodes(i_d2, "out1", i_d3, "in1")?;
+
+    scenery.save_to_file(Path::new("playground/filter_test.opm"))?;
+    Ok(())
+}

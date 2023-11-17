@@ -1,2 +1,4 @@
 [env]
 OPM_FILE_VERSION = "0"
+[alias]
+xtask = "run --package xtask --"
