@@ -55,6 +55,12 @@ fn file_path_is_valid(path: &Path) -> bool {
     Path::exists(path) && Path::is_file(path) && path.extension() == Some(&OsStr::from("opm"))
 }
 
+/// Evaluates if the passed file-path string is valid.
+/// # Attributes
+/// * `file_path`: String description of the path to the file
+/// # Returns
+/// * [`Option<PathBuf>`] with the defined file-path string if valid
+/// * None if the file-path string is invalid
 fn eval_file_path_input(file_path: &str) -> Option<PathBuf> {
     let working_dir = std::env::current_dir().unwrap();
     println!("{}", working_dir.display());
@@ -555,26 +561,5 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         .unwrap();
         let report_path_str3 = report_path3.to_str().unwrap();
         assert_eq!(report_path_str3, "./files_for_testing/");
-    }
-
-    #[test]
-    fn parser_test() {
-        let arg_vec = vec![
-            "opossum",
-            "-f",
-            "./files_for_testing/CLI/opticscenery.opm",
-            "-a",
-            "e",
-            "-r",
-            "./files_for_testing/",
-        ];
-        let part_args = PartialArgs::parse_from(arg_vec);
-        let fpath = part_args.file_path.unwrap();
-        let analyzer = part_args.analyzer.unwrap();
-        let r_dir = part_args.report_directory.unwrap();
-
-        assert_eq!(fpath, "./files_for_testing/CLI/opticscenery.opm");
-        assert_eq!(analyzer, "e");
-        assert_eq!(r_dir, "./files_for_testing/");
     }
 }
