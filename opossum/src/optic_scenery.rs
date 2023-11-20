@@ -632,6 +632,74 @@ mod test {
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
     }
     #[test]
+    fn to_dot_group() {
+        let path = "files_for_testing/dot/group_dot_TB.dot";
+        let file_content_tb = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
+
+        let path = "files_for_testing/dot/group_dot_LR.dot";
+        let file_content_lr = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+
+        let mut scenery = OpticScenery::new();
+        scenery
+            .set_description("Node Group test section".into())
+            .unwrap();
+
+        let mut group1 = NodeGroup::new("group 1");
+        group1.expand_view(true).unwrap();
+        let g1_n1 = group1.add_node(Dummy::new("node1")).unwrap();
+        let g1_n2 = group1.add_node(BeamSplitter::default()).unwrap();
+        group1
+            .map_output_port(g1_n2, "out1_trans1_refl2", "out1")
+            .unwrap();
+        group1
+            .connect_nodes(g1_n1, "rear", g1_n2, "input1")
+            .unwrap();
+
+        let mut nested_group = NodeGroup::new("group 1_1");
+        let nested_g_n1 = nested_group.add_node(Dummy::new("node1_1")).unwrap();
+        let nested_g_n2 = nested_group.add_node(Dummy::new("node1_2")).unwrap();
+        nested_group.expand_view(true).unwrap();
+
+        nested_group
+            .connect_nodes(nested_g_n1, "rear", nested_g_n2, "front")
+            .unwrap();
+        nested_group
+            .map_input_port(nested_g_n1, "front", "in1")
+            .unwrap();
+        nested_group
+            .map_output_port(nested_g_n2, "rear", "out1")
+            .unwrap();
+
+        let nested_group_index = group1.add_node(nested_group).unwrap();
+        group1
+            .connect_nodes(nested_group_index, "out1", g1_n1, "front")
+            .unwrap();
+
+        let mut group2: NodeGroup = NodeGroup::new("group 2");
+        group2.expand_view(false).unwrap();
+        let g2_n1 = group2.add_node(Dummy::new("node2_1")).unwrap();
+        let g2_n2 = group2.add_node(Dummy::new("node2_2")).unwrap();
+        group2.map_input_port(g2_n1, "front", "in1").unwrap();
+
+        group2.connect_nodes(g2_n1, "rear", g2_n2, "front").unwrap();
+
+        let scene_g1 = scenery.add_node(group1);
+        let scene_g2 = scenery.add_node(group2);
+
+        // set_output_port
+        scenery
+            .connect_nodes(scene_g1, "out1", scene_g2, "in1")
+            .unwrap();
+
+        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
+        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+
+        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
+        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
+    }
+    #[test]
     fn description() {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into()).unwrap();
