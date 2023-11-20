@@ -55,12 +55,6 @@ fn file_path_is_valid(path: &Path) -> bool {
     Path::exists(path) && Path::is_file(path) && path.extension() == Some(&OsStr::from("opm"))
 }
 
-/// Evaluates if the passed file-path string is valid.
-/// # Attributes
-/// * `file_path`: String description of the path to the file
-/// # Returns
-/// * [`Option<PathBuf>`] with the defined file-path string if valid
-/// * None if the file-path string is invalid
 fn eval_file_path_input(file_path: &str) -> Option<PathBuf> {
     if file_path_is_valid(Path::new(file_path)) {
         Some(PathBuf::from(file_path))
