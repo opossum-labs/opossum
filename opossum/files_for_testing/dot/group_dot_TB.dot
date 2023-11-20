@@ -1,0 +1,249 @@
+digraph {
+	fontsize = 8
+	size = 5.0;
+	dpi = 400.0;
+	compound = true;
+	rankdir = "TB";
+	label="Node Group test section"
+	fontname="Helvetica"
+	node [fontname="Helvetica" fontsize = 10]
+	edge [fontname="Helvetica"]
+
+  subgraph i0 {
+	label="group 1"
+	fontsize=15
+	cluster=true
+		i0_i0 [
+		shape=plaintext
+		label=<
+		<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" ALIGN="CENTER">
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="front" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: front">1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ROWSPAN="5" COLSPAN="5" BGCOLOR="lightgray" WIDTH="80" HEIGHT="80" BORDER="1" ALIGN="CENTER" CELLPADDING="10" STYLE="ROUNDED">node1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="rear" BORDER="1" BGCOLOR="lightblue" HREF="" TOOLTIP="Output port 1: rear">1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			</TABLE>
+		>];
+	i0_i1 [
+		shape=plaintext
+		label=<
+		<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" ALIGN="CENTER">
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="input1" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: input1">1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="input2" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 2: input2">2</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ROWSPAN="5" COLSPAN="5" BGCOLOR="lightpink" WIDTH="80" HEIGHT="80" BORDER="1" ALIGN="CENTER" CELLPADDING="10" STYLE="ROUNDED">beam splitter</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="out1_trans1_refl2" BORDER="1" BGCOLOR="lightblue" HREF="" TOOLTIP="Output port 1: out1_trans1_refl2">1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="out2_trans2_refl1" BORDER="1" BGCOLOR="lightblue" HREF="" TOOLTIP="Output port 2: out2_trans2_refl1">2</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			</TABLE>
+		>];
+  subgraph i0_i2 {
+	label="group 1_1"
+	fontsize=15
+	cluster=true
+		i0_i2_i0 [
+		shape=plaintext
+		label=<
+		<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" ALIGN="CENTER">
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="front" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: front">1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ROWSPAN="5" COLSPAN="5" BGCOLOR="lightgray" WIDTH="80" HEIGHT="80" BORDER="1" ALIGN="CENTER" CELLPADDING="10" STYLE="ROUNDED">node1_1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="rear" BORDER="1" BGCOLOR="lightblue" HREF="" TOOLTIP="Output port 1: rear">1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			</TABLE>
+		>];
+	i0_i2_i1 [
+		shape=plaintext
+		label=<
+		<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" ALIGN="CENTER">
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="front" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: front">1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ROWSPAN="5" COLSPAN="5" BGCOLOR="lightgray" WIDTH="80" HEIGHT="80" BORDER="1" ALIGN="CENTER" CELLPADDING="10" STYLE="ROUNDED">node1_2</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="rear" BORDER="1" BGCOLOR="lightblue" HREF="" TOOLTIP="Output port 1: rear">1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			</TABLE>
+		>];
+  i0_i2_i0:rear -> i0_i2_i1:front 
+}  i0_i0:rear -> i0_i1:input1 
+  i0_i2_i1:rear -> i0_i0:front 
+}	i1 [
+		shape=plaintext
+		label=<
+		<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" ALIGN="CENTER">
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD HEIGHT="16" WIDTH="16" PORT="in1" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: in1">1</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ROWSPAN="5" COLSPAN="5" BGCOLOR="yellow" WIDTH="80" HEIGHT="80" BORDER="1" ALIGN="CENTER" CELLPADDING="10" STYLE="ROUNDED">group 2</TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			<TR BORDER="0">
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+				<TD ALIGN="CENTER" HEIGHT="16" WIDTH="16"> </TD>
+			</TR>
+			</TABLE>
+		>];
+  i0_i1:out1_trans1_refl2 -> i1:in1 
+}
