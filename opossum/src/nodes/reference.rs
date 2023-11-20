@@ -52,7 +52,7 @@ impl Default for NodeReference {
 impl NodeReference {
     /// Create a new [`NodeReference`] referring to another optical node.
     /// # Attributes
-    /// `node`: [`OpticRef`] of the node
+    /// `node`: `OpticRef` of the node
     ///
     /// # Panics
     /// - if the node [`Properties`] `name` and `node_type` do not exist
