@@ -562,4 +562,25 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         let report_path_str3 = report_path3.to_str().unwrap();
         assert_eq!(report_path_str3, "./files_for_testing/");
     }
+
+    #[test]
+    fn parser_test(){
+        let arg_vec = vec![
+            "opossum",
+            "-f",
+            "./files_for_testing/CLI/opticscenery.opm",
+            "-a",
+            "e",
+            "-r",
+            "./files_for_testing/",
+        ];
+        let part_args = PartialArgs::parse_from(arg_vec);
+        let fpath = part_args.file_path.unwrap();
+        let analyzer = part_args.analyzer.unwrap();
+        let r_dir = part_args.report_directory.unwrap();
+
+        assert_eq!(fpath, "./files_for_testing/CLI/opticscenery.opm");
+        assert_eq!(analyzer, "e");
+        assert_eq!(r_dir, "./files_for_testing/");
+    }
 }
