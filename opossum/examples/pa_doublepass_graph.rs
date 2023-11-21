@@ -43,6 +43,6 @@ fn main() -> OpmResult<()> {
     // group.connect_nodes(g_n2, "rear", g_n3, "front").unwrap();
     // group.connect_nodes(g_n3, "rear", g_n4, "in1").unwrap();
     // scenery.add_node(OpticNode::new("CamBox", group));
-    scenery.save_to_file(Path::new("playground/pa_doublepass.opm"))?;
+    scenery.save_to_file(Path::new("./opossum/playground/pa_doublepass.opm"))?;
     Ok(())
 }

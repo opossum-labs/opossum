@@ -23,6 +23,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(src, "out1", filt, "front")?;
     scenery.connect_nodes(filt, "rear", reference, "front")?;
     scenery.connect_nodes(reference, "rear", detector, "in1")?;
-    scenery.save_to_file(Path::new("playground/reference_test.opm"))?;
+    scenery.save_to_file(Path::new("./opossum/playground/reference_test.opm"))?;
     Ok(())
 }

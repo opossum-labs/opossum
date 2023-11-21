@@ -26,6 +26,6 @@ fn main() -> OpmResult<()> {
     let node3 = scenery.add_node(EnergyMeter::default());
     scenery.connect_nodes(node1, "out1", node2, "front")?;
     scenery.connect_nodes(node2, "rear", node3, "in1")?;
-    scenery.save_to_file(Path::new("playground/simple_for_talk.opm"))?;
+    scenery.save_to_file(Path::new("./opossum/playground/simple_for_talk.opm"))?;
     Ok(())
 }

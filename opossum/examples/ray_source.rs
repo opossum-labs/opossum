@@ -26,6 +26,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_s, "out1", i_dummy, "front")?;
     scenery.connect_nodes(i_dummy, "rear", i_d, "in1")?;
     scenery.connect_nodes(i_d, "out1", i_sd, "in1")?;
-    scenery.save_to_file(Path::new("playground/ray_source.opm"))?;
+    scenery.save_to_file(Path::new("./opossum/playground/ray_source.opm"))?;
     Ok(())
 }

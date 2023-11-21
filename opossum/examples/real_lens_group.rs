@@ -17,6 +17,6 @@ fn main() -> OpmResult<()> {
     group1.connect_nodes(g1_n2, "rear", g1_n3, "front")?;
 
     let _scene_g1 = scenery.add_node(group1);
-    scenery.save_to_file(Path::new("playground/real_lens_group.opm"))?;
+    scenery.save_to_file(Path::new("./opossum/playground/real_lens_group.opm"))?;
     Ok(())
 }

@@ -24,6 +24,6 @@ fn main() -> OpmResult<()> {
     let detector = NodeReport::new("powermeter".into(), "my powermeter".into(), props);
     report.add_detector(detector);
     let generator = ReportGenerator::new(report);
-    generator.generate_pdf(Path::new("./playground/output.pdf"))?;
+    generator.generate_pdf(Path::new("./opossum/playground/output.pdf"))?;
     Ok(())
 }

@@ -14,6 +14,6 @@ fn main() -> OpmResult<()> {
         Energy::new::<joule>(1.0),
         &opossum::rays::DistributionStrategy::Random(200),
     );
-    rays.to_svg_plot(Path::new("./playground/rays.svg"))?;
+    rays.to_svg_plot(Path::new("./opossum/playground/rays.svg"))?;
     Ok(())
 }

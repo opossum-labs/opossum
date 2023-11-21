@@ -36,6 +36,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_s, "out1", i_g, "out1")?;
     scenery.connect_nodes(i_g, "in1", i_d, "in1")?;
 
-    scenery.save_to_file(Path::new("playground/group_reverse.opm"))?;
+    scenery.save_to_file(Path::new("./opossum/playground/group_reverse.opm"))?;
     Ok(())
 }
