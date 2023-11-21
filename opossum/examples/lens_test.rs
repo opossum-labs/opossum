@@ -22,6 +22,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(l1, "out1", l2, "in1")?;
     scenery.connect_nodes(l2, "out1", det, "in1")?;
 
-    scenery.save_to_file(Path::new("playground/lens_system.opm"))?;
+    scenery.save_to_file(Path::new("./opossum/playground/lens_system.opm"))?;
     Ok(())
 }

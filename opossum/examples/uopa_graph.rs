@@ -17,7 +17,7 @@ fn main() -> OpmResult<()> {
     let pump_shg_node = scenery.add_node(Dummy::new("Pump SHG"));
     let pump_splitter_node = scenery.add_node(BeamSplitter::default()); // Pump Beam Splitter
 
-    scenery.connect_nodes(pulse_generation_split_node, "rear", u_opa_1_node, "front")?;
+    // scenery.connect_nodes(pulse_generation_split_node, "rear", u_opa_1_node, "front")?;
     // scenery
     //     .connect_nodes(
     //         pulse_generation_split_node,
@@ -156,7 +156,7 @@ fn main() -> OpmResult<()> {
     // scenery.connect_nodes(pump_bs_node1, pump_kepler_node1);
     // scenery.connect_nodes(pump_kepler_node1, dichroic_node1);
 
-    scenery.save_to_file(Path::new("playground/uOPA.opm"))?;
-    scenery_2.save_to_file(Path::new("playground/uOPA_PreAmp.opm"))?;
+    scenery.save_to_file(Path::new("./opossum/playground/uOPA.opm"))?;
+    scenery_2.save_to_file(Path::new("./opossum/playground/uOPA_PreAmp.opm"))?;
     Ok(())
 }
