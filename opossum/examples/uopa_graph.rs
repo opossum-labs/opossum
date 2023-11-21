@@ -17,15 +17,15 @@ fn main() -> OpmResult<()> {
     let pump_shg_node = scenery.add_node(Dummy::new("Pump SHG"));
     let pump_splitter_node = scenery.add_node(BeamSplitter::default()); // Pump Beam Splitter
 
-    // scenery.connect_nodes(pulse_generation_split_node, "rear", u_opa_1_node, "front")?;
-    // scenery
-    //     .connect_nodes(
-    //         pulse_generation_split_node,
-    //         "rear",
-    //         pump_pre_amplifier_node,
-    //         "front",
-    //     )
-    //     .unwrap();
+    scenery.connect_nodes(pulse_generation_split_node, "rear", u_opa_1_node, "front")?;
+    scenery
+        .connect_nodes(
+            pulse_generation_split_node,
+            "rear",
+            pump_pre_amplifier_node,
+            "front",
+        )
+        .unwrap();
     scenery.connect_nodes(
         pump_pre_amplifier_node,
         "rear",
