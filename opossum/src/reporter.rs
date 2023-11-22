@@ -84,7 +84,7 @@ impl ReportGenerator {
         Self { report }
     }
     fn add_report_title(&self, doc: &mut genpdf::Document) {
-        let image = elements::Image::from_path("logo/Logo_square.png")
+        let image = elements::Image::from_path("./opossum/logo/Logo_square.png")
             .expect("Failed to load image")
             .with_scale(Scale::new(0.2, 0.2))
             .with_alignment(Alignment::Center);
@@ -154,7 +154,7 @@ impl ReportGenerator {
     ///   - the file could not be generated on disk (disk full, not writable, etc...)
     ///   - individual erros while generating sub components of the report
     pub fn generate_pdf(&self, path: &Path) -> OpmResult<()> {
-        let font_family = genpdf::fonts::from_files("./fonts", "LiberationSans", None)
+        let font_family = genpdf::fonts::from_files("./opossum/fonts", "LiberationSans", None)
             .map_err(|e| format!("failed to load font family: {e}"))?;
         // Create a document and set the default font family
         let mut doc = genpdf::Document::new(font_family);
