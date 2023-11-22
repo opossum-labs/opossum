@@ -24,31 +24,40 @@ fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
     Ok(scenery)
 }
 
-fn main() -> OpmResult<()> {
-    let opossum_args = Args::try_from(PartialArgs::parse())?;
-    let mut scenery = read_and_parse_model(&opossum_args.file_path)?;
-
-    let mut dot_path = opossum_args.report_directory.clone();
-    dot_path.push(opossum_args.file_path.file_stem().unwrap());
-    dot_path.set_extension("dot");
-    print!("Write diagram to {}...", dot_path.display());
+fn create_dot_or_report_file_instance(
+    path: &Path,
+    f_name: &str,
+    f_ext: &str,
+    print_str: &str,
+) -> OpmResult<File> {
+    let mut f_path = path.to_path_buf();
+    f_path.push(f_name);
+    f_path.set_extension(f_ext);
+    print!("Write {print_str} to {}...", f_path.display());
     let _ = io::stdout().flush();
-    let mut output = File::create(dot_path)
-        .map_err(|e| OpossumError::Other(format!("dot file creation failed: {e}")))?;
+
+    File::create(f_path)
+        .map_err(|e| OpossumError::Other(format!("{f_name} file creation failed: {e}")))
+}
+
+fn create_dot_file(dot_path: &Path, fname: &str, scenery: &OpticScenery) -> OpmResult<()> {
+    let mut output = create_dot_or_report_file_instance(dot_path, fname, "dot", "diagram")?;
+
     write!(output, "{}", scenery.to_dot("LR")?)
         .map_err(|e| OpossumError::Other(format!("writing dot file failed: {e}")))?;
     println!("Success");
-    print!("\nAnalyzing...");
-    let _ = io::stdout().flush();
-    scenery.analyze(&opossum_args.analyzer)?;
-    println!("Success\n");
-    let mut report_path = opossum_args.report_directory.clone();
-    report_path.push("report.json");
-    print!("Write detector report to {}...", report_path.display());
-    let _ = io::stdout().flush();
-    let mut output = File::create(report_path)
-        .map_err(|e| OpossumError::Other(format!("report file creation failed: {e}")))?;
-    let analysis_report = scenery.report(&opossum_args.report_directory)?;
+    Ok(())
+}
+
+fn create_report_file(
+    report_directory: &Path,
+    fname: &str,
+    scenery: &OpticScenery,
+) -> OpmResult<()> {
+    let mut output =
+        create_dot_or_report_file_instance(report_directory, fname, "json", "detector report")?;
+
+    let analysis_report = scenery.report(report_directory)?;
     write!(
         output,
         "{}",
@@ -56,9 +65,35 @@ fn main() -> OpmResult<()> {
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let pdf_generator = ReportGenerator::new(analysis_report);
-    let mut report_path = opossum_args.report_directory.clone();
+    let mut report_path = report_directory.to_path_buf();
     report_path.push("report.pdf");
     pdf_generator.generate_pdf(&report_path)?;
     println!("Success");
     Ok(())
+}
+
+fn main() -> OpmResult<()> {
+    //parse CLI arguments
+    let opossum_args = Args::try_from(PartialArgs::parse())?;
+
+    //read scenery model from file and deserialize it
+    let mut scenery = read_and_parse_model(&opossum_args.file_path)?;
+
+    //create the dot file of the scenery
+    create_dot_file(
+        &opossum_args.report_directory,
+        opossum_args
+            .file_path
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        &scenery,
+    )?;
+
+    //analyze the scenery
+    scenery.analyze(&opossum_args.analyzer)?;
+
+    //create the report file
+    create_report_file(&opossum_args.report_directory, "report", &scenery)
 }

@@ -1,7 +1,7 @@
 //! The basic structure containing the entire optical model
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Cursor, Write};
+use std::io::{self, Cursor, Write};
 use std::path::Path;
 
 use crate::analyzer::AnalyzerType;
@@ -230,6 +230,8 @@ impl OpticScenery {
     /// # Errors
     /// This function returns an error if an underlying node-specific analysis function returns an error.
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> OpmResult<()> {
+        print!("\nAnalyzing...");
+        let _ = io::stdout().flush();
         let sorted = toposort(&self.g.0, None)
             .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
         for idx in sorted {
@@ -263,6 +265,8 @@ impl OpticScenery {
                 self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
             }
         }
+
+        println!("Success\n");
         Ok(())
     }
     /// Sets the description of this [`OpticScenery`].
