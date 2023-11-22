@@ -544,7 +544,10 @@ impl PdfReportable for OpticScenery {
 mod test {
     use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
+    use crate::console::{Args, PartialArgs};
     use crate::nodes::Metertype;
+    use clap::Parser;
+    use std::fs;
     use std::{fs::File, io::Read};
     #[test]
     fn new() {
@@ -704,5 +707,45 @@ mod test {
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into()).unwrap();
         assert_eq!(scenery.description(), "Test")
+    }
+    #[test]
+    fn analzye_test() {
+        let arg_vec = vec![
+            "opossum",
+            "-f",
+            "./files_for_testing/opm/filter_test.opm",
+            "-a",
+            "e",
+            "-r",
+            "",
+        ];
+        let working_dir = std::env::current_dir().unwrap();
+        println!("{}", working_dir.display());
+
+        let opossum_args = Args::try_from(PartialArgs::parse_from(arg_vec)).unwrap();
+
+        let contents = fs::read_to_string(&opossum_args.file_path)
+            .map_err(|e| {
+                OpossumError::Console(format!(
+                    "cannot read file {} : {}",
+                    opossum_args.file_path.display(),
+                    e
+                ))
+            })
+            .unwrap();
+        let mut scenery: OpticScenery = serde_json::from_str(&contents)
+            .map_err(|e| OpossumError::OpticScenery(format!("parsing of model failed: {e}")))
+            .unwrap();
+
+        let mut dot_path = opossum_args.report_directory.clone();
+        dot_path.push(opossum_args.file_path.file_stem().unwrap());
+        dot_path.set_extension("dot");
+        let mut output = File::create(dot_path)
+            .map_err(|e| OpossumError::Other(format!("dot file creation failed: {e}")))
+            .unwrap();
+        write!(output, "{}", scenery.to_dot("LR").unwrap())
+            .map_err(|e| OpossumError::Other(format!("writing dot file failed: {e}")))
+            .unwrap();
+        scenery.analyze(&opossum_args.analyzer).unwrap();
     }
 }
