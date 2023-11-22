@@ -558,7 +558,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
     }
 
     #[test]
-    fn parser_test(){
+    fn parser_test() {
         let arg_vec = vec![
             "opossum",
             "-f",
