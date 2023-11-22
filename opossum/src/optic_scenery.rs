@@ -1,7 +1,7 @@
 //! The basic structure containing the entire optical model
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Cursor, Write, self};
+use std::io::{self, Cursor, Write};
 use std::path::Path;
 
 use crate::analyzer::AnalyzerType;
@@ -265,7 +265,7 @@ impl OpticScenery {
                 self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
             }
         }
-        
+
         println!("Success\n");
         Ok(())
     }
