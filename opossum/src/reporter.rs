@@ -154,7 +154,7 @@ impl ReportGenerator {
     ///   - the file could not be generated on disk (disk full, not writable, etc...)
     ///   - individual erros while generating sub components of the report
     pub fn generate_pdf(&self, path: &Path) -> OpmResult<()> {
-        let font_family = genpdf::fonts::from_files("./fonts", "LiberationSans", None)
+        let font_family = genpdf::fonts::from_files("./opossum/fonts", "LiberationSans", None)
             .map_err(|e| format!("failed to load font family: {e}"))?;
         // Create a document and set the default font family
         let mut doc = genpdf::Document::new(font_family);
