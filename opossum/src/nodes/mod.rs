@@ -42,11 +42,12 @@ use crate::optic_ref::OpticRef;
 
 /// Factory function creating a new reference of an optical node of the given type.
 ///
-/// This function is used internally during deserialization of an `OpticGraph`.
+/// If a uuid is given, the optical node is created using this id. Otherwise a new (random) id is generated. This 
+/// function is used internally during deserialization of an `OpticGraph`.
 ///
 /// # Errors
 ///
-/// This function will return an [`OpossumError`] if there is no node type of the given name.
+/// This function will return an [`OpossumError`] if there is no node with the given type.
 pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRef> {
     match node_type {
         "dummy" => Ok(OpticRef::new(Rc::new(RefCell::new(Dummy::default())), uuid)),
@@ -93,5 +94,13 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         _ => Err(OpossumError::Other(format!(
             "cannot create node type <{node_type}>"
         ))),
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn create_node_ref_error() {
+        assert!(create_node_ref("test", None).is_err());
     }
 }
