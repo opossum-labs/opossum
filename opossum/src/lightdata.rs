@@ -7,7 +7,7 @@ use std::path::Path;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
-use crate::error::OpmResult;
+use crate::error::{OpmResult, OpossumError};
 use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::rays::Rays;
@@ -33,15 +33,19 @@ impl LightData {
     /// * `f_path`: path to the file destination
     ///
     /// # Errors
-    /// This function will return an error if `to_svg_plot` fails for the case that the plot area cannot be filled with a background colour.
+    /// This function will return an error if
+    ///  - `to_svg_plot` fails for [`LightData::Energy`] the case that the plot area cannot be filled with a background colour.
+    ///  - no export function ist defined for the conrecte type of [`LightData`]
     pub fn export(&self, f_path: &Path) -> OpmResult<()> {
         match self {
             Self::Energy(d) => {
                 d.to_svg_plot(f_path)?;
+                Ok(())
             }
-            _ => println!("no export function defined for this type of LightData"),
+            _ => Err(OpossumError::Other(
+                "no export function defined for this type of LightData".into(),
+            )),
         }
-        Ok(())
     }
 }
 impl Display for LightData {
@@ -76,5 +80,38 @@ impl Plottable for DataEnergy {
 impl From<Option<LightData>> for Proptype {
     fn from(value: Option<LightData>) -> Self {
         Self::LightData(value)
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::spectrum::create_visible_spec;
+    use assert_matches::assert_matches;
+    #[test]
+    fn display_unknown() {
+        assert_eq!(
+            format!("{}", LightData::Fourier),
+            "No display defined for this type of LightData"
+        );
+    }
+    #[test]
+    fn display_energy() {
+        let ld = LightData::Energy(DataEnergy {
+            spectrum: create_visible_spec(),
+        });
+        assert_eq!(format!("{ld}"), "Energy: 0 J");
+    }
+    #[test]
+    fn debug() {
+        assert_eq!(format!("{:?}", LightData::Fourier), "Fourier");
+    }
+    #[test]
+    fn export_wrong() {
+        assert!(LightData::Fourier.export(Path::new("")).is_err());
+    }
+    #[test]
+    fn from() {
+        let ld = Proptype::from(Some(LightData::Fourier));
+        assert_matches!(ld, Proptype::LightData(_));
     }
 }

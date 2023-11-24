@@ -50,6 +50,7 @@ doc-images = []
 
 [dev-dependencies]
 regex = "1"
+assert_matches = "1"
 
 [build-dependencies]
 # All features enabled

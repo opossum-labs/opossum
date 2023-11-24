@@ -30,7 +30,7 @@ use chrono::DateTime;
 pub use optic_scenery::OpticScenery;
 pub mod console;
 mod optic_graph;
-mod optic_ref;
+pub mod optic_ref;
 pub mod rays;
 pub mod reporter;
 
