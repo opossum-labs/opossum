@@ -226,7 +226,30 @@ impl Dottable for Spectrometer {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spec};
+    use crate::{
+        analyzer::AnalyzerType,
+        lightdata::DataEnergy,
+        spectrum::{create_he_ne_spec, create_visible_spec},
+    };
+    #[test]
+    fn debug() {
+        let mut node = Spectrometer::default();
+        assert_eq!(format!("{:?}", node), "no data");
+        let mut input = LightResult::default();
+        input.insert("in1".into(), Some(LightData::Fourier));
+        let _ = node.analyze(input, &AnalyzerType::Energy);
+        assert_eq!(format!("{:?}", node), "no spectrum data to display");
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_visible_spec(),
+        });
+        input.insert("in1".into(), Some(input_light.clone()));
+        let _ = node.analyze(input, &AnalyzerType::Energy);
+        assert_eq!(
+            format!("{:?}", node),
+            "Spectrum 380.000 - 749.900 nm (Type: Ideal)"
+        );
+    }
     #[test]
     fn default() {
         let node = Spectrometer::default();
