@@ -10,7 +10,6 @@ use plotters::coord::Shift;
 use plotters::data::fitting_range;
 use plotters::prelude::*;
 use serde_derive::{Deserialize, Serialize};
-use serde_json::json;
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
 use std::fs::File;
@@ -368,14 +367,6 @@ impl Spectrum {
             })
             .collect();
     }
-    /// Generate JSON representation.
-    ///
-    /// Generate a JSON representation of this [`Spectrum`]. This function is mainly used for generating reports.
-    #[must_use]
-    pub fn to_json(&self) -> serde_json::Value {
-        let data_as_vec = self.data.clone();
-        json!(data_as_vec)
-    }
 }
 impl PdfReportable for Spectrum {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
@@ -608,6 +599,18 @@ mod test {
         let s = create_visible_spec();
         assert_eq!(s.lambda_vec().first().unwrap(), &0.38);
         assert_abs_diff_eq!(s.lambda_vec().last().unwrap(), &0.7499);
+    }
+    #[test]
+    fn nir_spec() {
+        assert_eq!(create_nir_spec().lambda_vec().first().unwrap(), &0.8);
+    }
+    #[test]
+    fn nd_glass_spec() {
+        let s = create_nd_glass_spec(1.0);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s.lambda_vec().first().unwrap(), &0.8);
+        assert!(create_nd_glass_spec(-1.0).is_err());
     }
     #[test]
     fn new_negative_resolution() {
