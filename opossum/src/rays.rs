@@ -191,30 +191,50 @@ impl Plottable for Rays {
         &self,
         root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>,
     ) -> crate::error::OpmResult<()> {
-        let x_min = self
+        let mut x_min = self
             .rays
             .iter()
             .map(|r| r.pos.x)
             .fold(f64::INFINITY, f64::min)
             * 1.1;
-        let x_max = self
+        if !x_min.is_finite() {
+            x_min = -1.0
+        }
+        let mut x_max = self
             .rays
             .iter()
             .map(|r| r.pos.x)
             .fold(f64::NEG_INFINITY, f64::max)
             * 1.1;
-        let y_min = self
+        if !x_max.is_finite() {
+            x_max = 1.0
+        }
+        if x_max == x_min {
+            x_max = 1.0;
+            x_min = -1.0;
+        }
+        let mut y_min = self
             .rays
             .iter()
             .map(|r| r.pos.y)
             .fold(f64::INFINITY, f64::min)
             * 1.1;
-        let y_max = self
+        if !y_min.is_finite() {
+            y_min = -1.0
+        }
+        let mut y_max = self
             .rays
             .iter()
             .map(|r| r.pos.y)
             .fold(f64::NEG_INFINITY, f64::max)
             * 1.1;
+        if !y_max.is_finite() {
+            y_max = 1.0
+        }
+        if y_max == y_min {
+            y_max = 1.0;
+            y_min = -1.0;
+        }
         let mut chart = ChartBuilder::on(root)
             .margin(5)
             .x_label_area_size(40)

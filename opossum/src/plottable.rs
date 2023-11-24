@@ -27,7 +27,9 @@ pub trait Plottable {
     /// `f_path`: path to the file destination
     ///
     /// # Errors
-    /// This function will return an error if the plot area cannot be filled with a background colour..
+    /// This function will return an error if
+    ///  - the given path is not writable or does not exist.
+    ///  - the plot area cannot be filled with a background colour.
     fn to_svg_plot(&self, f_path: &Path) -> OpmResult<()> {
         let root = SVGBackend::new(f_path, (800, 600)).into_drawing_area();
         root.fill(&WHITE)
@@ -59,5 +61,22 @@ pub trait Plottable {
         let img = RgbImage::from_raw(image_width, image_height, image_buffer)
             .ok_or_else(|| OpossumError::Other("image buffer size too small".into()))?;
         Ok(img)
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::rays::Rays;
+    use tempfile::NamedTempFile;
+    #[test]
+    fn to_svg_plot() {
+        let rays = Rays::default();
+        let path = NamedTempFile::new().unwrap();
+        assert!(rays.to_svg_plot(path.path()).is_ok());
+    }
+    #[test]
+    fn to_img_buf_plot() {
+        let rays = Rays::default();
+        assert!(rays.to_img_buf_plot().is_ok());
     }
 }
