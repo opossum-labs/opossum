@@ -22,7 +22,7 @@ impl OpticRef {
             uuid: uuid.unwrap_or_else(Uuid::new_v4),
         }
     }
-
+    #[must_use]
     pub const fn uuid(&self) -> Uuid {
         self.uuid
     }

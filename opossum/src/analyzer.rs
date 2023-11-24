@@ -52,3 +52,39 @@ impl Display for AnalyzerType {
         write!(f, "{msg}")
     }
 }
+#[cfg(test)]
+mod test {
+    use super::*;
+    use assert_matches::assert_matches;
+    #[test]
+    fn display() {
+        assert_eq!(format!("{}", AnalyzerType::Energy), "energy");
+        assert_eq!(
+            format!("{}", AnalyzerType::RayTrace(RayTraceConfig::default())),
+            "ray tracing"
+        );
+    }
+    #[test]
+    fn debug() {
+        assert_eq!(format!("{:?}", AnalyzerType::Energy), "Energy");
+    }
+    #[test]
+    fn ray_tracing_mode_default() {
+        assert_matches!(RayTracingMode::default(), RayTracingMode::Sequential);
+    }
+    #[test]
+    fn ray_tracing_mode_debug() {
+        assert_eq!(format!("{:?}", RayTracingMode::default()), "Sequential");
+    }
+    #[test]
+    fn ray_tracing_config_default() {
+        assert_matches!(RayTraceConfig::default().mode, RayTracingMode::Sequential);
+    }
+    #[test]
+    fn ray_tracing_config_debug() {
+        assert_eq!(
+            format!("{:?}", RayTraceConfig::default()),
+            "RayTraceConfig { mode: Sequential }"
+        );
+    }
+}
