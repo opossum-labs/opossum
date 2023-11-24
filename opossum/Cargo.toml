@@ -48,6 +48,9 @@ sobol="1"
 [features]
 doc-images = []
 
+[dev-dependencies]
+regex = "1"
+
 [build-dependencies]
 # All features enabled
 vergen = { version = "8", features = [

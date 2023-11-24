@@ -6,7 +6,7 @@ use std::{error::Error, fmt::Display};
 pub type OpmResult<T> = std::result::Result<T, OpossumError>;
 
 /// Errors that can be returned by various OPOSSUM functions.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum OpossumError {
     /// error while setting up an `OpticScenery`
     OpticScenery(String),
@@ -102,6 +102,13 @@ mod test {
         assert_eq!(
             format!("{}", OpossumError::Other("test".to_string())),
             "Opossum Error:Other:test"
+        );
+    }
+    #[test]
+    fn debug() {
+        assert_eq!(
+            format!("{:?}", OpossumError::OpticScenery("test".to_string())),
+            "OpticScenery(\"test\")"
         );
     }
 }
