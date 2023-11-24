@@ -42,7 +42,7 @@ use crate::optic_ref::OpticRef;
 
 /// Factory function creating a new reference of an optical node of the given type.
 ///
-/// If a uuid is given, the optical node is created using this id. Otherwise a new (random) id is generated. This 
+/// If a uuid is given, the optical node is created using this id. Otherwise a new (random) id is generated. This
 /// function is used internally during deserialization of an `OpticGraph`.
 ///
 /// # Errors
@@ -102,5 +102,14 @@ mod test {
     #[test]
     fn create_node_ref_error() {
         assert!(create_node_ref("test", None).is_err());
+    }
+    #[test]
+    fn create_dummy() {
+        assert!(create_node_ref("dummy", None).is_ok());
+        let id = Uuid::new_v4();
+        let node = create_node_ref("dummy", Some(id));
+        assert!(node.is_ok());
+        let node = node.unwrap();
+        assert_eq!(node.uuid(), id);
     }
 }
