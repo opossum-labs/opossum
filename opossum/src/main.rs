@@ -11,6 +11,7 @@ use opossum::{
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
+use std::process::exit;
 
 fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
     print!("\nReading model...");
@@ -73,6 +74,9 @@ fn create_report_file(
 }
 
 fn main() -> OpmResult<()> {
+    let working_dir = std::env::current_dir().unwrap();
+    println!("\n\n{}\n\n", working_dir.display());
+    exit(0);
     //parse CLI arguments
     let opossum_args = Args::try_from(PartialArgs::parse())?;
 
@@ -96,4 +100,13 @@ fn main() -> OpmResult<()> {
 
     //create the report file
     create_report_file(&opossum_args.report_directory, "report", &scenery)
+}
+
+#[cfg(test)]
+mod test {
+#[test]
+fn show_workspace(){
+    let working_dir = std::env::current_dir().unwrap();
+    println!("{}", working_dir.display());
+}
 }
