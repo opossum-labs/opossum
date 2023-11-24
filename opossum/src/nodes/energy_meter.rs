@@ -255,8 +255,9 @@ mod test {
         input.insert("in1".into(), input_data.clone());
         let result = meter.analyze(input, &AnalyzerType::Energy);
         assert!(result.is_ok());
-        assert!(result.clone().unwrap().contains_key("out1"));
-        assert_eq!(result.unwrap().get("out1").unwrap(), &input_data);
+        let result = result.unwrap();
+        assert!(result.contains_key("out1"));
+        assert_eq!(result.get("out1").unwrap(), &input_data);
     }
     #[test]
     fn analyze_inverted() {
@@ -269,7 +270,8 @@ mod test {
         input.insert("out1".into(), input_data.clone());
         let result = meter.analyze(input, &AnalyzerType::Energy);
         assert!(result.is_ok());
-        assert!(result.clone().unwrap().contains_key("in1"));
-        assert_eq!(result.unwrap().get("in1").unwrap(), &input_data);
+        let result = result.unwrap();
+        assert!(result.contains_key("in1"));
+        assert_eq!(result.get("in1").unwrap(), &input_data);
     }
 }

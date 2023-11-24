@@ -637,12 +637,13 @@ mod test {
     fn from_csv_ok() {
         let s = Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_01.csv");
         assert!(s.is_ok());
-        let lambdas = s.clone().unwrap().lambda_vec();
+        let s = s.unwrap();
+        let lambdas = s.lambda_vec();
         assert!(lambdas
             .into_iter()
             .zip(vec![500.0E-3, 501.0E-3, 502.0E-3, 503.0E-3, 504.0E-3, 505.0E-3].iter())
             .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON)));
-        let datas = s.unwrap().data_vec();
+        let datas = s.data_vec();
         assert!(datas
             .into_iter()
             .zip(vec![5.0E-01, 4.981E-01, 4.982E-01, 4.984E-01, 4.996E-01, 5.010E-01].iter())

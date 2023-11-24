@@ -6,7 +6,7 @@ use std::{error::Error, fmt::Display};
 pub type OpmResult<T> = std::result::Result<T, OpossumError>;
 
 /// Errors that can be returned by various OPOSSUM functions.
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq)]
 pub enum OpossumError {
     /// error while setting up an `OpticScenery`
     OpticScenery(String),
@@ -30,27 +30,27 @@ impl Display for OpossumError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::OpticScenery(m) => {
-                write!(f, "OpticScenery::{m}")
+                write!(f, "OpticScenery:{m}")
             }
             Self::OpticGroup(m) => {
-                write!(f, "OpticGroup::{m}")
+                write!(f, "OpticGroup:{m}")
             }
             Self::OpticPort(m) => {
-                write!(f, "OpticPort::{m}")
+                write!(f, "OpticPort:{m}")
             }
             Self::Analysis(m) => {
-                write!(f, "Analysis::{m}")
+                write!(f, "Analysis:{m}")
             }
             Self::Spectrum(m) => {
-                write!(f, "Spectrum::{m}")
+                write!(f, "Spectrum:{m}")
             }
             Self::Properties(m) => {
-                write!(f, "Properties::{m}")
+                write!(f, "Properties:{m}")
             }
             Self::Console(m) => {
-                write!(f, "Console::{m}")
+                write!(f, "Console:{m}")
             }
-            Self::Other(m) => write!(f, "Opossum Error::Other::{m}"),
+            Self::Other(m) => write!(f, "Opossum Error:Other:{m}"),
         }
     }
 }
@@ -59,5 +59,49 @@ impl Error for OpossumError {}
 impl std::convert::From<String> for OpossumError {
     fn from(msg: String) -> Self {
         Self::Other(msg)
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn from() {
+        let error = OpossumError::from("test".to_string());
+        assert_eq!(error, OpossumError::Other("test".to_string()));
+    }
+    #[test]
+    fn display() {
+        assert_eq!(
+            format!("{}", OpossumError::OpticScenery("test".to_string())),
+            "OpticScenery:test"
+        );
+        assert_eq!(
+            format!("{}", OpossumError::OpticGroup("test".to_string())),
+            "OpticGroup:test"
+        );
+        assert_eq!(
+            format!("{}", OpossumError::OpticPort("test".to_string())),
+            "OpticPort:test"
+        );
+        assert_eq!(
+            format!("{}", OpossumError::Analysis("test".to_string())),
+            "Analysis:test"
+        );
+        assert_eq!(
+            format!("{}", OpossumError::Spectrum("test".to_string())),
+            "Spectrum:test"
+        );
+        assert_eq!(
+            format!("{}", OpossumError::Properties("test".to_string())),
+            "Properties:test"
+        );
+        assert_eq!(
+            format!("{}", OpossumError::Console("test".to_string())),
+            "Console:test"
+        );
+        assert_eq!(
+            format!("{}", OpossumError::Other("test".to_string())),
+            "Opossum Error:Other:test"
+        );
     }
 }
