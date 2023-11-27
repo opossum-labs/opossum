@@ -62,8 +62,6 @@ fn file_path_is_valid(path: &Path) -> bool {
 /// * [`Option<PathBuf>`] with the defined file-path string if valid
 /// * None if the file-path string is invalid
 fn eval_file_path_input(file_path: &str) -> Option<PathBuf> {
-    let working_dir = std::env::current_dir().unwrap();
-    println!("{}", working_dir.display());
     if file_path_is_valid(Path::new(file_path)) {
         Some(PathBuf::from(file_path))
     } else {
