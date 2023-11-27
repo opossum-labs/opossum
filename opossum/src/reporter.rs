@@ -1,12 +1,11 @@
 #![warn(missing_docs)]
 //! Module for generating analysis reports in PDF format.
 
+use crate::{error::OpmResult, properties::Properties, OpticScenery};
 use chrono::{DateTime, Local};
 use genpdf::{self, elements, style, Alignment, Scale};
 use serde_derive::Serialize;
-use std::path::Path;
-
-use crate::{error::OpmResult, properties::Properties, OpticScenery};
+use std::path::{Path, PathBuf};
 #[derive(Serialize, Debug)]
 /// Structure for storing data being integrated in an analysis report.
 pub struct AnalysisReport {
@@ -84,7 +83,9 @@ impl ReportGenerator {
         Self { report }
     }
     fn add_report_title(&self, doc: &mut genpdf::Document) {
-        let image = elements::Image::from_path("./opossum/logo/Logo_square.png")
+        let mut img_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        img_path.push("logo/Logo_square.png");
+        let image = elements::Image::from_path(img_path)
             .expect("Failed to load image")
             .with_scale(Scale::new(0.2, 0.2))
             .with_alignment(Alignment::Center);
@@ -154,7 +155,10 @@ impl ReportGenerator {
     ///   - the file could not be generated on disk (disk full, not writable, etc...)
     ///   - individual erros while generating sub components of the report
     pub fn generate_pdf(&self, path: &Path) -> OpmResult<()> {
-        let font_family = genpdf::fonts::from_files("./opossum/fonts", "LiberationSans", None)
+        let mut font_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        font_dir.push("fonts");
+
+        let font_family = genpdf::fonts::from_files(font_dir, "LiberationSans", None)
             .map_err(|e| format!("failed to load font family: {e}"))?;
         // Create a document and set the default font family
         let mut doc = genpdf::Document::new(font_family);
@@ -172,5 +176,49 @@ impl ReportGenerator {
         doc.render_to_file(path)
             .map_err(|e| format!("failed to write file: {e}"))?;
         Ok(())
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use tempfile::NamedTempFile;
+    #[test]
+    fn analysis_report_new() {
+        let timestamp = Local::now();
+        let report = AnalysisReport::new(String::from("test"), timestamp);
+        assert!(report.scenery.is_none());
+        assert_eq!(report.opossum_version, "test");
+        assert!(report.node_reports.is_empty());
+        assert_eq!(report.analysis_timestamp, timestamp);
+    }
+    #[test]
+    fn analysis_report_add_scenery() {
+        let mut report = AnalysisReport::new(String::from("test"), DateTime::default());
+        report.add_scenery(&OpticScenery::default());
+        assert!(report.scenery.is_some());
+    }
+    #[test]
+    fn analysis_report_add_detector() {
+        let mut report = AnalysisReport::new(String::from("test"), DateTime::default());
+        report.add_detector(NodeReport::new(
+            "test detector",
+            "detector name",
+            Properties::default(),
+        ));
+        assert_eq!(report.node_reports.len(), 1);
+    }
+    #[test]
+    fn node_report_new() {
+        let report = NodeReport::new("test detector", "detector name", Properties::default());
+        assert_eq!(report.detector_type, "test detector");
+        assert_eq!(report.name, "detector name");
+    }
+    #[test]
+    fn report_generator_generate_pdf() {
+        let report = AnalysisReport::new(String::from("test"), DateTime::default());
+        let generator = ReportGenerator::new(report);
+        assert!(generator.generate_pdf(Path::new("")).is_err());
+        let path = NamedTempFile::new().unwrap();
+        assert!(generator.generate_pdf(path.path()).is_ok());
     }
 }
