@@ -170,6 +170,9 @@ impl<'de> Deserialize<'de> for OpticRef {
 mod test {
     use super::*;
     use crate::nodes::Dummy;
+    use std::io::Read;
+    use std::{fs::File, path::PathBuf};
+    use uuid::uuid;
     #[test]
     fn new() {
         let uuid = Uuid::new_v4();
@@ -181,5 +184,35 @@ mod test {
         let uuid = Uuid::new_v4();
         let optic_ref = OpticRef::new(Rc::new(RefCell::new(Dummy::default())), Some(uuid));
         assert_eq!(optic_ref.uuid(), uuid);
+    }
+    #[test]
+    fn serialize() {
+        let optic_ref = OpticRef::new(
+            Rc::new(RefCell::new(Dummy::default())),
+            Some(uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb")),
+        );
+        let serialized = serde_json::to_string_pretty(&optic_ref);
+        assert!(serialized.is_ok());
+        // cannot check here easily because the order of properties is not defined...
+        // let serialized=serialized.unwrap();
+        // assert_eq!(&serialized,file_content);
+    }
+    #[test]
+    fn deserialize() {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("files_for_testing/opm/optic_ref.opm");
+        let file_content = &mut "".to_owned();
+        let _ = File::open(path).unwrap().read_to_string(file_content);
+        let deserialized: Result<OpticRef, serde_json::Error> = serde_json::from_str(&file_content);
+        assert!(deserialized.is_ok());
+        let optic_ref = deserialized.unwrap();
+        assert_eq!(
+            optic_ref.uuid(),
+            uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb")
+        );
+        let optic_ref = optic_ref.optical_ref.borrow();
+        let properties = optic_ref.properties();
+        assert_eq!(properties.node_type().unwrap(), "dummy");
+        assert_eq!(properties.name().unwrap(), "test123");
     }
 }
