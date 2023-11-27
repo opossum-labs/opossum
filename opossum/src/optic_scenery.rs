@@ -654,4 +654,17 @@ mod test {
         let path = NamedTempFile::new().unwrap();
         assert!(scenery.save_to_file(path.path()).is_ok());
     }
+    #[test]
+    fn analyze_empty() {
+        let mut scenery = OpticScenery::default();
+        assert!(scenery.analyze(&AnalyzerType::Energy).is_ok());
+    }
+    #[test]
+    fn analyze_simple() {
+        let mut scenery = OpticScenery::default();
+        let n1 = scenery.add_node(Dummy::default());
+        let n2 = scenery.add_node(Dummy::default());
+        scenery.connect_nodes(n1, "rear", n2, "front").unwrap();
+        assert!(scenery.analyze(&AnalyzerType::Energy).is_ok());
+    }
 }
