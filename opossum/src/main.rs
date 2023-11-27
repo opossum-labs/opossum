@@ -11,7 +11,6 @@ use opossum::{
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
-use std::process::exit;
 
 fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
     print!("\nReading model...");
@@ -97,4 +96,69 @@ fn main() -> OpmResult<()> {
 
     //create the report file
     create_report_file(&opossum_args.report_directory, "report", &scenery)
+}
+
+#[cfg(test)]
+mod test {
+    use petgraph::adj::NodeIndex;
+    use std::path::PathBuf;
+
+    use super::*;
+
+    #[test]
+    fn read_and_parse_model_test() {
+        assert!(read_and_parse_model(&PathBuf::from(
+            "./invalid_file_path/invalid_file.invalid_ext"
+        ))
+        .is_err());
+        assert!(
+            read_and_parse_model(&PathBuf::from("./files_for_testing/opm/incorrect_opm.opm"))
+                .is_err()
+        );
+
+        let scenery =
+            read_and_parse_model(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
+                .unwrap();
+        let node1 = scenery.node(NodeIndex::from(0)).unwrap();
+        let node2 = scenery.node(NodeIndex::from(1)).unwrap();
+        assert_eq!(
+            "f4da70a8-ce43-460f-9d45-64d02879db63",
+            node1.uuid().to_string()
+        );
+        assert_eq!(
+            "4589fdd5-5cdd-4d69-8e6d-846f3bc9ad2d",
+            node2.uuid().to_string()
+        );
+    }
+
+    #[test]
+    fn create_dot_file_test() {
+        let scenery =
+            read_and_parse_model(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
+                .unwrap();
+        let dot_file = create_dot_file(
+            &PathBuf::from("./files_for_testing/dot/_not_valid/"),
+            "create_dot_file_test",
+            &scenery,
+        );
+        assert!(dot_file.is_err());
+        let _ = create_dot_file(
+            &PathBuf::from("./files_for_testing/dot/"),
+            "create_dot_file_test",
+            &scenery,
+        )
+        .unwrap();
+    }
+    #[test]
+    fn create_report_file_test() {
+        let scenery =
+            read_and_parse_model(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
+                .unwrap();
+        let report_file = create_report_file(
+            &PathBuf::from("./files_for_testing/report/_not_valid/"),
+            "create_report_file_test",
+            &scenery,
+        );
+        assert!(report_file.is_err());
+    }
 }

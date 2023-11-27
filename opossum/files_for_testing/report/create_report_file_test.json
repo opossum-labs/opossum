@@ -1,0 +1,75 @@
+{
+  "opossum_version": "0.2.0-173-gbeb5128 (2023/11/27 13:57)",
+  "analysis_timestamp": "2023-11-27T15:55:27.442662100+01:00",
+  "scenery": {
+    "opm version": "0",
+    "graph": {
+      "nodes": [
+        {
+          "type": "dummy",
+          "id": "f4da70a8-ce43-460f-9d45-64d02879db63",
+          "properties": {
+            "node_type": {
+              "String": "dummy"
+            },
+            "inverted": {
+              "Bool": false
+            },
+            "apertures": {
+              "OpticPorts": {
+                "inputs": {
+                  "front": "None"
+                },
+                "outputs": {
+                  "rear": "None"
+                }
+              }
+            },
+            "name": {
+              "String": "dummy1"
+            }
+          }
+        },
+        {
+          "type": "dummy",
+          "id": "4589fdd5-5cdd-4d69-8e6d-846f3bc9ad2d",
+          "properties": {
+            "apertures": {
+              "OpticPorts": {
+                "inputs": {
+                  "front": "None"
+                },
+                "outputs": {
+                  "rear": "None"
+                }
+              }
+            },
+            "name": {
+              "String": "dummy2"
+            },
+            "node_type": {
+              "String": "dummy"
+            },
+            "inverted": {
+              "Bool": false
+            }
+          }
+        }
+      ],
+      "edges": [
+        [
+          "f4da70a8-ce43-460f-9d45-64d02879db63",
+          "4589fdd5-5cdd-4d69-8e6d-846f3bc9ad2d",
+          "rear",
+          "front"
+        ]
+      ]
+    },
+    "properties": {
+      "description": {
+        "String": "OpticScenery demo"
+      }
+    }
+  },
+  "node_reports": []
+}

@@ -544,23 +544,9 @@ impl PdfReportable for OpticScenery {
 mod test {
     use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
-    use crate::console::{Args, PartialArgs};
     use crate::nodes::Metertype;
-    use clap::Parser;
-    use std::fs;
-    use std::path::Path;
+    use std::path::PathBuf;
     use std::{fs::File, io::Read};
-
-    // fn fix_debug_run_test_data_path(f_path: &str) -> String {
-    //     match std::env::var("ENV_ROOT_DIR") {
-    //         Ok(path) => {
-    //             Path::new(&path).join("opossum/").join(f_path).display().to_string()
-    //         },
-    //         Err(_) => {
-    //             Path::new(&std::env::current_dir().unwrap()).join("../").join(f_path).display().to_string()
-    //         }
-    //     }
-    // }
 
     fn get_file_content(f_path: &str) -> String {
         // let path = fix_debug_run_test_data_path(f_path);
@@ -705,39 +691,46 @@ mod test {
     #[test]
     fn description() {
         let mut scenery = OpticScenery::new();
+        assert_eq!(scenery.description(), "");
         scenery.set_description("Test".into()).unwrap();
         assert_eq!(scenery.description(), "Test")
     }
+    //todo: what should we exactly test for for the functions analyze and report?
     #[test]
-    fn analzye_test() {
-        //TODO
-        let path = "./files_for_testing/opm/filter_test.opm";
-        let arg_vec = vec!["opossum", "-f", &path, "-a", "e", "-r", ""];
+    fn analyze_dummy_test() {
+        let mut scenery = OpticScenery::new();
+        scenery.set_description("analyze_dummy_test").unwrap();
+        let node1 = scenery.add_node(Dummy::new("dummy1"));
+        let node2 = scenery.add_node(Dummy::new("dummy2"));
+        scenery
+            .connect_nodes(node1, "rear", node2, "front")
+            .unwrap();
+        scenery.analyze(&AnalyzerType::Energy).unwrap();
+    }
 
-        let opossum_args = Args::try_from(PartialArgs::parse_from(arg_vec)).unwrap();
+    #[test]
+    fn analyze_empty_test() {
+        let mut scenery = OpticScenery::new();
+        scenery.set_description("analyze_empty_test").unwrap();
+        scenery.analyze(&AnalyzerType::Energy).unwrap();
+    }
 
-        let contents = fs::read_to_string(&opossum_args.file_path)
-            .map_err(|e| {
-                OpossumError::Console(format!(
-                    "cannot read file {} : {}",
-                    opossum_args.file_path.display(),
-                    e
-                ))
-            })
-            .unwrap();
-        let mut scenery: OpticScenery = serde_json::from_str(&contents)
-            .map_err(|e| OpossumError::OpticScenery(format!("parsing of model failed: {e}")))
-            .unwrap();
+    #[test]
+    fn report_empty_test() {
+        let mut scenery = OpticScenery::new();
+        scenery.set_description("report_empty_test").unwrap();
+        scenery.analyze(&AnalyzerType::Energy).unwrap();
+        let _report = scenery.report(&PathBuf::from("./opossum/files_for_testing/"));
+    }
 
-        let mut dot_path = opossum_args.report_directory.clone();
-        dot_path.push(opossum_args.file_path.file_stem().unwrap());
-        dot_path.set_extension("dot");
-        let mut output = File::create(dot_path)
-            .map_err(|e| OpossumError::Other(format!("dot file creation failed: {e}")))
-            .unwrap();
-        write!(output, "{}", scenery.to_dot("LR").unwrap())
-            .map_err(|e| OpossumError::Other(format!("writing dot file failed: {e}")))
-            .unwrap();
-        scenery.analyze(&opossum_args.analyzer).unwrap();
+    #[test]
+    fn save_to_file_invalid_path_test() {
+        let mut scenery = OpticScenery::new();
+        scenery.set_description("analyze_empty_test").unwrap();
+        assert!(scenery
+            .save_to_file(&PathBuf::from(
+                "./invalid_file_path/invalid_file.invalid_ext"
+            ))
+            .is_err());
     }
 }
