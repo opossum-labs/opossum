@@ -162,7 +162,8 @@ mod test {
     }
     #[test]
     fn report() {
-        assert!(Dummy::default().report().is_none());
+        let report = Dummy::default().report();
+        assert!(report.is_some());
     }
     #[test]
     fn ports_inverted() {

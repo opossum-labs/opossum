@@ -1063,4 +1063,8 @@ mod test {
         let output = group.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_err());
     }
+    #[test]
+    fn report() {
+        assert!(NodeGroup::default().report().is_none());
+    }
 }

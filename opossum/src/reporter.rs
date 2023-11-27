@@ -217,9 +217,17 @@ mod test {
         assert!(generator.generate_pdf(path.path()).is_ok());
     }
     #[test]
-    fn report_generator_generate_pdf_with_content() {
+    fn report_generator_generate_pdf_with_scenery() {
         let mut analysis_report = AnalysisReport::new(String::from("test"), DateTime::default());
         analysis_report.add_scenery(&OpticScenery::default());
+        let generator = ReportGenerator::new(analysis_report);
+        assert!(generator.generate_pdf(Path::new("")).is_err());
+        let path = NamedTempFile::new().unwrap();
+        assert!(generator.generate_pdf(path.path()).is_ok());
+    }
+    #[test]
+    fn report_generator_generate_pdf_with_node_report() {
+        let mut analysis_report = AnalysisReport::new(String::from("test"), DateTime::default());
         let node_report = NodeReport::new("test detector", "detector name", Properties::default());
         analysis_report.add_detector(node_report);
         let generator = ReportGenerator::new(analysis_report);
