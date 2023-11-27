@@ -311,6 +311,7 @@ mod test {
         let n3 = graph.add_node(Dummy::new("Test"));
         assert!(graph.connect_nodes(n1, "rear", n2, "front").is_ok());
         assert!(graph.connect_nodes(n3, "rear", n2, "front").is_err());
+        assert!(graph.connect_nodes(n1, "rear", n3, "front").is_err());
     }
     #[test]
     fn connect_nodes_loop_error() {
@@ -336,5 +337,15 @@ mod test {
         let uuid = graph.0.node_weight(n1).unwrap().uuid();
         assert_eq!(graph.node_idx(uuid), Some(n1));
         assert_eq!(graph.node_idx(Uuid::new_v4()), None);
+    }
+    #[test]
+    fn serialize_deserialize() {
+        let mut graph = OpticGraph::default();
+        graph.add_node(Dummy::default());
+        let serialized = serde_json::to_string(&graph);
+        assert!(serialized.is_ok());
+        let serialized = serialized.unwrap();
+        let deserialized: Result<OpticGraph, serde_json::Error> = serde_json::from_str(&serialized);
+        assert!(deserialized.is_ok());
     }
 }

@@ -119,7 +119,7 @@ impl ReportGenerator {
         table_row.push().unwrap();
         doc.push(table);
     }
-    fn add_scenery_report(&self, doc: &mut genpdf::Document) -> OpmResult<()> {
+    fn add_scenery_report(&self, doc: &mut genpdf::Document) {
         if let Some(scenery) = &self.report.scenery {
             doc.push(genpdf::elements::Break::new(2));
             let p = elements::Paragraph::default().styled_string(
@@ -128,14 +128,13 @@ impl ReportGenerator {
             );
             doc.push(p);
             if let Ok(report) = scenery.pdf_report() {
-                doc.push(report)
+                doc.push(report);
             } else {
                 doc.push(elements::Paragraph::new(
                     "cannot display scenery diagram. Is graphviz installed?",
                 ));
             }
         }
-        Ok(())
     }
     fn add_node_reports(&self, doc: &mut genpdf::Document) -> OpmResult<()> {
         if !self.report.node_reports.is_empty() {
@@ -171,7 +170,7 @@ impl ReportGenerator {
         decorator.set_margins(10);
         doc.set_page_decorator(decorator);
         self.add_report_title(&mut doc);
-        self.add_scenery_report(&mut doc)?;
+        self.add_scenery_report(&mut doc);
         doc.push(genpdf::elements::PageBreak::new());
         self.add_node_reports(&mut doc)?;
         doc.render_to_file(path)
