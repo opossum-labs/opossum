@@ -30,33 +30,15 @@ pub trait Dottable {
         dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports, rankdir));
         Ok(dot_str)
     }
-    /// creates a table-cell wrapper around an "inner" string
-    fn add_table_cell_container(
-        &self,
-        inner_str: &str,
-        border_flag: bool,
-        indent_level: &mut usize,
-    ) -> String {
-        if inner_str.is_empty() {
-            format!(
-                "{}<TD BORDER=\"{}\">{}</TD>\n",
-                "\t".repeat(*indent_level),
-                border_flag,
-                inner_str
-            )
-        } else {
-            format!(
-                "{}<TD BORDER=\"{}\">{}{}{}</TD>\n",
-                "\t".repeat(*indent_level),
-                border_flag,
-                inner_str,
-                "\t".repeat(*indent_level + 1),
-                "\t".repeat(*indent_level)
-            )
-        }
-    }
-
-    /// create the dot-string of each port
+    /// Create the dot-string of each defined port
+    ///
+    /// # Attributes
+    /// * `port_name`:  Name of the port, stored in the table cell
+    /// * `input_flag`: Boolean that describes if the port is an input or an output. True for inputs, false for outputs.
+    /// * `port_index`: Index of the port for this specific Node
+    ///
+    /// # Returns
+    /// Returns the String that describes the table cell of the ports.
     fn create_port_cell_str(&self, port_name: &str, input_flag: bool, port_index: usize) -> String {
         // inputs marked as green, outputs as blue
         let color_str = if input_flag {
@@ -74,56 +56,23 @@ pub trait Dottable {
             "<TD HEIGHT=\"16\" WIDTH=\"16\" PORT=\"{port_name}\" BORDER=\"1\" BGCOLOR={color_str} HREF=\"\" TOOLTIP=\"{in_out_str} {port_index}: {port_name}\">{port_index}</TD>\n"
         )
     }
-    /// create the dot-string that describes the ports, including their row/table/cell wrappers
-    fn create_port_cells_str(
-        &self,
-        input_flag: bool,
-        indent_level: &mut usize,
-        indent_incr: i32,
-        ports: &OpticPorts,
-    ) -> String {
-        let mut ports = if input_flag {
-            ports.input_names()
-        } else {
-            ports.output_names()
-        };
-        ports.sort();
-        let mut dot_str = self.create_html_like_container("row", indent_level, true, 1);
-
-        dot_str.push_str(&self.create_html_like_container("cell", indent_level, true, 1));
-        dot_str.push_str(&self.create_html_like_container("table", indent_level, true, 1));
-        dot_str.push_str(&self.create_html_like_container("row", indent_level, true, 1));
-
-        dot_str.push_str(&self.add_table_cell_container("", false, indent_level));
-
-        let mut port_index = 1;
-        for port in ports {
-            dot_str.push_str(&self.create_port_cell_str(&port, input_flag, port_index));
-            dot_str.push_str(&self.add_table_cell_container("", false, indent_level));
-            port_index += 1;
-        }
-        *indent_level -= 1;
-
-        dot_str.push_str(&self.create_html_like_container("row", indent_level, false, -1));
-        dot_str.push_str(&self.create_html_like_container("table", indent_level, false, -1));
-        dot_str.push_str(&self.create_html_like_container("cell", indent_level, false, -1));
-        dot_str.push_str(&self.create_html_like_container("row", indent_level, false, indent_incr));
-        dot_str
-    }
-    /// Returns the color of the node.
+    /// Defines the displayed color of the node
+    ///
+    /// # Returns
+    /// Returns the color string of the node.
     fn node_color(&self) -> &str {
         "lightgray"
     }
-    /// Create a row string.
-    fn create_main_node_row_str(&self, node_name: &str, indent_level: &mut usize) -> String {
-        let mut dot_str = self.create_html_like_container("row", indent_level, true, 1);
-        dot_str.push_str(&format!("{}<TD BORDER=\"1\" BGCOLOR=\"{}\" ALIGN=\"CENTER\" WIDTH=\"80\" CELLPADDING=\"10\" HEIGHT=\"80\" STYLE=\"ROUNDED\">{}</TD>\n", "\t".repeat(*indent_level), self.node_color(), node_name));
-        *indent_level -= 1;
-        dot_str.push_str(&self.create_html_like_container("row", indent_level, false, 0));
-
-        dot_str
-    }
-    /// starts or ends an html-like container
+    /// Creates the start- or end-sequence of an html-like container within the dot file
+    ///
+    /// # Attributes
+    /// * `container_str`:  The inner string that is wrapped in this container
+    /// * `indent_level`:   Intendation level when creating the dot file. Just for readability
+    /// * `start_flag`:     Boolean that describes if the container starts or ends here. True for sart, false otherwise.
+    /// * `indent_incr`:    Defines if the indentation level increases, drops or remains the same. Just for readability.
+    ///
+    /// # Returns
+    /// Returns the String that describes the start- or end-sequence of an html-like container.
     fn create_html_like_container(
         &self,
         container_str: &str,
@@ -137,13 +86,6 @@ pub trait Dottable {
                     "<TR BORDER=\"0\">"
                 } else {
                     "</TR>"
-                }
-            }
-            "cell" => {
-                if start_flag {
-                    "<TD BORDER=\"0\">"
-                } else {
-                    "</TD>"
                 }
             }
             "table" => {
@@ -162,11 +104,19 @@ pub trait Dottable {
         new_str
     }
 
-    /// Create the code for table cells of an optical node.
+    /// Creates the respective table cell of the optical node, depending on the number of ports and orientation of the node
+    ///
+    /// # Attributes
+    /// * `ports`:          Reference to the input and output ports
+    /// * `ports_count`:    Respective number of input and output ports
+    /// * `ax_nums`:        Total number of rows and columns off the node table to display it correctly
+    /// * `node_name`:      Name of the node
+    ///
+    /// # Returns
+    /// Returns the String that describes the table cell of the node table.
     fn create_node_table_cells(
         &self,
         ports: (&Vec<String>, &Vec<String>),
-        // outputs:        &Vec<String>,
         ports_count: (&mut usize, &mut usize),
         ax_nums: (usize, usize),
         node_name: &str,
@@ -231,7 +181,16 @@ pub trait Dottable {
         dot_str
     }
 
-    /// creates the node label defined by html-like strings
+    /// Creates the html-like label that describes the node to be displayed via graphwiz
+    ///
+    /// # Attributes
+    /// * `node_name`:      Name of the node
+    /// * `indent_level`:   Intendation level when creating the dot file. Just for readability
+    /// * `ports`:          Reference to the [`OpticPorts`] of the node
+    /// * `rankdir`:        Describes the orientation in which the node graph is built. "LR" for left to right or "TB" or "" for top to bottom
+    ///
+    /// # Returns
+    /// Returns the String that describes the complete node in a dot-string label.
     fn add_html_like_labels(
         &self,
         node_name: &str,

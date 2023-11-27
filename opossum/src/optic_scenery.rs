@@ -545,7 +545,16 @@ mod test {
     use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
     use crate::nodes::{Detector, Metertype};
+    use std::path::PathBuf;
     use std::{fs::File, io::Read};
+
+    fn get_file_content(f_path: &str) -> String {
+        // let path = fix_debug_run_test_data_path(f_path);
+        let file_content = &mut "".to_owned();
+        let _ = File::open(f_path).unwrap().read_to_string(file_content);
+        file_content.to_string()
+    }
+
     #[test]
     fn new() {
         let scenery = OpticScenery::new();
@@ -555,13 +564,8 @@ mod test {
     }
     #[test]
     fn to_dot_empty() {
-        let path = "files_for_testing/dot/to_dot_empty_TB.dot";
-        let file_content_tb = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
-
-        let path = "files_for_testing/dot/to_dot_empty_LR.dot";
-        let file_content_lr = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_empty_TB.dot");
+        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_empty_LR.dot");
 
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into()).unwrap();
@@ -574,13 +578,8 @@ mod test {
     }
     #[test]
     fn to_dot_with_node() {
-        let path = "./files_for_testing/dot/to_dot_w_node_TB.dot";
-        let file_content_tb = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
-
-        let path = "./files_for_testing/dot/to_dot_w_node_LR.dot";
-        let file_content_lr = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_w_node_TB.dot");
+        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_w_node_LR.dot");
 
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into()).unwrap();
@@ -594,13 +593,8 @@ mod test {
     }
     #[test]
     fn to_dot_full() {
-        let path = "files_for_testing/dot/to_dot_full_TB.dot";
-        let file_content_tb = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content_tb);
-
-        let path = "files_for_testing/dot/to_dot_full_LR.dot";
-        let file_content_lr = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content_lr);
+        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_full_TB.dot");
+        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_full_LR.dot");
 
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into()).unwrap();
@@ -632,9 +626,73 @@ mod test {
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
     }
     #[test]
+    fn to_dot_group() {
+        let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot");
+        let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot");
+
+        let mut scenery = OpticScenery::new();
+        scenery
+            .set_description("Node Group test section".into())
+            .unwrap();
+
+        let mut group1 = NodeGroup::new("group 1");
+        group1.expand_view(true).unwrap();
+        let g1_n1 = group1.add_node(Dummy::new("node1")).unwrap();
+        let g1_n2 = group1.add_node(BeamSplitter::default()).unwrap();
+        group1
+            .map_output_port(g1_n2, "out1_trans1_refl2", "out1")
+            .unwrap();
+        group1
+            .connect_nodes(g1_n1, "rear", g1_n2, "input1")
+            .unwrap();
+
+        let mut nested_group = NodeGroup::new("group 1_1");
+        let nested_g_n1 = nested_group.add_node(Dummy::new("node1_1")).unwrap();
+        let nested_g_n2 = nested_group.add_node(Dummy::new("node1_2")).unwrap();
+        nested_group.expand_view(true).unwrap();
+
+        nested_group
+            .connect_nodes(nested_g_n1, "rear", nested_g_n2, "front")
+            .unwrap();
+        nested_group
+            .map_input_port(nested_g_n1, "front", "in1")
+            .unwrap();
+        nested_group
+            .map_output_port(nested_g_n2, "rear", "out1")
+            .unwrap();
+
+        let nested_group_index = group1.add_node(nested_group).unwrap();
+        group1
+            .connect_nodes(nested_group_index, "out1", g1_n1, "front")
+            .unwrap();
+
+        let mut group2: NodeGroup = NodeGroup::new("group 2");
+        group2.expand_view(false).unwrap();
+        let g2_n1 = group2.add_node(Dummy::new("node2_1")).unwrap();
+        let g2_n2 = group2.add_node(Dummy::new("node2_2")).unwrap();
+        group2.map_input_port(g2_n1, "front", "in1").unwrap();
+
+        group2.connect_nodes(g2_n1, "rear", g2_n2, "front").unwrap();
+
+        let scene_g1 = scenery.add_node(group1);
+        let scene_g2 = scenery.add_node(group2);
+
+        // set_output_port
+        scenery
+            .connect_nodes(scene_g1, "out1", scene_g2, "in1")
+            .unwrap();
+
+        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
+        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+
+        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
+        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
+    }
+    #[test]
     fn description() {
         let mut scenery = OpticScenery::new();
-        scenery.set_description("Test").unwrap();
+        assert_eq!(scenery.description(), "");
+        scenery.set_description("Test".into()).unwrap();
         assert_eq!(scenery.description(), "Test")
     }
     #[test]
@@ -653,5 +711,43 @@ mod test {
         assert!(scenery.save_to_file(Path::new("")).is_err());
         let path = NamedTempFile::new().unwrap();
         assert!(scenery.save_to_file(path.path()).is_ok());
+    }
+    //todo: what should we exactly test for for the functions analyze and report?
+    #[test]
+    fn analyze_dummy_test() {
+        let mut scenery = OpticScenery::new();
+        scenery.set_description("analyze_dummy_test").unwrap();
+        let node1 = scenery.add_node(Dummy::new("dummy1"));
+        let node2 = scenery.add_node(Dummy::new("dummy2"));
+        scenery
+            .connect_nodes(node1, "rear", node2, "front")
+            .unwrap();
+        scenery.analyze(&AnalyzerType::Energy).unwrap();
+    }
+
+    #[test]
+    fn analyze_empty_test() {
+        let mut scenery = OpticScenery::new();
+        scenery.set_description("analyze_empty_test").unwrap();
+        scenery.analyze(&AnalyzerType::Energy).unwrap();
+    }
+
+    #[test]
+    fn report_empty_test() {
+        let mut scenery = OpticScenery::new();
+        scenery.set_description("report_empty_test").unwrap();
+        scenery.analyze(&AnalyzerType::Energy).unwrap();
+        let _report = scenery.report(&PathBuf::from("./opossum/files_for_testing/"));
+    }
+
+    #[test]
+    fn save_to_file_invalid_path_test() {
+        let mut scenery = OpticScenery::new();
+        scenery.set_description("analyze_empty_test").unwrap();
+        assert!(scenery
+            .save_to_file(&PathBuf::from(
+                "./invalid_file_path/invalid_file.invalid_ext"
+            ))
+            .is_err());
     }
 }

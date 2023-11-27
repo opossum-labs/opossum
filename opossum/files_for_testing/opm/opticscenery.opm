@@ -1,0 +1,70 @@
+{
+  "opm version": "0",
+  "graph": {
+    "nodes": [
+      {
+        "type": "dummy",
+        "id": "f4da70a8-ce43-460f-9d45-64d02879db63",
+        "properties": {
+          "inverted": {
+            "Bool": false
+          },
+          "name": {
+            "String": "dummy1"
+          },
+          "apertures": {
+            "OpticPorts": {
+              "inputs": {
+                "front": "None"
+              },
+              "outputs": {
+                "rear": "None"
+              }
+            }
+          },
+          "node_type": {
+            "String": "dummy"
+          }
+        }
+      },
+      {
+        "type": "dummy",
+        "id": "4589fdd5-5cdd-4d69-8e6d-846f3bc9ad2d",
+        "properties": {
+          "name": {
+            "String": "dummy2"
+          },
+          "node_type": {
+            "String": "dummy"
+          },
+          "apertures": {
+            "OpticPorts": {
+              "inputs": {
+                "front": "None"
+              },
+              "outputs": {
+                "rear": "None"
+              }
+            }
+          },
+          "inverted": {
+            "Bool": false
+          }
+        }
+      }
+    ],
+    "edges": [
+      [
+        "f4da70a8-ce43-460f-9d45-64d02879db63",
+        "4589fdd5-5cdd-4d69-8e6d-846f3bc9ad2d",
+        "rear",
+        "front"
+      ]
+    ]
+  },
+  "properties": {
+    "description": {
+      "String": "OpticScenery demo"
+    }
+  }
+}
