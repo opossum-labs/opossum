@@ -198,7 +198,7 @@ impl Plottable for Rays {
             .fold(f64::INFINITY, f64::min)
             * 1.1;
         if !x_min.is_finite() {
-            x_min = -1.0
+            x_min = -1.0;
         }
         let mut x_max = self
             .rays
@@ -207,7 +207,7 @@ impl Plottable for Rays {
             .fold(f64::NEG_INFINITY, f64::max)
             * 1.1;
         if !x_max.is_finite() {
-            x_max = 1.0
+            x_max = 1.0;
         }
         if x_max == x_min {
             x_max = 1.0;

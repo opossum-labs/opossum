@@ -548,24 +548,24 @@ mod test {
     use crate::nodes::Metertype;
     use clap::Parser;
     use std::fs;
-    use std::{fs::File, io::Read};
     use std::path::Path;
+    use std::{fs::File, io::Read};
 
-    fn fix_debug_run_test_data_path(f_path: &str) -> String {
-        match std::env::var("ENV_ROOT_DIR") {
-            Ok(path) => {
-                Path::new(&path).join("opossum/").join(f_path).display().to_string()
-            },
-            Err(_) => {
-                Path::new(&std::env::current_dir().unwrap()).join("../").join(f_path).display().to_string()
-            }
-        }
-    }
+    // fn fix_debug_run_test_data_path(f_path: &str) -> String {
+    //     match std::env::var("ENV_ROOT_DIR") {
+    //         Ok(path) => {
+    //             Path::new(&path).join("opossum/").join(f_path).display().to_string()
+    //         },
+    //         Err(_) => {
+    //             Path::new(&std::env::current_dir().unwrap()).join("../").join(f_path).display().to_string()
+    //         }
+    //     }
+    // }
 
-    fn get_file_content(f_path: &str) -> String{
-        let path = fix_debug_run_test_data_path(f_path);
+    fn get_file_content(f_path: &str) -> String {
+        // let path = fix_debug_run_test_data_path(f_path);
         let file_content = &mut "".to_owned();
-        let _ = File::open(path).unwrap().read_to_string(file_content);
+        let _ = File::open(f_path).unwrap().read_to_string(file_content);
         file_content.to_string()
     }
 
@@ -578,8 +578,8 @@ mod test {
     }
     #[test]
     fn to_dot_empty() {
-        let file_content_tb = get_file_content("files_for_testing/dot/to_dot_empty_TB.dot");
-        let file_content_lr = get_file_content("files_for_testing/dot/to_dot_empty_LR.dot");
+        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_empty_TB.dot");
+        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_empty_LR.dot");
 
         let mut scenery = OpticScenery::new();
         scenery.set_description("Test".into()).unwrap();
@@ -592,8 +592,8 @@ mod test {
     }
     #[test]
     fn to_dot_with_node() {
-        let file_content_tb = get_file_content("files_for_testing/dot/to_dot_w_node_TB.dot");
-        let file_content_lr = get_file_content("files_for_testing/dot/to_dot_w_node_LR.dot");
+        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_w_node_TB.dot");
+        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_w_node_LR.dot");
 
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into()).unwrap();
@@ -607,8 +607,8 @@ mod test {
     }
     #[test]
     fn to_dot_full() {
-        let file_content_tb = get_file_content("files_for_testing/dot/to_dot_full_TB.dot");
-        let file_content_lr = get_file_content("files_for_testing/dot/to_dot_full_LR.dot");
+        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_full_TB.dot");
+        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_full_LR.dot");
 
         let mut scenery = OpticScenery::new();
         scenery.set_description("SceneryTest".into()).unwrap();
@@ -641,8 +641,8 @@ mod test {
     }
     #[test]
     fn to_dot_group() {
-        let file_content_tb = get_file_content("files_for_testing/dot/group_dot_TB.dot");
-        let file_content_lr = get_file_content("files_for_testing/dot/group_dot_LR.dot");
+        let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot");
+        let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot");
 
         let mut scenery = OpticScenery::new();
         scenery
@@ -711,16 +711,8 @@ mod test {
     #[test]
     fn analzye_test() {
         //TODO
-        let path = fix_debug_run_test_data_path("./files_for_testing/opm/filter_test.opm");
-        let arg_vec = vec![
-            "opossum",
-            "-f",
-            &path,
-            "-a",
-            "e",
-            "-r",
-            "",
-        ];
+        let path = "./files_for_testing/opm/filter_test.opm";
+        let arg_vec = vec!["opossum", "-f", &path, "-a", "e", "-r", ""];
 
         let opossum_args = Args::try_from(PartialArgs::parse_from(arg_vec)).unwrap();
 
