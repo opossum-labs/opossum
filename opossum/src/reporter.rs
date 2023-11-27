@@ -157,18 +157,13 @@ impl ReportGenerator {
     pub fn generate_pdf(&self, path: &Path) -> OpmResult<()> {
         let mut font_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         font_dir.push("fonts");
-
         let font_family = genpdf::fonts::from_files(font_dir, "LiberationSans", None)
             .map_err(|e| format!("failed to load font family: {e}"))?;
-        // Create a document and set the default font family
         let mut doc = genpdf::Document::new(font_family);
-        // Change the default settings
         doc.set_title("OPOSSUM Analysis report");
-        // Customize the pages
         let mut decorator = genpdf::SimplePageDecorator::new();
         decorator.set_margins(10);
         doc.set_page_decorator(decorator);
-
         self.add_report_title(&mut doc);
         self.add_scenery_report(&mut doc)?;
         doc.push(genpdf::elements::PageBreak::new());
@@ -214,9 +209,20 @@ mod test {
         assert_eq!(report.name, "detector name");
     }
     #[test]
-    fn report_generator_generate_pdf() {
+    fn report_generator_generate_pdf_empty_report() {
         let report = AnalysisReport::new(String::from("test"), DateTime::default());
         let generator = ReportGenerator::new(report);
+        assert!(generator.generate_pdf(Path::new("")).is_err());
+        let path = NamedTempFile::new().unwrap();
+        assert!(generator.generate_pdf(path.path()).is_ok());
+    }
+    #[test]
+    fn report_generator_generate_pdf_with_content() {
+        let mut analysis_report = AnalysisReport::new(String::from("test"), DateTime::default());
+        analysis_report.add_scenery(&OpticScenery::default());
+        let node_report = NodeReport::new("test detector", "detector name", Properties::default());
+        analysis_report.add_detector(node_report);
+        let generator = ReportGenerator::new(analysis_report);
         assert!(generator.generate_pdf(Path::new("")).is_err());
         let path = NamedTempFile::new().unwrap();
         assert!(generator.generate_pdf(path.path()).is_ok());
