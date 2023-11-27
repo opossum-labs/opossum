@@ -647,4 +647,11 @@ mod test {
         assert!(serde_json::to_string(&report).is_ok());
         // How shall we further parse the output?
     }
+    #[test]
+    fn save_to_file() {
+        let scenery = OpticScenery::new();
+        assert!(scenery.save_to_file(Path::new("")).is_err());
+        let path = NamedTempFile::new().unwrap();
+        assert!(scenery.save_to_file(path.path()).is_ok());
+    }
 }
