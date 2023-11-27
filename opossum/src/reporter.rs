@@ -127,7 +127,13 @@ impl ReportGenerator {
                 style::Effect::Bold,
             );
             doc.push(p);
-            doc.push(scenery.pdf_report()?);
+            if let Ok(report) = scenery.pdf_report() {
+                doc.push(report)
+            } else {
+                doc.push(elements::Paragraph::new(
+                    "cannot display scenery diagram. Is graphviz installed?",
+                ));
+            }
         }
         Ok(())
     }
@@ -223,8 +229,7 @@ mod test {
         let generator = ReportGenerator::new(analysis_report);
         assert!(generator.generate_pdf(Path::new("")).is_err());
         let path = NamedTempFile::new().unwrap();
-        generator.generate_pdf(path.path()).unwrap();
-        // assert!(generator.generate_pdf(path.path()).is_ok());
+        assert!(generator.generate_pdf(path.path()).is_ok());
     }
     #[test]
     fn report_generator_generate_pdf_with_node_report() {
