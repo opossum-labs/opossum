@@ -544,7 +544,7 @@ impl PdfReportable for OpticScenery {
 mod test {
     use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
-    use crate::nodes::Metertype;
+    use crate::nodes::{Metertype, Detector};
     use std::{fs::File, io::Read};
     #[test]
     fn new() {
@@ -634,7 +634,17 @@ mod test {
     #[test]
     fn description() {
         let mut scenery = OpticScenery::new();
-        scenery.set_description("Test".into()).unwrap();
+        scenery.set_description("Test").unwrap();
         assert_eq!(scenery.description(), "Test")
+    }
+    #[test]
+    fn report() {
+        let mut scenery = OpticScenery::new();
+        scenery.add_node(Detector::default());
+        let report= scenery.report(Path::new(""));
+        assert!(report.is_ok());
+        let report=report.unwrap();
+        assert!(serde_json::to_string(&report).is_ok());
+        // How shall we further parse the output?
     }
 }

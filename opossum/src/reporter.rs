@@ -223,7 +223,8 @@ mod test {
         let generator = ReportGenerator::new(analysis_report);
         assert!(generator.generate_pdf(Path::new("")).is_err());
         let path = NamedTempFile::new().unwrap();
-        assert!(generator.generate_pdf(path.path()).is_ok());
+        generator.generate_pdf(path.path()).unwrap();
+        // assert!(generator.generate_pdf(path.path()).is_ok());
     }
     #[test]
     fn report_generator_generate_pdf_with_node_report() {
