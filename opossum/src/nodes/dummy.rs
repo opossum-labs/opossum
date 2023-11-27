@@ -90,8 +90,11 @@ impl Dottable for Dummy {}
 
 #[cfg(test)]
 mod test {
+    use std::path::Path;
+
     use super::*;
     use crate::{
+        aperture::Aperture,
         lightdata::{DataEnergy, LightData},
         spectrum::create_he_ne_spec,
     };
@@ -131,6 +134,35 @@ mod test {
         let node = Dummy::default();
         assert_eq!(node.ports().input_names(), vec!["front"]);
         assert_eq!(node.ports().output_names(), vec!["rear"]);
+    }
+    #[test]
+    fn set_input_aperture() {
+        let mut node = Dummy::default();
+        let aperture = Aperture::default();
+        assert!(node.set_input_aperture("front", aperture.clone()).is_ok());
+        assert!(node.set_input_aperture("rear", aperture.clone()).is_err());
+        assert!(node.set_input_aperture("no port", aperture).is_err());
+    }
+    #[test]
+    fn set_output_aperture() {
+        let mut node = Dummy::default();
+        let aperture = Aperture::default();
+        assert!(node.set_output_aperture("rear", aperture.clone()).is_ok());
+        assert!(node.set_output_aperture("front", aperture.clone()).is_err());
+        assert!(node.set_output_aperture("no port", aperture).is_err());
+    }
+    #[test]
+    fn export_data() {
+        assert!(Dummy::default().export_data(Path::new("")).is_ok());
+    }
+    #[test]
+    fn as_ref_node_mut() {
+        let mut node = Dummy::default();
+        assert!(node.as_refnode_mut().is_err());
+    }
+    #[test]
+    fn report() {
+        assert!(Dummy::default().report().is_none());
     }
     #[test]
     fn ports_inverted() {

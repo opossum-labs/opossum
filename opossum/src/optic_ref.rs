@@ -215,4 +215,17 @@ mod test {
         assert_eq!(properties.node_type().unwrap(), "dummy");
         assert_eq!(properties.name().unwrap(), "test123");
     }
+    #[test]
+    fn debug() {
+        assert_eq!(
+            format!(
+                "{:?}",
+                OpticRef::new(
+                    Rc::new(RefCell::new(Dummy::default())),
+                    Some(uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb"))
+                )
+            ),
+            "OpticRef { optical_ref: RefCell { value: dummy (dummy) }, uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb }"
+        );
+    }
 }
