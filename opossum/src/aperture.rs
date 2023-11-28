@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Module for handling optical (2D) apertures
 //!
 //! An [`Aperture`] commonly defines the shape of an optical element which transmits or obstructs an incoming optical ray.
@@ -91,9 +92,16 @@ impl From<Aperture> for Proptype {
         Self::Aperture(value)
     }
 }
+/// A trait for all kinds of (2D-) apodizers.
 pub trait Apodize {
     /// Set the apodizition type of the aperture.
     fn set_aperture_type(&mut self, aperture_type: ApertureType);
+
+    /// Calculate the transmission coefficient for a point.
+    ///
+    /// This function calculates the transmission coefficient (0.0..=1.0) of an [`Aperture`] for a given 2D point.
+    /// In case of a binary aperture this value is either 0.0 or 1.0 depending on whether the given point is inside
+    /// or outside the aperture. For [`Aperture::Gaussian`] the function returns a continous transmission value.
     fn apodize(&self, point: &Point2<f64>) -> f64;
 }
 /// Configuration data for a circular aperture.

@@ -15,7 +15,6 @@
 //! let circle_config = CircleConfig::new(1.5, Point2::new(1.0, 1.0)).unwrap();
 //! ports.set_input_aperture("my input", Aperture::BinaryCircle(circle_config)).unwrap();
 //! ```
-
 use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},

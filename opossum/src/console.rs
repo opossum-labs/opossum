@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Handling the OPOSSUM CLI
 //!
 //! This module handles the command line parsing as well as basic information (e.g. help dialog, version information, etc.).
@@ -32,6 +33,7 @@ pub struct Args {
 
 #[derive(Parser)]
 #[command(author, version = Str::from(&get_version()), about, long_about = None)]
+/// Structure for handling the OPOOSUM CLI command line arguments.
 pub struct PartialArgs {
     /// filepath of the opticscenery to read in
     #[arg(short, long)]
@@ -99,7 +101,6 @@ fn eval_report_directory_input(report_path: &str) -> Option<PathBuf> {
         None
     }
 }
-
 /// Creates the prompt string that is displayed in the console, depending on the flag and if the passed input for the respective flag is valid
 /// # Attributes
 /// * `flag`:       Respective argument flag. "f" for file path of the optical setup, "a" for analyzer to be used and "r" for the report directory.

@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+//! Module for storing references to optical nodes.
 use std::{cell::RefCell, rc::Rc};
 
 use serde::{
@@ -10,18 +12,28 @@ use uuid::Uuid;
 use crate::{nodes::create_node_ref, optical::Optical, properties::Properties};
 
 #[derive(Debug, Clone)]
+/// Structure for storing an optical node.
+///
+/// This structure stores a reference to an optical node (a structure implementing the [`Optical`] trait). This [`OpticRef`]
+/// is than stored as a node in an OpticGraph (i.e. (`OpticScenery`)[crate::OpticScenery] or (`NodeGroup`)[crate::nodes::NodeGroup]).
+/// In addition, it contains a unique id ([`Uuid`]) in order to unambigously identify a node within a scene.
 pub struct OpticRef {
+    /// The underlying optical reference.
     pub optical_ref: Rc<RefCell<dyn Optical>>,
     uuid: Uuid,
 }
 
 impl OpticRef {
+    /// Creates a new [`OpticRef`].
+    ///
+    /// You can either assign a given [`Uuid`] using `Some(uuid!(...))` or provide `None`, where a new unique id is generated.
     pub fn new(node: Rc<RefCell<dyn Optical>>, uuid: Option<Uuid>) -> Self {
         Self {
             optical_ref: node,
             uuid: uuid.unwrap_or_else(Uuid::new_v4),
         }
     }
+    /// Returns the [`Uuid`] of this [`OpticRef`].
     #[must_use]
     pub const fn uuid(&self) -> Uuid {
         self.uuid

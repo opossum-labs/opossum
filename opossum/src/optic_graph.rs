@@ -1,11 +1,11 @@
-use std::{cell::RefCell, rc::Rc};
-
+#![warn(missing_docs)]
 use petgraph::{algo::is_cyclic_directed, prelude::DiGraph, stable_graph::NodeIndex};
 use serde::{
     de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
+use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
 
 use crate::{

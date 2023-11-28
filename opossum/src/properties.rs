@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Module for handling node properties
 use genpdf::{elements::TableLayout, style};
 use plotters::prelude::LogScalable;
@@ -411,21 +412,43 @@ impl From<Uuid> for Proptype {
 }
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
+/// The type of the [`Property`].
 pub enum Proptype {
+    /// A string property
+    ///
+    /// This property makes use of [`PropCondition::NonEmptyString`] for restricting strings to be non-empty.
     String(String),
+    /// An integer property
+    ///
+    /// This property respects the [`PropCondition::LessThan`], [`PropCondition::LessThanEqual`], [`PropCondition::GreaterThan`], and [`PropCondition::GreaterThanEqual`]
     I32(i32),
+    /// A float property
+    ///
+    /// This property respects the [`PropCondition::LessThan`], [`PropCondition::LessThanEqual`], [`PropCondition::GreaterThan`], and [`PropCondition::GreaterThanEqual`]
     F64(f64),
+    /// A boolean property
     Bool(bool),
+    /// An optional [`LightData`] property
     LightData(Option<LightData>),
+    /// A property for storing a complete `OpticGraph` to be used by (`OpticScenery`)[crate::OpticScenery].
     OpticGraph(OpticGraph),
+    /// Property for storing a [`FilterType`] of an (`IdealFilter`)[crate::nodes::IdealFilter] node.
     FilterType(FilterType),
+    /// Property for storing a [`SpectrometerType`] of a (`Sepctrometer`)[crate::nodes::Spectrometer] node.
     SpectrometerType(SpectrometerType),
+    /// Property for storing a [`Metertype`] of an (`Energymeter`)[crate::nodes::EnergyMeter] node.
     Metertype(Metertype),
+    /// Property for storing the external port mapping ([`PortMap`]) of a (`Group`)[crate::nodes::NodeGroup] node.
     GroupPortMap(PortMap),
+    /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
+    /// A property for storing [`OpticPorts`].
     OpticPorts(OpticPorts),
+    /// A property for storing an optical [`Aperture`]
     Aperture(Aperture),
+    /// This property stores a [`Spectrum`]
     Spectrum(Spectrum),
+    /// This property stores optical [`Rays`]
     Rays(Rays),
 }
 impl PdfReportable for Proptype {
@@ -451,13 +474,21 @@ impl PdfReportable for Proptype {
 }
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
+/// An enum defining value constraints for various [`Proptype`]s.
 pub enum PropCondition {
+    /// Allow only non-empty [`Proptype::String`]s.
     NonEmptyString,
+    /// Do not use yet...
     InternalOnly, // DO NOT USE YET (deserialization problems)
-    ReadOnly,     // can only be set during creation
+    /// This property is readonly. It can only be set during property creation.
+    ReadOnly, // can only be set during creation
+    /// Restrict integer or float properties to values greater (>) than the given limit.
     GreaterThan(f64),
+    /// Restrict integer or float properties to values less (<) than the given limit.
     LessThan(f64),
+    /// Restrict integer or float properties to values greater than or equal (>=) the given limit.
     GreaterThanEqual(f64),
+    /// Restrict integer or float properties to values less than or equal (<=) the given limit.
     LessThanEqual(f64),
 }
 #[cfg(test)]

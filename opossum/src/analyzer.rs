@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Optical Analyzers
 //!
 //! An analyzer of a certain [`AnalyzerType`] determines how an (`OpticScenery`)[`crate::OpticScenery`] is analyzed. For example, the energy flow for a scenery can be
@@ -40,6 +41,9 @@ enum RayTracingMode {
 }
 
 #[derive(Default, PartialEq, Debug)]
+/// Configuration data for a rays tracing analysis.
+///
+/// It currently only contains the `RayTracingMode`.
 pub struct RayTraceConfig {
     mode: RayTracingMode,
 }
