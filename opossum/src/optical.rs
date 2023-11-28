@@ -13,9 +13,9 @@ use core::fmt::Debug;
 use std::collections::HashMap;
 use std::path::Path;
 
-/// A [`LightResult`] represents the [`LightData`], which arrives at a given (`OpticPort`)[OpticPorts] of an optical node.
+/// A [`LightResult`] represents the [`LightData`], which arrives at a given (`OpticPort`)[`OpticPorts`] of an optical node.
 ///
-/// The given (`OpticPort`)[OpticPorts] might also be `None`, which indicates, that no light has already "flown" to an inpurt port of a node.
+/// The given (`OpticPort`)[`OpticPorts`] might also be `None`, which indicates, that no light has already "flown" to an inpurt port of a node.
 pub type LightResult = HashMap<String, Option<LightData>>;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
