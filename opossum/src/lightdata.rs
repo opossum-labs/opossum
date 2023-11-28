@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Data structures containing the light information flowing between [`Opticals`](crate::optical::Optical).
 use plotters::coord::Shift;
 use plotters::prelude::{DrawingArea, DrawingBackend};
@@ -64,7 +65,11 @@ impl Display for LightData {
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Data structure for storing [`LightData::Energy`] data.
+///
+/// It currently only contains a [`Spectrum`].
 pub struct DataEnergy {
+    /// The spectrum for energy analysis.
     pub spectrum: Spectrum,
 }
 impl PdfReportable for DataEnergy {
