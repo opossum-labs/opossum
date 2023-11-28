@@ -1,5 +1,4 @@
 use std::path::Path;
-
 use opossum::{error::OpmResult, plottable::Plottable, rays::Rays};
 use uom::si::{
     energy::joule,

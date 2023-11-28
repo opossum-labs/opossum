@@ -1,12 +1,12 @@
 #![warn(missing_docs)]
 //! Module for handling rays
 use crate::aperture::Aperture;
-use crate::error::OpossumError;
+use crate::error::{OpmResult, OpossumError};
 use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
 use image::DynamicImage;
-use nalgebra::{point, Point2, Point3};
+use nalgebra::{point, Point2, Point3, Vector3};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
 use plotters::style::RED;
@@ -21,8 +21,8 @@ use uom::si::f64::{Energy, Length};
 pub struct Ray {
     ///Stores all positions of the ray
     pos: Point3<f64>, // this should be a vector of points?
-    // ///stores the current propagation direction of the ray
-    // dir: Vector3<f64>,
+    /// stores the current propagation direction of the ray (stored as direction cosine)
+    dir: Vector3<f64>,
     // ///stores the polarization vector (Jones vector) of the ray
     // pol: Vector2<Complex<f64>>,
     ///energy of the ray
@@ -35,6 +35,7 @@ pub struct Ray {
     // bounce: usize,
     // //True if ray is allowd to further propagate, false else
     // //valid:  bool,
+    path_length: f64,
 }
 impl Ray {
     /// Create a new collimated ray.
@@ -44,12 +45,33 @@ impl Ray {
     pub fn new_collimated(position: Point2<f64>, wave_length: Length, energy: Energy) -> Self {
         Self {
             pos: Point3::new(position.x, position.y, 0.0),
-            //dir: Vector3::new(0.0, 0.0, 1.0),
+            dir: Vector3::new(0.0, 0.0, 1.0),
             //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
             e: energy,
             wvl: wave_length,
             //id: 0,
             //bounce: 0,
+            path_length: 0.0,
+        }
+    }
+    /// Creates a new [`Ray`].
+    ///
+    /// The dircetion vector is normalized. The direction is thus stored aa (`direction cosine`)[https://en.wikipedia.org/wiki/Direction_cosine]
+    pub fn new(
+        position: Point2<f64>,
+        direction: Vector3<f64>,
+        wave_length: Length,
+        energy: Energy,
+    ) -> Self {
+        Self {
+            pos: Point3::new(position.x, position.y, 0.0),
+            dir: direction.normalize(),
+            //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
+            e: energy,
+            wvl: wave_length,
+            //id: 0,
+            //bounce: 0,
+            path_length: 0.0,
         }
     }
     /// Returns the energy of this [`Ray`].
@@ -62,6 +84,22 @@ impl Ray {
     pub fn wavelength(&self) -> Length {
         self.wvl
     }
+    /// freely propagate a ray along its direction. The length is given as the projection on the z-axis (=optical axis).
+    ///
+    /// # Errors
+    /// This functions retruns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
+    pub fn propagate_along_z(&self, length_along_z: f64) -> OpmResult<Self> {
+        if self.dir[2].abs() < f64::EPSILON {
+            return Err(OpossumError::Other(
+                "z-Axis of direction vector must be != 0.0".into(),
+            ));
+        }
+        let mut new_ray = self.clone();
+        let length_in_ray_dir = length_along_z / self.dir[2];
+        new_ray.pos = self.pos + length_in_ray_dir * self.dir;
+        new_ray.path_length += length_in_ray_dir;
+        Ok(new_ray)
+    }
 }
 ///Struct containing all relevant information of a created bundle of rays
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
@@ -71,7 +109,62 @@ pub struct Rays {
     //Maximum number of bounces
     //max_bounces:    usize, do we need this here?
 }
-
+impl Rays {
+    /// Generate a set of collimated rays (collinear with optical axis).
+    #[must_use]
+    pub fn new_uniform_collimated(
+        size: f64,
+        wave_length: Length,
+        energy: Energy,
+        strategy: &DistributionStrategy,
+    ) -> Self {
+        let points: Vec<Point2<f64>> = strategy.generate(size);
+        let nr_of_rays = points.len();
+        let mut rays: Vec<Ray> = Vec::new();
+        #[allow(clippy::cast_precision_loss)]
+        let energy_per_ray = energy / nr_of_rays as f64;
+        for point in points {
+            let ray = Ray::new_collimated(point, wave_length, energy_per_ray);
+            rays.push(ray);
+        }
+        Self { rays }
+    }
+    /// Returns the total energy of this [`Rays`].
+    ///
+    /// This simply sums up all energies of the individual rays.
+    #[must_use]
+    pub fn total_energy(&self) -> Energy {
+        self.rays.iter().fold(Energy::zero(), |a, b| a + b.e)
+    }
+    /// Apodize (cut out or attenuate) the ray bundle by a given [`Aperture`].
+    pub fn apodize(&mut self, aperture: &Aperture) {
+        let mut new_rays: Vec<Ray> = Vec::new();
+        for ray in &self.rays {
+            let pos = point![ray.pos.x, ray.pos.y];
+            let ap_factor = aperture.apodization_factor(&pos);
+            if ap_factor > 0.0 {
+                let mut new_ray = ray.clone();
+                new_ray.e *= ap_factor;
+                new_rays.push(new_ray);
+            }
+        }
+        self.rays = new_rays;
+    }
+    /// Add a single ray to the ray bundle.
+    pub fn add_ray(&mut self, ray: Ray) {
+        self.rays.push(ray);
+    }
+    /// Propagate a ray bundle along the z axis.
+    ///
+    /// # Errors
+    /// This function returns an error if the z component of a ray direction is zero.
+    pub fn propagate_along_z(&mut self, length_along_z: f64) -> OpmResult<()> {
+        for ray in self.rays.iter_mut() {
+            ray.propagate_along_z(length_along_z)?;
+        }
+        Ok(())
+    }
+}
 /// Strategy for the creation of a 2D point set
 pub enum DistributionStrategy {
     /// Circular, hexapolar distribution with a given number of rings within a given radius
@@ -128,48 +221,7 @@ fn sobol(nr_of_rays: usize, side_length: f64) -> Vec<Point2<f64>> {
     }
     points
 }
-impl Rays {
-    /// Generate a set of collimated rays (collinear with optical axis).
-    #[must_use]
-    pub fn new_uniform_collimated(
-        size: f64,
-        wave_length: Length,
-        energy: Energy,
-        strategy: &DistributionStrategy,
-    ) -> Self {
-        let points: Vec<Point2<f64>> = strategy.generate(size);
-        let nr_of_rays = points.len();
-        let mut rays: Vec<Ray> = Vec::new();
-        #[allow(clippy::cast_precision_loss)]
-        let energy_per_ray = energy / nr_of_rays as f64;
-        for point in points {
-            let ray = Ray::new_collimated(point, wave_length, energy_per_ray);
-            rays.push(ray);
-        }
-        Self { rays }
-    }
-    /// Returns the total energy of this [`Rays`].
-    ///
-    /// This simply sums up all energies of the individual rays.
-    #[must_use]
-    pub fn total_energy(&self) -> Energy {
-        self.rays.iter().fold(Energy::zero(), |a, b| a + b.e)
-    }
-    /// Apodize (cut out or attenuate) the ray bundle by a given [`Aperture`].
-    pub fn apodize(&mut self, aperture: &Aperture) {
-        let mut new_rays: Vec<Ray> = Vec::new();
-        for ray in &self.rays {
-            let pos = point![ray.pos.x, ray.pos.y];
-            let ap_factor = aperture.apodization_factor(&pos);
-            if ap_factor > 0.0 {
-                let mut new_ray = ray.clone();
-                new_ray.e *= ap_factor;
-                new_rays.push(new_ray);
-            }
-        }
-        self.rays = new_rays;
-    }
-}
+
 impl From<Rays> for Proptype {
     fn from(value: Rays) -> Self {
         Self::Rays(value)
