@@ -41,18 +41,32 @@ impl Ray {
     /// Create a new collimated ray.
     ///
     /// Generate a ray a horizontally polarized ray collinear with the z axis (optical axis).
-    #[must_use]
-    pub fn new_collimated(position: Point2<f64>, wave_length: Length, energy: Energy) -> Self {
-        Self {
+    ///
+    /// # Errors
+    /// This function returns an error if
+    ///  - the given wavelength is 0.0, <0.0, `NaN` or +inf
+    ///  - the given energy is 0.0, <0.0, `NaN` or +inf
+    pub fn new_collimated(
+        position: Point2<f64>,
+        wave_length: Length,
+        energy: Energy,
+    ) -> OpmResult<Self> {
+        if wave_length.is_zero() || wave_length.is_sign_negative() || !wave_length.is_finite() {
+            return Err(OpossumError::Other("wavelength must be >0".into()));
+        }
+        if energy.is_zero() || energy.is_sign_negative() || !energy.is_finite() {
+            return Err(OpossumError::Other("energy must be >0".into()));
+        }
+        Ok(Self {
             pos: Point3::new(position.x, position.y, 0.0),
-            dir: Vector3::new(0.0, 0.0, 1.0),
+            dir: Vector3::z(),
             //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
             e: energy,
             wvl: wave_length,
             //id: 0,
             //bounce: 0,
             path_length: 0.0,
-        }
+        })
     }
     /// Creates a new [`Ray`].
     ///
@@ -111,23 +125,22 @@ pub struct Rays {
 }
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis).
-    #[must_use]
     pub fn new_uniform_collimated(
         size: f64,
         wave_length: Length,
         energy: Energy,
         strategy: &DistributionStrategy,
-    ) -> Self {
+    ) -> OpmResult<Self> {
         let points: Vec<Point2<f64>> = strategy.generate(size);
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::new();
         #[allow(clippy::cast_precision_loss)]
         let energy_per_ray = energy / nr_of_rays as f64;
         for point in points {
-            let ray = Ray::new_collimated(point, wave_length, energy_per_ray);
+            let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
-        Self { rays }
+        Ok(Self { rays })
     }
     /// Returns the total energy of this [`Rays`].
     ///
@@ -319,6 +332,82 @@ mod test {
     use super::*;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
+    fn ray_new_collimated() {
+        let position = Point2::new(1.0, 2.0);
+        let ray = Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        );
+        assert!(ray.is_ok());
+        let ray = ray.unwrap();
+        assert_eq!(ray.pos, Point3::new(1.0, 2.0, 0.0));
+        assert_eq!(ray.dir, Vector3::z());
+        assert_eq!(ray.wvl, Length::new::<nanometer>(1053.0));
+        assert_eq!(ray.e, Energy::new::<joule>(1.0));
+        assert_eq!(ray.path_length, 0.0);
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(0.0),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(-10.0),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(f64::NAN),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(f64::INFINITY),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(f64::NEG_INFINITY),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(0.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(-10.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::NAN)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::INFINITY)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::NEG_INFINITY)
+        )
+        .is_err());
+    }
+    #[test]
     fn strategy_hexapolar() {
         let strategy = DistributionStrategy::Hexapolar(0);
         assert_eq!(strategy.generate(1.0).len(), 1);
@@ -340,6 +429,8 @@ mod test {
             Energy::new::<joule>(1.0),
             &DistributionStrategy::Hexapolar(2),
         );
+        assert!(rays.is_ok());
+        let rays = rays.unwrap();
         assert_eq!(rays.rays.len(), 19);
         assert!(
             Energy::abs(rays.total_energy() - Energy::new::<joule>(1.0))

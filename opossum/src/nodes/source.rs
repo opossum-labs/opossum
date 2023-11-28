@@ -19,16 +19,15 @@ use crate::{
 /// Generate a source node with a collinear beam.
 ///
 /// This is a convenience functions, which generates a light source containing a hexapolar, collinear ray bundle with 1054 nm and a given energy.
-#[must_use]
-pub fn create_ray_source(radius: f64, energy: Energy) -> Source {
+pub fn create_ray_source(radius: f64, energy: Energy) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
         radius,
         Length::new::<nanometer>(1053.0),
         energy,
         &DistributionStrategy::Hexapolar(3),
-    );
+    )?;
     let light = LightData::Geometric(rays);
-    Source::new("ray source", &light)
+    Ok(Source::new("ray source", &light))
 }
 /// A general light source
 ///
