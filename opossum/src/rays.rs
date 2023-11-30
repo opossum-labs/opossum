@@ -51,22 +51,7 @@ impl Ray {
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
-        if wave_length.is_zero() || wave_length.is_sign_negative() || !wave_length.is_finite() {
-            return Err(OpossumError::Other("wavelength must be >0".into()));
-        }
-        if energy.is_zero() || energy.is_sign_negative() || !energy.is_finite() {
-            return Err(OpossumError::Other("energy must be >0".into()));
-        }
-        Ok(Self {
-            pos: Point3::new(position.x, position.y, 0.0),
-            dir: Vector3::z(),
-            //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
-            e: energy,
-            wvl: wave_length,
-            //id: 0,
-            //bounce: 0,
-            path_length: 0.0,
-        })
+        Self::new(position, Vector3::new(0.0,0.0,1.0), wave_length, energy)
     }
     /// Creates a new [`Ray`].
     ///
@@ -102,6 +87,11 @@ impl Ray {
             //bounce: 0,
             path_length: 0.0,
         })
+    }
+    /// Returns the position of thi [`Ray`].
+    #[must_use]
+    pub fn position(&self) -> Point3<f64> {
+        self.pos
     }
     /// Returns the energy of this [`Ray`].
     #[must_use]
@@ -435,9 +425,12 @@ mod test {
         assert!(ray.is_ok());
         let ray = ray.unwrap();
         assert_eq!(ray.pos, Point3::new(1.0, 2.0, 0.0));
+        assert_eq!(ray.position(), Point3::new(1.0, 2.0, 0.0));
         assert_eq!(ray.dir, Vector3::new(0.0, 0.0, 1.0));
         assert_eq!(ray.wvl, Length::new::<nanometer>(1053.0));
+        assert_eq!(ray.wavelength(), Length::new::<nanometer>(1053.0));
         assert_eq!(ray.e, Energy::new::<joule>(1.0));
+        assert_eq!(ray.energy(), Energy::new::<joule>(1.0));
         assert_eq!(ray.path_length, 0.0);
         assert!(Ray::new(
             position,
@@ -516,6 +509,25 @@ mod test {
             Energy::new::<joule>(1.0)
         )
         .is_err());
+    }
+    #[test]
+    fn propagate_along_z() {
+        let wvl= Length::new::<nanometer>(1053.0);
+        let energy= Energy::new::<joule>(1.0);
+        let ray=Ray::new(Point2::new(0.0,0.0), Vector3::new(0.0, 0.0, 1.0), wvl, energy).unwrap();
+        assert!(ray.propagate_along_z(1.0).is_ok());
+        let newray=ray.propagate_along_z(1.0).unwrap();
+        assert_eq!(newray.wavelength(), wvl);
+        assert_eq!(newray.energy(), energy);
+        assert_eq!(newray.dir, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(ray.propagate_along_z(1.0).unwrap().position(), Point3::new(0.0,0.0,1.0));
+        assert_eq!(ray.propagate_along_z(2.0).unwrap().position(), Point3::new(0.0,0.0,2.0));
+        assert_eq!(ray.propagate_along_z(-1.0).unwrap().position(), Point3::new(0.0,0.0,-1.0));
+        let ray=Ray::new(Point2::new(0.0,0.0), Vector3::new(0.0, 1.0, 1.0), wvl, energy).unwrap();
+        assert_eq!(ray.propagate_along_z(1.0).unwrap().position(), Point3::new(0.0,1.0,1.0));
+        assert_eq!(ray.propagate_along_z(2.0).unwrap().position(), Point3::new(0.0,2.0,2.0));
+        let ray=Ray::new(Point2::new(0.0,0.0), Vector3::new(0.0, 1.0, 0.0), wvl, energy).unwrap();
+        assert!(ray.propagate_along_z(1.0).is_err());
     }
     #[test]
     fn strategy_hexapolar() {
