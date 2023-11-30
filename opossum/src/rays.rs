@@ -44,8 +44,8 @@ impl Ray {
     ///
     /// # Errors
     /// This function returns an error if
-    ///  - the given wavelength is 0.0, <0.0, `NaN` or +inf
-    ///  - the given energy is 0.0, <0.0, `NaN` or +inf
+    ///  - the given wavelength is <=0.0, `NaN` or +inf
+    ///  - the given energy is <=0.0, `NaN` or +inf
     pub fn new_collimated(
         position: Point2<f64>,
         wave_length: Length,
@@ -71,13 +71,28 @@ impl Ray {
     /// Creates a new [`Ray`].
     ///
     /// The dircetion vector is normalized. The direction is thus stored aa (`direction cosine`)[https://en.wikipedia.org/wiki/Direction_cosine]
+    ///
+    /// # Error
+    /// This function returns an error if
+    ///  - the given wavelength is <=0.0, `NaN` or +inf
+    ///  - the given energy is <=0.0, `NaN` or +inf
+    ///  - the direction vector has a zero length
     pub fn new(
         position: Point2<f64>,
         direction: Vector3<f64>,
         wave_length: Length,
         energy: Energy,
-    ) -> Self {
-        Self {
+    ) -> OpmResult<Self> {
+        if wave_length.is_zero() || wave_length.is_sign_negative() || !wave_length.is_finite() {
+            return Err(OpossumError::Other("wavelength must be >0".into()));
+        }
+        if energy.is_zero() || energy.is_sign_negative() || !energy.is_finite() {
+            return Err(OpossumError::Other("energy must be >0".into()));
+        }
+        if direction.norm().is_zero() {
+            return Err(OpossumError::Other("length of direction must be >0".into()));
+        }
+        Ok(Self {
             pos: Point3::new(position.x, position.y, 0.0),
             dir: direction.normalize(),
             //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
@@ -86,7 +101,7 @@ impl Ray {
             //id: 0,
             //bounce: 0,
             path_length: 0.0,
-        }
+        })
     }
     /// Returns the energy of this [`Ray`].
     #[must_use]
@@ -404,6 +419,101 @@ mod test {
             position,
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(f64::NEG_INFINITY)
+        )
+        .is_err());
+    }
+    #[test]
+    fn ray_new() {
+        let position = Point2::new(1.0, 2.0);
+        let direction = Vector3::new(0.0, 0.0, 2.0);
+        let ray = Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        );
+        assert!(ray.is_ok());
+        let ray = ray.unwrap();
+        assert_eq!(ray.pos, Point3::new(1.0, 2.0, 0.0));
+        assert_eq!(ray.dir, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(ray.wvl, Length::new::<nanometer>(1053.0));
+        assert_eq!(ray.e, Energy::new::<joule>(1.0));
+        assert_eq!(ray.path_length, 0.0);
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(0.0),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(-10.0),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(f64::NAN),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(f64::INFINITY),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(f64::NEG_INFINITY),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(0.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(-10.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::NAN)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::INFINITY)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::NEG_INFINITY)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            Vector3::new(0.0, 0.0, 0.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0)
         )
         .is_err());
     }
