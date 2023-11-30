@@ -2,8 +2,9 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use nalgebra::Point2;
 use uom::si::{
-    f64::{Energy, Length},
+    f64::{Angle, Energy, Length},
     length::nanometer,
 };
 
@@ -16,14 +17,14 @@ use crate::{
     properties::{Properties, Proptype},
     rays::{DistributionStrategy, Rays},
 };
-/// Generate a source node with a collinear beam.
+/// Generate a source node with a collinated beam.
 ///
-/// This is a convenience functions, which generates a light source containing a hexapolar, collinear ray bundle with 1054 nm and a given energy.
+/// This is a convenience functions, which generates a light source containing a hexapolar, collinear ray bundle at 1053 nm and a given energy.
 ///
 /// # Errors
 /// This functions returns an error if
 ///  - the given energy is <=0.0, Nan, or +inf.
-pub fn create_ray_source(radius: f64, energy: Energy) -> OpmResult<Source> {
+pub fn create_collimated_ray_source(radius: f64, energy: Energy) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
         radius,
         Length::new::<nanometer>(1053.0),
@@ -31,7 +32,25 @@ pub fn create_ray_source(radius: f64, energy: Energy) -> OpmResult<Source> {
         &DistributionStrategy::Hexapolar(3),
     )?;
     let light = LightData::Geometric(rays);
-    Ok(Source::new("ray source", &light))
+    Ok(Source::new("collimated ray source", &light))
+}
+/// Generate a node representing a points source on the optical axis with a given cone angle.
+///
+/// This is a convenience functions, which generates a light source containing a hexapolar, cone shaped ray bundle at 1053 nm and a given energy.
+///
+/// # Errors
+/// This functions returns an error if
+///  - the given energy is <=0.0, Nan, or +inf.
+pub fn create_point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> {
+    let rays = Rays::new_hexapolar_point_source(
+        Point2::new(0.0, 0.0),
+        cone_angle,
+        3,
+        Length::new::<nanometer>(1053.0),
+        energy,
+    )?;
+    let light = LightData::Geometric(rays);
+    Ok(Source::new("point ray source", &light))
 }
 /// A general light source
 ///

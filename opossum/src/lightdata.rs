@@ -43,8 +43,12 @@ impl LightData {
                 d.to_svg_plot(f_path)?;
                 Ok(())
             }
-            _ => Err(OpossumError::Other(
-                "no export function defined for this type of LightData".into(),
+            Self::Geometric(d) => {
+                d.to_svg_plot(f_path)?;
+                Ok(())
+            }
+            Self::Fourier => Err(OpossumError::Other(
+                "export: no export function defined for this type of LightData".into(),
             )),
         }
     }

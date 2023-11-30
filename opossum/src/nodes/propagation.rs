@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use uom::si::{f64::Length, length::meter};
+
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -30,6 +32,40 @@ impl Default for Propagation {
             .unwrap();
         props.set("apertures", ports.into()).unwrap();
         Self { props }
+    }
+}
+impl Propagation {
+    /// Create a new propagation node of the given length.
+    ///
+    ///
+    /// # Errors
+    /// This function returns an error if
+    ///  - the given `length_along_z` is not finite.
+    /// # Panics
+    /// This function panics if
+    /// - the input port name already exists. (Theoretically impossible at this point, as the [`OpticPorts`] are created just before in this function)
+    /// - the output port name already exists. (Theoretically impossible at this point, as the [`OpticPorts`] are created just before in this function)
+    /// - the property `apertures` can not be set.
+    pub fn new(name: &str, length_along_z: Length) -> OpmResult<Self> {
+        if !length_along_z.is_finite() {
+            return Err(OpossumError::Other(
+                "propagation length must be finite".into(),
+            ));
+        }
+        let mut ports = OpticPorts::new();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
+        let mut props = Properties::new(name, "propagation");
+        props
+            .create(
+                "distance",
+                "distance along the optical axis",
+                None,
+                length_along_z.get::<meter>().into(),
+            )
+            .unwrap();
+        props.set("apertures", ports.into()).unwrap();
+        Ok(Self { props })
     }
 }
 

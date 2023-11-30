@@ -24,7 +24,8 @@ pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::{IdealLens, RealLens};
 pub use propagation::Propagation;
 pub use reference::NodeReference;
-pub use source::create_ray_source;
+pub use source::create_collimated_ray_source;
+pub use source::create_point_ray_source;
 pub use source::Source;
 
 pub use energy_meter::EnergyMeter;
