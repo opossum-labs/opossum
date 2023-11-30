@@ -342,8 +342,9 @@ impl Plottable for Rays {
 }
 #[cfg(test)]
 mod test {
-    use crate::aperture::CircleConfig;
     use super::*;
+    use crate::aperture::CircleConfig;
+    use assert_matches::assert_matches;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
     fn ray_new_collimated() {
@@ -586,6 +587,11 @@ mod test {
         assert_eq!(strategy.generate(1.0).len(), 10);
     }
     #[test]
+    fn strategy_sobol() {
+        let strategy = DistributionStrategy::Sobol(10);
+        assert_eq!(strategy.generate(1.0).len(), 10);
+    }
+    #[test]
     fn rays_new_uniform_collimated() {
         let rays = Rays::new_uniform_collimated(
             1.0,
@@ -668,9 +674,13 @@ mod test {
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
-        let circle_config= CircleConfig::new(0.5, Point2::new(0.0,0.0)).unwrap();
-        let aperture= Aperture::BinaryCircle(circle_config);
+        let circle_config = CircleConfig::new(0.5, Point2::new(0.0, 0.0)).unwrap();
+        let aperture = Aperture::BinaryCircle(circle_config);
         rays.apodize(&aperture);
         assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
+    }
+    #[test]
+    fn rays_into_proptype() {
+        assert_matches!(Rays::default().into(), Proptype::Rays(_));
     }
 }
