@@ -14,7 +14,8 @@ use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
 use sobol::{params::JoeKuoD6, Sobol};
 use uom::num_traits::Zero;
-use uom::si::f64::{Energy, Length};
+use uom::si::angle::degree;
+use uom::si::f64::{Angle, Energy, Length};
 
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -132,7 +133,7 @@ impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis).
     ///
     /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
-    /// evenly distributed over the indivual rays. The ray positions are distribution according to the given [`DistributionStrategy`].
+    /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`DistributionStrategy`].
     ///
     /// # Errors
     /// This function returns an error if
@@ -151,6 +152,42 @@ impl Rays {
         let energy_per_ray = energy / nr_of_rays as f64;
         for point in points {
             let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
+            rays.push(ray);
+        }
+        Ok(Self { rays })
+    }
+    /// Generate a ray cone (= point source)
+    ///
+    /// Generate a bundle of rays emerging from a given (x,y) point and a cone direction (as hexapolar pattern) of a given (full) cone angle.
+    /// The parameter `number_of_rings` determines the "density" of the hexapolar pattern (see corresponding function).
+    ///
+    /// # Errors
+    /// This functions returns an error if
+    ///  - the given wavelength is <=0.0, nan, or +inf
+    ///  - the given energy is <=0.0, nan, or +inf
+    ///  - the given cone angle is <0.0 degrees or >180.0 degrees
+    pub fn new_hexapolar_point_source(
+        position: Point2<f64>,
+        cone_angle: Angle,
+        number_of_rings: u8,
+        wave_length: Length,
+        energy: Energy,
+    ) -> OpmResult<Self> {
+        if cone_angle < Angle::zero() || cone_angle > Angle::new::<degree>(180.0) {
+            return Err(OpossumError::Other(
+                "cone angle must be within (0.0..=180.0) degrees range".into(),
+            ));
+        }
+        let size_after_unit_length = (cone_angle / 2.0).tan().value;
+        let points: Vec<Point2<f64>> =
+            DistributionStrategy::Hexapolar(number_of_rings).generate(size_after_unit_length);
+        let nr_of_rays = points.len();
+        #[allow(clippy::cast_precision_loss)]
+        let energy_per_ray = energy / nr_of_rays as f64;
+        let mut rays: Vec<Ray> = Vec::new();
+        for point in points {
+            let direction = Vector3::new(point[0], point[1], 1.0);
+            let ray = Ray::new(position, direction, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
         Ok(Self { rays })
@@ -344,6 +381,7 @@ impl Plottable for Rays {
 mod test {
     use super::*;
     use crate::aperture::CircleConfig;
+    use approx::assert_abs_diff_eq;
     use assert_matches::assert_matches;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
@@ -606,6 +644,28 @@ mod test {
             Energy::abs(rays.total_energy() - Energy::new::<joule>(1.0))
                 < Energy::new::<joule>(10.0 * f64::EPSILON)
         );
+    }
+    #[test]
+    fn rays_new_hexapolar_point_source() {
+        let position = Point2::new(0.0, 0.0);
+        let wave_length = Length::new::<nanometer>(1053.0);
+        let rays = Rays::new_hexapolar_point_source(
+            position,
+            Angle::new::<degree>(90.0),
+            1,
+            wave_length,
+            Energy::new::<joule>(1.0),
+        );
+        assert!(rays.is_ok());
+        let mut rays = rays.unwrap();
+        for ray in &rays.rays {
+            assert_eq!(ray.position(), Point3::new(0.0, 0.0, 0.0))
+        }
+        rays.propagate_along_z(1.0).unwrap();
+        assert_eq!(rays.rays[0].position(), Point3::new(0.0,0.0,1.0));
+        assert_eq!(rays.rays[1].position()[0], 0.0);
+        assert_abs_diff_eq!(rays.rays[1].position()[1], 1.0);
+        assert_eq!(rays.rays[1].position()[2], 1.0);
     }
     #[test]
     fn rays_add_ray() {
