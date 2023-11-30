@@ -342,6 +342,7 @@ impl Plottable for Rays {
 }
 #[cfg(test)]
 mod test {
+    use crate::aperture::CircleConfig;
     use super::*;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
@@ -648,5 +649,28 @@ mod test {
         rays.propagate_along_z(1.0).unwrap();
         assert_eq!(rays.rays[0].position(), Point3::new(0.0, 0.0, 1.0));
         assert_eq!(rays.rays[1].position(), Point3::new(0.0, 1.0, 1.0));
+    }
+    #[test]
+    fn rays_apodize() {
+        let mut rays = Rays::default();
+        let ray0 = Ray::new_collimated(
+            Point2::new(0.0, 0.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        let ray1 = Ray::new_collimated(
+            Point2::new(1.0, 1.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray0);
+        rays.add_ray(ray1);
+        assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
+        let circle_config= CircleConfig::new(0.5, Point2::new(0.0,0.0)).unwrap();
+        let aperture= Aperture::BinaryCircle(circle_config);
+        rays.apodize(&aperture);
+        assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
     }
 }
