@@ -9,7 +9,7 @@ use image::DynamicImage;
 use nalgebra::{point, Point2, Point3, Vector3};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
-use plotters::style::RED;
+use plotters::style::{IntoFont, TextStyle, RED};
 use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
 use sobol::{params::JoeKuoD6, Sobol};
@@ -351,7 +351,7 @@ impl Plottable for Rays {
             y_min = -1.0;
         }
         let mut chart = ChartBuilder::on(root)
-            .margin(5)
+            .margin(15)
             .x_label_area_size(40)
             .y_label_area_size(40)
             .build_cartesian_2d(x_min..x_max, y_min..y_max)
@@ -361,6 +361,7 @@ impl Plottable for Rays {
             .configure_mesh()
             .x_desc("x")
             .y_desc("y")
+            .label_style(TextStyle::from(("sans-serif", 20).into_font()))
             .draw()
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
         let points: Vec<(f64, f64)> = self.rays.iter().map(|ray| (ray.pos.x, ray.pos.y)).collect();
