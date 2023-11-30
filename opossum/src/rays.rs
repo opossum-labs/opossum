@@ -51,7 +51,7 @@ impl Ray {
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
-        Self::new(position, Vector3::new(0.0,0.0,1.0), wave_length, energy)
+        Self::new(position, Vector3::new(0.0, 0.0, 1.0), wave_length, energy)
     }
     /// Creates a new [`Ray`].
     ///
@@ -177,8 +177,8 @@ impl Rays {
     /// # Errors
     /// This function returns an error if the z component of a ray direction is zero.
     pub fn propagate_along_z(&mut self, length_along_z: f64) -> OpmResult<()> {
-        for ray in self.rays.iter_mut() {
-            ray.propagate_along_z(length_along_z)?;
+        for ray in &mut self.rays {
+            *ray=ray.propagate_along_z(length_along_z)?;
         }
         Ok(())
     }
@@ -511,22 +511,55 @@ mod test {
         .is_err());
     }
     #[test]
-    fn propagate_along_z() {
-        let wvl= Length::new::<nanometer>(1053.0);
-        let energy= Energy::new::<joule>(1.0);
-        let ray=Ray::new(Point2::new(0.0,0.0), Vector3::new(0.0, 0.0, 1.0), wvl, energy).unwrap();
+    fn ray_propagate_along_z() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let energy = Energy::new::<joule>(1.0);
+        let ray = Ray::new(
+            Point2::new(0.0, 0.0),
+            Vector3::new(0.0, 0.0, 1.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
         assert!(ray.propagate_along_z(1.0).is_ok());
-        let newray=ray.propagate_along_z(1.0).unwrap();
+        let newray = ray.propagate_along_z(1.0).unwrap();
         assert_eq!(newray.wavelength(), wvl);
         assert_eq!(newray.energy(), energy);
         assert_eq!(newray.dir, Vector3::new(0.0, 0.0, 1.0));
-        assert_eq!(ray.propagate_along_z(1.0).unwrap().position(), Point3::new(0.0,0.0,1.0));
-        assert_eq!(ray.propagate_along_z(2.0).unwrap().position(), Point3::new(0.0,0.0,2.0));
-        assert_eq!(ray.propagate_along_z(-1.0).unwrap().position(), Point3::new(0.0,0.0,-1.0));
-        let ray=Ray::new(Point2::new(0.0,0.0), Vector3::new(0.0, 1.0, 1.0), wvl, energy).unwrap();
-        assert_eq!(ray.propagate_along_z(1.0).unwrap().position(), Point3::new(0.0,1.0,1.0));
-        assert_eq!(ray.propagate_along_z(2.0).unwrap().position(), Point3::new(0.0,2.0,2.0));
-        let ray=Ray::new(Point2::new(0.0,0.0), Vector3::new(0.0, 1.0, 0.0), wvl, energy).unwrap();
+        assert_eq!(
+            ray.propagate_along_z(1.0).unwrap().position(),
+            Point3::new(0.0, 0.0, 1.0)
+        );
+        assert_eq!(
+            ray.propagate_along_z(2.0).unwrap().position(),
+            Point3::new(0.0, 0.0, 2.0)
+        );
+        assert_eq!(
+            ray.propagate_along_z(-1.0).unwrap().position(),
+            Point3::new(0.0, 0.0, -1.0)
+        );
+        let ray = Ray::new(
+            Point2::new(0.0, 0.0),
+            Vector3::new(0.0, 1.0, 1.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
+        assert_eq!(
+            ray.propagate_along_z(1.0).unwrap().position(),
+            Point3::new(0.0, 1.0, 1.0)
+        );
+        assert_eq!(
+            ray.propagate_along_z(2.0).unwrap().position(),
+            Point3::new(0.0, 2.0, 2.0)
+        );
+        let ray = Ray::new(
+            Point2::new(0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
         assert!(ray.propagate_along_z(1.0).is_err());
     }
     #[test]
@@ -544,7 +577,7 @@ mod test {
         assert_eq!(strategy.generate(1.0).len(), 10);
     }
     #[test]
-    fn new_uniform_collimated() {
+    fn rays_new_uniform_collimated() {
         let rays = Rays::new_uniform_collimated(
             1.0,
             Length::new::<nanometer>(1054.0),
@@ -558,5 +591,54 @@ mod test {
             Energy::abs(rays.total_energy() - Energy::new::<joule>(1.0))
                 < Energy::new::<joule>(10.0 * f64::EPSILON)
         );
+    }
+    #[test]
+    fn rays_add_ray() {
+        let mut rays = Rays::default();
+        assert_eq!(rays.rays.len(), 0);
+        let ray = Ray::new_collimated(
+            Point2::new(0.0, 0.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        assert_eq!(rays.rays.len(), 1);
+    }
+    #[test]
+    fn rays_total_energy() {
+        let mut rays = Rays::default();
+        assert!(rays.total_energy().is_zero());
+        let ray = Ray::new_collimated(
+            Point2::new(0.0, 0.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray.clone());
+        assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
+        rays.add_ray(ray.clone());
+        assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
+    }
+    #[test]
+    fn rays_propagate_along_z_axis() {
+        let mut rays = Rays::default();
+        let ray0 = Ray::new_collimated(
+            Point2::new(0.0, 0.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+    let ray1 = Ray::new_collimated(
+        Point2::new(0.0, 1.0),
+        Length::new::<nanometer>(1053.0),
+        Energy::new::<joule>(1.0),
+    )
+    .unwrap();
+        rays.add_ray(ray0);
+        rays.add_ray(ray1);
+        rays.propagate_along_z(1.0).unwrap();
+        assert_eq!(rays.rays[0].position(), Point3::new(0.0,0.0,1.0));
+        assert_eq!(rays.rays[1].position(), Point3::new(0.0,1.0,1.0));
     }
 }
