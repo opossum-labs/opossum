@@ -19,6 +19,10 @@ use crate::{
 /// Generate a source node with a collinear beam.
 ///
 /// This is a convenience functions, which generates a light source containing a hexapolar, collinear ray bundle with 1054 nm and a given energy.
+///
+/// # Errors
+/// This functions returns an error if
+///  - the given energy is <=0.0, Nan, or +inf.
 pub fn create_ray_source(radius: f64, energy: Energy) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
         radius,

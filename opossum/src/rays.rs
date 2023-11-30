@@ -55,9 +55,9 @@ impl Ray {
     }
     /// Creates a new [`Ray`].
     ///
-    /// The dircetion vector is normalized. The direction is thus stored aa (`direction cosine`)[https://en.wikipedia.org/wiki/Direction_cosine]
+    /// The dircetion vector is normalized. The direction is thus stored aa (`direction cosine`)[`https://en.wikipedia.org/wiki/Direction_cosine`]
     ///
-    /// # Error
+    /// # Errors
     /// This function returns an error if
     ///  - the given wavelength is <=0.0, `NaN` or +inf
     ///  - the given energy is <=0.0, `NaN` or +inf
@@ -90,7 +90,7 @@ impl Ray {
     }
     /// Returns the position of thi [`Ray`].
     #[must_use]
-    pub fn position(&self) -> Point3<f64> {
+    pub const fn position(&self) -> Point3<f64> {
         self.pos
     }
     /// Returns the energy of this [`Ray`].
@@ -130,6 +130,14 @@ pub struct Rays {
 }
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis).
+    ///
+    /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
+    /// evenly distributed over the indivual rays. The ray positions are distribution according to the given [`DistributionStrategy`].
+    ///
+    /// # Errors
+    /// This function returns an error if
+    ///  - the given wavelength is <=0.0, NaN or +inf
+    ///  - the given energy is <=0.0, NaN or +inf
     pub fn new_uniform_collimated(
         size: f64,
         wave_length: Length,
@@ -178,7 +186,7 @@ impl Rays {
     /// This function returns an error if the z component of a ray direction is zero.
     pub fn propagate_along_z(&mut self, length_along_z: f64) -> OpmResult<()> {
         for ray in &mut self.rays {
-            *ray=ray.propagate_along_z(length_along_z)?;
+            *ray = ray.propagate_along_z(length_along_z)?;
         }
         Ok(())
     }
@@ -629,16 +637,16 @@ mod test {
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-    let ray1 = Ray::new_collimated(
-        Point2::new(0.0, 1.0),
-        Length::new::<nanometer>(1053.0),
-        Energy::new::<joule>(1.0),
-    )
-    .unwrap();
+        let ray1 = Ray::new_collimated(
+            Point2::new(0.0, 1.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         rays.propagate_along_z(1.0).unwrap();
-        assert_eq!(rays.rays[0].position(), Point3::new(0.0,0.0,1.0));
-        assert_eq!(rays.rays[1].position(), Point3::new(0.0,1.0,1.0));
+        assert_eq!(rays.rays[0].position(), Point3::new(0.0, 0.0, 1.0));
+        assert_eq!(rays.rays[1].position(), Point3::new(0.0, 1.0, 1.0));
     }
 }
