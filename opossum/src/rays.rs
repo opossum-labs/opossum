@@ -165,7 +165,7 @@ impl Rays {
     /// This functions returns an error if
     ///  - the given wavelength is <=0.0, nan, or +inf
     ///  - the given energy is <=0.0, nan, or +inf
-    ///  - the given cone angle is <0.0 degrees or >180.0 degrees
+    ///  - the given cone angle is <0.0 degrees or >=180.0 degrees
     pub fn new_hexapolar_point_source(
         position: Point2<f64>,
         cone_angle: Angle,
@@ -173,9 +173,9 @@ impl Rays {
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
-        if cone_angle < Angle::zero() || cone_angle > Angle::new::<degree>(180.0) {
+        if cone_angle < Angle::zero() || cone_angle >= Angle::new::<degree>(180.0) {
             return Err(OpossumError::Other(
-                "cone angle must be within (0.0..=180.0) degrees range".into(),
+                "cone angle must be within (0.0..180.0) degrees range".into(),
             ));
         }
         let size_after_unit_length = (cone_angle / 2.0).tan().value;
@@ -662,10 +662,26 @@ mod test {
             assert_eq!(ray.position(), Point3::new(0.0, 0.0, 0.0))
         }
         rays.propagate_along_z(1.0).unwrap();
-        assert_eq!(rays.rays[0].position(), Point3::new(0.0,0.0,1.0));
+        assert_eq!(rays.rays[0].position(), Point3::new(0.0, 0.0, 1.0));
         assert_eq!(rays.rays[1].position()[0], 0.0);
         assert_abs_diff_eq!(rays.rays[1].position()[1], 1.0);
         assert_eq!(rays.rays[1].position()[2], 1.0);
+        assert!(Rays::new_hexapolar_point_source(
+            position,
+            Angle::new::<degree>(-1.0),
+            1,
+            wave_length,
+            Energy::new::<joule>(1.0),
+        )
+        .is_err());
+        assert!(Rays::new_hexapolar_point_source(
+            position,
+            Angle::new::<degree>(180.0),
+            1,
+            wave_length,
+            Energy::new::<joule>(1.0),
+        )
+        .is_err());
     }
     #[test]
     fn rays_add_ray() {
