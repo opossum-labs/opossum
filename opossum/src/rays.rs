@@ -139,18 +139,18 @@ impl Rays {
     ///  - the given wavelength is <=0.0, NaN or +inf
     ///  - the given energy is <=0.0, NaN or +inf
     pub fn new_uniform_collimated(
-        size: f64,
+        size: Length,
         wave_length: Length,
         energy: Energy,
         strategy: &DistributionStrategy,
     ) -> OpmResult<Self> {
-        let points: Vec<Point2<f64>> = strategy.generate(size);
+        let points: Vec<Point2<Length>> = strategy.generate(size);
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::new();
         #[allow(clippy::cast_precision_loss)]
         let energy_per_ray = energy / nr_of_rays as f64;
         for point in points {
-            let ray = Ray::new_collimated(Point2::new(Length::new::<millimeter>(point.x),Length::new::<millimeter>(point.y)), wave_length, energy_per_ray)?;
+            let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
         Ok(Self { rays })
@@ -178,14 +178,14 @@ impl Rays {
             ));
         }
         let size_after_unit_length = (cone_angle / 2.0).tan().value;
-        let points: Vec<Point2<f64>> =
-            DistributionStrategy::Hexapolar(number_of_rings).generate(size_after_unit_length);
+        let points: Vec<Point2<Length>> =
+            DistributionStrategy::Hexapolar(number_of_rings).generate(Length::new::<millimeter>(size_after_unit_length));
         let nr_of_rays = points.len();
         #[allow(clippy::cast_precision_loss)]
         let energy_per_ray = energy / nr_of_rays as f64;
         let mut rays: Vec<Ray> = Vec::new();
         for point in points {
-            let direction = Vector3::new(point[0], point[1], 1.0);
+            let direction = Vector3::new(point.x.get::<millimeter>(), point.y.get::<millimeter>(), 1.0);
             let ray = Ray::new(position, direction, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
@@ -239,7 +239,7 @@ pub enum DistributionStrategy {
 impl DistributionStrategy {
     /// Generate a vector of 2D points within a given size (which depends on the concrete strategy)
     #[must_use]
-    pub fn generate(&self, size: f64) -> Vec<Point2<f64>> {
+    pub fn generate(&self, size: Length) -> Vec<Point2<Length>> {
         match self {
             Self::Hexapolar(rings) => hexapolar(*rings, size),
             Self::Random(nr_of_rays) => random(*nr_of_rays, size),
@@ -247,10 +247,10 @@ impl DistributionStrategy {
         }
     }
 }
-fn hexapolar(rings: u8, radius: f64) -> Vec<Point2<f64>> {
-    let mut points: Vec<Point2<f64>> = Vec::new();
+fn hexapolar(rings: u8, radius: Length) -> Vec<Point2<Length>> {
+    let mut points: Vec<Point2<Length>> = Vec::new();
     let radius_step = radius / f64::from(rings);
-    points.push(point![0.0, 0.0]);
+    points.push(point![Length::zero(), Length::zero()]);
     for ring in 0u8..rings {
         let radius = f64::from(ring + 1) * radius_step;
         let points_per_ring = 6 * (ring + 1);
@@ -262,24 +262,25 @@ fn hexapolar(rings: u8, radius: f64) -> Vec<Point2<f64>> {
     }
     points
 }
-fn random(nr_of_rays: usize, side_length: f64) -> Vec<Point2<f64>> {
-    let mut points: Vec<Point2<f64>> = Vec::new();
+fn random(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
+    let mut points: Vec<Point2<Length>> = Vec::new();
     let mut rng = rand::thread_rng();
     for _ in 0..nr_of_rays {
         points.push(point![
-            rng.gen_range(-side_length..side_length),
-            rng.gen_range(-side_length..side_length)
+            Length::new::<millimeter>(rng.gen_range(-side_length.get::<millimeter>()..side_length.get::<millimeter>())),
+            Length::new::<millimeter>(rng.gen_range(-side_length.get::<millimeter>()..side_length.get::<millimeter>()))
         ]);
     }
     points
 }
-fn sobol(nr_of_rays: usize, side_length: f64) -> Vec<Point2<f64>> {
-    let mut points: Vec<Point2<f64>> = Vec::new();
+fn sobol(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
+    let side_length= side_length.get::<millimeter>();
+    let mut points: Vec<Point2<Length>> = Vec::new();
     let params = JoeKuoD6::minimal();
     let seq = Sobol::<f64>::new(2, &params);
     let offset = side_length / 2.0;
     for point in seq.take(nr_of_rays) {
-        points.push(point!(point[0] - offset, point[1] - offset));
+        points.push(point!(Length::new::<millimeter>(point[0] - offset), Length::new::<millimeter>(point[1] - offset)));
     }
     points
 }
@@ -613,26 +614,26 @@ mod test {
     #[test]
     fn strategy_hexapolar() {
         let strategy = DistributionStrategy::Hexapolar(0);
-        assert_eq!(strategy.generate(1.0).len(), 1);
+        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 1);
         let strategy = DistributionStrategy::Hexapolar(1);
-        assert_eq!(strategy.generate(1.0).len(), 7);
+        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 7);
         let strategy = DistributionStrategy::Hexapolar(5);
-        assert_eq!(strategy.generate(1.0).len(), 91);
+        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 91);
     }
     #[test]
     fn strategy_random() {
         let strategy = DistributionStrategy::Random(10);
-        assert_eq!(strategy.generate(1.0).len(), 10);
+        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 10);
     }
     #[test]
     fn strategy_sobol() {
         let strategy = DistributionStrategy::Sobol(10);
-        assert_eq!(strategy.generate(1.0).len(), 10);
+        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 10);
     }
     #[test]
     fn rays_new_uniform_collimated() {
         let rays = Rays::new_uniform_collimated(
-            1.0,
+            Length::new::<millimeter>(1.0),
             Length::new::<nanometer>(1054.0),
             Energy::new::<joule>(1.0),
             &DistributionStrategy::Hexapolar(2),

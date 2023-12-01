@@ -3,12 +3,12 @@ use std::path::Path;
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
-    length::nanometer,
+    length::{nanometer, millimeter},
 };
 
 fn main() -> OpmResult<()> {
     let rays = Rays::new_uniform_collimated(
-        1.0,
+        Length::new::<millimeter>(1.0),
         Length::new::<nanometer>(1054.0),
         Energy::new::<joule>(1.0),
         &opossum::rays::DistributionStrategy::Random(200),

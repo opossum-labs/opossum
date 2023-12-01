@@ -24,7 +24,7 @@ use crate::{
 /// # Errors
 /// This functions returns an error if
 ///  - the given energy is <=0.0, Nan, or +inf.
-pub fn create_collimated_ray_source(radius: f64, energy: Energy) -> OpmResult<Source> {
+pub fn create_collimated_ray_source(radius: Length, energy: Energy) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
         radius,
         Length::new::<nanometer>(1053.0),
