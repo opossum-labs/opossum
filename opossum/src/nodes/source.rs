@@ -2,12 +2,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use nalgebra::Point2;
-use uom::si::{
-    f64::{Angle, Energy, Length},
-    length::nanometer,
-};
-use uom::num_traits::Zero;
 use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
@@ -16,6 +10,12 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     rays::{DistributionStrategy, Rays},
+};
+use nalgebra::Point2;
+use uom::num_traits::Zero;
+use uom::si::{
+    f64::{Angle, Energy, Length},
+    length::nanometer,
 };
 /// Generate a source node with a collinated beam.
 ///

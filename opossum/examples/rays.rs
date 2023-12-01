@@ -3,7 +3,7 @@ use std::path::Path;
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
-    length::{nanometer, millimeter},
+    length::{millimeter, nanometer},
 };
 
 fn main() -> OpmResult<()> {
