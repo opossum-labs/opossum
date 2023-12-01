@@ -7,6 +7,7 @@ mod group;
 mod ideal_filter;
 mod lens;
 mod propagation;
+mod paraxial_surface;
 mod reference;
 mod source;
 mod spectrometer;
@@ -23,6 +24,7 @@ pub use group::PortMap;
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::{IdealLens, RealLens};
 pub use propagation::Propagation;
+pub use paraxial_surface::ParaxialSurface;
 pub use reference::NodeReference;
 pub use source::create_collimated_ray_source;
 pub use source::create_point_ray_source;
@@ -96,6 +98,10 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         )),
         "propagation" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Propagation::default())),
+            uuid,
+        )),
+        "paraxial surface" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(ParaxialSurface::default())),
             uuid,
         )),
         _ => Err(OpossumError::Other(format!(

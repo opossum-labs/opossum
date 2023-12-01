@@ -51,7 +51,7 @@ impl Ray {
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
-        Self::new(position, Vector3::new(0.0, 0.0, 1.0), wave_length, energy)
+        Self::new(position, Vector3::z(), wave_length, energy)
     }
     /// Creates a new [`Ray`].
     ///
@@ -125,6 +125,24 @@ impl Ray {
         let length_in_ray_dir = length_along_z.get::<millimeter>() / self.dir[2];
         new_ray.pos = self.pos + length_in_ray_dir * self.dir;
         new_ray.path_length += Length::new::<millimeter>(length_in_ray_dir);
+        Ok(new_ray)
+    }
+    /// Refract a ray on a paraxial surface of a given focal length.
+    ///
+    /// Modify the ray direction 
+    /// # Errors
+    ///
+    /// This function will return an error if the given focal length is zero or not finite
+    pub fn refract_paraxial(&self, focal_length: Length) -> OpmResult<Self> {
+        if focal_length.is_zero() || !focal_length.is_finite() {
+            return Err(OpossumError::Other("focal length must be != 0.0 & finite".into()))
+        }
+        let optical_power=1.0 / focal_length.get::<millimeter>();
+        let mut new_ray=self.clone();
+        new_ray.dir.x=self.dir.x-optical_power*self.pos.x;
+        new_ray.dir.y=self.dir.y-optical_power*self.pos.y;
+        new_ray.dir.z = 1.0;
+        new_ray.dir.normalize_mut();
         Ok(new_ray)
     }
 }
@@ -231,10 +249,24 @@ impl Rays {
     /// Propagate a ray bundle along the z axis.
     ///
     /// # Errors
-    /// This function returns an error if the z component of a ray direction is zero.
+    /// This function returns an error if 
+    ///  - the z component of a ray direction is zero.
+    ///  - the given length is not finite.
     pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
         for ray in &mut self.rays {
             *ray = ray.propagate_along_z(length_along_z)?;
+        }
+        Ok(())
+    }
+    /// Refract a ray bundle on a paraxial surface of given focal length.
+    ///
+    /// # Errors
+    /// This function returns an error if
+    ///  - the z component of a ray direction is zero.
+    ///  - the focal length is zero or not finite.
+    pub fn refract_paraxial(&mut self, focal_length: Length) -> OpmResult<()> {
+        for ray in &mut self.rays {
+            *ray = ray.refract_paraxial(focal_length)?;
         }
         Ok(())
     }
