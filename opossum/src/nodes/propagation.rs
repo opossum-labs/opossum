@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use uom::si::{f64::Length, length::meter};
+use uom::si::{f64::Length, length::{meter, millimeter}};
 
 use crate::{
     analyzer::AnalyzerType,
@@ -91,7 +91,7 @@ impl Optical for Propagation {
                         } else {
                             return Err(OpossumError::Analysis("cannot read distance".into()));
                         };
-                    rays.propagate_along_z(length_along_z)?;
+                    rays.propagate_along_z(Length::new::<millimeter>(length_along_z))?;
                     data = Some(LightData::Geometric(rays));
                 } else {
                     return Err(crate::error::OpossumError::Analysis(

@@ -7,7 +7,7 @@ use uom::si::{
     f64::{Angle, Energy, Length},
     length::nanometer,
 };
-
+use uom::num_traits::Zero;
 use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
@@ -43,7 +43,7 @@ pub fn create_collimated_ray_source(radius: f64, energy: Energy) -> OpmResult<So
 ///  - the given energy is <=0.0, Nan, or +inf.
 pub fn create_point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> {
     let rays = Rays::new_hexapolar_point_source(
-        Point2::new(0.0, 0.0),
+        Point2::new(Length::zero(), Length::zero()),
         cone_angle,
         3,
         Length::new::<nanometer>(1053.0),

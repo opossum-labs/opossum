@@ -15,28 +15,27 @@ use serde_derive::{Deserialize, Serialize};
 use sobol::{params::JoeKuoD6, Sobol};
 use uom::num_traits::Zero;
 use uom::si::angle::degree;
+use uom::si::length::millimeter;
 use uom::si::f64::{Angle, Energy, Length};
 
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {
-    ///Stores all positions of the ray
+    ///Stores all positions of the ray (in mm)
     pos: Point3<f64>, // this should be a vector of points?
     /// stores the current propagation direction of the ray (stored as direction cosine)
     dir: Vector3<f64>,
     // ///stores the polarization vector (Jones vector) of the ray
     // pol: Vector2<Complex<f64>>,
-    ///energy of the ray
+    /// Energy of the ray
     e: Energy,
-    ///Wavelength of the ray in nm
+    ///Wavelength of the ray
     wvl: Length,
-    // ///id of the ray
-    // id: usize,
     // ///Bounce count of the ray. Necessary to check if the maximum number of bounces is reached
     // bounce: usize,
     // //True if ray is allowd to further propagate, false else
     // //valid:  bool,
-    path_length: f64,
+    path_length: Length,
 }
 impl Ray {
     /// Create a new collimated ray.
@@ -48,7 +47,7 @@ impl Ray {
     ///  - the given wavelength is <=0.0, `NaN` or +inf
     ///  - the given energy is <=0.0, `NaN` or +inf
     pub fn new_collimated(
-        position: Point2<f64>,
+        position: Point2<Length>,
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
@@ -64,7 +63,7 @@ impl Ray {
     ///  - the given energy is <=0.0, `NaN` or +inf
     ///  - the direction vector has a zero length
     pub fn new(
-        position: Point2<f64>,
+        position: Point2<Length>,
         direction: Vector3<f64>,
         wave_length: Length,
         energy: Energy,
@@ -79,20 +78,20 @@ impl Ray {
             return Err(OpossumError::Other("length of direction must be >0".into()));
         }
         Ok(Self {
-            pos: Point3::new(position.x, position.y, 0.0),
+            pos: Point3::new(position.x.get::<millimeter>(), position.y.get::<millimeter>(), 0.0),
             dir: direction.normalize(),
             //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
             e: energy,
             wvl: wave_length,
             //id: 0,
             //bounce: 0,
-            path_length: 0.0,
+            path_length: Length::zero(),
         })
     }
     /// Returns the position of thi [`Ray`].
     #[must_use]
-    pub const fn position(&self) -> Point3<f64> {
-        self.pos
+    pub fn position(&self) -> Point3<Length> {
+        Point3::new(Length::new::<millimeter>(self.pos.x),Length::new::<millimeter>(self.pos.y), Length::new::<millimeter>(self.pos.z))
     }
     /// Returns the energy of this [`Ray`].
     #[must_use]
@@ -108,16 +107,16 @@ impl Ray {
     ///
     /// # Errors
     /// This functions retruns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
-    pub fn propagate_along_z(&self, length_along_z: f64) -> OpmResult<Self> {
+    pub fn propagate_along_z(&self, length_along_z: Length) -> OpmResult<Self> {
         if self.dir[2].abs() < f64::EPSILON {
             return Err(OpossumError::Other(
                 "z-Axis of direction vector must be != 0.0".into(),
             ));
         }
         let mut new_ray = self.clone();
-        let length_in_ray_dir = length_along_z / self.dir[2];
+        let length_in_ray_dir = length_along_z.get::<millimeter>() / self.dir[2];
         new_ray.pos = self.pos + length_in_ray_dir * self.dir;
-        new_ray.path_length += length_in_ray_dir;
+        new_ray.path_length += Length::new::<millimeter>(length_in_ray_dir);
         Ok(new_ray)
     }
 }
@@ -151,7 +150,7 @@ impl Rays {
         #[allow(clippy::cast_precision_loss)]
         let energy_per_ray = energy / nr_of_rays as f64;
         for point in points {
-            let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
+            let ray = Ray::new_collimated(Point2::new(Length::new::<millimeter>(point.x),Length::new::<millimeter>(point.y)), wave_length, energy_per_ray)?;
             rays.push(ray);
         }
         Ok(Self { rays })
@@ -167,7 +166,7 @@ impl Rays {
     ///  - the given energy is <=0.0, nan, or +inf
     ///  - the given cone angle is <0.0 degrees or >=180.0 degrees
     pub fn new_hexapolar_point_source(
-        position: Point2<f64>,
+        position: Point2<Length>,
         cone_angle: Angle,
         number_of_rings: u8,
         wave_length: Length,
@@ -221,7 +220,7 @@ impl Rays {
     ///
     /// # Errors
     /// This function returns an error if the z component of a ray direction is zero.
-    pub fn propagate_along_z(&mut self, length_along_z: f64) -> OpmResult<()> {
+    pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
         for ray in &mut self.rays {
             *ray = ray.propagate_along_z(length_along_z)?;
         }
@@ -359,8 +358,8 @@ impl Plottable for Rays {
 
         chart
             .configure_mesh()
-            .x_desc("x")
-            .y_desc("y")
+            .x_desc("x (mm)")
+            .y_desc("y (mm)")
             .label_style(TextStyle::from(("sans-serif", 20).into_font()))
             .draw()
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
@@ -387,7 +386,7 @@ mod test {
     use uom::si::{energy::joule, length::nanometer};
     #[test]
     fn ray_new_collimated() {
-        let position = Point2::new(1.0, 2.0);
+        let position = Point2::new(Length::new::<millimeter>(1.0), Length::new::<millimeter>(2.0));
         let ray = Ray::new_collimated(
             position,
             Length::new::<nanometer>(1053.0),
@@ -399,7 +398,7 @@ mod test {
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.wvl, Length::new::<nanometer>(1053.0));
         assert_eq!(ray.e, Energy::new::<joule>(1.0));
-        assert_eq!(ray.path_length, 0.0);
+        assert_eq!(ray.path_length, Length::zero());
         assert!(Ray::new_collimated(
             position,
             Length::new::<nanometer>(0.0),
@@ -463,7 +462,7 @@ mod test {
     }
     #[test]
     fn ray_new() {
-        let position = Point2::new(1.0, 2.0);
+        let position = Point2::new(Length::new::<millimeter>(1.0), Length::new::<millimeter>(2.0));
         let direction = Vector3::new(0.0, 0.0, 2.0);
         let ray = Ray::new(
             position,
@@ -474,13 +473,13 @@ mod test {
         assert!(ray.is_ok());
         let ray = ray.unwrap();
         assert_eq!(ray.pos, Point3::new(1.0, 2.0, 0.0));
-        assert_eq!(ray.position(), Point3::new(1.0, 2.0, 0.0));
+        assert_eq!(ray.position(), Point3::new(Length::new::<millimeter>(1.0), Length::new::<millimeter>(2.0), Length::zero()));
         assert_eq!(ray.dir, Vector3::new(0.0, 0.0, 1.0));
         assert_eq!(ray.wvl, Length::new::<nanometer>(1053.0));
         assert_eq!(ray.wavelength(), Length::new::<nanometer>(1053.0));
         assert_eq!(ray.e, Energy::new::<joule>(1.0));
         assert_eq!(ray.energy(), Energy::new::<joule>(1.0));
-        assert_eq!(ray.path_length, 0.0);
+        assert_eq!(ray.path_length, Length::zero());
         assert!(Ray::new(
             position,
             direction,
@@ -564,52 +563,52 @@ mod test {
         let wvl = Length::new::<nanometer>(1053.0);
         let energy = Energy::new::<joule>(1.0);
         let ray = Ray::new(
-            Point2::new(0.0, 0.0),
+            Point2::new(Length::zero(), Length::zero()),
             Vector3::new(0.0, 0.0, 1.0),
             wvl,
             energy,
         )
         .unwrap();
-        assert!(ray.propagate_along_z(1.0).is_ok());
-        let newray = ray.propagate_along_z(1.0).unwrap();
+        assert!(ray.propagate_along_z(Length::new::<millimeter>(1.0)).is_ok());
+        let newray = ray.propagate_along_z(Length::new::<millimeter>(1.0)).unwrap();
         assert_eq!(newray.wavelength(), wvl);
         assert_eq!(newray.energy(), energy);
         assert_eq!(newray.dir, Vector3::new(0.0, 0.0, 1.0));
         assert_eq!(
-            ray.propagate_along_z(1.0).unwrap().position(),
-            Point3::new(0.0, 0.0, 1.0)
+            ray.propagate_along_z(Length::new::<millimeter>(1.0)).unwrap().position(),
+            Point3::new(Length::zero(), Length::zero(), Length::new::<millimeter>(1.0))
         );
         assert_eq!(
-            ray.propagate_along_z(2.0).unwrap().position(),
-            Point3::new(0.0, 0.0, 2.0)
+            ray.propagate_along_z(Length::new::<millimeter>(2.0)).unwrap().position(),
+            Point3::new(Length::zero(), Length::zero(), Length::new::<millimeter>(2.0))
         );
         assert_eq!(
-            ray.propagate_along_z(-1.0).unwrap().position(),
-            Point3::new(0.0, 0.0, -1.0)
+            ray.propagate_along_z(Length::new::<millimeter>(-1.0)).unwrap().position(),
+            Point3::new(Length::zero(), Length::zero(), Length::new::<millimeter>(-1.0))
         );
         let ray = Ray::new(
-            Point2::new(0.0, 0.0),
+            Point2::new(Length::zero(), Length::zero()),
             Vector3::new(0.0, 1.0, 1.0),
             wvl,
             energy,
         )
         .unwrap();
         assert_eq!(
-            ray.propagate_along_z(1.0).unwrap().position(),
-            Point3::new(0.0, 1.0, 1.0)
+            ray.propagate_along_z(Length::new::<millimeter>(1.0)).unwrap().position(),
+            Point3::new(Length::zero(), Length::new::<millimeter>(1.0), Length::new::<millimeter>(1.0))
         );
         assert_eq!(
-            ray.propagate_along_z(2.0).unwrap().position(),
-            Point3::new(0.0, 2.0, 2.0)
+            ray.propagate_along_z(Length::new::<millimeter>(2.0)).unwrap().position(),
+            Point3::new(Length::zero(), Length::new::<millimeter>(2.0), Length::new::<millimeter>(2.0))
         );
         let ray = Ray::new(
-            Point2::new(0.0, 0.0),
+            Point2::new(Length::zero(), Length::zero()),
             Vector3::new(0.0, 1.0, 0.0),
             wvl,
             energy,
         )
         .unwrap();
-        assert!(ray.propagate_along_z(1.0).is_err());
+        assert!(ray.propagate_along_z(Length::new::<millimeter>(1.0)).is_err());
     }
     #[test]
     fn strategy_hexapolar() {
@@ -648,7 +647,7 @@ mod test {
     }
     #[test]
     fn rays_new_hexapolar_point_source() {
-        let position = Point2::new(0.0, 0.0);
+        let position = Point2::new(Length::zero(), Length::zero());
         let wave_length = Length::new::<nanometer>(1053.0);
         let rays = Rays::new_hexapolar_point_source(
             position,
@@ -657,16 +656,16 @@ mod test {
             wave_length,
             Energy::new::<joule>(1.0),
         );
-        assert!(rays.is_ok());
+        //assert!(rays.is_ok());
         let mut rays = rays.unwrap();
         for ray in &rays.rays {
-            assert_eq!(ray.position(), Point3::new(0.0, 0.0, 0.0))
+            assert_eq!(ray.position(), Point3::new(Length::zero(), Length::zero(), Length::zero()))
         }
-        rays.propagate_along_z(1.0).unwrap();
-        assert_eq!(rays.rays[0].position(), Point3::new(0.0, 0.0, 1.0));
-        assert_eq!(rays.rays[1].position()[0], 0.0);
-        assert_abs_diff_eq!(rays.rays[1].position()[1], 1.0);
-        assert_eq!(rays.rays[1].position()[2], 1.0);
+        rays.propagate_along_z(Length::new::<millimeter>(1.0)).unwrap();
+        assert_eq!(rays.rays[0].position(), Point3::new(Length::zero(), Length::zero(), Length::new::<millimeter>(1.0)));
+        assert_eq!(rays.rays[1].position()[0], Length::zero());
+        assert_abs_diff_eq!(rays.rays[1].position()[1].value, Length::new::<millimeter>(1.0).value);
+        assert_eq!(rays.rays[1].position()[2], Length::new::<millimeter>(1.0));
         assert!(Rays::new_hexapolar_point_source(
             position,
             Angle::new::<degree>(-1.0),
@@ -689,7 +688,7 @@ mod test {
         let mut rays = Rays::default();
         assert_eq!(rays.rays.len(), 0);
         let ray = Ray::new_collimated(
-            Point2::new(0.0, 0.0),
+            Point2::new(Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -702,7 +701,7 @@ mod test {
         let mut rays = Rays::default();
         assert!(rays.total_energy().is_zero());
         let ray = Ray::new_collimated(
-            Point2::new(0.0, 0.0),
+            Point2::new(Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -716,34 +715,34 @@ mod test {
     fn rays_propagate_along_z_axis() {
         let mut rays = Rays::default();
         let ray0 = Ray::new_collimated(
-            Point2::new(0.0, 0.0),
+            Point2::new(Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         let ray1 = Ray::new_collimated(
-            Point2::new(0.0, 1.0),
+            Point2::new(Length::zero(), Length::new::<millimeter>(1.0)),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         rays.add_ray(ray0);
         rays.add_ray(ray1);
-        rays.propagate_along_z(1.0).unwrap();
-        assert_eq!(rays.rays[0].position(), Point3::new(0.0, 0.0, 1.0));
-        assert_eq!(rays.rays[1].position(), Point3::new(0.0, 1.0, 1.0));
+        rays.propagate_along_z(Length::new::<millimeter>(1.0)).unwrap();
+        assert_eq!(rays.rays[0].position(), Point3::new(Length::zero(), Length::zero(), Length::new::<millimeter>(1.0)));
+        assert_eq!(rays.rays[1].position(), Point3::new(Length::zero(), Length::new::<millimeter>(1.0), Length::new::<millimeter>(1.0)));
     }
     #[test]
     fn rays_apodize() {
         let mut rays = Rays::default();
         let ray0 = Ray::new_collimated(
-            Point2::new(0.0, 0.0),
+            Point2::new(Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         let ray1 = Ray::new_collimated(
-            Point2::new(1.0, 1.0),
+            Point2::new(Length::new::<millimeter>(1.0), Length::new::<millimeter>(1.0)),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
