@@ -6,6 +6,7 @@ mod energy_meter;
 mod group;
 mod ideal_filter;
 mod lens;
+mod propagation;
 mod reference;
 mod source;
 mod spectrometer;
@@ -21,8 +22,10 @@ pub use group::NodeGroup;
 pub use group::PortMap;
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::{IdealLens, RealLens};
+pub use propagation::Propagation;
 pub use reference::NodeReference;
-pub use source::create_ray_source;
+pub use source::create_collimated_ray_source;
+pub use source::create_point_ray_source;
 pub use source::Source;
 
 pub use energy_meter::EnergyMeter;
@@ -89,6 +92,10 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         )),
         "spot diagram" => Ok(OpticRef::new(
             Rc::new(RefCell::new(SpotDiagram::default())),
+            uuid,
+        )),
+        "propagation" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(Propagation::default())),
             uuid,
         )),
         _ => Err(OpossumError::Other(format!(

@@ -1,56 +1,105 @@
 #![warn(missing_docs)]
 //! Module for handling rays
 use crate::aperture::Aperture;
-use crate::error::OpossumError;
+use crate::error::{OpmResult, OpossumError};
 use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
 use image::DynamicImage;
-use nalgebra::{point, Point2, Point3};
+use nalgebra::{point, Point2, Point3, Vector3};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
-use plotters::style::RED;
+use plotters::style::{IntoFont, TextStyle, RED};
 use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
 use sobol::{params::JoeKuoD6, Sobol};
 use uom::num_traits::Zero;
-use uom::si::f64::{Energy, Length};
+use uom::si::angle::degree;
+use uom::si::f64::{Angle, Energy, Length};
+use uom::si::length::millimeter;
 
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {
-    ///Stores all positions of the ray
+    ///Stores all positions of the ray (in mm)
     pos: Point3<f64>, // this should be a vector of points?
-    // ///stores the current propagation direction of the ray
-    // dir: Vector3<f64>,
+    /// stores the current propagation direction of the ray (stored as direction cosine)
+    dir: Vector3<f64>,
     // ///stores the polarization vector (Jones vector) of the ray
     // pol: Vector2<Complex<f64>>,
-    ///energy of the ray
+    /// Energy of the ray
     e: Energy,
-    ///Wavelength of the ray in nm
+    ///Wavelength of the ray
     wvl: Length,
-    // ///id of the ray
-    // id: usize,
     // ///Bounce count of the ray. Necessary to check if the maximum number of bounces is reached
     // bounce: usize,
     // //True if ray is allowd to further propagate, false else
     // //valid:  bool,
+    path_length: Length,
 }
 impl Ray {
     /// Create a new collimated ray.
     ///
     /// Generate a ray a horizontally polarized ray collinear with the z axis (optical axis).
-    #[must_use]
-    pub fn new_collimated(position: Point2<f64>, wave_length: Length, energy: Energy) -> Self {
-        Self {
-            pos: Point3::new(position.x, position.y, 0.0),
-            //dir: Vector3::new(0.0, 0.0, 1.0),
+    ///
+    /// # Errors
+    /// This function returns an error if
+    ///  - the given wavelength is <=0.0, `NaN` or +inf
+    ///  - the given energy is <=0.0, `NaN` or +inf
+    pub fn new_collimated(
+        position: Point2<Length>,
+        wave_length: Length,
+        energy: Energy,
+    ) -> OpmResult<Self> {
+        Self::new(position, Vector3::new(0.0, 0.0, 1.0), wave_length, energy)
+    }
+    /// Creates a new [`Ray`].
+    ///
+    /// The dircetion vector is normalized. The direction is thus stored aa (`direction cosine`)[`https://en.wikipedia.org/wiki/Direction_cosine`]
+    ///
+    /// # Errors
+    /// This function returns an error if
+    ///  - the given wavelength is <=0.0, `NaN` or +inf
+    ///  - the given energy is <=0.0, `NaN` or +inf
+    ///  - the direction vector has a zero length
+    pub fn new(
+        position: Point2<Length>,
+        direction: Vector3<f64>,
+        wave_length: Length,
+        energy: Energy,
+    ) -> OpmResult<Self> {
+        if wave_length.is_zero() || wave_length.is_sign_negative() || !wave_length.is_finite() {
+            return Err(OpossumError::Other("wavelength must be >0".into()));
+        }
+        if energy.is_zero() || energy.is_sign_negative() || !energy.is_finite() {
+            return Err(OpossumError::Other("energy must be >0".into()));
+        }
+        if direction.norm().is_zero() {
+            return Err(OpossumError::Other("length of direction must be >0".into()));
+        }
+        Ok(Self {
+            pos: Point3::new(
+                position.x.get::<millimeter>(),
+                position.y.get::<millimeter>(),
+                0.0,
+            ),
+            dir: direction.normalize(),
             //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
             e: energy,
             wvl: wave_length,
             //id: 0,
             //bounce: 0,
-        }
+            path_length: Length::zero(),
+        })
+    }
+    /// Returns the position of thi [`Ray`].
+    #[must_use]
+    pub fn position(&self) -> Point3<Length> {
+        Point3::new(
+            Length::new::<millimeter>(self.pos.x),
+            Length::new::<millimeter>(self.pos.y),
+            Length::new::<millimeter>(self.pos.z),
+        )
     }
     /// Returns the energy of this [`Ray`].
     #[must_use]
@@ -62,6 +111,22 @@ impl Ray {
     pub fn wavelength(&self) -> Length {
         self.wvl
     }
+    /// freely propagate a ray along its direction. The length is given as the projection on the z-axis (=optical axis).
+    ///
+    /// # Errors
+    /// This functions retruns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
+    pub fn propagate_along_z(&self, length_along_z: Length) -> OpmResult<Self> {
+        if self.dir[2].abs() < f64::EPSILON {
+            return Err(OpossumError::Other(
+                "z-Axis of direction vector must be != 0.0".into(),
+            ));
+        }
+        let mut new_ray = self.clone();
+        let length_in_ray_dir = length_along_z.get::<millimeter>() / self.dir[2];
+        new_ray.pos = self.pos + length_in_ray_dir * self.dir;
+        new_ray.path_length += Length::new::<millimeter>(length_in_ray_dir);
+        Ok(new_ray)
+    }
 }
 ///Struct containing all relevant information of a created bundle of rays
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
@@ -71,82 +136,72 @@ pub struct Rays {
     //Maximum number of bounces
     //max_bounces:    usize, do we need this here?
 }
-
-/// Strategy for the creation of a 2D point set
-pub enum DistributionStrategy {
-    /// Circular, hexapolar distribution with a given number of rings within a given radius
-    Hexapolar(u8),
-    /// Square, random distribution with a given number of points within a given side length
-    Random(usize),
-    /// Square, low-discrepancy quasirandom distribution with a given number of points within a given side length
-    Sobol(usize),
-}
-impl DistributionStrategy {
-    /// Generate a vector of 2D points within a given size (which depends on the concrete strategy)
-    #[must_use]
-    pub fn generate(&self, size: f64) -> Vec<Point2<f64>> {
-        match self {
-            Self::Hexapolar(rings) => hexapolar(*rings, size),
-            Self::Random(nr_of_rays) => random(*nr_of_rays, size),
-            Self::Sobol(nr_of_rays) => sobol(*nr_of_rays, size),
-        }
-    }
-}
-fn hexapolar(rings: u8, radius: f64) -> Vec<Point2<f64>> {
-    let mut points: Vec<Point2<f64>> = Vec::new();
-    let radius_step = radius / f64::from(rings);
-    points.push(point![0.0, 0.0]);
-    for ring in 0u8..rings {
-        let radius = f64::from(ring + 1) * radius_step;
-        let points_per_ring = 6 * (ring + 1);
-        let angle_step = 2.0 * std::f64::consts::PI / f64::from(points_per_ring);
-        for point_nr in 0u8..points_per_ring {
-            let point = (f64::from(point_nr) * angle_step).sin_cos();
-            points.push(point![radius * point.0, radius * point.1]);
-        }
-    }
-    points
-}
-fn random(nr_of_rays: usize, side_length: f64) -> Vec<Point2<f64>> {
-    let mut points: Vec<Point2<f64>> = Vec::new();
-    let mut rng = rand::thread_rng();
-    for _ in 0..nr_of_rays {
-        points.push(point![
-            rng.gen_range(-side_length..side_length),
-            rng.gen_range(-side_length..side_length)
-        ]);
-    }
-    points
-}
-fn sobol(nr_of_rays: usize, side_length: f64) -> Vec<Point2<f64>> {
-    let mut points: Vec<Point2<f64>> = Vec::new();
-    let params = JoeKuoD6::minimal();
-    let seq = Sobol::<f64>::new(2, &params);
-    let offset = side_length / 2.0;
-    for point in seq.take(nr_of_rays) {
-        points.push(point!(point[0] - offset, point[1] - offset));
-    }
-    points
-}
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis).
-    #[must_use]
+    ///
+    /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
+    /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`DistributionStrategy`].
+    ///
+    /// # Errors
+    /// This function returns an error if
+    ///  - the given wavelength is <=0.0, NaN or +inf
+    ///  - the given energy is <=0.0, NaN or +inf
     pub fn new_uniform_collimated(
-        size: f64,
+        size: Length,
         wave_length: Length,
         energy: Energy,
         strategy: &DistributionStrategy,
-    ) -> Self {
-        let points: Vec<Point2<f64>> = strategy.generate(size);
+    ) -> OpmResult<Self> {
+        let points: Vec<Point2<Length>> = strategy.generate(size);
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::new();
         #[allow(clippy::cast_precision_loss)]
         let energy_per_ray = energy / nr_of_rays as f64;
         for point in points {
-            let ray = Ray::new_collimated(point, wave_length, energy_per_ray);
+            let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
-        Self { rays }
+        Ok(Self { rays })
+    }
+    /// Generate a ray cone (= point source)
+    ///
+    /// Generate a bundle of rays emerging from a given (x,y) point and a cone direction (as hexapolar pattern) of a given (full) cone angle.
+    /// The parameter `number_of_rings` determines the "density" of the hexapolar pattern (see corresponding function).
+    ///
+    /// # Errors
+    /// This functions returns an error if
+    ///  - the given wavelength is <=0.0, nan, or +inf
+    ///  - the given energy is <=0.0, nan, or +inf
+    ///  - the given cone angle is <0.0 degrees or >=180.0 degrees
+    pub fn new_hexapolar_point_source(
+        position: Point2<Length>,
+        cone_angle: Angle,
+        number_of_rings: u8,
+        wave_length: Length,
+        energy: Energy,
+    ) -> OpmResult<Self> {
+        if cone_angle < Angle::zero() || cone_angle >= Angle::new::<degree>(180.0) {
+            return Err(OpossumError::Other(
+                "cone angle must be within (0.0..180.0) degrees range".into(),
+            ));
+        }
+        let size_after_unit_length = (cone_angle / 2.0).tan().value;
+        let points: Vec<Point2<Length>> = DistributionStrategy::Hexapolar(number_of_rings)
+            .generate(Length::new::<millimeter>(size_after_unit_length));
+        let nr_of_rays = points.len();
+        #[allow(clippy::cast_precision_loss)]
+        let energy_per_ray = energy / nr_of_rays as f64;
+        let mut rays: Vec<Ray> = Vec::new();
+        for point in points {
+            let direction = Vector3::new(
+                point.x.get::<millimeter>(),
+                point.y.get::<millimeter>(),
+                1.0,
+            );
+            let ray = Ray::new(position, direction, wave_length, energy_per_ray)?;
+            rays.push(ray);
+        }
+        Ok(Self { rays })
     }
     /// Returns the total energy of this [`Rays`].
     ///
@@ -169,7 +224,86 @@ impl Rays {
         }
         self.rays = new_rays;
     }
+    /// Add a single ray to the ray bundle.
+    pub fn add_ray(&mut self, ray: Ray) {
+        self.rays.push(ray);
+    }
+    /// Propagate a ray bundle along the z axis.
+    ///
+    /// # Errors
+    /// This function returns an error if the z component of a ray direction is zero.
+    pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
+        for ray in &mut self.rays {
+            *ray = ray.propagate_along_z(length_along_z)?;
+        }
+        Ok(())
+    }
 }
+/// Strategy for the creation of a 2D point set
+pub enum DistributionStrategy {
+    /// Circular, hexapolar distribution with a given number of rings within a given radius
+    Hexapolar(u8),
+    /// Square, random distribution with a given number of points within a given side length
+    Random(usize),
+    /// Square, low-discrepancy quasirandom distribution with a given number of points within a given side length
+    Sobol(usize),
+}
+impl DistributionStrategy {
+    /// Generate a vector of 2D points within a given size (which depends on the concrete strategy)
+    #[must_use]
+    pub fn generate(&self, size: Length) -> Vec<Point2<Length>> {
+        match self {
+            Self::Hexapolar(rings) => hexapolar(*rings, size),
+            Self::Random(nr_of_rays) => random(*nr_of_rays, size),
+            Self::Sobol(nr_of_rays) => sobol(*nr_of_rays, size),
+        }
+    }
+}
+fn hexapolar(rings: u8, radius: Length) -> Vec<Point2<Length>> {
+    let mut points: Vec<Point2<Length>> = Vec::new();
+    let radius_step = radius / f64::from(rings);
+    points.push(point![Length::zero(), Length::zero()]);
+    for ring in 0u8..rings {
+        let radius = f64::from(ring + 1) * radius_step;
+        let points_per_ring = 6 * (ring + 1);
+        let angle_step = 2.0 * std::f64::consts::PI / f64::from(points_per_ring);
+        for point_nr in 0u8..points_per_ring {
+            let point = (f64::from(point_nr) * angle_step).sin_cos();
+            points.push(point![radius * point.0, radius * point.1]);
+        }
+    }
+    points
+}
+fn random(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
+    let mut points: Vec<Point2<Length>> = Vec::new();
+    let mut rng = rand::thread_rng();
+    for _ in 0..nr_of_rays {
+        points.push(point![
+            Length::new::<millimeter>(
+                rng.gen_range(-side_length.get::<millimeter>()..side_length.get::<millimeter>())
+            ),
+            Length::new::<millimeter>(
+                rng.gen_range(-side_length.get::<millimeter>()..side_length.get::<millimeter>())
+            )
+        ]);
+    }
+    points
+}
+fn sobol(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
+    let side_length = side_length.get::<millimeter>();
+    let mut points: Vec<Point2<Length>> = Vec::new();
+    let params = JoeKuoD6::minimal();
+    let seq = Sobol::<f64>::new(2, &params);
+    let offset = side_length / 2.0;
+    for point in seq.take(nr_of_rays) {
+        points.push(point!(
+            Length::new::<millimeter>(point[0] - offset),
+            Length::new::<millimeter>(point[1] - offset)
+        ));
+    }
+    points
+}
+
 impl From<Rays> for Proptype {
     fn from(value: Rays) -> Self {
         Self::Rays(value)
@@ -236,16 +370,17 @@ impl Plottable for Rays {
             y_min = -1.0;
         }
         let mut chart = ChartBuilder::on(root)
-            .margin(5)
-            .x_label_area_size(40)
-            .y_label_area_size(40)
+            .margin(15)
+            .x_label_area_size(100)
+            .y_label_area_size(100)
             .build_cartesian_2d(x_min..x_max, y_min..y_max)
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
 
         chart
             .configure_mesh()
-            .x_desc("x")
-            .y_desc("y")
+            .x_desc("x (mm)")
+            .y_desc("y (mm)")
+            .label_style(TextStyle::from(("sans-serif", 30).into_font()))
             .draw()
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
         let points: Vec<(f64, f64)> = self.rays.iter().map(|ray| (ray.pos.x, ray.pos.y)).collect();
@@ -265,33 +400,464 @@ impl Plottable for Rays {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::aperture::CircleConfig;
+    use approx::assert_abs_diff_eq;
+    use assert_matches::assert_matches;
     use uom::si::{energy::joule, length::nanometer};
+    #[test]
+    fn ray_new_collimated() {
+        let position = Point2::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(2.0),
+        );
+        let ray = Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        );
+        assert!(ray.is_ok());
+        let ray = ray.unwrap();
+        assert_eq!(ray.pos, Point3::new(1.0, 2.0, 0.0));
+        assert_eq!(ray.dir, Vector3::z());
+        assert_eq!(ray.wvl, Length::new::<nanometer>(1053.0));
+        assert_eq!(ray.e, Energy::new::<joule>(1.0));
+        assert_eq!(ray.path_length, Length::zero());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(0.0),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(-10.0),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(f64::NAN),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(f64::INFINITY),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(f64::NEG_INFINITY),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(0.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(-10.0)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::NAN)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::INFINITY)
+        )
+        .is_err());
+        assert!(Ray::new_collimated(
+            position,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::NEG_INFINITY)
+        )
+        .is_err());
+    }
+    #[test]
+    fn ray_new() {
+        let position = Point2::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(2.0),
+        );
+        let direction = Vector3::new(0.0, 0.0, 2.0);
+        let ray = Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        );
+        assert!(ray.is_ok());
+        let ray = ray.unwrap();
+        assert_eq!(ray.pos, Point3::new(1.0, 2.0, 0.0));
+        assert_eq!(
+            ray.position(),
+            Point3::new(
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(2.0),
+                Length::zero()
+            )
+        );
+        assert_eq!(ray.dir, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(ray.wvl, Length::new::<nanometer>(1053.0));
+        assert_eq!(ray.wavelength(), Length::new::<nanometer>(1053.0));
+        assert_eq!(ray.e, Energy::new::<joule>(1.0));
+        assert_eq!(ray.energy(), Energy::new::<joule>(1.0));
+        assert_eq!(ray.path_length, Length::zero());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(0.0),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(-10.0),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(f64::NAN),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(f64::INFINITY),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(f64::NEG_INFINITY),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(0.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(-10.0)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::NAN)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::INFINITY)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            direction,
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(f64::NEG_INFINITY)
+        )
+        .is_err());
+        assert!(Ray::new(
+            position,
+            Vector3::new(0.0, 0.0, 0.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0)
+        )
+        .is_err());
+    }
+    #[test]
+    fn ray_propagate_along_z() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let energy = Energy::new::<joule>(1.0);
+        let ray = Ray::new(
+            Point2::new(Length::zero(), Length::zero()),
+            Vector3::new(0.0, 0.0, 1.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
+        assert!(ray
+            .propagate_along_z(Length::new::<millimeter>(1.0))
+            .is_ok());
+        let newray = ray
+            .propagate_along_z(Length::new::<millimeter>(1.0))
+            .unwrap();
+        assert_eq!(newray.wavelength(), wvl);
+        assert_eq!(newray.energy(), energy);
+        assert_eq!(newray.dir, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(
+            ray.propagate_along_z(Length::new::<millimeter>(1.0))
+                .unwrap()
+                .position(),
+            Point3::new(
+                Length::zero(),
+                Length::zero(),
+                Length::new::<millimeter>(1.0)
+            )
+        );
+        assert_eq!(
+            ray.propagate_along_z(Length::new::<millimeter>(2.0))
+                .unwrap()
+                .position(),
+            Point3::new(
+                Length::zero(),
+                Length::zero(),
+                Length::new::<millimeter>(2.0)
+            )
+        );
+        assert_eq!(
+            ray.propagate_along_z(Length::new::<millimeter>(-1.0))
+                .unwrap()
+                .position(),
+            Point3::new(
+                Length::zero(),
+                Length::zero(),
+                Length::new::<millimeter>(-1.0)
+            )
+        );
+        let ray = Ray::new(
+            Point2::new(Length::zero(), Length::zero()),
+            Vector3::new(0.0, 1.0, 1.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
+        assert_eq!(
+            ray.propagate_along_z(Length::new::<millimeter>(1.0))
+                .unwrap()
+                .position(),
+            Point3::new(
+                Length::zero(),
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(1.0)
+            )
+        );
+        assert_eq!(
+            ray.propagate_along_z(Length::new::<millimeter>(2.0))
+                .unwrap()
+                .position(),
+            Point3::new(
+                Length::zero(),
+                Length::new::<millimeter>(2.0),
+                Length::new::<millimeter>(2.0)
+            )
+        );
+        let ray = Ray::new(
+            Point2::new(Length::zero(), Length::zero()),
+            Vector3::new(0.0, 1.0, 0.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
+        assert!(ray
+            .propagate_along_z(Length::new::<millimeter>(1.0))
+            .is_err());
+    }
     #[test]
     fn strategy_hexapolar() {
         let strategy = DistributionStrategy::Hexapolar(0);
-        assert_eq!(strategy.generate(1.0).len(), 1);
+        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 1);
         let strategy = DistributionStrategy::Hexapolar(1);
-        assert_eq!(strategy.generate(1.0).len(), 7);
+        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 7);
         let strategy = DistributionStrategy::Hexapolar(5);
-        assert_eq!(strategy.generate(1.0).len(), 91);
+        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 91);
     }
     #[test]
     fn strategy_random() {
         let strategy = DistributionStrategy::Random(10);
-        assert_eq!(strategy.generate(1.0).len(), 10);
+        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 10);
     }
     #[test]
-    fn new_uniform_collimated() {
+    fn strategy_sobol() {
+        let strategy = DistributionStrategy::Sobol(10);
+        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 10);
+    }
+    #[test]
+    fn rays_new_uniform_collimated() {
         let rays = Rays::new_uniform_collimated(
-            1.0,
+            Length::new::<millimeter>(1.0),
             Length::new::<nanometer>(1054.0),
             Energy::new::<joule>(1.0),
             &DistributionStrategy::Hexapolar(2),
         );
+        assert!(rays.is_ok());
+        let rays = rays.unwrap();
         assert_eq!(rays.rays.len(), 19);
         assert!(
             Energy::abs(rays.total_energy() - Energy::new::<joule>(1.0))
                 < Energy::new::<joule>(10.0 * f64::EPSILON)
         );
+    }
+    #[test]
+    fn rays_new_hexapolar_point_source() {
+        let position = Point2::new(Length::zero(), Length::zero());
+        let wave_length = Length::new::<nanometer>(1053.0);
+        let rays = Rays::new_hexapolar_point_source(
+            position,
+            Angle::new::<degree>(90.0),
+            1,
+            wave_length,
+            Energy::new::<joule>(1.0),
+        );
+        //assert!(rays.is_ok());
+        let mut rays = rays.unwrap();
+        for ray in &rays.rays {
+            assert_eq!(
+                ray.position(),
+                Point3::new(Length::zero(), Length::zero(), Length::zero())
+            )
+        }
+        rays.propagate_along_z(Length::new::<millimeter>(1.0))
+            .unwrap();
+        assert_eq!(
+            rays.rays[0].position(),
+            Point3::new(
+                Length::zero(),
+                Length::zero(),
+                Length::new::<millimeter>(1.0)
+            )
+        );
+        assert_eq!(rays.rays[1].position()[0], Length::zero());
+        assert_abs_diff_eq!(
+            rays.rays[1].position()[1].value,
+            Length::new::<millimeter>(1.0).value
+        );
+        assert_eq!(rays.rays[1].position()[2], Length::new::<millimeter>(1.0));
+        assert!(Rays::new_hexapolar_point_source(
+            position,
+            Angle::new::<degree>(-1.0),
+            1,
+            wave_length,
+            Energy::new::<joule>(1.0),
+        )
+        .is_err());
+        assert!(Rays::new_hexapolar_point_source(
+            position,
+            Angle::new::<degree>(180.0),
+            1,
+            wave_length,
+            Energy::new::<joule>(1.0),
+        )
+        .is_err());
+    }
+    #[test]
+    fn rays_add_ray() {
+        let mut rays = Rays::default();
+        assert_eq!(rays.rays.len(), 0);
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        assert_eq!(rays.rays.len(), 1);
+    }
+    #[test]
+    fn rays_total_energy() {
+        let mut rays = Rays::default();
+        assert!(rays.total_energy().is_zero());
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray.clone());
+        assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
+        rays.add_ray(ray.clone());
+        assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
+    }
+    #[test]
+    fn rays_propagate_along_z_axis() {
+        let mut rays = Rays::default();
+        let ray0 = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        let ray1 = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::new::<millimeter>(1.0)),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray0);
+        rays.add_ray(ray1);
+        rays.propagate_along_z(Length::new::<millimeter>(1.0))
+            .unwrap();
+        assert_eq!(
+            rays.rays[0].position(),
+            Point3::new(
+                Length::zero(),
+                Length::zero(),
+                Length::new::<millimeter>(1.0)
+            )
+        );
+        assert_eq!(
+            rays.rays[1].position(),
+            Point3::new(
+                Length::zero(),
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(1.0)
+            )
+        );
+    }
+    #[test]
+    fn rays_apodize() {
+        let mut rays = Rays::default();
+        let ray0 = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        let ray1 = Ray::new_collimated(
+            Point2::new(
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(1.0),
+            ),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray0);
+        rays.add_ray(ray1);
+        assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
+        let circle_config = CircleConfig::new(0.5, Point2::new(0.0, 0.0)).unwrap();
+        let aperture = Aperture::BinaryCircle(circle_config);
+        rays.apodize(&aperture);
+        assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
+    }
+    #[test]
+    fn rays_into_proptype() {
+        assert_matches!(Rays::default().into(), Proptype::Rays(_));
     }
 }
