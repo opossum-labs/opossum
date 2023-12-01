@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use uom::si::{
-    f64::Length,
-    length::millimeter,
-};
+use uom::si::{f64::Length, length::millimeter};
 
 use crate::{
     analyzer::AnalyzerType,
@@ -26,12 +23,7 @@ impl Default for ParaxialSurface {
         ports.create_output("rear").unwrap();
         let mut props = Properties::new("paraxial surface", "paraxial");
         props
-            .create(
-                "focal length",
-                "focal length in mm",
-                None,
-                1.0.into(),
-            )
+            .create("focal length", "focal length in mm", None, 1.0.into())
             .unwrap();
         props.set("apertures", ports.into()).unwrap();
         Self { props }
@@ -51,14 +43,12 @@ impl ParaxialSurface {
     /// - the property `apertures` can not be set.
     pub fn new(name: &str, focal_length: Length) -> OpmResult<Self> {
         if !focal_length.is_finite() {
-            return Err(OpossumError::Other(
-                "focal length must be finite".into(),
-            ));
+            return Err(OpossumError::Other("focal length must be finite".into()));
         }
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        let mut props = Properties::new(name, "propagation");
+        let mut props = Properties::new(name, "paraxial");
         props
             .create(
                 "focal length",

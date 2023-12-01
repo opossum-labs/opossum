@@ -16,9 +16,13 @@ fn main() -> OpmResult<()> {
     )
     .unwrap();
     println!("ray: {:?}", ray);
-    let ray=ray.refract_paraxial(Length::new::<millimeter>(-10.0)).unwrap();
+    let ray = ray
+        .refract_paraxial(Length::new::<millimeter>(-10.0))
+        .unwrap();
     println!("refracted ray: {:?}", ray);
-    let ray=ray.propagate_along_z(Length::new::<millimeter>(5.0)).unwrap();
+    let ray = ray
+        .propagate_along_z(Length::new::<millimeter>(5.0))
+        .unwrap();
     println!("propagated ray: {:?}", ray);
     Ok(())
 }

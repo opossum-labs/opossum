@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use uom::si::{
-    f64::Length,
-    length::millimeter,
-};
+use uom::si::{f64::Length, length::millimeter};
 
 use crate::{
     analyzer::AnalyzerType,

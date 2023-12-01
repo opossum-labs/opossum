@@ -129,18 +129,20 @@ impl Ray {
     }
     /// Refract a ray on a paraxial surface of a given focal length.
     ///
-    /// Modify the ray direction 
+    /// Modify the ray direction
     /// # Errors
     ///
     /// This function will return an error if the given focal length is zero or not finite
     pub fn refract_paraxial(&self, focal_length: Length) -> OpmResult<Self> {
         if focal_length.is_zero() || !focal_length.is_finite() {
-            return Err(OpossumError::Other("focal length must be != 0.0 & finite".into()))
+            return Err(OpossumError::Other(
+                "focal length must be != 0.0 & finite".into(),
+            ));
         }
-        let optical_power=1.0 / focal_length.get::<millimeter>();
-        let mut new_ray=self.clone();
-        new_ray.dir.x=self.dir.x-optical_power*self.pos.x;
-        new_ray.dir.y=self.dir.y-optical_power*self.pos.y;
+        let optical_power = 1.0 / focal_length.get::<millimeter>();
+        let mut new_ray = self.clone();
+        new_ray.dir.x = self.dir.x - optical_power * self.pos.x;
+        new_ray.dir.y = self.dir.y - optical_power * self.pos.y;
         new_ray.dir.z = 1.0;
         new_ray.dir.normalize_mut();
         Ok(new_ray)
@@ -249,7 +251,7 @@ impl Rays {
     /// Propagate a ray bundle along the z axis.
     ///
     /// # Errors
-    /// This function returns an error if 
+    /// This function returns an error if
     ///  - the z component of a ray direction is zero.
     ///  - the given length is not finite.
     pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
