@@ -371,8 +371,8 @@ impl Plottable for Rays {
         }
         let mut chart = ChartBuilder::on(root)
             .margin(15)
-            .x_label_area_size(40)
-            .y_label_area_size(40)
+            .x_label_area_size(100)
+            .y_label_area_size(100)
             .build_cartesian_2d(x_min..x_max, y_min..y_max)
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
 
@@ -380,7 +380,7 @@ impl Plottable for Rays {
             .configure_mesh()
             .x_desc("x (mm)")
             .y_desc("y (mm)")
-            .label_style(TextStyle::from(("sans-serif", 20).into_font()))
+            .label_style(TextStyle::from(("sans-serif", 30).into_font()))
             .draw()
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
         let points: Vec<(f64, f64)> = self.rays.iter().map(|ray| (ray.pos.x, ray.pos.y)).collect();

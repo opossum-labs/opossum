@@ -31,7 +31,7 @@ pub trait Plottable {
     ///  - the given path is not writable or does not exist.
     ///  - the plot area cannot be filled with a background colour.
     fn to_svg_plot(&self, f_path: &Path) -> OpmResult<()> {
-        let root = SVGBackend::new(f_path, (800, 600)).into_drawing_area();
+        let root = SVGBackend::new(f_path, (800, 800)).into_drawing_area();
         root.fill(&WHITE)
             .map_err(|e| format!("filling plot background failed: {e}"))?;
         self.chart(&root)
@@ -45,7 +45,7 @@ pub trait Plottable {
     ///  - the image buffer cannot be allocated or has the wrong size.
     fn to_img_buf_plot(&self) -> OpmResult<RgbImage> {
         let image_width = 800_u32;
-        let image_height = 600_u32;
+        let image_height = 800_u32;
         let mut image_buffer = vec![
             0;
             (image_width * image_height) as usize
