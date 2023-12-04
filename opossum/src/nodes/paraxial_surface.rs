@@ -13,55 +13,48 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct Propagation {
+pub struct ParaxialSurface {
     props: Properties,
 }
-impl Default for Propagation {
+impl Default for ParaxialSurface {
     fn default() -> Self {
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        let mut props = Properties::new("propagation", "propagation");
+        let mut props = Properties::new("paraxial surface", "paraxial");
         props
-            .create(
-                "distance",
-                "distance along the optical axis in mm",
-                None,
-                1.0.into(),
-            )
+            .create("focal length", "focal length in mm", None, 1.0.into())
             .unwrap();
         props.set("apertures", ports.into()).unwrap();
         Self { props }
     }
 }
-impl Propagation {
-    /// Create a new propagation node of the given length.
+impl ParaxialSurface {
+    /// Create a new paraxial surface node of the given focal length.
     ///
     ///
     /// # Errors
     /// This function returns an error if
-    ///  - the given `length_along_z` is not finite.
+    ///  - the given `focal_length` is not finite.
     /// # Panics
     /// This function panics if
     /// - the input port name already exists. (Theoretically impossible at this point, as the [`OpticPorts`] are created just before in this function)
     /// - the output port name already exists. (Theoretically impossible at this point, as the [`OpticPorts`] are created just before in this function)
     /// - the property `apertures` can not be set.
-    pub fn new(name: &str, length_along_z: Length) -> OpmResult<Self> {
-        if !length_along_z.is_finite() {
-            return Err(OpossumError::Other(
-                "propagation length must be finite".into(),
-            ));
+    pub fn new(name: &str, focal_length: Length) -> OpmResult<Self> {
+        if !focal_length.is_finite() {
+            return Err(OpossumError::Other("focal length must be finite".into()));
         }
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        let mut props = Properties::new(name, "propagation");
+        let mut props = Properties::new(name, "paraxial");
         props
             .create(
-                "distance",
-                "distance along the optical axis in mm",
+                "focal length",
+                "focal length in mm",
                 None,
-                length_along_z.get::<millimeter>().into(),
+                focal_length.get::<millimeter>().into(),
             )
             .unwrap();
         props.set("apertures", ports.into()).unwrap();
@@ -69,7 +62,7 @@ impl Propagation {
     }
 }
 
-impl Optical for Propagation {
+impl Optical for ParaxialSurface {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -85,13 +78,13 @@ impl Optical for Propagation {
             AnalyzerType::Energy => (),
             AnalyzerType::RayTrace(_config) => {
                 if let Some(LightData::Geometric(mut rays)) = data {
-                    let length_along_z =
-                        if let Ok(Proptype::F64(length)) = self.props.get("distance") {
+                    let focal_length =
+                        if let Ok(Proptype::F64(length)) = self.props.get("focal length") {
                             *length
                         } else {
-                            return Err(OpossumError::Analysis("cannot read distance".into()));
+                            return Err(OpossumError::Analysis("cannot read focal length".into()));
                         };
-                    rays.propagate_along_z(Length::new::<millimeter>(length_along_z))?;
+                    rays.refract_paraxial(Length::new::<millimeter>(focal_length))?;
                     data = Some(LightData::Geometric(rays));
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
@@ -110,4 +103,8 @@ impl Optical for Propagation {
     }
 }
 
-impl Dottable for Propagation {}
+impl Dottable for ParaxialSurface {
+    fn node_color(&self) -> &str {
+        "palegreen"
+    }
+}

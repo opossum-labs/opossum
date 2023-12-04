@@ -216,7 +216,7 @@ impl Properties {
 impl PdfReportable for Properties {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let mut table = TableLayout::new(vec![1, 5]);
+        let mut table = TableLayout::new(vec![1, 2]);
         for property in &self.props {
             let mut table_row = table.row();
             let property_name = genpdf::elements::Paragraph::default()
@@ -457,7 +457,7 @@ impl PdfReportable for Proptype {
         match self {
             Self::String(value) => l.push(genpdf::elements::Paragraph::new(value)),
             Self::I32(value) => l.push(genpdf::elements::Paragraph::new(format!("{value}"))),
-            Self::F64(value) => l.push(genpdf::elements::Paragraph::new(format!("{value}"))),
+            Self::F64(value) => l.push(genpdf::elements::Paragraph::new(format!("{value:14.6}"))),
             Self::Bool(value) => l.push(genpdf::elements::Paragraph::new(value.to_string())),
             Self::FilterType(value) => l.push(value.pdf_report()?),
             Self::SpectrometerType(value) => l.push(value.pdf_report()?),
@@ -494,6 +494,11 @@ pub enum PropCondition {
 #[cfg(test)]
 mod test {
     use super::*;
+    #[test]
+    fn property_description() {
+        let prop=Property { prop: true.into(), description: "my description".to_string(), conditions: None};
+        assert_eq!(prop.description(), "my description");
+    }
     #[test]
     fn property_set_different_type() {
         let mut prop = Property {
