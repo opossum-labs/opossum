@@ -495,6 +495,11 @@ pub enum PropCondition {
 mod test {
     use super::*;
     #[test]
+    fn property_description() {
+        let prop=Property { prop: true.into(), description: "my description".to_string(), conditions: None};
+        assert_eq!(prop.description(), "my description");
+    }
+    #[test]
     fn property_set_different_type() {
         let mut prop = Property {
             prop: Proptype::Bool(true),
