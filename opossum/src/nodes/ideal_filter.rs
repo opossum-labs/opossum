@@ -1,7 +1,6 @@
 #![warn(missing_docs)]
 use serde_derive::{Deserialize, Serialize};
 
-use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::{DataEnergy, LightData};
@@ -183,20 +182,21 @@ impl IdealFilter {
                         }
                     }
                 }
-                LightData::Geometric(r) => match &self.filter_type() {
-                    FilterType::Constant(t) => {
-                        let mut new_rays = r.clone();
-                        new_rays.filter_by_factor(*t)?;
-                        let light_data = Some(LightData::Geometric(new_rays));
-                        return Ok(HashMap::from([(target.into(), light_data)]));
+                LightData::Geometric(r) => {
+                    match &self.filter_type() {
+                        FilterType::Constant(t) => {
+                            let mut new_rays = r.clone();
+                            new_rays.filter_by_factor(*t)?;
+                            let light_data = Some(LightData::Geometric(new_rays));
+                            return Ok(HashMap::from([(target.into(), light_data)]));
+                        }
+                        FilterType::Spectrum(_s) => return Err(OpossumError::Analysis(
+                            "Ideal filter: sgeometric analysis with spectrum not yet implemented"
+                                .into(),
+                        )),
                     }
-                    _ => {
-                        return Err(OpossumError::Analysis(
-                            "Ideal filter: sgeometric analysis with spectrum not yet implemented".into(),
-                        ))
-                    }
-                },
-                _ => {
+                }
+                LightData::Fourier => {
                     return Err(OpossumError::Analysis(
                         "Ideal filter: expected LightData::Energy or LightData::Geometric".into(),
                     ))
@@ -220,14 +220,9 @@ impl Optical for IdealFilter {
     fn analyze(
         &mut self,
         incoming_data: crate::optical::LightResult,
-        analyzer_type: &crate::analyzer::AnalyzerType,
+        _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<crate::optical::LightResult> {
-        match analyzer_type {
-            AnalyzerType::Energy => self.analyze_energy(&incoming_data),
-            _ => Err(OpossumError::Analysis(
-                "analysis type not yet implemented".into(),
-            )),
-        }
+        self.analyze_energy(&incoming_data)
     }
     fn properties(&self) -> &Properties {
         &self.props
@@ -244,7 +239,18 @@ impl Dottable for IdealFilter {
 }
 #[cfg(test)]
 mod test {
-    use crate::spectrum::create_he_ne_spec;
+    use approx::assert_abs_diff_eq;
+    use uom::si::{
+        energy::joule,
+        f64::{Energy, Length},
+        length::{millimeter, nanometer},
+    };
+
+    use crate::{
+        analyzer::{AnalyzerType, RayTraceConfig},
+        rays::{DistributionStrategy, Rays},
+        spectrum::create_he_ne_spec,
+    };
 
     use super::*;
     #[test]
@@ -284,7 +290,7 @@ mod test {
         assert_eq!(node.ports().output_names(), vec!["front"]);
     }
     #[test]
-    fn analyze_ok() {
+    fn analyze_energy_ok() {
         let mut node = IdealFilter::new("test", FilterType::Constant(0.5)).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
@@ -303,6 +309,33 @@ mod test {
             spectrum: create_he_ne_spec(0.5).unwrap(),
         });
         assert_eq!(output, expected_output_light);
+    }
+    #[test]
+    fn analyzer_geometric_fixed() {
+        let mut node = IdealFilter::new("test", FilterType::Constant(0.3)).unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::new::<millimeter>(5.0),
+                Length::new::<nanometer>(1054.0),
+                Energy::new::<joule>(1.0),
+                &DistributionStrategy::Hexapolar(1),
+            )
+            .unwrap(),
+        );
+        input.insert("front".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()));
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("rear"));
+        assert_eq!(output.len(), 1);
+        let output = output.get("rear").unwrap();
+        assert!(output.is_some());
+        if let LightData::Geometric(output) = output.clone().unwrap() {
+            assert_abs_diff_eq!(output.total_energy().get::<joule>(), 0.3);
+        } else {
+            panic!("wrong data LightData format")
+        }
     }
     #[test]
     fn analyze_wrong() {
