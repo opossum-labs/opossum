@@ -6,7 +6,7 @@ use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
 use image::DynamicImage;
-use nalgebra::{point, Point2, Point3, Vector3, distance};
+use nalgebra::{distance, point, Point2, Point3, Vector3};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
 use plotters::style::{IntoFont, TextStyle, RED};
@@ -245,30 +245,40 @@ impl Rays {
         self.rays = new_rays;
     }
     /// Returns the centroid of this [`Rays`].
-    pub fn centroid(&self) -> Point3<Length> {
+    ///
+    /// This functions returns the centroid of the positions of this ray bundle. The function returns `None` if [`Rays`] is empty.
+    pub fn centroid(&self) -> Option<Point3<Length>> {
+        let len = self.rays.len() as f64;
+        if len == 0.0 {
+            return None;
+        }
         let c = self.rays.iter().fold((0.0, 0.0, 0.0), |c, r| {
             (c.0 + r.pos.x, c.1 + r.pos.y, c.2 + r.pos.z)
         });
-        let len = self.rays.len() as f64;
-        Point3::new(
+        Some(Point3::new(
             Length::new::<millimeter>(c.0 / len),
-            Length::new::<millimeter>(c.0 / len),
-            Length::new::<millimeter>(c.0 / len),
-        )
+            Length::new::<millimeter>(c.1 / len),
+            Length::new::<millimeter>(c.2 / len),
+        ))
     }
     /// Returns the geometric beam radius [`Rays`].
-    /// 
+    ///
     /// This function calculates the maximum distance of a ray bundle from it centroid.
-    pub fn beam_radius_geo(&self) -> Length {
-        let c= self.centroid();
-        let c_in_millimeter=Point2::new(c.x.get::<millimeter>(), c.y.get::<millimeter>());
-        let mut max_dist= 0.0;
-        for ray in &self.rays {
-            let ray_2d=Point2::new(ray.pos.x, ray.pos.y);
-            let dist=distance(&ray_2d, &c_in_millimeter);
-            if dist>max_dist {max_dist=dist;}
+    pub fn beam_radius_geo(&self) -> Option<Length> {
+        if let Some(c) = self.centroid() {
+            let c_in_millimeter = Point2::new(c.x.get::<millimeter>(), c.y.get::<millimeter>());
+            let mut max_dist = 0.0;
+            for ray in &self.rays {
+                let ray_2d = Point2::new(ray.pos.x, ray.pos.y);
+                let dist = distance(&ray_2d, &c_in_millimeter);
+                if dist > max_dist {
+                    max_dist = dist;
+                }
+            }
+            Some(Length::new::<millimeter>(max_dist))
+        } else {
+            None
         }
-        Length::new::<millimeter>(max_dist)
     }
     /// Add a single ray to the ray bundle.
     pub fn add_ray(&mut self, ray: Ray) {
@@ -853,6 +863,21 @@ mod test {
         assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
         rays.add_ray(ray.clone());
         assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
+    }
+    #[test]
+    fn rays_centroid() {
+        let mut rays = Rays::default();
+        assert_eq!(rays.centroid(), None);
+        rays.add_ray(Ray::new_collimated(Point2::new(Length::new::<millimeter>(1.0), Length::new::<millimeter>(2.0)), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap());
+        rays.add_ray(Ray::new_collimated(Point2::new(Length::new::<millimeter>(2.0), Length::new::<millimeter>(3.0)), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap());
+        assert_eq!(rays.centroid().unwrap(), Point3::new(Length::new::<millimeter>(1.5), Length::new::<millimeter>(2.5), Length::zero()));
+    }
+    #[test]
+    fn rays_beam_radius_geo() {
+        let mut rays = Rays::default();
+        rays.add_ray(Ray::new_collimated(Point2::new(Length::new::<millimeter>(1.0), Length::new::<millimeter>(2.0)), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap());
+        rays.add_ray(Ray::new_collimated(Point2::new(Length::new::<millimeter>(2.0), Length::new::<millimeter>(3.0)), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap());
+        assert_eq!(rays.beam_radius_geo().unwrap(), Length::new::<millimeter>(0.5_f64.sqrt()));
     }
     #[test]
     fn rays_propagate_along_z_axis() {

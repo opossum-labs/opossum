@@ -106,30 +106,35 @@ impl Optical for SpotDiagram {
             props
                 .create("Spot diagram", "2D spot diagram", None, rays.clone().into())
                 .unwrap();
-            props
-                .create(
-                    "centroid x (in mm)",
-                    "x position of centroid",
-                    None,
-                    rays.centroid().x.get::<millimeter>().into(),
-                )
-                .unwrap();
-            props
-                .create(
-                    "centroid y (in mm)",
-                    "y position of centroid",
-                    None,
-                    rays.centroid().y.get::<millimeter>().into(),
-                )
-                .unwrap();
-            props
-                .create(
-                    "geometric beam radius (in mm)",
-                    "geometric beam radius",
-                    None,
-                    rays.beam_radius_geo().get::<millimeter>().into(),
-                )
-                .unwrap();
+            if let Some(c) = rays.centroid() {
+                props
+                    .create(
+                        "centroid x (in mm)",
+                        "x position of centroid",
+                        None,
+                        c.x.get::<millimeter>().into(),
+                    )
+                    .unwrap();
+
+                props
+                    .create(
+                        "centroid y (in mm)",
+                        "y position of centroid",
+                        None,
+                        c.y.get::<millimeter>().into(),
+                    )
+                    .unwrap();
+            }
+            if let Some(radius) = rays.beam_radius_geo() {
+                props
+                    .create(
+                        "geometric beam radius (in mm)",
+                        "geometric beam radius",
+                        None,
+                        radius.get::<millimeter>().into(),
+                    )
+                    .unwrap();
+            }
         }
         Some(NodeReport::new(
             self.properties().node_type().unwrap(),
