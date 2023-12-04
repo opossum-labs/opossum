@@ -6,7 +6,7 @@ use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
 use image::DynamicImage;
-use nalgebra::{point, Point2, Point3, Vector3};
+use nalgebra::{point, Point2, Point3, Vector3, distance};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
 use plotters::style::{IntoFont, TextStyle, RED};
@@ -243,6 +243,32 @@ impl Rays {
             }
         }
         self.rays = new_rays;
+    }
+    /// Returns the centroid of this [`Rays`].
+    pub fn centroid(&self) -> Point3<Length> {
+        let c = self.rays.iter().fold((0.0, 0.0, 0.0), |c, r| {
+            (c.0 + r.pos.x, c.1 + r.pos.y, c.2 + r.pos.z)
+        });
+        let len = self.rays.len() as f64;
+        Point3::new(
+            Length::new::<millimeter>(c.0 / len),
+            Length::new::<millimeter>(c.0 / len),
+            Length::new::<millimeter>(c.0 / len),
+        )
+    }
+    /// Returns the geometric beam radius [`Rays`].
+    /// 
+    /// This function calculates the maximum distance of a ray bundle from it centroid.
+    pub fn beam_radius_geo(&self) -> Length {
+        let c= self.centroid();
+        let c_in_millimeter=Point2::new(c.x.get::<millimeter>(), c.y.get::<millimeter>());
+        let mut max_dist= 0.0;
+        for ray in &self.rays {
+            let ray_2d=Point2::new(ray.pos.x, ray.pos.y);
+            let dist=distance(&ray_2d, &c_in_millimeter);
+            if dist>max_dist {max_dist=dist;}
+        }
+        Length::new::<millimeter>(max_dist)
     }
     /// Add a single ray to the ray bundle.
     pub fn add_ray(&mut self, ray: Ray) {

@@ -216,7 +216,7 @@ impl Properties {
 impl PdfReportable for Properties {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let mut table = TableLayout::new(vec![1, 5]);
+        let mut table = TableLayout::new(vec![1, 4]);
         for property in &self.props {
             let mut table_row = table.row();
             let property_name = genpdf::elements::Paragraph::default()

@@ -1,4 +1,6 @@
 #![warn(missing_docs)]
+use uom::si::length::millimeter;
+
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
@@ -103,6 +105,30 @@ impl Optical for SpotDiagram {
         if let Some(LightData::Geometric(rays)) = data {
             props
                 .create("Spot diagram", "2D spot diagram", None, rays.clone().into())
+                .unwrap();
+            props
+                .create(
+                    "centroid x (in mm)",
+                    "x position of centroid",
+                    None,
+                    rays.centroid().x.get::<millimeter>().into(),
+                )
+                .unwrap();
+            props
+                .create(
+                    "centroid y (in mm)",
+                    "y position of centroid",
+                    None,
+                    rays.centroid().y.get::<millimeter>().into(),
+                )
+                .unwrap();
+            props
+                .create(
+                    "geometric beam radius (in mm)",
+                    "geometric beam radius",
+                    None,
+                    rays.beam_radius_geo().get::<millimeter>().into(),
+                )
                 .unwrap();
         }
         Some(NodeReport::new(
