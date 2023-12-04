@@ -109,7 +109,7 @@ impl Optical for SpotDiagram {
             if let Some(c) = rays.centroid() {
                 props
                     .create(
-                        "centroid x (in mm)",
+                        "centroid x (mm)",
                         "x position of centroid",
                         None,
                         c.x.get::<millimeter>().into(),
@@ -118,7 +118,7 @@ impl Optical for SpotDiagram {
 
                 props
                     .create(
-                        "centroid y (in mm)",
+                        "centroid y (mm)",
                         "y position of centroid",
                         None,
                         c.y.get::<millimeter>().into(),
@@ -128,7 +128,7 @@ impl Optical for SpotDiagram {
             if let Some(radius) = rays.beam_radius_geo() {
                 props
                     .create(
-                        "geometric beam radius (in mm)",
+                        "geo beam radius (mm)",
                         "geometric beam radius",
                         None,
                         radius.get::<millimeter>().into(),

@@ -141,8 +141,8 @@ impl Ray {
         }
         let optical_power = 1.0 / focal_length.get::<millimeter>();
         let mut new_ray = self.clone();
-        new_ray.dir.x = self.dir.x - optical_power * self.pos.x;
-        new_ray.dir.y = self.dir.y - optical_power * self.pos.y;
+        new_ray.dir.x = optical_power.mul_add(-self.pos.x, self.dir.x);
+        new_ray.dir.y = optical_power.mul_add(-self.pos.y, self.dir.y);
         new_ray.dir.z = 1.0;
         new_ray.dir.normalize_mut();
         Ok(new_ray)
@@ -247,7 +247,9 @@ impl Rays {
     /// Returns the centroid of this [`Rays`].
     ///
     /// This functions returns the centroid of the positions of this ray bundle. The function returns `None` if [`Rays`] is empty.
+    #[must_use]
     pub fn centroid(&self) -> Option<Point3<Length>> {
+        #[allow(clippy::cast_precision_loss)]
         let len = self.rays.len() as f64;
         if len == 0.0 {
             return None;
@@ -264,8 +266,9 @@ impl Rays {
     /// Returns the geometric beam radius [`Rays`].
     ///
     /// This function calculates the maximum distance of a ray bundle from it centroid.
+    #[must_use]
     pub fn beam_radius_geo(&self) -> Option<Length> {
-        if let Some(c) = self.centroid() {
+        self.centroid().map(|c| {
             let c_in_millimeter = Point2::new(c.x.get::<millimeter>(), c.y.get::<millimeter>());
             let mut max_dist = 0.0;
             for ray in &self.rays {
@@ -275,10 +278,8 @@ impl Rays {
                     max_dist = dist;
                 }
             }
-            Some(Length::new::<millimeter>(max_dist))
-        } else {
-            None
-        }
+            Length::new::<millimeter>(max_dist)
+        })
     }
     /// Add a single ray to the ray bundle.
     pub fn add_ray(&mut self, ray: Ray) {
@@ -303,6 +304,9 @@ impl Rays {
     ///  - the z component of a ray direction is zero.
     ///  - the focal length is zero or not finite.
     pub fn refract_paraxial(&mut self, focal_length: Length) -> OpmResult<()> {
+        if focal_length.is_zero() || !focal_length.is_finite() {
+            return Err(OpossumError::Other("focal length must be !=0.0 and finite".into()))
+        }
         for ray in &mut self.rays {
             *ray = ray.refract_paraxial(focal_length)?;
         }
@@ -751,25 +755,85 @@ mod test {
     }
     #[test]
     fn ray_refract_paraxial() {
-        let ray=Ray::new_collimated(Point2::new(Length::zero(), Length::zero()), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap();
-        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(100.0)).unwrap().pos, ray.pos);
-        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(100.0)).unwrap().dir, ray.dir);
-        assert!(ray.refract_paraxial(Length::new::<millimeter>(0.0)).is_err());
-        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(-100.0)).unwrap().pos, ray.pos);
-        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(-100.0)).unwrap().dir, ray.dir);
-        let ray=Ray::new_collimated(Point2::new(Length::new::<millimeter>(1.0), Length::new::<millimeter>(2.0)), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap();
-        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(100.0)).unwrap().pos, ray.pos);
-        let ray_dir=ray.refract_paraxial(Length::new::<millimeter>(100.0)).unwrap().dir;
-        let test_ray_dir=Vector3::new(-1.0,-2.0,100.0).normalize();
-        assert_abs_diff_eq!(ray_dir.x,test_ray_dir.x);
-        assert_abs_diff_eq!(ray_dir.y,test_ray_dir.y);
-        assert_abs_diff_eq!(ray_dir.z,test_ray_dir.z);
-        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(-100.0)).unwrap().pos, ray.pos);
-        let ray_dir=ray.refract_paraxial(Length::new::<millimeter>(-100.0)).unwrap().dir;
-        let test_ray_dir=Vector3::new(1.0,2.0,100.0).normalize();
-        assert_abs_diff_eq!(ray_dir.x,test_ray_dir.x);
-        assert_abs_diff_eq!(ray_dir.y,test_ray_dir.y);
-        assert_abs_diff_eq!(ray_dir.z,test_ray_dir.z);
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            ray.refract_paraxial(Length::new::<millimeter>(100.0))
+                .unwrap()
+                .pos,
+            ray.pos
+        );
+        assert_eq!(
+            ray.refract_paraxial(Length::new::<millimeter>(100.0))
+                .unwrap()
+                .dir,
+            ray.dir
+        );
+        assert!(ray
+            .refract_paraxial(Length::new::<millimeter>(0.0))
+            .is_err());
+        assert!(ray
+            .refract_paraxial(Length::new::<millimeter>(f64::NAN))
+            .is_err());
+        assert!(ray
+            .refract_paraxial(Length::new::<millimeter>(f64::INFINITY))
+            .is_err());
+        assert!(ray
+            .refract_paraxial(Length::new::<millimeter>(f64::NEG_INFINITY))
+            .is_err());
+        assert_eq!(
+            ray.refract_paraxial(Length::new::<millimeter>(-100.0))
+                .unwrap()
+                .pos,
+            ray.pos
+        );
+        assert_eq!(
+            ray.refract_paraxial(Length::new::<millimeter>(-100.0))
+                .unwrap()
+                .dir,
+            ray.dir
+        );
+        let ray = Ray::new_collimated(
+            Point2::new(
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(2.0),
+            ),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            ray.refract_paraxial(Length::new::<millimeter>(100.0))
+                .unwrap()
+                .pos,
+            ray.pos
+        );
+        let ray_dir = ray
+            .refract_paraxial(Length::new::<millimeter>(100.0))
+            .unwrap()
+            .dir;
+        let test_ray_dir = Vector3::new(-1.0, -2.0, 100.0).normalize();
+        assert_abs_diff_eq!(ray_dir.x, test_ray_dir.x);
+        assert_abs_diff_eq!(ray_dir.y, test_ray_dir.y);
+        assert_abs_diff_eq!(ray_dir.z, test_ray_dir.z);
+        assert_eq!(
+            ray.refract_paraxial(Length::new::<millimeter>(-100.0))
+                .unwrap()
+                .pos,
+            ray.pos
+        );
+        let ray_dir = ray
+            .refract_paraxial(Length::new::<millimeter>(-100.0))
+            .unwrap()
+            .dir;
+        let test_ray_dir = Vector3::new(1.0, 2.0, 100.0).normalize();
+        assert_abs_diff_eq!(ray_dir.x, test_ray_dir.x);
+        assert_abs_diff_eq!(ray_dir.y, test_ray_dir.y);
+        assert_abs_diff_eq!(ray_dir.z, test_ray_dir.z);
     }
     #[test]
     fn strategy_hexapolar() {
@@ -890,16 +954,66 @@ mod test {
     fn rays_centroid() {
         let mut rays = Rays::default();
         assert_eq!(rays.centroid(), None);
-        rays.add_ray(Ray::new_collimated(Point2::new(Length::new::<millimeter>(1.0), Length::new::<millimeter>(2.0)), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap());
-        rays.add_ray(Ray::new_collimated(Point2::new(Length::new::<millimeter>(2.0), Length::new::<millimeter>(3.0)), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap());
-        assert_eq!(rays.centroid().unwrap(), Point3::new(Length::new::<millimeter>(1.5), Length::new::<millimeter>(2.5), Length::zero()));
+        rays.add_ray(
+            Ray::new_collimated(
+                Point2::new(
+                    Length::new::<millimeter>(1.0),
+                    Length::new::<millimeter>(2.0),
+                ),
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+            )
+            .unwrap(),
+        );
+        rays.add_ray(
+            Ray::new_collimated(
+                Point2::new(
+                    Length::new::<millimeter>(2.0),
+                    Length::new::<millimeter>(3.0),
+                ),
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            rays.centroid().unwrap(),
+            Point3::new(
+                Length::new::<millimeter>(1.5),
+                Length::new::<millimeter>(2.5),
+                Length::zero()
+            )
+        );
     }
     #[test]
     fn rays_beam_radius_geo() {
         let mut rays = Rays::default();
-        rays.add_ray(Ray::new_collimated(Point2::new(Length::new::<millimeter>(1.0), Length::new::<millimeter>(2.0)), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap());
-        rays.add_ray(Ray::new_collimated(Point2::new(Length::new::<millimeter>(2.0), Length::new::<millimeter>(3.0)), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap());
-        assert_eq!(rays.beam_radius_geo().unwrap(), Length::new::<millimeter>(0.5_f64.sqrt()));
+        rays.add_ray(
+            Ray::new_collimated(
+                Point2::new(
+                    Length::new::<millimeter>(1.0),
+                    Length::new::<millimeter>(2.0),
+                ),
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+            )
+            .unwrap(),
+        );
+        rays.add_ray(
+            Ray::new_collimated(
+                Point2::new(
+                    Length::new::<millimeter>(2.0),
+                    Length::new::<millimeter>(3.0),
+                ),
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            rays.beam_radius_geo().unwrap(),
+            Length::new::<millimeter>(0.5_f64.sqrt())
+        );
     }
     #[test]
     fn rays_propagate_along_z_axis() {
@@ -936,6 +1050,37 @@ mod test {
                 Length::new::<millimeter>(1.0)
             )
         );
+    }
+    #[test]
+    fn rays_refract_paraxial() {
+        let mut rays=Rays::default();
+        assert!(rays.refract_paraxial(Length::new::<millimeter>(0.0)).is_err());
+        assert!(rays.refract_paraxial(Length::new::<millimeter>(f64::NAN)).is_err());
+        assert!(rays.refract_paraxial(Length::new::<millimeter>(f64::INFINITY)).is_err());
+        assert!(rays.refract_paraxial(Length::new::<millimeter>(f64::NEG_INFINITY)).is_err());
+        assert!(rays.refract_paraxial(Length::new::<millimeter>(100.0)).is_ok());
+        let ray0 = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        let ray1 = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::new::<millimeter>(1.0)),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray0.clone());
+        rays.add_ray(ray1.clone());
+        rays.refract_paraxial(Length::new::<millimeter>(100.0)).unwrap();
+        assert_eq!(rays.rays[0].pos, ray0.pos);
+        assert_eq!(rays.rays[0].dir, ray0.dir);
+        assert_eq!(rays.rays[1].pos, ray1.pos);
+        let new_dir=Vector3::new(0.0,-1.0,100.0).normalize();
+        assert_abs_diff_eq!(rays.rays[1].dir.x, new_dir.x);
+        assert_abs_diff_eq!(rays.rays[1].dir.y, new_dir.y);
+        assert_abs_diff_eq!(rays.rays[1].dir.z, new_dir.z);
     }
     #[test]
     fn rays_apodize() {
