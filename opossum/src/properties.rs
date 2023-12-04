@@ -496,7 +496,11 @@ mod test {
     use super::*;
     #[test]
     fn property_description() {
-        let prop=Property { prop: true.into(), description: "my description".to_string(), conditions: None};
+        let prop = Property {
+            prop: true.into(),
+            description: "my description".to_string(),
+            conditions: None,
+        };
         assert_eq!(prop.description(), "my description");
     }
     #[test]
