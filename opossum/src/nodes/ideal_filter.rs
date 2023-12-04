@@ -183,7 +183,24 @@ impl IdealFilter {
                         }
                     }
                 }
-                _ => return Err(OpossumError::Analysis("expected energy value".into())),
+                LightData::Geometric(r) => match &self.filter_type() {
+                    FilterType::Constant(t) => {
+                        let mut new_rays = r.clone();
+                        new_rays.filter_by_factor(*t)?;
+                        let light_data = Some(LightData::Geometric(new_rays));
+                        return Ok(HashMap::from([(target.into(), light_data)]));
+                    }
+                    _ => {
+                        return Err(OpossumError::Analysis(
+                            "Ideal filter: sgeometric analysis with spectrum not yet implemented".into(),
+                        ))
+                    }
+                },
+                _ => {
+                    return Err(OpossumError::Analysis(
+                        "Ideal filter: expected LightData::Energy or LightData::Geometric".into(),
+                    ))
+                }
             }
         }
         Err(OpossumError::Analysis("no data on input port".into()))
