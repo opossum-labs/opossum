@@ -750,6 +750,28 @@ mod test {
             .is_err());
     }
     #[test]
+    fn ray_refract_paraxial() {
+        let ray=Ray::new_collimated(Point2::new(Length::zero(), Length::zero()), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap();
+        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(100.0)).unwrap().pos, ray.pos);
+        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(100.0)).unwrap().dir, ray.dir);
+        assert!(ray.refract_paraxial(Length::new::<millimeter>(0.0)).is_err());
+        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(-100.0)).unwrap().pos, ray.pos);
+        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(-100.0)).unwrap().dir, ray.dir);
+        let ray=Ray::new_collimated(Point2::new(Length::new::<millimeter>(1.0), Length::new::<millimeter>(2.0)), Length::new::<nanometer>(1053.0), Energy::new::<joule>(1.0)).unwrap();
+        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(100.0)).unwrap().pos, ray.pos);
+        let ray_dir=ray.refract_paraxial(Length::new::<millimeter>(100.0)).unwrap().dir;
+        let test_ray_dir=Vector3::new(-1.0,-2.0,100.0).normalize();
+        assert_abs_diff_eq!(ray_dir.x,test_ray_dir.x);
+        assert_abs_diff_eq!(ray_dir.y,test_ray_dir.y);
+        assert_abs_diff_eq!(ray_dir.z,test_ray_dir.z);
+        assert_eq!(ray.refract_paraxial(Length::new::<millimeter>(-100.0)).unwrap().pos, ray.pos);
+        let ray_dir=ray.refract_paraxial(Length::new::<millimeter>(-100.0)).unwrap().dir;
+        let test_ray_dir=Vector3::new(1.0,2.0,100.0).normalize();
+        assert_abs_diff_eq!(ray_dir.x,test_ray_dir.x);
+        assert_abs_diff_eq!(ray_dir.y,test_ray_dir.y);
+        assert_abs_diff_eq!(ray_dir.z,test_ray_dir.z);
+    }
+    #[test]
     fn strategy_hexapolar() {
         let strategy = DistributionStrategy::Hexapolar(0);
         assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 1);
