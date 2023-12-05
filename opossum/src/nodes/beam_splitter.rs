@@ -103,10 +103,10 @@ impl BeamSplitter {
             match in1 {
                 LightData::Energy(e) => {
                     let mut s = e.spectrum.clone();
-                    s.scale_vertical(self.ratio()).unwrap();
+                    s.scale_vertical(&self.ratio()).unwrap();
                     out1_1_spectrum = Some(s);
                     let mut s = e.spectrum.clone();
-                    s.scale_vertical(1.0 - self.ratio()).unwrap();
+                    s.scale_vertical(&(1.0 - self.ratio())).unwrap();
                     out1_2_spectrum = Some(s);
                 }
                 _ => {
@@ -120,10 +120,10 @@ impl BeamSplitter {
             match in2 {
                 LightData::Energy(e) => {
                     let mut s = e.spectrum.clone();
-                    s.scale_vertical(self.ratio()).unwrap();
+                    s.scale_vertical(&self.ratio()).unwrap();
                     out2_1_spectrum = Some(s);
                     let mut s = e.spectrum.clone();
-                    s.scale_vertical(1.0 - self.ratio()).unwrap();
+                    s.scale_vertical(&(1.0 - self.ratio())).unwrap();
                     out2_2_spectrum = Some(s);
                 }
                 _ => {

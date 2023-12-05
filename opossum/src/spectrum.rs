@@ -251,8 +251,8 @@ impl Spectrum {
     /// # Errors
     ///
     /// This function will return an [`OpossumError::Spectrum`] if the scaling factor is < 0.0.
-    pub fn scale_vertical(&mut self, factor: f64) -> OpmResult<()> {
-        if factor < 0.0 {
+    pub fn scale_vertical(&mut self, factor: &f64) -> OpmResult<()> {
+        if factor < &0.0 {
             return Err(OpossumError::Spectrum(
                 "scaling factor mus be >= 0.0".into(),
             ));
@@ -802,14 +802,14 @@ mod test {
         .unwrap();
         s.add_single_peak(Length::new::<micrometer>(2.5), 1.0)
             .unwrap();
-        assert!(s.scale_vertical(0.5).is_ok());
+        assert!(s.scale_vertical(&0.5).is_ok());
         assert_eq!(s.data_vec(), vec![0.0, 0.25, 0.25, 0.0]);
     }
     #[test]
     fn scale_vertical2() {
         let mut s = create_he_ne_spec(1.0).unwrap();
         let s2 = create_he_ne_spec(0.6).unwrap();
-        s.scale_vertical(0.6).unwrap();
+        s.scale_vertical(&0.6).unwrap();
         assert_eq!(s.total_energy(), s2.total_energy());
         // let mut expected_spectrum = s2.iter();
         // for value in s.iter() {
@@ -828,7 +828,7 @@ mod test {
     #[test]
     fn scale_vertical_negative() {
         let mut s = prep();
-        assert!(s.scale_vertical(-0.5).is_err());
+        assert!(s.scale_vertical(&-0.5).is_err());
     }
     #[test]
     fn calc_ratio_test() {

@@ -9,6 +9,7 @@ use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
 use crate::error::{OpmResult, OpossumError};
+use crate::nodes::FilterType;
 use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::rays::Rays;
@@ -75,6 +76,24 @@ impl Display for LightData {
 pub struct DataEnergy {
     /// The spectrum for energy analysis.
     pub spectrum: Spectrum,
+}
+impl DataEnergy {
+    /// Filter this [`DataEnergy`] by a given `filter_type`.
+    ///
+    /// Modify the overall energy of the underlying spectrum depneding on the concrete filter type. For a [`FilterType::Constant`] simple scale all
+    /// spectrum values by the given factor. For [`FilterType::Spectrum`] multiply both spectra.
+    /// # Errors
+    ///
+    /// This function will return an error if [`FilterType::Constant`] is used and the transmission value is outside the interval `[0.0;1.0]`.
+    pub fn filter(&mut self, filter_type: &FilterType) -> OpmResult<()> {
+        match filter_type {
+            FilterType::Constant(t) => self.spectrum.scale_vertical(t)?,
+            FilterType::Spectrum(s) => {
+                self.spectrum.filter(s);
+            }
+        }
+        Ok(())
+    }
 }
 impl PdfReportable for DataEnergy {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {

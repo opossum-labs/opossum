@@ -2,6 +2,7 @@
 //! Module for handling rays
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
+use crate::nodes::FilterType;
 use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
@@ -148,22 +149,28 @@ impl Ray {
         Ok(new_ray)
     }
 
-    /// Attenuate a ray by a given transmission factor.
+    /// Attenuate a ray's energy by a given filter.
     ///
-    /// This function attenuates the ray's energy by the given transmission factor which must be within the interval
-    /// `(0.0..=1.0)`. 0.0 thereby means a fully attenuated bed (output energy 0.0) while 1.0 means no attenuation at all.
+    /// This function attenuates the ray's energy by the given [`FilterType`]. For [`FilterType::Constant`] the energy is simply multiplied with the
+    /// given transmission factor.
     /// # Errors
     ///
-    /// This function will return an error if the transmission factor is not within the interval `(0.0..=1.0)`
-    pub fn filter_by_factor(&self, transmission: f64) -> OpmResult<Self> {
-        if !(0.0..=1.0).contains(&transmission) {
-            return Err(OpossumError::Other(
-                "transmission factor must be within (0.0..=1.0)".into(),
-            ));
-        }
-        let mut new_ray = self.clone();
-        new_ray.e *= transmission;
-        Ok(new_ray)
+    /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the interval `(0.0..=1.0)`
+    pub fn filter_energy(&self, filter: &FilterType) -> OpmResult<Self> {
+        let filtered_ray = match filter {
+            FilterType::Constant(t) => {
+                if !(0.0..=1.0).contains(t) {
+                    return Err(OpossumError::Other(
+                        "transmission factor must be within (0.0..=1.0)".into(),
+                    ));
+                }
+                let mut new_ray = self.clone();
+                new_ray.e *= *t;
+                new_ray
+            }
+            FilterType::Spectrum(_s) => todo!("filter a ray with spectrum not yet supported"),
+        };
+        Ok(filtered_ray)
     }
 }
 ///Struct containing all relevant information of a created bundle of rays
@@ -332,20 +339,22 @@ impl Rays {
         }
         Ok(())
     }
-    /// Filter a ray bundle by a given attenuation factor.
+    /// Filter a ray bundle by a given filter.
     ///
-    /// Filter the energy of of the rays by a given attenuation factor. This factor must be within the range `(0.0..=1.0)`.
+    /// Filter the energy of of the rays by a given [`FilterType`].
     /// # Errors
     ///
-    /// This function will return an error if the transmission factor is not within the range `(0.0..=1.0)`.
-    pub fn filter_by_factor(&mut self, transmission: f64) -> OpmResult<()> {
-        if !(0.0..=1.0).contains(&transmission) {
-            return Err(OpossumError::Other(
-                "transmission must be within (0.0..=1.0)".into(),
-            ));
+    /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the range `(0.0..=1.0)`.
+    pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
+        if let FilterType::Constant(t) = filter {
+            if !(0.0..=1.0).contains(t) {
+                return Err(OpossumError::Other(
+                    "transmission value must be in the range [0.0;1.0]".into(),
+                ));
+            }
         }
         for ray in &mut self.rays {
-            *ray = ray.filter_by_factor(transmission)?;
+            *ray = ray.filter_energy(filter)?;
         }
         Ok(())
     }
@@ -873,17 +882,17 @@ mod test {
         assert_abs_diff_eq!(ray_dir.z, test_ray_dir.z);
     }
     #[test]
-    fn ray_filter_by_factor() {
+    fn ray_filter_energy() {
         let position = Point2::new(Length::zero(), Length::new::<millimeter>(1.0));
         let wvl = Length::new::<nanometer>(1054.0);
         let ray = Ray::new_collimated(position, wvl, Energy::new::<joule>(1.0)).unwrap();
-        let new_ray = ray.filter_by_factor(0.3).unwrap();
+        let new_ray = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
         assert_eq!(new_ray.pos, Point3::new(0.0, 1.0, 0.0));
         assert_eq!(new_ray.dir, Vector3::z());
         assert_eq!(new_ray.wvl, wvl);
         assert_eq!(new_ray.e, Energy::new::<joule>(0.3));
-        assert!(ray.filter_by_factor(-0.1).is_err());
-        assert!(ray.filter_by_factor(1.1).is_err());
+        assert!(ray.filter_energy(&FilterType::Constant(-0.1)).is_err());
+        assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
     }
     #[test]
     fn strategy_hexapolar() {
@@ -1144,11 +1153,11 @@ mod test {
         assert_abs_diff_eq!(rays.rays[1].dir.z, new_dir.z);
     }
     #[test]
-    fn rays_filter_factor() {
+    fn rays_filter_energy() {
         let mut rays = Rays::default();
-        assert!(rays.filter_by_factor(0.5).is_ok());
-        assert!(rays.filter_by_factor(-0.1).is_err());
-        assert!(rays.filter_by_factor(1.1).is_err());
+        assert!(rays.filter_energy(&FilterType::Constant(0.5)).is_ok());
+        assert!(rays.filter_energy(&FilterType::Constant(-0.1)).is_err());
+        assert!(rays.filter_energy(&FilterType::Constant(1.1)).is_err());
         let ray = Ray::new_collimated(
             Point2::new(Length::zero(), Length::new::<millimeter>(1.0)),
             Length::new::<nanometer>(1054.0),
@@ -1156,8 +1165,8 @@ mod test {
         )
         .unwrap();
         rays.add_ray(ray.clone());
-        let new_ray = ray.filter_by_factor(0.3).unwrap();
-        rays.filter_by_factor(0.3).unwrap();
+        let new_ray = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        rays.filter_energy(&FilterType::Constant(0.3)).unwrap();
         assert_eq!(rays.rays[0].pos, new_ray.pos);
         assert_eq!(rays.rays[0].dir, new_ray.dir);
         assert_eq!(rays.rays[0].wvl, new_ray.wvl);

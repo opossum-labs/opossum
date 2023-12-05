@@ -3,7 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
-use crate::lightdata::{DataEnergy, LightData};
+use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
@@ -165,36 +165,16 @@ impl IdealFilter {
         if let Some(Some(input)) = input {
             match input {
                 LightData::Energy(e) => {
-                    let mut out_spec = e.spectrum.clone();
-                    match &self.filter_type() {
-                        FilterType::Constant(t) => {
-                            if out_spec.scale_vertical(*t).is_ok() {
-                                let light_data =
-                                    Some(LightData::Energy(DataEnergy { spectrum: out_spec }));
-                                return Ok(HashMap::from([(target.into(), light_data)]));
-                            }
-                        }
-                        FilterType::Spectrum(s) => {
-                            out_spec.filter(s);
-                            let light_data =
-                                Some(LightData::Energy(DataEnergy { spectrum: out_spec }));
-                            return Ok(HashMap::from([(target.into(), light_data)]));
-                        }
-                    }
+                    let mut new_data = e.clone();
+                    new_data.filter(&self.filter_type())?;
+                    let light_data = Some(LightData::Energy(new_data));
+                    return Ok(HashMap::from([(target.into(), light_data)]));
                 }
                 LightData::Geometric(r) => {
-                    match &self.filter_type() {
-                        FilterType::Constant(t) => {
-                            let mut new_rays = r.clone();
-                            new_rays.filter_by_factor(*t)?;
-                            let light_data = Some(LightData::Geometric(new_rays));
-                            return Ok(HashMap::from([(target.into(), light_data)]));
-                        }
-                        FilterType::Spectrum(_s) => return Err(OpossumError::Analysis(
-                            "Ideal filter: sgeometric analysis with spectrum not yet implemented"
-                                .into(),
-                        )),
-                    }
+                    let mut new_rays = r.clone();
+                    new_rays.filter_energy(&self.filter_type())?;
+                    let light_data = Some(LightData::Geometric(new_rays));
+                    return Ok(HashMap::from([(target.into(), light_data)]));
                 }
                 LightData::Fourier => {
                     return Err(OpossumError::Analysis(
@@ -248,6 +228,7 @@ mod test {
 
     use crate::{
         analyzer::{AnalyzerType, RayTraceConfig},
+        lightdata::DataEnergy,
         rays::{DistributionStrategy, Rays},
         spectrum::create_he_ne_spec,
     };
