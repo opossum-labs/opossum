@@ -122,9 +122,9 @@ impl Spectrum {
         let range = rays
             .wavelength_range()
             .ok_or_else(|| OpossumError::Other("from_rays: rays seems to be empty".into()))?;
-        let mut spectrum = Spectrum::new(range, *resolution)?;
-        for ray in rays.clone().into_iter() {
-            spectrum.add_single_peak(ray.wavelength(), ray.energy().get::<joule>())?
+        let mut spectrum = Self::new(range, *resolution)?;
+        for ray in rays.clone() {
+            spectrum.add_single_peak(ray.wavelength(), ray.energy().get::<joule>())?;
         }
         Ok(spectrum)
     }

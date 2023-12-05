@@ -372,6 +372,7 @@ impl Rays {
     /// Returns the wavelength range of this [`Rays`].
     ///
     /// This functions returns the minimum and maximum wavelength of the containing rays as `Range`. If [`Rays`] is empty, `None` is returned.
+    #[must_use]
     pub fn wavelength_range(&self) -> Option<Range<Length>> {
         if self.rays.is_empty() {
             return None;
