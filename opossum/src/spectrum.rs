@@ -246,6 +246,48 @@ impl Spectrum {
             .sum();
         total_energy
     }
+    /// Return the value at a given wavelength.
+    ///
+    /// This function returns the spectrum value (y value) for a given wavelength. The value will be linear interpolated if the wavelength does not correspond
+    /// to a defined wavelength bin. If the wavelength is outside the spectrum range `None` is returned.
+    #[must_use]
+    pub fn get_value(&self, wavelength: &Length) -> Option<f64> {
+        let wvl_in_micrometer = wavelength.get::<micrometer>();
+        if let Some(last) = self.data.last() {
+            #[allow(clippy::float_cmp)]
+            if wvl_in_micrometer == last.0 {
+                return Some(last.1);
+            }
+        } else {
+            return None;
+        }
+
+        let spectrum_range = self.range();
+        if !spectrum_range.contains(wavelength) {
+            return None;
+        }
+        let idx = self
+            .lambda_vec()
+            .iter()
+            .position(|w| *w >= wvl_in_micrometer);
+        idx.map(|idx| {
+            if idx == 0 {
+                let wvl_left = self.lambda_vec()[idx];
+                let wvl_right = self.lambda_vec()[idx + 1];
+                let data_left = self.data_vec()[idx];
+                let data_right = self.data_vec()[idx + 1];
+                let ratio = (wvl_in_micrometer - wvl_left) / (wvl_right - wvl_left);
+                data_left.mul_add(1.0 - ratio, data_right * ratio)
+            } else {
+                let wvl_left = self.lambda_vec()[idx - 1];
+                let wvl_right = self.lambda_vec()[idx];
+                let data_left = self.data_vec()[idx - 1];
+                let data_right = self.data_vec()[idx];
+                let ratio = (wvl_in_micrometer - wvl_left) / (wvl_right - wvl_left);
+                data_left.mul_add(1.0 - ratio, data_right * ratio)
+            }
+        })
+    }
     /// Scale the spectrum by a constant factor.
     ///
     /// # Errors
@@ -792,6 +834,30 @@ mod test {
         s.add_single_peak(Length::new::<micrometer>(1.5), 1.0)
             .unwrap();
         assert_eq!(s.total_energy(), 1.0);
+    }
+    #[test]
+    fn get_value() {
+        let s = Spectrum {
+            data: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 4.0)],
+        };
+        assert_eq!(s.get_value(&Length::new::<micrometer>(0.9)), None);
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)), Some(1.0));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.2)), Some(1.2));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(2.0)), Some(2.0));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(2.75)), Some(3.5));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(3.0)), Some(4.0));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(3.1)), None);
+    }
+    #[test]
+    fn get_value_empty() {
+        let s = Spectrum { data: vec![] };
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)), None);
+        let s = Spectrum {
+            data: vec![(1.0, 1.0)],
+        };
+        assert_eq!(s.get_value(&Length::new::<micrometer>(0.9)), None);
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)), Some(1.0));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.1)), None);
     }
     #[test]
     fn scale_vertical() {

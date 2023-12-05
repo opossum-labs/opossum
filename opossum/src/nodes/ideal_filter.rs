@@ -287,7 +287,12 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("front".into(), Some(input_light.clone()));
-        assert!(node.analyze(input.clone(), &AnalyzerType::RayTrace(RayTraceConfig::default())).is_err());
+        assert!(node
+            .analyze(
+                input.clone(),
+                &AnalyzerType::RayTrace(RayTraceConfig::default())
+            )
+            .is_err());
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
