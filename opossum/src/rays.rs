@@ -157,20 +157,29 @@ impl Ray {
     ///
     /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the interval `(0.0..=1.0)`
     pub fn filter_energy(&self, filter: &FilterType) -> OpmResult<Self> {
-        let filtered_ray = match filter {
+        let transmission = match filter {
             FilterType::Constant(t) => {
                 if !(0.0..=1.0).contains(t) {
                     return Err(OpossumError::Other(
                         "transmission factor must be within (0.0..=1.0)".into(),
                     ));
                 }
-                let mut new_ray = self.clone();
-                new_ray.e *= *t;
-                new_ray
+                *t
             }
-            FilterType::Spectrum(_s) => todo!("filter a ray with spectrum not yet supported"),
+            FilterType::Spectrum(s) => {
+                let transmission = s.get_value(&self.wavelength());
+                if let Some(t) = transmission {
+                    t
+                } else {
+                    return Err(OpossumError::Other(
+                        "wavelength of ray outside filter spectrum".into(),
+                    ));
+                }
+            }
         };
-        Ok(filtered_ray)
+        let mut new_ray = self.clone();
+        new_ray.e *= transmission;
+        Ok(new_ray)
     }
 }
 ///Struct containing all relevant information of a created bundle of rays
@@ -520,9 +529,10 @@ impl Plottable for Rays {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::aperture::CircleConfig;
-    use approx::assert_abs_diff_eq;
+    use crate::{aperture::CircleConfig, spectrum::Spectrum};
+    use approx::{abs_diff_eq, assert_abs_diff_eq};
     use assert_matches::assert_matches;
+    use std::path::PathBuf;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
     fn ray_new_collimated() {
@@ -893,6 +903,30 @@ mod test {
         assert_eq!(new_ray.e, Energy::new::<joule>(0.3));
         assert!(ray.filter_energy(&FilterType::Constant(-0.1)).is_err());
         assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
+    }
+    #[test]
+    fn ray_filter_spectrum() {
+        let position = Point2::new(Length::zero(), Length::new::<millimeter>(1.0));
+        let e_1j = Energy::new::<joule>(1.0);
+        let ray = Ray::new_collimated(position, Length::new::<nanometer>(502.0), e_1j).unwrap();
+        let mut spec_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        spec_path.push("files_for_testing/spectrum/test_filter.csv");
+        let s = Spectrum::from_csv(spec_path.to_str().unwrap()).unwrap();
+        let filter = FilterType::Spectrum(s);
+        let filtered_ray = ray.filter_energy(&filter).unwrap();
+        assert_eq!(filtered_ray.energy(), Energy::new::<joule>(1.0));
+        let ray = Ray::new_collimated(position, Length::new::<nanometer>(500.0), e_1j).unwrap();
+        let filtered_ray = ray.filter_energy(&filter).unwrap();
+        assert_eq!(filtered_ray.energy(), Energy::new::<joule>(0.0));
+        let ray = Ray::new_collimated(position, Length::new::<nanometer>(501.5), e_1j).unwrap();
+        let filtered_ray = ray.filter_energy(&filter).unwrap();
+        assert!(abs_diff_eq!(
+            filtered_ray.energy().get::<joule>(),
+            0.5,
+            epsilon = 300.0 * f64::EPSILON
+        ));
+        let ray = Ray::new_collimated(position, Length::new::<nanometer>(506.0), e_1j).unwrap();
+        assert!(ray.filter_energy(&filter).is_err());
     }
     #[test]
     fn strategy_hexapolar() {
