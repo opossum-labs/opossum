@@ -271,21 +271,13 @@ impl Spectrum {
             .iter()
             .position(|w| *w >= wvl_in_micrometer);
         idx.map(|idx| {
-            if idx == 0 {
-                let wvl_left = self.lambda_vec()[idx];
-                let wvl_right = self.lambda_vec()[idx + 1];
-                let data_left = self.data_vec()[idx];
-                let data_right = self.data_vec()[idx + 1];
-                let ratio = (wvl_in_micrometer - wvl_left) / (wvl_right - wvl_left);
-                data_left.mul_add(1.0 - ratio, data_right * ratio)
+            let (data_left, data_right) = if idx == 0 {
+                (self.data[idx], self.data[idx + 1])
             } else {
-                let wvl_left = self.lambda_vec()[idx - 1];
-                let wvl_right = self.lambda_vec()[idx];
-                let data_left = self.data_vec()[idx - 1];
-                let data_right = self.data_vec()[idx];
-                let ratio = (wvl_in_micrometer - wvl_left) / (wvl_right - wvl_left);
-                data_left.mul_add(1.0 - ratio, data_right * ratio)
-            }
+                (self.data[idx - 1], self.data[idx])
+            };
+            let ratio = (wvl_in_micrometer - data_left.0) / (data_right.0 - data_left.0);
+            data_left.1.mul_add(1.0 - ratio, data_right.1 * ratio)
         })
     }
     /// Scale the spectrum by a constant factor.
