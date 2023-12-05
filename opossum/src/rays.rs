@@ -371,13 +371,13 @@ impl Rays {
     }
     /// Returns the wavelength range of this [`Rays`].
     ///
-    /// This functions returns the minimum and maximum wavelength of the containing rays. If [`Rays`] is empty, `None` is returned.
+    /// This functions returns the minimum and maximum wavelength of the containing rays as `Range`. If [`Rays`] is empty, `None` is returned.
     pub fn wavelength_range(&self) -> Option<Range<Length>> {
         if self.rays.is_empty() {
             return None;
         };
-        let mut min = Length::zero();
-        let mut max = Length::new::<millimeter>(f64::INFINITY);
+        let mut min = Length::new::<millimeter>(f64::INFINITY);
+        let mut max = Length::zero();
         for ray in &self.rays {
             let w = ray.wavelength();
             if w > max {
@@ -1261,6 +1261,60 @@ mod test {
         let aperture = Aperture::BinaryCircle(circle_config);
         rays.apodize(&aperture);
         assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
+    }
+    #[test]
+    fn rays_wavelength_range() {
+        let mut rays = Rays::default();
+        assert_eq!(rays.wavelength_range(), None);
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        let ray = Ray::new_collimated(
+            Point2::new(
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(1.0),
+            ),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        assert_eq!(
+            rays.wavelength_range(),
+            Some(Length::new::<nanometer>(1053.0)..Length::new::<nanometer>(1053.0))
+        );
+        let ray = Ray::new_collimated(
+            Point2::new(
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(1.0),
+            ),
+            Length::new::<nanometer>(1050.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        assert_eq!(
+            rays.wavelength_range(),
+            Some(Length::new::<nanometer>(1050.0)..Length::new::<nanometer>(1053.0))
+        );
+        let ray = Ray::new_collimated(
+            Point2::new(
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(1.0),
+            ),
+            Length::new::<nanometer>(1051.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        assert_eq!(
+            rays.wavelength_range(),
+            Some(Length::new::<nanometer>(1050.0)..Length::new::<nanometer>(1053.0))
+        );
     }
     #[test]
     fn rays_into_proptype() {
