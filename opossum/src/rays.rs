@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling rays
+use std::ops::Range;
+
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::FilterType;
@@ -367,6 +369,26 @@ impl Rays {
         }
         Ok(())
     }
+    /// Returns the wavelength range of this [`Rays`].
+    ///
+    /// This functions returns the minimum and maximum wavelength of the containing rays. If [`Rays`] is empty, `None` is returned.
+    pub fn wavelength_range(&self) -> Option<Range<Length>> {
+        if self.rays.is_empty() {
+            return None;
+        };
+        let mut min = Length::zero();
+        let mut max = Length::new::<millimeter>(f64::INFINITY);
+        for ray in &self.rays {
+            let w = ray.wavelength();
+            if w > max {
+                max = w;
+            }
+            if w < min {
+                min = w;
+            }
+        }
+        Some(min..max)
+    }
 }
 /// Strategy for the creation of a 2D point set
 pub enum DistributionStrategy {
@@ -524,6 +546,13 @@ impl Plottable for Rays {
         root.present()
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
         Ok(())
+    }
+}
+impl Iterator for Rays {
+    type Item = Ray;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.rays.iter().next().cloned()
     }
 }
 #[cfg(test)]
