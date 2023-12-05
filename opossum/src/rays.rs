@@ -2,6 +2,7 @@
 //! Module for handling rays
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
+use crate::nodes::FilterType;
 use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
@@ -145,6 +146,39 @@ impl Ray {
         new_ray.dir.y = optical_power.mul_add(-self.pos.y, self.dir.y);
         new_ray.dir.z = 1.0;
         new_ray.dir.normalize_mut();
+        Ok(new_ray)
+    }
+
+    /// Attenuate a ray's energy by a given filter.
+    ///
+    /// This function attenuates the ray's energy by the given [`FilterType`]. For [`FilterType::Constant`] the energy is simply multiplied with the
+    /// given transmission factor.
+    /// # Errors
+    ///
+    /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the interval `(0.0..=1.0)`
+    pub fn filter_energy(&self, filter: &FilterType) -> OpmResult<Self> {
+        let transmission = match filter {
+            FilterType::Constant(t) => {
+                if !(0.0..=1.0).contains(t) {
+                    return Err(OpossumError::Other(
+                        "transmission factor must be within (0.0..=1.0)".into(),
+                    ));
+                }
+                *t
+            }
+            FilterType::Spectrum(s) => {
+                let transmission = s.get_value(&self.wavelength());
+                if let Some(t) = transmission {
+                    t
+                } else {
+                    return Err(OpossumError::Other(
+                        "wavelength of ray outside filter spectrum".into(),
+                    ));
+                }
+            }
+        };
+        let mut new_ray = self.clone();
+        new_ray.e *= transmission;
         Ok(new_ray)
     }
 }
@@ -305,10 +339,31 @@ impl Rays {
     ///  - the focal length is zero or not finite.
     pub fn refract_paraxial(&mut self, focal_length: Length) -> OpmResult<()> {
         if focal_length.is_zero() || !focal_length.is_finite() {
-            return Err(OpossumError::Other("focal length must be !=0.0 and finite".into()))
+            return Err(OpossumError::Other(
+                "focal length must be !=0.0 and finite".into(),
+            ));
         }
         for ray in &mut self.rays {
             *ray = ray.refract_paraxial(focal_length)?;
+        }
+        Ok(())
+    }
+    /// Filter a ray bundle by a given filter.
+    ///
+    /// Filter the energy of of the rays by a given [`FilterType`].
+    /// # Errors
+    ///
+    /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the range `(0.0..=1.0)`.
+    pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
+        if let FilterType::Constant(t) = filter {
+            if !(0.0..=1.0).contains(t) {
+                return Err(OpossumError::Other(
+                    "transmission value must be in the range [0.0;1.0]".into(),
+                ));
+            }
+        }
+        for ray in &mut self.rays {
+            *ray = ray.filter_energy(filter)?;
         }
         Ok(())
     }
@@ -474,9 +529,10 @@ impl Plottable for Rays {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::aperture::CircleConfig;
-    use approx::assert_abs_diff_eq;
+    use crate::{aperture::CircleConfig, spectrum::Spectrum};
+    use approx::{abs_diff_eq, assert_abs_diff_eq};
     use assert_matches::assert_matches;
+    use std::path::PathBuf;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
     fn ray_new_collimated() {
@@ -836,6 +892,43 @@ mod test {
         assert_abs_diff_eq!(ray_dir.z, test_ray_dir.z);
     }
     #[test]
+    fn ray_filter_energy() {
+        let position = Point2::new(Length::zero(), Length::new::<millimeter>(1.0));
+        let wvl = Length::new::<nanometer>(1054.0);
+        let ray = Ray::new_collimated(position, wvl, Energy::new::<joule>(1.0)).unwrap();
+        let new_ray = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        assert_eq!(new_ray.pos, Point3::new(0.0, 1.0, 0.0));
+        assert_eq!(new_ray.dir, Vector3::z());
+        assert_eq!(new_ray.wvl, wvl);
+        assert_eq!(new_ray.e, Energy::new::<joule>(0.3));
+        assert!(ray.filter_energy(&FilterType::Constant(-0.1)).is_err());
+        assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
+    }
+    #[test]
+    fn ray_filter_spectrum() {
+        let position = Point2::new(Length::zero(), Length::new::<millimeter>(1.0));
+        let e_1j = Energy::new::<joule>(1.0);
+        let ray = Ray::new_collimated(position, Length::new::<nanometer>(502.0), e_1j).unwrap();
+        let mut spec_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        spec_path.push("files_for_testing/spectrum/test_filter.csv");
+        let s = Spectrum::from_csv(spec_path.to_str().unwrap()).unwrap();
+        let filter = FilterType::Spectrum(s);
+        let filtered_ray = ray.filter_energy(&filter).unwrap();
+        assert_eq!(filtered_ray.energy(), Energy::new::<joule>(1.0));
+        let ray = Ray::new_collimated(position, Length::new::<nanometer>(500.0), e_1j).unwrap();
+        let filtered_ray = ray.filter_energy(&filter).unwrap();
+        assert_eq!(filtered_ray.energy(), Energy::new::<joule>(0.0));
+        let ray = Ray::new_collimated(position, Length::new::<nanometer>(501.5), e_1j).unwrap();
+        let filtered_ray = ray.filter_energy(&filter).unwrap();
+        assert!(abs_diff_eq!(
+            filtered_ray.energy().get::<joule>(),
+            0.5,
+            epsilon = 300.0 * f64::EPSILON
+        ));
+        let ray = Ray::new_collimated(position, Length::new::<nanometer>(506.0), e_1j).unwrap();
+        assert!(ray.filter_energy(&filter).is_err());
+    }
+    #[test]
     fn strategy_hexapolar() {
         let strategy = DistributionStrategy::Hexapolar(0);
         assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 1);
@@ -1053,12 +1146,22 @@ mod test {
     }
     #[test]
     fn rays_refract_paraxial() {
-        let mut rays=Rays::default();
-        assert!(rays.refract_paraxial(Length::new::<millimeter>(0.0)).is_err());
-        assert!(rays.refract_paraxial(Length::new::<millimeter>(f64::NAN)).is_err());
-        assert!(rays.refract_paraxial(Length::new::<millimeter>(f64::INFINITY)).is_err());
-        assert!(rays.refract_paraxial(Length::new::<millimeter>(f64::NEG_INFINITY)).is_err());
-        assert!(rays.refract_paraxial(Length::new::<millimeter>(100.0)).is_ok());
+        let mut rays = Rays::default();
+        assert!(rays
+            .refract_paraxial(Length::new::<millimeter>(0.0))
+            .is_err());
+        assert!(rays
+            .refract_paraxial(Length::new::<millimeter>(f64::NAN))
+            .is_err());
+        assert!(rays
+            .refract_paraxial(Length::new::<millimeter>(f64::INFINITY))
+            .is_err());
+        assert!(rays
+            .refract_paraxial(Length::new::<millimeter>(f64::NEG_INFINITY))
+            .is_err());
+        assert!(rays
+            .refract_paraxial(Length::new::<millimeter>(100.0))
+            .is_ok());
         let ray0 = Ray::new_collimated(
             Point2::new(Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
@@ -1073,14 +1176,36 @@ mod test {
         .unwrap();
         rays.add_ray(ray0.clone());
         rays.add_ray(ray1.clone());
-        rays.refract_paraxial(Length::new::<millimeter>(100.0)).unwrap();
+        rays.refract_paraxial(Length::new::<millimeter>(100.0))
+            .unwrap();
         assert_eq!(rays.rays[0].pos, ray0.pos);
         assert_eq!(rays.rays[0].dir, ray0.dir);
         assert_eq!(rays.rays[1].pos, ray1.pos);
-        let new_dir=Vector3::new(0.0,-1.0,100.0).normalize();
+        let new_dir = Vector3::new(0.0, -1.0, 100.0).normalize();
         assert_abs_diff_eq!(rays.rays[1].dir.x, new_dir.x);
         assert_abs_diff_eq!(rays.rays[1].dir.y, new_dir.y);
         assert_abs_diff_eq!(rays.rays[1].dir.z, new_dir.z);
+    }
+    #[test]
+    fn rays_filter_energy() {
+        let mut rays = Rays::default();
+        assert!(rays.filter_energy(&FilterType::Constant(0.5)).is_ok());
+        assert!(rays.filter_energy(&FilterType::Constant(-0.1)).is_err());
+        assert!(rays.filter_energy(&FilterType::Constant(1.1)).is_err());
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::new::<millimeter>(1.0)),
+            Length::new::<nanometer>(1054.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray.clone());
+        let new_ray = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        rays.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        assert_eq!(rays.rays[0].pos, new_ray.pos);
+        assert_eq!(rays.rays[0].dir, new_ray.dir);
+        assert_eq!(rays.rays[0].wvl, new_ray.wvl);
+        assert_eq!(rays.rays[0].e, new_ray.e);
+        assert_eq!(rays.rays.len(), 1);
     }
     #[test]
     fn rays_apodize() {

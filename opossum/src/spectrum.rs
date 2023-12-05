@@ -246,13 +246,47 @@ impl Spectrum {
             .sum();
         total_energy
     }
+    /// Return the value at a given wavelength.
+    ///
+    /// This function returns the spectrum value (y value) for a given wavelength. The value will be linear interpolated if the wavelength does not correspond
+    /// to a defined wavelength bin. If the wavelength is outside the spectrum range `None` is returned.
+    #[must_use]
+    pub fn get_value(&self, wavelength: &Length) -> Option<f64> {
+        let wvl_in_micrometer = wavelength.get::<micrometer>();
+        if let Some(last) = self.data.last() {
+            #[allow(clippy::float_cmp)]
+            if wvl_in_micrometer == last.0 {
+                return Some(last.1);
+            }
+        } else {
+            return None;
+        }
+
+        let spectrum_range = self.range();
+        if !spectrum_range.contains(wavelength) {
+            return None;
+        }
+        let idx = self
+            .lambda_vec()
+            .iter()
+            .position(|w| *w >= wvl_in_micrometer);
+        idx.map(|idx| {
+            let (data_left, data_right) = if idx == 0 {
+                (self.data[idx], self.data[idx + 1])
+            } else {
+                (self.data[idx - 1], self.data[idx])
+            };
+            let ratio = (wvl_in_micrometer - data_left.0) / (data_right.0 - data_left.0);
+            data_left.1.mul_add(1.0 - ratio, data_right.1 * ratio)
+        })
+    }
     /// Scale the spectrum by a constant factor.
     ///
     /// # Errors
     ///
     /// This function will return an [`OpossumError::Spectrum`] if the scaling factor is < 0.0.
-    pub fn scale_vertical(&mut self, factor: f64) -> OpmResult<()> {
-        if factor < 0.0 {
+    pub fn scale_vertical(&mut self, factor: &f64) -> OpmResult<()> {
+        if factor < &0.0 {
             return Err(OpossumError::Spectrum(
                 "scaling factor mus be >= 0.0".into(),
             ));
@@ -794,6 +828,30 @@ mod test {
         assert_eq!(s.total_energy(), 1.0);
     }
     #[test]
+    fn get_value() {
+        let s = Spectrum {
+            data: vec![(1.0, 1.0), (2.0, 2.0), (3.0, 4.0)],
+        };
+        assert_eq!(s.get_value(&Length::new::<micrometer>(0.9)), None);
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)), Some(1.0));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.2)), Some(1.2));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(2.0)), Some(2.0));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(2.75)), Some(3.5));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(3.0)), Some(4.0));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(3.1)), None);
+    }
+    #[test]
+    fn get_value_empty() {
+        let s = Spectrum { data: vec![] };
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)), None);
+        let s = Spectrum {
+            data: vec![(1.0, 1.0)],
+        };
+        assert_eq!(s.get_value(&Length::new::<micrometer>(0.9)), None);
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)), Some(1.0));
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.1)), None);
+    }
+    #[test]
     fn scale_vertical() {
         let mut s = Spectrum::new(
             Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
@@ -802,14 +860,14 @@ mod test {
         .unwrap();
         s.add_single_peak(Length::new::<micrometer>(2.5), 1.0)
             .unwrap();
-        assert!(s.scale_vertical(0.5).is_ok());
+        assert!(s.scale_vertical(&0.5).is_ok());
         assert_eq!(s.data_vec(), vec![0.0, 0.25, 0.25, 0.0]);
     }
     #[test]
     fn scale_vertical2() {
         let mut s = create_he_ne_spec(1.0).unwrap();
         let s2 = create_he_ne_spec(0.6).unwrap();
-        s.scale_vertical(0.6).unwrap();
+        s.scale_vertical(&0.6).unwrap();
         assert_eq!(s.total_energy(), s2.total_energy());
         // let mut expected_spectrum = s2.iter();
         // for value in s.iter() {
@@ -828,7 +886,7 @@ mod test {
     #[test]
     fn scale_vertical_negative() {
         let mut s = prep();
-        assert!(s.scale_vertical(-0.5).is_err());
+        assert!(s.scale_vertical(&-0.5).is_err());
     }
     #[test]
     fn calc_ratio_test() {

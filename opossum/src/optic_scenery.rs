@@ -549,7 +549,6 @@ mod test {
     use std::{fs::File, io::Read};
 
     fn get_file_content(f_path: &str) -> String {
-        // let path = fix_debug_run_test_data_path(f_path);
         let file_content = &mut "".to_owned();
         let _ = File::open(f_path).unwrap().read_to_string(file_content);
         file_content.to_string()
