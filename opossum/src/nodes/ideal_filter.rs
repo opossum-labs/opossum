@@ -1,11 +1,12 @@
 #![warn(missing_docs)]
 use serde_derive::{Deserialize, Serialize};
 
+use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
-use crate::optical::{LightResult, Optical};
+use crate::optical::Optical;
 use crate::properties::{Properties, Proptype};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
@@ -156,35 +157,6 @@ impl IdealFilter {
             FilterType::Spectrum(_) => None,
         }
     }
-    fn analyze_energy(&mut self, incoming_data: &LightResult) -> OpmResult<LightResult> {
-        let (mut src, mut target) = ("front", "rear");
-        if self.properties().inverted()? {
-            (src, target) = (target, src);
-        }
-        let input = incoming_data.get(src);
-        if let Some(Some(input)) = input {
-            match input {
-                LightData::Energy(e) => {
-                    let mut new_data = e.clone();
-                    new_data.filter(&self.filter_type())?;
-                    let light_data = Some(LightData::Energy(new_data));
-                    return Ok(HashMap::from([(target.into(), light_data)]));
-                }
-                LightData::Geometric(r) => {
-                    let mut new_rays = r.clone();
-                    new_rays.filter_energy(&self.filter_type())?;
-                    let light_data = Some(LightData::Geometric(new_rays));
-                    return Ok(HashMap::from([(target.into(), light_data)]));
-                }
-                LightData::Fourier => {
-                    return Err(OpossumError::Analysis(
-                        "Ideal filter: expected LightData::Energy or LightData::Geometric".into(),
-                    ))
-                }
-            }
-        }
-        Err(OpossumError::Analysis("no data on input port".into()))
-    }
 }
 
 impl Optical for IdealFilter {
@@ -200,9 +172,45 @@ impl Optical for IdealFilter {
     fn analyze(
         &mut self,
         incoming_data: crate::optical::LightResult,
-        _analyzer_type: &crate::analyzer::AnalyzerType,
+        analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<crate::optical::LightResult> {
-        self.analyze_energy(&incoming_data)
+        let (mut src, mut target) = ("front", "rear");
+        if self.properties().inverted()? {
+            (src, target) = (target, src);
+        }
+        let input = incoming_data.get(src);
+        if let Some(Some(input)) = input {
+            match input {
+                LightData::Energy(e) => {
+                    if !matches!(analyzer_type, AnalyzerType::Energy) {
+                        return Err(OpossumError::Analysis(
+                            "expected energy analyzer for LightData::Energy".into(),
+                        ));
+                    }
+                    let mut new_data = e.clone();
+                    new_data.filter(&self.filter_type())?;
+                    let light_data = Some(LightData::Energy(new_data));
+                    return Ok(HashMap::from([(target.into(), light_data)]));
+                }
+                LightData::Geometric(r) => {
+                    if !matches!(analyzer_type, AnalyzerType::RayTrace(_)) {
+                        return Err(OpossumError::Analysis(
+                            "expected ray tracing analyzer for LightData::Geometric".into(),
+                        ));
+                    }
+                    let mut new_rays = r.clone();
+                    new_rays.filter_energy(&self.filter_type())?;
+                    let light_data = Some(LightData::Geometric(new_rays));
+                    return Ok(HashMap::from([(target.into(), light_data)]));
+                }
+                LightData::Fourier => {
+                    return Err(OpossumError::Analysis(
+                        "Ideal filter: expected LightData::Energy or LightData::Geometric".into(),
+                    ))
+                }
+            }
+        }
+        Err(OpossumError::Analysis("no data on input port".into()))
     }
     fn properties(&self) -> &Properties {
         &self.props
@@ -229,6 +237,7 @@ mod test {
     use crate::{
         analyzer::{AnalyzerType, RayTraceConfig},
         lightdata::DataEnergy,
+        optical::LightResult,
         rays::{DistributionStrategy, Rays},
         spectrum::create_he_ne_spec,
     };
@@ -278,6 +287,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("front".into(), Some(input_light.clone()));
+        assert!(node.analyze(input.clone(), &AnalyzerType::RayTrace(RayTraceConfig::default())).is_err());
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
@@ -305,6 +315,7 @@ mod test {
             .unwrap(),
         );
         input.insert("front".into(), Some(input_light.clone()));
+        assert!(node.analyze(input.clone(), &AnalyzerType::Energy).is_err());
         let output = node.analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()));
         assert!(output.is_ok());
         let output = output.unwrap();
