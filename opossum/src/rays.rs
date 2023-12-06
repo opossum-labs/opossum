@@ -8,6 +8,7 @@ use crate::nodes::FilterType;
 use crate::plottable::Plottable;
 use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
+use crate::spectrum::Spectrum;
 use image::DynamicImage;
 use nalgebra::{distance, point, Point2, Point3, Vector3};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
@@ -18,6 +19,7 @@ use serde_derive::{Deserialize, Serialize};
 use sobol::{params::JoeKuoD6, Sobol};
 use uom::num_traits::Zero;
 use uom::si::angle::degree;
+use uom::si::energy::joule;
 use uom::si::f64::{Angle, Energy, Length};
 use uom::si::length::millimeter;
 
@@ -390,6 +392,26 @@ impl Rays {
         }
         Some(min..max)
     }
+    /// Create a [`Spectrum`] (with a given resolution) from a ray bundle.
+    ///
+    /// This functions creates a spectrum by adding all individual rays from ray bundle with respect to their particular wavelength and energy.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///   - [`Rays`] is empty
+    ///   - the `resolution` is invalid (negative, infinite)
+    pub fn to_spectrum(&self, resolution: &Length) -> OpmResult<Spectrum> {
+        let mut range = self
+            .wavelength_range()
+            .ok_or_else(|| OpossumError::Other("from_rays: rays seems to be empty".into()))?;
+        range.end += *resolution * 2.0; // add 2* resolution to be sure to have all rays included in the wavelength range...
+        let mut spectrum = Spectrum::new(range, *resolution)?;
+        for ray in &self.rays {
+            spectrum.add_single_peak(ray.wavelength(), ray.energy().get::<joule>())?;
+        }
+        Ok(spectrum)
+    }
 }
 /// Strategy for the creation of a 2D point set
 pub enum DistributionStrategy {
@@ -547,13 +569,6 @@ impl Plottable for Rays {
         root.present()
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
         Ok(())
-    }
-}
-impl Iterator for Rays {
-    type Item = Ray;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.rays.iter().next().cloned()
     }
 }
 #[cfg(test)]
@@ -1320,5 +1335,44 @@ mod test {
     #[test]
     fn rays_into_proptype() {
         assert_matches!(Rays::default().into(), Proptype::Rays(_));
+    }
+    #[test]
+    fn rays_to_spectrum() {
+        let mut rays = Rays::default();
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1052.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1052.1),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        let spectrum = rays.to_spectrum(&Length::new::<nanometer>(0.5)).unwrap();
+        println!("{}", spectrum);
+        assert_abs_diff_eq!(
+            spectrum.total_energy(),
+            4.0,
+            epsilon = 100000.0 * f64::EPSILON
+        );
     }
 }

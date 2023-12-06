@@ -3,7 +3,6 @@
 use crate::error::{OpmResult, OpossumError};
 use crate::plottable::Plottable;
 use crate::properties::Proptype;
-use crate::rays::Rays;
 use crate::reporter::PdfReportable;
 use csv::ReaderBuilder;
 use image::DynamicImage;
@@ -17,7 +16,6 @@ use std::fs::File;
 use std::ops::Range;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
-use uom::si::energy::joule;
 use uom::si::{f64::Length, length::micrometer, length::nanometer};
 
 /// Structure for handling spectral data.
@@ -108,25 +106,6 @@ impl Spectrum {
             ));
         }
         Ok(Self { data: datas })
-    }
-    /// Create a [`Spectrum`] (with a given resolution) from a ray bundle.
-    ///
-    /// This functions creates a spectrum by adding all individual rays from ray bundle with respect to their particular wavelength and energy.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    ///   - [`Rays`] is empty
-    ///   - the `resolution` is invalid (negative, infinite)
-    pub fn from_rays(rays: &Rays, resolution: &Length) -> OpmResult<Self> {
-        let range = rays
-            .wavelength_range()
-            .ok_or_else(|| OpossumError::Other("from_rays: rays seems to be empty".into()))?;
-        let mut spectrum = Self::new(range, *resolution)?;
-        for ray in rays.clone() {
-            spectrum.add_single_peak(ray.wavelength(), ray.energy().get::<joule>())?;
-        }
-        Ok(spectrum)
     }
     fn lambda_vec(&self) -> Vec<f64> {
         self.data.iter().map(|data| data.0).collect()

@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use serde_derive::{Deserialize, Serialize};
+use uom::si::f64::Length;
 use uom::si::length::nanometer;
 
 use crate::dottable::Dottable;
@@ -171,23 +172,25 @@ impl Optical for Spectrometer {
     fn report(&self) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
-        if let Some(LightData::Energy(e)) = data {
-            props
-                .create(
-                    "Spectrum",
-                    "Output spectrum",
-                    None,
-                    e.spectrum.clone().into(),
-                )
-                .unwrap();
-            props
-                .create(
-                    "Model",
-                    "Spectrometer model",
-                    None,
-                    self.props.get("spectrometer type").unwrap().clone(),
-                )
-                .unwrap();
+        if let Some(light_data) = data {
+            let spectrum = match light_data {
+                LightData::Energy(e) => Some(e.spectrum.clone()),
+                LightData::Geometric(r) => r.to_spectrum(&Length::new::<nanometer>(0.2)).ok(),
+                LightData::Fourier => None,
+            };
+            if let Some(spectrum) = spectrum {
+                props
+                    .create("Spectrum", "Output spectrum", None, spectrum.into())
+                    .unwrap();
+                props
+                    .create(
+                        "Model",
+                        "Spectrometer model",
+                        None,
+                        self.props.get("spectrometer type").unwrap().clone(),
+                    )
+                    .unwrap();
+            }
         }
         Some(NodeReport::new(
             self.properties().node_type().unwrap(),
@@ -222,7 +225,6 @@ impl Dottable for Spectrometer {
         "lightseagreen"
     }
 }
-
 #[cfg(test)]
 mod test {
     use super::*;
