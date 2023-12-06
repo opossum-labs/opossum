@@ -49,8 +49,8 @@ impl Ray {
     ///
     /// # Errors
     /// This function returns an error if
-    ///  - the given wavelength is <=0.0, `NaN` or +inf
-    ///  - the given energy is <=0.0, `NaN` or +inf
+    ///  - the given wavelength is <= 0.0, `NaN` or +inf
+    ///  - the given energy is < 0.0, `NaN` or +inf
     pub fn new_collimated(
         position: Point2<Length>,
         wave_length: Length,
@@ -64,8 +64,8 @@ impl Ray {
     ///
     /// # Errors
     /// This function returns an error if
-    ///  - the given wavelength is <=0.0, `NaN` or +inf
-    ///  - the given energy is <=0.0, `NaN` or +inf
+    ///  - the given wavelength is <= 0.0, `NaN` or +inf
+    ///  - the given energy is < 0.0, `NaN` or +inf
     ///  - the direction vector has a zero length
     pub fn new(
         position: Point2<Length>,
@@ -76,7 +76,7 @@ impl Ray {
         if wave_length.is_zero() || wave_length.is_sign_negative() || !wave_length.is_finite() {
             return Err(OpossumError::Other("wavelength must be >0".into()));
         }
-        if energy.is_zero() || energy.is_sign_negative() || !energy.is_finite() {
+        if energy.is_sign_negative() || !energy.is_finite() {
             return Err(OpossumError::Other("energy must be >0".into()));
         }
         if direction.norm().is_zero() {
@@ -682,11 +682,11 @@ mod test {
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(0.0)
         )
-        .is_err());
+        .is_ok());
         assert!(Ray::new_collimated(
             position,
             Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(-10.0)
+            Energy::new::<joule>(-0.1)
         )
         .is_err());
         assert!(Ray::new_collimated(
@@ -777,14 +777,7 @@ mod test {
             position,
             direction,
             Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(0.0)
-        )
-        .is_err());
-        assert!(Ray::new(
-            position,
-            direction,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(-10.0)
+            Energy::new::<joule>(-0.1)
         )
         .is_err());
         assert!(Ray::new(

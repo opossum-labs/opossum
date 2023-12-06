@@ -23,7 +23,7 @@ use uom::si::{
 ///
 /// # Errors
 /// This functions returns an error if
-///  - the given energy is <=0.0, Nan, or +inf.
+///  - the given energy is < 0.0, Nan, or +inf.
 pub fn create_collimated_ray_source(radius: Length, energy: Energy) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
         radius,
@@ -187,8 +187,16 @@ impl Dottable for Source {
 }
 #[cfg(test)]
 mod test {
+    use uom::si::{length::millimeter, energy::joule};
     use super::*;
     use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spec};
+    #[test]
+    fn test_create_collimated_ray_source() {
+        assert!(create_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(-0.1)).is_err());
+        assert!(create_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(f64::NAN)).is_err());
+        assert!(create_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(f64::INFINITY)).is_err());
+        assert!(create_collimated_ray_source(Length::new::<millimeter>(-0.1), Energy::new::<joule>(1.0)).is_err());
+    }
     #[test]
     fn default() {
         let node = Source::default();
