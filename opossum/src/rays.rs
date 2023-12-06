@@ -194,10 +194,10 @@ impl Ray {
     /// # Errors
     ///
     /// This function will return an error if `splitting_ratio` is outside the interval [0.0..1.0].
-    pub fn split(&mut self, splitting_ratio: f64) -> OpmResult<Ray> {
+    pub fn split(&mut self, splitting_ratio: f64) -> OpmResult<Self> {
         if !(0.0..=1.0).contains(&splitting_ratio) {
             return Err(OpossumError::Other(
-                "energy_ration must be within [0.0;1.0]".into(),
+                "splitting_ratio must be within [0.0;1.0]".into(),
             ));
         }
         let mut split_ray = self.clone();
@@ -431,6 +431,28 @@ impl Rays {
             spectrum.add_single_peak(ray.wavelength(), ray.energy().get::<joule>())?;
         }
         Ok(spectrum)
+    }
+    /// Split a ray bundle by a given splitting ratio.
+    ///
+    /// This function splits a ray bundle by a given energy splitting ratio. It modifies the energies of all containing ray and generates a new
+    /// bundle with the split rays. The splitting ratio must be in the interval [0.0; 1.0].
+    /// A splitting ratio of 1.0 means a fully transmitted beam. All split rays have an energy of zero. In contrast, a splitting ratio of 1.0 means a
+    /// fully reflected beam. All energy goes into the split rays.
+    /// # Errors
+    ///
+    /// This function will return an error if the splitting ratio is outside the interval [0.0; 1.0].
+    pub fn split(&mut self, splitting_ratio: f64) -> OpmResult<Self> {
+        if !(0.0..=1.0).contains(&splitting_ratio) {
+            return Err(OpossumError::Other(
+                "splitting_ratio must be within [0.0;1.0]".into(),
+            ));
+        }
+        let mut split_rays = Self::default();
+        for ray in &mut self.rays {
+            let split_ray = ray.split(splitting_ratio)?;
+            split_rays.add_ray(split_ray);
+        }
+        Ok(split_rays)
     }
 }
 /// Strategy for the creation of a 2D point set
@@ -1003,7 +1025,7 @@ mod test {
         .unwrap();
         assert!(ray.split(1.1).is_err());
         assert!(ray.split(-0.1).is_err());
-        let split_ray=ray.split(0.1).unwrap();
+        let split_ray = ray.split(0.1).unwrap();
         assert_eq!(ray.energy(), Energy::new::<joule>(0.1));
         assert_eq!(split_ray.energy(), Energy::new::<joule>(0.9));
         assert_eq!(ray.position(), split_ray.position());
@@ -1410,6 +1432,33 @@ mod test {
             spectrum.total_energy(),
             4.0,
             epsilon = 100000.0 * f64::EPSILON
+        );
+    }
+    #[test]
+    fn rays_split() {
+        assert!(Rays::default().split(1.1).is_err());
+        assert!(Rays::default().split(-0.1).is_err());
+        let ray1 = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        let ray2 = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1050.0),
+            Energy::new::<joule>(2.0),
+        )
+        .unwrap();
+        let mut rays = Rays::default();
+        rays.add_ray(ray1.clone());
+        rays.add_ray(ray2.clone());
+        let split_rays = rays.split(0.2).unwrap();
+        assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
+        assert_abs_diff_eq!(
+            split_rays.total_energy().get::<joule>(),
+            2.4,
+            epsilon = 10.0 * f64::EPSILON
         );
     }
 }
