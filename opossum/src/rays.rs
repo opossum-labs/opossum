@@ -10,7 +10,7 @@ use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use image::DynamicImage;
-use nalgebra::{distance, point, Point2, Point3, Vector3};
+use nalgebra::{distance, point, Point2, Point3, Vector3, DMatrix};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
 use plotters::style::{IntoFont, TextStyle, RED};
@@ -21,7 +21,7 @@ use uom::num_traits::Zero;
 use uom::si::angle::degree;
 use uom::si::energy::joule;
 use uom::si::f64::{Angle, Energy, Length};
-use uom::si::length::millimeter;
+use uom::si::length::{nanometer,millimeter};
 
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -303,7 +303,7 @@ impl Rays {
     }
     /// Returns the geometric beam radius [`Rays`].
     ///
-    /// This function calculates the maximum distance of a ray bundle from it centroid.
+    /// This function calculates the maximum distance of a ray bundle from its centroid.
     #[must_use]
     pub fn beam_radius_geo(&self) -> Option<Length> {
         self.centroid().map(|c| {
@@ -319,6 +319,34 @@ impl Rays {
             Length::new::<millimeter>(max_dist)
         })
     }
+    /// Returns the wavefront of the bundle of [`Rays`] at a specific wavelength wvl.
+    ///
+    /// This function calculates the wavefront of a ray bundle as multiple of its wavelength with reference to the ray that is closest to the optical axis.
+    #[must_use]
+    pub fn wavefront_at_wvl(&self, wvl: f64) -> DMatrix<f64> {
+        let mut path_length_at_pos = DMatrix::from_element(self.rays.len(), 3, 0.);
+        let mut min_radius = f64::INFINITY;
+        let mut path_length_at_center = 0.;
+        for (i, ray) in self.rays.iter().enumerate(){
+            path_length_at_pos[(i,0)] = ray.pos.x;
+            path_length_at_pos[(i,1)] = ray.pos.y;
+            path_length_at_pos[(i,2)] = ray.path_length.get::<nanometer>();
+
+            let radius = ray.pos.x*ray.pos.x+ray.pos.y* ray.pos.y;
+            if radius < min_radius{
+                min_radius = radius;
+                path_length_at_center = path_length_at_pos[(i,2)];
+            }
+        }      
+
+        for mut ray_path in path_length_at_pos.row_iter_mut(){
+            ray_path[2] -= path_length_at_center;
+            ray_path[2] /= wvl;
+        }
+
+        path_length_at_pos
+    }
+
     /// Add a single ray to the ray bundle.
     pub fn add_ray(&mut self, ray: Ray) {
         self.rays.push(ray);
