@@ -573,8 +573,8 @@ impl Plottable for Spectrum {
         let y_range = fitting_range(self.data_vec().iter());
         let mut chart = ChartBuilder::on(root)
             .margin(5)
-            .x_label_area_size(40)
-            .y_label_area_size(40)
+            .x_label_area_size(100)
+            .y_label_area_size(100)
             .build_cartesian_2d(x_left * 1.0E3..x_right * 1.0E3, 0.0..y_range.end * 1E-3)
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
 
@@ -582,6 +582,7 @@ impl Plottable for Spectrum {
             .configure_mesh()
             .x_desc("wavelength (nm)")
             .y_desc("value (1/nm)")
+            .label_style(TextStyle::from(("sans-serif", 30).into_font()))
             .draw()
             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
 
