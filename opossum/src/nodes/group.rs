@@ -1020,11 +1020,7 @@ mod test {
         });
         input.insert("wrong".into(), Some(input_light.clone()));
         let output = group.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
-        assert!(output.contains_key("output"));
-        let output = output.get("output").unwrap().clone();
-        assert!(output.is_none());
+        assert!(output.is_err());
     }
     #[test]
     fn analyze_inverse() {

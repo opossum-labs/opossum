@@ -69,10 +69,10 @@ impl BeamSplitter {
     /// This functions panics if the specified [`Properties`], here `ratio`, do not exist or if the property has the wrong data format
     #[must_use]
     pub fn ratio(&self) -> f64 {
-        if let Proptype::F64(value) = self.props.get("ratio").unwrap() {
+        if let Ok(Proptype::F64(value)) = self.props.get("ratio") {
             return *value;
         }
-        panic!("wrong data format")
+        panic!("property `ratio` does not exist or has wrong data format")
     }
 
     /// Sets the splitting ratio of this [`BeamSplitter`].
@@ -84,21 +84,17 @@ impl BeamSplitter {
         self.props.set("ratio", ratio.into())?;
         Ok(())
     }
-    fn analyze_energy(&mut self, incoming_data: &LightResult) -> OpmResult<LightResult> {
-        let (in1, in2) = if self.properties().inverted()? {
-            (
-                incoming_data.get("out1_trans1_refl2"),
-                incoming_data.get("out2_trans2_refl1"),
-            )
-        } else {
-            (incoming_data.get("input1"), incoming_data.get("input2"))
-        };
+    fn analyze_energy(
+        &mut self,
+        in1: Option<&LightData>,
+        in2: Option<&LightData>,
+    ) -> OpmResult<LightResult> {
         let mut out1_1_spectrum: Option<Spectrum> = None;
         let mut out1_2_spectrum: Option<Spectrum> = None;
         let mut out2_1_spectrum: Option<Spectrum> = None;
         let mut out2_2_spectrum: Option<Spectrum> = None;
 
-        if let Some(Some(in1)) = in1 {
+        if let Some(in1) = in1 {
             match in1 {
                 LightData::Energy(e) => {
                     let mut s = e.spectrum.clone();
@@ -115,7 +111,7 @@ impl BeamSplitter {
                 }
             }
         }
-        if let Some(Some(in2)) = in2 {
+        if let Some(in2) = in2 {
             match in2 {
                 LightData::Energy(e) => {
                     let mut s = e.spectrum.clone();
@@ -174,8 +170,35 @@ impl Optical for BeamSplitter {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
+        let (input_port1, input_port2) = if self.properties().inverted()? {
+            ("out1_trans1_refl2", "out2_trans2_refl1")
+        } else {
+            ("input1", "input2")
+        };
+        let in1 = if let Some(input) = incoming_data.get(input_port1) {
+            if let Some(light_data) = input {
+                Some(light_data)
+            } else {
+                return Err(OpossumError::Analysis(format!(
+                    "beam splitter: no light data in input port <{input_port1}>"
+                )));
+            }
+        } else {
+            None
+        };
+        let in2 = if let Some(input) = incoming_data.get(input_port2) {
+            if let Some(light_data) = input {
+                Some(light_data)
+            } else {
+                return Err(OpossumError::Analysis(format!(
+                    "beam splitter: no light data in input port <{input_port2}>"
+                )));
+            }
+        } else {
+            None
+        };
         match analyzer_type {
-            AnalyzerType::Energy => self.analyze_energy(&incoming_data),
+            AnalyzerType::Energy => self.analyze_energy(in1, in2),
             _ => Err(OpossumError::Analysis(
                 "analysis type not yet implemented".into(),
             )),
@@ -198,7 +221,7 @@ impl Dottable for BeamSplitter {
 #[cfg(test)]
 mod test {
     use crate::{analyzer::RayTraceConfig, spectrum::create_he_ne_spec};
-    use approx::AbsDiffEq;
+    use approx::{assert_abs_diff_eq, AbsDiffEq};
 
     use super::*;
     #[test]
@@ -377,18 +400,19 @@ mod test {
         );
         let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
         let energy_output1 =
-            if let LightData::Energy(s) = output.clone().get("input1").unwrap().clone().unwrap() {
+            if let Some(LightData::Energy(s)) = output.clone().get("input1").unwrap().clone() {
                 s.spectrum.total_energy()
             } else {
                 0.0
             };
-        assert!(energy_output1.abs_diff_eq(&0.8, f64::EPSILON));
+
         let energy_output2 =
-            if let LightData::Energy(s) = output.clone().get("input2").unwrap().clone().unwrap() {
+            if let Some(LightData::Energy(s)) = output.clone().get("input2").unwrap().clone() {
                 s.spectrum.total_energy()
             } else {
                 0.0
             };
-        assert!(energy_output2.abs_diff_eq(&0.7, f64::EPSILON));
+        assert_abs_diff_eq!(energy_output1, &0.8);
+        assert_abs_diff_eq!(energy_output2, &0.7);
     }
 }

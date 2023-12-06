@@ -454,6 +454,14 @@ impl Rays {
         }
         Ok(split_rays)
     }
+    /// Merge two ray bundles.
+    ///
+    /// This function simply adds the given rays to the existing ray bundle.
+    pub fn merge(&mut self, rays: &Self) {
+        for ray in &rays.rays {
+            self.add_ray(ray.clone());
+        }
+    }
 }
 /// Strategy for the creation of a 2D point set
 pub enum DistributionStrategy {
