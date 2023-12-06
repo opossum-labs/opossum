@@ -1,6 +1,6 @@
 use opossum::{
     error::OpmResult,
-    nodes::{create_point_ray_source, EnergyMeter, Propagation, SpotDiagram, Spectrometer},
+    nodes::{create_point_ray_source, EnergyMeter, Propagation, Spectrometer, SpotDiagram},
     OpticScenery,
 };
 use std::path::Path;
