@@ -264,11 +264,17 @@ impl Dottable for BeamSplitter {
         "lightpink"
     }
 }
-
 #[cfg(test)]
 mod test {
-    use crate::spectrum::create_he_ne_spec;
+    use crate::{analyzer::RayTraceConfig, rays::Ray, spectrum::create_he_ne_spec};
     use approx::{assert_abs_diff_eq, AbsDiffEq};
+    use nalgebra::Point2;
+    use uom::num_traits::Zero;
+    use uom::si::{
+        energy::joule,
+        f64::{Energy, Length},
+        length::nanometer,
+    };
 
     use super::*;
     #[test]
@@ -333,7 +339,7 @@ mod test {
         assert_eq!(output_ports, vec!["input1", "input2"]);
     }
     #[test]
-    fn analyze_empty_input() {
+    fn analyze_energy_empty_input() {
         let mut node = BeamSplitter::default();
         let input = LightResult::default();
         let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
@@ -343,7 +349,7 @@ mod test {
         assert!(output.get("out2_trans2_refl1").unwrap().is_none());
     }
     #[test]
-    fn analyze_one_input() {
+    fn analyze_energy_one_input() {
         let mut node = BeamSplitter::new("test", 0.6).unwrap();
         let mut input = LightResult::default();
         input.insert(
@@ -379,7 +385,7 @@ mod test {
         assert_eq!(energy, 0.4);
     }
     #[test]
-    fn analyze_two_input() {
+    fn analyze_energy_two_input() {
         let mut node = BeamSplitter::new("test", 0.6).unwrap();
         let mut input = LightResult::default();
         input.insert(
@@ -419,6 +425,91 @@ mod test {
             0.0
         };
         assert!(energy_output2.abs_diff_eq(&0.7, f64::EPSILON));
+    }
+    #[test]
+    fn analyze_raytrace_empty() {
+        let mut node = BeamSplitter::default();
+        let input = LightResult::default();
+        let output = node
+            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
+            .unwrap();
+        assert!(output.contains_key("out1_trans1_refl2"));
+        assert!(output.contains_key("out2_trans2_refl1"));
+        assert!(output.clone().get("out1_trans1_refl2").unwrap().is_none());
+        assert!(output.get("out2_trans2_refl1").unwrap().is_none());
+    }
+    #[test]
+    fn analyze_raytrace_one_input() {
+        let mut node = BeamSplitter::new("test", 0.6).unwrap();
+        let mut input = LightResult::default();
+        let mut rays = Rays::default();
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        input.insert("input1".into(), Some(LightData::Geometric(rays)));
+        let output = node
+            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
+            .unwrap();
+        let result = output.clone().get("out1_trans1_refl2").unwrap().clone();
+        let energy = if let Some(LightData::Geometric(r)) = result {
+            r.total_energy().get::<joule>()
+        } else {
+            0.0
+        };
+        assert_eq!(energy, 0.6);
+        let result = output.clone().get("out2_trans2_refl1").unwrap().clone();
+        let energy = if let Some(LightData::Geometric(r)) = result {
+            r.total_energy().get::<joule>()
+        } else {
+            0.0
+        };
+        assert_eq!(energy, 0.4);
+    }
+    #[test]
+    fn analyze_raytrace_two_input() {
+        let mut node = BeamSplitter::new("test", 0.6).unwrap();
+        let mut input = LightResult::default();
+        let mut rays = Rays::default();
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        input.insert("input1".into(), Some(LightData::Geometric(rays)));
+        let mut rays = Rays::default();
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(0.5),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        input.insert("input2".into(), Some(LightData::Geometric(rays)));
+        let output = node
+            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
+            .unwrap();
+        let energy_output1 = if let Some(LightData::Geometric(r)) =
+            output.clone().get("out1_trans1_refl2").unwrap().clone()
+        {
+            r.total_energy().get::<joule>()
+        } else {
+            0.0
+        };
+        assert_abs_diff_eq!(energy_output1, &0.8);
+        let energy_output2 = if let Some(LightData::Geometric(r)) =
+            output.clone().get("out2_trans2_refl1").unwrap().clone()
+        {
+            r.total_energy().get::<joule>()
+        } else {
+            0.0
+        };
+        assert_abs_diff_eq!(energy_output2, &0.7);
     }
     #[test]
     fn analyze_inverse() {
