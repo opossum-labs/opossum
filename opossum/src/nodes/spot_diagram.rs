@@ -4,6 +4,7 @@ use uom::si::length::millimeter;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
+use crate::plottable::PlotType;
 use crate::properties::{Properties, Proptype};
 use crate::reporter::NodeReport;
 use crate::{
@@ -13,7 +14,7 @@ use crate::{
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// An spot diagram monitor
+/// A spot-diagram monitor
 ///
 /// It simply generates a spot diagram of an incoming ray bundle.
 ///
@@ -41,7 +42,7 @@ fn create_default_props() -> Properties {
     props
 }
 impl Default for SpotDiagram {
-    /// create an ideal spectrometer.
+    /// create a spot-diagram monitor.
     fn default() -> Self {
         Self {
             light_data: None,
@@ -85,7 +86,8 @@ impl Optical for SpotDiagram {
         if let Some(data) = &self.light_data {
             let mut file_path = PathBuf::from(report_dir);
             file_path.push(format!("spot_diagram_{}.svg", self.properties().name()?));
-            data.export(&file_path)
+            
+            data.export(&file_path, PlotType::Scatter2D)
         } else {
             Err(OpossumError::Other(
                 "spot diagram: no light data for export available".into(),
