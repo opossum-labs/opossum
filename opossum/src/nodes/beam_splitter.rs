@@ -9,6 +9,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{PropCondition, Properties, Proptype},
+    rays::Rays,
     spectrum::{merge_spectra, Spectrum},
 };
 #[derive(Debug)]
@@ -88,7 +89,7 @@ impl BeamSplitter {
         &mut self,
         in1: Option<&LightData>,
         in2: Option<&LightData>,
-    ) -> OpmResult<LightResult> {
+    ) -> OpmResult<(Option<LightData>, Option<LightData>)> {
         let mut out1_1_spectrum: Option<Spectrum> = None;
         let mut out1_2_spectrum: Option<Spectrum> = None;
         let mut out2_1_spectrum: Option<Spectrum> = None;
@@ -142,17 +143,54 @@ impl BeamSplitter {
                 spectrum: out2_spec,
             }));
         }
-        if self.properties().inverted()? {
-            Ok(HashMap::from([
-                ("input1".into(), out1_data),
-                ("input2".into(), out2_data),
-            ]))
+        Ok((out1_data, out2_data))
+    }
+    fn analyze_raytrace(
+        &mut self,
+        in1: Option<&LightData>,
+        in2: Option<&LightData>,
+    ) -> OpmResult<(Option<LightData>, Option<LightData>)> {
+        if in1.is_none() && in2.is_none() {
+            return Ok((None, None));
+        };
+        let (mut in_ray1, split1) = if let Some(input1) = in1 {
+            match input1 {
+                LightData::Geometric(r) => {
+                    let mut in_ray = r.clone();
+                    let split_ray = in_ray.split(self.ratio())?;
+                    (in_ray, split_ray)
+                }
+                _ => {
+                    return Err(OpossumError::Analysis(
+                        "expected Rays value at input port".into(),
+                    ))
+                }
+            }
         } else {
-            Ok(HashMap::from([
-                ("out1_trans1_refl2".into(), out1_data),
-                ("out2_trans2_refl1".into(), out2_data),
-            ]))
-        }
+            (Rays::default(), Rays::default())
+        };
+        let (mut in_ray2, split2) = if let Some(input2) = in2 {
+            match input2 {
+                LightData::Geometric(r) => {
+                    let mut in_ray = r.clone();
+                    let split_ray = in_ray.split(self.ratio())?;
+                    (in_ray, split_ray)
+                }
+                _ => {
+                    return Err(OpossumError::Analysis(
+                        "expected Rays value at input port".into(),
+                    ))
+                }
+            }
+        } else {
+            (Rays::default(), Rays::default())
+        };
+        in_ray1.merge(&split2);
+        in_ray2.merge(&split1);
+        Ok((
+            Some(LightData::Geometric(in_ray1)),
+            Some(LightData::Geometric(in_ray2)),
+        ))
     }
 }
 
@@ -197,11 +235,20 @@ impl Optical for BeamSplitter {
         } else {
             None
         };
-        match analyzer_type {
-            AnalyzerType::Energy => self.analyze_energy(in1, in2),
-            _ => Err(OpossumError::Analysis(
-                "analysis type not yet implemented".into(),
-            )),
+        let (out1_data, out2_data) = match analyzer_type {
+            AnalyzerType::Energy => self.analyze_energy(in1, in2)?,
+            AnalyzerType::RayTrace(_) => self.analyze_raytrace(in1, in2)?,
+        };
+        if self.properties().inverted()? {
+            Ok(HashMap::from([
+                ("input1".into(), out1_data),
+                ("input2".into(), out2_data),
+            ]))
+        } else {
+            Ok(HashMap::from([
+                ("out1_trans1_refl2".into(), out1_data),
+                ("out2_trans2_refl1".into(), out2_data),
+            ]))
         }
     }
     fn properties(&self) -> &Properties {
@@ -220,7 +267,7 @@ impl Dottable for BeamSplitter {
 
 #[cfg(test)]
 mod test {
-    use crate::{analyzer::RayTraceConfig, spectrum::create_he_ne_spec};
+    use crate::spectrum::create_he_ne_spec;
     use approx::{assert_abs_diff_eq, AbsDiffEq};
 
     use super::*;
@@ -284,14 +331,6 @@ mod test {
         let mut output_ports = node.ports().output_names();
         output_ports.sort();
         assert_eq!(output_ports, vec!["input1", "input2"]);
-    }
-    #[test]
-    fn analyze_wrong_analyszer() {
-        let mut node = BeamSplitter::default();
-        let input = LightResult::default();
-        assert!(node
-            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
-            .is_err());
     }
     #[test]
     fn analyze_empty_input() {
