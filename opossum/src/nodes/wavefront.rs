@@ -93,13 +93,41 @@ impl Optical for WaveFront {
                 .unwrap();
             let wf_data = rays.wavefront_at_wvl(1053.);
             
-            Some(NodeReport::new(
-                self.properties().node_type().unwrap(),
-                self.properties().name().unwrap(),
-                props,
-            ));
+            if let Some(c) = rays.centroid() {
+                props
+                    .create(
+                        "centroid x (mm)",
+                        "x position of centroid",
+                        None,
+                        c.x.get::<millimeter>().into(),
+                    )
+                    .unwrap();
+
+                props
+                    .create(
+                        "centroid y (mm)",
+                        "y position of centroid",
+                        None,
+                        c.y.get::<millimeter>().into(),
+                    )
+                    .unwrap();
+            }
+            if let Some(radius) = rays.beam_radius_geo() {
+                props
+                    .create(
+                        "geo beam radius (mm)",
+                        "geometric beam radius",
+                        None,
+                        radius.get::<millimeter>().into(),
+                    )
+                    .unwrap();
+            }
         }
-        Ok(())
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            props,
+        ))
     }
 }
 

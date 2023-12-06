@@ -41,6 +41,11 @@ pub trait Plottable {
     /// This function will return an error if the drawing code of the implementing function fails.
     fn chart<B: DrawingBackend>(&self, root: &DrawingArea<B, Shift>) -> OpmResult<()>;
 
+    fn scatter_plot_2D<B: DrawingBackend>(&self, root: &DrawingArea<B, Shift>) -> OpmResult<()> {
+        Ok(())
+    }
+
+    fn get_plot_data(&self, )
     /// Generate a plot of the element as SVG file with the given path.
     /// # Attributes
     /// `f_path`: path to the file destination
@@ -49,10 +54,20 @@ pub trait Plottable {
     /// This function will return an error if
     ///  - the given path is not writable or does not exist.
     ///  - the plot area cannot be filled with a background colour.
-    fn to_svg_plot(&self, f_path: &Path) -> OpmResult<()> {
+    fn to_svg_plot(&self, f_path: &Path, plot_type: PlotType) -> OpmResult<()> {
         let root = SVGBackend::new(f_path, (800, 800)).into_drawing_area();
         root.fill(&WHITE)
             .map_err(|e| format!("filling plot background failed: {e}"))?;
+        match plot_type{
+            PlotType::Scatter2D => self.scatter_plot_2D(&root),
+            // PlotType::Scatter3D =>,
+            // PlotType::Line2D =>,
+            // PlotType::Line3D =>,
+            // PlotType::MultiLine2D =>,
+            // PlotType::MultiLine3D =>,
+            // PlotType::ColorMesh =>,
+            _ => Err(OpossumError::Other("Plot Type not defined, yet!".into()))
+        };
         self.chart(&root)
     }
     /// Generate a plot of the given element as an image buffer.

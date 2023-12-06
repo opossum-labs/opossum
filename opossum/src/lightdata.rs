@@ -41,11 +41,11 @@ impl LightData {
     pub fn export(&self, f_path: &Path, plot_type: PlotType) -> OpmResult<()> {
         match self {
             Self::Energy(d) => {
-                d.to_svg_plot(f_path)?;
+                d.to_svg_plot(f_path, plot_type)?;
                 Ok(())
             }
             Self::Geometric(d) => {
-                d.to_svg_plot(f_path)?;
+                d.to_svg_plot(f_path, plot_type)?;
                 Ok(())
             }
             Self::Fourier => Err(OpossumError::Other(
