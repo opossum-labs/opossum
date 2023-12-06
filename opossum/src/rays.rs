@@ -185,8 +185,28 @@ impl Ray {
         new_ray.e *= transmission;
         Ok(new_ray)
     }
+    /// Split a ray with the given energy splitting ratio.
+    ///
+    /// This function modifies the energy of the existing ray and generates a new split ray. The splitting ratio must be within the range
+    /// `(0.0..=1.0)`. A ratio of 1.0 means that all energy remains in the initial beam and the split beam has an energy of zero. A ratio of 0.0
+    /// corresponds to a fully reflected beam.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if `splitting_ratio` is outside the interval [0.0..1.0].
+    pub fn split(&mut self, splitting_ratio: f64) -> OpmResult<Ray> {
+        if !(0.0..=1.0).contains(&splitting_ratio) {
+            return Err(OpossumError::Other(
+                "energy_ration must be within [0.0;1.0]".into(),
+            ));
+        }
+        let mut split_ray = self.clone();
+        self.e *= splitting_ratio;
+        split_ray.e *= 1.0 - splitting_ratio;
+        Ok(split_ray)
+    }
 }
-///Struct containing all relevant information of a created bundle of rays
+/// Struct containing all relevant information of a ray bundle
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Rays {
     ///vector containing rays
@@ -972,6 +992,23 @@ mod test {
         ));
         let ray = Ray::new_collimated(position, Length::new::<nanometer>(506.0), e_1j).unwrap();
         assert!(ray.filter_energy(&filter).is_err());
+    }
+    #[test]
+    fn ray_split() {
+        let mut ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1054.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        assert!(ray.split(1.1).is_err());
+        assert!(ray.split(-0.1).is_err());
+        let split_ray=ray.split(0.1).unwrap();
+        assert_eq!(ray.energy(), Energy::new::<joule>(0.1));
+        assert_eq!(split_ray.energy(), Energy::new::<joule>(0.9));
+        assert_eq!(ray.position(), split_ray.position());
+        assert_eq!(ray.dir, split_ray.dir);
+        assert_eq!(ray.wavelength(), split_ray.wavelength());
     }
     #[test]
     fn strategy_hexapolar() {

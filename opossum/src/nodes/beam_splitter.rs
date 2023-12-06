@@ -11,7 +11,6 @@ use crate::{
     properties::{PropCondition, Properties, Proptype},
     spectrum::{merge_spectra, Spectrum},
 };
-
 #[derive(Debug)]
 /// An ideal beamsplitter node with a given splitting ratio.
 ///
