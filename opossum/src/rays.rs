@@ -230,6 +230,9 @@ impl Rays {
         energy: Energy,
         strategy: &DistributionStrategy,
     ) -> OpmResult<Self> {
+        if size.is_sign_negative() || !size.is_finite() {
+            return Err(OpossumError::Other("radius must be >= 0.0 and finite".into()));
+        }
         let points: Vec<Point2<Length>> = strategy.generate(size);
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::new();
@@ -287,6 +290,10 @@ impl Rays {
     #[must_use]
     pub fn total_energy(&self) -> Energy {
         self.rays.iter().fold(Energy::zero(), |a, b| a + b.e)
+    }
+    /// Returns the number of rays of this [`Rays`].
+    pub fn nr_of_rays(&self) -> usize {
+        self.rays.len()
     }
     /// Apodize (cut out or attenuate) the ray bundle by a given [`Aperture`].
     pub fn apodize(&mut self, aperture: &Aperture) {
@@ -1051,6 +1058,11 @@ mod test {
     fn strategy_sobol() {
         let strategy = DistributionStrategy::Sobol(10);
         assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 10);
+    }
+    #[test]
+    fn rays_default() {
+        let rays=Rays::default();
+        assert_eq!(rays.nr_of_rays(), 0);
     }
     #[test]
     fn rays_new_uniform_collimated() {

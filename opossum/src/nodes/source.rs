@@ -187,6 +187,7 @@ impl Dottable for Source {
 }
 #[cfg(test)]
 mod test {
+    use approx::assert_abs_diff_eq;
     use uom::si::{length::millimeter, energy::joule};
     use super::*;
     use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spec};
@@ -196,6 +197,23 @@ mod test {
         assert!(create_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(f64::NAN)).is_err());
         assert!(create_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(f64::INFINITY)).is_err());
         assert!(create_collimated_ray_source(Length::new::<millimeter>(-0.1), Energy::new::<joule>(1.0)).is_err());
+        let src=create_collimated_ray_source(Length::zero(), Energy::new::<joule>(1.0)).unwrap();
+        if let Proptype::LightData(light_data)=src.properties().get("light data").unwrap() {
+            if let Some(LightData::Geometric(rays))= light_data {
+                assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 1.0, epsilon=10.0*f64::EPSILON);
+            } else {
+                panic!("no LightData::Geometric found")
+            }
+        } else {
+            panic!("property light data has wrong type");
+        }
+        let src=create_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(1.0)).unwrap();
+        if let Proptype::LightData(light_data)=src.properties().get("light data").unwrap() {
+            if let Some(LightData::Geometric(rays))= light_data {
+                assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 1.0, epsilon=10.0*f64::EPSILON);
+                assert_eq!(rays.nr_of_rays(), 37);
+            } 
+        }
     }
     #[test]
     fn default() {
