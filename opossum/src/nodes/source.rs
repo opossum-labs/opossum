@@ -191,6 +191,7 @@ mod test {
     use super::*;
     use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spec};
     use approx::assert_abs_diff_eq;
+    use assert_matches::assert_matches;
     use uom::si::{angle::degree, energy::joule, length::millimeter};
     #[test]
     fn test_create_collimated_ray_source() {
@@ -263,7 +264,8 @@ mod test {
         } else {
             panic!("cannot unpack light data property");
         }
-        let src = create_point_ray_source(Angle::new::<degree>(1.0), Energy::new::<joule>(1.0)).unwrap();
+        let src =
+            create_point_ray_source(Angle::new::<degree>(1.0), Energy::new::<joule>(1.0)).unwrap();
         if let Ok(Proptype::LightData(Some(LightData::Geometric(rays)))) =
             src.properties().get("light data")
         {
@@ -308,6 +310,17 @@ mod test {
         let node = Source::default();
         assert!(node.ports().input_names().is_empty());
         assert_eq!(node.ports().output_names(), vec!["out1"]);
+    }
+    #[test]
+    fn test_set_light_data() {
+        let mut src = Source::default();
+        if let Ok(Proptype::LightData(light_data)) = src.properties().get("light data") {
+            assert_eq!(light_data, &None);
+        }
+        src.set_light_data(&LightData::Fourier).unwrap();
+        if let Ok(Proptype::LightData(light_data)) = src.properties().get("light data") {
+            assert_matches!(light_data.clone().unwrap(), LightData::Fourier);
+        }
     }
     #[test]
     fn analyze_empty() {
