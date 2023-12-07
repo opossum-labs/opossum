@@ -140,8 +140,8 @@ impl Debug for Source {
             &None
         };
         match data {
-            Some(data) => write!(f, "{data}"),
-            None => write!(f, "no data"),
+            Some(data) => write!(f, "Source: {data}"),
+            None => write!(f, "Source: no data"),
         }
     }
 }
@@ -344,5 +344,13 @@ mod test {
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, light);
+    }
+    #[test]
+    fn debug() {
+        assert_eq!(format!("{:?}", Source::default()), "Source: no data");
+        assert_eq!(
+            format!("{:?}", Source::new("hallo", &LightData::Fourier)),
+            "Source: No display defined for this type of LightData"
+        );
     }
 }
