@@ -220,10 +220,13 @@ impl Rays {
     /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
     /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`DistributionStrategy`].
     ///
+    /// If the given size id zero, a bundle consisting of a single ray along the optical - position (0.0,0.0,0.0) - axis is generated.
+    ///
     /// # Errors
     /// This function returns an error if
-    ///  - the given wavelength is <=0.0, NaN or +inf
-    ///  - the given energy is <=0.0, NaN or +inf
+    ///  - the given wavelength is <= 0.0, NaN or +inf
+    ///  - the given energy is <= 0.0, NaN or +inf
+    ///  - the given size is < 0.0, NaN or +inf
     pub fn new_uniform_collimated(
         size: Length,
         wave_length: Length,
@@ -231,9 +234,15 @@ impl Rays {
         strategy: &DistributionStrategy,
     ) -> OpmResult<Self> {
         if size.is_sign_negative() || !size.is_finite() {
-            return Err(OpossumError::Other("radius must be >= 0.0 and finite".into()));
+            return Err(OpossumError::Other(
+                "radius must be >= 0.0 and finite".into(),
+            ));
         }
-        let points: Vec<Point2<Length>> = strategy.generate(size);
+        let points: Vec<Point2<Length>> = if size.is_zero() {
+            vec![Point2::new(Length::zero(), Length::zero())]
+        } else {
+            strategy.generate(size)
+        };
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::new();
         #[allow(clippy::cast_precision_loss)]
@@ -292,6 +301,7 @@ impl Rays {
         self.rays.iter().fold(Energy::zero(), |a, b| a + b.e)
     }
     /// Returns the number of rays of this [`Rays`].
+    #[must_use]
     pub fn nr_of_rays(&self) -> usize {
         self.rays.len()
     }
@@ -1061,17 +1071,16 @@ mod test {
     }
     #[test]
     fn rays_default() {
-        let rays=Rays::default();
+        let rays = Rays::default();
         assert_eq!(rays.nr_of_rays(), 0);
     }
     #[test]
     fn rays_new_uniform_collimated() {
-        let rays = Rays::new_uniform_collimated(
-            Length::new::<millimeter>(1.0),
-            Length::new::<nanometer>(1054.0),
-            Energy::new::<joule>(1.0),
-            &DistributionStrategy::Hexapolar(2),
-        );
+        let wvl = Length::new::<nanometer>(1054.0);
+        let energy = Energy::new::<joule>(1.0);
+        let strategy = &DistributionStrategy::Hexapolar(2);
+        let rays =
+            Rays::new_uniform_collimated(Length::new::<millimeter>(1.0), wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();
         assert_eq!(rays.rays.len(), 19);
@@ -1079,6 +1088,39 @@ mod test {
             Energy::abs(rays.total_energy() - Energy::new::<joule>(1.0))
                 < Energy::new::<joule>(10.0 * f64::EPSILON)
         );
+        assert!(Rays::new_uniform_collimated(
+            Length::new::<millimeter>(-0.1),
+            wvl,
+            energy,
+            strategy
+        )
+        .is_err(),);
+        assert!(Rays::new_uniform_collimated(
+            Length::new::<millimeter>(f64::NAN),
+            wvl,
+            energy,
+            strategy
+        )
+        .is_err(),);
+        assert!(Rays::new_uniform_collimated(
+            Length::new::<millimeter>(f64::INFINITY),
+            wvl,
+            energy,
+            strategy
+        )
+        .is_err(),);
+    }
+    #[test]
+    fn rays_new_uniform_collimated_zero() {
+        let wvl = Length::new::<nanometer>(1054.0);
+        let energy = Energy::new::<joule>(1.0);
+        let strategy = &DistributionStrategy::Hexapolar(2);
+        let rays = Rays::new_uniform_collimated(Length::zero(), wvl, energy, strategy);
+        assert!(rays.is_ok());
+        let rays = rays.unwrap();
+        assert_eq!(rays.rays.len(), 1);
+        assert_eq!(rays.rays[0].pos, Point3::new(0.0, 0.0, 0.0));
+        assert_eq!(rays.rays[0].dir, Vector3::z());
     }
     #[test]
     fn rays_new_hexapolar_point_source() {
