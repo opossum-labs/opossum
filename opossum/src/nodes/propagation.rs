@@ -52,16 +52,14 @@ impl Propagation {
     /// - the input port name already exists. (Theoretically impossible at this point, as the [`OpticPorts`] are created just before in this function)
     /// - the output port name already exists. (Theoretically impossible at this point, as the [`OpticPorts`] are created just before in this function)
     pub fn new(name: &str, length_along_z: Length) -> OpmResult<Self> {
-        if !length_along_z.is_finite() {
+        if !length_along_z.is_normal() {
             return Err(OpossumError::Other(
                 "propagation length must be finite".into(),
             ));
         }
         let mut props = create_default_props();
-        props.set("name", name.into()).unwrap();
-        props
-            .set("distance", length_along_z.get::<millimeter>().into())
-            .unwrap();
+        props.set("name", name.into())?;
+        props.set("distance", length_along_z.get::<millimeter>().into())?;
         Ok(Self { props })
     }
 }
@@ -108,16 +106,16 @@ impl Optical for Propagation {
 
 impl Dottable for Propagation {
     fn node_color(&self) -> &str {
-       "none" 
+        "none"
     }
 }
 #[cfg(test)]
 mod test {
-    use std::path::Path;
     use assert_matches::assert_matches;
+    use std::path::Path;
 
-    use crate::aperture::Aperture;
     use super::*;
+    use crate::aperture::Aperture;
     #[test]
     fn default() {
         let node = Propagation::default();
@@ -127,8 +125,8 @@ mod test {
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert!(node.properties().get("distance").is_ok());
         assert_matches!(node.properties().get("distance").unwrap(), Proptype::F64(_));
-        if let Ok(Proptype::F64(dist))=node.properties().get("distance") {
-            assert_eq!(dist,&0.0);
+        if let Ok(Proptype::F64(dist)) = node.properties().get("distance") {
+            assert_eq!(dist, &0.0);
         }
         assert_eq!(node.node_color(), "none");
         assert!(node.as_group().is_err());
@@ -137,8 +135,8 @@ mod test {
     fn new() {
         let node = Propagation::new("Test", Length::new::<millimeter>(1.0)).unwrap();
         assert_eq!(node.properties().name().unwrap(), "Test");
-        if let Ok(Proptype::F64(dist))=node.properties().get("distance") {
-            assert_eq!(dist,&1.0);
+        if let Ok(Proptype::F64(dist)) = node.properties().get("distance") {
+            assert_eq!(dist, &1.0);
         }
     }
     #[test]
