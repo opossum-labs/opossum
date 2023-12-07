@@ -256,13 +256,14 @@ impl Rays {
     /// Generate a ray cone (= point source)
     ///
     /// Generate a bundle of rays emerging from a given (x,y) point and a cone direction (as hexapolar pattern) of a given (full) cone angle.
-    /// The parameter `number_of_rings` determines the "density" of the hexapolar pattern (see corresponding function).
+    /// The parameter `number_of_rings` determines the "density" of the hexapolar pattern (see corresponding function). If the cone angle is zero, a ray bundle
+    /// with a single ray along the optical axis at the given position is created.
     ///
     /// # Errors
     /// This functions returns an error if
-    ///  - the given wavelength is <=0.0, nan, or +inf
-    ///  - the given energy is <=0.0, nan, or +inf
-    ///  - the given cone angle is <0.0 degrees or >=180.0 degrees
+    ///  - the given wavelength is <= 0.0, nan, or +inf
+    ///  - the given energy is < 0.0, nan, or +inf
+    ///  - the given cone angle is < 0.0 degrees or >= 180.0 degrees
     pub fn new_hexapolar_point_source(
         position: Point2<Length>,
         cone_angle: Angle,
@@ -270,14 +271,18 @@ impl Rays {
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
-        if cone_angle < Angle::zero() || cone_angle >= Angle::new::<degree>(180.0) {
+        if cone_angle.is_sign_negative() || cone_angle >= Angle::new::<degree>(180.0) {
             return Err(OpossumError::Other(
                 "cone angle must be within (0.0..180.0) degrees range".into(),
             ));
         }
         let size_after_unit_length = (cone_angle / 2.0).tan().value;
-        let points: Vec<Point2<Length>> = DistributionStrategy::Hexapolar(number_of_rings)
-            .generate(Length::new::<millimeter>(size_after_unit_length));
+        let points: Vec<Point2<Length>> = if cone_angle.is_zero() {
+            vec![Point2::new(Length::zero(), Length::zero())]
+        } else {
+            DistributionStrategy::Hexapolar(number_of_rings)
+                .generate(Length::new::<millimeter>(size_after_unit_length))
+        };
         let nr_of_rays = points.len();
         #[allow(clippy::cast_precision_loss)]
         let energy_per_ray = energy / nr_of_rays as f64;
@@ -1133,7 +1138,7 @@ mod test {
             wave_length,
             Energy::new::<joule>(1.0),
         );
-        //assert!(rays.is_ok());
+
         let mut rays = rays.unwrap();
         for ray in &rays.rays {
             assert_eq!(
@@ -1173,6 +1178,28 @@ mod test {
             Energy::new::<joule>(1.0),
         )
         .is_err());
+        assert!(Rays::new_hexapolar_point_source(
+            position,
+            Angle::new::<degree>(1.0),
+            1,
+            wave_length,
+            Energy::new::<joule>(-0.1),
+        )
+        .is_err());
+        let rays = Rays::new_hexapolar_point_source(
+            position,
+            Angle::zero(),
+            1,
+            wave_length,
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        assert_eq!(rays.nr_of_rays(), 1);
+        assert_eq!(
+            rays.rays[0].position(),
+            Point3::new(position.x, position.y, Length::zero())
+        );
+        assert_eq!(rays.rays[0].dir, Vector3::z());
     }
     #[test]
     fn rays_add_ray() {
