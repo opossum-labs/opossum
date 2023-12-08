@@ -142,4 +142,12 @@ mod test {
         let ld = Proptype::from(Some(LightData::Fourier));
         assert_matches!(ld, Proptype::LightData(_));
     }
+    #[test]
+    fn data_energy_pdf_report() {
+        assert!(DataEnergy {
+            spectrum: create_visible_spec()
+        }
+        .pdf_report()
+        .is_ok());
+    }
 }

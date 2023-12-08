@@ -2,7 +2,7 @@
 use uom::si::length::millimeter;
 
 use crate::dottable::Dottable;
-use crate::error::OpmResult;
+use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Proptype};
 use crate::reporter::NodeReport;
@@ -87,7 +87,9 @@ impl Optical for SpotDiagram {
             file_path.push(format!("spot_diagram_{}.svg", self.properties().name()?));
             data.export(&file_path)
         } else {
-            Ok(())
+            Err(OpossumError::Other(
+                "spot diagram: no light data for export available".into(),
+            ))
         }
     }
     fn is_detector(&self) -> bool {
@@ -152,8 +154,12 @@ impl Dottable for SpotDiagram {
 
 #[cfg(test)]
 mod test {
+    use tempfile::tempdir;
+
     use super::*;
-    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spec};
+    use crate::{
+        analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays, spectrum::create_he_ne_spec,
+    };
     #[test]
     fn default() {
         let node = SpotDiagram::default();
@@ -241,5 +247,14 @@ mod test {
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
+    }
+    #[test]
+    fn export_data() {
+        let mut sd = SpotDiagram::default();
+        assert!(sd.export_data(Path::new("")).is_err());
+        sd.light_data = Some(LightData::Geometric(Rays::default()));
+        let tmp_dir = tempdir().unwrap();
+        assert!(sd.export_data(tmp_dir.path()).is_ok());
+        tmp_dir.close().unwrap();
     }
 }
