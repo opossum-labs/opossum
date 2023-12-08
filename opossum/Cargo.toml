@@ -13,6 +13,7 @@ keywords = ["laser", "optics", "physics", "simulation"]
 categories = ["science", "simulation"]
 publish = false
 build = "build.rs"
+readme = "README.md"
 
 [dependencies]
 petgraph = { version = "0", features = ["serde-1"] } # the graph library
