@@ -1,11 +1,13 @@
 #![warn(missing_docs)]
+use image::DynamicImage;
+use serde_derive::{Serialize, Deserialize};
 use uom::si::length::millimeter;
 
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Proptype};
-use crate::reporter::NodeReport;
+use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -28,6 +30,7 @@ use std::path::{Path, PathBuf};
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WaveFront {
     light_data: Option<LightData>,
     props: Properties,
@@ -69,8 +72,13 @@ impl Optical for WaveFront {
     fn export_data(&self, report_dir: &Path) -> OpmResult<()> {
         if let Some(data) = &self.light_data {
             let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!("wavefront_diagram_{}.svg", self.properties().name()?));
-            data.export(&file_path)
+            file_path.push(format!(
+                "wavefront_diagram_{}.svg",
+                self.properties().name()?
+            ));
+            // self.to
+            // data.export(&file_path)
+            Ok(())
         } else {
             Ok(())
         }
@@ -89,17 +97,41 @@ impl Optical for WaveFront {
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
             props
-                .create("Wavefront diagram", "2D wavefront diagram", None, rays.clone().into())
+                .create(
+                    "Wavefront diagram",
+                    "2D wavefront diagram",
+                    None,
+                    self.clone().into(),
+                )
                 .unwrap();
             let wf_data = rays.wavefront_at_wvl(1053.);
-            
+
             Some(NodeReport::new(
                 self.properties().node_type().unwrap(),
                 self.properties().name().unwrap(),
                 props,
-            ));
+            ))
+        } else {
+            None
         }
-        Ok(())
+    }
+}
+
+// impl PdfReportable for WaveFront{
+//     fn pdf_report(&self) -> crate::error::OpmResult<genpdf::elements::LinearLayout> {
+//         let mut layout = genpdf::elements::LinearLayout::vertical();
+//         let img = self.to_img_buf_plot((800,800)).unwrap();
+//         layout.push(
+//             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
+//                 .map_err(|e| format!("adding of image failed: {e}"))?,
+//         );
+//         Ok(layout)
+//     }
+// }
+
+impl From<WaveFront> for Proptype {
+    fn from(value: WaveFront) -> Self {
+        Self::WaveFront(value)
     }
 }
 

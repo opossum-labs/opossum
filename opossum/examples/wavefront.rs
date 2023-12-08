@@ -1,19 +1,23 @@
 use opossum::{
     error::OpmResult,
-    nodes::{create_point_ray_source, EnergyMeter, Propagation, WaveFront, ParaxialSurface, create_collimated_ray_source},
+    nodes::{
+        create_collimated_ray_source, create_point_ray_source, EnergyMeter, ParaxialSurface,
+        Propagation, WaveFront,
+    },
     OpticScenery,
 };
 use std::path::Path;
 use uom::si::{
     angle::degree,
-    energy::{joule, self},
+    energy::{self, joule},
     f64::{Angle, Energy, Length},
     length::meter,
 };
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Wavefont Demo")?;
-    let source = create_collimated_ray_source(Length::new::<meter>(5e-3), Energy::new::<joule>(1.))?;
+    let source =
+        create_collimated_ray_source(Length::new::<meter>(5e-3), Energy::new::<joule>(1.))?;
     let i_s = scenery.add_node(source);
     let i_p1 = scenery.add_node(Propagation::new("propagation", Length::new::<meter>(0.1))?);
     let i_wf1 = scenery.add_node(WaveFront::default());

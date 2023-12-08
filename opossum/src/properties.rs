@@ -10,7 +10,7 @@ use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
-    nodes::{FilterType, Metertype, PortMap, SpectrometerType},
+    nodes::{FilterType, Metertype, PortMap, SpectrometerType, SpotDiagram, WaveFront, Spectrometer},
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     rays::Rays,
@@ -447,9 +447,11 @@ pub enum Proptype {
     /// A property for storing an optical [`Aperture`]
     Aperture(Aperture),
     /// This property stores a [`Spectrum`]
-    Spectrum(Spectrum),
+    Spectrometer(Spectrometer),
     /// This property stores optical [`Rays`]
-    Rays(Rays),
+    SpotDiagram(SpotDiagram),
+    /// This property stores optical [`Rays`]
+    WaveFront(WaveFront),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
 }
@@ -464,8 +466,9 @@ impl PdfReportable for Proptype {
             Self::FilterType(value) => l.push(value.pdf_report()?),
             Self::SpectrometerType(value) => l.push(value.pdf_report()?),
             Self::Metertype(value) => l.push(value.pdf_report()?),
-            Self::Spectrum(value) => l.push(value.pdf_report()?),
-            Self::Rays(value) => l.push(value.pdf_report()?),
+            Self::Spectrometer(value) => l.push(value.pdf_report()?),
+            Self::SpotDiagram(value) => l.push(value.pdf_report()?),
+            // Self::WaveFront(value) => l.push(value.pdf_report()?),
             Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
             _ => l.push(
                 genpdf::elements::Paragraph::default()

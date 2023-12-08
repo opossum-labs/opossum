@@ -1,8 +1,16 @@
 #![warn(missing_docs)]
+use image::DynamicImage;
+use nalgebra::MatrixXx2;
+use plotters::style::RGBAColor;
+use serde_derive::{Deserialize, Serialize};
+use uom::si::f64::Length;
+use uom::si::length::nanometer;
+
 use crate::dottable::Dottable;
-use crate::error::OpmResult;
+use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::nodes::OpossumError;
+use crate::plottable::{Plottable, PlotData};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
@@ -31,6 +39,13 @@ impl From<SpectrometerType> for Proptype {
         Self::SpectrometerType(value)
     }
 }
+
+impl From<Spectrometer> for Proptype {
+    fn from(value: Spectrometer) -> Self {
+        Self::Spectrometer(value)
+    }
+}
+
 impl PdfReportable for SpectrometerType {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let element = match self {
@@ -58,6 +73,7 @@ impl PdfReportable for SpectrometerType {
 /// `
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Spectrometer {
     light_data: Option<LightData>,
     props: Properties,
@@ -135,6 +151,14 @@ impl Spectrometer {
         self.props.set("spectrometer type", meter_type.into())?;
         Ok(())
     }
+
+    fn get_plot_data(&self) -> OpmResult<MatrixXx2<f64>>{
+        match &self.light_data {
+            Some(LightData::Energy(e)) => Ok(e.spectrum.get_plot_data()),
+            Some(LightData::Geometric(r)) => Ok(r.to_spectrum(&Length::new::<nanometer>(0.2))?.get_plot_data()),
+            _ => Err(OpossumError::Other("lightdata type not defined!".into()))
+        }
+    }
 }
 impl Optical for Spectrometer {
     fn analyze(
@@ -155,7 +179,8 @@ impl Optical for Spectrometer {
         if let Some(data) = &self.light_data {
             let mut file_path = PathBuf::from(report_dir);
             file_path.push(format!("spectrum_{}.svg", self.properties().name()?));
-            data.export(&file_path)
+            self.to_svg_plot(&file_path, (1200,800))
+            // data.export(&file_path)
         } else {
             Err(OpossumError::Other(
                 "spectrometer: no light data available".into(),
@@ -182,7 +207,7 @@ impl Optical for Spectrometer {
             };
             if let Some(spectrum) = spectrum {
                 props
-                    .create("Spectrum", "Output spectrum", None, spectrum.into())
+                    .create("Spectrum", "Output spectrum", None, self.clone().into())
                     .unwrap();
                 props
                     .create(
@@ -227,6 +252,35 @@ impl Dottable for Spectrometer {
         "lightseagreen"
     }
 }
+
+
+
+impl PdfReportable for Spectrometer {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let img = self.to_img_buf_plot((1200,800)).unwrap();
+        layout.push(
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
+                .map_err(|e| format!("adding of image failed: {e}"))?,
+        );
+        Ok(layout)
+    }
+}
+
+impl Plottable for Spectrometer{
+    fn create_plot<B: plotters::prelude::DrawingBackend>(&self, root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>) -> OpmResult<()> {
+        let plot_spec = self.get_plot_data()?;
+        let marker_color = RGBAColor{0:255, 1:0, 2:0, 3:1.};
+        let xlabel = "x (mm)";
+        let ylabel = "y (mm)";
+        self.plot_2d_line(&PlotData::Dim2(plot_spec), marker_color, vec![[true, true], [true, true]], xlabel, ylabel, root);
+        
+        Ok(())
+    }
+}
+
+
+
 #[cfg(test)]
 mod test {
     use tempfile::tempdir;
