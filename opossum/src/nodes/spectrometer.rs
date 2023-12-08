@@ -1,20 +1,20 @@
 #![warn(missing_docs)]
-use serde_derive::{Deserialize, Serialize};
-use uom::si::f64::Length;
-use uom::si::length::nanometer;
-
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
+use crate::nodes::OpossumError;
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
 };
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
+use uom::si::f64::Length;
+use uom::si::length::nanometer;
 
 #[non_exhaustive]
 #[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -157,7 +157,9 @@ impl Optical for Spectrometer {
             file_path.push(format!("spectrum_{}.svg", self.properties().name()?));
             data.export(&file_path)
         } else {
-            Ok(())
+            Err(OpossumError::Other(
+                "spectrometer: no light data available".into(),
+            ))
         }
     }
     fn is_detector(&self) -> bool {
@@ -227,11 +229,18 @@ impl Dottable for Spectrometer {
 }
 #[cfg(test)]
 mod test {
+    use tempfile::tempdir;
+
     use super::*;
     use crate::{
         analyzer::AnalyzerType,
         lightdata::DataEnergy,
+        rays::{DistributionStrategy, Rays},
         spectrum::{create_he_ne_spec, create_visible_spec},
+    };
+    use uom::{
+        num_traits::Zero,
+        si::{energy::joule, f64::Energy},
     };
     #[test]
     fn debug() {
@@ -349,5 +358,39 @@ mod test {
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
+    }
+    #[test]
+    fn export_data() {
+        let mut s = Spectrometer::default();
+        assert!(s.export_data(Path::new("")).is_err());
+        s.light_data = Some(LightData::Geometric(Rays::default()));
+        let tmp_dir = tempdir().unwrap();
+        assert!(s.export_data(tmp_dir.path()).is_ok());
+        tmp_dir.close().unwrap();
+    }
+    #[test]
+    fn report() {
+        let mut sd = Spectrometer::default();
+        let node_report = sd.report().unwrap();
+        assert_eq!(node_report.detector_type(), "spectrometer");
+        assert_eq!(node_report.name(), "spectrometer");
+        let node_props = node_report.properties();
+        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
+        assert_eq!(nr_of_props, 0);
+        sd.light_data = Some(LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::zero(),
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+                &DistributionStrategy::Hexapolar(1),
+            )
+            .unwrap(),
+        ));
+        let node_report = sd.report().unwrap();
+        let node_props = node_report.properties();
+        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
+        assert_eq!(nr_of_props, 2);
+        assert!(node_props.contains("Spectrum"));
+        assert!(node_props.contains("Model"));
     }
 }

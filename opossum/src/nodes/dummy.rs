@@ -183,6 +183,19 @@ mod test {
         assert_eq!(node.properties().node_type().unwrap(), "dummy");
     }
     #[test]
+    fn analyze_empty() {
+        let mut dummy = Dummy::default();
+        let mut input = LightResult::default();
+        input.insert("front".into(), None);
+        let output = dummy.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("rear"));
+        assert_eq!(output.len(), 1);
+        let output = output.get("rear").unwrap();
+        assert!(output.is_none());
+    }
+    #[test]
     fn analyze_ok() {
         let mut dummy = Dummy::default();
         let mut input = LightResult::default();

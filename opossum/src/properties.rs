@@ -85,18 +85,18 @@ impl Properties {
         conditions: Option<Vec<PropCondition>>,
         value: Proptype,
     ) -> OpmResult<()> {
+        if self.props.contains_key(name) {
+            return Err(OpossumError::Properties(format!(
+                "property {name} already created",
+            )));
+        }
         let new_property = Property {
             prop: value,
             description: description.into(),
             conditions,
         };
-        if self.props.insert(name.into(), new_property).is_some() {
-            Err(OpossumError::Properties(format!(
-                "property {name} already created",
-            )))
-        } else {
-            Ok(())
-        }
+        self.props.insert(name.into(), new_property);
+        Ok(())
     }
     /// Set the value of the property with the given name.
     ///
@@ -184,7 +184,7 @@ impl Properties {
     ///
     /// This function will return an error if the property `name` and the property `node_type` does not exist.
     pub fn name(&self) -> OpmResult<&str> {
-        if let Proptype::String(name) = &self.get("name")? {
+        if let Ok(Proptype::String(name)) = &self.get("name") {
             Ok(name)
         } else {
             self.node_type()
@@ -196,7 +196,7 @@ impl Properties {
     ///
     /// This function will return an error if the property `node_type` does not exist.
     pub fn node_type(&self) -> OpmResult<&str> {
-        if let Proptype::String(node_type) = &self.get("node_type")? {
+        if let Ok(Proptype::String(node_type)) = &self.get("node_type") {
             Ok(node_type)
         } else {
             Err(OpossumError::Properties(
@@ -208,7 +208,7 @@ impl Properties {
     ///
     /// # Errors
     ///
-    /// Retruns an error if the underlying property `inverted` does not exist or has the wrong datatype.
+    /// Returns an error if the underlying property `inverted` does not exist or has the wrong datatype.
     pub fn inverted(&self) -> OpmResult<bool> {
         self.get_bool("inverted")
     }
@@ -494,6 +494,64 @@ pub enum PropCondition {
 #[cfg(test)]
 mod test {
     use super::*;
+    use assert_matches::assert_matches;
+    #[test]
+    fn properties_create() {
+        let mut props = Properties::default();
+        assert!(props
+            .create("test", "my description", None, 1.into())
+            .is_ok());
+        assert_eq!(props.props.len(), 1);
+        assert!(props
+            .create("test2", "my description", None, 1.into())
+            .is_ok());
+        assert_eq!(props.props.len(), 2);
+        assert!(props
+            .create("test", "my description", None, 2.into())
+            .is_err());
+        assert_eq!(props.props.len(), 2);
+    }
+    #[test]
+    fn properties_get() {
+        let mut props = Properties::default();
+        props
+            .create("test", "my description", None, 1.into())
+            .unwrap();
+        let prop = props.get("test").unwrap();
+        assert_matches!(prop, &Proptype::I32(1));
+        assert!(props.get("wrong").is_err());
+    }
+    #[test]
+    fn properties_node_type() {
+        let mut props = Properties::default();
+        assert!(props.node_type().is_err());
+        props
+            .create("node_type", "my description", None, "my node".into())
+            .unwrap();
+        assert_eq!(props.node_type().unwrap(), "my node");
+        let mut props = Properties::default();
+        props
+            .create("node_type", "my description", None, true.into())
+            .unwrap();
+        assert!(props.node_type().is_err());
+    }
+    #[test]
+    fn properties_get_bool() {
+        let mut props = Properties::default();
+        props
+            .create("no bool", "my description", None, 1.into())
+            .unwrap();
+        props
+            .create("my bool", "my description", None, true.into())
+            .unwrap();
+        props
+            .create("my other bool", "my description", None, false.into())
+            .unwrap();
+        assert!(props.get_bool("wrong").is_err());
+        assert!(props.get_bool("no bool").is_err());
+        assert_eq!(props.get_bool("my bool").unwrap(), true);
+        assert_eq!(props.get_bool("my other bool").unwrap(), false);
+    }
     #[test]
     fn property_description() {
         let prop = Property {

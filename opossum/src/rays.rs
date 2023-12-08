@@ -49,8 +49,8 @@ impl Ray {
     ///
     /// # Errors
     /// This function returns an error if
-    ///  - the given wavelength is <=0.0, `NaN` or +inf
-    ///  - the given energy is <=0.0, `NaN` or +inf
+    ///  - the given wavelength is <= 0.0, `NaN` or +inf
+    ///  - the given energy is < 0.0, `NaN` or +inf
     pub fn new_collimated(
         position: Point2<Length>,
         wave_length: Length,
@@ -64,8 +64,8 @@ impl Ray {
     ///
     /// # Errors
     /// This function returns an error if
-    ///  - the given wavelength is <=0.0, `NaN` or +inf
-    ///  - the given energy is <=0.0, `NaN` or +inf
+    ///  - the given wavelength is <= 0.0, `NaN` or +inf
+    ///  - the given energy is < 0.0, `NaN` or +inf
     ///  - the direction vector has a zero length
     pub fn new(
         position: Point2<Length>,
@@ -76,7 +76,7 @@ impl Ray {
         if wave_length.is_zero() || wave_length.is_sign_negative() || !wave_length.is_finite() {
             return Err(OpossumError::Other("wavelength must be >0".into()));
         }
-        if energy.is_zero() || energy.is_sign_negative() || !energy.is_finite() {
+        if energy.is_sign_negative() || !energy.is_finite() {
             return Err(OpossumError::Other("energy must be >0".into()));
         }
         if direction.norm().is_zero() {
@@ -220,17 +220,29 @@ impl Rays {
     /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
     /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`DistributionStrategy`].
     ///
+    /// If the given size id zero, a bundle consisting of a single ray along the optical - position (0.0,0.0,0.0) - axis is generated.
+    ///
     /// # Errors
     /// This function returns an error if
-    ///  - the given wavelength is <=0.0, NaN or +inf
-    ///  - the given energy is <=0.0, NaN or +inf
+    ///  - the given wavelength is <= 0.0, NaN or +inf
+    ///  - the given energy is <= 0.0, NaN or +inf
+    ///  - the given size is < 0.0, NaN or +inf
     pub fn new_uniform_collimated(
         size: Length,
         wave_length: Length,
         energy: Energy,
         strategy: &DistributionStrategy,
     ) -> OpmResult<Self> {
-        let points: Vec<Point2<Length>> = strategy.generate(size);
+        if size.is_sign_negative() || !size.is_finite() {
+            return Err(OpossumError::Other(
+                "radius must be >= 0.0 and finite".into(),
+            ));
+        }
+        let points: Vec<Point2<Length>> = if size.is_zero() {
+            vec![Point2::new(Length::zero(), Length::zero())]
+        } else {
+            strategy.generate(size)
+        };
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::new();
         #[allow(clippy::cast_precision_loss)]
@@ -244,13 +256,14 @@ impl Rays {
     /// Generate a ray cone (= point source)
     ///
     /// Generate a bundle of rays emerging from a given (x,y) point and a cone direction (as hexapolar pattern) of a given (full) cone angle.
-    /// The parameter `number_of_rings` determines the "density" of the hexapolar pattern (see corresponding function).
+    /// The parameter `number_of_rings` determines the "density" of the hexapolar pattern (see corresponding function). If the cone angle is zero, a ray bundle
+    /// with a single ray along the optical axis at the given position is created.
     ///
     /// # Errors
     /// This functions returns an error if
-    ///  - the given wavelength is <=0.0, nan, or +inf
-    ///  - the given energy is <=0.0, nan, or +inf
-    ///  - the given cone angle is <0.0 degrees or >=180.0 degrees
+    ///  - the given wavelength is <= 0.0, nan, or +inf
+    ///  - the given energy is < 0.0, nan, or +inf
+    ///  - the given cone angle is < 0.0 degrees or >= 180.0 degrees
     pub fn new_hexapolar_point_source(
         position: Point2<Length>,
         cone_angle: Angle,
@@ -258,14 +271,18 @@ impl Rays {
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
-        if cone_angle < Angle::zero() || cone_angle >= Angle::new::<degree>(180.0) {
+        if cone_angle.is_sign_negative() || cone_angle >= Angle::new::<degree>(180.0) {
             return Err(OpossumError::Other(
                 "cone angle must be within (0.0..180.0) degrees range".into(),
             ));
         }
         let size_after_unit_length = (cone_angle / 2.0).tan().value;
-        let points: Vec<Point2<Length>> = DistributionStrategy::Hexapolar(number_of_rings)
-            .generate(Length::new::<millimeter>(size_after_unit_length));
+        let points: Vec<Point2<Length>> = if cone_angle.is_zero() {
+            vec![Point2::new(Length::zero(), Length::zero())]
+        } else {
+            DistributionStrategy::Hexapolar(number_of_rings)
+                .generate(Length::new::<millimeter>(size_after_unit_length))
+        };
         let nr_of_rays = points.len();
         #[allow(clippy::cast_precision_loss)]
         let energy_per_ray = energy / nr_of_rays as f64;
@@ -287,6 +304,11 @@ impl Rays {
     #[must_use]
     pub fn total_energy(&self) -> Energy {
         self.rays.iter().fold(Energy::zero(), |a, b| a + b.e)
+    }
+    /// Returns the number of rays of this [`Rays`].
+    #[must_use]
+    pub fn nr_of_rays(&self) -> usize {
+        self.rays.len()
     }
     /// Apodize (cut out or attenuate) the ray bundle by a given [`Aperture`].
     pub fn apodize(&mut self, aperture: &Aperture) {
@@ -682,11 +704,11 @@ mod test {
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(0.0)
         )
-        .is_err());
+        .is_ok());
         assert!(Ray::new_collimated(
             position,
             Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(-10.0)
+            Energy::new::<joule>(-0.1)
         )
         .is_err());
         assert!(Ray::new_collimated(
@@ -777,14 +799,7 @@ mod test {
             position,
             direction,
             Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(0.0)
-        )
-        .is_err());
-        assert!(Ray::new(
-            position,
-            direction,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(-10.0)
+            Energy::new::<joule>(-0.1)
         )
         .is_err());
         assert!(Ray::new(
@@ -1060,13 +1075,17 @@ mod test {
         assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 10);
     }
     #[test]
+    fn rays_default() {
+        let rays = Rays::default();
+        assert_eq!(rays.nr_of_rays(), 0);
+    }
+    #[test]
     fn rays_new_uniform_collimated() {
-        let rays = Rays::new_uniform_collimated(
-            Length::new::<millimeter>(1.0),
-            Length::new::<nanometer>(1054.0),
-            Energy::new::<joule>(1.0),
-            &DistributionStrategy::Hexapolar(2),
-        );
+        let wvl = Length::new::<nanometer>(1054.0);
+        let energy = Energy::new::<joule>(1.0);
+        let strategy = &DistributionStrategy::Hexapolar(2);
+        let rays =
+            Rays::new_uniform_collimated(Length::new::<millimeter>(1.0), wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();
         assert_eq!(rays.rays.len(), 19);
@@ -1074,6 +1093,39 @@ mod test {
             Energy::abs(rays.total_energy() - Energy::new::<joule>(1.0))
                 < Energy::new::<joule>(10.0 * f64::EPSILON)
         );
+        assert!(Rays::new_uniform_collimated(
+            Length::new::<millimeter>(-0.1),
+            wvl,
+            energy,
+            strategy
+        )
+        .is_err(),);
+        assert!(Rays::new_uniform_collimated(
+            Length::new::<millimeter>(f64::NAN),
+            wvl,
+            energy,
+            strategy
+        )
+        .is_err(),);
+        assert!(Rays::new_uniform_collimated(
+            Length::new::<millimeter>(f64::INFINITY),
+            wvl,
+            energy,
+            strategy
+        )
+        .is_err(),);
+    }
+    #[test]
+    fn rays_new_uniform_collimated_zero() {
+        let wvl = Length::new::<nanometer>(1054.0);
+        let energy = Energy::new::<joule>(1.0);
+        let strategy = &DistributionStrategy::Hexapolar(2);
+        let rays = Rays::new_uniform_collimated(Length::zero(), wvl, energy, strategy);
+        assert!(rays.is_ok());
+        let rays = rays.unwrap();
+        assert_eq!(rays.rays.len(), 1);
+        assert_eq!(rays.rays[0].pos, Point3::new(0.0, 0.0, 0.0));
+        assert_eq!(rays.rays[0].dir, Vector3::z());
     }
     #[test]
     fn rays_new_hexapolar_point_source() {
@@ -1086,7 +1138,7 @@ mod test {
             wave_length,
             Energy::new::<joule>(1.0),
         );
-        //assert!(rays.is_ok());
+
         let mut rays = rays.unwrap();
         for ray in &rays.rays {
             assert_eq!(
@@ -1126,6 +1178,28 @@ mod test {
             Energy::new::<joule>(1.0),
         )
         .is_err());
+        assert!(Rays::new_hexapolar_point_source(
+            position,
+            Angle::new::<degree>(1.0),
+            1,
+            wave_length,
+            Energy::new::<joule>(-0.1),
+        )
+        .is_err());
+        let rays = Rays::new_hexapolar_point_source(
+            position,
+            Angle::zero(),
+            1,
+            wave_length,
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        assert_eq!(rays.nr_of_rays(), 1);
+        assert_eq!(
+            rays.rays[0].position(),
+            Point3::new(position.x, position.y, Length::zero())
+        );
+        assert_eq!(rays.rays[0].dir, Vector3::z());
     }
     #[test]
     fn rays_add_ray() {

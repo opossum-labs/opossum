@@ -1062,4 +1062,16 @@ mod test {
             ]
         );
     }
+    #[test]
+    fn debug() {
+        let s = Spectrum::new(
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(4.0),
+            Length::new::<micrometer>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", s),
+            "1000.00 nm -> 0\n2000.00 nm -> 0\n3000.00 nm -> 0\n"
+        );
+    }
 }
