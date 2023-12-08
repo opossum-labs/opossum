@@ -57,6 +57,21 @@ impl NodeReport {
             properties,
         }
     }
+    /// Returns a reference to the detector type of this [`NodeReport`].
+    #[must_use]
+    pub fn detector_type(&self) -> &str {
+        self.detector_type.as_ref()
+    }
+    /// Returns a reference to the name of this [`NodeReport`].
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.name.as_ref()
+    }
+    /// Returns a reference to the properties of this [`NodeReport`].
+    #[must_use]
+    pub const fn properties(&self) -> &Properties {
+        &self.properties
+    }
 }
 
 /// Trait for providing information to be integrated in an PDF analysis report.

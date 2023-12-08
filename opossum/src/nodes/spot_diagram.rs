@@ -154,11 +154,19 @@ impl Dottable for SpotDiagram {
 
 #[cfg(test)]
 mod test {
-    use tempfile::tempdir;
-
     use super::*;
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays, spectrum::create_he_ne_spec,
+        analyzer::AnalyzerType,
+        lightdata::DataEnergy,
+        rays::{DistributionStrategy, Rays},
+        spectrum::create_he_ne_spec,
+    };
+    use tempfile::tempdir;
+    use uom::num_traits::Zero;
+    use uom::si::{
+        energy::{joule, Energy},
+        f64::Length,
+        length::nanometer,
     };
     #[test]
     fn default() {
@@ -256,5 +264,31 @@ mod test {
         let tmp_dir = tempdir().unwrap();
         assert!(sd.export_data(tmp_dir.path()).is_ok());
         tmp_dir.close().unwrap();
+    }
+    #[test]
+    fn report() {
+        let mut sd = SpotDiagram::default();
+        let node_report = sd.report().unwrap();
+        assert_eq!(node_report.detector_type(), "spot diagram");
+        assert_eq!(node_report.name(), "spot diagram");
+        let node_props = node_report.properties();
+        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
+        assert_eq!(nr_of_props, 0);
+        sd.light_data = Some(LightData::Geometric(Rays::default()));
+        let node_report = sd.report().unwrap();
+        assert!(node_report.properties().contains("Spot diagram"));
+        sd.light_data = Some(LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::zero(),
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+                &DistributionStrategy::Hexapolar(1),
+            )
+            .unwrap(),
+        ));
+        let node_report = sd.report().unwrap();
+        let node_props = node_report.properties();
+        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
+        assert_eq!(nr_of_props, 4);
     }
 }
