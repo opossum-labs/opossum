@@ -10,7 +10,7 @@ use uom::si::{energy::joule, f64::Energy};
 
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::FilterType;
-use crate::plottable::{Plottable, PlotType};
+use crate::plottable::{PlotType, Plottable};
 use crate::properties::Proptype;
 use crate::rays::Rays;
 use crate::reporter::PdfReportable;
@@ -29,31 +29,31 @@ pub enum LightData {
     /// placeholder value for future Fourier optics analysis, nothing implementd yet.
     Fourier,
 }
-impl LightData {
-    /// Export [`LightData`] to a specific file format
-    /// # Attributes
-    /// * `f_path`: path to the file destination
-    ///
-    /// # Errors
-    /// This function will return an error if
-    ///  - `to_svg_plot` fails for [`LightData::Energy`] the case that the plot area cannot be filled with a background colour.
-    ///  - no export function ist defined for the conrecte type of [`LightData`]
-    pub fn export(&self, f_path: &Path, plot_type: PlotType) -> OpmResult<()> {
-        match self {
-            Self::Energy(d) => {
-                d.to_svg_plot(f_path)?;
-                Ok(())
-            }
-            Self::Geometric(d) => {
-                d.to_svg_plot(f_path)?;
-                Ok(())
-            }
-            Self::Fourier => Err(OpossumError::Other(
-                "export: no export function defined for this type of LightData".into(),
-            )),
-        }
-    }
-}
+// impl LightData {
+//     /// Export [`LightData`] to a specific file format
+//     /// # Attributes
+//     /// * `f_path`: path to the file destination
+//     ///
+//     /// # Errors
+//     /// This function will return an error if
+//     ///  - `to_svg_plot` fails for [`LightData::Energy`] the case that the plot area cannot be filled with a background colour.
+//     ///  - no export function ist defined for the conrecte type of [`LightData`]
+//     pub fn export(&self, f_path: &Path) -> OpmResult<()> {
+//         match self {
+//             Self::Energy(d) => {
+//                 d.to_svg_plot(f_path)?;
+//                 Ok(())
+//             }
+//             Self::Geometric(d) => {
+//                 d.to_svg_plot(f_path)?;
+//                 Ok(())
+//             }
+//             Self::Fourier => Err(OpossumError::Other(
+//                 "export: no export function defined for this type of LightData".into(),
+//             )),
+//         }
+//     }
+// }
 impl Display for LightData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -95,16 +95,16 @@ impl DataEnergy {
         Ok(())
     }
 }
-impl PdfReportable for DataEnergy {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        self.spectrum.pdf_report()
-    }
-}
-impl Plottable for DataEnergy {
-    fn chart<B: DrawingBackend>(&self, root: &DrawingArea<B, Shift>) -> OpmResult<()> {
-        self.spectrum.chart(root)
-    }
-}
+// impl PdfReportable for DataEnergy {
+//     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+//         self.spectrum.pdf_report()
+//     }
+// }
+// impl Plottable for DataEnergy {
+//     fn chart<B: DrawingBackend>(&self, root: &DrawingArea<B, Shift>) -> OpmResult<()> {
+//         self.spectrum.chart(root)
+//     }
+// }
 impl From<Option<LightData>> for Proptype {
     fn from(value: Option<LightData>) -> Self {
         Self::LightData(value)
@@ -113,7 +113,7 @@ impl From<Option<LightData>> for Proptype {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{spectrum::create_visible_spec, plottable::PlotType};
+    use crate::{plottable::PlotType, spectrum::create_visible_spec};
     use assert_matches::assert_matches;
     #[test]
     fn display_unknown() {
@@ -133,10 +133,10 @@ mod test {
     fn debug() {
         assert_eq!(format!("{:?}", LightData::Fourier), "Fourier");
     }
-    #[test]
-    fn export_wrong() {
-        assert!(LightData::Fourier.export(Path::new(""), PlotType::ColorMesh).is_err());
-    }
+    // #[test]
+    // fn export_wrong() {
+    //     assert!(LightData::Fourier.export(Path::new("")).is_err());
+    // }
     #[test]
     fn from() {
         let ld = Proptype::from(Some(LightData::Fourier));

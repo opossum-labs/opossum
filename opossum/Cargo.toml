@@ -37,14 +37,16 @@ chrono = { version= "0", features = ["serde"] }
 embed-doc-image = "0" # allows for embedded images in the rust API doc
 
 itertools-num="0"
-ncollide2d = "0.33"
-nalgebra = { version= "0.30", features = ["serde-serialize"] }
 
 genpdf={ version="0", features = ["images"] }
 image="0.23"
 tempfile="3"
 rand="0"
 sobol="1"
+itertools = "0.12.0"
+accurate = "0.3.1"
+nalgebra = "0.30"
+ncollide2d = { version = "0.33.0", features = ["serde-serialize"] }
 [features]
 doc-images = []
 

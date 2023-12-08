@@ -34,7 +34,7 @@ impl PdfReportable for FilterType {
             ))),
             Self::Spectrum(spectrum) => {
                 l.push(genpdf::elements::Text::new("transmission spectrum"));
-                l.push(spectrum.pdf_report()?);
+                // l.push(spectrum.pdf_report()?);
             }
         };
         Ok(l)

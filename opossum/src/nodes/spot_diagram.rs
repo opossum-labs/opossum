@@ -1,12 +1,16 @@
 #![warn(missing_docs)]
+use image::DynamicImage;
+use plotters::chart::ChartBuilder;
+use plotters::style::RGBAColor;
+use serde_derive::{Serialize, Deserialize};
 use uom::si::length::millimeter;
 
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
-use crate::plottable::PlotType;
+use crate::plottable::{PlotType, Plottable, PlotData};
 use crate::properties::{Properties, Proptype};
-use crate::reporter::NodeReport;
+use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -29,6 +33,7 @@ use std::path::{Path, PathBuf};
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SpotDiagram {
     light_data: Option<LightData>,
     props: Properties,
@@ -86,8 +91,8 @@ impl Optical for SpotDiagram {
         if let Some(data) = &self.light_data {
             let mut file_path = PathBuf::from(report_dir);
             file_path.push(format!("spot_diagram_{}.svg", self.properties().name()?));
-            
-            data.export(&file_path, PlotType::Scatter2D)
+            self.to_svg_plot(&file_path, (800,800))
+            // data.export(&file_path)
         } else {
             Ok(())
         }
@@ -106,7 +111,7 @@ impl Optical for SpotDiagram {
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
             props
-                .create("Spot diagram", "2D spot diagram", None, rays.clone().into())
+                .create("Spot diagram", "2D spot diagram", None, self.clone().into())
                 .unwrap();
             if let Some(c) = rays.centroid() {
                 props
@@ -149,6 +154,66 @@ impl Optical for SpotDiagram {
 impl Dottable for SpotDiagram {
     fn node_color(&self) -> &str {
         "darkorange"
+    }
+}
+
+impl From<SpotDiagram> for Proptype {
+    fn from(value: SpotDiagram) -> Self {
+        Self::SpotDiagram(value)
+    }
+}
+
+impl PdfReportable for SpotDiagram{
+    fn pdf_report(&self) -> crate::error::OpmResult<genpdf::elements::LinearLayout> {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let img = self.to_img_buf_plot((800,800)).unwrap();
+        layout.push(
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
+                .map_err(|e| format!("adding of image failed: {e}"))?,
+        );
+        Ok(layout)
+    }
+}
+
+impl Plottable for SpotDiagram{
+    fn create_plot<B: plotters::prelude::DrawingBackend>(&self, root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>) -> OpmResult<()> {
+
+        let data = &self.light_data;
+        if let Some(LightData::Geometric(rays)) = data {
+            let rays_xy_pos = rays.get_xy_rays_pos();
+            let marker_color = RGBAColor{0:255, 1:0, 2:0, 3:1.};
+            let xlabel = "x (mm)";
+            let ylabel = "y (mm)";
+            self.plot_2d_scatter(&PlotData::Dim2(rays_xy_pos), marker_color, vec![[true, true], [true, true]], xlabel, ylabel, root);
+        }
+
+        // let mut chart = ChartBuilder::on(root)
+        //     .margin(15)
+        //     .x_label_area_size(100)
+        //     .y_label_area_size(100)
+        //     .build_cartesian_2d(x_min..x_max, y_min..y_max)
+        //     .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
+
+        // chart
+        //     .configure_mesh()
+        //     .x_desc("x (mm)")
+        //     .y_desc("y (mm)")
+        //     .label_style(TextStyle::from(("sans-serif", 30).into_font()))
+        //     .draw()
+        //     .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
+        // let points: Vec<(f64, f64)> = self.rays.iter().map(|ray| (ray.pos.x, ray.pos.y)).collect();
+        // let series = PointSeries::of_element(points, 5, &RED, &|c, s, st| {
+        //     EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+        //         + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+        // });
+
+        // chart
+        //     .draw_series(series)
+        //     .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
+        // root.present()
+        //     .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
+
+        Ok(())
     }
 }
 
