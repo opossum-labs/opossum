@@ -4,8 +4,12 @@
 use crate::{error::OpmResult, properties::Properties, OpticScenery};
 use chrono::{DateTime, Local};
 use genpdf::{self, elements, style, Alignment, Scale};
+use image::{io::Reader, DynamicImage};
 use serde_derive::Serialize;
-use std::path::{Path, PathBuf};
+use std::{
+    io::Cursor,
+    path::{Path, PathBuf},
+};
 #[derive(Serialize, Debug)]
 /// Structure for storing data being integrated in an analysis report.
 pub struct AnalysisReport {
@@ -98,12 +102,22 @@ impl ReportGenerator {
         Self { report }
     }
     fn add_report_title(&self, doc: &mut genpdf::Document) {
-        let mut img_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        img_path.push("logo/Logo_square.png");
-        let image = elements::Image::from_path(img_path)
+        let img_data = include_bytes!("../logo/Logo_square.png");
+        let img = Reader::new(Cursor::new(img_data))
+            .with_guessed_format()
+            .unwrap()
+            .decode()
+            .unwrap()
+            .into_rgb8();
+        let img = DynamicImage::ImageRgb8(img);
+        let image = elements::Image::from_dynamic_image(img)
             .expect("Failed to load image")
             .with_scale(Scale::new(0.2, 0.2))
             .with_alignment(Alignment::Center);
+        // let image = elements::Image::from_path(img_path)
+        //     .expect("Failed to load image")
+        //     .with_scale(Scale::new(0.2, 0.2))
+        //     .with_alignment(Alignment::Center);
         doc.push(image);
         let p = elements::Paragraph::default()
             .styled_string("Analysis Report", style::Effect::Bold)
