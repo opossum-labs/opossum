@@ -1,15 +1,20 @@
 #![warn(missing_docs)]
 //! Module for generating analysis reports in PDF format.
 
-use crate::{error::OpmResult, properties::Properties, OpticScenery};
+use crate::{
+    error::{OpmResult, OpossumError},
+    properties::Properties,
+    OpticScenery,
+};
 use chrono::{DateTime, Local};
-use genpdf::{self, elements, style, Alignment, Scale};
+use genpdf::{
+    self, elements,
+    fonts::{FontData, FontFamily},
+    style, Alignment, Scale,
+};
 use image::{io::Reader, DynamicImage};
 use serde_derive::Serialize;
-use std::{
-    io::Cursor,
-    path::{Path, PathBuf},
-};
+use std::{io::Cursor, path::Path};
 #[derive(Serialize, Debug)]
 /// Structure for storing data being integrated in an analysis report.
 pub struct AnalysisReport {
@@ -114,10 +119,6 @@ impl ReportGenerator {
             .expect("Failed to load image")
             .with_scale(Scale::new(0.2, 0.2))
             .with_alignment(Alignment::Center);
-        // let image = elements::Image::from_path(img_path)
-        //     .expect("Failed to load image")
-        //     .with_scale(Scale::new(0.2, 0.2))
-        //     .with_alignment(Alignment::Center);
         doc.push(image);
         let p = elements::Paragraph::default()
             .styled_string("Analysis Report", style::Effect::Bold)
@@ -189,10 +190,24 @@ impl ReportGenerator {
     ///   - the file could not be generated on disk (disk full, not writable, etc...)
     ///   - individual erros while generating sub components of the report
     pub fn generate_pdf(&self, path: &Path) -> OpmResult<()> {
-        let mut font_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        font_dir.push("fonts");
-        let font_family = genpdf::fonts::from_files(font_dir, "LiberationSans", None)
-            .map_err(|e| format!("failed to load font family: {e}"))?;
+        let font = include_bytes!("../fonts/LiberationSans-Regular.ttf");
+        let font_data_regular = FontData::new(font.to_vec(), None)
+            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+        let font = include_bytes!("../fonts/LiberationSans-Italic.ttf");
+        let font_data_italic = FontData::new(font.to_vec(), None)
+            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+        let font = include_bytes!("../fonts/LiberationSans-Bold.ttf");
+        let font_data_bold = FontData::new(font.to_vec(), None)
+            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+        let font = include_bytes!("../fonts/LiberationSans-BoldItalic.ttf");
+        let font_data_bold_italic = FontData::new(font.to_vec(), None)
+            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+        let font_family = FontFamily {
+            regular: font_data_regular,
+            bold: font_data_bold,
+            italic: font_data_italic,
+            bold_italic: font_data_bold_italic,
+        };
         let mut doc = genpdf::Document::new(font_family);
         doc.set_title("OPOSSUM Analysis report");
         let mut decorator = genpdf::SimplePageDecorator::new();
