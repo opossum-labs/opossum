@@ -129,6 +129,9 @@ impl Ray {
         let mut new_ray = self.clone();
         let length_in_ray_dir = length_along_z.get::<millimeter>() / self.dir[2];
         new_ray.pos = self.pos + length_in_ray_dir * self.dir;
+
+        let normalized_dir = self.dir.normalize();
+        let length_in_ray_dir = length_along_z.get::<millimeter>() / normalized_dir[2];
         new_ray.path_length += Length::new::<millimeter>(length_in_ray_dir);
         Ok(new_ray)
     }
@@ -149,7 +152,9 @@ impl Ray {
         new_ray.dir.x = optical_power.mul_add(-self.pos.x, self.dir.x);
         new_ray.dir.y = optical_power.mul_add(-self.pos.y, self.dir.y);
         new_ray.dir.z = 1.0;
-        new_ray.dir.normalize_mut();
+        // *** no longer normalized ***
+        // new_ray.dir.normalize_mut();
+        // *** removed since it introduced severe rounding errors ***
         Ok(new_ray)
     }
 
@@ -982,7 +987,7 @@ mod test {
             .refract_paraxial(Length::new::<millimeter>(100.0))
             .unwrap()
             .dir;
-        let test_ray_dir = Vector3::new(-1.0, -2.0, 100.0).normalize();
+        let test_ray_dir = Vector3::new(-1.0, -2.0, 100.0) / 100.0; //.normalize();
         assert_abs_diff_eq!(ray_dir.x, test_ray_dir.x);
         assert_abs_diff_eq!(ray_dir.y, test_ray_dir.y);
         assert_abs_diff_eq!(ray_dir.z, test_ray_dir.z);
@@ -996,7 +1001,7 @@ mod test {
             .refract_paraxial(Length::new::<millimeter>(-100.0))
             .unwrap()
             .dir;
-        let test_ray_dir = Vector3::new(1.0, 2.0, 100.0).normalize();
+        let test_ray_dir = Vector3::new(1.0, 2.0, 100.0) / 100.0;
         assert_abs_diff_eq!(ray_dir.x, test_ray_dir.x);
         assert_abs_diff_eq!(ray_dir.y, test_ray_dir.y);
         assert_abs_diff_eq!(ray_dir.z, test_ray_dir.z);
@@ -1367,7 +1372,7 @@ mod test {
         assert_eq!(rays.rays[0].pos, ray0.pos);
         assert_eq!(rays.rays[0].dir, ray0.dir);
         assert_eq!(rays.rays[1].pos, ray1.pos);
-        let new_dir = Vector3::new(0.0, -1.0, 100.0).normalize();
+        let new_dir = Vector3::new(0.0, -1.0, 100.0) / 100.0;
         assert_abs_diff_eq!(rays.rays[1].dir.x, new_dir.x);
         assert_abs_diff_eq!(rays.rays[1].dir.y, new_dir.y);
         assert_abs_diff_eq!(rays.rays[1].dir.z, new_dir.z);
