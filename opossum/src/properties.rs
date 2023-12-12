@@ -14,7 +14,7 @@ use crate::{
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     rays::Rays,
-    reporter::PdfReportable,
+    reporter::{NodeReport, PdfReportable},
     spectrum::Spectrum,
 };
 /// A general set of (optical) properties.
@@ -216,7 +216,7 @@ impl Properties {
 impl PdfReportable for Properties {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let mut table = TableLayout::new(vec![1, 2]);
+        let mut table = TableLayout::new(vec![1, 3]);
         for property in &self.props {
             let mut table_row = table.row();
             let property_name = genpdf::elements::Paragraph::default()
@@ -450,6 +450,8 @@ pub enum Proptype {
     Spectrum(Spectrum),
     /// This property stores optical [`Rays`]
     Rays(Rays),
+    /// A (nested set) of Properties
+    NodeReport(NodeReport),
 }
 impl PdfReportable for Proptype {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
@@ -464,6 +466,7 @@ impl PdfReportable for Proptype {
             Self::Metertype(value) => l.push(value.pdf_report()?),
             Self::Spectrum(value) => l.push(value.pdf_report()?),
             Self::Rays(value) => l.push(value.pdf_report()?),
+            Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
             _ => l.push(
                 genpdf::elements::Paragraph::default()
                     .styled_string("unknown poperty type", style::Effect::Italic),

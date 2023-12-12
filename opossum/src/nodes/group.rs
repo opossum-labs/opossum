@@ -718,9 +718,23 @@ impl Optical for NodeGroup {
         Ok(())
     }
     fn report(&self) -> Option<NodeReport> {
-        // let report = NodeReport::new("group", "blah", Properties::default());
-        // Some(report)
-        None
+        let mut group_props = Properties::default();
+        for node_idx in self.g.0.node_indices() {
+            let node = self.g.0.node_weight(node_idx).unwrap().optical_ref.borrow();
+            let node_props = node.properties();
+            if let Some(node_report) = node.report() {
+                if !(group_props.contains(node_props.name().unwrap())) {
+                    group_props
+                        .create(node_props.name().unwrap(), "", None, node_report.into())
+                        .unwrap();
+                }
+            }
+        }
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            group_props,
+        ))
     }
     fn is_detector(&self) -> bool {
         self.g.contains_detector()
@@ -1075,7 +1089,11 @@ mod test {
         assert!(output.is_err());
     }
     #[test]
-    fn report() {
-        assert!(NodeGroup::default().report().is_none());
+    fn report_default() {
+        let group = NodeGroup::default();
+        assert!(group.report().is_some());
+        let report = group.report().unwrap();
+        let nr_of_props = report.properties().iter().fold(0, |s: usize, _p| s + 1);
+        assert_eq!(nr_of_props, 0);
     }
 }

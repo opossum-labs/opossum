@@ -3,7 +3,7 @@
 
 use crate::{
     error::{OpmResult, OpossumError},
-    properties::Properties,
+    properties::{Properties, Proptype},
     OpticScenery,
 };
 use chrono::{DateTime, Local};
@@ -13,7 +13,7 @@ use genpdf::{
     style, Alignment, Scale,
 };
 use image::{io::Reader, DynamicImage};
-use serde_derive::Serialize;
+use serde_derive::{Deserialize, Serialize};
 use std::{io::Cursor, path::Path};
 #[derive(Serialize, Debug)]
 /// Structure for storing data being integrated in an analysis report.
@@ -49,7 +49,7 @@ impl AnalysisReport {
         self.node_reports.push(report);
     }
 }
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 /// Structure for storing (detector-)node specific data to be integrated in the [`AnalysisReport`].
 pub struct NodeReport {
     detector_type: String,
@@ -83,6 +83,17 @@ impl NodeReport {
     }
 }
 
+impl From<NodeReport> for Proptype {
+    fn from(value: NodeReport) -> Self {
+        Self::NodeReport(value)
+    }
+}
+
+impl PdfReportable for NodeReport {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        todo!()
+    }
+}
 /// Trait for providing information to be integrated in an PDF analysis report.
 pub trait PdfReportable {
     /// Return a `genpdf`-based PDF component to be integrated in an analysis report.
