@@ -457,7 +457,7 @@ impl PdfReportable for Proptype {
         match self {
             Self::String(value) => l.push(genpdf::elements::Paragraph::new(value)),
             Self::I32(value) => l.push(genpdf::elements::Paragraph::new(format!("{value}"))),
-            Self::F64(value) => l.push(genpdf::elements::Paragraph::new(format!("{value:14.6}"))),
+            Self::F64(value) => l.push(genpdf::elements::Paragraph::new(format!("{value:.6}"))),
             Self::Bool(value) => l.push(genpdf::elements::Paragraph::new(value.to_string())),
             Self::FilterType(value) => l.push(value.pdf_report()?),
             Self::SpectrometerType(value) => l.push(value.pdf_report()?),
