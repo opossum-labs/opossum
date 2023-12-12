@@ -766,7 +766,7 @@ mod test {
     use super::*;
     use crate::{
         lightdata::DataEnergy,
-        nodes::{BeamSplitter, Dummy, Source, Detector},
+        nodes::{BeamSplitter, Detector, Dummy, Source},
         optical::Optical,
         spectrum::create_he_ne_spec,
     };
@@ -790,10 +790,10 @@ mod test {
     }
     #[test]
     fn is_detector() {
-        let mut node = NodeGroup::default(); 
-        assert_eq!(node.is_detector(),false);
+        let mut node = NodeGroup::default();
+        assert_eq!(node.is_detector(), false);
         node.add_node(Detector::default()).unwrap();
-        assert_eq!(node.is_detector(),true);
+        assert_eq!(node.is_detector(), true);
     }
     #[test]
     fn add_node() {
