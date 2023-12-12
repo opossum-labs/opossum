@@ -112,6 +112,9 @@ impl OpticGraph {
             .node_indices()
             .find(|idx| self.0.node_weight(*idx).unwrap().uuid() == uuid)
     }
+    pub fn contains_detector(&self) -> bool {
+        self.0.node_weights().any(|node| node.optical_ref.borrow().is_detector())
+    }
 }
 impl Serialize for OpticGraph {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>

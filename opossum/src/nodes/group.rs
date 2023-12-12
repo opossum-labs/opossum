@@ -8,6 +8,7 @@ use crate::lightdata::LightData;
 use crate::optic_graph::OpticGraph;
 use crate::optical::LightResult;
 use crate::properties::{Properties, Proptype};
+use crate::reporter::NodeReport;
 use crate::{optic_ports::OpticPorts, optical::Optical};
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -716,6 +717,14 @@ impl Optical for NodeGroup {
         }
         Ok(())
     }
+    fn report(&self) -> Option<NodeReport> {
+        // let report = NodeReport::new("group", "blah", Properties::default());
+        // Some(report)
+        None
+    }
+    fn is_detector(&self) -> bool {
+        self.g.contains_detector()
+    }
 }
 
 impl Dottable for NodeGroup {
@@ -757,7 +766,7 @@ mod test {
     use super::*;
     use crate::{
         lightdata::DataEnergy,
-        nodes::{BeamSplitter, Dummy, Source},
+        nodes::{BeamSplitter, Dummy, Source, Detector},
         optical::Optical,
         spectrum::create_he_ne_spec,
     };
@@ -770,7 +779,6 @@ mod test {
         assert!(node.output_port_map().is_empty());
         assert_eq!(node.properties().name().unwrap(), "group");
         assert_eq!(node.properties().node_type().unwrap(), "group");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "yellow");
         assert!(node.as_group().is_ok());
@@ -779,6 +787,13 @@ mod test {
     fn new() {
         let node = NodeGroup::new("test");
         assert_eq!(node.properties().name().unwrap(), "test");
+    }
+    #[test]
+    fn is_detector() {
+        let mut node = NodeGroup::default(); 
+        assert_eq!(node.is_detector(),false);
+        node.add_node(Detector::default()).unwrap();
+        assert_eq!(node.is_detector(),true);
     }
     #[test]
     fn add_node() {
