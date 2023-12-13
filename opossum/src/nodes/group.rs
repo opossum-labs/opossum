@@ -8,6 +8,7 @@ use crate::lightdata::LightData;
 use crate::optic_graph::OpticGraph;
 use crate::optical::LightResult;
 use crate::properties::{Properties, Proptype};
+use crate::reporter::NodeReport;
 use crate::{optic_ports::OpticPorts, optical::Optical};
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -716,6 +717,28 @@ impl Optical for NodeGroup {
         }
         Ok(())
     }
+    fn report(&self) -> Option<NodeReport> {
+        let mut group_props = Properties::default();
+        for node_idx in self.g.0.node_indices() {
+            let node = self.g.0.node_weight(node_idx).unwrap().optical_ref.borrow();
+            let node_props = node.properties();
+            if let Some(node_report) = node.report() {
+                if !(group_props.contains(node_props.name().unwrap())) {
+                    group_props
+                        .create(node_props.name().unwrap(), "", None, node_report.into())
+                        .unwrap();
+                }
+            }
+        }
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            group_props,
+        ))
+    }
+    fn is_detector(&self) -> bool {
+        self.g.contains_detector()
+    }
 }
 
 impl Dottable for NodeGroup {
@@ -757,7 +780,7 @@ mod test {
     use super::*;
     use crate::{
         lightdata::DataEnergy,
-        nodes::{BeamSplitter, Dummy, Source},
+        nodes::{BeamSplitter, Detector, Dummy, Source},
         optical::Optical,
         spectrum::create_he_ne_spec,
     };
@@ -770,7 +793,6 @@ mod test {
         assert!(node.output_port_map().is_empty());
         assert_eq!(node.properties().name().unwrap(), "group");
         assert_eq!(node.properties().node_type().unwrap(), "group");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "yellow");
         assert!(node.as_group().is_ok());
@@ -779,6 +801,13 @@ mod test {
     fn new() {
         let node = NodeGroup::new("test");
         assert_eq!(node.properties().name().unwrap(), "test");
+    }
+    #[test]
+    fn is_detector() {
+        let mut node = NodeGroup::default();
+        assert_eq!(node.is_detector(), false);
+        node.add_node(Detector::default()).unwrap();
+        assert_eq!(node.is_detector(), true);
     }
     #[test]
     fn add_node() {
@@ -1060,7 +1089,11 @@ mod test {
         assert!(output.is_err());
     }
     #[test]
-    fn report() {
-        assert!(NodeGroup::default().report().is_none());
+    fn report_default() {
+        let group = NodeGroup::default();
+        assert!(group.report().is_some());
+        let report = group.report().unwrap();
+        let nr_of_props = report.properties().iter().fold(0, |s: usize, _p| s + 1);
+        assert_eq!(nr_of_props, 0);
     }
 }

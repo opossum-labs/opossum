@@ -1,11 +1,20 @@
 #![warn(missing_docs)]
 //! Module for generating analysis reports in PDF format.
 
-use crate::{error::OpmResult, properties::Properties, OpticScenery};
+use crate::{
+    error::{OpmResult, OpossumError},
+    properties::{Properties, Proptype},
+    OpticScenery,
+};
 use chrono::{DateTime, Local};
-use genpdf::{self, elements, style, Alignment, Scale};
-use serde_derive::Serialize;
-use std::path::{Path, PathBuf};
+use genpdf::{
+    self, elements,
+    fonts::{FontData, FontFamily},
+    style, Alignment, Scale,
+};
+use image::{io::Reader, DynamicImage};
+use serde_derive::{Deserialize, Serialize};
+use std::{io::Cursor, path::Path};
 #[derive(Serialize, Debug)]
 /// Structure for storing data being integrated in an analysis report.
 pub struct AnalysisReport {
@@ -40,7 +49,7 @@ impl AnalysisReport {
         self.node_reports.push(report);
     }
 }
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 /// Structure for storing (detector-)node specific data to be integrated in the [`AnalysisReport`].
 pub struct NodeReport {
     detector_type: String,
@@ -74,6 +83,17 @@ impl NodeReport {
     }
 }
 
+impl From<NodeReport> for Proptype {
+    fn from(value: NodeReport) -> Self {
+        Self::NodeReport(value)
+    }
+}
+
+impl PdfReportable for NodeReport {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        todo!()
+    }
+}
 /// Trait for providing information to be integrated in an PDF analysis report.
 pub trait PdfReportable {
     /// Return a `genpdf`-based PDF component to be integrated in an analysis report.
@@ -98,9 +118,15 @@ impl ReportGenerator {
         Self { report }
     }
     fn add_report_title(&self, doc: &mut genpdf::Document) {
-        let mut img_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        img_path.push("logo/Logo_square.png");
-        let image = elements::Image::from_path(img_path)
+        let img_data = include_bytes!("../logo/Logo_square.png");
+        let img = Reader::new(Cursor::new(img_data))
+            .with_guessed_format()
+            .unwrap()
+            .decode()
+            .unwrap()
+            .into_rgb8();
+        let img = DynamicImage::ImageRgb8(img);
+        let image = elements::Image::from_dynamic_image(img)
             .expect("Failed to load image")
             .with_scale(Scale::new(0.2, 0.2))
             .with_alignment(Alignment::Center);
@@ -175,10 +201,24 @@ impl ReportGenerator {
     ///   - the file could not be generated on disk (disk full, not writable, etc...)
     ///   - individual erros while generating sub components of the report
     pub fn generate_pdf(&self, path: &Path) -> OpmResult<()> {
-        let mut font_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        font_dir.push("fonts");
-        let font_family = genpdf::fonts::from_files(font_dir, "LiberationSans", None)
-            .map_err(|e| format!("failed to load font family: {e}"))?;
+        let font = include_bytes!("../fonts/LiberationSans-Regular.ttf");
+        let font_data_regular = FontData::new(font.to_vec(), None)
+            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+        let font = include_bytes!("../fonts/LiberationSans-Italic.ttf");
+        let font_data_italic = FontData::new(font.to_vec(), None)
+            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+        let font = include_bytes!("../fonts/LiberationSans-Bold.ttf");
+        let font_data_bold = FontData::new(font.to_vec(), None)
+            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+        let font = include_bytes!("../fonts/LiberationSans-BoldItalic.ttf");
+        let font_data_bold_italic = FontData::new(font.to_vec(), None)
+            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+        let font_family = FontFamily {
+            regular: font_data_regular,
+            bold: font_data_bold,
+            italic: font_data_italic,
+            bold_italic: font_data_bold_italic,
+        };
         let mut doc = genpdf::Document::new(font_family);
         doc.set_title("OPOSSUM Analysis report");
         let mut decorator = genpdf::SimplePageDecorator::new();

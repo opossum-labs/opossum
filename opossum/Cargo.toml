@@ -8,12 +8,22 @@ authors = [
 ]
 description = "Open-source Optics Simulation Software and Unified Modeler"
 repository = "https://git.gsi.de/phelix/rust/opossum/"
-license = "GPL-3.0-or-later"
+license = "GPL-3.0"
 keywords = ["laser", "optics", "physics", "simulation"]
 categories = ["science", "simulation"]
-publish = false
+publish = true
 build = "build.rs"
 readme = "README.md"
+
+[package.metadata.wix]
+upgrade-guid = "6A79F3B1-0417-472C-8C99-F1ADB17DE27D"
+path-guid = "56710F06-5772-4D76-BA9F-83122E49A2C3"
+license = false
+eula = false
+timestamp = "Versign"
+product-icon = "opossum/logo/Logo_square.ico"
+banner = "opossum/logo/Logo_InstallBanner.png"
+dialog = "opossum/logo/Logo_InstallDialog.png"
 
 [dependencies]
 petgraph = { version = "0", features = ["serde-1"] } # the graph library

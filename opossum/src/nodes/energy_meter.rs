@@ -160,11 +160,11 @@ impl Optical for EnergyMeter {
         let mut props = Properties::default();
         if let Some(e) = energy {
             props
-                .create("Energy", "Output energy", None, e.into())
+                .create("Energy (J)", "Output energy", None, e.into())
                 .unwrap();
         } else {
             props
-                .create("Energy", "Output energy", None, "no info".into())
+                .create("Energy (J)", "Output energy", None, "no info".into())
                 .unwrap();
         }
         props
