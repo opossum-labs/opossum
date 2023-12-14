@@ -4,6 +4,7 @@ use genpdf::{elements::TableLayout, style};
 use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::{collections::HashMap, mem};
+use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
 
 use crate::{
@@ -410,6 +411,11 @@ impl From<Uuid> for Proptype {
         Self::Uuid(value)
     }
 }
+impl From<Length> for Proptype {
+    fn from(value: Length) -> Self {
+        Self::Length(value)
+    }
+}
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 /// The type of the [`Property`].
@@ -452,7 +458,42 @@ pub enum Proptype {
     Rays(Rays),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
+    /// a geometrical length
+    Length(Length),
 }
+
+fn format_length(length: Length) -> String {
+    let base_value = length.get::<meter>();
+    if base_value.abs() < f64::EPSILON {
+        return String::from("   0.000 m");
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    let mut exponent = (f64::log10(base_value).floor()) as i32;
+    if exponent.is_negative() {
+        exponent -= 2;
+    }
+    let exponent = (exponent / 3) * 3;
+    let prefix = match exponent {
+        -21 => "z",
+        -18 => "a",
+        -15 => "f",
+        -12 => "p",
+        -9 => "n",
+        -6 => "u",
+        -3 => "m",
+        0 => "",
+        3 => "k",
+        6 => "M",
+        9 => "G",
+        12 => "T",
+        15 => "P",
+        18 => "E",
+        21 => "Z",
+        _ => "?",
+    };
+    format!("{:8.3} {prefix}m", base_value / f64::powi(10.0, exponent))
+}
+
 impl PdfReportable for Proptype {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut l = genpdf::elements::LinearLayout::vertical();
@@ -467,6 +508,7 @@ impl PdfReportable for Proptype {
             Self::Spectrum(value) => l.push(value.pdf_report()?),
             Self::Rays(value) => l.push(value.pdf_report()?),
             Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
+            Self::Length(value) => l.push(genpdf::elements::Paragraph::new(format_length(*value))),
             _ => l.push(
                 genpdf::elements::Paragraph::default()
                     .styled_string("unknown poperty type", style::Effect::Italic),

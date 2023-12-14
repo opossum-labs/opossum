@@ -3,10 +3,12 @@ use uom::si::{f64::Length, length::meter};
 
 fn uom_format(length: Length) {
     let base_value = length.get::<meter>();
-    let mut exponent= (f64::log10(base_value).floor()) as i32;
-    if exponent.is_negative() {exponent-=2;}
-    let exponent = ( exponent / 3) * 3;
-    let prefix=match exponent {
+    let mut exponent = (f64::log10(base_value).floor()) as i32;
+    if exponent.is_negative() {
+        exponent -= 2;
+    }
+    let exponent = (exponent / 3) * 3;
+    let prefix = match exponent {
         -18 => "a",
         -15 => "f",
         -12 => "p",
@@ -17,10 +19,9 @@ fn uom_format(length: Length) {
         3 => "k",
         6 => "M",
         9 => "G",
-        _ => "?"
+        _ => "?",
     };
     println!("{:8.3} {prefix}m", base_value / f64::powi(10.0, exponent));
-    
 }
 fn main() -> OpmResult<()> {
     uom_format(Length::new::<meter>(0.000000123456789));

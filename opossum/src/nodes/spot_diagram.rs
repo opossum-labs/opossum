@@ -1,6 +1,4 @@
 #![warn(missing_docs)]
-use uom::si::length::millimeter;
-
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
@@ -13,7 +11,7 @@ use crate::{
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// An spot diagram monitor
+/// A spot diagram monitor
 ///
 /// It simply generates a spot diagram of an incoming ray bundle.
 ///
@@ -110,30 +108,20 @@ impl Optical for SpotDiagram {
                 .unwrap();
             if let Some(c) = rays.centroid() {
                 props
-                    .create(
-                        "centroid x (mm)",
-                        "x position of centroid",
-                        None,
-                        c.x.get::<millimeter>().into(),
-                    )
+                    .create("centroid x", "x position of centroid", None, c.x.into())
                     .unwrap();
 
                 props
-                    .create(
-                        "centroid y (mm)",
-                        "y position of centroid",
-                        None,
-                        c.y.get::<millimeter>().into(),
-                    )
+                    .create("centroid y", "y position of centroid", None, c.y.into())
                     .unwrap();
             }
             if let Some(radius) = rays.beam_radius_geo() {
                 props
                     .create(
-                        "geo beam radius (mm)",
+                        "geo beam radius",
                         "geometric beam radius",
                         None,
-                        radius.get::<millimeter>().into(),
+                        radius.into(),
                     )
                     .unwrap();
             }
