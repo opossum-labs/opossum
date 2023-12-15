@@ -49,6 +49,47 @@ pub enum PlotType {
     ColorMesh,
 }
 
+// impl PlotType{    
+//     fn plot(
+//         &self, 
+//         plt_data: &PlotData, 
+//         plot_params: PlotParameters,
+//     ) -> OpmResult<()> {
+        
+//         let mut plot = Plot::new(plt_data, plot_params);
+        
+//         match self{
+//             PlotType::ColorMesh => {
+//                 let path = plot.fpath.clone();
+//                 let backend = BitMapBackend::new(&path, plot.img_size).into_drawing_area();
+//                 _ = self.plot_color_mesh(&mut plot, &backend);
+//                 Ok(())
+//             },
+//             PlotType::Scatter2D =>{
+//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
+//             },
+//             PlotType::Scatter3D =>{
+//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
+//             },
+//             PlotType::Line2D =>{
+//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
+//             },
+//             PlotType::Line3D =>{
+//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
+//             },
+//             PlotType::MultiLine2D =>{
+//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
+//             },
+//             PlotType::MultiLine3D =>{
+//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
+//             },
+            
+//             _ => Err(OpossumError::Other("Plottype notdefined yet!".into()))
+//         }
+//     }
+// }
+
+
 ///Enum to define the type of plot that should be created
 pub enum PlotData {
     ///Pairwise 2D data (e.g. x, y data) for scatter2D, Line2D. Data Structure as Matrix with N rows and two columns (x,y)

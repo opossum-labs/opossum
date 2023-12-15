@@ -34,12 +34,12 @@ serde_yaml = "0"
 serde_json = "1"
 
 csv = "1"
-plotters = "0"
+plotters = "0.3.5"
 
 approx = "0" # assert macros for comparison of floats with tolerance
 clap = { version = "4", features = ["derive", "string"] } # command line argument parser
 rprompt = "2.0"
-strum = { version = "0", features = ["derive"] }
+strum = { version = "0.25.0", features = ["derive"] }
 
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
 
@@ -58,6 +58,10 @@ itertools = "0.12.0"
 accurate = "0.3.1"
 nalgebra = "0.30"
 ncollide2d = { version = "0.33.0", features = ["serde-serialize"] }
+colorous = "1.0.12"
+strum_macros = "0.25.3"
+plotters-backend = "0.3.5"
+plotters-bitmap = "0.3.3"
 [features]
 doc-images = []
 
