@@ -50,11 +50,14 @@ impl Display for OpossumError {
             Self::Console(m) => {
                 write!(f, "Console:{m}")
             }
-            Self::Other(m) => write!(f, "Opossum Error:Other:{m}"),
+            Self::Other(m) => {
+                write!(f, "Opossum Error:Other:{m}")
+            },
         }
     }
 }
 impl Error for OpossumError {}
+
 
 impl std::convert::From<String> for OpossumError {
     fn from(msg: String) -> Self {

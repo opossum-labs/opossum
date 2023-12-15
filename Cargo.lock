@@ -314,6 +314,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
+name = "colorous"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7eb0838c7c2f4548ff2218bfdcc6ce3d34ffabd0128bfb9eb44cf27de1ec38b3"
+
+[[package]]
 name = "console"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1350,6 +1356,7 @@ dependencies = [
  "assert_matches",
  "chrono",
  "clap 4.4.10",
+ "colorous",
  "csv",
  "embed-doc-image",
  "genpdf",
@@ -1360,6 +1367,8 @@ dependencies = [
  "ncollide2d",
  "petgraph",
  "plotters",
+ "plotters-backend",
+ "plotters-bitmap",
  "rand",
  "regex",
  "rprompt",
@@ -1369,6 +1378,7 @@ dependencies = [
  "serde_yaml",
  "sobol",
  "strum",
+ "strum_macros",
  "tempfile",
  "uom",
  "uuid",
