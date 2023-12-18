@@ -9,7 +9,7 @@ use serde::{
 };
 use uuid::Uuid;
 
-use crate::{nodes::create_node_ref, optical::Optical, properties::Properties};
+use crate::{nodes::create_node_ref, optical::Optical, properties::Properties, plottable::Plottable};
 
 #[derive(Debug, Clone)]
 /// Structure for storing an optical node.
@@ -22,6 +22,7 @@ pub struct OpticRef {
     pub optical_ref: Rc<RefCell<dyn Optical>>,
     uuid: Uuid,
 }
+
 
 impl OpticRef {
     /// Creates a new [`OpticRef`].

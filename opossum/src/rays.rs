@@ -370,8 +370,8 @@ impl Rays {
     ///
     /// This function calculates the wavefront of a ray bundle as multiple of its wavelength with reference to the ray that is closest to the optical axis.
     #[must_use]
-    pub fn wavefront_at_wvl(&self, wvl: f64) -> DMatrix<f64> {
-        let mut path_length_at_pos = DMatrix::from_element(self.rays.len(), 3, 0.);
+    pub fn optical_path_length_at_wvl(&self, wvl: f64) -> MatrixXx3<f64> {
+        let mut path_length_at_pos = MatrixXx3::from_element(self.rays.len(), 0.);
         let mut min_radius = f64::INFINITY;
         let mut path_length_at_center = 0.;
         for (i, ray) in self.rays.iter().enumerate() {

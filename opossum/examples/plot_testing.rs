@@ -1427,8 +1427,6 @@ fn main() -> OpmResult<()>{
     .set(PlotArgs::FDir("./opossum/playground/".into()));
 
 
-    //
-
     //     .set(PlotArgs::FigSize((1000,850)))
     //     .set(PlotArgs::XLabel("x label".into()))
     //     .set(PlotArgs::YLabel("y label".into()))

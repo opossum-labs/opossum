@@ -1,11 +1,12 @@
 #![warn(missing_docs)]
-use image::DynamicImage;
+use image::{DynamicImage, RgbImage, ImageBuffer};
 use serde_derive::{Serialize, Deserialize};
 use uom::si::length::millimeter;
 
 use crate::dottable::Dottable;
-use crate::error::OpmResult;
+use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
+use crate::plottable::{PltBackEnd, PlotParameters, PlotArgs, PlotType, PlotData, Plottable};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
@@ -69,20 +70,32 @@ impl Optical for WaveFront {
         self.light_data = data.clone();
         Ok(HashMap::from([(target.into(), data.clone())]))
     }
-    fn export_data(&self, report_dir: &Path) -> OpmResult<()> {
+    fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(data) = &self.light_data {
             let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!(
-                "wavefront_diagram_{}.svg",
-                self.properties().name()?
-            ));
-            // self.to
-            // data.export(&file_path)
-            Ok(())
+            file_path.push(format!("wavefront_diagram_{}.svg", self.properties().name()?));
+            self.to_plot(&file_path, (800,800), PltBackEnd::SVG)
+
         } else {
-            Ok(())
+            Err(OpossumError::Other(
+                "Wavefront diagram: no light data for export available".into(),
+            ))
         }
     }
+    // fn export_data(&self, report_dir: &Path) -> OpmResult<()> {
+    //     if let Some(data) = &self.light_data {
+    //         let mut file_path = PathBuf::from(report_dir);
+    //         file_path.push(format!(
+    //             "wavefront_diagram_{}.svg",
+    //             self.properties().name()?
+    //         ));
+    //         // self.to
+    //         // data.export(&file_path)
+    //         Ok(())
+    //     } else {
+    //         Ok(())
+    //     }
+    // }
     fn is_detector(&self) -> bool {
         true
     }
@@ -104,7 +117,7 @@ impl Optical for WaveFront {
                     self.clone().into(),
                 )
                 .unwrap();
-            let wf_data = rays.wavefront_at_wvl(1053.);
+            let wf_data = rays.optical_path_length_at_wvl(1053.);
 
             Some(NodeReport::new(
                 self.properties().node_type().unwrap(),
@@ -117,6 +130,18 @@ impl Optical for WaveFront {
     }
 }
 
+
+impl PdfReportable for WaveFront{
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let img = self.to_plot(Path::new(""), (1000,850), PltBackEnd::Buf)?;
+        layout.push(
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img.unwrap_or(ImageBuffer::default())))
+                .map_err(|e| format!("adding of image failed: {e}"))?,
+        );
+        Ok(layout)
+    }
+}
 // impl PdfReportable for WaveFront{
 //     fn pdf_report(&self) -> crate::error::OpmResult<genpdf::elements::LinearLayout> {
 //         let mut layout = genpdf::elements::LinearLayout::vertical();
@@ -138,5 +163,51 @@ impl From<WaveFront> for Proptype {
 impl Dottable for WaveFront {
     fn node_color(&self) -> &str {
         "lightbrown"
+    }
+}
+
+impl Plottable for WaveFront{
+    fn to_plot(&self, f_path: &Path, img_size: (u32, u32), backend: PltBackEnd) -> OpmResult<Option<RgbImage>>{
+        let mut plt_params = PlotParameters::default();
+        match backend{
+            PltBackEnd::Buf => plt_params.set(PlotArgs::FigSize(img_size)),
+            _ => {
+                plt_params.set(PlotArgs::FName(f_path.file_name().unwrap().to_str().unwrap().to_owned()))
+                .set(PlotArgs::FDir(f_path.parent().unwrap().to_str().unwrap().to_owned()))
+                .set(PlotArgs::FigSize(img_size))
+            }
+        };
+        plt_params.set(PlotArgs::Backend(backend));
+
+        let plt_type = PlotType::ColorMesh(plt_params);
+
+        let plt_data_opt = self.get_plot_data(&plt_type)?;
+        
+        if let Some(plt_dat) = plt_data_opt{
+            plt_type.plot(&plt_dat)
+        }
+        else{
+            Ok(None)
+        }        
+    }
+
+    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+        let data = &self.light_data;
+        match data{
+            Some(LightData::Geometric(rays)) => {
+                let path_length = rays.optical_path_length_at_wvl(1053.);
+                match plt_type{
+                    PlotType::ColorMesh(_) => {
+                        
+                        Ok(Some(PlotData::ColorMesh(path_length)))
+                    },
+                    PlotType::ColorScatter(_) => {
+                        Ok(Some(PlotData::ColorMesh(path_length)))
+                    },
+                    _ => Ok(None),
+                }
+            },
+            _ => Ok(None),
+        }
     }
 }
