@@ -9,10 +9,10 @@ use crate::{
     optical::{LightResult, Optical},
 };
 use serde_derive::{Deserialize, Serialize};
-use uom::si::f64::Energy;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use uom::si::energy::joule;
+use uom::si::f64::Energy;
 
 #[non_exhaustive]
 #[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]

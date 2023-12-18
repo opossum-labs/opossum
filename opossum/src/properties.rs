@@ -4,7 +4,11 @@ use genpdf::{elements::TableLayout, style};
 use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::{collections::BTreeMap, mem};
-use uom::si::{f64::{Length, Energy}, length::meter, energy::joule};
+use uom::si::{
+    energy::joule,
+    f64::{Energy, Length},
+    length::meter,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -132,7 +136,6 @@ impl Properties {
         Ok(())
     }
     /// Returns the iter of this [`Properties`].
-    #[must_use]
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, Property> {
         self.props.iter()
     }
@@ -469,11 +472,20 @@ pub enum Proptype {
     Energy(Energy),
 }
 fn format_value_with_prefix(value: f64) -> String {
+    if value.is_nan() {
+        return String::from("     nan ");
+    }
+    if value == f64::INFINITY {
+        return String::from("     inf ");
+    }
+    if value == f64::NEG_INFINITY {
+        return String::from("    -inf ");
+    }
     if value.abs() < f64::EPSILON {
         return String::from("   0.000 ");
     }
     #[allow(clippy::cast_possible_truncation)]
-    let mut exponent = (f64::log10(value).floor()) as i32;
+    let mut exponent = (f64::log10(value.abs()).floor()) as i32;
     if exponent.is_negative() {
         exponent -= 2;
     }
@@ -630,5 +642,20 @@ mod test {
         };
         assert!(prop.set_value(Proptype::Bool(false)).is_ok());
         assert!(prop.set_value(Proptype::F64(3.14)).is_err());
+    }
+    #[test]
+    fn format_value() {
+        assert_eq!(format_value_with_prefix(0.0), "   0.000 ");
+        assert_eq!(format_value_with_prefix(1.0), "   1.000 ");
+        assert_eq!(format_value_with_prefix(999.12345), " 999.123 ");
+        assert_eq!(format_value_with_prefix(1001.2345), "   1.001 k");
+        assert_eq!(format_value_with_prefix(1234567.12345), "   1.235 M");
+        assert_eq!(format_value_with_prefix(1234567890.12345), "   1.235 G");
+        assert_eq!(format_value_with_prefix(-1234567890.12345), "  -1.235 G");
+        assert_eq!(format_value_with_prefix(0.12345), " 123.450 m");
+        assert_eq!(format_value_with_prefix(-0.0000012345), "  -1.235 u");
+        assert_eq!(format_value_with_prefix(f64::INFINITY), "     inf ");
+        assert_eq!(format_value_with_prefix(f64::NEG_INFINITY), "    -inf ");
+        assert_eq!(format_value_with_prefix(f64::NAN), "     nan ");
     }
 }
