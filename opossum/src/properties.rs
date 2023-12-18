@@ -3,7 +3,7 @@
 use genpdf::{elements::TableLayout, style};
 use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
-use std::{collections::HashMap, mem};
+use std::{collections::BTreeMap, mem};
 use uom::si::{f64::{Length, Energy}, length::meter, energy::joule};
 use uuid::Uuid;
 
@@ -33,7 +33,7 @@ use crate::{
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 #[serde(transparent)]
 pub struct Properties {
-    props: HashMap<String, Property>,
+    props: BTreeMap<String, Property>,
 }
 impl Properties {
     /// Creates new [`Properties`].
@@ -133,7 +133,7 @@ impl Properties {
     }
     /// Returns the iter of this [`Properties`].
     #[must_use]
-    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, Property> {
+    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, Property> {
         self.props.iter()
     }
     /// Return `true`if a property with the given name exists.
