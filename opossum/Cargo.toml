@@ -56,6 +56,8 @@ image="0.23"
 tempfile="3"
 rand="0"
 sobol="1"
+kahan = "0"
+
 [features]
 doc-images = []
 

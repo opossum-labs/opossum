@@ -10,6 +10,7 @@ use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use image::DynamicImage;
+use kahan::KahanSummator;
 use nalgebra::{distance, point, Point2, Point3, Vector3};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
@@ -308,7 +309,9 @@ impl Rays {
     /// This simply sums up all energies of the individual rays.
     #[must_use]
     pub fn total_energy(&self) -> Energy {
-        self.rays.iter().fold(Energy::zero(), |a, b| a + b.e)
+        let energies: Vec<f64> = self.rays.iter().map(|r| r.e.get::<joule>()).collect();
+        let kahan_sum: kahan::KahanSum<f64>=energies.iter().kahan_sum();
+        Energy::new::<joule>(kahan_sum.sum())
     }
     /// Returns the number of rays of this [`Rays`].
     #[must_use]
@@ -1233,6 +1236,9 @@ mod test {
         assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
         rays.add_ray(ray.clone());
         assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
+
+        let rays=Rays::new_uniform_collimated(Length::new::<millimeter>(1.0), Length::new::<nanometer>(1054.0), Energy::new::<joule>(1.0), &DistributionStrategy::Random(100000)).unwrap();
+        assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 1.0);
     }
     #[test]
     fn rays_centroid() {
