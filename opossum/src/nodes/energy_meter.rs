@@ -9,6 +9,7 @@ use crate::{
     optical::{LightResult, Optical},
 };
 use serde_derive::{Deserialize, Serialize};
+use uom::si::f64::Energy;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use uom::si::energy::joule;
@@ -149,11 +150,11 @@ impl Optical for EnergyMeter {
         self.props.set(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
-        let mut energy: Option<f64> = None;
+        let mut energy: Option<Energy> = None;
         if let Some(light_data) = &self.light_data {
             energy = match light_data {
-                LightData::Energy(e) => Some(e.spectrum.total_energy()),
-                LightData::Geometric(r) => Some(r.total_energy().get::<joule>()),
+                LightData::Energy(e) => Some(Energy::new::<joule>(e.spectrum.total_energy())),
+                LightData::Geometric(r) => Some(r.total_energy()),
                 LightData::Fourier => None,
             };
         };

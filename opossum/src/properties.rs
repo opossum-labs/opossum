@@ -4,7 +4,7 @@ use genpdf::{elements::TableLayout, style};
 use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::{collections::HashMap, mem};
-use uom::si::{f64::Length, length::meter};
+use uom::si::{f64::{Length, Energy}, length::meter, energy::joule};
 use uuid::Uuid;
 
 use crate::{
@@ -416,6 +416,11 @@ impl From<Length> for Proptype {
         Self::Length(value)
     }
 }
+impl From<Energy> for Proptype {
+    fn from(value: Energy) -> Self {
+        Self::Energy(value)
+    }
+}
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 /// The type of the [`Property`].
@@ -460,15 +465,15 @@ pub enum Proptype {
     NodeReport(NodeReport),
     /// a geometrical length
     Length(Length),
+    /// an energy value
+    Energy(Energy),
 }
-
-fn format_length(length: Length) -> String {
-    let base_value = length.get::<meter>();
-    if base_value.abs() < f64::EPSILON {
-        return String::from("   0.000 m");
+fn format_value_with_prefix(value: f64) -> String {
+    if value.abs() < f64::EPSILON {
+        return String::from("   0.000 ");
     }
     #[allow(clippy::cast_possible_truncation)]
-    let mut exponent = (f64::log10(base_value).floor()) as i32;
+    let mut exponent = (f64::log10(value).floor()) as i32;
     if exponent.is_negative() {
         exponent -= 2;
     }
@@ -491,9 +496,18 @@ fn format_length(length: Length) -> String {
         21 => "Z",
         _ => "?",
     };
-    format!("{:8.3} {prefix}m", base_value / f64::powi(10.0, exponent))
+    format!("{:8.3} {prefix}", value / f64::powi(10.0, exponent))
 }
 
+fn format_length(length: Length) -> String {
+    let base_value = length.get::<meter>();
+    format!("{}m", format_value_with_prefix(base_value))
+}
+
+fn format_energy(energy: Energy) -> String {
+    let base_value = energy.get::<joule>();
+    format!("{}J", format_value_with_prefix(base_value))
+}
 impl PdfReportable for Proptype {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut l = genpdf::elements::LinearLayout::vertical();
@@ -509,6 +523,7 @@ impl PdfReportable for Proptype {
             Self::Rays(value) => l.push(value.pdf_report()?),
             Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
             Self::Length(value) => l.push(genpdf::elements::Paragraph::new(format_length(*value))),
+            Self::Energy(value) => l.push(genpdf::elements::Paragraph::new(format_energy(*value))),
             _ => l.push(
                 genpdf::elements::Paragraph::default()
                     .styled_string("unknown poperty type", style::Effect::Italic),
