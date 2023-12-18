@@ -241,17 +241,11 @@ impl Spectrum {
     #[must_use]
     pub fn total_energy(&self) -> f64 {
         let lambda_deltas = self.data.windows(2).map(|l| l[1].0 - l[0].0);
-        // let total_energy = lambda_deltas
-        //     .zip(self.data.iter())
-        //     .map(|d| d.0 * d.1 .1)
-        //     .sum();
-        // total_energy
-
         let energies: Vec<f64> = lambda_deltas
             .zip(self.data.iter())
             .map(|d| d.0 * d.1 .1)
             .collect();
-        let kahan_sum: kahan::KahanSum<f64>=energies.iter().kahan_sum();
+        let kahan_sum: kahan::KahanSum<f64> = energies.iter().kahan_sum();
         kahan_sum.sum()
     }
     /// Return the value at a given wavelength.

@@ -310,7 +310,7 @@ impl Rays {
     #[must_use]
     pub fn total_energy(&self) -> Energy {
         let energies: Vec<f64> = self.rays.iter().map(|r| r.e.get::<joule>()).collect();
-        let kahan_sum: kahan::KahanSum<f64>=energies.iter().kahan_sum();
+        let kahan_sum: kahan::KahanSum<f64> = energies.iter().kahan_sum();
         Energy::new::<joule>(kahan_sum.sum())
     }
     /// Returns the number of rays of this [`Rays`].
@@ -1237,7 +1237,13 @@ mod test {
         rays.add_ray(ray.clone());
         assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
 
-        let rays=Rays::new_uniform_collimated(Length::new::<millimeter>(1.0), Length::new::<nanometer>(1054.0), Energy::new::<joule>(1.0), &DistributionStrategy::Random(100000)).unwrap();
+        let rays = Rays::new_uniform_collimated(
+            Length::new::<millimeter>(1.0),
+            Length::new::<nanometer>(1054.0),
+            Energy::new::<joule>(1.0),
+            &DistributionStrategy::Random(100000),
+        )
+        .unwrap();
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 1.0);
     }
     #[test]
