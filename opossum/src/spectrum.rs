@@ -6,6 +6,7 @@ use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
 use csv::ReaderBuilder;
 use image::DynamicImage;
+use kahan::KahanSummator;
 use plotters::coord::Shift;
 use plotters::data::fitting_range;
 use plotters::prelude::*;
@@ -240,11 +241,18 @@ impl Spectrum {
     #[must_use]
     pub fn total_energy(&self) -> f64 {
         let lambda_deltas = self.data.windows(2).map(|l| l[1].0 - l[0].0);
-        let total_energy = lambda_deltas
+        // let total_energy = lambda_deltas
+        //     .zip(self.data.iter())
+        //     .map(|d| d.0 * d.1 .1)
+        //     .sum();
+        // total_energy
+
+        let energies: Vec<f64> = lambda_deltas
             .zip(self.data.iter())
             .map(|d| d.0 * d.1 .1)
-            .sum();
-        total_energy
+            .collect();
+        let kahan_sum: kahan::KahanSum<f64>=energies.iter().kahan_sum();
+        kahan_sum.sum()
     }
     /// Return the value at a given wavelength.
     ///
@@ -818,7 +826,7 @@ mod test {
         assert_eq!(s.total_energy(), 1.0);
     }
     #[test]
-    fn total_energy2() {
+    fn total_energy_interpolated_peak() {
         let mut s = Spectrum::new(
             Length::new::<micrometer>(1.0)..Length::new::<micrometer>(4.0),
             Length::new::<micrometer>(1.0),
