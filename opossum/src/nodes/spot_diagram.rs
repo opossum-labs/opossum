@@ -125,6 +125,11 @@ impl Optical for SpotDiagram {
                     )
                     .unwrap();
             }
+            if let Some(radius) = rays.beam_radius_rms() {
+                props
+                    .create("rms beam radius", "rms beam radius", None, radius.into())
+                    .unwrap();
+            }
         }
         Some(NodeReport::new(
             self.properties().node_type().unwrap(),
@@ -277,6 +282,6 @@ mod test {
         let node_report = sd.report().unwrap();
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
-        assert_eq!(nr_of_props, 4);
+        assert_eq!(nr_of_props, 5);
     }
 }
