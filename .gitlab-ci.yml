@@ -44,7 +44,7 @@ build-windows:
   tags:
     - windows
   script:
-    - cargo build --release
+    - cargo distrib build
   dependencies:
     - test_windows
   rules:
