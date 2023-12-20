@@ -29,7 +29,7 @@ stages:
 # #    reports:
 # #      junit: $CI_PROJECT_DIR/tests/*.xml
 
-test:
+test_windows:
   stage: test
   tags:
     - windows
