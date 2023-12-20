@@ -53,7 +53,7 @@ build-windows:
     untracked: false
     when: on_success
     paths: 
-      - $CI_PROJECT_DIR/target/distrib/*.msi
+      - $CI_BUILDS_DIR/target/distrib/*.msi
       - $CI_PROJECT_DIR/target/distrib/*.zip
       - $CI_PROJECT_DIR/target/distrib/*.tar.gz
 
