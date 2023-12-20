@@ -35,8 +35,6 @@ test:
     - windows
   script:
     - cargo xtask ci
-  dependencies:
-    - test_windows
   rules:
     - if: '$CI_COMMIT_REF_PROTECTED == "true"'
 
