@@ -369,6 +369,23 @@ impl Rays {
             Length::new::<millimeter>(max_dist)
         })
     }
+    /// Returns the rms beam radius [`Rays`].
+    ///
+    /// This function calculates the rms (root mean square) size of a ray bundle from it centroid. So far, the rays / spots are not weighted by their
+    /// particular energy.
+    #[must_use]
+    pub fn beam_radius_rms(&self) -> Option<Length> {
+        self.centroid().map(|c| {
+            let c_in_millimeter = Point2::new(c.x.get::<millimeter>(), c.y.get::<millimeter>());
+            let mut sum_dist_sq = 0.0;
+            for ray in &self.rays {
+                let ray_2d = Point2::new(ray.pos.x, ray.pos.y);
+                sum_dist_sq += distance(&ray_2d, &c_in_millimeter).powi(2);
+            }
+            sum_dist_sq /= self.rays.len() as f64;
+            Length::new::<millimeter>(sum_dist_sq.sqrt())
+        })
+    }
     /// Add a single ray to the ray bundle.
     pub fn add_ray(&mut self, ray: Ray) {
         self.rays.push(ray);
