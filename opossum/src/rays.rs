@@ -382,7 +382,9 @@ impl Rays {
                 let ray_2d = Point2::new(ray.pos.x, ray.pos.y);
                 sum_dist_sq += distance(&ray_2d, &c_in_millimeter).powi(2);
             }
-            sum_dist_sq /= self.rays.len() as f64;
+            #[allow(clippy::cast_precision_loss)]
+            let nr_of_rays = self.rays.len() as f64;
+            sum_dist_sq /= nr_of_rays;
             Length::new::<millimeter>(sum_dist_sq.sqrt())
         })
     }
@@ -1301,6 +1303,7 @@ mod test {
     #[test]
     fn rays_beam_radius_geo() {
         let mut rays = Rays::default();
+        assert!(rays.beam_radius_geo().is_none());
         rays.add_ray(
             Ray::new_collimated(
                 Point2::new(
@@ -1326,6 +1329,38 @@ mod test {
         assert_eq!(
             rays.beam_radius_geo().unwrap(),
             Length::new::<millimeter>(0.5_f64.sqrt())
+        );
+    }
+    #[test]
+    fn rays_beam_radius_rms() {
+        let mut rays = Rays::default();
+        assert!(rays.beam_radius_rms().is_none());
+        rays.add_ray(
+            Ray::new_collimated(
+                Point2::new(
+                    Length::new::<millimeter>(1.0),
+                    Length::new::<millimeter>(1.0),
+                ),
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+            )
+            .unwrap(),
+        );
+        assert_eq!(rays.beam_radius_rms().unwrap(), Length::zero());
+        rays.add_ray(
+            Ray::new_collimated(
+                Point2::new(
+                    Length::new::<millimeter>(0.0),
+                    Length::new::<millimeter>(0.0),
+                ),
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            rays.beam_radius_rms().unwrap(),
+            Length::new::<millimeter>(f64::sqrt(2.0) / 2.0)
         );
     }
     #[test]
