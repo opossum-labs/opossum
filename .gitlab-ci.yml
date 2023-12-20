@@ -53,9 +53,9 @@ build-windows:
     untracked: false
     when: on_success
     paths: 
-      - $CI_BUILDS_DIR/target/distrib/*.msi
-      - $CI_PROJECT_DIR/target/distrib/*.zip
-      - $CI_PROJECT_DIR/target/distrib/*.tar.gz
+      - $CI_BUILDS_DIR\..\target\distrib\*.msi
+      - $CI_PROJECT_DIR\..\..\..\..\..\..\target\distrib\*.zip
+      - $CI_PROJECT_DIR\..\..\..\..\..\..\target\distrib\*.tar.gz
 
 # Build the main application for linux
 #build-linux:
