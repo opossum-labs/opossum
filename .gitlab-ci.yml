@@ -55,7 +55,7 @@ build-windows:
     paths: 
       - distrib/*.msi
       - distrib/*.zip
-      - /distrib/*.tar.gz
+      - distrib/*.tar.gz
 
 # Build the main application for linux
 #build-linux:
