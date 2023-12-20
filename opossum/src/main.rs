@@ -90,10 +90,14 @@ fn main() -> OpmResult<()> {
             .unwrap(),
         &scenery,
     )?;
-
     //analyze the scenery
-    scenery.analyze(&opossum_args.analyzer)?;
-
+    print!("\nAnalyzing...");
+    let _ = io::stdout().flush();
+    if let Err(e) = scenery.analyze(&opossum_args.analyzer) {
+        println!("\nAnalysis error: {e}");
+        return Ok(());
+    }
+    println!("Success\n");
     //create the report file
     create_report_file(&opossum_args.report_directory, "report", &scenery)
 }

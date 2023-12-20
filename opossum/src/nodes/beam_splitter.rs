@@ -85,50 +85,39 @@ impl BeamSplitter {
         self.props.set("ratio", ratio.into())?;
         Ok(())
     }
+    fn split_spectrum(
+        &self,
+        input: Option<&LightData>,
+    ) -> OpmResult<(Option<Spectrum>, Option<Spectrum>)> {
+        if let Some(in1) = input {
+            match in1 {
+                LightData::Energy(e) => {
+                    let mut s = e.spectrum.clone();
+                    s.scale_vertical(&self.ratio())?;
+                    let out1_spectrum = Some(s);
+                    let mut s = e.spectrum.clone();
+                    s.scale_vertical(&(1.0 - self.ratio()))?;
+                    let out2_spectrum = Some(s);
+                    Ok((out1_spectrum, out2_spectrum))
+                }
+                _ => {
+                    Err(OpossumError::Analysis(
+                        "expected LightData::Energy value at input port. A reason might be that the wrong analzer was used for the given light source data type. Try to use another analyzer (e.g. ray tracing)".into(),
+                    ))
+                }
+            }
+        } else {
+            Ok((None, None))
+        }
+    }
     fn analyze_energy(
         &mut self,
         in1: Option<&LightData>,
         in2: Option<&LightData>,
     ) -> OpmResult<(Option<LightData>, Option<LightData>)> {
-        let mut out1_1_spectrum: Option<Spectrum> = None;
-        let mut out1_2_spectrum: Option<Spectrum> = None;
-        let mut out2_1_spectrum: Option<Spectrum> = None;
-        let mut out2_2_spectrum: Option<Spectrum> = None;
+        let (out1_1_spectrum, out1_2_spectrum) = self.split_spectrum(in1)?;
+        let (out2_1_spectrum, out2_2_spectrum) = self.split_spectrum(in2)?;
 
-        if let Some(in1) = in1 {
-            match in1 {
-                LightData::Energy(e) => {
-                    let mut s = e.spectrum.clone();
-                    s.scale_vertical(&self.ratio()).unwrap();
-                    out1_1_spectrum = Some(s);
-                    let mut s = e.spectrum.clone();
-                    s.scale_vertical(&(1.0 - self.ratio())).unwrap();
-                    out1_2_spectrum = Some(s);
-                }
-                _ => {
-                    return Err(OpossumError::Analysis(
-                        "expected DataEnergy value at input port".into(),
-                    ))
-                }
-            }
-        }
-        if let Some(in2) = in2 {
-            match in2 {
-                LightData::Energy(e) => {
-                    let mut s = e.spectrum.clone();
-                    s.scale_vertical(&self.ratio()).unwrap();
-                    out2_1_spectrum = Some(s);
-                    let mut s = e.spectrum.clone();
-                    s.scale_vertical(&(1.0 - self.ratio())).unwrap();
-                    out2_2_spectrum = Some(s);
-                }
-                _ => {
-                    return Err(OpossumError::Analysis(
-                        "expected DataEnergy value at input port".into(),
-                    ))
-                }
-            }
-        }
         let out1_spec = merge_spectra(out1_1_spectrum, out2_2_spectrum);
         let out2_spec = merge_spectra(out1_2_spectrum, out2_1_spectrum);
         let mut out1_data: Option<LightData> = None;
