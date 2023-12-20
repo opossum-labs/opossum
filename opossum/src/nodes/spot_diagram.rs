@@ -91,9 +91,9 @@ impl Optical for SpotDiagram {
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(data) = &self.light_data {
-            let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!("spot_diagram_{}.svg", self.properties().name()?));
+            let file_path = PathBuf::from(report_dir).join(Path::new(&format!("spot_diagram_{}.svg", self.properties().name()?)));
             self.to_plot(&file_path, (800,800), PltBackEnd::SVG)
+
             // self.to_svg_plot(&file_path, (800,800))
             // data.export(&file_path)
         } else {

@@ -99,6 +99,10 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
             Rc::new(RefCell::new(SpotDiagram::default())),
             uuid,
         )),
+        "Wavefront monitor" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(WaveFront::default())),
+            uuid,
+        )),
         "propagation" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Propagation::default())),
             uuid,

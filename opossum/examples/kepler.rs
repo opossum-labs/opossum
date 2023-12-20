@@ -16,6 +16,7 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(create_collimated_ray_source(
         Length::new::<millimeter>(10.0),
         Energy::new::<joule>(1.0),
+        3
     )?);
     let i_sd1 = scenery.add_node(SpotDiagram::new("source"));
     let i_pl1 = scenery.add_node(ParaxialSurface::new(

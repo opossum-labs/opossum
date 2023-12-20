@@ -305,7 +305,7 @@ impl PlotType{
             _ = root.fill(&WHITE);
             let (root_size_x, _) = root.dim_in_pixel();
             //split root for main plot and colorbar
-            let (main_root, cbar_root) = root.split_horizontally(root_size_x as f64*0.85);
+            let (main_root, cbar_root) = root.split_horizontally(850);
     
             
             let shape = dat.shape();
@@ -332,7 +332,7 @@ impl PlotType{
             };
     
     
-            //colorrbar. first because otherwise the xlabel of the main plot is cropped
+            //colorbar. first because otherwise the xlabel of the main plot is cropped
             let mut chart = self.create_2d_plot_chart(
                 &cbar_root,
                 (0., 1.),
@@ -410,7 +410,9 @@ impl PlotType{
                 let (x_px, y_px) = root.dim_in_pixel();     
                 
                 if y_ax{
-                    chart_builder.set_label_area_size(ylabelpos.into(),90);
+                    let digits = y_bounds.1.abs().log10().floor()+2.;
+                    let pixels = (digits*30.*0.6*0.75) as i32;
+                    chart_builder.set_label_area_size(ylabelpos.into(),90 + pixels);
                 }
                 chart_builder.set_label_area_size(xlabelpos.into(), 65);
                 
@@ -424,6 +426,7 @@ impl PlotType{
                     .configure_mesh();
         
                 // mesh.disable_mesh();
+
         
                 if y_ax{
                     mesh.y_desc(ylabel);
@@ -575,7 +578,7 @@ pub trait Plottable {
             let (y_range, y_min, y_max ) = plt_dat.get_min_max_range(&dat.column(1));
 
             let num_entries = dat.column(0).len();
-            let num = f64::sqrt(num_entries as f64).floor();
+            let num = f64::sqrt(num_entries as f64 / 2.).floor();
 
             let x_end = x_max+x_range/(num-1.0)*0.5;
             let x_start = x_min-x_range/(num-1.0)*0.5;
@@ -1078,7 +1081,7 @@ impl PlotParameters{
         let fdir = self.get_fdir()?;
         let fname = self.get_fname()?;
 
-        Ok(fdir + fname.as_str())
+        Ok(fdir + "/" + fname.as_str())
         
     }
 
@@ -1170,14 +1173,14 @@ impl PlotParameters{
     pub fn check_validity(&self) -> OpmResult<()>{
         let backend = self.get_backend()?;
         let fname: String = self.get_fname()?;
-        let fdir = self.get_fdir()? + "\\";
+        let fdir = self.get_fdir()?;
         let dir_path = Path::new(&fdir);
 
         let (valid_backend, err_msg) = self.check_backend_file_ext_compatibility(&fname, &backend);
         let mut err_path = "".to_owned();
         let mut valid_path = true;
         if !dir_path.exists(){
-            err_path.push_str(format!("File-directory path \"{fdir}\\\" is not valid!\n\n").as_str());
+            err_path.push_str(format!("File-directory path \"{fdir}\" is not valid!\n\n").as_str());
             valid_path = false;
             println!("test");
         }

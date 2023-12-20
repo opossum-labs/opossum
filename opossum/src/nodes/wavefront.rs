@@ -37,6 +37,24 @@ pub struct WaveFront {
     props: Properties,
 }
 
+impl WaveFront {
+    /// Creates a new [`WaveFront`] Monitou.
+    /// # Attributes
+    /// * `name`: name of the spot diagram
+    ///
+    /// # Panics
+    /// This function may panic if the property "name" can not be set.
+    #[must_use]
+    pub fn new(name: &str) -> Self {
+        let mut props = create_default_props();
+        props.set("name", name.into()).unwrap();
+        Self {
+            props,
+            ..Default::default()
+        }
+    }
+}
+
 fn create_default_props() -> Properties {
     let mut props = Properties::new("Wavefront monitor", "Wavefront monitor");
     let mut ports = OpticPorts::new();
@@ -73,8 +91,12 @@ impl Optical for WaveFront {
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(data) = &self.light_data {
             let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!("wavefront_diagram_{}.svg", self.properties().name()?));
-            self.to_plot(&file_path, (800,800), PltBackEnd::SVG)
+            file_path.push(format!("wavefront_diagram_{}.png", self.properties().name()?));
+
+            // let mut file_path = PathBuf::from(report_dir);
+            // file_path.push(format!("\\wavefront_diagram_{}.png", self.properties().name()?));
+            println!("{:?}", file_path);
+            self.to_plot(&file_path, (1100,850), PltBackEnd::BMP)
 
         } else {
             Err(OpossumError::Other(
@@ -196,13 +218,14 @@ impl Plottable for WaveFront{
         match data{
             Some(LightData::Geometric(rays)) => {
                 let path_length = rays.optical_path_length_at_wvl(1053.);
+                let binned_data = self.bin_2d_scatter_data(&PlotData::Dim3(path_length));
                 match plt_type{
                     PlotType::ColorMesh(_) => {
-                        
-                        Ok(Some(PlotData::ColorMesh(path_length)))
+
+                        Ok(binned_data)
                     },
                     PlotType::ColorScatter(_) => {
-                        Ok(Some(PlotData::ColorMesh(path_length)))
+                        Ok(binned_data)
                     },
                     _ => Ok(None),
                 }
