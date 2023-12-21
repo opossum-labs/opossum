@@ -22,6 +22,7 @@ use std::fmt::Debug;
 ///
 /// ## Properties
 ///   - `name`
+///   - `apertures`
 ///   - `inverted`
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,

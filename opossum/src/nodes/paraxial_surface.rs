@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+//! A paraxial surface (ideal lens)
 use std::collections::HashMap;
 
 use crate::{
@@ -22,6 +24,26 @@ fn create_default_props() -> Properties {
     props.set("apertures", ports.into()).unwrap();
     props
 }
+/// Paraxial surface (=ideal lens)
+///
+/// This node models a (flat) paraxial surface with a given `focal leength`. This corresponds to an ideal lens which is aberration free
+/// and achromatic. A positive `focal length` corresponds to a focussing (convex) lens while a negative `focal length` represents a
+/// defocussing (concave) lens.
+///
+/// The propagation is performed for [`LightData::Geometric`] only. For [`LightData::Energy`] this node is "transparent" which means
+/// that the input data is simply forward unmodified to the output (such as a `Dummy` node).
+///
+/// ## Optical Ports
+///   - Inputs
+///     - `front`
+///   - Outputs
+///     - `rear`
+///
+/// ## Properties
+///   - `name`
+///   - `apertures`
+///   - `inverted`
+///   - `focal length`
 #[derive(Debug, Clone)]
 pub struct ParaxialSurface {
     props: Properties,
@@ -35,7 +57,6 @@ impl Default for ParaxialSurface {
 }
 impl ParaxialSurface {
     /// Create a new paraxial surface node of the given focal length.
-    ///
     ///
     /// # Errors
     /// This function returns an error if
@@ -55,7 +76,6 @@ impl ParaxialSurface {
         Ok(Self { props })
     }
 }
-
 impl Optical for ParaxialSurface {
     fn analyze(
         &mut self,

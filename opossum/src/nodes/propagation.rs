@@ -1,6 +1,5 @@
-//! Propagation along the optical axis
-//!
-//! This node represents a propagation along the optical axis. So far, the light propgates without a medium (vaccuum, refractive index = 1.0).
+#![warn(missing_docs)]
+//! Free-space propagation along the optical axis
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -12,7 +11,26 @@ use crate::{
 };
 use std::collections::HashMap;
 use uom::si::{f64::Length, length::millimeter};
-
+/// Propagation along the optical axis (z-Axis)
+///
+/// This node represents a free-space propagation along the optical axis (z-axis). So far,
+/// the light propgates without a medium (vaccuum, refractive index = 1.0). The given `distance` corresponds to the
+/// projected length on the optical axis.
+///
+/// The propagation is performed for [`LightData::Geometric`] only. For [`LightData::Energy`] this node is "transparent" which means
+/// that the input data is simply forward unmodified to the output (such as a `Dummy` node).
+///
+/// ## Optical Ports
+///   - Inputs
+///     - `front`
+///   - Outputs
+///     - `rear`
+///
+/// ## Properties
+///   - `name`
+///   - `apertures`
+///   - `inverted`
+///   - `distance`
 #[derive(Debug, Clone)]
 pub struct Propagation {
     props: Properties,
