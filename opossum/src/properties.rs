@@ -1,16 +1,5 @@
 #![warn(missing_docs)]
 //! Module for handling node properties
-use genpdf::{elements::TableLayout, style};
-use plotters::prelude::LogScalable;
-use serde_derive::{Deserialize, Serialize};
-use std::{collections::BTreeMap, mem};
-use uom::si::{
-    energy::joule,
-    f64::{Energy, Length},
-    length::meter,
-};
-use uuid::Uuid;
-
 use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},
@@ -22,6 +11,19 @@ use crate::{
     reporter::{NodeReport, PdfReportable},
     spectrum::Spectrum,
 };
+use genpdf::{elements::TableLayout, style};
+use plotters::prelude::LogScalable;
+use serde_derive::{Deserialize, Serialize};
+use std::fmt::Debug;
+use std::{collections::BTreeMap, mem};
+use uom::num::Float;
+use uom::si::{
+    energy::joule,
+    f64::{Energy, Length},
+    length::meter,
+    Dimension, Quantity, Unit, Units,
+};
+use uuid::Uuid;
 /// A general set of (optical) properties.
 ///
 /// The property system is used for storing node specific parameters (such as focal length, splitting ratio, filter curve, etc ...).
@@ -510,15 +512,16 @@ fn format_value_with_prefix(value: f64) -> String {
     };
     format!("{:8.3} {prefix}", value / f64::powi(10.0, exponent))
 }
-
-fn format_length(length: Length) -> String {
-    let base_value = length.get::<meter>();
-    format!("{}m", format_value_with_prefix(base_value))
-}
-
-fn format_energy(energy: Energy) -> String {
-    let base_value = energy.get::<joule>();
-    format!("{}J", format_value_with_prefix(base_value))
+fn format_quantity<D, U, V, N>(_: N, q: Quantity<D, U, V>) -> String
+where
+    D: Dimension + ?Sized,
+    U: Units<V> + ?Sized,
+    V: Float + uom::Conversion<V> + Debug,
+    N: Unit,
+{
+    let base_unit = N::abbreviation();
+    let base_value = q.value.to_f64().unwrap();
+    format!("{}{}", format_value_with_prefix(base_value), base_unit)
 }
 impl PdfReportable for Proptype {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
@@ -534,8 +537,12 @@ impl PdfReportable for Proptype {
             Self::Spectrum(value) => l.push(value.pdf_report()?),
             Self::Rays(value) => l.push(value.pdf_report()?),
             Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
-            Self::Length(value) => l.push(genpdf::elements::Paragraph::new(format_length(*value))),
-            Self::Energy(value) => l.push(genpdf::elements::Paragraph::new(format_energy(*value))),
+            Self::Length(value) => l.push(genpdf::elements::Paragraph::new(format_quantity(
+                meter, *value,
+            ))),
+            Self::Energy(value) => l.push(genpdf::elements::Paragraph::new(format_quantity(
+                joule, *value,
+            ))),
             _ => l.push(
                 genpdf::elements::Paragraph::default()
                     .styled_string("unknown poperty type", style::Effect::Italic),
