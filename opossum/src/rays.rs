@@ -389,8 +389,18 @@ impl Rays {
         })
     }
     /// Add a single ray to the ray bundle.
+    ///
+    /// # Panics
+    /// Panics if the resulting ray bundle exceeds `isize::MAX` bytes.
     pub fn add_ray(&mut self, ray: Ray) {
         self.rays.push(ray);
+    }
+    /// Add (merge) another ray bundle
+    ///
+    /// # Panics
+    /// Panics if the resulting ray bundle exceeds `isize::MAX` bytes.
+    pub fn add_rays(&mut self, rays: &mut Rays) {
+        self.rays.append(&mut rays.rays)
     }
     /// Propagate a ray bundle along the z axis.
     ///
@@ -1240,6 +1250,22 @@ mod test {
         .unwrap();
         rays.add_ray(ray);
         assert_eq!(rays.rays.len(), 1);
+    }
+    #[test]
+    fn rays_add_rays() {
+        let mut rays = Rays::default();
+        assert_eq!(rays.rays.len(), 0);
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        assert_eq!(rays.rays.len(), 1);
+        let mut rays2 = rays.clone();
+        rays.add_rays(&mut rays2);
+        assert_eq!(rays.rays.len(), 2);
     }
     #[test]
     fn rays_total_energy() {
