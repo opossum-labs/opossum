@@ -24,7 +24,11 @@ use uom::si::{
 /// # Errors
 /// This functions returns an error if
 ///  - the given energy is < 0.0, Nan, or +inf.
-pub fn create_collimated_ray_source(radius: Length, energy: Energy, num_rings: u8) -> OpmResult<Source> {
+pub fn create_collimated_ray_source(
+    radius: Length,
+    energy: Energy,
+    num_rings: u8,
+) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
         radius,
         Length::new::<nanometer>(1053.0),
@@ -219,7 +223,8 @@ mod test {
             3
         )
         .is_err());
-        let src = create_collimated_ray_source(Length::zero(), Energy::new::<joule>(1.0), 3).unwrap();
+        let src =
+            create_collimated_ray_source(Length::zero(), Energy::new::<joule>(1.0), 3).unwrap();
         if let Proptype::LightData(light_data) = src.properties().get("light data").unwrap() {
             if let Some(LightData::Geometric(rays)) = light_data {
                 assert_eq!(rays.nr_of_rays(), 1);
@@ -234,9 +239,12 @@ mod test {
         } else {
             panic!("property light data has wrong type");
         }
-        let src =
-            create_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(1.0), 3)
-                .unwrap();
+        let src = create_collimated_ray_source(
+            Length::new::<millimeter>(1.0),
+            Energy::new::<joule>(1.0),
+            3,
+        )
+        .unwrap();
         if let Proptype::LightData(Some(LightData::Geometric(rays))) =
             src.properties().get("light data").unwrap()
         {

@@ -1,14 +1,14 @@
 #![warn(missing_docs)]
-use image::{DynamicImage, RgbImage, ImageBuffer};
+use image::{DynamicImage, ImageBuffer, RgbImage};
 use plotters::chart::ChartBuilder;
 use plotters::style::RGBAColor;
-use serde_derive::{Serialize, Deserialize};
+use serde_derive::{Deserialize, Serialize};
 use uom::si::length::millimeter;
 
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::plottable::{PlotType, Plottable, PlotData, PlotParameters, PltBackEnd, PlotArgs};
+use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
@@ -73,7 +73,6 @@ impl SpotDiagram {
     }
 }
 
-
 impl Optical for SpotDiagram {
     fn analyze(
         &mut self,
@@ -91,8 +90,11 @@ impl Optical for SpotDiagram {
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(data) = &self.light_data {
-            let file_path = PathBuf::from(report_dir).join(Path::new(&format!("spot_diagram_{}.svg", self.properties().name()?)));
-            self.to_plot(&file_path, (800,800), PltBackEnd::SVG)
+            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+                "spot_diagram_{}.svg",
+                self.properties().name()?
+            )));
+            self.to_plot(&file_path, (800, 800), PltBackEnd::SVG)
 
             // self.to_svg_plot(&file_path, (800,800))
             // data.export(&file_path)
@@ -168,53 +170,62 @@ impl From<SpotDiagram> for Proptype {
     }
 }
 
-impl PdfReportable for SpotDiagram{
+impl PdfReportable for SpotDiagram {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), (800,800), PltBackEnd::Buf)?;
+        let img = self.to_plot(Path::new(""), (800, 800), PltBackEnd::Buf)?;
         layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img.unwrap_or(ImageBuffer::default())))
-                .map_err(|e| format!("adding of image failed: {e}"))?,
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
+                img.unwrap_or(ImageBuffer::default()),
+            ))
+            .map_err(|e| format!("adding of image failed: {e}"))?,
         );
         Ok(layout)
     }
 }
 
-impl Plottable for SpotDiagram{
-    fn to_plot(&self, f_path: &Path, img_size: (u32, u32), backend: PltBackEnd) -> OpmResult<Option<RgbImage>>{
+impl Plottable for SpotDiagram {
+    fn to_plot(
+        &self,
+        f_path: &Path,
+        img_size: (u32, u32),
+        backend: PltBackEnd,
+    ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
-        match backend{
+        match backend {
             PltBackEnd::Buf => plt_params.set(PlotArgs::FigSize(img_size)),
-            _ => {
-                plt_params.set(PlotArgs::FName(f_path.file_name().unwrap().to_str().unwrap().to_owned()))
-                .set(PlotArgs::FDir(f_path.parent().unwrap().to_str().unwrap().to_owned()))
-                .set(PlotArgs::FigSize(img_size))
-            }
+            _ => plt_params
+                .set(PlotArgs::FName(
+                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
+                ))
+                .set(PlotArgs::FDir(
+                    f_path.parent().unwrap().to_str().unwrap().to_owned(),
+                ))
+                .set(PlotArgs::FigSize(img_size)),
         };
         plt_params.set(PlotArgs::Backend(backend));
 
         let plt_type = PlotType::Scatter2D(plt_params);
 
         let plt_data_opt = self.get_plot_data(&plt_type)?;
-        
-        if let Some(plt_dat) = plt_data_opt{
+
+        if let Some(plt_dat) = plt_data_opt {
             plt_type.plot(&plt_dat)
-        }
-        else{
+        } else {
             Ok(None)
-        }        
+        }
     }
 
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
         let data = &self.light_data;
-        match data{
+        match data {
             Some(LightData::Geometric(rays)) => {
                 let rays_xy_pos = rays.get_xy_rays_pos();
-                match plt_type{
+                match plt_type {
                     PlotType::Scatter2D(_) => Ok(Some(PlotData::Dim2(rays_xy_pos))),
                     _ => Ok(None),
                 }
-            },
+            }
             _ => Ok(None),
         }
     }

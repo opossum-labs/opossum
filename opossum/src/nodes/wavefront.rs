@@ -93,10 +93,8 @@ impl Optical for WaveFront {
             let mut file_path = PathBuf::from(report_dir);
             file_path.push(format!("wavefront_diagram_{}.png", self.properties().name()?));
 
-            // let mut file_path = PathBuf::from(report_dir);
-            // file_path.push(format!("\\wavefront_diagram_{}.png", self.properties().name()?));
             println!("{:?}", file_path);
-            self.to_plot(&file_path, (1100,850), PltBackEnd::BMP)
+            self.to_plot(&file_path, (1000,850), PltBackEnd::BMP)
 
         } else {
             Err(OpossumError::Other(
@@ -201,10 +199,20 @@ impl Plottable for WaveFront{
         };
         plt_params.set(PlotArgs::Backend(backend));
 
-        let plt_type = PlotType::ColorMesh(plt_params);
+        let (plt_data_opt, plt_type) = if let Some(LightData::Geometric(rays)) = &self.light_data{
+            if rays.nr_of_rays() > 100{
+                let plt_type = PlotType::ColorMesh(plt_params);
+                (self.get_plot_data(&plt_type)?, plt_type)
+            }
+            else{
+                let plt_type = PlotType::ColorScatter(plt_params);
+                (self.get_plot_data(&plt_type)?, plt_type)
+            }
+        }
+        else{
+            (None, PlotType::ColorMesh(plt_params))
+        };
 
-        let plt_data_opt = self.get_plot_data(&plt_type)?;
-        
         if let Some(plt_dat) = plt_data_opt{
             plt_type.plot(&plt_dat)
         }
@@ -218,14 +226,14 @@ impl Plottable for WaveFront{
         match data{
             Some(LightData::Geometric(rays)) => {
                 let path_length = rays.optical_path_length_at_wvl(1053.);
-                let binned_data = self.bin_2d_scatter_data(&PlotData::Dim3(path_length));
                 match plt_type{
                     PlotType::ColorMesh(_) => {
-
+                        let binned_data = self.bin_2d_scatter_data(&PlotData::Dim3(path_length));
                         Ok(binned_data)
                     },
                     PlotType::ColorScatter(_) => {
-                        Ok(binned_data)
+                        let triangulated_dat = self.triangulate_plot_data(&PlotData::Dim3(path_length));
+                        Ok(triangulated_dat)
                     },
                     _ => Ok(None),
                 }

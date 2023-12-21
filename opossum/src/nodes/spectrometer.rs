@@ -9,7 +9,7 @@ use uom::si::length::nanometer;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::plottable::{Plottable, PlotData, PltBackEnd, PlotType, PlotParameters, PlotArgs};
+use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
@@ -147,7 +147,6 @@ impl Spectrometer {
         self.props.set("spectrometer type", meter_type.into())?;
         Ok(())
     }
-
 }
 impl Optical for Spectrometer {
     fn analyze(
@@ -166,8 +165,11 @@ impl Optical for Spectrometer {
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(data) = &self.light_data {
-            let file_path = PathBuf::from(report_dir).join(Path::new(&format!("spectrum_{}.svg", self.properties().name()?)));
-            self.to_plot(&file_path, (1200,800), PltBackEnd::SVG)
+            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+                "spectrum_{}.svg",
+                self.properties().name()?
+            )));
+            self.to_plot(&file_path, (1200, 800), PltBackEnd::SVG)
             // self.to_svg_plot(&file_path, (1200,800))
             // data.export(&file_path)
         } else {
@@ -242,43 +244,50 @@ impl Dottable for Spectrometer {
     }
 }
 
-
-
 impl PdfReportable for Spectrometer {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), (1200,800), PltBackEnd::Buf)?;
+        let img = self.to_plot(Path::new(""), (1200, 800), PltBackEnd::Buf)?;
         layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img.unwrap_or(ImageBuffer::default())))
-                .map_err(|e| format!("adding of image failed: {e}"))?,
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
+                img.unwrap_or(ImageBuffer::default()),
+            ))
+            .map_err(|e| format!("adding of image failed: {e}"))?,
         );
         Ok(layout)
     }
 }
 
-impl Plottable for Spectrometer{
-    fn to_plot(&self, f_path: &Path, img_size: (u32, u32), backend: PltBackEnd) -> OpmResult<Option<RgbImage>>{
+impl Plottable for Spectrometer {
+    fn to_plot(
+        &self,
+        f_path: &Path,
+        img_size: (u32, u32),
+        backend: PltBackEnd,
+    ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
-        match backend{
+        match backend {
             PltBackEnd::Buf => plt_params.set(PlotArgs::FigSize(img_size)),
-            _ => {
-                plt_params.set(PlotArgs::FName(f_path.file_name().unwrap().to_str().unwrap().to_owned()))
-                .set(PlotArgs::FDir(f_path.parent().unwrap().to_str().unwrap().to_owned()))
-                .set(PlotArgs::FigSize(img_size))
-            }
+            _ => plt_params
+                .set(PlotArgs::FName(
+                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
+                ))
+                .set(PlotArgs::FDir(
+                    f_path.parent().unwrap().to_str().unwrap().to_owned(),
+                ))
+                .set(PlotArgs::FigSize(img_size)),
         };
         plt_params.set(PlotArgs::Backend(backend));
 
         let plt_type = PlotType::Line2D(plt_params);
 
         let plt_data_opt = self.get_plot_data(&plt_type)?;
-        
-        if let Some(plt_dat) = plt_data_opt{
+
+        if let Some(plt_dat) = plt_data_opt {
             plt_type.plot(&plt_dat)
-        }
-        else{
+        } else {
             Ok(None)
-        }        
+        }
     }
 
     // fn get_plot_data(&self) -> OpmResult<MatrixXx2<f64>>{
@@ -290,21 +299,23 @@ impl Plottable for Spectrometer{
     // }
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
         let data = &self.light_data;
-        match data{
+        match data {
             Some(LightData::Geometric(rays)) => {
-                let spec = rays.to_spectrum(&Length::new::<nanometer>(0.2))?.get_plot_data();
-                match plt_type{
+                let spec = rays
+                    .to_spectrum(&Length::new::<nanometer>(0.2))?
+                    .get_plot_data();
+                match plt_type {
                     PlotType::Line2D(_) => Ok(Some(PlotData::Dim2(spec))),
                     _ => Ok(None),
                 }
-            },
+            }
             Some(LightData::Energy(e)) => {
                 let spec = e.spectrum.get_plot_data();
-                match plt_type{
+                match plt_type {
                     PlotType::Line2D(_) => Ok(Some(PlotData::Dim2(spec))),
                     _ => Ok(None),
                 }
-            },
+            }
             _ => Ok(None),
         }
     }
@@ -314,12 +325,10 @@ impl Plottable for Spectrometer{
     //     let xlabel = "x (mm)";
     //     let ylabel = "y (mm)";
     //     self.plot_2d_line(&PlotData::Dim2(plot_spec), marker_color, vec![[true, true], [true, true]], xlabel, ylabel, root);
-        
+
     //     Ok(())
     // }
 }
-
-
 
 #[cfg(test)]
 mod test {

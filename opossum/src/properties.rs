@@ -10,7 +10,9 @@ use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
-    nodes::{FilterType, Metertype, PortMap, SpectrometerType, SpotDiagram, WaveFront, Spectrometer},
+    nodes::{
+        FilterType, Metertype, PortMap, Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
+    },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     rays::Rays,

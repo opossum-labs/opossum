@@ -30,29 +30,29 @@ pub enum LightData {
     Fourier,
 }
 // impl LightData {
-    /// Export [`LightData`] to a specific file format
-    /// # Attributes
-    /// * `f_path`: path to the file destination
-    ///
-    /// # Errors
-    /// This function will return an error if
-    ///  - `to_svg_plot` fails for [`LightData::Energy`] the case that the plot area cannot be filled with a background colour.
-    ///  - no export function ist defined for the conrecte type of [`LightData`]
-    // pub fn export(&self, f_path: &Path) -> OpmResult<()> {
-    //     match self {
-    //         Self::Energy(d) => {
-    //             d.to_svg_plot(f_path)?;
-    //             Ok(())
-    //         }
-    //         Self::Geometric(d) => {
-    //             d.to_svg_plot(f_path)?;
-    //             Ok(())
-    //         }
-    //         Self::Fourier => Err(OpossumError::Other(
-    //             "export: no export function defined for this type of LightData".into(),
-    //         )),
-    //     }
-    // }
+/// Export [`LightData`] to a specific file format
+/// # Attributes
+/// * `f_path`: path to the file destination
+///
+/// # Errors
+/// This function will return an error if
+///  - `to_svg_plot` fails for [`LightData::Energy`] the case that the plot area cannot be filled with a background colour.
+///  - no export function ist defined for the conrecte type of [`LightData`]
+// pub fn export(&self, f_path: &Path) -> OpmResult<()> {
+//     match self {
+//         Self::Energy(d) => {
+//             d.to_svg_plot(f_path)?;
+//             Ok(())
+//         }
+//         Self::Geometric(d) => {
+//             d.to_svg_plot(f_path)?;
+//             Ok(())
+//         }
+//         Self::Fourier => Err(OpossumError::Other(
+//             "export: no export function defined for this type of LightData".into(),
+//         )),
+//     }
+// }
 // }
 impl Display for LightData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

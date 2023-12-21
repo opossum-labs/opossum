@@ -6,7 +6,7 @@ use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
 use csv::ReaderBuilder;
 use image::DynamicImage;
-use nalgebra::{MatrixXx2, DMatrix};
+use nalgebra::{DMatrix, MatrixXx2};
 use plotters::coord::Shift;
 use plotters::data::fitting_range;
 use plotters::prelude::*;
@@ -403,13 +403,13 @@ impl Spectrum {
             .collect();
     }
 
-    pub fn get_plot_data(&self) -> MatrixXx2<f64>{
+    pub fn get_plot_data(&self) -> MatrixXx2<f64> {
         let data = self.data.clone();
         let mut spec_mat = MatrixXx2::zeros(data.len());
-        for (i, s) in data.iter().enumerate(){
-            spec_mat[(i,0)] = s.0;
-            spec_mat[(i,1)] = s.1;
-        };
+        for (i, s) in data.iter().enumerate() {
+            spec_mat[(i, 0)] = s.0;
+            spec_mat[(i, 1)] = s.1;
+        }
         spec_mat
     }
 }

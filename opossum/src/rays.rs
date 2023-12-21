@@ -10,7 +10,9 @@ use crate::properties::Proptype;
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use image::DynamicImage;
-use nalgebra::{distance, point, DMatrix, Point2, Point3, Vector3, Matrix3xX, MatrixXx3, MatrixXx2};
+use nalgebra::{
+    distance, point, DMatrix, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector3,
+};
 use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
 use plotters::series::PointSeries;
 use plotters::style::{IntoFont, TextStyle, RED};
@@ -395,7 +397,7 @@ impl Rays {
     }
 
     /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx3<f64>]`.
-    pub fn get_xy_rays_pos(&self,) -> MatrixXx2<f64> {
+    pub fn get_xy_rays_pos(&self) -> MatrixXx2<f64> {
         let mut rays_at_pos = MatrixXx2::from_element(self.rays.len(), 0.);
         for (row, ray) in self.rays.iter().enumerate() {
             rays_at_pos[(row, 0)] = ray.pos.x;
