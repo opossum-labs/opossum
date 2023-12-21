@@ -112,7 +112,7 @@ impl EnergyMeter {
     /// - the data format is wrong.
     #[must_use]
     pub fn meter_type(&self) -> Metertype {
-        if let Proptype::Metertype(meter_type) = self.props.get("meter type").unwrap() {
+        if let Ok(Proptype::Metertype(meter_type)) = self.props.get("meter type") {
             *meter_type
         } else {
             panic!("wrong data format")
@@ -161,11 +161,11 @@ impl Optical for EnergyMeter {
         let mut props = Properties::default();
         if let Some(e) = energy {
             props
-                .create("Energy (J)", "Output energy", None, e.into())
+                .create("Energy", "Output energy", None, e.into())
                 .unwrap();
         } else {
             props
-                .create("Energy (J)", "Output energy", None, "no info".into())
+                .create("Energy", "Output energy", None, "no data".into())
                 .unwrap();
         }
         props
@@ -274,5 +274,48 @@ mod test {
         let result = result.unwrap();
         assert!(result.contains_key("in1"));
         assert_eq!(result.get("in1").unwrap(), &input_data);
+    }
+    #[test]
+    fn debug() {
+        let mut meter = EnergyMeter::default();
+        assert_eq!(format!("{meter:?}"), "no data");
+        let mut input = LightResult::default();
+        let input_data = Some(LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        }));
+        input.insert("in1".into(), input_data.clone());
+        meter.analyze(input, &AnalyzerType::Energy).unwrap();
+        assert_eq!(format!("{meter:?}"), "Energy: 1 J (Type: IdealEnergyMeter)");
+    }
+    #[test]
+    fn report() {
+        let mut meter = EnergyMeter::default();
+        let report = meter.report().unwrap();
+        assert_eq!(report.name(), "energy meter");
+        assert_eq!(report.detector_type(), "energy meter");
+        assert!(report.properties().contains("Energy"));
+        assert!(report.properties().contains("Model"));
+        if let Ok(Proptype::String(s)) = report.properties().get("Energy") {
+            assert_eq!(s, "no data");
+        } else {
+            panic!("could not read Energy property");
+        }
+        if let Ok(Proptype::Metertype(t)) = report.properties().get("Model") {
+            assert_eq!(t, &Metertype::IdealEnergyMeter);
+        } else {
+            panic!("could not read Model property");
+        }
+        let mut input = LightResult::default();
+        let input_data = Some(LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        }));
+        input.insert("in1".into(), input_data.clone());
+        meter.analyze(input, &AnalyzerType::Energy).unwrap();
+        let report = meter.report().unwrap();
+        if let Ok(Proptype::Energy(e)) = report.properties().get("Energy") {
+            assert_eq!(e, &Energy::new::<joule>(1.0));
+        } else {
+            panic!("could not read Energy property");
+        }
     }
 }

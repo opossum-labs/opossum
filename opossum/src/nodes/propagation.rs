@@ -133,6 +133,7 @@ mod test {
     }
     #[test]
     fn new() {
+        assert!(Propagation::new("Test", Length::new::<millimeter>(f64::INFINITY)).is_err());
         let node = Propagation::new("Test", Length::new::<millimeter>(1.0)).unwrap();
         assert_eq!(node.properties().name().unwrap(), "Test");
         if let Ok(Proptype::F64(dist)) = node.properties().get("distance") {
