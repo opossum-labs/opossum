@@ -26,7 +26,7 @@ use crate::{
 /// ## Properties
 ///   - `name`
 ///   - `apertures`
-///   - `inverted``
+///   - `inverted`
 ///   - `ratio`
 pub struct BeamSplitter {
     props: Properties,
