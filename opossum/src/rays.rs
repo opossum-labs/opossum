@@ -402,6 +402,20 @@ impl Rays {
     pub fn add_rays(&mut self, rays: &mut Self) {
         self.rays.append(&mut rays.rays);
     }
+    /// Remove rays from the bundle whose energies are below a given threshold.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given energy is negative or infinite.
+    pub fn delete_by_threshold(&mut self, threshold: Energy) -> OpmResult<()> {
+        if threshold.is_sign_negative() || !threshold.is_finite() {
+            return Err(OpossumError::Other(
+                "energy threshold must be >= 0.0 J and finite".into(),
+            ));
+        }
+        self.rays.retain(|r| r.e >= threshold);
+        Ok(())
+    }
     /// Propagate a ray bundle along the z axis.
     ///
     /// # Errors
@@ -1266,6 +1280,42 @@ mod test {
         let mut rays2 = rays.clone();
         rays.add_rays(&mut rays2);
         assert_eq!(rays.rays.len(), 2);
+    }
+    #[test]
+    fn rays_delete_by_threshold() {
+        let mut rays = Rays::default();
+        assert!(rays
+            .delete_by_threshold(Energy::new::<joule>(-0.1))
+            .is_err());
+        assert!(rays
+            .delete_by_threshold(Energy::new::<joule>(f64::NAN))
+            .is_err());
+        assert!(rays
+            .delete_by_threshold(Energy::new::<joule>(f64::INFINITY))
+            .is_err());
+        assert!(rays.delete_by_threshold(Energy::zero()).is_ok());
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(2.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        rays.delete_by_threshold(Energy::zero()).unwrap();
+        assert_eq!(rays.nr_of_rays(), 2);
+        rays.delete_by_threshold(Energy::new::<joule>(1.0)).unwrap();
+        assert_eq!(rays.nr_of_rays(), 2);
+        rays.delete_by_threshold(Energy::new::<joule>(1.1)).unwrap();
+        assert_eq!(rays.nr_of_rays(), 1);
+        rays.delete_by_threshold(Energy::new::<joule>(2.1)).unwrap();
+        assert_eq!(rays.nr_of_rays(), 0);
     }
     #[test]
     fn rays_total_energy() {
