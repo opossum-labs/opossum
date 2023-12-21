@@ -399,8 +399,8 @@ impl Rays {
     ///
     /// # Panics
     /// Panics if the resulting ray bundle exceeds `isize::MAX` bytes.
-    pub fn add_rays(&mut self, rays: &mut Rays) {
-        self.rays.append(&mut rays.rays)
+    pub fn add_rays(&mut self, rays: &mut Self) {
+        self.rays.append(&mut rays.rays);
     }
     /// Propagate a ray bundle along the z axis.
     ///
