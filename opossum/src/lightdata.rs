@@ -1,19 +1,14 @@
 #![warn(missing_docs)]
 //! Data structures containing the light information flowing between [`Opticals`](crate::optical::Optical).
-use plotters::coord::Shift;
-use plotters::prelude::{DrawingArea, DrawingBackend};
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::Display;
-use std::path::Path;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
-use crate::error::{OpmResult, OpossumError};
+use crate::error::OpmResult;
 use crate::nodes::FilterType;
-use crate::plottable::{PlotType, Plottable};
 use crate::properties::Proptype;
 use crate::rays::Rays;
-use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 
 /// Data structure defining the light properties. The actuals data type used depends on the

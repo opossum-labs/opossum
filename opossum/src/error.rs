@@ -1,7 +1,6 @@
 #![warn(missing_docs)]
 //! Opossum specfic error structures
 use std::{error::Error, fmt::Display};
-
 /// Opossum application specific Result type
 pub type OpmResult<T> = std::result::Result<T, OpossumError>;
 

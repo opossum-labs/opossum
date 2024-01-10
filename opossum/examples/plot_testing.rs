@@ -1,40 +1,13 @@
-use std::{
-    collections::HashMap,
-    env::current_dir,
-    f64::{self, consts::PI},
-    path::{Path, PathBuf},
-    time::Instant,
-};
-
-use approx::RelativeEq;
-use colorous::Gradient;
-use delaunator::{triangulate, Point,Triangulation };
-use itertools::{chain, iproduct, izip};
-use nalgebra::{
-    matrix, vector, DMatrix, DVector, DVectorSlice, Matrix, Matrix1xX, Matrix2, MatrixSlice1xX,
-    MatrixSliceXx1, MatrixXx1, MatrixXx2, MatrixXx3, OMatrix,
-};
+use delaunator::{triangulate, Point};
+use itertools::izip;
+use nalgebra::{DMatrix, DVector, Matrix1xX, Matrix3xX, MatrixXx3};
 use opossum::{
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType, PltBackEnd},
 };
-use plotters::{
-    backend::DrawingBackend,
-    chart::{ChartBuilder, ChartContext},
-    coord::{cartesian::Cartesian2d, ranged3d::Cartesian3d, types::RangedCoordf64, Shift},
-    drawing::DrawingArea,
-    element::Circle,
-    series::LineSeries,
-    style::{HSLColor, IntoFont, RGBAColor, RGBColor, ShapeStyle, TextStyle, WHITE},
-};
-use plotters::{
-    backend::{self, PixelFormat, RGBPixel},
-    chart,
-    prelude::*,
-};
-use plotters_backend::{BackendColor, BackendCoord, DrawingErrorKind};
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
+use std::f64::{self, consts::PI};
+use voronator::delaunator::Point as v_point;
+use voronator::VoronoiDiagram;
 
 fn linspace(start: f64, end: f64, num: usize) -> Matrix1xX<f64> {
     let mut linspace = Matrix1xX::<f64>::from_element(num, start);
@@ -86,15 +59,64 @@ fn meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f6
 }
 
 fn main() -> OpmResult<()> {
-    let points = vec![
-        Point { x: 0., y: 0. },
-        Point { x: 1., y: 0. },
-        Point { x: 1., y: 1. },
-        Point { x: 0., y: 1. },
-    ];
+    //triangulation test
+    let dat = Matrix3xX::from_vec(vec![
+        0.,
+        0.,
+        1.,
+        f64::cos(2. * PI / 6. * 0.),
+        f64::sin(2. * PI / 6. * 0.),
+        0.,
+        f64::cos(2. * PI / 6. * 1.),
+        f64::sin(2. * PI / 6. * 1.),
+        0.,
+        f64::cos(2. * PI / 6. * 2.),
+        f64::sin(2. * PI / 6. * 2.),
+        0.,
+        f64::cos(2. * PI / 6. * 3.),
+        f64::sin(2. * PI / 6. * 3.),
+        0.,
+        f64::cos(2. * PI / 6. * 4.),
+        f64::sin(2. * PI / 6. * 4.),
+        0.,
+        f64::cos(2. * PI / 6. * 5.),
+        f64::sin(2. * PI / 6. * 5.),
+        0.,
+    ])
+    .transpose();
 
-    let result: Triangulation  = triangulate(&points);
+    let mut plt_params = PlotParameters::default();
 
+    plt_params
+        .set(&PlotArgs::FName("triangle_test.png".into()))
+        .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .set(&PlotArgs::FigSize((800, 1000)));
+
+    plt_params.set(&PlotArgs::Backend(PltBackEnd::BMP));
+
+    let points: Vec<Point> = dat
+        .row_iter()
+        .map(|c| Point { x: c[0], y: c[1] })
+        .collect::<Vec<Point>>();
+
+    let trianglulation = triangulate(&points);
+    let triangles = trianglulation.triangles;
+
+    let tri_index_mat = Matrix3xX::from_vec(triangles).transpose();
+
+    let mut triangle_centroid_z = DVector::<f64>::zeros(tri_index_mat.column(0).len());
+
+    for (c, t) in izip!(tri_index_mat.row_iter(), triangle_centroid_z.iter_mut()) {
+        *t = (dat[(c[0], 2)] + dat[(c[1], 2)] + dat[(c[2], 2)]) / 3.;
+    }
+
+    let (plt_dat, plt_type) = (
+        PlotData::TriangulatedSurface(tri_index_mat, triangle_centroid_z, dat.clone()),
+        PlotType::ColorScatter(plt_params),
+    );
+    let _ = plt_type.plot(&plt_dat);
+
+    //colormesh test
     let x = linspace(-50., 50., 101);
     let y = linspace(-50., 50., 101);
     let sigma = 5.;
@@ -104,8 +126,6 @@ fn main() -> OpmResult<()> {
         / f64::powi(sigma, 2))
     .map(|x| x.exp())
         * 2.;
-
-    let f_path = "./opossum/playground/plot_test.png";
 
     let flat_x = DVector::from_vec(xx.iter().cloned().map(|x| x).collect::<Vec<f64>>());
     let flat_y = DVector::from_vec(yy.iter().cloned().map(|x| x).collect::<Vec<f64>>());
@@ -118,26 +138,16 @@ fn main() -> OpmResult<()> {
 
     let mut p_info_params = PlotParameters::default();
     p_info_params
-        .set(PlotArgs::Backend(PltBackEnd::BMP))
-        .set(PlotArgs::FName("pre_bin.png".into()))
-        .set(PlotArgs::FDir("./opossum/playground/".into()));
+        .set(&PlotArgs::Backend(PltBackEnd::BMP))
+        .set(&PlotArgs::FName("pre_bin.png".into()))
+        .set(&PlotArgs::FDir("./opossum/playground/".into()));
 
     let plt_type = PlotType::ColorMesh(p_info_params.clone());
     plt_type.plot(&plt_dat_origin)?;
 
-    p_info_params.set(PlotArgs::FName("post_bin.png".into()));
+    p_info_params.set(&PlotArgs::FName("post_bin.png".into()));
     let plt_type = PlotType::ColorMesh(p_info_params.clone());
     plt_type.plot(&plt_dat_binned)?;
-
-    // p_info_params
-
-    // let mut plot = Plot::new(&plt_data, p_info_params);
-    // let path = plot.fpath.clone();
-    // let backend = BitMapBackend::new(&path, plot.img_size).into_drawing_area();
-
-    // _ = plot_color_mesh2(&mut plot, &backend);
-
-    // plot_2d_line(&PlotData::Dim2(dat_mat2), RGBAColor(255, 0,0, 1.), vec!([true, true],[true, true]), "testx", "testy", &root).unwrap()
 
     Ok(())
 }
@@ -176,7 +186,7 @@ fn bin_2d_scatter_data(plt_dat: &PlotData) -> Option<PlotData> {
             zz[(y_index, x_index)] += row[(0, 2)];
             zz_counter[(y_index, x_index)] += 1.;
         }
-        for (i, (z, z_count)) in izip!(zz.iter_mut(), zz_counter.iter()).enumerate() {
+        for (z, z_count) in izip!(zz.iter_mut(), zz_counter.iter()) {
             if *z_count > 0.5 {
                 *z /= *z_count;
             }

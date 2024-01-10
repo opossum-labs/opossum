@@ -15,9 +15,7 @@ use crate::{
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
-    rays::Rays,
     reporter::{NodeReport, PdfReportable},
-    spectrum::Spectrum,
 };
 /// A general set of (optical) properties.
 ///
@@ -215,6 +213,15 @@ impl Properties {
         self.get_bool("inverted")
     }
 }
+
+impl<'a> IntoIterator for &'a Properties {
+    type IntoIter = std::collections::hash_map::Iter<'a, std::string::String, Property>;
+    type Item = (&'a std::string::String, &'a Property);
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 impl PdfReportable for Properties {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();

@@ -9,9 +9,7 @@ use serde::{
 };
 use uuid::Uuid;
 
-use crate::{
-    nodes::create_node_ref, optical::Optical, plottable::Plottable, properties::Properties,
-};
+use crate::{nodes::create_node_ref, optical::Optical, properties::Properties};
 
 #[derive(Debug, Clone)]
 /// Structure for storing an optical node.

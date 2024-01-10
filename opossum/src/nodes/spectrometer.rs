@@ -1,7 +1,5 @@
 #![warn(missing_docs)]
 use image::{DynamicImage, ImageBuffer, RgbImage};
-use nalgebra::MatrixXx2;
-use plotters::style::RGBAColor;
 use serde_derive::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::nanometer;
@@ -164,7 +162,7 @@ impl Optical for Spectrometer {
         Ok(HashMap::from([(target.into(), data.clone())]))
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
-        if let Some(data) = &self.light_data {
+        if self.light_data.is_some() {
             let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
                 "spectrum_{}.svg",
                 self.properties().name()?
@@ -196,7 +194,7 @@ impl Optical for Spectrometer {
                 LightData::Geometric(r) => r.to_spectrum(&Length::new::<nanometer>(0.2)).ok(),
                 LightData::Fourier => None,
             };
-            if let Some(spectrum) = spectrum {
+            if spectrum.is_some() {
                 props
                     .create("Spectrum", "Output spectrum", None, self.clone().into())
                     .unwrap();
@@ -250,7 +248,7 @@ impl PdfReportable for Spectrometer {
         let img = self.to_plot(Path::new(""), (1200, 800), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
-                img.unwrap_or(ImageBuffer::default()),
+                img.unwrap_or_else(ImageBuffer::default),
             ))
             .map_err(|e| format!("adding of image failed: {e}"))?,
         );
@@ -267,27 +265,23 @@ impl Plottable for Spectrometer {
     ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
         match backend {
-            PltBackEnd::Buf => plt_params.set(PlotArgs::FigSize(img_size)),
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size)),
             _ => plt_params
-                .set(PlotArgs::FName(
+                .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
                 ))
-                .set(PlotArgs::FDir(
+                .set(&PlotArgs::FDir(
                     f_path.parent().unwrap().to_str().unwrap().to_owned(),
                 ))
-                .set(PlotArgs::FigSize(img_size)),
+                .set(&PlotArgs::FigSize(img_size)),
         };
-        plt_params.set(PlotArgs::Backend(backend));
+        plt_params.set(&PlotArgs::Backend(backend));
 
         let plt_type = PlotType::Line2D(plt_params);
 
         let plt_data_opt = self.get_plot_data(&plt_type)?;
 
-        if let Some(plt_dat) = plt_data_opt {
-            plt_type.plot(&plt_dat)
-        } else {
-            Ok(None)
-        }
+        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
     }
 
     // fn get_plot_data(&self) -> OpmResult<MatrixXx2<f64>>{

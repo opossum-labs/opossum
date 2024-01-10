@@ -160,7 +160,7 @@ pub trait Optical: Dottable {
     /// This function will return an error if the Property conditions while setting a value are not met.
     fn set_properties(&mut self, properties: Properties) -> OpmResult<()> {
         let own_properties = self.properties().clone();
-        for prop in properties.iter() {
+        for prop in &properties {
             if own_properties.contains(prop.0) {
                 match prop.0.as_str() {
                     "node_type" => {}

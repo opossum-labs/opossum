@@ -1,15 +1,8 @@
 #![warn(missing_docs)]
 //! Module for handling optical spectra
 use crate::error::{OpmResult, OpossumError};
-use crate::plottable::Plottable;
-use crate::properties::Proptype;
-use crate::reporter::PdfReportable;
 use csv::ReaderBuilder;
-use image::DynamicImage;
-use nalgebra::{DMatrix, MatrixXx2};
-use plotters::coord::Shift;
-use plotters::data::fitting_range;
-use plotters::prelude::*;
+use nalgebra::MatrixXx2;
 use serde_derive::{Deserialize, Serialize};
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
@@ -403,6 +396,8 @@ impl Spectrum {
             .collect();
     }
 
+    ///Retrieves the plot data of the spectrum
+    #[must_use]
     pub fn get_plot_data(&self) -> MatrixXx2<f64> {
         let data = self.data.clone();
         let mut spec_mat = MatrixXx2::zeros(data.len());
@@ -411,6 +406,14 @@ impl Spectrum {
             spec_mat[(i, 1)] = s.1;
         }
         spec_mat
+    }
+}
+
+impl<'a> IntoIterator for &'a Spectrum {
+    type IntoIter = std::slice::Iter<'a, (f64, f64)>;
+    type Item = &'a (f64, f64);
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 // impl PdfReportable for Spectrum {

@@ -5,17 +5,8 @@ use std::ops::Range;
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::FilterType;
-use crate::plottable::Plottable;
-use crate::properties::Proptype;
-use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
-use image::DynamicImage;
-use nalgebra::{
-    distance, point, DMatrix, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector3,
-};
-use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
-use plotters::series::PointSeries;
-use plotters::style::{IntoFont, TextStyle, RED};
+use nalgebra::{distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Vector3};
 use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
 use sobol::{params::JoeKuoD6, Sobol};
@@ -381,7 +372,7 @@ impl Rays {
             path_length_at_pos[(i, 1)] = ray.pos.y;
             path_length_at_pos[(i, 2)] = ray.path_length.get::<nanometer>();
 
-            let radius = ray.pos.x * ray.pos.x + ray.pos.y * ray.pos.y;
+            let radius = ray.pos.x.mul_add(ray.pos.x, ray.pos.y * ray.pos.y);
             if radius < min_radius {
                 min_radius = radius;
                 path_length_at_center = path_length_at_pos[(i, 2)];
@@ -397,6 +388,7 @@ impl Rays {
     }
 
     /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx3<f64>]`.
+    #[must_use]
     pub fn get_xy_rays_pos(&self) -> MatrixXx2<f64> {
         let mut rays_at_pos = MatrixXx2::from_element(self.rays.len(), 0.);
         for (row, ray) in self.rays.iter().enumerate() {

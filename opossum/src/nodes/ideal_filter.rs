@@ -32,7 +32,7 @@ impl PdfReportable for FilterType {
             Self::Constant(value) => l.push(genpdf::elements::Text::new(format!(
                 "fixed attenuation: {value}"
             ))),
-            Self::Spectrum(spectrum) => {
+            Self::Spectrum(_) => {
                 l.push(genpdf::elements::Text::new("transmission spectrum"));
                 // l.push(spectrum.pdf_report()?);
             }
