@@ -197,7 +197,7 @@ impl PlotType {
                     (x[idx[1]], y[idx[1]], z[idx[1]]),
                     (x[idx[2]], y[idx[2]], z[idx[2]]),
                 ],
-                Into::<ShapeStyle>::into(RGBAColor(180, 180, 180, 1.)).filled(),
+                Into::<ShapeStyle>::into(RGBAColor(0, 0, 255, 0.2)).filled(),
             )
         });
         chart.draw_series(series).unwrap();
