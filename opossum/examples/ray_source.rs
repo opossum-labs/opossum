@@ -18,7 +18,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Raysource demo")?;
     let mut source =
-        create_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(1.0))?;
+        create_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(1.0), 3)?;
     let aperture = Aperture::BinaryCircle(CircleConfig::new(1.0, point![0.5, 0.5])?);
     let mut ports = source.ports();
     ports.set_output_aperture("out1", aperture)?;

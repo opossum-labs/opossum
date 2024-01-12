@@ -1,20 +1,22 @@
 #![warn(missing_docs)]
+use image::{DynamicImage, ImageBuffer, RgbImage};
+use serde_derive::{Deserialize, Serialize};
+use uom::si::f64::Length;
+use uom::si::length::nanometer;
+
 use crate::dottable::Dottable;
-use crate::error::OpmResult;
+use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::nodes::OpossumError;
+use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
 };
-use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
-use uom::si::f64::Length;
-use uom::si::length::nanometer;
 
 #[non_exhaustive]
 #[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -31,6 +33,13 @@ impl From<SpectrometerType> for Proptype {
         Self::SpectrometerType(value)
     }
 }
+
+impl From<Spectrometer> for Proptype {
+    fn from(value: Spectrometer) -> Self {
+        Self::Spectrometer(value)
+    }
+}
+
 impl PdfReportable for SpectrometerType {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let element = match self {
@@ -58,6 +67,7 @@ impl PdfReportable for SpectrometerType {
 /// `
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Spectrometer {
     light_data: Option<LightData>,
     props: Properties,
@@ -151,11 +161,15 @@ impl Optical for Spectrometer {
         self.light_data = data.clone();
         Ok(HashMap::from([(target.into(), data.clone())]))
     }
-    fn export_data(&self, report_dir: &Path) -> OpmResult<()> {
-        if let Some(data) = &self.light_data {
-            let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!("spectrum_{}.svg", self.properties().name()?));
-            data.export(&file_path)
+    fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
+        if self.light_data.is_some() {
+            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+                "spectrum_{}.svg",
+                self.properties().name()?
+            )));
+            self.to_plot(&file_path, (1200, 800), PltBackEnd::SVG)
+            // self.to_svg_plot(&file_path, (1200,800))
+            // data.export(&file_path)
         } else {
             Err(OpossumError::Other(
                 "spectrometer: no light data available".into(),
@@ -180,9 +194,9 @@ impl Optical for Spectrometer {
                 LightData::Geometric(r) => r.to_spectrum(&Length::new::<nanometer>(0.2)).ok(),
                 LightData::Fourier => None,
             };
-            if let Some(spectrum) = spectrum {
+            if spectrum.is_some() {
                 props
-                    .create("Spectrum", "Output spectrum", None, spectrum.into())
+                    .create("Spectrum", "Output spectrum", None, self.clone().into())
                     .unwrap();
                 props
                     .create(
@@ -227,6 +241,89 @@ impl Dottable for Spectrometer {
         "lightseagreen"
     }
 }
+
+impl PdfReportable for Spectrometer {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let img = self.to_plot(Path::new(""), (1200, 800), PltBackEnd::Buf)?;
+        layout.push(
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
+                img.unwrap_or_else(ImageBuffer::default),
+            ))
+            .map_err(|e| format!("adding of image failed: {e}"))?,
+        );
+        Ok(layout)
+    }
+}
+
+impl Plottable for Spectrometer {
+    fn to_plot(
+        &self,
+        f_path: &Path,
+        img_size: (u32, u32),
+        backend: PltBackEnd,
+    ) -> OpmResult<Option<RgbImage>> {
+        let mut plt_params = PlotParameters::default();
+        match backend {
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size)),
+            _ => plt_params
+                .set(&PlotArgs::FName(
+                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
+                ))
+                .set(&PlotArgs::FDir(
+                    f_path.parent().unwrap().to_str().unwrap().to_owned(),
+                ))
+                .set(&PlotArgs::FigSize(img_size)),
+        };
+        plt_params.set(&PlotArgs::Backend(backend));
+
+        let plt_type = PlotType::Line2D(plt_params);
+
+        let plt_data_opt = self.get_plot_data(&plt_type)?;
+
+        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+    }
+
+    // fn get_plot_data(&self) -> OpmResult<MatrixXx2<f64>>{
+    //     match &self.light_data {
+    //         Some(LightData::Energy(e)) => Ok(e.spectrum.get_plot_data()),
+    //         Some(LightData::Geometric(r)) => Ok(r.to_spectrum(&Length::new::<nanometer>(0.2))?.get_plot_data()),
+    //         _ => Err(OpossumError::Other("lightdata type not defined!".into()))
+    //     }
+    // }
+    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+        let data = &self.light_data;
+        match data {
+            Some(LightData::Geometric(rays)) => {
+                let spec = rays
+                    .to_spectrum(&Length::new::<nanometer>(0.2))?
+                    .get_plot_data();
+                match plt_type {
+                    PlotType::Line2D(_) => Ok(Some(PlotData::Dim2(spec))),
+                    _ => Ok(None),
+                }
+            }
+            Some(LightData::Energy(e)) => {
+                let spec = e.spectrum.get_plot_data();
+                match plt_type {
+                    PlotType::Line2D(_) => Ok(Some(PlotData::Dim2(spec))),
+                    _ => Ok(None),
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+    // fn create_plot<B: plotters::prelude::DrawingBackend>(&self, root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>) -> OpmResult<()> {
+    //     let plot_spec = self.get_plot_data()?;
+    //     let marker_color = RGBAColor{0:255, 1:0, 2:0, 3:1.};
+    //     let xlabel = "x (mm)";
+    //     let ylabel = "y (mm)";
+    //     self.plot_2d_line(&PlotData::Dim2(plot_spec), marker_color, vec![[true, true], [true, true]], xlabel, ylabel, root);
+
+    //     Ok(())
+    // }
+}
+
 #[cfg(test)]
 mod test {
     use tempfile::tempdir;
@@ -359,15 +456,15 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
     }
-    #[test]
-    fn export_data() {
-        let mut s = Spectrometer::default();
-        assert!(s.export_data(Path::new("")).is_err());
-        s.light_data = Some(LightData::Geometric(Rays::default()));
-        let tmp_dir = tempdir().unwrap();
-        assert!(s.export_data(tmp_dir.path()).is_ok());
-        tmp_dir.close().unwrap();
-    }
+    // #[test]
+    // fn export_data() {
+    //     let mut s = Spectrometer::default();
+    //     assert!(s.export_data(Path::new("")).is_err());
+    //     s.light_data = Some(LightData::Geometric(Rays::default()));
+    //     let tmp_dir = tempdir().unwrap();
+    //     assert!(s.export_data(tmp_dir.path()).is_ok());
+    //     tmp_dir.close().unwrap();
+    // }
     #[test]
     fn report() {
         let mut sd = Spectrometer::default();

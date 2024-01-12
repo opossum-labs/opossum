@@ -334,6 +334,7 @@ impl OpticScenery {
             if let Some(node_report) = node.optical_ref.borrow().report() {
                 analysis_report.add_detector(node_report);
             }
+
             node.optical_ref.borrow().export_data(report_dir)?;
         }
         Ok(analysis_report)

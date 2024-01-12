@@ -4,12 +4,12 @@ use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
-    nodes::{FilterType, Metertype, PortMap, SpectrometerType},
+    nodes::{
+        FilterType, Metertype, PortMap, Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
+    },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
-    rays::Rays,
     reporter::{NodeReport, PdfReportable},
-    spectrum::Spectrum,
 };
 use genpdf::{elements::TableLayout, style};
 use plotters::prelude::LogScalable;
@@ -219,6 +219,15 @@ impl Properties {
         self.get_bool("inverted")
     }
 }
+
+impl<'a> IntoIterator for &'a Properties {
+    type IntoIter = std::collections::hash_map::Iter<'a, std::string::String, Property>;
+    type Item = (&'a std::string::String, &'a Property);
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 impl PdfReportable for Properties {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
@@ -463,9 +472,11 @@ pub enum Proptype {
     /// A property for storing an optical [`Aperture`]
     Aperture(Aperture),
     /// This property stores a [`Spectrum`]
-    Spectrum(Spectrum),
+    Spectrometer(Spectrometer),
     /// This property stores optical [`Rays`]
-    Rays(Rays),
+    SpotDiagram(SpotDiagram),
+    /// This property stores optical [`Rays`]
+    WaveFront(WaveFront),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
     /// a geometrical length
@@ -534,8 +545,9 @@ impl PdfReportable for Proptype {
             Self::FilterType(value) => l.push(value.pdf_report()?),
             Self::SpectrometerType(value) => l.push(value.pdf_report()?),
             Self::Metertype(value) => l.push(value.pdf_report()?),
-            Self::Spectrum(value) => l.push(value.pdf_report()?),
-            Self::Rays(value) => l.push(value.pdf_report()?),
+            Self::Spectrometer(value) => l.push(value.pdf_report()?),
+            Self::SpotDiagram(value) => l.push(value.pdf_report()?),
+            Self::WaveFront(value) => l.push(value.pdf_report()?),
             Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
             Self::Length(value) => l.push(genpdf::elements::Paragraph::new(format_quantity(
                 meter, *value,

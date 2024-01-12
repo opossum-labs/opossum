@@ -12,6 +12,7 @@ mod reference;
 mod source;
 mod spectrometer;
 mod spot_diagram;
+mod wavefront;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -37,6 +38,8 @@ pub use spectrometer::Spectrometer;
 pub use spectrometer::SpectrometerType;
 
 pub use spot_diagram::SpotDiagram;
+
+pub use wavefront::WaveFront;
 
 use uuid::Uuid;
 
@@ -94,6 +97,10 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         )),
         "spot diagram" => Ok(OpticRef::new(
             Rc::new(RefCell::new(SpotDiagram::default())),
+            uuid,
+        )),
+        "Wavefront monitor" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(WaveFront::default())),
             uuid,
         )),
         "propagation" => Ok(OpticRef::new(

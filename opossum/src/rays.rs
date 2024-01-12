@@ -5,16 +5,9 @@ use std::ops::Range;
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::FilterType;
-use crate::plottable::Plottable;
-use crate::properties::Proptype;
-use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
-use image::DynamicImage;
 use kahan::KahanSummator;
-use nalgebra::{distance, point, Point2, Point3, Vector3};
-use plotters::prelude::{ChartBuilder, Circle, EmptyElement};
-use plotters::series::PointSeries;
-use plotters::style::{IntoFont, TextStyle, RED};
+use nalgebra::{distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Vector3};
 use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
 use sobol::{params::JoeKuoD6, Sobol};
@@ -22,7 +15,7 @@ use uom::num_traits::Zero;
 use uom::si::angle::degree;
 use uom::si::energy::joule;
 use uom::si::f64::{Angle, Energy, Length};
-use uom::si::length::millimeter;
+use uom::si::length::{millimeter, nanometer};
 
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -353,7 +346,7 @@ impl Rays {
     }
     /// Returns the geometric beam radius [`Rays`].
     ///
-    /// This function calculates the maximum distance of a ray bundle from it centroid.
+    /// This function calculates the maximum distance of a ray bundle from its centroid.
     #[must_use]
     pub fn beam_radius_geo(&self) -> Option<Length> {
         self.centroid().map(|c| {
@@ -388,6 +381,45 @@ impl Rays {
             Length::new::<millimeter>(sum_dist_sq.sqrt())
         })
     }
+    /// Returns the wavefront of the bundle of [`Rays`] at a specific wavelength wvl.
+    ///
+    /// This function calculates the wavefront of a ray bundle as multiple of its wavelength with reference to the ray that is closest to the optical axis.
+    #[must_use]
+    pub fn optical_path_length_at_wvl(&self, wvl: f64) -> MatrixXx3<f64> {
+        let mut path_length_at_pos = MatrixXx3::from_element(self.rays.len(), 0.);
+        let mut min_radius = f64::INFINITY;
+        let mut path_length_at_center = 0.;
+        for (i, ray) in self.rays.iter().enumerate() {
+            path_length_at_pos[(i, 0)] = ray.pos.x;
+            path_length_at_pos[(i, 1)] = ray.pos.y;
+            path_length_at_pos[(i, 2)] = ray.path_length.get::<nanometer>();
+
+            let radius = ray.pos.x.mul_add(ray.pos.x, ray.pos.y * ray.pos.y);
+            if radius < min_radius {
+                min_radius = radius;
+                path_length_at_center = path_length_at_pos[(i, 2)];
+            }
+        }
+
+        for mut ray_path in path_length_at_pos.row_iter_mut() {
+            ray_path[2] -= path_length_at_center;
+            ray_path[2] /= wvl;
+        }
+
+        path_length_at_pos
+    }
+
+    /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx3<f64>]`.
+    #[must_use]
+    pub fn get_xy_rays_pos(&self) -> MatrixXx2<f64> {
+        let mut rays_at_pos = MatrixXx2::from_element(self.rays.len(), 0.);
+        for (row, ray) in self.rays.iter().enumerate() {
+            rays_at_pos[(row, 0)] = ray.pos.x;
+            rays_at_pos[(row, 1)] = ray.pos.y;
+        }
+        rays_at_pos
+    }
+
     /// Add a single ray to the ray bundle.
     ///
     /// # Panics
@@ -601,99 +633,99 @@ fn sobol(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
     points
 }
 
-impl From<Rays> for Proptype {
-    fn from(value: Rays) -> Self {
-        Self::Rays(value)
-    }
-}
-impl PdfReportable for Rays {
-    fn pdf_report(&self) -> crate::error::OpmResult<genpdf::elements::LinearLayout> {
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_img_buf_plot().unwrap();
-        layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
-                .map_err(|e| format!("adding of image failed: {e}"))?,
-        );
-        Ok(layout)
-    }
-}
-impl Plottable for Rays {
-    fn chart<B: plotters::prelude::DrawingBackend>(
-        &self,
-        root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>,
-    ) -> crate::error::OpmResult<()> {
-        let mut x_min = self
-            .rays
-            .iter()
-            .map(|r| r.pos.x)
-            .fold(f64::INFINITY, f64::min)
-            * 1.1;
-        if !x_min.is_finite() {
-            x_min = -1.0;
-        }
-        let mut x_max = self
-            .rays
-            .iter()
-            .map(|r| r.pos.x)
-            .fold(f64::NEG_INFINITY, f64::max)
-            * 1.1;
-        if !x_max.is_finite() {
-            x_max = 1.0;
-        }
-        if (x_max - x_min).abs() < 10.0 * f64::EPSILON {
-            x_max = 1.0;
-            x_min = -1.0;
-        }
-        let mut y_min = self
-            .rays
-            .iter()
-            .map(|r| r.pos.y)
-            .fold(f64::INFINITY, f64::min)
-            * 1.1;
-        if !y_min.is_finite() {
-            y_min = -1.0;
-        }
-        let mut y_max = self
-            .rays
-            .iter()
-            .map(|r| r.pos.y)
-            .fold(f64::NEG_INFINITY, f64::max)
-            * 1.1;
-        if !y_max.is_finite() {
-            y_max = 1.0;
-        }
-        if (y_max - y_min).abs() < 10.0 * f64::EPSILON {
-            y_max = 1.0;
-            y_min = -1.0;
-        }
-        let mut chart = ChartBuilder::on(root)
-            .margin(15)
-            .x_label_area_size(100)
-            .y_label_area_size(100)
-            .build_cartesian_2d(x_min..x_max, y_min..y_max)
-            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
+// impl From<Rays> for Proptype {
+//     fn from(value: Rays) -> Self {
+//         Self::Rays(value)
+//     }
+// }
+// impl PdfReportable for Rays {
+//     fn pdf_report(&self) -> crate::error::OpmResult<genpdf::elements::LinearLayout> {
+//         let mut layout = genpdf::elements::LinearLayout::vertical();
+//         let img = self.to_img_buf_plot().unwrap();
+//         layout.push(
+//             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
+//                 .map_err(|e| format!("adding of image failed: {e}"))?,
+//         );
+//         Ok(layout)
+//     }
+// }
+// impl Plottable for Rays {
+//     fn chart<B: plotters::prelude::DrawingBackend>(
+//         &self,
+//         root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>,
+//     ) -> crate::error::OpmResult<()> {
+//         let mut x_min = self
+//             .rays
+//             .iter()
+//             .map(|r| r.pos.x)
+//             .fold(f64::INFINITY, f64::min)
+//             * 1.1;
+//         if !x_min.is_finite() {
+//             x_min = -1.0;
+//         }
+//         let mut x_max = self
+//             .rays
+//             .iter()
+//             .map(|r| r.pos.x)
+//             .fold(f64::NEG_INFINITY, f64::max)
+//             * 1.1;
+//         if !x_max.is_finite() {
+//             x_max = 1.0;
+//         }
+//         if (x_max - x_min).abs() < f64::EPSILON {
+//             x_max = 1.0;
+//             x_min = -1.0;
+//         }
+//         let mut y_min = self
+//             .rays
+//             .iter()
+//             .map(|r| r.pos.y)
+//             .fold(f64::INFINITY, f64::min)
+//             * 1.1;
+//         if !y_min.is_finite() {
+//             y_min = -1.0;
+//         }
+//         let mut y_max = self
+//             .rays
+//             .iter()
+//             .map(|r| r.pos.y)
+//             .fold(f64::NEG_INFINITY, f64::max)
+//             * 1.1;
+//         if !y_max.is_finite() {
+//             y_max = 1.0;
+//         }
+//         if (y_max - y_min).abs() < f64::EPSILON {
+//             y_max = 1.0;
+//             y_min = -1.0;
+//         }
+//         let mut chart = ChartBuilder::on(root)
+//             .margin(15)
+//             .x_label_area_size(100)
+//             .y_label_area_size(100)
+//             .build_cartesian_2d(x_min..x_max, y_min..y_max)
+//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
 
-        chart
-            .configure_mesh()
-            .x_desc("x (mm)")
-            .y_desc("y (mm)")
-            .label_style(TextStyle::from(("sans-serif", 30).into_font()))
-            .draw()
-            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-        let points: Vec<(f64, f64)> = self.rays.iter().map(|ray| (ray.pos.x, ray.pos.y)).collect();
-        let series = PointSeries::of_element(points, 5, &RED, &|c, s, st| {
-            EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-                + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
-        });
+//         chart
+//             .configure_mesh()
+//             .x_desc("x (mm)")
+//             .y_desc("y (mm)")
+//             .label_style(TextStyle::from(("sans-serif", 30).into_font()))
+//             .draw()
+//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
+//         let points: Vec<(f64, f64)> = self.rays.iter().map(|ray| (ray.pos.x, ray.pos.y)).collect();
+//         let series = PointSeries::of_element(points, 5, &RED, &|c, s, st| {
+//             EmptyElement::at(c)    // We want to construct a composed element on-the-fly
+//                 + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
+//         });
 
-        chart
-            .draw_series(series)
-            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-        root.present()
-            .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-        Ok(())
-    }
-}
+//         chart
+//             .draw_series(series)
+//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
+//         root.present()
+//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
+//         Ok(())
+//     }
+// }
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1618,10 +1650,10 @@ mod test {
             Some(Length::new::<nanometer>(1050.0)..Length::new::<nanometer>(1053.0))
         );
     }
-    #[test]
-    fn rays_into_proptype() {
-        assert_matches!(Rays::default().into(), Proptype::Rays(_));
-    }
+    // #[test]
+    // fn rays_into_proptype() {
+    //     assert_matches!(Rays::default().into(), Proptype::Rays(_));
+    // }
     #[test]
     fn rays_to_spectrum() {
         let mut rays = Rays::default();

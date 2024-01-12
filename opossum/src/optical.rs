@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 //! Contains the basic trait representing an optical element
+use image::RgbImage;
+
 use crate::analyzer::AnalyzerType;
 use crate::aperture::Aperture;
 use crate::dottable::Dottable;
@@ -97,8 +99,8 @@ pub trait Optical: Dottable {
     ///
     /// # Errors
     /// This function might return an error depending on the particular implemention.
-    fn export_data(&self, _report_dir: &Path) -> OpmResult<()> {
-        Ok(())
+    fn export_data(&self, _report_dir: &Path) -> OpmResult<Option<RgbImage>> {
+        Ok(None)
     }
     /// Returns `true` if the [`Optical`] represents a detector which can report analysis data.
     fn is_detector(&self) -> bool {
@@ -158,7 +160,7 @@ pub trait Optical: Dottable {
     /// This function will return an error if the Property conditions while setting a value are not met.
     fn set_properties(&mut self, properties: Properties) -> OpmResult<()> {
         let own_properties = self.properties().clone();
-        for prop in properties.iter() {
+        for prop in &properties {
             if own_properties.contains(prop.0) {
                 match prop.0.as_str() {
                     "node_type" => {}

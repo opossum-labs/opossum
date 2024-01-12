@@ -1,7 +1,6 @@
 #![warn(missing_docs)]
 //! Opossum specfic error structures
 use std::{error::Error, fmt::Display};
-
 /// Opossum application specific Result type
 pub type OpmResult<T> = std::result::Result<T, OpossumError>;
 
@@ -50,7 +49,9 @@ impl Display for OpossumError {
             Self::Console(m) => {
                 write!(f, "Console:{m}")
             }
-            Self::Other(m) => write!(f, "Opossum Error:Other:{m}"),
+            Self::Other(m) => {
+                write!(f, "Opossum Error:Other:{m}")
+            }
         }
     }
 }

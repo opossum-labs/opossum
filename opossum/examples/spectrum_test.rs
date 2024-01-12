@@ -37,12 +37,15 @@ fn main() -> OpmResult<()> {
         0.02,
     )?;
     s.sub(&s3);
-    s.to_svg_plot(Path::new("./opossum/spectrum.svg"))?;
+    todo!();
+    // s.to_svg_plot(Path::new("./opossum/spectrum.svg"))?;
 
     let s4 = Spectrum::from_csv("./opossum/NE03B.csv")?;
-    s4.to_svg_plot(Path::new("./opossum/ne03b_raw.svg"))?;
+    todo!();
+    // s4.to_svg_plot(Path::new("./opossum/ne03b_raw.svg"))?;
     let mut s5 = create_visible_spec();
     s5.resample(&s4);
-    s5.to_svg_plot(Path::new("./opossum/ne03b.svg"))?;
+    todo!();
+    // s5.to_svg_plot(Path::new("./opossum/ne03b.svg"))?;
     Ok(())
 }
