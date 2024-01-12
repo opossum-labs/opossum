@@ -33,13 +33,13 @@ pub enum PlotType {
     Scatter2D(PlotParameters),
     // ///Scatter plot in three dimensions for 3D data
     // Scatter3D,
-    ///Line plot in two dimentions for pairwise data
+    ///Line plot in two dimensions for pairwise data
     Line2D(PlotParameters),
     // ///Line plot in three dimensions for 3D data
     // Line3D,
-    // ///Line plot for multiple lines, e.g. rays, in two dimentions with pairwise data
+    // ///Line plot for multiple lines, e.g. rays, in two dimensions with pairwise data
     // MultiLine2D,
-    // ///Line plot for multiple lines, e.g. rays, in three dimentions with 3D data
+    // ///Line plot for multiple lines, e.g. rays, in three dimensions with 3D data
     // MultiLine3D,
     ///2D color plot of gridded data with color representing the amplitude over an x-y grid
     ColorMesh(PlotParameters),
@@ -71,7 +71,7 @@ impl PlotType {
         };
     }
 
-    /// This methods creates a plot
+    /// This method creates a plot
     /// # Attributes
     /// - `plt_data`: plot data. See [`PlotData`]
     /// # Returns
@@ -227,7 +227,7 @@ impl PlotType {
             return;
         }
 
-        //there will probably a more direct way to achieve the series without thisconversion to a vec<f64> when we can use nalgebra >=v0.32.
+        //there will probably be a more direct way to achieve the series without this conversion to a vec<f64> when we can use nalgebra >=v0.32.
         //currently, clone is not implemented for matrix_iter in v0.30 which we use due to ncollide2d. Therefore, we go this way
         let a: Vec<f64> = x_ax.data.clone().into();
         let b: Vec<f64> = y_ax.data.clone().into();
@@ -527,7 +527,7 @@ impl PlotType {
         chart_builder.margin(10).margin_top(40);
 
         if y_ax {
-            //absolutley ugly "automation" of margin. not done nicely and not accurate, works only for sans serif with 30 pt
+            //absolutely ugly "automation" of margin. not done nicely and not accurate, works only for sans serif with 30 pt
             let digits_max =
                 y_bounds.1.abs().log10().floor() + 2. + f64::from(y_bounds.1.is_sign_negative());
             let digits_min =
@@ -632,11 +632,11 @@ pub enum PlotData {
     /// Data to create a 2d triangulated color plot.
     /// Matrix with 3 columns and N rows that is filled with the indices that correspond to the data points that ave been triangulated
     /// Vector with N rows which holds the average color value of the triangle
-    /// Matrix with 3 columns and N rows that holds the x,y,z data
+    /// Matrix with 3 columns and N rows that hold the x,y,z data
     ColorTriangulated(MatrixXx3<usize>, DVector<f64>, MatrixXx3<f64>),
     /// Data to create a 3d triangulated surface plot.
     /// Matrix with 3 columns and N rows that is filled with the indices that correspond to the data points that ave been triangulated
-    /// Matrix with 3 columns and N rows that holds the x,y,z data
+    /// Matrix with 3 columns and N rows that hold the x,y,z data
     TriangulatedSurface(MatrixXx3<usize>, MatrixXx3<f64>),
 }
 
@@ -650,13 +650,13 @@ impl PlotData {
         let mut min_val = ax_vals.min();
         let mut ax_range = max_val - min_val;
 
-        //check if mininum and maximum value are approximately equal. if so, take max value as range
+        //check if minimum and maximum values are approximately equal. if so, take the max value as range
         if max_val.relative_eq(&min_val, f64::EPSILON, f64::EPSILON) {
             ax_range = max_val;
             min_val = 0.;
         };
 
-        //check if for some reason maximum is 0, then set to 1, so that the axis spans at least some distance
+        //check if for some reason maximum is 0, then set it to 1, so that the axis spans at least some distance
         if ax_range < f64::EPSILON {
             max_val = 1.;
             min_val = 0.;
@@ -670,23 +670,23 @@ impl PlotData {
 /// Trait for adding the possibility to generate a (x/y) plot of an element.
 pub trait Plottable {
     /// This method must be implemented in order to retrieve the plot data.
-    /// As the plot data may differ, the implmentation must be done for each kind of plot type [`PlotType`]
+    /// As the plot data may differ, the implementation must be done for each kind of plot type [`PlotType`]
     /// # Attributes
     /// - `plt_type`: plot type to be used. See [`PlotType`]
     /// # Returns
     /// This method returns an [`OpmResult<Option<PlotData>>`]. Whether Some(PlotData) or None is returned depends on the individual implementation
     /// # Errors
-    /// Whether an error is thrown depends on the individual implementation of hte method
+    /// Whether an error is thrown depends on the individual implementation of the method
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>>;
 
     /// This method must be implemented in order to create a plot.
-    /// As the plot data may differ, the implmentation must be done for each kind of plot
+    /// As the plot data may differ, the implementation must be done for each kind of plot
     /// # Attributes
     /// - `f_path`: path to the file
-    /// - `img_size`: size of the image in pixels
+    /// - `img_size`: the size of the image in pixels
     /// - `backend`: used backend to create the plot. See [`PltBackEnd`]
     /// # Errors
-    /// Whether an error is thrown depends on the individual implementation of hte method
+    /// Whether an error is thrown depends on the individual implementation of the method
     fn to_plot(
         &self,
         f_path: &Path,
@@ -958,7 +958,7 @@ pub trait Plottable {
     // }
 }
 
-///Enum to describte which type of plotting backend should be used
+///Enum to describe which type of plotting backend should be used
 #[derive(Clone, Debug, Default)]
 pub enum PltBackEnd {
     /// BitmapBackend. Used to create .png, .bmp, .jpg
@@ -994,14 +994,14 @@ impl Default for CGradient {
 ///Enum to hold the information to position an axis label
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Default)]
 pub enum LabelPos {
-    ///Label on top. Only for x axis
+    ///Label on the top. Only for x axis
     Top,
-    ///Label on bottom. Only for x axis
+    ///Label on the bottom. Only for x axis
     Bottom,
-    ///Label on left. Only for y axis
+    ///Label on the left. Only for y axis
     #[default]
     Left,
-    ///Label on right. Only for y axis
+    ///Label on the right. Only for y axis
     Right,
 }
 
@@ -1037,7 +1037,7 @@ impl LabelDescription {
         }
     }
 
-    /// Returns the a [`LabelDescription`] with a default value for the y axis, which is "y" as label and is positioned to the left of the plot.
+    /// Returns a [`LabelDescription`] with a default value for the y axis, which is "y" as the label and is positioned to the left of the plot.
     #[must_use]
     pub fn y_default(&self) -> Self {
         Self::new("y", LabelPos::Left)
@@ -1114,7 +1114,7 @@ pub struct PlotBounds {
     z: Option<(f64, f64)>,
 }
 
-/// Holds all necessary plotparameters in a Hashmap that contains a String-key and an [`PlotArgs`] argument.
+/// Holds all necessary plot parameters in a Hashmap that contains a String-key and an [`PlotArgs`] argument.
 #[derive(Debug, Clone)]
 pub struct PlotParameters {
     params: HashMap<String, PlotArgs>,
@@ -1141,7 +1141,7 @@ impl Default for PlotParameters {
     /// # Returns
     /// This method returns a new [`PlotParameters`] struct
     /// # Panics
-    /// This method panics if the current working directoy is invalid. See `std::env:current_dir()`
+    /// This method panics if the current working directory is invalid. See `std::env:current_dir()`
     #[must_use]
     fn default() -> Self {
         let current_dir = current_dir().unwrap().to_str().unwrap().to_owned() + "\\";
@@ -1493,13 +1493,13 @@ impl PlotParameters {
         }
     }
 
-    /// This method checks if compatibility between chosen [`PltBackEnd`] and the file extension
+    /// This method checks if compatibility between the chosen [`PltBackEnd`] and the file extension
     /// # Attributes
     /// - `path_fname`: name of the file
     /// - `backend`: backend to plot with. See [`PltBackEnd`]
     /// # Returns
     /// Returns a tuple consisting of a boolean and a potential error message
-    /// The boolean is treu if the backend and fname ar compatible. False if not
+    /// The boolean is true if the backend and fname are compatible. False if not
     fn check_backend_file_ext_compatibility(&self) -> OpmResult<(bool, &str)> {
         let backend = self.get_backend()?;
         let path_fname = self.get_fname()?;
@@ -1648,7 +1648,7 @@ impl Plot {
         let (x_range, x_min, x_max) = if x_filtered.is_empty() {
             (1., 0., 1.)
         } else {
-            //get maximum and minimum of the axis
+            //get the maximum and minimum of the axis
             self.data
                 .as_ref()
                 .expect("No PlotData available!")
@@ -1737,11 +1737,11 @@ pub enum PlotArgs {
     ZLim(Option<(f64, f64)>),
     ///Figure size in pixels. Holds an `(usize, usize)` tuple
     FigSize((u32, u32)),
-    ///Path to the save driectory of the image. Only necessary if the data is not written into a buffer. Holds a String
+    ///Path to the save directory of the image. Only necessary if the data is not written into a buffer. Holds a String
     FDir(String),
     ///Name of the file to be written. Holds a String
     FName(String),
-    ///Pllotting backend that should be used. Holds a [`PltBackEnd`] enum
+    ///Plotting backend that should be used. Holds a [`PltBackEnd`] enum
     Backend(PltBackEnd),
 }
 fn _meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f64>) {
