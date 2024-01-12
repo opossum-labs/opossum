@@ -160,8 +160,6 @@ impl Optical for WaveFront {
                 .unwrap();
             let wf_data = rays.optical_path_length_at_wvl(1053.);
             if !wf_data.is_empty() {
-                let test = wf_data.column(2);
-                println!("{}", test[(0, 0)]);
                 let (rms, ptv) = Self::calc_wavefront_statistics(&DVector::from_column_slice(
                     wf_data.column(2).as_slice(),
                 ))
