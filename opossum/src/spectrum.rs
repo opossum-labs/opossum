@@ -2,11 +2,7 @@
 //! Module for handling optical spectra
 use crate::error::{OpmResult, OpossumError};
 use csv::ReaderBuilder;
-use image::DynamicImage;
 use kahan::KahanSummator;
-use plotters::coord::Shift;
-use plotters::data::fitting_range;
-use plotters::prelude::*;
 use nalgebra::MatrixXx2;
 use serde_derive::{Deserialize, Serialize};
 use std::f64::consts::PI;

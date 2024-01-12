@@ -1,7 +1,6 @@
 #![warn(missing_docs)]
 use image::{DynamicImage, ImageBuffer, RgbImage};
 use serde_derive::{Deserialize, Serialize};
-use uom::si::length::millimeter;
 
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};

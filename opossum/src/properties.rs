@@ -221,7 +221,7 @@ impl Properties {
 }
 
 impl<'a> IntoIterator for &'a Properties {
-    type IntoIter = std::collections::hash_map::Iter<'a, std::string::String, Property>;
+    type IntoIter = std::collections::btree_map::Iter<'a, String, Property>;
     type Item = (&'a std::string::String, &'a Property);
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
