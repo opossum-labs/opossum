@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use image::{DynamicImage, ImageBuffer, RgbImage};
+use nalgebra::DVector;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::dottable::Dottable;
@@ -50,6 +51,28 @@ impl WaveFront {
         Self {
             props,
             ..Default::default()
+        }
+    }
+
+    fn calc_wavefront_statistics(path_length_lambda: &DVector<f64>) -> OpmResult<(f64, f64)> {
+        if path_length_lambda.is_empty() {
+            Err(OpossumError::Other("Empty wavefront-data vector!".into()))
+        } else {
+            let max = path_length_lambda.column(2).max();
+            let min = path_length_lambda.column(2).min();
+            let ptv = max - min;
+
+            let rms = f64::sqrt(
+                path_length_lambda
+                    .column(2)
+                    .iter()
+                    .map(|l| l.powi(2))
+                    .collect::<Vec<f64>>()
+                    .iter()
+                    .sum::<f64>()
+                    / f64::from(i32::try_from(path_length_lambda.column(2).len()).unwrap()),
+            );
+            Ok((rms, ptv))
         }
     }
 }
@@ -137,6 +160,28 @@ impl Optical for WaveFront {
                 )
                 .unwrap();
             let wf_data = rays.optical_path_length_at_wvl(1053.);
+            if !wf_data.is_empty() {
+                let (rms, ptv) = Self::calc_wavefront_statistics(&DVector::from_column_slice(
+                    wf_data.column(2).as_slice(),
+                ))
+                .unwrap();
+                props
+                    .create(
+                        "Wavefront rms in λ",
+                        "Wavefront root mean square in units of the wavelength",
+                        None,
+                        format!("{rms:.2}").into(),
+                    )
+                    .unwrap();
+                props
+                    .create(
+                        "Wavefront ptv in λ",
+                        "Wavefront peak to valley in units of the wavelength",
+                        None,
+                        format!("{ptv:.2}").into(),
+                    )
+                    .unwrap();
+            }
 
             Some(NodeReport::new(
                 self.properties().node_type().unwrap(),
@@ -201,7 +246,7 @@ impl Plottable for WaveFront {
                 let plt_type = PlotType::ColorMesh(plt_params);
                 (self.get_plot_data(&plt_type)?, plt_type)
             } else {
-                let plt_type = PlotType::ColorScatter(plt_params);
+                let plt_type = PlotType::ColorTriangulated(plt_params);
                 (self.get_plot_data(&plt_type)?, plt_type)
             }
         } else {
@@ -221,9 +266,9 @@ impl Plottable for WaveFront {
                         let binned_data = self.bin_2d_scatter_data(&PlotData::Dim3(path_length));
                         Ok(binned_data)
                     }
-                    PlotType::ColorScatter(_) => {
+                    PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {
                         let triangulated_dat =
-                            self.triangulate_plot_data(&PlotData::Dim3(path_length));
+                            self.triangulate_plot_data(&PlotData::Dim3(path_length), plt_type);
                         Ok(triangulated_dat)
                     }
                     _ => Ok(None),

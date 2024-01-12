@@ -11,6 +11,7 @@ use nalgebra::{
     ComplexField, DMatrix, DVector, DVectorSlice, Matrix1xX, Matrix3xX, MatrixSliceXx1, MatrixXx1,
     MatrixXx2, MatrixXx3,
 };
+use num::ToPrimitive;
 use plotters::{
     backend::DrawingBackend,
     backend::PixelFormat,
@@ -43,19 +44,28 @@ pub enum PlotType {
     ///2D color plot of gridded data with color representing the amplitude over an x-y grid
     ColorMesh(PlotParameters),
 
-    ///2D color plot of ungridded data with color representing the amplitude over an x-y grid
-    ColorScatter(PlotParameters),
+    // ///2D color plot of ungridded data with color representing the amplitude over an x-y grid
+    // ColorScatter(PlotParameters),
+    /// 2D, triangulated color plot of ungridded data with color representing the amplitude over an x-y grid
+    ColorTriangulated(PlotParameters),
+    /// 3D surface plot of ungridded data
+    TriangulatedSurface(PlotParameters),
 }
 impl PlotType {
     const fn get_plot_params(&self) -> &PlotParameters {
         match self {
-            Self::ColorMesh(p) | Self::Scatter2D(p) | Self::Line2D(p) | Self::ColorScatter(p) => p,
+            Self::ColorMesh(p)
+            | Self::Scatter2D(p)
+            | Self::Line2D(p)
+            | Self::ColorTriangulated(p)
+            | Self::TriangulatedSurface(p) => p,
         }
     }
     fn create_plot<B: DrawingBackend>(&self, backend: &DrawingArea<B, Shift>, plot: &Plot) {
         match self {
             Self::ColorMesh(_) => Self::plot_color_mesh(plot, backend),
-            Self::ColorScatter(_) => Self::plot_color_surface(plot, backend),
+            Self::TriangulatedSurface(_) => Self::plot_triangulated_surface(plot, backend),
+            Self::ColorTriangulated(_) => Self::plot_color_triangulated(plot, backend),
             Self::Scatter2D(_) => Self::plot_2d_scatter(plot, backend),
             Self::Line2D(_) => Self::plot_2d_line(plot, backend),
         };
@@ -139,16 +149,11 @@ impl PlotType {
             .unwrap();
     }
 
-    fn draw_triangle_surf<T: DrawingBackend>(
-        chart: &mut ChartContext<
-            '_,
-            T,
-            Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>,
-        >,
+    fn draw_color_triangles<T: DrawingBackend>(
+        chart: &mut ChartContext<'_, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
         triangle_index: &MatrixXx3<usize>,
         x: &DVector<f64>,
         y: &DVector<f64>,
-        z: &DVector<f64>,
         c: &DVector<f64>,
         cmap: &Gradient,
         cbounds: (f64, f64),
@@ -159,19 +164,42 @@ impl PlotType {
         let series = izip!(triangle_index.row_iter(), c).map(|(idx, c)| {
             Polygon::new(
                 vec![
-                    (x[idx[0]], y[idx[0]], z[idx[0]]),
-                    (x[idx[1]], y[idx[1]], z[idx[1]]),
-                    (x[idx[2]], y[idx[2]], z[idx[2]]),
+                    (x[idx[0]], y[idx[0]]),
+                    (x[idx[1]], y[idx[1]]),
+                    (x[idx[2]], y[idx[2]]),
                 ],
                 {
                     let cor = cmap.eval_continuous((c - z_min) / z_max);
-                    // let color = RGBAColor(cor.r, cor.g, cor.b, 1.);
-                    let color = RGBAColor(0, 0, 255, 0.1);
+                    let color = RGBAColor(cor.r, cor.g, cor.b, 1.);
                     Into::<ShapeStyle>::into(color).filled()
                 },
             )
         });
 
+        chart.draw_series(series).unwrap();
+    }
+
+    fn draw_triangle_surf<T: DrawingBackend>(
+        chart: &mut ChartContext<
+            '_,
+            T,
+            Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>,
+        >,
+        triangle_index: &MatrixXx3<usize>,
+        x: &DVector<f64>,
+        y: &DVector<f64>,
+        z: &DVector<f64>,
+    ) {
+        let series = triangle_index.row_iter().map(|idx| {
+            Polygon::new(
+                vec![
+                    (x[idx[0]], y[idx[0]], z[idx[0]]),
+                    (x[idx[1]], y[idx[1]], z[idx[1]]),
+                    (x[idx[2]], y[idx[2]], z[idx[2]]),
+                ],
+                Into::<ShapeStyle>::into(RGBAColor(180, 180, 180, 1.)).filled(),
+            )
+        });
         chart.draw_series(series).unwrap();
     }
 
@@ -234,10 +262,7 @@ impl PlotType {
                 root,
                 (x_min, x_max),
                 (y_min, y_max),
-                &plt.label[0].label,
-                &plt.label[1].label,
-                plt.label[0].label_pos,
-                plt.label[1].label_pos,
+                &plt.label,
                 true,
                 true,
             );
@@ -266,10 +291,7 @@ impl PlotType {
                 root,
                 (x_min, x_max),
                 (y_min, y_max),
-                &plt.label[0].label,
-                &plt.label[1].label,
-                plt.label[0].label_pos,
-                plt.label[1].label_pos,
+                &plt.label,
                 true,
                 true,
             );
@@ -280,8 +302,76 @@ impl PlotType {
         root.present().unwrap();
     }
 
-    fn plot_color_surface<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
-        if let Some(PlotData::TriangulatedSurface(triangle_index, color_z, dat)) = plt.get_data() {
+    fn plot_color_triangulated<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
+        if let Some(PlotData::ColorTriangulated(triangle_index, color, dat)) = plt.get_data() {
+            _ = root.fill(&WHITE);
+
+            let (main_root, cbar_root) = root.split_horizontally(830);
+
+            let (x_min, x_max) = if plt.bounds.x.is_none() {
+                plt.define_axis_bounds(&DVectorSlice::from(dat.column(0)), false, false)
+            } else {
+                plt.bounds.x.unwrap()
+            };
+            let (y_min, y_max) = if plt.bounds.y.is_none() {
+                plt.define_axis_bounds(&DVectorSlice::from(dat.column(1)), false, false)
+            } else {
+                plt.bounds.y.unwrap()
+            };
+            let (z_min, z_max) = if plt.bounds.z.is_none() {
+                plt.define_axis_bounds(&DVectorSlice::from(dat.column(2)), false, false)
+            } else {
+                plt.bounds.z.unwrap()
+            };
+
+            //colorbar. first because otherwise the xlabel of the main plot is cropped
+            let mut chart = Self::create_2d_plot_chart(
+                &cbar_root,
+                (0., 1.),
+                (z_min, z_max),
+                &[
+                    LabelDescription::new("", plt.label[0].label_pos),
+                    plt.cbar.label.clone(),
+                ],
+                true,
+                false,
+            );
+
+            let c_dat = linspace(z_min, z_max, 100.).unwrap().transpose();
+            let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
+            let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
+            Self::draw_2d_colormesh(
+                &mut chart,
+                &xxx,
+                &linspace(z_min, z_max, 100.).unwrap().transpose(),
+                &d_mat,
+                &plt.cbar.cmap,
+                (z_min, z_max),
+            );
+
+            //main plot
+            let mut chart = Self::create_2d_plot_chart(
+                &main_root,
+                (x_min, x_max),
+                (y_min, y_max),
+                &plt.label,
+                true,
+                true,
+            );
+            Self::draw_color_triangles(
+                &mut chart,
+                triangle_index,
+                &DVector::from(dat.column(0)),
+                &DVector::from(dat.column(1)),
+                color,
+                &plt.cbar.cmap,
+                (z_min, z_max),
+            );
+        }
+    }
+
+    fn plot_triangulated_surface<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
+        if let Some(PlotData::TriangulatedSurface(triangle_index, dat)) = plt.get_data() {
             _ = root.fill(&WHITE);
 
             let (x_min, x_max) = if plt.bounds.x.is_none() {
@@ -302,18 +392,8 @@ impl PlotType {
 
             //main plot
             //currently there is no support for axes labels in 3d plots
-            let mut chart = Self::create_3d_plot_chart(
-                root,
-                (x_min, x_max),
-                (z_min, z_max),
-                (y_min, y_max),
-                // &plt.label[0].label,
-                // &"test".to_owned(),
-                // &plt.label[1].label,
-                // &plt.label[0].label_pos,
-                // &plt.label[1].label_pos,
-                // &plt.label[1].label_pos,
-            );
+            let mut chart =
+                Self::create_3d_plot_chart(root, (x_min, x_max), (z_min, z_max), (y_min, y_max));
 
             Self::draw_triangle_surf(
                 &mut chart,
@@ -321,26 +401,7 @@ impl PlotType {
                 &DVector::from(dat.column(0)),
                 &DVector::from(dat.column(2)),
                 &DVector::from(dat.column(1)),
-                color_z,
-                &plt.cbar.cmap,
-                (z_min, z_max),
             );
-
-            // let (x_min, x_max) = if plt.bounds.x.is_none() {
-            //     plt.define_axis_bounds(&DVectorSlice::from(x), false, false)
-            // } else {
-            //     plt.bounds.x.unwrap()
-            // };
-            // let (y_min, y_max) = if plt.bounds.y.is_none() {
-            //     plt.define_axis_bounds(&DVectorSlice::from(y), false, false)
-            // } else {
-            //     plt.bounds.y.unwrap()
-            // };
-            // let (z_min, z_max) = if plt.bounds.z.is_none() {
-            //     plt.define_axis_bounds(&DVectorSlice::from(&dat_flat), false, false)
-            // } else {
-            //     plt.bounds.z.unwrap()
-            // };
         }
     }
     fn plot_color_mesh<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
@@ -374,21 +435,21 @@ impl PlotType {
                 &cbar_root,
                 (0., 1.),
                 (z_min, z_max),
-                &String::new(),
-                &plt.cbar.label.label,
-                plt.label[0].label_pos,
-                plt.cbar.label.label_pos,
+                &[
+                    LabelDescription::new("", plt.label[0].label_pos),
+                    plt.cbar.label.clone(),
+                ],
                 true,
                 false,
             );
 
-            let c_dat = linspace(z_min, z_max, 100).transpose();
+            let c_dat = linspace(z_min, z_max, 100.).unwrap().transpose();
             let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
             let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
             Self::draw_2d_colormesh(
                 &mut chart,
                 &xxx,
-                &linspace(z_min, z_max, 100).transpose(),
+                &linspace(z_min, z_max, 100.).unwrap().transpose(),
                 &d_mat,
                 &plt.cbar.cmap,
                 (z_min, z_max),
@@ -399,10 +460,7 @@ impl PlotType {
                 &main_root,
                 (x_min, x_max),
                 (y_min, y_max),
-                &plt.label[0].label,
-                &plt.label[1].label,
-                plt.label[0].label_pos,
-                plt.label[1].label_pos,
+                &plt.label,
                 true,
                 true,
             );
@@ -455,10 +513,11 @@ impl PlotType {
         root: &'a DrawingArea<T, Shift>,
         x_bounds: (f64, f64),
         y_bounds: (f64, f64),
-        x_label: &String,
-        y_label: &String,
-        x_labelpos: LabelPos,
-        y_labelpos: LabelPos,
+        label_desc: &[LabelDescription; 2],
+        // x_label: &String,
+        // y_label: &String,
+        // x_labelpos: LabelPos,
+        // y_labelpos: LabelPos,
         y_ax: bool,
         x_ax: bool,
     ) -> ChartContext<'a, T, Cartesian2d<RangedCoordf64, RangedCoordf64>> {
@@ -474,21 +533,22 @@ impl PlotType {
             let digits_min =
                 y_bounds.0.abs().log10().floor() + 2. + f64::from(y_bounds.0.is_sign_negative());
             let digits = if digits_max >= digits_min {
-                digits_max
+                digits_max.to_i32()
             } else {
-                digits_min
-            };
+                digits_min.to_i32()
+            }
+            .unwrap();
 
-            let pixel_margin = (digits * 13.) as i32 + 20;
-            chart_builder.set_label_area_size(y_labelpos.into(), 21 + pixel_margin);
+            let pixel_margin = digits * 13 + 20;
+            chart_builder.set_label_area_size(label_desc[1].label_pos.into(), 21 + pixel_margin);
 
-            if LabelPos::Right == y_labelpos && (pixel_margin < 72) {
+            if LabelPos::Right == label_desc[1].label_pos && (pixel_margin < 72) {
                 chart_builder.margin_right(82 - pixel_margin);
-            } else if LabelPos::Left == y_labelpos && (pixel_margin < 72) {
+            } else if LabelPos::Left == label_desc[1].label_pos && (pixel_margin < 72) {
                 chart_builder.margin_left(82 - pixel_margin);
             }
         }
-        chart_builder.set_label_area_size(x_labelpos.into(), 65);
+        chart_builder.set_label_area_size(label_desc[0].label_pos.into(), 65);
 
         let mut chart = chart_builder
             .build_cartesian_2d(x_bounds.0..x_bounds.1, y_bounds.0..y_bounds.1)
@@ -497,13 +557,13 @@ impl PlotType {
         let mut mesh = chart.configure_mesh();
 
         if y_ax {
-            mesh.y_desc(y_label);
+            mesh.y_desc(&label_desc[1].label);
         } else {
             mesh.disable_y_axis();
         }
 
         if x_ax {
-            mesh.x_desc(x_label);
+            mesh.x_desc(&label_desc[0].label);
         } else {
             mesh.disable_x_axis();
         }
@@ -569,11 +629,15 @@ pub enum PlotData {
     // MultiDim3(Vec<MatrixXx3<f64>>),
     /// Data to create a 2d colormesh plot. Vector with N entries for x, Vector with M entries for y and a Matrix with NxM entries for the colordata
     ColorMesh(DVector<f64>, DVector<f64>, DMatrix<f64>), // ColorScatter(DVector<f64>, DVector<f64>, DMatrix<f64>)
+    /// Data to create a 2d triangulated color plot.
+    /// Matrix with 3 columns and N rows that is filled with the indices that correspond to the data points that ave been triangulated
+    /// Vector with N rows which holds the average color value of the triangle
+    /// Matrix with 3 columns and N rows that holds the x,y,z data
+    ColorTriangulated(MatrixXx3<usize>, DVector<f64>, MatrixXx3<f64>),
     /// Data to create a 3d triangulated surface plot.
     /// Matrix with 3 columns and N rows that is filled with the indices that correspond to the data points that ave been triangulated
-    /// Vector with N rows which holds the average z value of the triangle
     /// Matrix with 3 columns and N rows that holds the x,y,z data
-    TriangulatedSurface(MatrixXx3<usize>, DVector<f64>, MatrixXx3<f64>),
+    TriangulatedSurface(MatrixXx3<usize>, MatrixXx3<f64>),
 }
 
 impl PlotData {
@@ -635,7 +699,7 @@ pub trait Plottable {
     /// - `plt_dat`: plot data
     /// # Returns
     /// This method returns [`Option<PlotData>`]. It is None if the [`PlotData`] Variant is not Dim3
-    fn triangulate_plot_data(&self, plt_dat: &PlotData) -> Option<PlotData> {
+    fn triangulate_plot_data(&self, plt_dat: &PlotData, plt_type: &PlotType) -> Option<PlotData> {
         if let PlotData::Dim3(dat) = plt_dat {
             let points: Vec<Point> = dat
                 .row_iter()
@@ -643,17 +707,20 @@ pub trait Plottable {
                 .collect::<Vec<Point>>();
             let tri_index_mat = Matrix3xX::from_vec(triangulate(&points).triangles).transpose();
 
-            let mut triangle_centroid_z = DVector::<f64>::zeros(tri_index_mat.column(0).len());
+            if let PlotType::ColorTriangulated(_) = plt_type {
+                let mut triangle_centroid_z = DVector::<f64>::zeros(tri_index_mat.column(0).len());
 
-            for (c, t) in izip!(tri_index_mat.row_iter(), triangle_centroid_z.iter_mut()) {
-                *t = (dat[(c[0], 2)] + dat[(c[1], 2)] + dat[(c[2], 2)]) / 3.;
+                for (c, t) in izip!(tri_index_mat.row_iter(), triangle_centroid_z.iter_mut()) {
+                    *t = (dat[(c[0], 2)] + dat[(c[1], 2)] + dat[(c[2], 2)]) / 3.;
+                }
+                Some(PlotData::ColorTriangulated(
+                    tri_index_mat,
+                    triangle_centroid_z,
+                    dat.clone(),
+                ))
+            } else {
+                Some(PlotData::TriangulatedSurface(tri_index_mat, dat.clone()))
             }
-
-            Some(PlotData::TriangulatedSurface(
-                tri_index_mat,
-                triangle_centroid_z,
-                dat.clone(),
-            ))
         } else {
             None
         }
@@ -670,34 +737,36 @@ pub trait Plottable {
             let (y_range, y_min, y_max) = plt_dat.get_min_max_range(&dat.column(1));
 
             let num_entries = dat.column(0).len();
-            let mut num = f64::sqrt(num_entries as f64 / 2.).floor();
+            let mut num = f64::sqrt((num_entries / 2).to_f64().unwrap()).floor();
 
-            if (num as i32) % 2 == 0 {
+            if (num % 2.).relative_eq(&0., f64::EPSILON, f64::EPSILON) {
                 num += 1.;
             }
 
             let xbin = x_range / (num - 1.0);
             let ybin = y_range / (num - 1.0);
 
-            let x = linspace(x_min - xbin / 2., x_max + xbin / 2., num as usize);
-            let y = linspace(y_min - ybin / 2., y_max + ybin / 2., num as usize);
+            let x = linspace(x_min - xbin / 2., x_max + xbin / 2., num).unwrap();
+            let y = linspace(y_min - ybin / 2., y_max + ybin / 2., num).unwrap();
 
             let xbin = x[1] - x[0];
             let ybin = y[1] - y[0];
             let x_min = x.min();
             let y_min = y.min();
 
-            // let (xx, _) = meshgrid(&x, &y);
-
             let mut zz = DMatrix::<f64>::zeros(x.len(), y.len());
             // xx.clone() * 0.;
             let mut zz_counter = DMatrix::<f64>::zeros(x.len(), y.len()); //xx.clone() * 0.;
 
             for row in dat.row_iter() {
-                let x_index = ((row[(0, 0)] - x_min + xbin / 2.) / xbin) as usize;
-                let y_index = ((row[(0, 1)] - y_min + ybin / 2.) / ybin) as usize;
-                zz[(y_index, x_index)] += row[(0, 2)];
-                zz_counter[(y_index, x_index)] += 1.;
+                let x_index = ((row[(0, 0)] - x_min + xbin / 2.) / xbin).to_usize();
+                let y_index = ((row[(0, 1)] - y_min + ybin / 2.) / ybin).to_usize();
+                if x_index.is_some() && y_index.is_some() {
+                    let x_index = x_index.unwrap();
+                    let y_index = y_index.unwrap();
+                    zz[(y_index, x_index)] += row[(0, 2)];
+                    zz_counter[(y_index, x_index)] += 1.;
+                }
             }
             for (z, z_count) in izip!(zz.iter_mut(), zz_counter.iter()) {
                 if *z_count > 0.5 {
@@ -937,7 +1006,7 @@ pub enum LabelPos {
 }
 
 impl From<LabelPos> for LabelAreaPosition {
-    fn from(val: LabelPos) -> LabelAreaPosition {
+    fn from(val: LabelPos) -> Self {
         match val {
             LabelPos::Top => Self::Top,
             LabelPos::Bottom => Self::Bottom,
@@ -1497,7 +1566,6 @@ pub struct Plot {
     color: RGBAColor,
     data: Option<PlotData>,
     bounds: PlotBounds,
-    fpath: String,
     img_size: (u32, u32),
 }
 
@@ -1562,27 +1630,6 @@ impl Plot {
         }
     }
 
-    fn get_min_max_range(&self, ax_vals: &DVectorSlice<'_, f64>) -> (f64, f64, f64) {
-        let mut max_val = ax_vals.max();
-        let mut min_val = ax_vals.min();
-        let mut ax_range = max_val - min_val;
-
-        //check if mininum and maximum value are approximately equal. if so, take max value as range
-        if max_val.relative_eq(&min_val, f64::EPSILON, f64::EPSILON) {
-            ax_range = max_val;
-            min_val = 0.;
-        };
-
-        //check if for some reason maximum is 0, then set to 1, so that the axis spans at least some distance
-        if ax_range < f64::EPSILON {
-            max_val = 1.;
-            min_val = 0.;
-            ax_range = 1.;
-        };
-
-        (ax_range, min_val, max_val)
-    }
-
     fn define_axis_bounds(
         &self,
         x: &DVectorSlice<'_, f64>,
@@ -1602,7 +1649,11 @@ impl Plot {
             (1., 0., 1.)
         } else {
             //get maximum and minimum of the axis
-            self.get_min_max_range(&DVectorSlice::from(&x_filtered))
+            self.data
+                .as_ref()
+                .expect("No PlotData available!")
+                .get_min_max_range(&DVectorSlice::from(&x_filtered))
+            // self.data.unwrap().get_min_max_range(&DVectorSlice::from(&x_filtered));
         };
 
         //add spacing to the edges if defined
@@ -1632,8 +1683,6 @@ impl TryFrom<&PlotParameters> for Plot {
         let y_label_str = p_i_params.get_y_label()?;
         let x_label_pos = p_i_params.get_x_label_pos()?;
         let y_label_pos = p_i_params.get_y_label_pos()?;
-        let fdir = p_i_params.get_fdir()?;
-        let fname = p_i_params.get_fname()?;
 
         let x_label = LabelDescription::new(&x_label_str, x_label_pos);
         let y_label = LabelDescription::new(&y_label_str, y_label_pos);
@@ -1654,7 +1703,6 @@ impl TryFrom<&PlotParameters> for Plot {
                 y: y_lim,
                 z: z_lim,
             },
-            fpath: fdir + fname.as_str(),
             img_size: fig_size,
         };
 
@@ -1696,7 +1744,7 @@ pub enum PlotArgs {
     ///Pllotting backend that should be used. Holds a [`PltBackEnd`] enum
     Backend(PltBackEnd),
 }
-fn meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f64>) {
+fn _meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f64>) {
     let x_len = x.len();
     let y_len = y.len();
 
@@ -1713,13 +1761,25 @@ fn meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f6
     (x_mat, y_mat)
 }
 
-fn linspace(start: f64, end: f64, num: usize) -> Matrix1xX<f64> {
-    let mut linspace = Matrix1xX::<f64>::from_element(num, start);
-    let bin_size = (end - start) / (num - 1) as f64;
-    for (i, val) in linspace.iter_mut().enumerate() {
-        *val += bin_size * i as f64;
+fn linspace(start: f64, end: f64, num: f64) -> OpmResult<Matrix1xX<f64>> {
+    let num_usize = num.to_usize();
+    if num_usize.is_some() {
+        let mut linspace = Matrix1xX::<f64>::from_element(num_usize.unwrap(), start);
+        let bin_size = (end - start)
+            / (num_usize
+                .unwrap()
+                .to_f64()
+                .expect("Cast from usize to f64 may truncate the value!")
+                - 1.);
+        for (i, val) in (0_u32..).zip(linspace.iter_mut()) {
+            *val += bin_size * f64::from(i);
+        }
+        Ok(linspace)
+    } else {
+        Err(OpossumError::Other(
+            "Cannot cast num value to usize!".into(),
+        ))
     }
-    linspace
 }
 // #[cfg(test)]
 // mod test {

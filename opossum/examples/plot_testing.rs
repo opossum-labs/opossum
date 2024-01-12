@@ -111,8 +111,8 @@ fn main() -> OpmResult<()> {
     }
 
     let (plt_dat, plt_type) = (
-        PlotData::TriangulatedSurface(tri_index_mat, triangle_centroid_z, dat.clone()),
-        PlotType::ColorScatter(plt_params),
+        PlotData::TriangulatedSurface(tri_index_mat, dat.clone()),
+        PlotType::TriangulatedSurface(plt_params),
     );
     let _ = plt_type.plot(&plt_dat);
 
