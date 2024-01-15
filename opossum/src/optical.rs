@@ -17,7 +17,7 @@ use std::path::Path;
 
 /// A [`LightResult`] represents the [`LightData`], which arrives at a given (`OpticPort`)[`OpticPorts`] of an optical node.
 ///
-/// The given (`OpticPort`)[`OpticPorts`] might also be `None`, which indicates, that no light has already "flown" to an inpurt port of a node.
+/// The given (`OpticPort`)[`OpticPorts`] might also be `None`, which indicates, that no light has already "flown" to an input port of a node.
 pub type LightResult = HashMap<String, Option<LightData>>;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
@@ -98,11 +98,11 @@ pub trait Optical: Dottable {
     /// The default implementation does nothing.
     ///
     /// # Errors
-    /// This function might return an error depending on the particular implemention.
+    /// This function might return an error depending on the particular implementation.
     fn export_data(&self, _report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         Ok(None)
     }
-    /// Returns `true` if the [`Optical`] represents a detector which can report analysis data.
+    /// Returns `true` if the [`Optical`] represents a detector that can report analysis data.
     fn is_detector(&self) -> bool {
         false
     }
@@ -121,8 +121,8 @@ pub trait Optical: Dottable {
     /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
     /// function does nothing and returns no error.
     ///
-    /// Currently thsi function is needed for group nodes whose internal graph structure must be synchronized with the
-    /// graph stored in theirs properties
+    /// Currently this function is needed for group nodes whose internal graph structure must be synchronized with the
+    /// graph stored in their properties
     ///
     /// # Errors
     ///
@@ -153,7 +153,7 @@ pub trait Optical: Dottable {
     /// Set all properties of this [`Optical`].
     ///
     /// This is a convenience function. It internally calls [`set_property`](Optical::set_property) for all given properties. **Note**: Properties, which are not
-    /// present for the [`Optical`] are silently igrnored.
+    /// present for the [`Optical`] are silently ignored.
     ///
     /// # Errors
     ///

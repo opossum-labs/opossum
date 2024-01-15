@@ -26,7 +26,7 @@ use std::fmt::Debug;
 ///   - `inverted`
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
-/// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
+/// different detector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct Detector {
     light_data: Option<LightData>,
     props: Properties,
