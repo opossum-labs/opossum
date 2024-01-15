@@ -1,7 +1,4 @@
-use std::path::Path;
-
 use opossum::error::OpmResult;
-use opossum::plottable::Plottable;
 use opossum::spectrum::{create_visible_spec, Spectrum};
 use uom::si::{f64::Length, length::nanometer};
 

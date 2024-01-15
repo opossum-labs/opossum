@@ -1,14 +1,8 @@
 use itertools::Itertools;
-use nalgebra::{
-    iter::MatrixIter, vector, Const, DVector, DVectorSlice, Dynamic, MatrixSlice, MatrixSlice1,
-    MatrixSliceXx1, MatrixXx1, SVector, VectorN, U5,
-};
-use std::{
-    ops::Add,
-    time::{Duration, Instant},
-};
+use nalgebra::DVector;
+use std::time::Instant;
 
-use accurate::sum::{NaiveSum, Sum2};
+use accurate::sum::Sum2;
 use accurate::traits::*;
 
 fn pairwise_sumation(input: &[f64]) -> f64 {
@@ -26,16 +20,16 @@ fn pairwise_sumation(input: &[f64]) -> f64 {
     }
 }
 
-fn pairwise_sum_matrix(input: &DVectorSlice<f64>) -> f64 {
-    let vec_len = input.len();
-    if vec_len < 64 {
-        input.sum()
-    } else {
-        let new_size = vec_len / 2;
-        pairwise_sum_matrix(&input.rows(0, new_size))
-            + pairwise_sum_matrix(&input.rows(new_size, vec_len - new_size))
-    }
-}
+// fn pairwise_sum_matrix(input: &DVectorSlice<f64>) -> f64 {
+//     let vec_len = input.len();
+//     if vec_len < 64 {
+//         input.sum()
+//     } else {
+//         let new_size = vec_len / 2;
+//         pairwise_sum_matrix(&input.rows(0, new_size))
+//             + pairwise_sum_matrix(&input.rows(new_size, vec_len - new_size))
+//     }
+// }
 
 fn kahansum2(input: Vec<f64>) -> f64 {
     // Prepare the accumulator.
@@ -84,16 +78,16 @@ fn kahansum_vector(input: &DVector<f64>) -> f64 {
 }
 
 fn main() {
-    let mat = DVector::from(vec![-3., -2., -1., 0., 1., 2., 3.]);
-    let mat2 = MatrixXx1::from(vec![-3., f64::NAN, -2., -1., 1., f64::INFINITY, 3.]);
-    let mat22 = MatrixXx1::from(vec![f64::NAN, f64::INFINITY]);
-    let mat3 = MatrixXx1::from(vec![f64::INFINITY, -2., -1., 0., 1., 2., 3.]);
-    let mat4 = MatrixXx1::from(vec![f64::NAN, f64::NAN]);
-    let infinite_plus = f64::INFINITY;
-    let infinite_minus = -f64::INFINITY;
-    let mut vec = Vec::<f64>::new();
+    // let mat = DVector::from(vec![-3., -2., -1., 0., 1., 2., 3.]);
+    // let mat2 = MatrixXx1::from(vec![-3., f64::NAN, -2., -1., 1., f64::INFINITY, 3.]);
+    // let mat22 = MatrixXx1::from(vec![f64::NAN, f64::INFINITY]);
+    // let mat3 = MatrixXx1::from(vec![f64::INFINITY, -2., -1., 0., 1., 2., 3.]);
+    // let mat4 = MatrixXx1::from(vec![f64::NAN, f64::NAN]);
+    // let infinite_plus = f64::INFINITY;
+    // let infinite_minus = -f64::INFINITY;
+    // let mut vec = Vec::<f64>::new();
 
-    let test = mat.rows(0, 5);
+    // let test = mat.rows(0, 5);
     // let test = mat.fixed_columns
 
     // let mat_wo_inf =  mat2.iter().filter_map(|x| {
@@ -105,13 +99,13 @@ fn main() {
     //     }
     // }).collect::<Vec<f64>>();
 
-    let mat_wo_inf = MatrixXx1::from(
-        mat22
-            .iter()
-            .cloned()
-            .filter(|x| !x.is_nan() & x.is_finite())
-            .collect::<Vec<f64>>(),
-    );
+    // let mat_wo_inf = MatrixXx1::from(
+    //     mat22
+    //         .iter()
+    //         .cloned()
+    //         .filter(|x| !x.is_nan() & x.is_finite())
+    //         .collect::<Vec<f64>>(),
+    // );
     // let bla: Vec<&f64> = mat_wo_inf.to_vec().clone();
     // let test = MatrixXx1::from_vec(bla);
     // let mat_new = MatrixXx1::from_vec(mat_wo_inf.clone());
@@ -138,7 +132,7 @@ fn main() {
     let energy_per_ray = energy * 1. / num_rays as f64;
 
     let mut rays_vec2 = Vec::<f64>::with_capacity(num_rays);
-    for i in 0..(num_rays as usize) {
+    for _ in 0..(num_rays as usize) {
         rays_vec2.push(energy_per_ray)
     }
 

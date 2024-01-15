@@ -38,7 +38,7 @@ test_windows:
   rules:
     - if: '$CI_COMMIT_REF_PROTECTED == "true"'
 
-# Build the main application (currently mostly useless)
+# Build the main application
 build-windows:
   stage: build
   tags:

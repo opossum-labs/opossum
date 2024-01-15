@@ -6,8 +6,8 @@ use opossum::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType, PltBackEnd},
 };
 use std::f64::{self, consts::PI};
-use voronator::delaunator::Point as v_point;
-use voronator::VoronoiDiagram;
+// use voronator::delaunator::Point as v_point;
+// use voronator::VoronoiDiagram;
 
 fn linspace(start: f64, end: f64, num: usize) -> Matrix1xX<f64> {
     let mut linspace = Matrix1xX::<f64>::from_element(num, start);
@@ -18,29 +18,29 @@ fn linspace(start: f64, end: f64, num: usize) -> Matrix1xX<f64> {
     linspace
 }
 
-fn linspace_u8(start: u8, step: u8, num: u8) -> Matrix1xX<u8> {
-    let u8_iter = (start..(start + step * num))
-        .step_by(step as usize)
-        .into_iter();
-    Matrix1xX::<u8>::from_iterator(num as usize, u8_iter)
-}
+// fn linspace_u8(start: u8, step: u8, num: u8) -> Matrix1xX<u8> {
+//     let u8_iter = (start..(start + step * num))
+//         .step_by(step as usize)
+//         .into_iter();
+//     Matrix1xX::<u8>::from_iterator(num as usize, u8_iter)
+// }
 
-fn meshgrid_u8(x: &Matrix1xX<u8>, y: &Matrix1xX<u8>) -> (DMatrix<u8>, DMatrix<u8>) {
-    let x_len = x.len();
-    let y_len = y.len();
+// fn meshgrid_u8(x: &Matrix1xX<u8>, y: &Matrix1xX<u8>) -> (DMatrix<u8>, DMatrix<u8>) {
+//     let x_len = x.len();
+//     let y_len = y.len();
 
-    let mut x_mat = DMatrix::<u8>::zeros(y_len, x_len);
-    let mut y_mat = DMatrix::<u8>::zeros(y_len, x_len);
+//     let mut x_mat = DMatrix::<u8>::zeros(y_len, x_len);
+//     let mut y_mat = DMatrix::<u8>::zeros(y_len, x_len);
 
-    for x_id in 0..x_len {
-        for y_id in 0..y_len {
-            x_mat[(y_id, x_id)] = x[x_id];
-            y_mat[(y_id, x_id)] = y[y_id];
-        }
-    }
+//     for x_id in 0..x_len {
+//         for y_id in 0..y_len {
+//             x_mat[(y_id, x_id)] = x[x_id];
+//             y_mat[(y_id, x_id)] = y[y_id];
+//         }
+//     }
 
-    (x_mat, y_mat)
-}
+//     (x_mat, y_mat)
+// }
 fn meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f64>) {
     let x_len = x.len();
     let y_len = y.len();
@@ -175,7 +175,7 @@ fn bin_2d_scatter_data(plt_dat: &PlotData) -> Option<PlotData> {
         let x_min = x.min();
         let y_min = y.min();
 
-        let (xx, yy) = meshgrid(&x, &y);
+        let (xx, _yy) = meshgrid(&x, &y);
 
         let mut zz = xx.clone() * 0.;
         let mut zz_counter = xx.clone() * 0.;

@@ -1,16 +1,12 @@
 use opossum::{
     error::OpmResult,
-    nodes::{
-        create_collimated_ray_source, create_point_ray_source, EnergyMeter, ParaxialSurface,
-        Propagation, SpotDiagram, WaveFront,
-    },
+    nodes::{create_collimated_ray_source, ParaxialSurface, Propagation, SpotDiagram, WaveFront},
     OpticScenery,
 };
 use std::path::Path;
 use uom::si::{
-    angle::degree,
-    energy::{self, joule},
-    f64::{Angle, Energy, Length},
+    energy::joule,
+    f64::{Energy, Length},
     length::meter,
 };
 fn main() -> OpmResult<()> {
