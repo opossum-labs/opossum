@@ -129,11 +129,9 @@ impl Dottable for Propagation {
 }
 #[cfg(test)]
 mod test {
-    use assert_matches::assert_matches;
-    use std::path::Path;
-
     use super::*;
     use crate::aperture::Aperture;
+    use assert_matches::assert_matches;
     #[test]
     fn default() {
         let node = Propagation::default();

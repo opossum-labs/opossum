@@ -90,8 +90,6 @@ impl Dottable for Dummy {}
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
-
     use super::*;
     use crate::{
         aperture::Aperture,

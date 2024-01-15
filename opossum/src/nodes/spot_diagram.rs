@@ -268,7 +268,6 @@ mod test {
         rays::{DistributionStrategy, Rays},
         spectrum::create_he_ne_spec,
     };
-    use tempfile::tempdir;
     use uom::num_traits::Zero;
     use uom::si::{
         energy::{joule, Energy},

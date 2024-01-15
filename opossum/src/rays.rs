@@ -731,7 +731,6 @@ mod test {
     use super::*;
     use crate::{aperture::CircleConfig, spectrum::Spectrum};
     use approx::{abs_diff_eq, assert_abs_diff_eq};
-    use assert_matches::assert_matches;
     use std::path::PathBuf;
     use uom::si::{energy::joule, length::nanometer};
     #[test]

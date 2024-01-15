@@ -326,8 +326,6 @@ impl Plottable for Spectrometer {
 
 #[cfg(test)]
 mod test {
-    use tempfile::tempdir;
-
     use super::*;
     use crate::{
         analyzer::AnalyzerType,
