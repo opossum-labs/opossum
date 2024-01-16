@@ -144,7 +144,7 @@ pub trait Optical: Dottable {
     fn properties(&self) -> &Properties;
     /// Set a property of this [`Optical`].
     ///
-    /// Set a property of an optical node. This property must already exist (e.g. defined in new() / default() functions of the node).
+    /// Set a property of an optical node. This property must already exist (e.g. defined in `new()` / `default()` functions of the node).
     ///
     /// # Errors
     ///

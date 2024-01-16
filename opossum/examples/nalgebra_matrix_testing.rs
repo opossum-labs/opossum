@@ -2,9 +2,6 @@ use itertools::Itertools;
 use nalgebra::DVector;
 use std::time::Instant;
 
-use accurate::sum::Sum2;
-use accurate::traits::*;
-
 fn pairwise_sumation(input: &[f64]) -> f64 {
     let sub_array_size = 32;
     let vec_len = input.len();
@@ -170,20 +167,11 @@ fn main() {
         duration
     );
 
-    let start = Instant::now();
-    let energy_vec4 = rays_vec2.sum_with_accumulator::<Sum2<f64>>();
-    let duration = start.elapsed();
-    println!(
-        "Time elapsed in pairwise matrix self written summation() is: {:?}",
-        duration
-    );
-
     println!("energy:{}", energy_vec0);
     println!("energy:{}", energy_vec);
     println!("energy:{}", energy_vec1.unwrap());
     println!("energy:{}", energy_vec2);
     println!("energy:{}", energy_vec3);
-    println!("energy:{}", energy_vec4);
 
     // println!("energy:{}", energy_vec);
     // println!("energy:{}", energy_vec2);

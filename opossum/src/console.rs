@@ -136,7 +136,7 @@ fn create_prompt_str(flag: &str, init_str: &str) -> OpmResult<String> {
 /// * `func`:       Function to evaluate the input string of the given argument.
 /// * `input`:      String-Option of the argument
 /// * `arg_flag`:   Respective argument flag. "f" for file path of the optical setup, "a" for analyzer to be used and "r" for the report directory.
-/// * `reader`:     Type that implements the `BufRead` trait to read from. May be stdin().lock() for user input or a `BufReader` from a static String for tests
+/// * `reader`:     Type that implements the `BufRead` trait to read from. May be `stdin().lock()` for user input or a `BufReader` from a static String for tests
 /// * `writer`:     Type  that implements the Write trait to write into.
 /// # Returns
 /// * Returns an [`OpmResult<T>`] containing the extracted argument. The specific type of T depends on the used function.
