@@ -131,7 +131,8 @@ impl Ray {
     }
     /// Refract a ray on a paraxial surface of a given focal length.
     ///
-    /// Modify the ray direction
+    /// Modify the ray direction in order to simulate a perfect lens. **Note**: This function also
+    /// modifies the path length of a ray in order to return correct values for the wavefront.
     /// # Errors
     ///
     /// This function will return an error if the given focal length is zero or not finite
@@ -141,14 +142,17 @@ impl Ray {
                 "focal length must be != 0.0 & finite".into(),
             ));
         }
-        let optical_power = 1.0 / focal_length.get::<millimeter>();
+        let f = focal_length.get::<millimeter>();
+        let optical_power = 1.0 / f;
         let mut new_ray = self.clone();
         new_ray.dir.x = optical_power.mul_add(-self.pos.x, self.dir.x);
         new_ray.dir.y = optical_power.mul_add(-self.pos.y, self.dir.y);
         new_ray.dir.z = 1.0;
-        // *** no longer normalized ***
-        // new_ray.dir.normalize_mut();
-        // *** removed since it introduced severe rounding errors ***
+        // correct path length
+        let r_square = self.pos.x.mul_add(self.pos.x, self.pos.y * self.pos.y);
+        let f_square = f * f;
+        new_ray.path_length -=
+            Length::new::<millimeter>((r_square + f_square).sqrt()) - focal_length;
         Ok(new_ray)
     }
 
@@ -1009,18 +1013,14 @@ mod test {
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-        assert_eq!(
-            ray.refract_paraxial(Length::new::<millimeter>(100.0))
-                .unwrap()
-                .pos,
-            ray.pos
-        );
-        assert_eq!(
-            ray.refract_paraxial(Length::new::<millimeter>(100.0))
-                .unwrap()
-                .dir,
-            ray.dir
-        );
+        let refracted_ray = ray
+            .refract_paraxial(Length::new::<millimeter>(100.0))
+            .unwrap();
+        assert_eq!(refracted_ray.pos, ray.pos);
+        assert_eq!(refracted_ray.dir, ray.dir);
+        assert_eq!(refracted_ray.e, ray.e);
+        assert_eq!(refracted_ray.path_length, ray.path_length);
+
         assert!(ray
             .refract_paraxial(Length::new::<millimeter>(0.0))
             .is_err());
@@ -1064,7 +1064,7 @@ mod test {
             .refract_paraxial(Length::new::<millimeter>(100.0))
             .unwrap()
             .dir;
-        let test_ray_dir = Vector3::new(-1.0, -2.0, 100.0) / 100.0; //.normalize();
+        let test_ray_dir = Vector3::new(-1.0, -2.0, 100.0) / 100.0;
         assert_abs_diff_eq!(ray_dir.x, test_ray_dir.x);
         assert_abs_diff_eq!(ray_dir.y, test_ray_dir.y);
         assert_abs_diff_eq!(ray_dir.z, test_ray_dir.z);
@@ -1082,6 +1082,15 @@ mod test {
         assert_abs_diff_eq!(ray_dir.x, test_ray_dir.x);
         assert_abs_diff_eq!(ray_dir.y, test_ray_dir.y);
         assert_abs_diff_eq!(ray_dir.z, test_ray_dir.z);
+
+        let ray = Ray::new(
+            Point2::new(Length::zero(), Length::new::<millimeter>(10.0)),
+            Vector3::new(0.0, 0.0, 1.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        ).unwrap();
+        let refracted_ray=ray.refract_paraxial(Length::new::<millimeter>(10.0)).unwrap();
+        assert_abs_diff_eq!(refracted_ray.path_length.get::<millimeter>(),-1.0*(f64::sqrt(200.0)-10.0), epsilon = 10.0*f64::EPSILON);
     }
     #[test]
     fn ray_filter_energy() {
