@@ -6,6 +6,9 @@
 //! and / or exported as a PDF report.
 use std::fmt::Display;
 use strum::EnumIter;
+use uom::si::{energy::picojoule, f64::Energy};
+
+use crate::error::{OpmResult, OpossumError};
 
 /// Type of analysis to be performed.
 #[non_exhaustive]
@@ -40,12 +43,44 @@ enum RayTracingMode {
     // NonSequential
 }
 
-#[derive(Default, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 /// Configuration data for a rays tracing analysis.
 ///
 /// It currently only contains the `RayTracingMode`.
 pub struct RayTraceConfig {
     mode: RayTracingMode,
+    min_energy_per_ray: Energy,
+}
+
+impl RayTraceConfig {
+    /// Returns the lower limit for ray energies during analysis. Rays with energies lower than this limit will be dropped.
+    #[must_use]
+    pub fn min_energy_per_ray(&self) -> Energy {
+        self.min_energy_per_ray
+    }
+
+    /// Sets the min energy per ray during analysis. Rays with energies lower than this limit will be dropped.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given energy limit is negative or not finite.
+    pub fn set_min_energy_per_ray(&mut self, min_energy_per_ray: Energy) -> OpmResult<()> {
+        if !min_energy_per_ray.is_finite() || min_energy_per_ray.is_sign_negative() {
+            return Err(OpossumError::Analysis(
+                "minimum energy must be >=0.0 and finite".into(),
+            ));
+        }
+        self.min_energy_per_ray = min_energy_per_ray;
+        Ok(())
+    }
+}
+impl Default for RayTraceConfig {
+    fn default() -> Self {
+        Self {
+            mode: RayTracingMode::default(),
+            min_energy_per_ray: Energy::new::<picojoule>(1.0),
+        }
+    }
 }
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -88,7 +123,7 @@ mod test {
     fn ray_tracing_config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { mode: Sequential }"
+            "RayTraceConfig { mode: Sequential, min_energy_per_ray: 1e-12 m^2 kg^1 s^-2 }"
         );
     }
 }

@@ -26,6 +26,7 @@ use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
+use uom::si::f64::Energy;
 
 /// Overall optical model and additional metadata.
 ///
@@ -270,6 +271,9 @@ impl OpticScenery {
                     ))
                 })?;
             outgoing_edges = apodize_outgoing_light(outgoing_edges, node)?;
+            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                threshold_by_energy(&mut outgoing_edges, config.min_energy_per_ray())?;
+            }
             for outgoing_edge in outgoing_edges {
                 self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
             }
@@ -422,6 +426,18 @@ fn apodize_outgoing_light(
     }
     Ok(apodized_edges)
 }
+fn threshold_by_energy(
+    outgoing_edges: &mut LightResult,
+    energy_threshold: Energy,
+) -> OpmResult<()> {
+    for light_data in outgoing_edges.iter_mut() {
+        if let Some(LightData::Geometric(rays)) = light_data.1 {
+            rays.threshold_by_energy(energy_threshold)?;
+        }
+    }
+    Ok(())
+}
+
 impl Serialize for OpticScenery {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -552,9 +568,16 @@ impl PdfReportable for OpticScenery {
 mod test {
     use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
+    use crate::analyzer::RayTraceConfig;
     use crate::nodes::{Detector, Metertype};
+    use crate::rays::{Ray, Rays};
+    use nalgebra::Point2;
+    use num::Zero;
     use std::path::PathBuf;
     use std::{fs::File, io::Read};
+    use uom::si::energy::joule;
+    use uom::si::f64::Length;
+    use uom::si::length::nanometer;
 
     fn get_file_content(f_path: &str) -> String {
         let file_content = &mut "".to_owned();
@@ -730,7 +753,6 @@ mod test {
             .unwrap();
         scenery.analyze(&AnalyzerType::Energy).unwrap();
     }
-
     #[test]
     fn analyze_empty_test() {
         let mut scenery = OpticScenery::new();
@@ -747,6 +769,49 @@ mod test {
             res.unwrap_err().to_string(),
             "Analysis:found stale (completely unconnected) node dummy"
         );
+    }
+    #[test]
+    fn analyze_energy_threshold() {
+        let mut rays = Rays::default();
+        rays.add_ray(
+            Ray::new_collimated(
+                Point2::new(Length::zero(), Length::zero()),
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+            )
+            .unwrap(),
+        );
+        rays.add_ray(
+            Ray::new_collimated(
+                Point2::new(Length::zero(), Length::zero()),
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(0.1),
+            )
+            .unwrap(),
+        );
+        let mut scenery = OpticScenery::new();
+        let i_s = scenery.add_node(Source::new("src", &LightData::Geometric(rays)));
+        let i_e = scenery.add_node(EnergyMeter::default());
+        scenery.connect_nodes(i_s, "out1", i_e, "in1").unwrap();
+        let mut raytrace_config = RayTraceConfig::default();
+        raytrace_config
+            .set_min_energy_per_ray(Energy::new::<joule>(0.5))
+            .unwrap();
+        scenery
+            .analyze(&AnalyzerType::RayTrace(raytrace_config))
+            .unwrap();
+        let report = scenery
+            .node(i_e)
+            .unwrap()
+            .optical_ref
+            .borrow()
+            .report()
+            .unwrap();
+        if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {
+            assert_eq!(*e, Energy::new::<joule>(1.0));
+        } else {
+            assert!(false)
+        }
     }
     #[test]
     fn report_empty_test() {
