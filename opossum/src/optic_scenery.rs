@@ -430,7 +430,7 @@ fn threshold_by_energy(
     outgoing_edges: &mut LightResult,
     energy_threshold: Energy,
 ) -> OpmResult<()> {
-    for light_data in outgoing_edges.iter_mut() {
+    for light_data in &mut *outgoing_edges {
         if let Some(LightData::Geometric(rays)) = light_data.1 {
             rays.threshold_by_energy(energy_threshold)?;
         }

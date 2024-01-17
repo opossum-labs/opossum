@@ -365,6 +365,13 @@ impl Spectrum {
             .map(|d| (d.0 .0, d.0 .1 * d.1 .1))
             .collect();
     }
+    /// Modify the spectrum by a given function or closure.
+    pub fn map_mut<F>(&mut self, f: F)
+    where
+        F: FnMut(&mut (f64, f64)) -> (f64, f64),
+    {
+        self.data = self.data.iter_mut().map(f).collect();
+    }
     /// Add a given spectrum.
     ///
     /// The given spectrum might be resampled in order to match self.
