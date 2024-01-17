@@ -1,6 +1,10 @@
-use uom::si::{f64::Length, length::nanometer};
+#![warn(missing_docs)]
+//! helper functions for easier generation of spectra
 
+use std::ops::Range;
+use uom::si::{f64::Length, length::nanometer};
 use crate::{error::OpmResult, spectrum::Spectrum};
+use crate::error::OpossumError;
 
 /// Helper function for generating a visible spectrum.
 ///
@@ -61,4 +65,26 @@ pub fn create_nd_glass_spec(energy: f64) -> OpmResult<Spectrum> {
         energy,
     )?;
     Ok(s)
+}
+
+/// Generate a spectrum of an ideal short-pass filter.
+///
+/// This helper generates a transmission spectrum with the given range and resolution representing a short-pass filter.
+/// Wavelengths below the given cut-off wavelength are set to 1.0 (=full transmisson) while all other values are set to 
+/// zero (= full absorptin). Note that the actual cut-off wavelength is truncated to the next wavelength bin in the given
+/// resolution.
+///  
+/// # Errors
+///
+/// This function will return an error if
+///   - the given rage and / or resolution are invalid.
+///   - the cut-off wavelength is outside the spectrum range.
+pub fn create_short_pass_filter(range: Range<Length>, resolution: Length, cut_off: Length) -> OpmResult<Spectrum> {
+    if !range.contains(&cut_off) {
+        return Err(OpossumError::Spectrum("cut-off wavelength must be inside the spectrum range".into()));
+    }
+    let mut s = Spectrum::new(range, resolution)?;
+    todo!();
+    // let values=s.data_vec()
+    // Ok(s)
 }
