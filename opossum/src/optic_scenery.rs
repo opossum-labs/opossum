@@ -238,6 +238,14 @@ impl OpticScenery {
                 .0
                 .node_weight(idx)
                 .ok_or_else(|| OpossumError::Analysis("getting node_weight failed".into()))?;
+            let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
+            let neighbors = self.g.0.neighbors_undirected(idx);
+            if neighbors.count() == 0 {
+                return Err(OpossumError::Analysis(format!(
+                    "found stale (completely unconnected) node {node_name}"
+                )));
+            }
+
             let mut incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
             // paranoia: check if all incoming ports are really input ports of the node to be analyzed
             let input_ports = node.optical_ref.borrow().ports().input_names();
@@ -246,7 +254,6 @@ impl OpticScenery {
             }
             incoming_edges = apodize_incoming_light(incoming_edges, node)?;
             //
-            let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
             let node_type = node
                 .optical_ref
                 .borrow()
@@ -712,7 +719,6 @@ mod test {
         let path = NamedTempFile::new().unwrap();
         assert!(scenery.save_to_file(path.path()).is_ok());
     }
-    //todo: what should we exactly test for for the functions analyze and report?
     #[test]
     fn analyze_dummy_test() {
         let mut scenery = OpticScenery::new();
@@ -731,7 +737,17 @@ mod test {
         scenery.set_description("analyze_empty_test").unwrap();
         scenery.analyze(&AnalyzerType::Energy).unwrap();
     }
-
+    #[test]
+    fn analyze_stale_node() {
+        let mut scenery = OpticScenery::new();
+        scenery.add_node(Dummy::default());
+        let res = scenery.analyze(&AnalyzerType::Energy);
+        assert!(res.is_err());
+        assert_eq!(
+            res.unwrap_err().to_string(),
+            "Analysis:found stale (completely unconnected) node dummy"
+        );
+    }
     #[test]
     fn report_empty_test() {
         let mut scenery = OpticScenery::new();
