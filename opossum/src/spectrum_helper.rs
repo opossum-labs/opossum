@@ -104,6 +104,39 @@ pub fn create_short_pass_filter(
     Ok(s)
 }
 
+/// Generate a spectrum of an ideal long-pass filter.
+///
+/// This helper generates a transmission spectrum with the given range and resolution representing a long-pass filter.
+/// Wavelengths above the given cut-off wavelength are set to 1.0 (=full transmisson) while all other values are set to
+/// zero (= full absorptin). Note that the actual cut-off wavelength is truncated to the next wavelength bin in the given
+/// resolution.
+///  
+/// # Errors
+///
+/// This function will return an error if
+///   - the given rage and / or resolution are invalid.
+///   - the cut-off wavelength is outside the spectrum range.
+pub fn create_long_pass_filter(
+    range: Range<Length>,
+    resolution: Length,
+    cut_off: Length,
+) -> OpmResult<Spectrum> {
+    if !range.contains(&cut_off) {
+        return Err(OpossumError::Spectrum(
+            "cut-off wavelength must be inside the spectrum range".into(),
+        ));
+    }
+    let mut cut_off_in_um = cut_off.get::<micrometer>();
+    let mut s = Spectrum::new(range, resolution)?;
+    s.map_mut(|(lambda, _)| {
+        if lambda > &mut cut_off_in_um {
+            (*lambda, 1.0)
+        } else {
+            (*lambda, 0.0)
+        }
+    });
+    Ok(s)
+}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -125,5 +158,25 @@ mod test {
         assert_eq!(s.get_value(&Length::new::<micrometer>(2.0)).unwrap(), 1.0);
         assert_eq!(s.get_value(&Length::new::<micrometer>(3.0)).unwrap(), 0.0);
         assert_eq!(s.get_value(&Length::new::<micrometer>(4.0)).unwrap(), 0.0);
+    }
+
+    #[test]
+    fn test_create_long_pass_filter() {
+        assert!(create_long_pass_filter(
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
+            Length::new::<micrometer>(1.0),
+            Length::new::<micrometer>(7.0)
+        )
+        .is_err());
+        let s = create_long_pass_filter(
+            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
+            Length::new::<micrometer>(1.0),
+            Length::new::<micrometer>(3.0),
+        )
+        .unwrap();
+        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&Length::new::<micrometer>(2.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&Length::new::<micrometer>(3.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&Length::new::<micrometer>(4.0)).unwrap(), 1.0);
     }
 }
