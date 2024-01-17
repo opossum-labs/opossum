@@ -1088,9 +1088,16 @@ mod test {
             Vector3::new(0.0, 0.0, 1.0),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
-        ).unwrap();
-        let refracted_ray=ray.refract_paraxial(Length::new::<millimeter>(10.0)).unwrap();
-        assert_abs_diff_eq!(refracted_ray.path_length.get::<millimeter>(),-1.0*(f64::sqrt(200.0)-10.0), epsilon = 10.0*f64::EPSILON);
+        )
+        .unwrap();
+        let refracted_ray = ray
+            .refract_paraxial(Length::new::<millimeter>(10.0))
+            .unwrap();
+        assert_abs_diff_eq!(
+            refracted_ray.path_length.get::<millimeter>(),
+            -1.0 * (f64::sqrt(200.0) - 10.0),
+            epsilon = 10.0 * f64::EPSILON
+        );
     }
     #[test]
     fn ray_filter_energy() {
