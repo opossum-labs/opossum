@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 /// A wavefront monitor node
 ///
-/// This node creates a wavefront view of an incoming raybundle and can be used as an ideal wavefront-measurement device
+/// This node creates a wavefront view of an incoming ray bundle and can be used as an ideal wavefront-measurement device
 ///
 /// ## Optical Ports
 ///   - Inputs
