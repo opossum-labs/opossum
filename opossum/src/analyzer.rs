@@ -6,6 +6,7 @@
 //! and / or exported as a PDF report.
 use std::fmt::Display;
 use strum::EnumIter;
+use uom::si::f64::Energy;
 
 /// Type of analysis to be performed.
 #[non_exhaustive]
@@ -46,6 +47,7 @@ enum RayTracingMode {
 /// It currently only contains the `RayTracingMode`.
 pub struct RayTraceConfig {
     mode: RayTracingMode,
+    min_energy_per_ray: Energy,
 }
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

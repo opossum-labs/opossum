@@ -500,6 +500,22 @@ impl Rays {
         }
         Ok(())
     }
+    /// Remove rays below a given energy threshold.
+    ///
+    /// Removes all rays with an energy (per ray) below the given threshold.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given energy threshold is negative or not finite.
+    pub fn threshold_by_energy(&mut self, min_energy_per_ray: Energy) -> OpmResult<()> {
+        if !min_energy_per_ray.is_finite() || min_energy_per_ray.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "threshold energy must be >=0.0 and finite".into(),
+            ));
+        };
+        self.rays.retain(|ray| ray.e >= min_energy_per_ray);
+        Ok(())
+    }
     /// Returns the wavelength range of this [`Rays`].
     ///
     /// This functions returns the minimum and maximum wavelength of the containing rays as `Range`. If [`Rays`] is empty, `None` is returned.
@@ -1584,6 +1600,40 @@ mod test {
         assert_eq!(rays.rays[0].wvl, new_ray.wvl);
         assert_eq!(rays.rays[0].e, new_ray.e);
         assert_eq!(rays.rays.len(), 1);
+    }
+    #[test]
+    fn rays_threshold_by_energy() {
+        let mut rays = Rays::default();
+        assert!(rays
+            .threshold_by_energy(Energy::new::<joule>(f64::NAN))
+            .is_err());
+        assert!(rays
+            .threshold_by_energy(Energy::new::<joule>(f64::INFINITY))
+            .is_err());
+        assert!(rays
+            .threshold_by_energy(Energy::new::<joule>(-0.1))
+            .is_err());
+        assert!(rays.threshold_by_energy(Energy::new::<joule>(0.0)).is_ok());
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        let ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(0.1),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        rays.threshold_by_energy(Energy::new::<joule>(0.1)).unwrap();
+        assert_eq!(rays.nr_of_rays(), 2);
+        rays.threshold_by_energy(Energy::new::<joule>(0.5)).unwrap();
+        assert_eq!(rays.nr_of_rays(), 1);
+        rays.threshold_by_energy(Energy::new::<joule>(1.1)).unwrap();
+        assert_eq!(rays.nr_of_rays(), 0);
     }
     #[test]
     fn rays_apodize() {
