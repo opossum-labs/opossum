@@ -256,7 +256,7 @@ impl Dottable for BeamSplitter {
 }
 #[cfg(test)]
 mod test {
-    use crate::{analyzer::RayTraceConfig, rays::Ray, spectrum::create_he_ne_spec};
+    use crate::{analyzer::RayTraceConfig, rays::Ray, spectrum_helper::create_he_ne_spec};
     use approx::{assert_abs_diff_eq, AbsDiffEq};
     use nalgebra::Point2;
     use uom::num_traits::Zero;

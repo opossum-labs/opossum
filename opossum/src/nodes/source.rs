@@ -107,7 +107,7 @@ impl Source {
     /// use opossum::{
     /// lightdata::{DataEnergy, LightData},
     /// nodes::Source,
-    /// spectrum::create_he_ne_spec};
+    /// spectrum_helper::create_he_ne_spec};
     ///
     /// let source=Source::new("My Source", &LightData::Energy(DataEnergy {spectrum: create_he_ne_spec(1.0).unwrap()}));
     /// ```
@@ -193,7 +193,9 @@ impl Dottable for Source {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spec};
+    use crate::{
+        analyzer::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
+    };
     use approx::assert_abs_diff_eq;
     use assert_matches::assert_matches;
     use uom::si::{angle::degree, energy::joule, length::millimeter};

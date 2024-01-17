@@ -5,7 +5,7 @@ use opossum::{
     lightdata::{DataEnergy, LightData},
     nodes::{Dummy, EnergyMeter, NodeGroup, Source},
     optical::Optical,
-    spectrum::create_he_ne_spec,
+    spectrum_helper::create_he_ne_spec,
     OpticScenery,
 };
 

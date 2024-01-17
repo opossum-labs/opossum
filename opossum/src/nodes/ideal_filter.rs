@@ -239,7 +239,7 @@ mod test {
         lightdata::DataEnergy,
         optical::LightResult,
         rays::{DistributionStrategy, Rays},
-        spectrum::create_he_ne_spec,
+        spectrum_helper::create_he_ne_spec,
     };
 
     use super::*;

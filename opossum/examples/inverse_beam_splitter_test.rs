@@ -3,7 +3,7 @@ use opossum::optical::Optical;
 use opossum::{
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, EnergyMeter, Source},
-    spectrum::create_he_ne_spec,
+    spectrum_helper::create_he_ne_spec,
     OpticScenery,
 };
 use std::path::Path;

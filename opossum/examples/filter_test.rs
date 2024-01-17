@@ -4,7 +4,8 @@ use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, EnergyMeter, FilterType, IdealFilter, Source, Spectrometer},
-    spectrum::{create_he_ne_spec, Spectrum},
+    spectrum::Spectrum,
+    spectrum_helper::create_he_ne_spec,
     OpticScenery,
 };
 
