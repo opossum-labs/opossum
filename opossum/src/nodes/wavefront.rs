@@ -1,7 +1,9 @@
 #![warn(missing_docs)]
 use image::{DynamicImage, ImageBuffer, RgbImage};
-use nalgebra::DVector;
+use nalgebra::{DVector, MatrixXx3, Point3};
 use serde_derive::{Deserialize, Serialize};
+use uom::si::f64::Length;
+use uom::si::length::nanometer;
 
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
@@ -53,25 +55,68 @@ impl WaveFront {
             ..Default::default()
         }
     }
+}
 
-    fn calc_wavefront_statistics(path_length_lambda: &DVector<f64>) -> OpmResult<(f64, f64)> {
-        if path_length_lambda.is_empty() {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WaveFrontData {
+    pub wavefront_error: Vec<WaveFrontError>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WaveFrontError {
+    x: Vec<f64>,
+    y: Vec<f64>,
+    err_in_wvl: Vec<f64>,
+    ptv: f64,
+    rms: f64,
+    wavelength: Length,
+}
+
+impl WaveFrontError {
+    pub fn new(wf_dat: &MatrixXx3<f64>, wavelength: Length) -> OpmResult<Self> {
+        if wf_dat.is_empty() {
             Err(OpossumError::Other("Empty wavefront-data vector!".into()))
         } else {
-            let max = path_length_lambda.max();
-            let min = path_length_lambda.min();
+            let len_wf_dat = wf_dat.len();
+            let mut x = Vec::<f64>::with_capacity(len_wf_dat);
+            let mut y = Vec::<f64>::with_capacity(len_wf_dat);
+            let mut err_in_wvl = Vec::<f64>::with_capacity(len_wf_dat);
+            for row in wf_dat.row_iter() {
+                x.push(row[0]);
+                y.push(row[1]);
+                err_in_wvl.push(row[2]);
+            }
+            let (ptv, rms) =
+                Self::calc_wavefront_statistics(DVector::from_vec(err_in_wvl.clone())).unwrap();
+            Ok(Self {
+                x,
+                y,
+                err_in_wvl,
+                ptv,
+                rms,
+                wavelength,
+            })
+        }
+    }
+
+    fn calc_wavefront_statistics(wf_dat: DVector<f64>) -> OpmResult<(f64, f64)> {
+        if wf_dat.is_empty() {
+            Err(OpossumError::Other("Empty wavefront-data vector!".into()))
+        } else {
+            let max = wf_dat.max();
+            let min = wf_dat.min();
             let ptv = max - min;
 
             let rms = f64::sqrt(
-                path_length_lambda
+                wf_dat
                     .iter()
                     .map(|l| l.powi(2))
                     .collect::<Vec<f64>>()
                     .iter()
                     .sum::<f64>()
-                    / f64::from(i32::try_from(path_length_lambda.len()).unwrap()),
+                    / f64::from(i32::try_from(wf_dat.len()).unwrap()),
             );
-            Ok((rms*1000., ptv*1000.))
+            Ok((rms * 1000., ptv * 1000.))
         }
     }
 }
@@ -150,37 +195,59 @@ impl Optical for WaveFront {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
-            props
+            let wf_data_opt =
+                rays.get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(1.));
+
+            if wf_data_opt.is_ok() && wf_data_opt.as_ref().unwrap().is_some() {
+                let wf_data = wf_data_opt.unwrap().unwrap();
+
+                props
                 .create(
-                    "Wavefront diagram",
-                    "2D wavefront diagram",
+                    "Wavefront Data",
+                    "Wavefront error, rms and ptv with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                     None,
-                    self.clone().into(),
+                    wf_data.clone().into(),
                 )
                 .unwrap();
-            let wf_error_data = rays.wavefront_error_in_lambda_at_wvl(1053.);
-            if !wf_error_data.is_empty() {
-                let (rms, ptv) = Self::calc_wavefront_statistics(&DVector::from_column_slice(
-                    wf_error_data.column(2).as_slice(),
-                ))
-                .unwrap();
                 props
                     .create(
-                        "Wavefront rms in mλ",
-                        "Wavefront root mean square in units of the wavelength",
+                        "Wavefront Diagram",
+                        "Wavelength Specific Wavefront Diagram",
                         None,
-                        format!("{rms:.2}").into(),
-                    )
-                    .unwrap();
-                props
-                    .create(
-                        "Wavefront ptv in mλ",
-                        "Wavefront peak to valley in units of the wavelength",
-                        None,
-                        format!("{ptv:.2}").into(),
+                        self.clone().into(),
                     )
                     .unwrap();
             }
+            // props
+            //     .create(
+            //         "Wavefront Data",
+            //         "Wavefront error with respect to the chief ray (closest ray to the optical axis)",
+            //         None,
+            //         self.clone().into(),
+            //     )
+            //     .unwrap();
+            // if !wf_error_data.is_empty() {
+            //     let (rms, ptv) = Self::calc_wavefront_statistics(&DVector::from_column_slice(
+            //         wf_error_data.column(2).as_slice(),
+            //     ))
+            //     .unwrap();
+            //     props
+            //         .create(
+            //             "Wavefront rms in mλ",
+            //             "Wavefront root mean square in units of the wavelength",
+            //             None,
+            //             format!("{rms:.2}").into(),
+            //         )
+            //         .unwrap();
+            //     props
+            //         .create(
+            //             "Wavefront ptv in mλ",
+            //             "Wavefront peak to valley in units of the wavelength",
+            //             None,
+            //             format!("{ptv:.2}").into(),
+            //         )
+            //         .unwrap();
+            // }
 
             Some(NodeReport::new(
                 self.properties().node_type().unwrap(),
@@ -207,9 +274,32 @@ impl PdfReportable for WaveFront {
     }
 }
 
+impl PdfReportable for WaveFrontData {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        // genpdf::elements::Paragraph::new(value.to_string())
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+
+        layout.push(genpdf::elements::Paragraph::new(format!(
+            "ptv: {} mλ",
+            self.wavefront_error[0].ptv.to_string()
+        )));
+        layout.push(genpdf::elements::Paragraph::new(format!(
+            "rms: {} mλ",
+            self.wavefront_error[0].rms.to_string()
+        )));
+        Ok(layout)
+    }
+}
+
+impl From<WaveFrontData> for Proptype {
+    fn from(value: WaveFrontData) -> Self {
+        Self::WaveFrontStats(value)
+    }
+}
+
 impl From<WaveFront> for Proptype {
     fn from(value: WaveFront) -> Self {
-        Self::WaveFront(value)
+        Self::WaveFrontDiagram(value)
     }
 }
 
@@ -264,10 +354,12 @@ impl Plottable for WaveFront {
         let data = &self.light_data;
         match data {
             Some(LightData::Geometric(rays)) => {
-                let wavefront_error = rays.wavefront_error_in_lambda_at_wvl(1053.);
+                let wavefront_error =
+                    rays.wavefront_error_at_pos_in_units_of_wvl(Length::new::<nanometer>(1053.));
                 match plt_type {
                     PlotType::ColorMesh(_) => {
-                        let binned_data = self.bin_2d_scatter_data(&PlotData::Dim3(wavefront_error));
+                        let binned_data =
+                            self.bin_2d_scatter_data(&PlotData::Dim3(wavefront_error));
                         Ok(binned_data)
                     }
                     PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {

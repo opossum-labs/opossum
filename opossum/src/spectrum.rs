@@ -242,6 +242,30 @@ impl Spectrum {
         let kahan_sum: kahan::KahanSum<f64> = energies.iter().kahan_sum();
         kahan_sum.sum()
     }
+
+    /// Returns the center wavelength of this [`Spectrum`].
+    ///
+    /// This function calculates the first moment of the spectral distribution.
+    /// The calculated value represents the average wavelength and is thereofre returned as the "center wavelength" of this [`Spectrum`].
+    pub fn center_wavelength(&self) -> Length {
+        let spec_int_vec = self
+            .data
+            .windows(2)
+            .map(|l| (l[1].0 - l[0].0) * (l[1].1 + l[0].1))
+            .collect::<Vec<f64>>();
+        let weighted_spec_int_vec = self
+            .data
+            .windows(2)
+            .map(|l| (l[1].0 - l[0].0) * (l[1].1 * l[1].0 + l[0].1 * l[0].0))
+            .collect::<Vec<f64>>();
+
+        let weighted_spec_int_kahan: kahan::KahanSum<f64> =
+            weighted_spec_int_vec.iter().kahan_sum();
+        let spec_int_kahan: kahan::KahanSum<f64> = spec_int_vec.iter().kahan_sum();
+        let center_wavelength = weighted_spec_int_kahan.sum() / spec_int_kahan.sum();
+
+        Length::new::<micrometer>(center_wavelength)
+    }
     /// Return the value at a given wavelength.
     ///
     /// This function returns the spectrum value (y value) for a given wavelength. The value will be linear interpolated if the wavelength does not correspond

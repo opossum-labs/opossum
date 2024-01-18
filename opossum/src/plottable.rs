@@ -665,6 +665,20 @@ impl PlotData {
 
         (ax_range, min_val, max_val)
     }
+
+    pub fn get_axes_min_max_ranges(&self) -> OpmResult<Vec<(f64, f64, f64)>> {
+        match self {
+            PlotData::Dim2(dat) => Ok(vec![self.get_min_max_range(&dat.column(0)), self.get_min_max_range(&dat.column(1))]),
+            PlotData::Dim3(dat) | PlotData::ColorTriangulated(_,_,dat) | PlotData::TriangulatedSurface(_,dat) => Ok(vec![self.get_min_max_range(&dat.column(0)), self.get_min_max_range(&dat.column(1)), self.get_min_max_range(&dat.column(2))]),
+            PlotData::ColorMesh(x,y,z) => {
+                let z_flat = z.into_iter().cloned().map(|z| z).collect::<Vec<f64>>();
+                let test = DVectorSlice::from_iterator(z_flat);
+                // let test = z.res
+                Ok(vec![self.get_min_max_range(&DVectorSlice::from(x)), self.get_min_max_range(&DVectorSlice::from(y)), self.get_min_max_range(&DVectorSlice::from_vec(z_flat))])
+        }}
+    }
+
+
 }
 
 /// Trait for adding the possibility to generate a (x/y) plot of an element.

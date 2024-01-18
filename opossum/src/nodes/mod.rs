@@ -12,7 +12,7 @@ mod reference;
 mod source;
 mod spectrometer;
 mod spot_diagram;
-mod wavefront;
+pub mod wavefront;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -39,7 +39,7 @@ pub use spectrometer::SpectrometerType;
 
 pub use spot_diagram::SpotDiagram;
 
-pub use wavefront::WaveFront;
+pub use wavefront::{WaveFront, WaveFrontError};
 
 use uuid::Uuid;
 
