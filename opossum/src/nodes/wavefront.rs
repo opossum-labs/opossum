@@ -71,7 +71,7 @@ impl WaveFront {
                     .sum::<f64>()
                     / f64::from(i32::try_from(path_length_lambda.len()).unwrap()),
             );
-            Ok((rms, ptv))
+            Ok((rms*1000., ptv*1000.))
         }
     }
 }
@@ -158,15 +158,15 @@ impl Optical for WaveFront {
                     self.clone().into(),
                 )
                 .unwrap();
-            let wf_data = rays.optical_path_length_at_wvl(1053.);
-            if !wf_data.is_empty() {
+            let wf_error_data = rays.wavefront_error_in_lambda_at_wvl(1053.);
+            if !wf_error_data.is_empty() {
                 let (rms, ptv) = Self::calc_wavefront_statistics(&DVector::from_column_slice(
-                    wf_data.column(2).as_slice(),
+                    wf_error_data.column(2).as_slice(),
                 ))
                 .unwrap();
                 props
                     .create(
-                        "Wavefront rms in λ",
+                        "Wavefront rms in mλ",
                         "Wavefront root mean square in units of the wavelength",
                         None,
                         format!("{rms:.2}").into(),
@@ -174,7 +174,7 @@ impl Optical for WaveFront {
                     .unwrap();
                 props
                     .create(
-                        "Wavefront ptv in λ",
+                        "Wavefront ptv in mλ",
                         "Wavefront peak to valley in units of the wavelength",
                         None,
                         format!("{ptv:.2}").into(),
@@ -240,6 +240,10 @@ impl Plottable for WaveFront {
         };
         plt_params.set(&PlotArgs::Backend(backend));
 
+        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()));
+        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()));
+        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()));
+
         let (plt_data_opt, plt_type) = if let Some(LightData::Geometric(rays)) = &self.light_data {
             if rays.nr_of_rays() > 10000 {
                 let plt_type = PlotType::ColorMesh(plt_params);
@@ -260,15 +264,15 @@ impl Plottable for WaveFront {
         let data = &self.light_data;
         match data {
             Some(LightData::Geometric(rays)) => {
-                let path_length = rays.optical_path_length_at_wvl(1053.);
+                let wavefront_error = rays.wavefront_error_in_lambda_at_wvl(1053.);
                 match plt_type {
                     PlotType::ColorMesh(_) => {
-                        let binned_data = self.bin_2d_scatter_data(&PlotData::Dim3(path_length));
+                        let binned_data = self.bin_2d_scatter_data(&PlotData::Dim3(wavefront_error));
                         Ok(binned_data)
                     }
                     PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {
                         let triangulated_dat =
-                            self.triangulate_plot_data(&PlotData::Dim3(path_length), plt_type);
+                            self.triangulate_plot_data(&PlotData::Dim3(wavefront_error), plt_type);
                         Ok(triangulated_dat)
                     }
                     _ => Ok(None),
