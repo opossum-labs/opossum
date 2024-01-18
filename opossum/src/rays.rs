@@ -389,28 +389,29 @@ impl Rays {
     ///
     /// This function calculates the wavefront of a ray bundle as multiple of its wavelength with reference to the ray that is closest to the optical axis.
     #[must_use]
-    pub fn optical_path_length_at_wvl(&self, wvl: f64) -> MatrixXx3<f64> {
-        let mut path_length_at_pos = MatrixXx3::from_element(self.rays.len(), 0.);
+    pub fn wavefront_error_in_lambda_at_wvl(&self, wvl: f64) -> MatrixXx3<f64> {
+        let mut optical_path_length_at_pos = MatrixXx3::from_element(self.rays.len(), 0.);
         let mut min_radius = f64::INFINITY;
         let mut path_length_at_center = 0.;
         for (i, ray) in self.rays.iter().enumerate() {
-            path_length_at_pos[(i, 0)] = ray.pos.x;
-            path_length_at_pos[(i, 1)] = ray.pos.y;
-            path_length_at_pos[(i, 2)] = ray.path_length.get::<nanometer>();
+            optical_path_length_at_pos[(i, 0)] = ray.pos.x;
+            optical_path_length_at_pos[(i, 1)] = ray.pos.y;
+            optical_path_length_at_pos[(i, 2)] = ray.path_length.get::<nanometer>();
 
             let radius = ray.pos.x.mul_add(ray.pos.x, ray.pos.y * ray.pos.y);
             if radius < min_radius {
                 min_radius = radius;
-                path_length_at_center = path_length_at_pos[(i, 2)];
+                path_length_at_center = optical_path_length_at_pos[(i, 2)];
             }
         }
 
-        for mut ray_path in path_length_at_pos.row_iter_mut() {
+        for mut ray_path in optical_path_length_at_pos.row_iter_mut() {
             ray_path[2] -= path_length_at_center;
             ray_path[2] /= wvl;
         }
 
-        path_length_at_pos
+        //the wavefront error has the negative sign of the optical path difference
+        -optical_path_length_at_pos
     }
 
     /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx3<f64>]`.
