@@ -61,6 +61,15 @@ impl PlotType {
             | Self::TriangulatedSurface(p) => p,
         }
     }
+    fn get_plot_params_mut(&mut self) -> &mut PlotParameters {
+        match self {
+            Self::ColorMesh(p)
+            | Self::Scatter2D(p)
+            | Self::Line2D(p)
+            | Self::ColorTriangulated(p)
+            | Self::TriangulatedSurface(p) => p,
+        }
+    }
     fn create_plot<B: DrawingBackend>(&self, backend: &DrawingArea<B, Shift>, plot: &Plot) {
         match self {
             Self::ColorMesh(_) => Self::plot_color_mesh(plot, backend),
@@ -69,6 +78,13 @@ impl PlotType {
             Self::Scatter2D(_) => Self::plot_2d_scatter(plot, backend),
             Self::Line2D(_) => Self::plot_2d_line(plot, backend),
         };
+    }
+
+    pub fn set_plot_param(&mut self, plt_arg: &PlotArgs) -> &mut Self {
+        let plt_params: &mut PlotParameters = self.get_plot_params_mut();
+        plt_params.set(plt_arg);
+
+        self
     }
 
     /// This method creates a plot
@@ -156,10 +172,10 @@ impl PlotType {
         y: &DVector<f64>,
         c: &DVector<f64>,
         cmap: &Gradient,
-        cbounds: (f64, f64),
+        cbounds: AxLims,
     ) {
-        let z_min = cbounds.0;
-        let z_max: f64 = cbounds.1 - z_min; //z.max();
+        let z_min = cbounds.min;
+        let z_max: f64 = cbounds.max - z_min; //z.max();
 
         let series = izip!(triangle_index.row_iter(), c).map(|(idx, c)| {
             Polygon::new(
@@ -209,7 +225,7 @@ impl PlotType {
         y_ax: &MatrixXx1<f64>,
         z_dat: &DMatrix<f64>,
         cmap: &Gradient,
-        cbounds: (f64, f64),
+        cbounds: AxLims,
     ) {
         let mut x_dist = (x_ax[1] - x_ax[0]) / 2.;
         if x_dist <= 2. * f64::EPSILON {
@@ -231,9 +247,9 @@ impl PlotType {
         //currently, clone is not implemented for matrix_iter in v0.30 which we use due to ncollide2d. Therefore, we go this way
         let a: Vec<f64> = x_ax.data.clone().into();
         let b: Vec<f64> = y_ax.data.clone().into();
-        let z_min = cbounds.0;
+        let z_min = cbounds.min;
 
-        let z_max: f64 = cbounds.1 - z_min; //z.max();
+        let z_max: f64 = cbounds.max - z_min; //z.max();
         let series = izip!(iproduct!(a, b), z_dat).map(|((x, y), z)| {
             Rectangle::new([(x - x_dist, y + y_dist), (x + x_dist, y - y_dist)], {
                 let cor = cmap.eval_continuous((z - z_min) / z_max);
@@ -247,25 +263,19 @@ impl PlotType {
 
     fn plot_2d_line<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
         if let Some(PlotData::Dim2(dat)) = &plt.data {
-            let (x_min, x_max) = if plt.bounds.x.is_none() {
+            let x_ax_lims = if plt.bounds.x.is_none() {
                 plt.define_axis_bounds(&dat.column(0), true, true)
             } else {
                 plt.bounds.x.unwrap()
             };
-            let (y_min, y_max) = if plt.bounds.x.is_none() {
+            let y_ax_lims = if plt.bounds.x.is_none() {
                 plt.define_axis_bounds(&dat.column(0), true, true)
             } else {
                 plt.bounds.x.unwrap()
             };
 
-            let mut chart = Self::create_2d_plot_chart(
-                root,
-                (x_min, x_max),
-                (y_min, y_max),
-                &plt.label,
-                true,
-                true,
-            );
+            let mut chart =
+                Self::create_2d_plot_chart(root, x_ax_lims, y_ax_lims, &plt.label, true, true);
             Self::draw_line(&mut chart, &dat.column(0), &dat.column(1), &plt.color);
         }
 
@@ -276,25 +286,19 @@ impl PlotType {
         if let Some(PlotData::Dim2(dat)) = plt.get_data() {
             _ = root.fill(&WHITE);
 
-            let (x_min, x_max) = if plt.bounds.x.is_none() {
+            let x_ax_lims = if plt.bounds.x.is_none() {
                 plt.define_axis_bounds(&dat.column(0), true, true)
             } else {
                 plt.bounds.x.unwrap()
             };
-            let (y_min, y_max) = if plt.bounds.x.is_none() {
+            let y_ax_lims = if plt.bounds.x.is_none() {
                 plt.define_axis_bounds(&dat.column(0), true, true)
             } else {
                 plt.bounds.x.unwrap()
             };
 
-            let mut chart = Self::create_2d_plot_chart(
-                root,
-                (x_min, x_max),
-                (y_min, y_max),
-                &plt.label,
-                true,
-                true,
-            );
+            let mut chart =
+                Self::create_2d_plot_chart(root, x_ax_lims, y_ax_lims, &plt.label, true, true);
 
             Self::draw_points(&mut chart, &dat.column(0), &dat.column(1), &plt.color);
         }
@@ -308,17 +312,17 @@ impl PlotType {
 
             let (main_root, cbar_root) = root.split_horizontally(830);
 
-            let (x_min, x_max) = if plt.bounds.x.is_none() {
+            let x_ax_lims = if plt.bounds.x.is_none() {
                 plt.define_axis_bounds(&DVectorSlice::from(dat.column(0)), false, false)
             } else {
                 plt.bounds.x.unwrap()
             };
-            let (y_min, y_max) = if plt.bounds.y.is_none() {
+            let y_ax_lims = if plt.bounds.y.is_none() {
                 plt.define_axis_bounds(&DVectorSlice::from(dat.column(1)), false, false)
             } else {
                 plt.bounds.y.unwrap()
             };
-            let (z_min, z_max) = if plt.bounds.z.is_none() {
+            let z_ax_lims = if plt.bounds.z.is_none() {
                 plt.define_axis_bounds(&DVectorSlice::from(dat.column(2)), false, false)
             } else {
                 plt.bounds.z.unwrap()
@@ -327,8 +331,8 @@ impl PlotType {
             //colorbar. first because otherwise the xlabel of the main plot is cropped
             let mut chart = Self::create_2d_plot_chart(
                 &cbar_root,
-                (0., 1.),
-                (z_min, z_max),
+                AxLims { min: 0., max: 1. },
+                z_ax_lims,
                 &[
                     LabelDescription::new("", plt.label[0].label_pos),
                     plt.cbar.label.clone(),
@@ -337,26 +341,25 @@ impl PlotType {
                 false,
             );
 
-            let c_dat = linspace(z_min, z_max, 100.).unwrap().transpose();
+            let c_dat = linspace(z_ax_lims.min, z_ax_lims.max, 100.)
+                .unwrap()
+                .transpose();
             let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
             let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
             Self::draw_2d_colormesh(
                 &mut chart,
                 &xxx,
-                &linspace(z_min, z_max, 100.).unwrap().transpose(),
+                &linspace(z_ax_lims.min, z_ax_lims.max, 100.)
+                    .unwrap()
+                    .transpose(),
                 &d_mat,
                 &plt.cbar.cmap,
-                (z_min, z_max),
+                z_ax_lims,
             );
 
             //main plot
             let mut chart = Self::create_2d_plot_chart(
-                &main_root,
-                (x_min, x_max),
-                (y_min, y_max),
-                &plt.label,
-                true,
-                true,
+                &main_root, x_ax_lims, y_ax_lims, &plt.label, true, true,
             );
             Self::draw_color_triangles(
                 &mut chart,
@@ -365,7 +368,7 @@ impl PlotType {
                 &DVector::from(dat.column(1)),
                 color,
                 &plt.cbar.cmap,
-                (z_min, z_max),
+                z_ax_lims,
             );
         }
     }
@@ -374,17 +377,17 @@ impl PlotType {
         if let Some(PlotData::TriangulatedSurface(triangle_index, dat)) = plt.get_data() {
             _ = root.fill(&WHITE);
 
-            let (x_min, x_max) = if plt.bounds.x.is_none() {
+            let x_ax_lims = if plt.bounds.x.is_none() {
                 plt.define_axis_bounds(&DVectorSlice::from(dat.column(0)), false, false)
             } else {
                 plt.bounds.x.unwrap()
             };
-            let (y_min, y_max) = if plt.bounds.y.is_none() {
+            let y_ax_lims = if plt.bounds.y.is_none() {
                 plt.define_axis_bounds(&DVectorSlice::from(dat.column(1)), false, false)
             } else {
                 plt.bounds.y.unwrap()
             };
-            let (z_min, z_max) = if plt.bounds.z.is_none() {
+            let z_ax_lims = if plt.bounds.z.is_none() {
                 plt.define_axis_bounds(&DVectorSlice::from(dat.column(2)), false, false)
             } else {
                 plt.bounds.z.unwrap()
@@ -392,8 +395,7 @@ impl PlotType {
 
             //main plot
             //currently there is no support for axes labels in 3d plots
-            let mut chart =
-                Self::create_3d_plot_chart(root, (x_min, x_max), (z_min, z_max), (y_min, y_max));
+            let mut chart = Self::create_3d_plot_chart(root, x_ax_lims, z_ax_lims, y_ax_lims);
 
             Self::draw_triangle_surf(
                 &mut chart,
@@ -414,17 +416,17 @@ impl PlotType {
             let flattened_size = shape.0 * shape.1;
             let dat_flat = MatrixXx1::<f64>::from_iterator(flattened_size, dat.iter().copied());
 
-            let (x_min, x_max) = if plt.bounds.x.is_none() {
+            let x_ax_lims = if plt.bounds.x.is_none() {
                 plt.define_axis_bounds(&DVectorSlice::from(x), false, false)
             } else {
                 plt.bounds.x.unwrap()
             };
-            let (y_min, y_max) = if plt.bounds.y.is_none() {
+            let y_ax_lims = if plt.bounds.y.is_none() {
                 plt.define_axis_bounds(&DVectorSlice::from(y), false, false)
             } else {
                 plt.bounds.y.unwrap()
             };
-            let (z_min, z_max) = if plt.bounds.z.is_none() {
+            let z_ax_lims = if plt.bounds.z.is_none() {
                 plt.define_axis_bounds(&DVectorSlice::from(&dat_flat), false, false)
             } else {
                 plt.bounds.z.unwrap()
@@ -433,8 +435,8 @@ impl PlotType {
             //colorbar. first because otherwise the xlabel of the main plot is cropped
             let mut chart = Self::create_2d_plot_chart(
                 &cbar_root,
-                (0., 1.),
-                (z_min, z_max),
+                AxLims { min: 0., max: 1. },
+                z_ax_lims,
                 &[
                     LabelDescription::new("", plt.label[0].label_pos),
                     plt.cbar.label.clone(),
@@ -443,29 +445,28 @@ impl PlotType {
                 false,
             );
 
-            let c_dat = linspace(z_min, z_max, 100.).unwrap().transpose();
+            let c_dat = linspace(z_ax_lims.min, z_ax_lims.max, 100.)
+                .unwrap()
+                .transpose();
             let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
             let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
             Self::draw_2d_colormesh(
                 &mut chart,
                 &xxx,
-                &linspace(z_min, z_max, 100.).unwrap().transpose(),
+                &linspace(z_ax_lims.min, z_ax_lims.max, 100.)
+                    .unwrap()
+                    .transpose(),
                 &d_mat,
                 &plt.cbar.cmap,
-                (z_min, z_max),
+                z_ax_lims,
             );
 
             //main plot
             let mut chart = Self::create_2d_plot_chart(
-                &main_root,
-                (x_min, x_max),
-                (y_min, y_max),
-                &plt.label,
-                true,
-                true,
+                &main_root, x_ax_lims, y_ax_lims, &plt.label, true, true,
             );
 
-            Self::draw_2d_colormesh(&mut chart, x, y, dat, &plt.cbar.cmap, (z_min, z_max));
+            Self::draw_2d_colormesh(&mut chart, x, y, dat, &plt.cbar.cmap, z_ax_lims);
         }
 
         root.present().unwrap();
@@ -473,9 +474,9 @@ impl PlotType {
 
     fn create_3d_plot_chart<T: DrawingBackend>(
         root: &DrawingArea<T, Shift>,
-        x_bounds: (f64, f64),
-        y_bounds: (f64, f64),
-        z_bounds: (f64, f64),
+        x_bounds: AxLims,
+        y_bounds: AxLims,
+        z_bounds: AxLims,
         // xlabel: &String,
         // ylabel: &String,
         // zlabel: &String,
@@ -489,9 +490,9 @@ impl PlotType {
             .margin(20)
             .set_all_label_area_size(100)
             .build_cartesian_3d(
-                x_bounds.0..x_bounds.1,
-                y_bounds.0..y_bounds.1,
-                z_bounds.0..z_bounds.1,
+                x_bounds.min..x_bounds.max,
+                y_bounds.min..y_bounds.max,
+                z_bounds.min..z_bounds.max,
             )
             .unwrap();
 
@@ -511,8 +512,8 @@ impl PlotType {
 
     fn create_2d_plot_chart<'a, T: DrawingBackend>(
         root: &'a DrawingArea<T, Shift>,
-        x_bounds: (f64, f64),
-        y_bounds: (f64, f64),
+        x_bounds: AxLims,
+        y_bounds: AxLims,
         label_desc: &[LabelDescription; 2],
         // x_label: &String,
         // y_label: &String,
@@ -528,10 +529,18 @@ impl PlotType {
 
         if y_ax {
             //absolutely ugly "automation" of margin. not done nicely and not accurate, works only for sans serif with 30 pt
-            let digits_max =
-                y_bounds.1.abs().log10().floor() + 2. + f64::from(y_bounds.1.is_sign_negative());
-            let digits_min =
-                y_bounds.0.abs().log10().floor() + 2. + f64::from(y_bounds.0.is_sign_negative());
+            let mut digits_max = y_bounds.max.abs().log10().abs().floor()
+                + 2.
+                + f64::from(y_bounds.max.is_sign_negative());
+            if digits_max.is_infinite(){
+                digits_max = 4.
+            }
+            let mut digits_min = y_bounds.min.abs().log10().abs().floor()
+                + 2.
+                + f64::from(y_bounds.min.is_sign_negative());
+            if digits_min.is_infinite(){
+                digits_min = 4.
+            }
             let digits = if digits_max >= digits_min {
                 digits_max.to_i32()
             } else {
@@ -551,7 +560,7 @@ impl PlotType {
         chart_builder.set_label_area_size(label_desc[0].label_pos.into(), 65);
 
         let mut chart = chart_builder
-            .build_cartesian_2d(x_bounds.0..x_bounds.1, y_bounds.0..y_bounds.1)
+            .build_cartesian_2d(x_bounds.min..x_bounds.max, y_bounds.min..y_bounds.max)
             .unwrap();
 
         let mut mesh = chart.configure_mesh();
@@ -575,46 +584,6 @@ impl PlotType {
         chart
     }
 }
-
-// impl PlotType{
-//     fn plot(
-//         &self,
-//         plt_data: &PlotData,
-//         plot_params: PlotParameters,
-//     ) -> OpmResult<()> {
-
-//         let mut plot = Plot::new(plt_data, plot_params);
-
-//         match self{
-//             PlotType::ColorMesh => {
-//                 let path = plot.fpath.clone();
-//                 let backend = BitMapBackend::new(&path, plot.img_size).into_drawing_area();
-//                 _ = self.plot_color_mesh(&mut plot, &backend);
-//                 Ok(())
-//             },
-//             PlotType::Scatter2D =>{
-//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
-//             },
-//             PlotType::Scatter3D =>{
-//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
-//             },
-//             PlotType::Line2D =>{
-//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
-//             },
-//             PlotType::Line3D =>{
-//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
-//             },
-//             PlotType::MultiLine2D =>{
-//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
-//             },
-//             PlotType::MultiLine3D =>{
-//                 Err(OpossumError::Other("plot() not yet defined for plottype::Scatter2D!".into()))
-//             },
-
-//             _ => Err(OpossumError::Other("Plottype notdefined yet!".into()))
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone)]
 ///Enum to define the type of plot that should be created
@@ -645,7 +614,7 @@ impl PlotData {
     /// If min and max are approximately equal, the range ist set to the maximum value and the minimum value is set to 0
     /// if the maximum is zero AND approximately equal to the minimum, then it is set to 1 and the minimum to zero to avoid awkward ax scalings
     #[must_use]
-    pub fn get_min_max_range(&self, ax_vals: &DVectorSlice<'_, f64>) -> (f64, f64, f64) {
+    pub fn define_min_max_range(&self, ax_vals: &DVectorSlice<'_, f64>) -> AxLims {
         let mut max_val = ax_vals.max();
         let mut min_val = ax_vals.min();
         let mut ax_range = max_val - min_val;
@@ -660,25 +629,52 @@ impl PlotData {
         if ax_range < f64::EPSILON {
             max_val = 1.;
             min_val = 0.;
-            ax_range = 1.;
         };
 
-        (ax_range, min_val, max_val)
+        AxLims {
+            min: min_val,
+            max: max_val,
+        }
     }
 
-    pub fn get_axes_min_max_ranges(&self) -> OpmResult<Vec<(f64, f64, f64)>> {
+    pub fn get_min_max_data_values(&self, ax_vals: &DVectorSlice<'_, f64>) -> AxLims {
+        let mut max_val = ax_vals.max();
+        let mut min_val = ax_vals.min();
+        AxLims {
+            min: min_val,
+            max: max_val,
+        }
+    }
+
+    pub fn get_axes_min_max_ranges(&self) -> OpmResult<Vec<AxLims>> {
         match self {
-            PlotData::Dim2(dat) => Ok(vec![self.get_min_max_range(&dat.column(0)), self.get_min_max_range(&dat.column(1))]),
-            PlotData::Dim3(dat) | PlotData::ColorTriangulated(_,_,dat) | PlotData::TriangulatedSurface(_,dat) => Ok(vec![self.get_min_max_range(&dat.column(0)), self.get_min_max_range(&dat.column(1)), self.get_min_max_range(&dat.column(2))]),
-            PlotData::ColorMesh(x,y,z) => {
-                let z_flat = z.into_iter().cloned().map(|z| z).collect::<Vec<f64>>();
-                let test = DVectorSlice::from_iterator(z_flat);
-                // let test = z.res
-                Ok(vec![self.get_min_max_range(&DVectorSlice::from(x)), self.get_min_max_range(&DVectorSlice::from(y)), self.get_min_max_range(&DVectorSlice::from_vec(z_flat))])
-        }}
+            PlotData::Dim2(dat) => Ok(vec![
+                self.get_min_max_data_values(&dat.column(0)),
+                self.get_min_max_data_values(&dat.column(1)),
+            ]),
+            PlotData::Dim3(dat)
+            | PlotData::ColorTriangulated(_, _, dat)
+            | PlotData::TriangulatedSurface(_, dat) => Ok(vec![
+                self.get_min_max_data_values(&dat.column(0)),
+                self.get_min_max_data_values(&dat.column(1)),
+                self.get_min_max_data_values(&dat.column(2)),
+            ]),
+            PlotData::ColorMesh(x, y, z) => {
+                let z_flat =
+                    DVector::from_vec(z.into_iter().cloned().map(|z| z).collect::<Vec<f64>>());
+                Ok(vec![
+                    self.get_min_max_data_values(&DVectorSlice::from(x)),
+                    self.get_min_max_data_values(&DVectorSlice::from(y)),
+                    self.get_min_max_data_values(&z_flat.column(0)),
+                ])
+            }
+        }
     }
-
-
+}
+#[derive(Clone, Debug, Copy)]
+pub struct AxLims {
+    pub min: f64,
+    pub max: f64,
 }
 
 /// Trait for adding the possibility to generate a (x/y) plot of an element.
@@ -747,8 +743,8 @@ pub trait Plottable {
     /// This method returns [`Option<PlotData>`]. It is None if the [`PlotData`] Variant is not Dim3
     fn bin_2d_scatter_data(&self, plt_dat: &PlotData) -> Option<PlotData> {
         if let PlotData::Dim3(dat) = plt_dat {
-            let (x_range, x_min, x_max) = plt_dat.get_min_max_range(&dat.column(0));
-            let (y_range, y_min, y_max) = plt_dat.get_min_max_range(&dat.column(1));
+            let x_ax_lims = plt_dat.define_min_max_range(&dat.column(0));
+            let y_ax_lims = plt_dat.define_min_max_range(&dat.column(1));
 
             let num_entries = dat.column(0).len();
             let mut num = f64::sqrt((num_entries / 2).to_f64().unwrap()).floor();
@@ -757,11 +753,11 @@ pub trait Plottable {
                 num += 1.;
             }
 
-            let xbin = x_range / (num - 1.0);
-            let ybin = y_range / (num - 1.0);
+            let xbin = (x_ax_lims.max - x_ax_lims.min) / (num - 1.0);
+            let ybin = (y_ax_lims.max - y_ax_lims.min) / (num - 1.0);
 
-            let x = linspace(x_min - xbin / 2., x_max + xbin / 2., num).unwrap();
-            let y = linspace(y_min - ybin / 2., y_max + ybin / 2., num).unwrap();
+            let x = linspace(x_ax_lims.min - xbin / 2., x_ax_lims.max + xbin / 2., num).unwrap();
+            let y = linspace(y_ax_lims.min - ybin / 2., y_ax_lims.max + ybin / 2., num).unwrap();
 
             let xbin = x[1] - x[0];
             let ybin = y[1] - y[0];
@@ -773,8 +769,8 @@ pub trait Plottable {
             let mut zz_counter = DMatrix::<f64>::zeros(x.len(), y.len()); //xx.clone() * 0.;
 
             for row in dat.row_iter() {
-                let x_index = ((row[(0, 0)] - x_min + xbin / 2.) / xbin).to_usize();
-                let y_index = ((row[(0, 1)] - y_min + ybin / 2.) / ybin).to_usize();
+                let x_index = ((row[(0, 0)] - x_ax_lims.min + xbin / 2.) / xbin).to_usize();
+                let y_index = ((row[(0, 1)] - y_ax_lims.min + ybin / 2.) / ybin).to_usize();
                 if x_index.is_some() && y_index.is_some() {
                     let x_index = x_index.unwrap();
                     let y_index = y_index.unwrap();
@@ -791,6 +787,24 @@ pub trait Plottable {
             Some(PlotData::ColorMesh(x.transpose(), y.transpose(), zz))
         } else {
             None
+        }
+    }
+
+    fn bin_or_triangulate_data(
+        &self,
+        plt_type: &PlotType,
+        plt_data: &PlotData,
+    ) -> OpmResult<Option<PlotData>> {
+        match plt_type {
+            PlotType::ColorMesh(_) => {
+                let binned_data = self.bin_2d_scatter_data(plt_data);
+                Ok(binned_data)
+            }
+            PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {
+                let triangulated_dat = self.triangulate_plot_data(plt_data, plt_type);
+                Ok(triangulated_dat)
+            }
+            _ => Ok(None),
         }
     }
 
@@ -1123,9 +1137,9 @@ impl Default for ColorBar {
 /// The values may also be None. Then, reasonable boundaries are chosen automatically
 #[derive(Clone)]
 pub struct PlotBounds {
-    x: Option<(f64, f64)>,
-    y: Option<(f64, f64)>,
-    z: Option<(f64, f64)>,
+    x: Option<AxLims>,
+    y: Option<AxLims>,
+    z: Option<AxLims>,
 }
 
 /// Holds all necessary plot parameters in a Hashmap that contains a String-key and an [`PlotArgs`] argument.
@@ -1384,10 +1398,10 @@ impl PlotParameters {
 
     ///This method gets the x limit which is stored in the [`PlotParameters`]
     /// # Returns
-    /// This method returns an [`OpmResult<Option<(f64, f64)>>`] with the min and max of the x values as f64
+    /// This method returns an [`OpmResult<Option<AxLims>>`] with the min and max of the x values as f64
     /// # Errors
     /// This method throws an error if the argument is not found
-    pub fn get_xlim(&self) -> OpmResult<Option<(f64, f64)>> {
+    pub fn get_xlim(&self) -> OpmResult<Option<AxLims>> {
         if let Some(PlotArgs::XLim(xlim)) = self.params.get("xlim") {
             Ok(*xlim)
         } else {
@@ -1397,10 +1411,10 @@ impl PlotParameters {
 
     ///This method gets the y limit which is stored in the [`PlotParameters`]
     /// # Returns
-    /// This method returns an [`OpmResult<Option<(f64, f64)>>`] with the min and max of the y values as f64
+    /// This method returns an [`OpmResult<Option<AxLims>>`] with the min and max of the y values as f64
     /// # Errors
     /// This method throws an error if the argument is not found
-    pub fn get_ylim(&self) -> OpmResult<Option<(f64, f64)>> {
+    pub fn get_ylim(&self) -> OpmResult<Option<AxLims>> {
         if let Some(PlotArgs::YLim(ylim)) = self.params.get("ylim") {
             Ok(*ylim)
         } else {
@@ -1410,10 +1424,10 @@ impl PlotParameters {
 
     ///This method gets the z limit which is stored in the [`PlotParameters`]
     /// # Returns
-    /// This method returns an [`OpmResult<Option<(f64, f64)>>`] with the min and max of the z values as f64
+    /// This method returns an [`OpmResult<Option<AxLims>>`] with the min and max of the z values as f64
     /// # Errors
     /// This method throws an error if the argument is not found
-    pub fn get_zlim(&self) -> OpmResult<Option<(f64, f64)>> {
+    pub fn get_zlim(&self) -> OpmResult<Option<AxLims>> {
         if let Some(PlotArgs::ZLim(zlim)) = self.params.get("zlim") {
             Ok(*zlim)
         } else {
@@ -1649,7 +1663,7 @@ impl Plot {
         x: &DVectorSlice<'_, f64>,
         expand_min: bool,
         expand_max: bool,
-    ) -> (f64, f64) {
+    ) -> AxLims {
         //filter out every infinite value and every NaN
         let x_filtered = MatrixXx1::from(
             x.iter()
@@ -1659,14 +1673,14 @@ impl Plot {
         );
 
         //this only happens if all entries in this matrix are either infinite or NAN
-        let (x_range, x_min, x_max) = if x_filtered.is_empty() {
-            (1., 0., 1.)
+        let x_ax_lims = if x_filtered.is_empty() {
+            AxLims { min: 0., max: 1. }
         } else {
             //get the maximum and minimum of the axis
             self.data
                 .as_ref()
                 .expect("No PlotData available!")
-                .get_min_max_range(&DVectorSlice::from(&x_filtered))
+                .define_min_max_range(&DVectorSlice::from(&x_filtered))
             // self.data.unwrap().get_min_max_range(&DVectorSlice::from(&x_filtered));
         };
 
@@ -1675,10 +1689,15 @@ impl Plot {
         let expand_min_fac = f64::from(i32::from(expand_min));
         let expand_max_fac = f64::from(i32::from(expand_max));
 
-        let range_start = (x_range * add_range_fac).mul_add(-expand_min_fac, x_min);
-        let range_end = (x_range * add_range_fac).mul_add(expand_max_fac, x_max);
+        let range_start = ((x_ax_lims.max - x_ax_lims.min) * add_range_fac)
+            .mul_add(-expand_min_fac, x_ax_lims.min);
+        let range_end = ((x_ax_lims.max - x_ax_lims.min) * add_range_fac)
+            .mul_add(expand_max_fac, x_ax_lims.max);
 
-        (range_start, range_end)
+        AxLims {
+            min: range_start,
+            max: range_end,
+        }
     }
 }
 
@@ -1743,12 +1762,12 @@ pub enum PlotArgs {
     CBarLabel(String),
     ///Position of the colorbar label. Holds a [`LabelPos`] enum
     CBarLabelPos(LabelPos),
-    ///Boundaries of the x axis. If not defined, the inserted plot data will be used to get a reasonable boundary. Holds an [`Option<(f64, f64)>`]
-    XLim(Option<(f64, f64)>),
-    ///Boundaries of the y axis. If not defined, the inserted plot data will be used to get a reasonable boundary. Holds an [`Option<(f64, f64)>`]
-    YLim(Option<(f64, f64)>),
-    ///Boundaries of the z axis. If not defined, the inserted plot data will be used to get a reasonable boundary. Holds an [`Option<(f64, f64)>`]
-    ZLim(Option<(f64, f64)>),
+    ///Boundaries of the x axis. If not defined, the inserted plot data will be used to get a reasonable boundary. Holds an [`Option<AxLims>`]
+    XLim(Option<AxLims>),
+    ///Boundaries of the y axis. If not defined, the inserted plot data will be used to get a reasonable boundary. Holds an [`Option<AxLims>`]
+    YLim(Option<AxLims>),
+    ///Boundaries of the z axis. If not defined, the inserted plot data will be used to get a reasonable boundary. Holds an [`Option<AxLims>`]
+    ZLim(Option<AxLims>),
     ///Figure size in pixels. Holds an `(usize, usize)` tuple
     FigSize((u32, u32)),
     ///Path to the save directory of the image. Only necessary if the data is not written into a buffer. Holds a String

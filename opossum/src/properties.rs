@@ -478,8 +478,6 @@ pub enum Proptype {
     SpotDiagram(SpotDiagram),
     /// This property stores the wavefront Information [`WaveFrontData`]
     WaveFrontStats(WaveFrontData),
-    /// This property stores the wavefront detector node
-    WaveFrontDiagram(WaveFront),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
     /// a geometrical length
@@ -550,7 +548,6 @@ impl PdfReportable for Proptype {
             Self::Metertype(value) => l.push(value.pdf_report()?),
             Self::Spectrometer(value) => l.push(value.pdf_report()?),
             Self::SpotDiagram(value) => l.push(value.pdf_report()?),
-            Self::WaveFrontDiagram(value) => l.push(value.pdf_report()?),
             Self::WaveFrontStats(value) => l.push(value.pdf_report()?),
             Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
             Self::Length(value) => l.push(genpdf::elements::Paragraph::new(format_quantity(

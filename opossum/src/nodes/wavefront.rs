@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 use image::{DynamicImage, ImageBuffer, RgbImage};
-use nalgebra::{DVector, MatrixXx3, Point3};
+use nalgebra::{DMatrix, DVector, MatrixXx3, Point3};
+use num::complex::ComplexFloat;
 use serde_derive::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::nanometer;
@@ -8,7 +9,9 @@ use uom::si::length::nanometer;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
+use crate::plottable::{
+    AxLims, PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd,
+};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
 use crate::{
@@ -64,12 +67,12 @@ pub struct WaveFrontData {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WaveFrontError {
+    wavelength: Length,
+    ptv: f64,
+    rms: f64,
     x: Vec<f64>,
     y: Vec<f64>,
     err_in_wvl: Vec<f64>,
-    ptv: f64,
-    rms: f64,
-    wavelength: Length,
 }
 
 impl WaveFrontError {
@@ -204,50 +207,12 @@ impl Optical for WaveFront {
                 props
                 .create(
                     "Wavefront Data",
-                    "Wavefront error, rms and ptv with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
+                    "Wavefront error in λ, rms in mλ and ptv in mλ with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                     None,
                     wf_data.clone().into(),
                 )
                 .unwrap();
-                props
-                    .create(
-                        "Wavefront Diagram",
-                        "Wavelength Specific Wavefront Diagram",
-                        None,
-                        self.clone().into(),
-                    )
-                    .unwrap();
             }
-            // props
-            //     .create(
-            //         "Wavefront Data",
-            //         "Wavefront error with respect to the chief ray (closest ray to the optical axis)",
-            //         None,
-            //         self.clone().into(),
-            //     )
-            //     .unwrap();
-            // if !wf_error_data.is_empty() {
-            //     let (rms, ptv) = Self::calc_wavefront_statistics(&DVector::from_column_slice(
-            //         wf_error_data.column(2).as_slice(),
-            //     ))
-            //     .unwrap();
-            //     props
-            //         .create(
-            //             "Wavefront rms in mλ",
-            //             "Wavefront root mean square in units of the wavelength",
-            //             None,
-            //             format!("{rms:.2}").into(),
-            //         )
-            //         .unwrap();
-            //     props
-            //         .create(
-            //             "Wavefront ptv in mλ",
-            //             "Wavefront peak to valley in units of the wavelength",
-            //             None,
-            //             format!("{ptv:.2}").into(),
-            //         )
-            //         .unwrap();
-            // }
 
             Some(NodeReport::new(
                 self.properties().node_type().unwrap(),
@@ -260,10 +225,21 @@ impl Optical for WaveFront {
     }
 }
 
-impl PdfReportable for WaveFront {
+impl PdfReportable for WaveFrontData {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        // genpdf::elements::Paragraph::new(value.to_string())
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), (1000, 850), PltBackEnd::Buf)?;
+
+        layout.push(genpdf::elements::Paragraph::new(format!(
+            "ptv: {:.1} mλ",
+            self.wavefront_error[0].ptv
+        )));
+        layout.push(genpdf::elements::Paragraph::new(format!(
+            "rms: {:.1} mλ",
+            self.wavefront_error[0].rms
+        )));
+        //todo! for all wavefronts!
+        let img = self.wavefront_error[0].to_plot(Path::new(""), (1000, 850), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),
@@ -274,32 +250,9 @@ impl PdfReportable for WaveFront {
     }
 }
 
-impl PdfReportable for WaveFrontData {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        // genpdf::elements::Paragraph::new(value.to_string())
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-
-        layout.push(genpdf::elements::Paragraph::new(format!(
-            "ptv: {} mλ",
-            self.wavefront_error[0].ptv.to_string()
-        )));
-        layout.push(genpdf::elements::Paragraph::new(format!(
-            "rms: {} mλ",
-            self.wavefront_error[0].rms.to_string()
-        )));
-        Ok(layout)
-    }
-}
-
 impl From<WaveFrontData> for Proptype {
     fn from(value: WaveFrontData) -> Self {
         Self::WaveFrontStats(value)
-    }
-}
-
-impl From<WaveFront> for Proptype {
-    fn from(value: WaveFront) -> Self {
-        Self::WaveFrontDiagram(value)
     }
 }
 
@@ -334,8 +287,77 @@ impl Plottable for WaveFront {
         plt_params.set(&PlotArgs::YLabel("y distance in mm".into()));
         plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()));
 
-        let (plt_data_opt, plt_type) = if let Some(LightData::Geometric(rays)) = &self.light_data {
-            if rays.nr_of_rays() > 10000 {
+        let (mut plt_data_opt, mut plt_type) =
+            if let Some(LightData::Geometric(rays)) = &self.light_data {
+                if rays.nr_of_rays() > 10000 {
+                    let plt_type = PlotType::ColorMesh(plt_params);
+                    (self.get_plot_data(&plt_type)?, plt_type)
+                } else {
+                    let plt_type = PlotType::ColorTriangulated(plt_params);
+                    // let plt_type = PlotType::TriangulatedSurface(plt_params);
+                    (self.get_plot_data(&plt_type)?, plt_type)
+                }
+            } else {
+                (None, PlotType::ColorMesh(plt_params))
+            };
+
+        if let Some(plt_data) = &mut plt_data_opt {
+            let ranges = plt_data.get_axes_min_max_ranges()?;
+            if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
+                _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
+                    min: -1e-3,
+                    max: 1e-3,
+                })));
+            }
+        }
+
+        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+    }
+
+    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+        let data = &self.light_data;
+        match data {
+            Some(LightData::Geometric(rays)) => {
+                let plt_data =
+                    PlotData::Dim3(rays.wavefront_error_at_pos_in_units_of_wvl(Length::new::<
+                        nanometer,
+                    >(
+                        1053.
+                    )));
+                self.bin_or_triangulate_data(plt_type, &plt_data)
+            }
+            _ => Ok(None),
+        }
+    }
+}
+
+impl Plottable for WaveFrontError {
+    fn to_plot(
+        &self,
+        f_path: &Path,
+        img_size: (u32, u32),
+        backend: PltBackEnd,
+    ) -> OpmResult<Option<RgbImage>> {
+        let mut plt_params = PlotParameters::default();
+        match backend {
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size)),
+            _ => plt_params
+                .set(&PlotArgs::FName(
+                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
+                ))
+                .set(&PlotArgs::FDir(
+                    f_path.parent().unwrap().to_str().unwrap().to_owned(),
+                ))
+                .set(&PlotArgs::FigSize(img_size)),
+        };
+        plt_params.set(&PlotArgs::Backend(backend));
+
+        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()));
+        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()));
+        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()));
+
+        let (mut plt_data_opt, mut plt_type) = if self.x.len() > 0 {
+            if self.x.len() > 10000 {
                 let plt_type = PlotType::ColorMesh(plt_params);
                 (self.get_plot_data(&plt_type)?, plt_type)
             } else {
@@ -347,30 +369,25 @@ impl Plottable for WaveFront {
             (None, PlotType::ColorMesh(plt_params))
         };
 
+        if let Some(plt_data) = &mut plt_data_opt {
+            let ranges = plt_data.get_axes_min_max_ranges()?;
+            if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
+                _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
+                    min: -1e-3,
+                    max: 1e-3,
+                })));
+            }
+        }
+
         plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
     }
 
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
-        let data = &self.light_data;
-        match data {
-            Some(LightData::Geometric(rays)) => {
-                let wavefront_error =
-                    rays.wavefront_error_at_pos_in_units_of_wvl(Length::new::<nanometer>(1053.));
-                match plt_type {
-                    PlotType::ColorMesh(_) => {
-                        let binned_data =
-                            self.bin_2d_scatter_data(&PlotData::Dim3(wavefront_error));
-                        Ok(binned_data)
-                    }
-                    PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {
-                        let triangulated_dat =
-                            self.triangulate_plot_data(&PlotData::Dim3(wavefront_error), plt_type);
-                        Ok(triangulated_dat)
-                    }
-                    _ => Ok(None),
-                }
-            }
-            _ => Ok(None),
-        }
+        let plt_data = PlotData::Dim3(MatrixXx3::from_columns(&[
+            DVector::from_vec(self.x.clone()),
+            DVector::from_vec(self.y.clone()),
+            DVector::from_vec(self.err_in_wvl.clone()),
+        ]));
+        self.bin_or_triangulate_data(plt_type, &plt_data)
     }
 }
