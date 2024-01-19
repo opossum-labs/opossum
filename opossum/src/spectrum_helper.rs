@@ -70,6 +70,44 @@ pub fn create_nd_glass_spec(energy: f64) -> OpmResult<Spectrum> {
     Ok(s)
 }
 
+pub enum FilterType {
+    ShortPassStep(Length),
+    ShortPassSmooth(Length, Length),
+    LongPassStep(Length),
+    LongPassSmooth(Length, Length),
+}
+pub fn generate_filter_spectrum(
+    range: Range<Length>,
+    resolution: Length,
+    filter_type: FilterType,
+) -> OpmResult<Spectrum> {
+    let mut s = Spectrum::new(range, resolution)?;
+    match filter_type {
+        FilterType::ShortPassStep(cut_off) => {
+            let mut cut_off_in_um = cut_off.get::<micrometer>();
+            s.map_mut(|(lambda, _)| {
+                if lambda < &mut cut_off_in_um {
+                    (*lambda, 1.0)
+                } else {
+                    (*lambda, 0.0)
+                }
+            });
+        }
+        FilterType::ShortPassSmooth(cut_off, width) => todo!(),
+        FilterType::LongPassStep(cut_off) => {
+            let mut cut_off_in_um = cut_off.get::<micrometer>();
+            s.map_mut(|(lambda, _)| {
+                if lambda > &mut cut_off_in_um {
+                    (*lambda, 1.0)
+                } else {
+                    (*lambda, 0.0)
+                }
+            });
+        }
+        FilterType::LongPassSmooth(cut_off, width) => todo!(),
+    }
+    Ok(s)
+}
 /// Generate a spectrum of an ideal short-pass filter.
 ///
 /// This helper generates a transmission spectrum with the given range and resolution representing a short-pass filter.
