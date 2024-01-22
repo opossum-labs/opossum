@@ -2,7 +2,7 @@ use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, Detector, Dummy, NodeReference, Source},
-    spectrum::create_he_ne_spec,
+    spectrum_helper::create_he_ne_spec,
     OpticScenery,
 };
 use std::path::Path;

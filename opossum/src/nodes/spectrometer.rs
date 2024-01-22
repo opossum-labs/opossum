@@ -331,7 +331,7 @@ mod test {
         analyzer::AnalyzerType,
         lightdata::DataEnergy,
         rays::{DistributionStrategy, Rays},
-        spectrum::{create_he_ne_spec, create_visible_spec},
+        spectrum_helper::{create_he_ne_spec, create_visible_spec},
     };
     use uom::{
         num_traits::Zero,

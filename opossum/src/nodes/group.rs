@@ -782,7 +782,7 @@ mod test {
         lightdata::DataEnergy,
         nodes::{BeamSplitter, Detector, Dummy, Source},
         optical::Optical,
-        spectrum::create_he_ne_spec,
+        spectrum_helper::create_he_ne_spec,
     };
     #[test]
     fn default() {

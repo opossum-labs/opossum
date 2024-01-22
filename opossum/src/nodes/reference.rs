@@ -137,7 +137,7 @@ mod test {
     use crate::{
         lightdata::{DataEnergy, LightData},
         nodes::{Dummy, Source},
-        spectrum::create_he_ne_spec,
+        spectrum_helper::create_he_ne_spec,
         OpticScenery,
     };
     #[test]

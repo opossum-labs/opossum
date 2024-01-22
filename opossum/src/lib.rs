@@ -26,6 +26,7 @@ pub mod optical;
 pub mod plottable;
 pub mod properties;
 pub mod spectrum;
+pub mod spectrum_helper;
 use chrono::DateTime;
 pub use optic_scenery::OpticScenery;
 pub mod console;

@@ -107,8 +107,9 @@ impl From<Option<LightData>> for Proptype {
 }
 #[cfg(test)]
 mod test {
+    use crate::spectrum_helper::create_visible_spec;
+
     use super::*;
-    use crate::spectrum::create_visible_spec;
     use assert_matches::assert_matches;
     #[test]
     fn display_unknown() {

@@ -107,7 +107,9 @@ impl Dottable for Detector {
 }
 #[cfg(test)]
 mod test {
-    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spec};
+    use crate::{
+        analyzer::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
+    };
 
     use super::*;
     #[test]

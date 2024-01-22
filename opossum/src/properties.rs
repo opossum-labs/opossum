@@ -455,15 +455,15 @@ pub enum Proptype {
     Bool(bool),
     /// An optional [`LightData`] property
     LightData(Option<LightData>),
-    /// A property for storing a complete `OpticGraph` to be used by (`OpticScenery`)[crate::OpticScenery].
+    /// A property for storing a complete `OpticGraph` to be used by [`OpticScenery`](crate::OpticScenery).
     OpticGraph(OpticGraph),
-    /// Property for storing a [`FilterType`] of an (`IdealFilter`)[crate::nodes::IdealFilter] node.
+    /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterType(FilterType),
-    /// Property for storing a [`SpectrometerType`] of a (`Sepctrometer`)[crate::nodes::Spectrometer] node.
+    /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
-    /// Property for storing a [`Metertype`] of an (`Energymeter`)[crate::nodes::EnergyMeter] node.
+    /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.
     Metertype(Metertype),
-    /// Property for storing the external port mapping ([`PortMap`]) of a (`Group`)[crate::nodes::NodeGroup] node.
+    /// Property for storing the external port mapping ([`PortMap`]) of a [`Group`](crate::nodes::NodeGroup) node.
     GroupPortMap(PortMap),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
@@ -471,11 +471,11 @@ pub enum Proptype {
     OpticPorts(OpticPorts),
     /// A property for storing an optical [`Aperture`]
     Aperture(Aperture),
-    /// This property stores a [`Spectrum`]
+    /// This property stores a [`Spectrum`](crate::spectrum::Spectrum)
     Spectrometer(Spectrometer),
-    /// This property stores optical [`Rays`]
+    /// This property stores optical [`Rays`](crate::rays::Rays)
     SpotDiagram(SpotDiagram),
-    /// This property stores optical [`Rays`]
+    /// This property stores optical [`Rays`](crate::rays::Rays)
     WaveFront(WaveFront),
     /// A (nested set) of Properties
     NodeReport(NodeReport),

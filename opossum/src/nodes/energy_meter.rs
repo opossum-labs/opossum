@@ -201,7 +201,9 @@ impl Dottable for EnergyMeter {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{analyzer::AnalyzerType, lightdata::DataEnergy, spectrum::create_he_ne_spec};
+    use crate::{
+        analyzer::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
+    };
     #[test]
     fn default() {
         let node = EnergyMeter::default();

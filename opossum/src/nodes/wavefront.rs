@@ -71,7 +71,7 @@ impl WaveFront {
                     .sum::<f64>()
                     / f64::from(i32::try_from(path_length_lambda.len()).unwrap()),
             );
-            Ok((rms*1000., ptv*1000.))
+            Ok((rms * 1000., ptv * 1000.))
         }
     }
 }
@@ -267,7 +267,8 @@ impl Plottable for WaveFront {
                 let wavefront_error = rays.wavefront_error_in_lambda_at_wvl(1053.);
                 match plt_type {
                     PlotType::ColorMesh(_) => {
-                        let binned_data = self.bin_2d_scatter_data(&PlotData::Dim3(wavefront_error));
+                        let binned_data =
+                            self.bin_2d_scatter_data(&PlotData::Dim3(wavefront_error));
                         Ok(binned_data)
                     }
                     PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {

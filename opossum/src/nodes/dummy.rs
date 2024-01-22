@@ -94,7 +94,7 @@ mod test {
     use crate::{
         aperture::Aperture,
         lightdata::{DataEnergy, LightData},
-        spectrum::create_he_ne_spec,
+        spectrum_helper::create_he_ne_spec,
     };
     #[test]
     fn default() {

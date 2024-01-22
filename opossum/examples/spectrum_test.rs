@@ -1,5 +1,5 @@
-use opossum::error::OpmResult;
-use opossum::spectrum::{create_visible_spec, Spectrum};
+use opossum::spectrum::Spectrum;
+use opossum::{error::OpmResult, spectrum_helper::create_visible_spec};
 use uom::si::{f64::Length, length::nanometer};
 
 fn main() -> OpmResult<()> {

@@ -1,7 +1,7 @@
 use opossum::error::OpmResult;
 use opossum::lightdata::{DataEnergy, LightData};
 use opossum::nodes::{EnergyMeter, RealLens, Source};
-use opossum::spectrum::create_he_ne_spec;
+use opossum::spectrum_helper::create_he_ne_spec;
 use opossum::OpticScenery;
 use std::path::Path;
 
