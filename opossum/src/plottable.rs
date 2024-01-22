@@ -75,7 +75,7 @@ impl PlotType {
     /// # Attributes
     /// - `plt_data`: plot data. See [`PlotData`]
     /// # Returns
-    /// This mehotd returns an [`OpmResult<Option<RgbImage>>`]. It is None if a new file (such as svg, png, bmp or jpg) is created. It is Some(RgbImage) if the image is written to a buffer
+    /// This method returns an [`OpmResult<Option<RgbImage>>`]. It is None if a new file (such as svg, png, bmp or jpg) is created. It is Some(RgbImage) if the image is written to a buffer
     /// # Errors
     /// This method throws an error if
     /// - some plot parameters contradict each other
