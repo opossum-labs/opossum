@@ -1,7 +1,6 @@
 #![warn(missing_docs)]
 use image::{DynamicImage, ImageBuffer, RgbImage};
-use nalgebra::{DMatrix, DVector, MatrixXx3, Point3};
-use num::complex::ComplexFloat;
+use nalgebra::{DVector, MatrixXx3};
 use serde_derive::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::nanometer;
@@ -60,22 +59,41 @@ impl WaveFront {
     }
 }
 
+/// This [`WaveFrontData`] struct holds a vector of wavefront-error maps.
+/// The vector of [`WaveFrontErrorMap`] is necessary, e.g., to store the wavefront data for each spectral component of a pulse
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WaveFrontData {
-    pub wavefront_error: Vec<WaveFrontError>,
+    pub wavefront_error_maps: Vec<WaveFrontErrorMap>,
 }
 
+/// This [`WaveFrontErrorMap`] struct holds the necessary data to describe the wavefront as well as some statistical values:
+/// - `wavelength`: the wavelength that was used to calculate this wavefront map in units of a specific wavelength
+/// - `ptv`: the peak-to-valley value of the wavefront map in units of milli-lambda
+/// - `rms`: the root-mean-square value of the wavefront map in units of milli-lambda
+/// - `x`: the x axis of the wavefront map
+/// - `y`: the y axis of the wavefront map
+/// - `wf_map`: the wavefront map
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct WaveFrontError {
+pub struct WaveFrontErrorMap {
     wavelength: Length,
     ptv: f64,
     rms: f64,
     x: Vec<f64>,
     y: Vec<f64>,
-    err_in_wvl: Vec<f64>,
+    wf_map: Vec<f64>,
 }
 
-impl WaveFrontError {
+impl WaveFrontErrorMap {
+    /// Creates a new [`WaveFrontErrorMap`]
+    /// # Attributes
+    /// - `wf_dat`: wavefront data as Matrix with 3 columns and dynamix number of rows. Columns are used as 1:x, 2:y, 3:z
+    /// - `wavelength`: wave length that is used for this WavefrontErrorMap
+    ///
+    /// # Returns
+    /// This method returns a [`WaveFrontErrorMap`] struct
+    ///
+    /// # Errors
+    /// This method will return an error if the wavefront data is empty or if `calc_wavefront_statistics()` fails.
     pub fn new(wf_dat: &MatrixXx3<f64>, wavelength: Length) -> OpmResult<Self> {
         if wf_dat.is_empty() {
             Err(OpossumError::Other("Empty wavefront-data vector!".into()))
@@ -83,26 +101,25 @@ impl WaveFrontError {
             let len_wf_dat = wf_dat.len();
             let mut x = Vec::<f64>::with_capacity(len_wf_dat);
             let mut y = Vec::<f64>::with_capacity(len_wf_dat);
-            let mut err_in_wvl = Vec::<f64>::with_capacity(len_wf_dat);
+            let mut wf_map = Vec::<f64>::with_capacity(len_wf_dat);
             for row in wf_dat.row_iter() {
                 x.push(row[0]);
                 y.push(row[1]);
-                err_in_wvl.push(row[2]);
+                wf_map.push(row[2]);
             }
-            let (ptv, rms) =
-                Self::calc_wavefront_statistics(DVector::from_vec(err_in_wvl.clone())).unwrap();
+            let (ptv, rms) = Self::calc_wavefront_statistics(&DVector::from_vec(wf_map.clone()))?;
             Ok(Self {
-                x,
-                y,
-                err_in_wvl,
+                wavelength,
                 ptv,
                 rms,
-                wavelength,
+                x,
+                y,
+                wf_map,
             })
         }
     }
 
-    fn calc_wavefront_statistics(wf_dat: DVector<f64>) -> OpmResult<(f64, f64)> {
+    fn calc_wavefront_statistics(wf_dat: &DVector<f64>) -> OpmResult<(f64, f64)> {
         if wf_dat.is_empty() {
             Err(OpossumError::Other("Empty wavefront-data vector!".into()))
         } else {
@@ -209,7 +226,7 @@ impl Optical for WaveFront {
                     "Wavefront Data",
                     "Wavefront error in λ, rms in mλ and ptv in mλ with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                     None,
-                    wf_data.clone().into(),
+                    wf_data.into(),
                 )
                 .unwrap();
             }
@@ -232,14 +249,14 @@ impl PdfReportable for WaveFrontData {
 
         layout.push(genpdf::elements::Paragraph::new(format!(
             "ptv: {:.1} mλ",
-            self.wavefront_error[0].ptv
+            self.wavefront_error_maps[0].ptv
         )));
         layout.push(genpdf::elements::Paragraph::new(format!(
             "rms: {:.1} mλ",
-            self.wavefront_error[0].rms
+            self.wavefront_error_maps[0].rms
         )));
         //todo! for all wavefronts!
-        let img = self.wavefront_error[0].to_plot(Path::new(""), (1000, 850), PltBackEnd::Buf)?;
+        let img = self.wavefront_error_maps[0].to_plot(Path::new(""), (1000, 850), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),
@@ -324,14 +341,14 @@ impl Plottable for WaveFront {
                     >(
                         1053.
                     )));
-                self.bin_or_triangulate_data(plt_type, &plt_data)
+                Ok(self.bin_or_triangulate_data(plt_type, &plt_data))
             }
             _ => Ok(None),
         }
     }
 }
 
-impl Plottable for WaveFrontError {
+impl Plottable for WaveFrontErrorMap {
     fn to_plot(
         &self,
         f_path: &Path,
@@ -356,17 +373,15 @@ impl Plottable for WaveFrontError {
         plt_params.set(&PlotArgs::YLabel("y distance in mm".into()));
         plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()));
 
-        let (mut plt_data_opt, mut plt_type) = if self.x.len() > 0 {
-            if self.x.len() > 10000 {
-                let plt_type = PlotType::ColorMesh(plt_params);
-                (self.get_plot_data(&plt_type)?, plt_type)
-            } else {
-                let plt_type = PlotType::ColorTriangulated(plt_params);
-                // let plt_type = PlotType::TriangulatedSurface(plt_params);
-                (self.get_plot_data(&plt_type)?, plt_type)
-            }
-        } else {
+        let (mut plt_data_opt, mut plt_type) = if self.x.is_empty() {
             (None, PlotType::ColorMesh(plt_params))
+        } else if self.x.len() > 10000 {
+            let plt_type = PlotType::ColorMesh(plt_params);
+            (self.get_plot_data(&plt_type)?, plt_type)
+        } else {
+            let plt_type = PlotType::ColorTriangulated(plt_params);
+            // let plt_type = PlotType::TriangulatedSurface(plt_params);
+            (self.get_plot_data(&plt_type)?, plt_type)
         };
 
         if let Some(plt_data) = &mut plt_data_opt {
@@ -386,8 +401,8 @@ impl Plottable for WaveFrontError {
         let plt_data = PlotData::Dim3(MatrixXx3::from_columns(&[
             DVector::from_vec(self.x.clone()),
             DVector::from_vec(self.y.clone()),
-            DVector::from_vec(self.err_in_wvl.clone()),
+            DVector::from_vec(self.wf_map.clone()),
         ]));
-        self.bin_or_triangulate_data(plt_type, &plt_data)
+        Ok(self.bin_or_triangulate_data(plt_type, &plt_data))
     }
 }

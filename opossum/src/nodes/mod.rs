@@ -12,6 +12,7 @@ mod reference;
 mod source;
 mod spectrometer;
 mod spot_diagram;
+/// wavefront measurement node
 pub mod wavefront;
 
 use std::cell::RefCell;
@@ -39,7 +40,7 @@ pub use spectrometer::SpectrometerType;
 
 pub use spot_diagram::SpotDiagram;
 
-pub use wavefront::{WaveFront, WaveFrontError};
+pub use wavefront::{WaveFront, WaveFrontErrorMap};
 
 use uuid::Uuid;
 

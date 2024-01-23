@@ -6,7 +6,7 @@ use crate::{
     lightdata::LightData,
     nodes::{
         wavefront::WaveFrontData, FilterType, Metertype, PortMap, Spectrometer, SpectrometerType,
-        SpotDiagram, WaveFront,
+        SpotDiagram,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,

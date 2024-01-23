@@ -4,7 +4,7 @@ use std::ops::Range;
 
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
-use crate::nodes::wavefront::{WaveFrontData, WaveFrontError};
+use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
 use crate::spectrum::Spectrum;
 use kahan::KahanSummator;
@@ -389,17 +389,17 @@ impl Rays {
     /// Returns the wavefront of the bundle of [`Rays`] at the center wavelength or at each band of the spectrum with a defined resolution.
     ///
     /// This function calculates the wavefront of a ray bundle as multiple of its wavelength with reference to the ray that is closest to the optical axis.
-    #[must_use]
     pub fn get_wavefront_data_in_units_of_wvl(
         &self,
         center_wavelength_flag: bool,
         spec_res: Length,
     ) -> OpmResult<Option<WaveFrontData>> {
+        let spec = self.to_spectrum(&spec_res)?;
         if center_wavelength_flag {
-            let center_wavelength = self.to_spectrum(&spec_res)?.center_wavelength();
+            let center_wavelength = spec.center_wavelength();
             let wf_err = self.wavefront_error_at_pos_in_units_of_wvl(center_wavelength);
             Ok(Some(WaveFrontData {
-                wavefront_error: vec![WaveFrontError::new(&wf_err, center_wavelength)?],
+                wavefront_error_maps: vec![WaveFrontErrorMap::new(&wf_err, center_wavelength)?],
             }))
         } else {
             todo!();
@@ -407,6 +407,13 @@ impl Rays {
         }
     }
 
+    /// Calculates the wavefront error of a ray bundle with a specified wavelength at a certain position along the optical axis in the optical system
+    /// # Attributes
+    /// - `wavelength`: wave length that is used for this wavefront calculation
+    ///
+    /// # Returns
+    /// This method returns a Matrix with 3 columns for the x(1), y(2) and z(3) axes and a dynamic number of rows
+    #[must_use]
     pub fn wavefront_error_at_pos_in_units_of_wvl(&self, wavelength: Length) -> MatrixXx3<f64> {
         let wvl = wavelength.get::<nanometer>();
         let mut wave_front_err = MatrixXx3::from_element(self.rays.len(), 0.);

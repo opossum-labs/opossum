@@ -80,6 +80,11 @@ impl PlotType {
         };
     }
 
+    ///This method sets a plot argument ([`PlotArgs`]) to [`PlotParameters`] which is stored in this [`PlotType`]
+    /// # Attributes
+    /// - `plt_arg`: plot argument [`PlotArgs`]
+    /// # Returns
+    /// This method returns a mutable reference to the changed [`PlotType`]
     pub fn set_plot_param(&mut self, plt_arg: &PlotArgs) -> &mut Self {
         let plt_params: &mut PlotParameters = self.get_plot_params_mut();
         plt_params.set(plt_arg);
@@ -532,14 +537,14 @@ impl PlotType {
             let mut digits_max = y_bounds.max.abs().log10().abs().floor()
                 + 2.
                 + f64::from(y_bounds.max.is_sign_negative());
-            if digits_max.is_infinite(){
-                digits_max = 4.
+            if digits_max.is_infinite() {
+                digits_max = 4.;
             }
             let mut digits_min = y_bounds.min.abs().log10().abs().floor()
                 + 2.
                 + f64::from(y_bounds.min.is_sign_negative());
-            if digits_min.is_infinite(){
-                digits_min = 4.
+            if digits_min.is_infinite() {
+                digits_min = 4.;
             }
             let digits = if digits_max >= digits_min {
                 digits_max.to_i32()
@@ -637,31 +642,44 @@ impl PlotData {
         }
     }
 
+    /// This method gets the actual maximum and minimum data values of an axis
+    /// # Attributes
+    /// - `ax_vals`: dynamically sized vector slice of the data vector on this axis
+    /// # Returns
+    /// This method returns the maximum and minimum data values on this axis in form of an [`AxLims`] struct
+    #[must_use]
     pub fn get_min_max_data_values(&self, ax_vals: &DVectorSlice<'_, f64>) -> AxLims {
-        let mut max_val = ax_vals.max();
-        let mut min_val = ax_vals.min();
         AxLims {
-            min: min_val,
-            max: max_val,
+            min: ax_vals.min(),
+            max: ax_vals.max(),
         }
     }
 
+    /// Gets the minimum and maximum values of all axes
+    /// # Attributes
+    /// - `wf_dat`: wavefront data as Matrix with 3 columns and dynamix number of rows. Columns are used as 1:x, 2:y, 3:z
+    /// - `wavelength`: wave length that is used for this WavefrontErrorMap
+    ///
+    /// # Returns
+    /// This method returns a vector of axes limits [`Vec<AxLims>`]
+    ///
+    /// # Errors
+    /// This method will returns an error if `get_min_max_data_values()` fails.
     pub fn get_axes_min_max_ranges(&self) -> OpmResult<Vec<AxLims>> {
         match self {
-            PlotData::Dim2(dat) => Ok(vec![
+            Self::Dim2(dat) => Ok(vec![
                 self.get_min_max_data_values(&dat.column(0)),
                 self.get_min_max_data_values(&dat.column(1)),
             ]),
-            PlotData::Dim3(dat)
-            | PlotData::ColorTriangulated(_, _, dat)
-            | PlotData::TriangulatedSurface(_, dat) => Ok(vec![
+            Self::Dim3(dat)
+            | Self::ColorTriangulated(_, _, dat)
+            | Self::TriangulatedSurface(_, dat) => Ok(vec![
                 self.get_min_max_data_values(&dat.column(0)),
                 self.get_min_max_data_values(&dat.column(1)),
                 self.get_min_max_data_values(&dat.column(2)),
             ]),
-            PlotData::ColorMesh(x, y, z) => {
-                let z_flat =
-                    DVector::from_vec(z.into_iter().cloned().map(|z| z).collect::<Vec<f64>>());
+            Self::ColorMesh(x, y, z) => {
+                let z_flat = DVector::from_vec(z.into_iter().copied().collect::<Vec<f64>>());
                 Ok(vec![
                     self.get_min_max_data_values(&DVectorSlice::from(x)),
                     self.get_min_max_data_values(&DVectorSlice::from(y)),
@@ -671,9 +689,13 @@ impl PlotData {
         }
     }
 }
+
+/// Struct that holds the maximum and minimum values of an axis
 #[derive(Clone, Debug, Copy)]
 pub struct AxLims {
+    /// minimum value of the axis
     pub min: f64,
+    /// maximum value of the axis
     pub max: f64,
 }
 
@@ -743,8 +765,8 @@ pub trait Plottable {
     /// This method returns [`Option<PlotData>`]. It is None if the [`PlotData`] Variant is not Dim3
     fn bin_2d_scatter_data(&self, plt_dat: &PlotData) -> Option<PlotData> {
         if let PlotData::Dim3(dat) = plt_dat {
-            let x_ax_lims = plt_dat.define_min_max_range(&dat.column(0));
-            let y_ax_lims = plt_dat.define_min_max_range(&dat.column(1));
+            let mut x_ax_lims = plt_dat.define_min_max_range(&dat.column(0));
+            let mut y_ax_lims = plt_dat.define_min_max_range(&dat.column(1));
 
             let num_entries = dat.column(0).len();
             let mut num = f64::sqrt((num_entries / 2).to_f64().unwrap()).floor();
@@ -761,8 +783,8 @@ pub trait Plottable {
 
             let xbin = x[1] - x[0];
             let ybin = y[1] - y[0];
-            let x_min = x.min();
-            let y_min = y.min();
+            x_ax_lims.min = x.min();
+            y_ax_lims.min = y.min();
 
             let mut zz = DMatrix::<f64>::zeros(x.len(), y.len());
             // xx.clone() * 0.;
@@ -790,21 +812,28 @@ pub trait Plottable {
         }
     }
 
+    /// This method bins or triangulates a set of [`PlotData`]
+    /// # Attributes
+    /// - `plt_type`: [`PlotType`] of the plot
+    /// - `plt_data`: [`PlotData`] of the plot
+    ///
+    /// # Returns
+    /// This method returns a Some([`PlotData`]) for the `ColorMesh`, `ColorTriangulated` and `TriangulatedSurface` [`PlotType`] variants. It Returns None for all other variants
     fn bin_or_triangulate_data(
         &self,
         plt_type: &PlotType,
         plt_data: &PlotData,
-    ) -> OpmResult<Option<PlotData>> {
+    ) -> Option<PlotData> {
         match plt_type {
             PlotType::ColorMesh(_) => {
                 let binned_data = self.bin_2d_scatter_data(plt_data);
-                Ok(binned_data)
+                binned_data
             }
             PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {
                 let triangulated_dat = self.triangulate_plot_data(plt_data, plt_type);
-                Ok(triangulated_dat)
+                triangulated_dat
             }
-            _ => Ok(None),
+            _ => None,
         }
     }
 
