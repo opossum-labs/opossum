@@ -1,6 +1,4 @@
 #![warn(missing_docs)]
-use std::collections::HashMap;
-
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -8,10 +6,27 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{PropCondition, Properties, Proptype},
+    properties::{Properties, Proptype},
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
 };
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The configuration data of a BeamSplitter.
+pub enum SplitterType {
+    /// Ideal beam splitter with a fixed splitting ratio
+    Ideal(f64),
+    /// A beam splitter with a given transmission spectrum
+    Spectrum(Spectrum),
+}
+impl From<SplitterType> for Proptype {
+    fn from(value: SplitterType) -> Self {
+        Self::SplitterType(value)
+    }
+}
 #[derive(Debug)]
 /// An ideal beamsplitter node with a given splitting ratio.
 ///
@@ -27,7 +42,7 @@ use crate::{
 ///   - `name`
 ///   - `apertures`
 ///   - `inverted`
-///   - `ratio`
+///   - `splitter config`
 pub struct BeamSplitter {
     props: Properties,
 }
@@ -36,13 +51,10 @@ fn create_default_props() -> Properties {
     let mut props = Properties::new("beam splitter", "beam splitter");
     props
         .create(
-            "ratio",
-            "splitting ratio",
-            Some(vec![
-                PropCondition::GreaterThanEqual(0.0),
-                PropCondition::LessThanEqual(1.0),
-            ]),
-            0.5.into(),
+            "splitter config",
+            "config data of the beam splitter",
+            None,
+            SplitterType::Ideal(0.5).into(),
         )
         .unwrap();
     let mut ports = OpticPorts::new();
@@ -60,8 +72,13 @@ impl BeamSplitter {
     /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
     /// [0.0..1.0].
     pub fn new(name: &str, ratio: f64) -> OpmResult<Self> {
+        if ratio.is_sign_negative() || ratio > 1.0 || !ratio.is_finite() {
+            return Err(OpossumError::Properties(
+                "ratio must be within (0.0..1.0) and finite".into(),
+            ));
+        }
         let mut props = create_default_props();
-        props.set("ratio", ratio.into())?;
+        props.set("splitter config", SplitterType::Ideal(ratio).into())?;
         props.set("name", name.into())?;
         Ok(Self { props })
     }
@@ -71,10 +88,12 @@ impl BeamSplitter {
     /// This functions panics if the specified [`Properties`], here `ratio`, do not exist or if the property has the wrong data format
     #[must_use]
     pub fn ratio(&self) -> f64 {
-        if let Ok(Proptype::F64(value)) = self.props.get("ratio") {
+        if let Ok(Proptype::SplitterType(SplitterType::Ideal(value))) =
+            self.props.get("splitter config")
+        {
             return *value;
         }
-        panic!("property `ratio` does not exist or has wrong data format")
+        panic!("property `splitter config` does not exist or has wrong data format")
     }
 
     /// Sets the splitting ratio of this [`BeamSplitter`].
@@ -83,7 +102,13 @@ impl BeamSplitter {
     /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
     /// [0.0..1.0].
     pub fn set_ratio(&mut self, ratio: f64) -> OpmResult<()> {
-        self.props.set("ratio", ratio.into())?;
+        if ratio.is_sign_negative() || ratio > 1.0 || !ratio.is_finite() {
+            return Err(OpossumError::Properties(
+                "ratio must be within (0.0..1.0) and finite".into(),
+            ));
+        }
+        self.props
+            .set("splitter config", SplitterType::Ideal(ratio).into())?;
         Ok(())
     }
     fn split_spectrum(

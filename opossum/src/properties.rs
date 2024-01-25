@@ -5,7 +5,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
-        FilterType, Metertype, PortMap, Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
+        FilterType, Metertype, PortMap, Spectrometer, SpectrometerType, SplitterType, SpotDiagram,
+        WaveFront,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
@@ -459,6 +460,8 @@ pub enum Proptype {
     OpticGraph(OpticGraph),
     /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterType(FilterType),
+    /// Property for storing a [`SplitterType`] of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
+    SplitterType(SplitterType),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.
