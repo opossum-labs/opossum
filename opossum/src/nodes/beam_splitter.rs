@@ -16,14 +16,14 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// The configuration data of a [`BeamSplitter`].
-pub enum SplitterType {
+pub enum SplittingConfig {
     /// Ideal beam splitter with a fixed splitting ratio
-    Ideal(f64),
+    Ratio(f64),
     /// A beam splitter with a given transmission spectrum
     Spectrum(Spectrum),
 }
-impl From<SplitterType> for Proptype {
-    fn from(value: SplitterType) -> Self {
+impl From<SplittingConfig> for Proptype {
+    fn from(value: SplittingConfig) -> Self {
         Self::SplitterType(value)
     }
 }
@@ -54,7 +54,7 @@ fn create_default_props() -> Properties {
             "splitter config",
             "config data of the beam splitter",
             None,
-            SplitterType::Ideal(0.5).into(),
+            SplittingConfig::Ratio(0.5).into(),
         )
         .unwrap();
     let mut ports = OpticPorts::new();
@@ -78,7 +78,7 @@ impl BeamSplitter {
             ));
         }
         let mut props = create_default_props();
-        props.set("splitter config", SplitterType::Ideal(ratio).into())?;
+        props.set("splitter config", SplittingConfig::Ratio(ratio).into())?;
         props.set("name", name.into())?;
         Ok(Self { props })
     }
@@ -88,7 +88,7 @@ impl BeamSplitter {
     /// This functions panics if the specified [`Properties`], here `ratio`, do not exist or if the property has the wrong data format
     #[must_use]
     pub fn ratio(&self) -> f64 {
-        if let Ok(Proptype::SplitterType(SplitterType::Ideal(value))) =
+        if let Ok(Proptype::SplitterType(SplittingConfig::Ratio(value))) =
             self.props.get("splitter config")
         {
             return *value;
@@ -108,7 +108,7 @@ impl BeamSplitter {
             ));
         }
         self.props
-            .set("splitter config", SplitterType::Ideal(ratio).into())?;
+            .set("splitter config", SplittingConfig::Ratio(ratio).into())?;
         Ok(())
     }
     fn split_spectrum(
@@ -172,7 +172,7 @@ impl BeamSplitter {
             match input1 {
                 LightData::Geometric(r) => {
                     let mut in_ray = r.clone();
-                    let split_ray = in_ray.split(self.ratio())?;
+                    let split_ray = in_ray.split_by_ratio(self.ratio())?;
                     (in_ray, split_ray)
                 }
                 _ => {
@@ -188,7 +188,7 @@ impl BeamSplitter {
             match input2 {
                 LightData::Geometric(r) => {
                     let mut in_ray = r.clone();
-                    let split_ray = in_ray.split(self.ratio())?;
+                    let split_ray = in_ray.split_by_ratio(self.ratio())?;
                     (in_ray, split_ray)
                 }
                 _ => {

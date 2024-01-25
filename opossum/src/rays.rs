@@ -587,7 +587,7 @@ impl Rays {
     /// # Errors
     ///
     /// This function will return an error if the splitting ratio is outside the interval [0.0; 1.0].
-    pub fn split(&mut self, splitting_ratio: f64) -> OpmResult<Self> {
+    pub fn split_by_ratio(&mut self, splitting_ratio: f64) -> OpmResult<Self> {
         if !(0.0..=1.0).contains(&splitting_ratio) {
             return Err(OpossumError::Other(
                 "splitting_ratio must be within [0.0;1.0]".into(),
@@ -1781,8 +1781,8 @@ mod test {
     }
     #[test]
     fn rays_split() {
-        assert!(Rays::default().split(1.1).is_err());
-        assert!(Rays::default().split(-0.1).is_err());
+        assert!(Rays::default().split_by_ratio(1.1).is_err());
+        assert!(Rays::default().split_by_ratio(-0.1).is_err());
         let ray1 = Ray::new_collimated(
             Point2::new(Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
@@ -1798,7 +1798,7 @@ mod test {
         let mut rays = Rays::default();
         rays.add_ray(ray1.clone());
         rays.add_ray(ray2.clone());
-        let split_rays = rays.split(0.2).unwrap();
+        let split_rays = rays.split_by_ratio(0.2).unwrap();
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
         assert_abs_diff_eq!(
             split_rays.total_energy().get::<joule>(),
