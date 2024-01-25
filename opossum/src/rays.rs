@@ -197,7 +197,7 @@ impl Ray {
     /// # Errors
     ///
     /// This function will return an error if `splitting_ratio` is outside the interval [0.0..1.0].
-    pub fn split(&mut self, splitting_ratio: f64) -> OpmResult<Self> {
+    pub fn split_by_ratio(&mut self, splitting_ratio: f64) -> OpmResult<Self> {
         if !(0.0..=1.0).contains(&splitting_ratio) {
             return Err(OpossumError::Other(
                 "splitting_ratio must be within [0.0;1.0]".into(),
@@ -207,6 +207,26 @@ impl Ray {
         self.e *= splitting_ratio;
         split_ray.e *= 1.0 - splitting_ratio;
         Ok(split_ray)
+    }
+    /// Split ray by a given [`Spectrum`].
+    ///
+    /// This functions modifies the energy of the existing [`Ray`] and generates a new split ray. The splitting ratio is determined by the wavelength
+    /// of the ray and the given transmission / reflection spectrum. This [`Spectrum`] must contain values in the range (0.0..=1.0). A spectrum value
+    /// of 1.0 means that all energy remains in the initial beam and the split beam has an energy of zero. A spectrum value of 0.0 corresponds to
+    /// a fully reflected beam.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the wavelength of the ray is outside the given spectrum or the spectrum value is outside the range (0.0..=1.0).
+    pub fn split_by_spectrum(&mut self, spectrum: &Spectrum) -> OpmResult<Self> {
+        spectrum.get_value(&self.wvl).map_or_else(
+            || {
+                Err(OpossumError::Spectrum(
+                    "ray splitting failed. wavelength outside given spectrum".into(),
+                ))
+            },
+            |splitting_ratio| self.split_by_ratio(splitting_ratio),
+        )
     }
 }
 /// Struct containing all relevant information of a ray bundle
@@ -575,7 +595,7 @@ impl Rays {
         }
         let mut split_rays = Self::default();
         for ray in &mut self.rays {
-            let split_ray = ray.split(splitting_ratio)?;
+            let split_ray = ray.split_by_ratio(splitting_ratio)?;
             split_rays.add_ray(split_ray);
         }
         Ok(split_rays)
@@ -1154,16 +1174,16 @@ mod test {
         assert!(ray.filter_energy(&filter).is_err());
     }
     #[test]
-    fn ray_split() {
+    fn ray_split_by_ratio() {
         let mut ray = Ray::new_collimated(
             Point2::new(Length::zero(), Length::zero()),
             Length::new::<nanometer>(1054.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-        assert!(ray.split(1.1).is_err());
-        assert!(ray.split(-0.1).is_err());
-        let split_ray = ray.split(0.1).unwrap();
+        assert!(ray.split_by_ratio(1.1).is_err());
+        assert!(ray.split_by_ratio(-0.1).is_err());
+        let split_ray = ray.split_by_ratio(0.1).unwrap();
         assert_eq!(ray.energy(), Energy::new::<joule>(0.1));
         assert_eq!(split_ray.energy(), Energy::new::<joule>(0.9));
         assert_eq!(ray.position(), split_ray.position());

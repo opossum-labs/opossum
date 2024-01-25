@@ -15,7 +15,7 @@ use serde_derive::Serialize;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-/// The configuration data of a BeamSplitter.
+/// The configuration data of a [`BeamSplitter`].
 pub enum SplitterType {
     /// Ideal beam splitter with a fixed splitting ratio
     Ideal(f64),
