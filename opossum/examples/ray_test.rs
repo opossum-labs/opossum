@@ -1,5 +1,5 @@
 use nalgebra::Point2;
-use opossum::rays::Ray;
+use opossum::ray::Ray;
 use uom::num_traits::Zero;
 use uom::si::energy::joule;
 use uom::si::length::nanometer;

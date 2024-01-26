@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+use crate::ray::SplittingConfig;
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -7,7 +8,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    rays::{Rays, SplittingConfig},
+    rays::Rays,
     spectrum::{merge_spectra, Spectrum},
 };
 use std::collections::HashMap;
@@ -271,7 +272,7 @@ impl Dottable for BeamSplitter {
 }
 #[cfg(test)]
 mod test {
-    use crate::{analyzer::RayTraceConfig, rays::Ray, spectrum_helper::create_he_ne_spec};
+    use crate::{analyzer::RayTraceConfig, ray::Ray, spectrum_helper::create_he_ne_spec};
     use approx::{assert_abs_diff_eq, AbsDiffEq};
     use nalgebra::Point2;
     use uom::num_traits::Zero;

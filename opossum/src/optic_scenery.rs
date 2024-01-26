@@ -387,7 +387,7 @@ fn apodize_incoming_light(
         if let Some(LightData::Geometric(rays)) = edge.1 {
             if let Some(aperture) = input_ports.get(&edge.0) {
                 let mut apodized_rays = rays.clone();
-                apodized_rays.apodize(aperture);
+                apodized_rays.apodize(aperture)?;
                 apodized_edges.insert(edge.0, Some(LightData::Geometric(apodized_rays)));
             } else {
                 return Err(OpossumError::OpticScenery(format!(
@@ -412,7 +412,7 @@ fn apodize_outgoing_light(
         if let Some(LightData::Geometric(rays)) = edge.1 {
             if let Some(aperture) = outgoing_ports.get(&edge.0) {
                 let mut apodized_rays = rays.clone();
-                apodized_rays.apodize(aperture);
+                apodized_rays.apodize(aperture)?;
                 apodized_edges.insert(edge.0, Some(LightData::Geometric(apodized_rays)));
             } else {
                 return Err(OpossumError::OpticScenery(format!(
@@ -432,7 +432,7 @@ fn threshold_by_energy(
 ) -> OpmResult<()> {
     for light_data in &mut *outgoing_edges {
         if let Some(LightData::Geometric(rays)) = light_data.1 {
-            rays.threshold_by_energy(energy_threshold)?;
+            rays.delete_by_threshold_energy(energy_threshold)?;
         }
     }
     Ok(())
@@ -570,7 +570,8 @@ mod test {
     use super::*;
     use crate::analyzer::RayTraceConfig;
     use crate::nodes::{Detector, Metertype};
-    use crate::rays::{Ray, Rays};
+    use crate::ray::Ray;
+    use crate::rays::Rays;
     use nalgebra::Point2;
     use num::Zero;
     use std::path::PathBuf;

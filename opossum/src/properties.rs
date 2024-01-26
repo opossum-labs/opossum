@@ -460,7 +460,7 @@ pub enum Proptype {
     OpticGraph(OpticGraph),
     /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterType(FilterType),
-    /// Property for storing a [`SplitterType`] of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
+    /// Property for storing a [`SplittingConfig`] of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
     SplitterType(SplittingConfig),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
