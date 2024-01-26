@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Module for handling rays
+//! Module for handling ray bundles
 use std::ops::Range;
 
 use crate::aperture::Aperture;

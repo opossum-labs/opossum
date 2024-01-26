@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+//! Module for handling optical rays
 use nalgebra::{Point2, Point3, Vector3};
 use num::Zero;
 use serde_derive::{Deserialize, Serialize};
@@ -239,10 +241,16 @@ impl Ray {
         split_ray.e *= 1.0 - splitting_ratio;
         Ok(split_ray)
     }
+    /// Returns the direction of this [`Ray`].
+    ///
+    /// Return the ray direction vector as directional cosine. **Note**: This vector is not necessarily normalized.
     #[must_use]
     pub const fn direction(&self) -> Vector3<f64> {
         self.dir
     }
+    /// Returns the path length of this [`Ray`].
+    ///
+    /// Return the geometric path length of the ray.
     #[must_use]
     pub fn path_length(&self) -> Length {
         self.path_length
