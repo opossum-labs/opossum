@@ -25,6 +25,9 @@ product-icon = "opossum/logo/Logo_square.ico"
 banner = "opossum/logo/Logo_InstallBanner.png"
 dialog = "opossum/logo/Logo_InstallDialog.png"
 
+[profile.release]
+strip = true
+
 [dependencies]
 petgraph = { version = "0", features = ["serde-1"] } # the graph library
 uom = {version="0", features = ["serde"] }
