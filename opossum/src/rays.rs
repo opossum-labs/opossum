@@ -5,6 +5,7 @@ use std::ops::Range;
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::FilterType;
+use crate::properties::Proptype;
 use crate::spectrum::Spectrum;
 use kahan::KahanSummator;
 use nalgebra::{distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Vector3};
@@ -16,6 +17,20 @@ use uom::si::angle::degree;
 use uom::si::energy::joule;
 use uom::si::f64::{Angle, Energy, Length};
 use uom::si::length::{millimeter, nanometer};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The configuration for splitting a [`Ray`].
+pub enum SplittingConfig {
+    /// Ideal beam splitter with a fixed splitting ratio
+    Ratio(f64),
+    /// A beam splitter with a given transmission spectrum
+    Spectrum(Spectrum),
+}
+impl From<SplittingConfig> for Proptype {
+    fn from(value: SplittingConfig) -> Self {
+        Self::SplitterType(value)
+    }
+}
 
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -190,14 +205,36 @@ impl Ray {
     }
     /// Split a ray with the given energy splitting ratio.
     ///
-    /// This function modifies the energy of the existing ray and generates a new split ray. The splitting ratio must be within the range
-    /// `(0.0..=1.0)`. A ratio of 1.0 means that all energy remains in the initial beam and the split beam has an energy of zero. A ratio of 0.0
-    /// corresponds to a fully reflected beam.
+    /// This function modifies the energy of the existing ray and generates a new split ray. The splitting strategy is determined by the
+    /// given [`SplittingConfig`]:
+    ///
+    /// ## [`SplittingConfig::Ratio`]
+    ///
+    /// The splitting ratio must be within the range `(0.0..=1.0)`. A ratio of 1.0 means that all energy remains in the initial beam
+    /// and the split beam has an energy of zero. A ratio of 0.0 corresponds to a fully reflected beam.
+    ///
+    /// ## [`SplittingConfig::Spectrum`]
+    ///
+    /// The splitting ratio is determined by the wavelength
+    /// of the ray and the given transmission / reflection spectrum. This [`Spectrum`] must contain values in the range (0.0..=1.0). A spectrum value
+    /// of 1.0 means that all energy remains in the initial beam and the split beam has an energy of zero. A spectrum value of 0.0 corresponds to
+    /// a fully reflected beam.
     ///
     /// # Errors
     ///
-    /// This function will return an error if `splitting_ratio` is outside the interval [0.0..1.0].
-    pub fn split_by_ratio(&mut self, splitting_ratio: f64) -> OpmResult<Self> {
+    /// This function will return an error if `splitting_ratio` is outside the interval [0.0..1.0] or the wavelength of the ray is outside the given
+    /// spectrum.
+    pub fn split(&mut self, config: &SplittingConfig) -> OpmResult<Self> {
+        let splitting_ratio = match config {
+            SplittingConfig::Ratio(ratio) => *ratio,
+            SplittingConfig::Spectrum(spectrum) => {
+                (*spectrum).get_value(&self.wvl).ok_or_else(|| {
+                    OpossumError::Spectrum(
+                        "ray splitting failed. wavelength outside given spectrum".into(),
+                    )
+                })?
+            }
+        };
         if !(0.0..=1.0).contains(&splitting_ratio) {
             return Err(OpossumError::Other(
                 "splitting_ratio must be within [0.0;1.0]".into(),
@@ -207,26 +244,6 @@ impl Ray {
         self.e *= splitting_ratio;
         split_ray.e *= 1.0 - splitting_ratio;
         Ok(split_ray)
-    }
-    /// Split ray by a given [`Spectrum`].
-    ///
-    /// This functions modifies the energy of the existing [`Ray`] and generates a new split ray. The splitting ratio is determined by the wavelength
-    /// of the ray and the given transmission / reflection spectrum. This [`Spectrum`] must contain values in the range (0.0..=1.0). A spectrum value
-    /// of 1.0 means that all energy remains in the initial beam and the split beam has an energy of zero. A spectrum value of 0.0 corresponds to
-    /// a fully reflected beam.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the wavelength of the ray is outside the given spectrum or the spectrum value is outside the range (0.0..=1.0).
-    pub fn split_by_spectrum(&mut self, spectrum: &Spectrum) -> OpmResult<Self> {
-        spectrum.get_value(&self.wvl).map_or_else(
-            || {
-                Err(OpossumError::Spectrum(
-                    "ray splitting failed. wavelength outside given spectrum".into(),
-                ))
-            },
-            |splitting_ratio| self.split_by_ratio(splitting_ratio),
-        )
     }
 }
 /// Struct containing all relevant information of a ray bundle
@@ -578,24 +595,16 @@ impl Rays {
         }
         Ok(spectrum)
     }
-    /// Split a ray bundle by a given splitting ratio.
+    /// Split a ray bundle
     ///
-    /// This function splits a ray bundle by a given energy splitting ratio. It modifies the energies of all containing ray and generates a new
-    /// bundle with the split rays. The splitting ratio must be in the interval [0.0; 1.0].
-    /// A splitting ratio of 1.0 means a fully transmitted beam. All split rays have an energy of zero. In contrast, a splitting ratio of 1.0 means a
-    /// fully reflected beam. All energy goes into the split rays.
+    /// This function splits a ray bundle determined by the given [`SplittingConfig`]. See [`split`](Ray::split) function for details.
     /// # Errors
     ///
-    /// This function will return an error if the splitting ratio is outside the interval [0.0; 1.0].
-    pub fn split_by_ratio(&mut self, splitting_ratio: f64) -> OpmResult<Self> {
-        if !(0.0..=1.0).contains(&splitting_ratio) {
-            return Err(OpossumError::Other(
-                "splitting_ratio must be within [0.0;1.0]".into(),
-            ));
-        }
+    /// This function will return an error if the underlying split function for a single ray returns an error.
+    pub fn split(&mut self, config: &SplittingConfig) -> OpmResult<Self> {
         let mut split_rays = Self::default();
         for ray in &mut self.rays {
-            let split_ray = ray.split_by_ratio(splitting_ratio)?;
+            let split_ray = ray.split(config)?;
             split_rays.add_ray(split_ray);
         }
         Ok(split_rays)
@@ -1181,9 +1190,9 @@ mod test {
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-        assert!(ray.split_by_ratio(1.1).is_err());
-        assert!(ray.split_by_ratio(-0.1).is_err());
-        let split_ray = ray.split_by_ratio(0.1).unwrap();
+        assert!(ray.split(&SplittingConfig::Ratio(1.1)).is_err());
+        assert!(ray.split(&SplittingConfig::Ratio(-0.1)).is_err());
+        let split_ray = ray.split(&SplittingConfig::Ratio(0.1)).unwrap();
         assert_eq!(ray.energy(), Energy::new::<joule>(0.1));
         assert_eq!(split_ray.energy(), Energy::new::<joule>(0.9));
         assert_eq!(ray.position(), split_ray.position());
@@ -1781,8 +1790,6 @@ mod test {
     }
     #[test]
     fn rays_split() {
-        assert!(Rays::default().split_by_ratio(1.1).is_err());
-        assert!(Rays::default().split_by_ratio(-0.1).is_err());
         let ray1 = Ray::new_collimated(
             Point2::new(Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
@@ -1798,7 +1805,9 @@ mod test {
         let mut rays = Rays::default();
         rays.add_ray(ray1.clone());
         rays.add_ray(ray2.clone());
-        let split_rays = rays.split_by_ratio(0.2).unwrap();
+        assert!(rays.split(&SplittingConfig::Ratio(1.1)).is_err());
+        assert!(rays.split(&SplittingConfig::Ratio(-0.1)).is_err());
+        let split_rays = rays.split(&SplittingConfig::Ratio(0.2)).unwrap();
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
         assert_abs_diff_eq!(
             split_rays.total_energy().get::<joule>(),

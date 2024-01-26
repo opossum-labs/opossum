@@ -5,12 +5,12 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
-        FilterType, Metertype, PortMap, Spectrometer, SpectrometerType, SplittingConfig,
-        SpotDiagram, WaveFront,
+        FilterType, Metertype, PortMap, Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     reporter::{NodeReport, PdfReportable},
+    SplittingConfig,
 };
 use genpdf::{elements::TableLayout, style};
 use plotters::prelude::LogScalable;

@@ -18,7 +18,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub use beam_splitter::BeamSplitter;
-pub use beam_splitter::SplittingConfig;
 pub use detector::Detector;
 pub use dummy::Dummy;
 pub use group::NodeGroup;

@@ -7,26 +7,11 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    rays::Rays,
+    rays::{Rays, SplittingConfig},
     spectrum::{merge_spectra, Spectrum},
 };
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-/// The configuration data of a [`BeamSplitter`].
-pub enum SplittingConfig {
-    /// Ideal beam splitter with a fixed splitting ratio
-    Ratio(f64),
-    /// A beam splitter with a given transmission spectrum
-    Spectrum(Spectrum),
-}
-impl From<SplittingConfig> for Proptype {
-    fn from(value: SplittingConfig) -> Self {
-        Self::SplitterType(value)
-    }
-}
 #[derive(Debug)]
 /// An ideal beamsplitter node with a given splitting ratio.
 ///
@@ -168,11 +153,16 @@ impl BeamSplitter {
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
         };
+        let Ok(Proptype::SplitterType(splitting_config)) = self.props.get("splitter config") else {
+            return Err(OpossumError::Analysis(
+                "could not read splitter config property".into(),
+            ));
+        };
         let (mut in_ray1, split1) = if let Some(input1) = in1 {
             match input1 {
                 LightData::Geometric(r) => {
                     let mut in_ray = r.clone();
-                    let split_ray = in_ray.split_by_ratio(self.ratio())?;
+                    let split_ray = in_ray.split(splitting_config)?;
                     (in_ray, split_ray)
                 }
                 _ => {
@@ -188,7 +178,7 @@ impl BeamSplitter {
             match input2 {
                 LightData::Geometric(r) => {
                     let mut in_ray = r.clone();
-                    let split_ray = in_ray.split_by_ratio(self.ratio())?;
+                    let split_ray = in_ray.split(splitting_config)?;
                     (in_ray, split_ray)
                 }
                 _ => {
