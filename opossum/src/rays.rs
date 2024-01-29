@@ -4,6 +4,7 @@ use std::ops::Range;
 
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
+use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
 use crate::ray::{Ray, SplittingConfig};
 use crate::spectrum::Spectrum;
@@ -211,37 +212,69 @@ impl Rays {
             Length::new::<millimeter>(sum_dist_sq.sqrt())
         })
     }
-    /// Returns the wavefront of the bundle of [`Rays`] at a specific wavelength wvl.
-    ///
+    /// Returns the wavefront of the bundle of [`Rays`] at the center wavelength or at each band of the spectrum with a defined resolution.
     /// This function calculates the wavefront of a ray bundle as multiple of its wavelength with reference to the ray that is closest to the optical axis.
+    /// # Attributes
+    /// - `center_wavelength_flag`: flag to define if the center wavelength should be used for calculation or if a wavefront for all spectral components should be analyzed
+    /// - `spec_res`: spectral resolution to calculate the center wavelength or for individal spectral analysis
+    ///
+    /// # Errors
+    /// This function errors for the moment if `center_wavelength_flag` is set to false
+    pub fn get_wavefront_data_in_units_of_wvl(
+        &self,
+        center_wavelength_flag: bool,
+        spec_res: Length,
+    ) -> OpmResult<Option<WaveFrontData>> {
+        let spec = self.to_spectrum(&spec_res)?;
+        if center_wavelength_flag {
+            let center_wavelength = spec.center_wavelength();
+            let wf_err = self.wavefront_error_at_pos_in_units_of_wvl(center_wavelength);
+            Ok(Some(WaveFrontData {
+                wavefront_error_maps: vec![WaveFrontErrorMap::new(&wf_err, center_wavelength)?],
+            }))
+        } else {
+            todo!();
+            // Ok(None)
+        }
+    }
+
+    /// Calculates the wavefront error of a ray bundle with a specified wavelength at a certain position along the optical axis in the optical system
+    /// # Attributes
+    /// - `wavelength`: wave length that is used for this wavefront calculation
+    ///
+    /// # Returns
+    /// This method returns a Matrix with 3 columns for the x(1), y(2) and z(3) axes and a dynamic number of rows
     #[must_use]
-    pub fn wavefront_error_in_lambda_at_wvl(&self, wvl: f64) -> MatrixXx3<f64> {
-        let mut optical_path_length_at_pos = MatrixXx3::from_element(self.rays.len(), 0.);
+    pub fn wavefront_error_at_pos_in_units_of_wvl(&self, wavelength: Length) -> MatrixXx3<f64> {
+        let wvl = wavelength.get::<nanometer>();
+        let mut wave_front_err = MatrixXx3::from_element(self.rays.len(), 0.);
         let mut min_radius = f64::INFINITY;
         let mut path_length_at_center = 0.;
         for (i, ray) in self.rays.iter().enumerate() {
+
+
             let position = Vector2::new(
                 ray.position().x.get::<millimeter>(),
                 ray.position().y.get::<millimeter>(),
             );
-            optical_path_length_at_pos[(i, 0)] = position.x;
-            optical_path_length_at_pos[(i, 1)] = position.y;
-            optical_path_length_at_pos[(i, 2)] = ray.path_length().get::<nanometer>();
+            wave_front_err[(i, 0)] = position.x;
+            wave_front_err[(i, 1)] = position.y;
+            //the wavefront error has the negative sign of the optical path difference
+            wave_front_err[(i, 2)] = -ray.path_length().get::<nanometer>();
 
             let radius = position.x.mul_add(position.x, position.y * position.y);
             if radius < min_radius {
                 min_radius = radius;
-                path_length_at_center = optical_path_length_at_pos[(i, 2)];
+                path_length_at_center = wave_front_err[(i, 2)];
             }
         }
 
-        for mut ray_path in optical_path_length_at_pos.row_iter_mut() {
-            ray_path[2] -= path_length_at_center;
-            ray_path[2] /= wvl;
+        for mut wf_err in wave_front_err.row_iter_mut() {
+            wf_err[2] -= path_length_at_center;
+            wf_err[2] /= wvl;
         }
 
-        //the wavefront error has the negative sign of the optical path difference
-        -optical_path_length_at_pos
+        wave_front_err
     }
 
     /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx3<f64>]`.

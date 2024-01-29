@@ -5,7 +5,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
-        FilterType, Metertype, PortMap, Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
+        wavefront::WaveFrontData, FilterType, Metertype, PortMap, Spectrometer, SpectrometerType,
+        SpotDiagram,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
@@ -478,8 +479,8 @@ pub enum Proptype {
     Spectrometer(Spectrometer),
     /// This property stores optical [`Rays`](crate::rays::Rays)
     SpotDiagram(SpotDiagram),
-    /// This property stores optical [`Rays`](crate::rays::Rays)
-    WaveFront(WaveFront),
+    /// This property stores the wavefront Information [`WaveFrontData`]
+    WaveFrontStats(WaveFrontData),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
     /// a geometrical length
@@ -550,7 +551,7 @@ impl PdfReportable for Proptype {
             Self::Metertype(value) => l.push(value.pdf_report()?),
             Self::Spectrometer(value) => l.push(value.pdf_report()?),
             Self::SpotDiagram(value) => l.push(value.pdf_report()?),
-            Self::WaveFront(value) => l.push(value.pdf_report()?),
+            Self::WaveFrontStats(value) => l.push(value.pdf_report()?),
             Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
             Self::Length(value) => l.push(genpdf::elements::Paragraph::new(format_quantity(
                 meter, *value,
@@ -560,7 +561,7 @@ impl PdfReportable for Proptype {
             ))),
             _ => l.push(
                 genpdf::elements::Paragraph::default()
-                    .styled_string("unknown poperty type", style::Effect::Italic),
+                    .styled_string("unknown property type", style::Effect::Italic),
             ),
         }
         Ok(l)
