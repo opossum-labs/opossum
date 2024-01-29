@@ -290,21 +290,20 @@ impl Plottable for WaveFront {
     ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
         match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size)),
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
             _ => plt_params
                 .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))
+                ))?
                 .set(&PlotArgs::FDir(
                     f_path.parent().unwrap().to_str().unwrap().to_owned(),
-                ))
-                .set(&PlotArgs::FigSize(img_size)),
+                ))?
+                .set(&PlotArgs::FigSize(img_size))?,
         };
-        plt_params.set(&PlotArgs::Backend(backend));
-
-        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()));
-        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()));
-        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()));
+        plt_params.set(&PlotArgs::Backend(backend))?;
+        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()))?;
+        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()))?;
+        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()))?;
 
         let (mut plt_data_opt, mut plt_type) =
             if let Some(LightData::Geometric(rays)) = &self.light_data {

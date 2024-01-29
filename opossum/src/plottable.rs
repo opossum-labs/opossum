@@ -106,7 +106,7 @@ impl PlotType {
     /// - the image buffer is too small
     pub fn plot(&self, plt_data: &PlotData) -> OpmResult<Option<RgbImage>> {
         let params = self.get_plot_params();
-        params.check_validity()?;
+        params.check_backend_fpath_validity()?;
         let path = params.get_fpath()?;
         let plot = Plot::new(plt_data, params);
 
@@ -276,7 +276,7 @@ impl PlotType {
             let y_ax_lims = if plt.bounds.x.is_none() {
                 plt.define_axis_bounds(&dat.column(0), true, true)
             } else {
-                plt.bounds.x.unwrap()
+                plt.bounds.y.unwrap()
             };
 
             let mut chart =
@@ -299,7 +299,7 @@ impl PlotType {
             let y_ax_lims = if plt.bounds.x.is_none() {
                 plt.define_axis_bounds(&dat.column(0), true, true)
             } else {
-                plt.bounds.x.unwrap()
+                plt.bounds.y.unwrap()
             };
 
             let mut chart =
@@ -520,10 +520,6 @@ impl PlotType {
         x_bounds: AxLims,
         y_bounds: AxLims,
         label_desc: &[LabelDescription; 2],
-        // x_label: &String,
-        // y_label: &String,
-        // x_labelpos: LabelPos,
-        // y_labelpos: LabelPos,
         y_ax: bool,
         x_ax: bool,
     ) -> ChartContext<'a, T, Cartesian2d<RangedCoordf64, RangedCoordf64>> {
@@ -1012,7 +1008,7 @@ pub trait Plottable {
 }
 
 ///Enum to describe which type of plotting backend should be used
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum PltBackEnd {
     /// BitmapBackend. Used to create .png, .bmp, .jpg
     #[default]
@@ -1212,20 +1208,35 @@ impl Default for PlotParameters {
         };
         plt_params
             .set(&PlotArgs::Backend(PltBackEnd::BMP))
+            .unwrap()
             .set(&PlotArgs::XLabel("x".into()))
+            .unwrap()
             .set(&PlotArgs::XLabelPos(LabelPos::Bottom))
+            .unwrap()
             .set(&PlotArgs::YLabel("y".into()))
+            .unwrap()
             .set(&PlotArgs::YLabelPos(LabelPos::Left))
+            .unwrap()
             .set(&PlotArgs::CBarLabel("z value".into()))
+            .unwrap()
             .set(&PlotArgs::CBarLabelPos(LabelPos::Right))
+            .unwrap()
             .set(&PlotArgs::XLim(None))
+            .unwrap()
             .set(&PlotArgs::YLim(None))
+            .unwrap()
             .set(&PlotArgs::ZLim(None))
+            .unwrap()
             .set(&PlotArgs::CMap(CGradient::default()))
+            .unwrap()
             .set(&PlotArgs::Color(RGBAColor(255, 0, 0, 1.)))
+            .unwrap()
             .set(&PlotArgs::FDir(current_dir))
+            .unwrap()
             .set(&PlotArgs::FName(format!("opossum_default_plot_{i}.png")))
-            .set(&PlotArgs::FigSize((1000, 850)));
+            .unwrap()
+            .set(&PlotArgs::FigSize((1000, 850)))
+            .unwrap();
 
         plt_params
     }
@@ -1484,6 +1495,90 @@ impl PlotParameters {
         found
     }
 
+    // /// This method checks if
+    // /// - the path to the save-directory is valid
+    // /// - the backend matches with the set file extension
+    // ///
+    // /// # Errors
+    // /// - if the file directory does not exist
+    // /// - if the wrong backend or wrong file extension was chosen
+    // pub fn check_backend_fpath_validity(&self) -> OpmResult<()> {
+    //     let fdir = self.get_fdir()?;
+    //     let dir_path = Path::new(&fdir);
+
+    //     let (valid_backend, err_msg) = self.check_backend_file_ext_compatibility()?;
+    //     let mut err_path = String::new();
+    //     let valid_path = if dir_path.exists() {
+    //         true
+    //     } else {
+    //         err_path.push_str(format!("File-directory path \"{fdir}\" is not valid!\n\n").as_str());
+    //         false
+    //     };
+
+    //     if valid_path && valid_backend {
+    //         Ok(())
+    //     } else {
+    //         err_path.push_str(err_msg.to_string().as_str());
+    //         Err(OpossumError::Other(err_path))
+    //     }
+    // }
+
+    fn check_ax_lim_validity(ax_lim_opt: &Option<(f64, f64)>) -> bool {
+        if let Some(lim) = ax_lim_opt {
+            if lim.0.is_finite() && !lim.0.is_nan() && lim.1.is_finite() && !lim.1.is_nan() {
+                true
+            } else {
+                false
+            }
+        } else {
+            true
+        }
+    }
+
+    fn check_plot_arg_validity(plt_arg: &PlotArgs) -> bool {
+        match plt_arg {
+            PlotArgs::XLabelPos(xlabel_pos) => match xlabel_pos {
+                LabelPos::Bottom | LabelPos::Top => true,
+                _ => false,
+            },
+            PlotArgs::YLabelPos(label_pos) | PlotArgs::CBarLabelPos(label_pos) => match label_pos {
+                LabelPos::Left | LabelPos::Right => true,
+                _ => false,
+            },
+            PlotArgs::XLim(lim_opt) | PlotArgs::YLim(lim_opt) | PlotArgs::ZLim(lim_opt) => {
+                Self::check_ax_lim_validity(lim_opt)
+            }
+            PlotArgs::FigSize(figsize) => {
+                if figsize.0 == 0 || figsize.1 == 0 {
+                    false
+                } else {
+                    true
+                }
+            }
+            PlotArgs::FDir(fdir) => Path::new(fdir).exists(),
+            PlotArgs::FName(fname) => {
+                Self::check_file_ext_validity(fname, vec!["jpg", "png", "bmp", "svg"])
+            }
+            // labels, color and gradient are irrelevant to check.
+            //cross check of backend and full file path is done later, as a change would otherwise always result in an error.
+            _ => true,
+        }
+    }
+
+    fn check_file_ext_validity(fname: &str, valid_exts: Vec<&str>) -> bool {
+        let mut valid = false;
+        for valid_ext in valid_exts {
+            if std::path::Path::new(fname)
+                .extension()
+                .map_or(false, |ext| ext.eq_ignore_ascii_case(valid_ext))
+            {
+                valid = true;
+                break;
+            }
+        }
+        valid
+    }
+
     fn get_plt_arg_key(plt_arg: &PlotArgs) -> String {
         match plt_arg {
             PlotArgs::XLabel(_) => "xlabel".to_owned(),
@@ -1509,13 +1604,19 @@ impl PlotParameters {
     /// - `plt_arg`: plot argument [`PlotArgs`]
     /// # Returns
     /// This method returns a mutable reference to the changed [`PlotParameters`]
-    pub fn set(&mut self, plt_arg: &PlotArgs) -> &mut Self {
+    pub fn set(&mut self, plt_arg: &PlotArgs) -> OpmResult<&mut Self> {
         let key = Self::get_plt_arg_key(plt_arg);
-        if self.check_if_set(plt_arg) {
-            self.params.remove_entry(&key);
+        if Self::check_plot_arg_validity(plt_arg) {
+            if self.check_if_set(plt_arg) {
+                self.params.remove_entry(&key);
+            }
+            self.insert(plt_arg);
+            Ok(self)
+        } else {
+            Err(OpossumError::Other(format!(
+                "Parameter of plot argument \"{plt_arg:?}\" is invalid!"
+            )))
         }
-        self.insert(plt_arg);
-        self
     }
 
     /// This method checks if
@@ -1525,7 +1626,7 @@ impl PlotParameters {
     /// # Errors
     /// - if the file directory does not exist
     /// - if the wrong backend or wrong file extension was chosen
-    pub fn check_validity(&self) -> OpmResult<()> {
+    pub fn check_backend_fpath_validity(&self) -> OpmResult<()> {
         let fdir = self.get_fdir()?;
         let dir_path = Path::new(&fdir);
 
@@ -1678,6 +1779,7 @@ impl Plot {
                 }
                 _ => Err(OpossumError::Other("Not defined yet!".into())),
             }
+            
         } else {
             Err(OpossumError::Other("No plot data defined!".into()))
         }
@@ -1839,20 +1941,161 @@ fn linspace(start: f64, end: f64, num: f64) -> OpmResult<Matrix1xX<f64>> {
         ))
     }
 }
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-//     use crate::rays::Rays;
-//     use tempfile::NamedTempFile;
-//     #[test]
-//     fn to_svg_plot() {
-//         let rays = Rays::default();
-//         let path = NamedTempFile::new().unwrap();
-//         assert!(rays.to_svg_plot(path.path()).is_ok());
-//     }
-//     #[test]
-//     fn to_img_buf_plot() {
-//         let rays = Rays::default();
-//         assert!(rays.to_img_buf_plot().is_ok());
-//     }
-// }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn empty_plot_params() {
+        let plt_params = PlotParameters {
+            params: HashMap::new(),
+        };
+        assert_eq!(plt_params.get_backend().is_err(), true);
+        assert_eq!(plt_params.get_x_label().is_err(), true);
+        assert_eq!(plt_params.get_x_label_pos().is_err(), true);
+        assert_eq!(plt_params.get_y_label().is_err(), true);
+        assert_eq!(plt_params.get_y_label_pos().is_err(), true);
+        assert_eq!(plt_params.get_cbar_label().is_err(), true);
+        assert_eq!(plt_params.get_cbar_label_pos().is_err(), true);
+        assert_eq!(plt_params.get_xlim().is_err(), true);
+        assert_eq!(plt_params.get_ylim().is_err(), true);
+        assert_eq!(plt_params.get_zlim().is_err(), true);
+        assert_eq!(plt_params.get_color().is_err(), true);
+        assert_eq!(plt_params.get_fdir().is_err(), true);
+        assert_eq!(plt_params.get_fname().is_err(), true);
+        assert_eq!(plt_params.get_cmap().is_err(), true);
+    }
+    #[test]
+    fn default_plot_params() {
+        let current_dir = current_dir().unwrap().to_str().unwrap().to_owned() + "\\";
+
+        let plt_params = PlotParameters::default();
+        assert_eq!(plt_params.get_backend().unwrap(), PltBackEnd::BMP);
+        assert_eq!(plt_params.get_x_label().unwrap(), "x".to_owned());
+        assert_eq!(plt_params.get_x_label_pos().unwrap(), LabelPos::Bottom);
+        assert_eq!(plt_params.get_y_label().unwrap(), "y".to_owned());
+        assert_eq!(plt_params.get_y_label_pos().unwrap(), LabelPos::Left);
+        assert_eq!(plt_params.get_cbar_label().unwrap(), "z value".to_owned());
+        assert_eq!(plt_params.get_cbar_label_pos().unwrap(), LabelPos::Right);
+        assert_eq!(plt_params.get_xlim().unwrap(), None);
+        assert_eq!(plt_params.get_ylim().unwrap(), None);
+        assert_eq!(plt_params.get_zlim().unwrap(), None);
+        assert_eq!(plt_params.get_color().unwrap(), RGBAColor(255, 0, 0, 1.));
+        assert_eq!(
+            format!("{:?}", plt_params.get_cmap().unwrap().get_gradient()),
+            "Gradient(Turbo)".to_owned()
+        );
+        assert_eq!(plt_params.get_fdir().unwrap(), current_dir);
+        assert_eq!(
+            plt_params.get_fname().unwrap(),
+            format!("opossum_default_plot_0.png")
+        );
+        assert_eq!(plt_params.get_figsize().unwrap(), (1000, 850));
+    }
+
+    #[test]
+    fn plot_params_backend() {
+        let mut plt_params = PlotParameters::default();
+        plt_params.set(&PlotArgs::Backend(PltBackEnd::Buf)).unwrap();
+        assert_eq!(plt_params.get_backend().unwrap(), PltBackEnd::Buf);
+    }
+    #[test]
+    fn plot_params_xlabel() {
+        let mut plt_params = PlotParameters::default();
+        plt_params.set(&PlotArgs::XLabel("x test".into())).unwrap();
+        assert_eq!(plt_params.get_x_label().unwrap(), "x test".to_owned());
+    }
+    #[test]
+    fn plot_params_xlabelpos() {
+        let mut plt_params = PlotParameters::default();
+        plt_params.set(&PlotArgs::XLabelPos(LabelPos::Top)).unwrap();
+        assert_eq!(plt_params.get_x_label_pos().unwrap(), LabelPos::Top);
+    }
+    #[test]
+    fn plot_params_ylabel() {
+        let mut plt_params = PlotParameters::default();
+        plt_params.set(&PlotArgs::YLabel("y test".into())).unwrap();
+        assert_eq!(plt_params.get_y_label().unwrap(), "y test".to_owned());
+    }
+    #[test]
+    fn plot_params_ylabelpos() {
+        let mut plt_params = PlotParameters::default();
+        plt_params
+            .set(&PlotArgs::YLabelPos(LabelPos::Right))
+            .unwrap();
+        assert_eq!(plt_params.get_y_label_pos().unwrap(), LabelPos::Right);
+    }
+    #[test]
+    fn plot_params_cbarlabel() {
+        let mut plt_params = PlotParameters::default();
+        plt_params
+            .set(&PlotArgs::CBarLabel("cbar test".into()))
+            .unwrap();
+        assert_eq!(plt_params.get_cbar_label().unwrap(), "cbar test".to_owned());
+    }
+    #[test]
+    fn plot_params_cbarlabelpos() {
+        let mut plt_params = PlotParameters::default();
+        plt_params
+            .set(&PlotArgs::CBarLabelPos(LabelPos::Left))
+            .unwrap();
+        assert_eq!(plt_params.get_cbar_label_pos().unwrap(), LabelPos::Left);
+    }
+    #[test]
+    fn plot_params_cmap() {
+        let mut plt_params = PlotParameters::default();
+        plt_params
+            .set(&PlotArgs::CMap(CGradient {
+                gradient: colorous::INFERNO,
+            }))
+            .unwrap();
+        assert_eq!(
+            format!("{:?}", plt_params.get_cmap().unwrap().get_gradient()),
+            "Gradient(Inferno)".to_owned()
+        );
+    }
+    #[test]
+    fn plot_params_ax_lims() {
+        let mut plt_params = PlotParameters::default();
+        plt_params.set(&PlotArgs::XLim(Some((0., 1.)))).unwrap();
+        assert_eq!(plt_params.get_xlim().unwrap().unwrap(), (0., 1.));
+        plt_params.set(&PlotArgs::XLim(None)).unwrap();
+        assert_eq!(plt_params.get_xlim().unwrap(), None);
+
+        plt_params.set(&PlotArgs::YLim(Some((0., 1.)))).unwrap();
+        assert_eq!(plt_params.get_ylim().unwrap().unwrap(), (0., 1.));
+        plt_params.set(&PlotArgs::YLim(None)).unwrap();
+        assert_eq!(plt_params.get_ylim().unwrap(), None);
+
+        plt_params.set(&PlotArgs::ZLim(Some((0., 1.)))).unwrap();
+        assert_eq!(plt_params.get_zlim().unwrap().unwrap(), (0., 1.));
+        plt_params.set(&PlotArgs::ZLim(None)).unwrap();
+        assert_eq!(plt_params.get_zlim().unwrap(), None);
+    }
+
+    #[test]
+    fn plot_params_color() {
+        let mut plt_params = PlotParameters::default();
+        plt_params
+            .set(&PlotArgs::Color(RGBAColor(255, 233, 211, 0.5)))
+            .unwrap();
+        assert_eq!(
+            plt_params.get_color().unwrap(),
+            RGBAColor(255, 233, 211, 0.5)
+        );
+    }
+    #[test]
+    fn plot_params_fdir() {
+        let mut plt_params = PlotParameters::default();
+        plt_params.set(&PlotArgs::FDir(".\\".to_owned())).unwrap();
+        assert_eq!(plt_params.get_fdir().unwrap(), ".\\".to_owned());
+    }
+    #[test]
+    fn plot_params_fname() {
+        let mut plt_params = PlotParameters::default();
+        plt_params
+            .set(&PlotArgs::FName("test_name.png".to_owned()))
+            .unwrap();
+        assert_eq!(plt_params.get_fname().unwrap(), "test_name.png".to_owned());
+    }
+}

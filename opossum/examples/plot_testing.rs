@@ -89,10 +89,13 @@ fn main() -> OpmResult<()> {
 
     plt_params
         .set(&PlotArgs::FName("triangle_test.png".into()))
+        .unwrap()
         .set(&PlotArgs::FDir("./opossum/playground/".into()))
-        .set(&PlotArgs::FigSize((800, 1000)));
+        .unwrap()
+        .set(&PlotArgs::FigSize((800, 1000)))
+        .unwrap();
 
-    plt_params.set(&PlotArgs::Backend(PltBackEnd::BMP));
+    plt_params.set(&PlotArgs::Backend(PltBackEnd::BMP)).unwrap();
 
     let points: Vec<Point> = dat
         .row_iter()
@@ -139,13 +142,18 @@ fn main() -> OpmResult<()> {
     let mut p_info_params = PlotParameters::default();
     p_info_params
         .set(&PlotArgs::Backend(PltBackEnd::BMP))
+        .unwrap()
         .set(&PlotArgs::FName("pre_bin.png".into()))
-        .set(&PlotArgs::FDir("./opossum/playground/".into()));
+        .unwrap()
+        .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .unwrap();
 
     let plt_type = PlotType::ColorMesh(p_info_params.clone());
     plt_type.plot(&plt_dat_origin)?;
 
-    p_info_params.set(&PlotArgs::FName("post_bin.png".into()));
+    p_info_params
+        .set(&PlotArgs::FName("post_bin.png".into()))
+        .unwrap();
     let plt_type = PlotType::ColorMesh(p_info_params.clone());
     plt_type.plot(&plt_dat_binned)?;
 
