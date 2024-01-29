@@ -259,7 +259,10 @@ impl Ray {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::spectrum::Spectrum;
+    use crate::{
+        spectrum::Spectrum,
+        spectrum_helper::{self, generate_filter_spectrum},
+    };
     use approx::{abs_diff_eq, assert_abs_diff_eq};
     use std::path::PathBuf;
     use uom::si::{energy::joule, length::nanometer};
@@ -678,5 +681,62 @@ mod test {
         assert_eq!(ray.position(), split_ray.position());
         assert_eq!(ray.dir, split_ray.dir);
         assert_eq!(ray.wavelength(), split_ray.wavelength());
+    }
+    #[test]
+    fn split_by_spectrum() {
+        let mut ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        let spectrum = generate_filter_spectrum(
+            Length::new::<nanometer>(500.0)..Length::new::<nanometer>(1500.0),
+            Length::new::<nanometer>(1.0),
+            &spectrum_helper::FilterType::ShortPassStep {
+                cut_off: Length::new::<nanometer>(1000.0),
+            },
+        )
+        .unwrap();
+        let splitting_config = SplittingConfig::Spectrum(spectrum);
+        let split_ray = ray.split(&splitting_config).unwrap();
+        assert_eq!(ray.energy(), Energy::new::<joule>(0.0));
+        assert_eq!(split_ray.energy(), Energy::new::<joule>(1.0));
+        let mut ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1001.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        let split_ray = ray.split(&splitting_config).unwrap();
+        assert_eq!(ray.energy(), Energy::zero());
+        assert_eq!(split_ray.energy(), Energy::new::<joule>(1.0));
+        let mut ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(999.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        let split_ray = ray.split(&&splitting_config).unwrap();
+        assert_eq!(ray.energy(), Energy::new::<joule>(1.0));
+        assert_eq!(split_ray.energy(), Energy::zero());
+    }
+    #[test]
+    fn split_by_spectrum_fail() {
+        let mut ray = Ray::new_collimated(
+            Point2::new(Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1501.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        let spectrum = generate_filter_spectrum(
+            Length::new::<nanometer>(500.0)..Length::new::<nanometer>(1500.0),
+            Length::new::<nanometer>(1.0),
+            &spectrum_helper::FilterType::ShortPassStep {
+                cut_off: Length::new::<nanometer>(1000.0),
+            },
+        )
+        .unwrap();
+        assert!(ray.split(&SplittingConfig::Spectrum(spectrum)).is_err());
     }
 }
