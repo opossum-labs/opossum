@@ -372,6 +372,25 @@ impl Spectrum {
             .map(|d| (d.0 .0, d.0 .1 * d.1 .1))
             .collect();
     }
+    /// Modify and generate spectrum for a beamsplitter.
+    #[must_use]
+    pub fn split_by_spectrum(&mut self, filter_spectrum: &Self) -> Self {
+        let mut resampled_spec = self.clone();
+        resampled_spec.resample(filter_spectrum);
+        let mut split_data = self.data.clone();
+        self.data = self
+            .data
+            .iter()
+            .zip(resampled_spec.data.iter())
+            .map(|d| (d.0 .0, d.0 .1 * d.1 .1))
+            .collect();
+        split_data = split_data
+            .iter()
+            .zip(resampled_spec.data.iter())
+            .map(|d| (d.0 .0, d.0 .1 * (1.0 - d.1 .1)))
+            .collect();
+        Self { data: split_data }
+    }
     /// Modify the spectrum by a given function or closure.
     pub fn map_mut<F>(&mut self, f: F)
     where

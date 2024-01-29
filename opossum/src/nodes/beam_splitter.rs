@@ -102,14 +102,20 @@ impl BeamSplitter {
                     match self.splitting_config() {
                         SplittingConfig::Ratio(r) => {
                             let mut s = e.spectrum.clone();
-                    s.scale_vertical(&r)?;
-                    let out1_spectrum = Some(s);
-                    let mut s = e.spectrum.clone();
-                    s.scale_vertical(&(1.0 - r))?;
-                    let out2_spectrum = Some(s);
-                    Ok((out1_spectrum, out2_spectrum))
+                            s.scale_vertical(&r)?;
+                            let out1_spectrum = Some(s);
+                            let mut s = e.spectrum.clone();
+                            s.scale_vertical(&(1.0 - r))?;
+                            let out2_spectrum = Some(s);
+                            Ok((out1_spectrum, out2_spectrum))
                         },
-                        SplittingConfig::Spectrum(_) => todo!(),
+                        SplittingConfig::Spectrum(spec) => {
+                            let mut s = e.spectrum.clone();
+                            let split_spectrum=s.split_by_spectrum(&spec);
+                            let out1_spectrum = Some(s);
+                            let out2_spectrum = Some(split_spectrum);
+                            Ok((out1_spectrum, out2_spectrum))
+                        },
                     }
                 },
                 _ => {
