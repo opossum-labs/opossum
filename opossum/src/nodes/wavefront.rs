@@ -399,11 +399,25 @@ impl Plottable for WaveFrontErrorMap {
     }
 
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
-        let plt_data = PlotData::Dim3(MatrixXx3::from_columns(&[
-            DVector::from_vec(self.x.clone()),
-            DVector::from_vec(self.y.clone()),
-            DVector::from_vec(self.wf_map.clone()),
-        ]));
-        Ok(self.bin_or_triangulate_data(plt_type, &plt_data))
+        let data = &self.light_data;
+        match data {
+            Some(LightData::Geometric(rays)) => {
+                let wavefront_error = rays.wavefront_error_in_lambda_at_wvl(1053.);
+                match plt_type {
+                    PlotType::ColorMesh(_) => {
+                        let binned_data =
+                            self.bin_2d_scatter_data(&PlotData::Dim3(wavefront_error));
+                        Ok(binned_data)
+                    }
+                    PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {
+                        let triangulated_dat =
+                            self.triangulate_plot_data(&PlotData::Dim3(wavefront_error), plt_type);
+                        Ok(triangulated_dat)
+                    }
+                    _ => Ok(None),
+                }
+            }
+            _ => Ok(None),
+        }
     }
 }
