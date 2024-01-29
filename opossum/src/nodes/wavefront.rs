@@ -63,6 +63,7 @@ impl WaveFront {
 /// The vector of [`WaveFrontErrorMap`] is necessary, e.g., to store the wavefront data for each spectral component of a pulse
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WaveFrontData {
+    /// vector of [`WaveFrontErrorMap`]. May contain only a single [`WaveFrontErrorMap`] if only calculated for a single wavelength
     pub wavefront_error_maps: Vec<WaveFrontErrorMap>,
 }
 
@@ -87,7 +88,7 @@ impl WaveFrontErrorMap {
     /// Creates a new [`WaveFrontErrorMap`]
     /// # Attributes
     /// - `wf_dat`: wavefront data as Matrix with 3 columns and dynamix number of rows. Columns are used as 1:x, 2:y, 3:z
-    /// - `wavelength`: wave length that is used for this WavefrontErrorMap
+    /// - `wavelength`: wave length that is used for this `WavefrontErrorMap`
     ///
     /// # Returns
     /// This method returns a [`WaveFrontErrorMap`] struct
@@ -256,7 +257,8 @@ impl PdfReportable for WaveFrontData {
             self.wavefront_error_maps[0].rms
         )));
         //todo! for all wavefronts!
-        let img = self.wavefront_error_maps[0].to_plot(Path::new(""), (1000, 850), PltBackEnd::Buf)?;
+        let img =
+            self.wavefront_error_maps[0].to_plot(Path::new(""), (1000, 850), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),

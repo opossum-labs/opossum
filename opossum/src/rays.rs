@@ -387,8 +387,13 @@ impl Rays {
         })
     }
     /// Returns the wavefront of the bundle of [`Rays`] at the center wavelength or at each band of the spectrum with a defined resolution.
-    ///
     /// This function calculates the wavefront of a ray bundle as multiple of its wavelength with reference to the ray that is closest to the optical axis.
+    /// # Attributes
+    /// - `center_wavelength_flag`: flag to define if the center wavelength should be used for calculation or if a wavefront for all spectral components should be analyzed
+    /// - `spec_res`: spectral resolution to calculate the center wavelength or for individal spectral analysis
+    ///
+    /// # Errors
+    /// This function errors for the moment if `center_wavelength_flag` is set to false
     pub fn get_wavefront_data_in_units_of_wvl(
         &self,
         center_wavelength_flag: bool,

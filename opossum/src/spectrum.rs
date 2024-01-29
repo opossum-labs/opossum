@@ -257,7 +257,7 @@ impl Spectrum {
         let weighted_spec_int_vec = self
             .data
             .windows(2)
-            .map(|l| (l[1].0 - l[0].0) * (l[1].1 * l[1].0 + l[0].1 * l[0].0))
+            .map(|l| (l[1].0 - l[0].0) * (l[1].1.mul_add(l[1].0, l[0].1 * l[0].0)))
             .collect::<Vec<f64>>();
 
         let weighted_spec_int_kahan: kahan::KahanSum<f64> =

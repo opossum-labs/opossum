@@ -658,7 +658,7 @@ impl PlotData {
     /// Gets the minimum and maximum values of all axes
     /// # Attributes
     /// - `wf_dat`: wavefront data as Matrix with 3 columns and dynamix number of rows. Columns are used as 1:x, 2:y, 3:z
-    /// - `wavelength`: wave length that is used for this WavefrontErrorMap
+    /// - `wavelength`: wave length that is used for this `WavefrontErrorMap`
     ///
     /// # Returns
     /// This method returns a vector of axes limits [`Vec<AxLims>`]
@@ -825,13 +825,9 @@ pub trait Plottable {
         plt_data: &PlotData,
     ) -> Option<PlotData> {
         match plt_type {
-            PlotType::ColorMesh(_) => {
-                let binned_data = self.bin_2d_scatter_data(plt_data);
-                binned_data
-            }
+            PlotType::ColorMesh(_) => self.bin_2d_scatter_data(plt_data),
             PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {
-                let triangulated_dat = self.triangulate_plot_data(plt_data, plt_type);
-                triangulated_dat
+                self.triangulate_plot_data(plt_data, plt_type)
             }
             _ => None,
         }
