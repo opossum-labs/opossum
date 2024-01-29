@@ -775,15 +775,15 @@ impl Dottable for NodeGroup {
 
 #[cfg(test)]
 mod test {
-    use approx::assert_abs_diff_eq;
-
     use super::*;
     use crate::{
         lightdata::DataEnergy,
         nodes::{BeamSplitter, Detector, Dummy, Source},
         optical::Optical,
         spectrum_helper::create_he_ne_spec,
+        SplittingConfig,
     };
+    use approx::assert_abs_diff_eq;
     #[test]
     fn default() {
         let node = NodeGroup::default();
@@ -874,7 +874,7 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
-        let sub_node3 = BeamSplitter::new("test", 0.5).unwrap();
+        let sub_node3 = BeamSplitter::new("test", &SplittingConfig::Ratio(0.5)).unwrap();
         let sn3_i = og.add_node(sub_node3).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
         og.connect_nodes(sn2_i, "rear", sn3_i, "input1").unwrap();
@@ -884,7 +884,7 @@ mod test {
     fn output_nodes() {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
-        let sub_node1 = BeamSplitter::new("test", 0.5).unwrap();
+        let sub_node1 = BeamSplitter::new("test", &SplittingConfig::Ratio(0.5)).unwrap();
         let sn2_i = og.add_node(sub_node1).unwrap();
         let sn3_i = og.add_node(Dummy::new("n3")).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
@@ -1002,7 +1002,7 @@ mod test {
         let mut group = NodeGroup::default();
         let g1_n1 = group.add_node(Dummy::new("node1")).unwrap();
         let g1_n2 = group
-            .add_node(BeamSplitter::new("test", 0.6).unwrap())
+            .add_node(BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap())
             .unwrap();
         group
             .map_output_port(g1_n2, "out1_trans1_refl2", "output")

@@ -6,7 +6,7 @@ use opossum::{
     nodes::{BeamSplitter, EnergyMeter, FilterType, IdealFilter, Source, Spectrometer},
     spectrum::Spectrum,
     spectrum_helper::create_he_ne_spec,
-    OpticScenery,
+    OpticScenery, SplittingConfig,
 };
 
 fn main() -> OpmResult<()> {
@@ -19,7 +19,7 @@ fn main() -> OpmResult<()> {
             spectrum: create_he_ne_spec(1.0)?,
         }),
     ));
-    let i_bs = scenery.add_node(BeamSplitter::new("bs", 0.6).unwrap());
+    let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap());
     let filter_spectrum = Spectrum::from_csv("./opossum/NE03B.csv")?;
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",

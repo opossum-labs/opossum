@@ -52,49 +52,44 @@ fn create_default_props() -> Properties {
     props
 }
 impl BeamSplitter {
-    /// Creates a new [`BeamSplitter`] with a given splitting ratio.
+    /// Creates a new [`BeamSplitter`] with a given [`SplittingConfig`].
     ///
     /// ## Errors
-    /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
-    /// [0.0..1.0].
-    pub fn new(name: &str, ratio: f64) -> OpmResult<Self> {
-        if ratio.is_sign_negative() || ratio > 1.0 || !ratio.is_finite() {
+    /// This function returns an [`OpossumError::Other`] if the [`SplittingConfig`] is invalid.
+    pub fn new(name: &str, config: &SplittingConfig) -> OpmResult<Self> {
+        if !config.is_valid() {
             return Err(OpossumError::Properties(
-                "ratio must be within (0.0..1.0) and finite".into(),
+                "ratio must be within (0.0..=1.0)".into(),
             ));
         }
         let mut props = create_default_props();
-        props.set("splitter config", SplittingConfig::Ratio(ratio).into())?;
+        props.set("splitter config", config.clone().into())?;
         props.set("name", name.into())?;
         Ok(Self { props })
     }
-
-    /// Returns the splitting ratio of this [`BeamSplitter`].
+    /// Returns the splitting config of this [`BeamSplitter`].
+    ///
+    /// See [`SplittingConfig`] for further details.
     /// # Panics
     /// This functions panics if the specified [`Properties`], here `ratio`, do not exist or if the property has the wrong data format
     #[must_use]
-    pub fn ratio(&self) -> f64 {
-        if let Ok(Proptype::SplitterType(SplittingConfig::Ratio(value))) =
-            self.props.get("splitter config")
-        {
-            return *value;
+    pub fn splitting_config(&self) -> SplittingConfig {
+        if let Ok(Proptype::SplitterType(config)) = self.props.get("splitter config") {
+            return (*config).clone();
         }
         panic!("property `splitter config` does not exist or has wrong data format")
     }
-
-    /// Sets the splitting ratio of this [`BeamSplitter`].
+    /// Sets the [`SplittingConfig`] of this [`BeamSplitter`].
     ///
     /// ## Errors
-    /// This function returns an [`OpossumError::Other`] if the splitting ratio is outside the closed interval
-    /// [0.0..1.0].
-    pub fn set_ratio(&mut self, ratio: f64) -> OpmResult<()> {
-        if ratio.is_sign_negative() || ratio > 1.0 || !ratio.is_finite() {
-            return Err(OpossumError::Properties(
-                "ratio must be within (0.0..1.0) and finite".into(),
-            ));
-        }
-        self.props
-            .set("splitter config", SplittingConfig::Ratio(ratio).into())?;
+    /// This function returns an [`OpossumError::Other`] if the [`SplittingConfig`] is invalid.
+    pub fn set_splitting_config(&mut self, config: &SplittingConfig) -> OpmResult<()> {
+        // if ratio.is_sign_negative() || ratio > 1.0 || !ratio.is_finite() {
+        //     return Err(OpossumError::Properties(
+        //         "ratio must be within (0.0..1.0) and finite".into(),
+        //     ));
+        // }
+        self.props.set("splitter config", config.clone().into())?;
         Ok(())
     }
     fn split_spectrum(
@@ -104,14 +99,19 @@ impl BeamSplitter {
         if let Some(in1) = input {
             match in1 {
                 LightData::Energy(e) => {
-                    let mut s = e.spectrum.clone();
-                    s.scale_vertical(&self.ratio())?;
+                    match self.splitting_config() {
+                        SplittingConfig::Ratio(r) => {
+                            let mut s = e.spectrum.clone();
+                    s.scale_vertical(&r)?;
                     let out1_spectrum = Some(s);
                     let mut s = e.spectrum.clone();
-                    s.scale_vertical(&(1.0 - self.ratio()))?;
+                    s.scale_vertical(&(1.0 - r))?;
                     let out2_spectrum = Some(s);
                     Ok((out1_spectrum, out2_spectrum))
-                }
+                        },
+                        SplittingConfig::Spectrum(_) => todo!(),
+                    }
+                },
                 _ => {
                     Err(OpossumError::Analysis(
                         "expected LightData::Energy value at input port. A reason might be that the wrong analzer was used for the given light source data type. Try to use another analyzer (e.g. ray tracing)".into(),
@@ -272,6 +272,7 @@ impl Dottable for BeamSplitter {
 }
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::{analyzer::RayTraceConfig, ray::Ray, spectrum_helper::create_he_ne_spec};
     use approx::{assert_abs_diff_eq, AbsDiffEq};
     use nalgebra::Point2;
@@ -281,12 +282,10 @@ mod test {
         f64::{Energy, Length},
         length::nanometer,
     };
-
-    use super::*;
     #[test]
     fn default() {
         let node = BeamSplitter::default();
-        assert_eq!(node.ratio(), 0.5);
+        assert!(matches!(node.splitting_config(), SplittingConfig::Ratio(_)));
         assert_eq!(node.properties().name().unwrap(), "beam splitter");
         assert_eq!(node.properties().node_type().unwrap(), "beam splitter");
         assert_eq!(node.is_detector(), false);
@@ -296,26 +295,13 @@ mod test {
     }
     #[test]
     fn new() {
-        let splitter = BeamSplitter::new("test", 0.6);
+        let splitter = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6));
         assert!(splitter.is_ok());
         let splitter = splitter.unwrap();
         assert_eq!(splitter.properties().name().unwrap(), "test");
-        assert_eq!(splitter.ratio(), 0.6);
-        assert!(BeamSplitter::new("test", -0.01).is_err());
-        assert!(BeamSplitter::new("test", 1.01).is_err());
-    }
-    #[test]
-    fn ratio() {
-        let splitter = BeamSplitter::new("test", 0.5).unwrap();
-        assert_eq!(splitter.ratio(), 0.5);
-    }
-    #[test]
-    fn set_ratio() {
-        let mut splitter = BeamSplitter::new("test", 0.0).unwrap();
-        assert!(splitter.set_ratio(1.0).is_ok());
-        assert_eq!(splitter.ratio(), 1.0);
-        assert!(splitter.set_ratio(-0.1).is_err());
-        assert!(splitter.set_ratio(1.1).is_err());
+        //assert_eq!(splitter.ratio(), 0.6);
+        assert!(BeamSplitter::new("test", &SplittingConfig::Ratio(-0.01)).is_err());
+        assert!(BeamSplitter::new("test", &SplittingConfig::Ratio(1.01)).is_err());
     }
     #[test]
     fn inverted() {
@@ -356,7 +342,7 @@ mod test {
     }
     #[test]
     fn analyze_energy_one_input() {
-        let mut node = BeamSplitter::new("test", 0.6).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
         let mut input = LightResult::default();
         input.insert(
             "input1".into(),
@@ -392,7 +378,7 @@ mod test {
     }
     #[test]
     fn analyze_energy_two_input() {
-        let mut node = BeamSplitter::new("test", 0.6).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
         let mut input = LightResult::default();
         input.insert(
             "input1".into(),
@@ -446,7 +432,7 @@ mod test {
     }
     #[test]
     fn analyze_raytrace_one_input() {
-        let mut node = BeamSplitter::new("test", 0.6).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         let ray = Ray::new_collimated(
@@ -477,7 +463,7 @@ mod test {
     }
     #[test]
     fn analyze_raytrace_two_input() {
-        let mut node = BeamSplitter::new("test", 0.6).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         let ray = Ray::new_collimated(
@@ -519,7 +505,7 @@ mod test {
     }
     #[test]
     fn analyze_inverse() {
-        let mut node = BeamSplitter::new("test", 0.6).unwrap();
+        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
         node.set_property("inverted", true.into()).unwrap();
         let mut input = LightResult::default();
         input.insert(

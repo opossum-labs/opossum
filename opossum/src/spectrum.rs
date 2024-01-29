@@ -178,6 +178,13 @@ impl Spectrum {
             Err(OpossumError::Spectrum("insertion point not found".into()))
         }
     }
+    /// Check if the [`Spectrum`] could server as a transmission spectrum.
+    ///
+    /// This functions checks if all values are in the range (0.0..=1.0)
+    #[must_use]
+    pub fn is_transmission_spectrum(&self) -> bool {
+        self.data.iter().all(|d| (0.0..=1.0).contains(&d.1))
+    }
     /// Returns the iterator of this [`Spectrum`].
     pub fn iter(&self) -> std::slice::Iter<'_, (f64, f64)> {
         self.data.iter()

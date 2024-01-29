@@ -6,7 +6,7 @@ use opossum::{
         create_collimated_ray_source, BeamSplitter, EnergyMeter, IdealFilter, NodeGroup,
         ParaxialSurface, Propagation, SpotDiagram,
     },
-    OpticScenery,
+    OpticScenery, SplittingConfig,
 };
 use uom::si::{
     energy::joule,
@@ -33,7 +33,7 @@ fn main() -> OpmResult<()> {
         "f=200",
         Length::new::<millimeter>(200.0),
     )?);
-    let i_bs = scenery.add_node(BeamSplitter::new("1% BS", 0.99)?);
+    let i_bs = scenery.add_node(BeamSplitter::new("1% BS", &SplittingConfig::Ratio(0.99))?);
     let i_e1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
         opossum::nodes::Metertype::IdealEnergyMeter,
@@ -57,7 +57,7 @@ fn main() -> OpmResult<()> {
     // Cam Box
     let mut cam_box = NodeGroup::new("CamBox");
 
-    let i_cb_bs = cam_box.add_node(BeamSplitter::new("50/50 BS", 0.5)?)?;
+    let i_cb_bs = cam_box.add_node(BeamSplitter::new("50/50 BS", &SplittingConfig::Ratio(0.5))?)?;
     let i_cb_l = cam_box.add_node(ParaxialSurface::new(
         "FF lens",
         Length::new::<millimeter>(100.0),

@@ -28,6 +28,18 @@ impl From<SplittingConfig> for Proptype {
         Self::SplitterType(value)
     }
 }
+impl SplittingConfig {
+    /// Check validity of [`SplittingConfig`].
+    ///
+    /// This function returns ture if all values in a spectrum or the ratio is in the range (0.0..=1.0).
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        match self {
+            Self::Ratio(r) => (0.0..=1.0).contains(r),
+            Self::Spectrum(s) => s.is_transmission_spectrum(),
+        }
+    }
+}
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {

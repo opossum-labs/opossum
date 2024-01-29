@@ -1,5 +1,6 @@
 use opossum::error::OpmResult;
 use opossum::optical::Optical;
+use opossum::SplittingConfig;
 use opossum::{
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, EnergyMeter, Source},
@@ -18,7 +19,7 @@ fn main() -> OpmResult<()> {
             spectrum: create_he_ne_spec(1.0)?,
         }),
     ));
-    let mut bs = BeamSplitter::new("bs", 0.6).unwrap();
+    let mut bs = BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap();
     bs.set_property("inverted", true.into()).unwrap();
     let i_bs = scenery.add_node(bs);
     let i_d1 = scenery.add_node(EnergyMeter::new(
