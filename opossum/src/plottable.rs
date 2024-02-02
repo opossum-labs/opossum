@@ -608,12 +608,12 @@ impl PlotData {
     /// # Returns
     /// This method returns the maximum and minimum data values on this axis in form of an [`AxLims`] struct
     #[must_use]
-    pub fn get_min_max_data_values(&self, ax_vals: &DVectorSlice<'_, f64>) -> Option<AxLims> {
+    pub fn get_min_max_data_values(&self, ax_vals: &DVectorSlice<'_, f64>) -> AxLims {
         let filtered_ax_vals = Self::filter_nan_infinite(ax_vals);
-        Some(AxLims {
+        AxLims {
             min: filtered_ax_vals.min(),
             max: filtered_ax_vals.max(),
-        })
+        }
     }
 
     /// Gets the minimum and maximum values of all axes
@@ -624,12 +624,12 @@ impl PlotData {
     /// # Returns
     /// This method returns a vector of axes limits [`Vec<AxLims>`]
     #[must_use]
-    pub fn get_axes_min_max_ranges(&self) -> Vec<Option<AxLims>> {
+    pub fn get_axes_min_max_ranges(&self) -> Vec<AxLims> {
         match self {
             Self::Dim2(dat) => vec![
                 self.get_min_max_data_values(&dat.column(0)),
                 self.get_min_max_data_values(&dat.column(1)),
-                None,
+                
             ],
             Self::Dim3(dat)
             | Self::ColorTriangulated(_, _, dat)
@@ -670,16 +670,15 @@ impl PlotData {
     /// - `expand_flag`: true if the ax bounds should expand by +- 10%, such that the data is not on the edge of the plot. false for no expansion
     /// # Returns
     /// This function returns a Vector of optional [`AxLims`]
+    /// # Panics
+    /// This function panics if the expand_lims function fails. As this only happens for a non-normal number this cannnot happen here.
     #[must_use]
-    fn define_data_based_axes_bounds(&self, expand_flag: bool) -> Vec<Option<AxLims>> {
+    fn define_data_based_axes_bounds(&self, expand_flag: bool) -> Vec<AxLims> {
         let mut ax_lims = self.get_axes_min_max_ranges();
 
         if expand_flag {
             for ax_lim in &mut ax_lims {
-                if ax_lim.is_some() {
-                    ax_lim.unwrap().max -= 0.1 * ax_lim.unwrap().max;
-                    ax_lim.unwrap().min -= 0.1 * ax_lim.unwrap().min;
-                }
+                ax_lim.expand_lims(0.1).unwrap();
             }
         };
         ax_lims
@@ -722,6 +721,22 @@ impl AxLims {
             && (self.max - self.min).abs() > f64::EPSILON
             && self.max > self.min
     }
+
+    /// Shifts the minimum and the maximum to lower and higher values respectively.
+    /// The extend of the shift is expressed as a relative ratio of the full range
+    /// # Attributes
+    /// -`ratio`: relative extension of the range. must be positive, non-zero, not NAN and finite
+    pub fn expand_lims(&mut self, expansion_ratio: f64) -> OpmResult<()>{
+        if expansion_ratio.is_normal() && expansion_ratio.is_sign_positive(){
+            let range = self.max - self.min;
+            self.max += range*expansion_ratio;
+            self.min -= range*expansion_ratio;
+            Ok(())
+        }
+        else{
+            Err(OpossumError::Other("Expansion ratio must be normal!".into()))
+        }
+    } 
 }
 
 /// Trait for adding the possibility to generate a (x/y) plot of an element.
@@ -1549,14 +1564,15 @@ impl Plot {
     pub fn define_axes_bounds(&mut self) -> OpmResult<()> {
         if let Some(dat) = &self.data {
             let axes_limits = dat.define_data_based_axes_bounds(false);
+            
             if self.bounds.x.is_none() {
-                self.bounds.x = axes_limits[0];
+                self.bounds.x = Some(axes_limits[0]);
             }
             if self.bounds.y.is_none() {
-                self.bounds.y = axes_limits[1];
+                self.bounds.y = Some(axes_limits[1]);
             }
-            if self.bounds.z.is_none() {
-                self.bounds.z = axes_limits[2];
+            if axes_limits.len() == 3 && self.bounds.z.is_none() {
+                self.bounds.z = Some(axes_limits[2]);
             }
             Ok(())
         } else {
@@ -2169,7 +2185,19 @@ mod test {
             assert!((xy[(0, 1)] - 3.).abs() < f64::EPSILON);
         }
     }
+    #[test]
+    fn define_data_based_axes_bounds_test(){
+        let x = linspace(0., 1., 2.).unwrap().transpose();
+        let dat_2d = MatrixXx2::from_columns(&[x.clone(), x]);
+        let plt_dat_dim2 = PlotData::Dim2(dat_2d);
 
+        let axlims = plt_dat_dim2.define_data_based_axes_bounds(true);
+        assert!((axlims[0].min + 0.1).abs() < f64::EPSILON);
+        assert!((axlims[0].max - 1.1).abs() < f64::EPSILON);
+        assert!((axlims[1].min + 0.1).abs() < f64::EPSILON);
+        assert!((axlims[1].max - 1.1).abs() < f64::EPSILON);
+
+    }
     #[test]
     fn define_plot_axes_bounds() {
         //define test data
@@ -2283,5 +2311,25 @@ mod test {
     fn cgradient_get_gradient(){
         let c_grad = CGradient::default();
         assert_eq!(format!("{:?}", c_grad.get_gradient()),"Gradient(Turbo)".to_owned());
+    }
+    #[test]
+    fn axlim_new(){
+        assert!(AxLims::new(-10.,10.).is_ok());
+        assert!(AxLims::new(0.,f64::NAN).is_err());
+
+        assert!((AxLims::new(-10.,10.).unwrap().min + 10.).abs() < f64::EPSILON);
+        assert!((AxLims::new(-10.,10.).unwrap().max - 10.).abs() < f64::EPSILON);
+    }
+    #[test]
+    fn axlim_expand(){
+        let mut axlim = AxLims::new(-10.,10.).unwrap();
+        let _ = axlim.expand_lims(0.1);
+
+        assert!((axlim.min + 12.).abs() < f64::EPSILON);
+        assert!((axlim.max - 12.).abs() < f64::EPSILON);
+        assert!(axlim.expand_lims(-1.).is_err());
+        assert!(axlim.expand_lims(f64::NAN).is_err());
+        assert!(axlim.expand_lims(f64::INFINITY).is_err());
+        assert!(axlim.expand_lims(0.).is_err());
     }
 }

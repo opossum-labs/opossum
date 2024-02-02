@@ -322,7 +322,7 @@ impl Plottable for WaveFront {
 
         if let Some(plt_data) = &mut plt_data_opt {
             let ranges = plt_data.get_axes_min_max_ranges();
-            if ranges[2].unwrap().min > -1e-3 && ranges[2].unwrap().max < 1e-3 {
+            if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
                 _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
                     min: -1e-3,
                     max: 1e-3,
@@ -388,7 +388,7 @@ impl Plottable for WaveFrontErrorMap {
 
         if let Some(plt_data) = &mut plt_data_opt {
             let ranges = plt_data.get_axes_min_max_ranges();
-            if ranges[2].unwrap().min > -1e-3 && ranges[2].unwrap().max < 1e-3 {
+            if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
                 _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
                     min: -1e-3,
                     max: 1e-3,
