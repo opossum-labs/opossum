@@ -301,6 +301,7 @@ impl Plottable for WaveFront {
                 .set(&PlotArgs::FigSize(img_size))?,
         };
         plt_params.set(&PlotArgs::Backend(backend))?;
+
         plt_params.set(&PlotArgs::XLabel("x distance in mm".into()))?;
         plt_params.set(&PlotArgs::YLabel("y distance in mm".into()))?;
         plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()))?;
@@ -320,8 +321,8 @@ impl Plottable for WaveFront {
             };
 
         if let Some(plt_data) = &mut plt_data_opt {
-            let ranges = plt_data.get_axes_min_max_ranges()?;
-            if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
+            let ranges = plt_data.get_axes_min_max_ranges();
+            if ranges[2].unwrap().min > -1e-3 && ranges[2].unwrap().max < 1e-3 {
                 _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
                     min: -1e-3,
                     max: 1e-3,
@@ -358,21 +359,21 @@ impl Plottable for WaveFrontErrorMap {
     ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
         match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size)),
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
             _ => plt_params
                 .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))
+                ))?
                 .set(&PlotArgs::FDir(
                     f_path.parent().unwrap().to_str().unwrap().to_owned(),
-                ))
-                .set(&PlotArgs::FigSize(img_size)),
+                ))?
+                .set(&PlotArgs::FigSize(img_size))?,
         };
-        plt_params.set(&PlotArgs::Backend(backend));
+        plt_params.set(&PlotArgs::Backend(backend))?;
 
-        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()));
-        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()));
-        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()));
+        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()))?;
+        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()))?;
+        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()))?;
 
         let (mut plt_data_opt, mut plt_type) = if self.x.is_empty() {
             (None, PlotType::ColorMesh(plt_params))
@@ -386,8 +387,8 @@ impl Plottable for WaveFrontErrorMap {
         };
 
         if let Some(plt_data) = &mut plt_data_opt {
-            let ranges = plt_data.get_axes_min_max_ranges()?;
-            if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
+            let ranges = plt_data.get_axes_min_max_ranges();
+            if ranges[2].unwrap().min > -1e-3 && ranges[2].unwrap().max < 1e-3 {
                 _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
                     min: -1e-3,
                     max: 1e-3,
@@ -399,25 +400,11 @@ impl Plottable for WaveFrontErrorMap {
     }
 
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
-        let data = &self.light_data;
-        match data {
-            Some(LightData::Geometric(rays)) => {
-                let wavefront_error = rays.wavefront_error_in_lambda_at_wvl(1053.);
-                match plt_type {
-                    PlotType::ColorMesh(_) => {
-                        let binned_data =
-                            self.bin_2d_scatter_data(&PlotData::Dim3(wavefront_error));
-                        Ok(binned_data)
-                    }
-                    PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {
-                        let triangulated_dat =
-                            self.triangulate_plot_data(&PlotData::Dim3(wavefront_error), plt_type);
-                        Ok(triangulated_dat)
-                    }
-                    _ => Ok(None),
-                }
-            }
-            _ => Ok(None),
-        }
+        let plt_data = PlotData::Dim3(MatrixXx3::from_columns(&[
+            DVector::from_vec(self.x.clone()),
+            DVector::from_vec(self.y.clone()),
+            DVector::from_vec(self.wf_map.clone()),
+        ]));
+        Ok(self.bin_or_triangulate_data(plt_type, &plt_data))
     }
 }

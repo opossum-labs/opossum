@@ -162,8 +162,15 @@ fn main() -> OpmResult<()> {
 
 fn bin_2d_scatter_data(plt_dat: &PlotData) -> Option<PlotData> {
     if let PlotData::Dim3(dat) = plt_dat {
-        let (x_range, x_min, x_max) = plt_dat.get_min_max_range(&dat.column(0));
-        let (y_range, y_min, y_max) = plt_dat.get_min_max_range(&dat.column(1));
+        let ranges = plt_dat.get_axes_min_max_ranges();
+        let x_axlims = ranges[0];
+        let x_range = x_axlims.unwrap().max - x_axlims.unwrap().min;
+        let x_min = x_axlims.unwrap().min;
+        let x_max = x_axlims.unwrap().max;
+        let y_axlims = ranges[1];
+        let y_range = y_axlims.unwrap().max - y_axlims.unwrap().min;
+        let y_min = y_axlims.unwrap().min;
+        let y_max = y_axlims.unwrap().max;
 
         let num_entries = dat.column(0).len();
         let mut num = f64::sqrt(num_entries as f64 / 2.).floor();

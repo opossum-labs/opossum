@@ -251,8 +251,6 @@ impl Rays {
         let mut min_radius = f64::INFINITY;
         let mut path_length_at_center = 0.;
         for (i, ray) in self.rays.iter().enumerate() {
-
-
             let position = Vector2::new(
                 ray.position().x.get::<millimeter>(),
                 ray.position().y.get::<millimeter>(),
