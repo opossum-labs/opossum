@@ -90,7 +90,7 @@ fn main() -> OpmResult<()> {
     plt_params
         .set(&PlotArgs::FName("triangle_test.png".into()))
         .unwrap()
-        .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .set(&PlotArgs::FDir("./../opossum/playground/".into()))
         .unwrap()
         .set(&PlotArgs::FigSize((800, 1000)))
         .unwrap();
