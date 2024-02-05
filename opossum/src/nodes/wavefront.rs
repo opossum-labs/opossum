@@ -290,21 +290,21 @@ impl Plottable for WaveFront {
     ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
         match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size)),
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
             _ => plt_params
                 .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))
+                ))?
                 .set(&PlotArgs::FDir(
                     f_path.parent().unwrap().to_str().unwrap().to_owned(),
-                ))
-                .set(&PlotArgs::FigSize(img_size)),
+                ))?
+                .set(&PlotArgs::FigSize(img_size))?,
         };
-        plt_params.set(&PlotArgs::Backend(backend));
+        plt_params.set(&PlotArgs::Backend(backend))?;
 
-        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()));
-        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()));
-        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()));
+        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()))?;
+        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()))?;
+        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()))?;
 
         let (mut plt_data_opt, mut plt_type) =
             if let Some(LightData::Geometric(rays)) = &self.light_data {
@@ -321,7 +321,7 @@ impl Plottable for WaveFront {
             };
 
         if let Some(plt_data) = &mut plt_data_opt {
-            let ranges = plt_data.get_axes_min_max_ranges()?;
+            let ranges = plt_data.get_axes_min_max_ranges();
             if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
                 _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
                     min: -1e-3,
@@ -359,21 +359,21 @@ impl Plottable for WaveFrontErrorMap {
     ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
         match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size)),
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
             _ => plt_params
                 .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))
+                ))?
                 .set(&PlotArgs::FDir(
                     f_path.parent().unwrap().to_str().unwrap().to_owned(),
-                ))
-                .set(&PlotArgs::FigSize(img_size)),
+                ))?
+                .set(&PlotArgs::FigSize(img_size))?,
         };
-        plt_params.set(&PlotArgs::Backend(backend));
+        plt_params.set(&PlotArgs::Backend(backend))?;
 
-        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()));
-        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()));
-        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()));
+        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()))?;
+        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()))?;
+        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()))?;
 
         let (mut plt_data_opt, mut plt_type) = if self.x.is_empty() {
             (None, PlotType::ColorMesh(plt_params))
@@ -387,7 +387,7 @@ impl Plottable for WaveFrontErrorMap {
         };
 
         if let Some(plt_data) = &mut plt_data_opt {
-            let ranges = plt_data.get_axes_min_max_ranges()?;
+            let ranges = plt_data.get_axes_min_max_ranges();
             if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
                 _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
                     min: -1e-3,

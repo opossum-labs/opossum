@@ -185,17 +185,17 @@ impl Plottable for SpotDiagram {
     ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
         match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size)),
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
             _ => plt_params
                 .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))
+                ))?
                 .set(&PlotArgs::FDir(
                     f_path.parent().unwrap().to_str().unwrap().to_owned(),
-                ))
-                .set(&PlotArgs::FigSize(img_size)),
+                ))?
+                .set(&PlotArgs::FigSize(img_size))?,
         };
-        plt_params.set(&PlotArgs::Backend(backend));
+        plt_params.set(&PlotArgs::Backend(backend))?;
 
         let plt_type = PlotType::Scatter2D(plt_params);
 

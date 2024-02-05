@@ -89,10 +89,13 @@ fn main() -> OpmResult<()> {
 
     plt_params
         .set(&PlotArgs::FName("triangle_test.png".into()))
-        .set(&PlotArgs::FDir("./opossum/playground/".into()))
-        .set(&PlotArgs::FigSize((800, 1000)));
+        .unwrap()
+        .set(&PlotArgs::FDir("./../opossum/playground/".into()))
+        .unwrap()
+        .set(&PlotArgs::FigSize((800, 1000)))
+        .unwrap();
 
-    plt_params.set(&PlotArgs::Backend(PltBackEnd::BMP));
+    plt_params.set(&PlotArgs::Backend(PltBackEnd::BMP)).unwrap();
 
     let points: Vec<Point> = dat
         .row_iter()
@@ -139,13 +142,18 @@ fn main() -> OpmResult<()> {
     let mut p_info_params = PlotParameters::default();
     p_info_params
         .set(&PlotArgs::Backend(PltBackEnd::BMP))
+        .unwrap()
         .set(&PlotArgs::FName("pre_bin.png".into()))
-        .set(&PlotArgs::FDir("./opossum/playground/".into()));
+        .unwrap()
+        .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .unwrap();
 
     let plt_type = PlotType::ColorMesh(p_info_params.clone());
     plt_type.plot(&plt_dat_origin)?;
 
-    p_info_params.set(&PlotArgs::FName("post_bin.png".into()));
+    p_info_params
+        .set(&PlotArgs::FName("post_bin.png".into()))
+        .unwrap();
     let plt_type = PlotType::ColorMesh(p_info_params.clone());
     plt_type.plot(&plt_dat_binned)?;
 
@@ -154,8 +162,15 @@ fn main() -> OpmResult<()> {
 
 fn bin_2d_scatter_data(plt_dat: &PlotData) -> Option<PlotData> {
     if let PlotData::Dim3(dat) = plt_dat {
-        let (x_range, x_min, x_max) = plt_dat.get_min_max_range(&dat.column(0));
-        let (y_range, y_min, y_max) = plt_dat.get_min_max_range(&dat.column(1));
+        let ranges = plt_dat.get_axes_min_max_ranges();
+        let x_axlims = ranges[0];
+        let x_range = x_axlims.max - x_axlims.min;
+        let x_min = x_axlims.min;
+        let x_max = x_axlims.max;
+        let y_axlims = ranges[1];
+        let y_range = y_axlims.max - y_axlims.min;
+        let y_min = y_axlims.min;
+        let y_max = y_axlims.max;
 
         let num_entries = dat.column(0).len();
         let mut num = f64::sqrt(num_entries as f64 / 2.).floor();

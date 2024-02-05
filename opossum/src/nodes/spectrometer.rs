@@ -265,17 +265,17 @@ impl Plottable for Spectrometer {
     ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
         match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size)),
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
             _ => plt_params
                 .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))
+                ))?
                 .set(&PlotArgs::FDir(
                     f_path.parent().unwrap().to_str().unwrap().to_owned(),
-                ))
-                .set(&PlotArgs::FigSize(img_size)),
+                ))?
+                .set(&PlotArgs::FigSize(img_size))?,
         };
-        plt_params.set(&PlotArgs::Backend(backend));
+        plt_params.set(&PlotArgs::Backend(backend))?;
 
         let plt_type = PlotType::Line2D(plt_params);
 
@@ -284,13 +284,6 @@ impl Plottable for Spectrometer {
         plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
     }
 
-    // fn get_plot_data(&self) -> OpmResult<MatrixXx2<f64>>{
-    //     match &self.light_data {
-    //         Some(LightData::Energy(e)) => Ok(e.spectrum.get_plot_data()),
-    //         Some(LightData::Geometric(r)) => Ok(r.to_spectrum(&Length::new::<nanometer>(0.2))?.get_plot_data()),
-    //         _ => Err(OpossumError::Other("lightdata type not defined!".into()))
-    //     }
-    // }
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
         let data = &self.light_data;
         match data {
