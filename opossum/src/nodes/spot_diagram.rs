@@ -190,9 +190,7 @@ impl Plottable for SpotDiagram {
                 .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
                 ))?
-                .set(&PlotArgs::FDir(
-                    f_path.parent().unwrap().to_str().unwrap().to_owned(),
-                ))?
+                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
                 .set(&PlotArgs::FigSize(img_size))?,
         };
         plt_params.set(&PlotArgs::Backend(backend))?;

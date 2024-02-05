@@ -1156,18 +1156,21 @@ impl PlotParameters {
     ///This method creates a default directory and default filename that is unused
     /// # Returns
     /// This method returns a (String, String) tuple with the first String being the directory and the second String being the filename
-    fn create_unused_filename_dir() -> (String, String) {
-        let current_dir = current_dir().unwrap().to_str().unwrap().to_owned() + "\\";
+    fn create_unused_filename_dir() -> (PathBuf, String) {
+        let cur_dir = current_dir().unwrap().to_str().unwrap().to_owned() + "\\";
         let mut i = 0;
         loop {
-            let fpath = current_dir.clone() + format!("opossum_default_plot_{i}.png").as_str();
+            let fpath = cur_dir.clone() + format!("opossum_default_plot_{i}.png").as_str();
             let path = Path::new(&fpath);
             if !path.exists() {
                 break;
             }
             i += 1;
         }
-        (current_dir, format!("opossum_default_plot_{i}.png"))
+        (
+            current_dir().unwrap(),
+            format!("opossum_default_plot_{i}.png"),
+        )
     }
 
     ///This method creates a new [`PlotParameters`] struct and inserts the passed [`PlotArgs`]. The other [`PlotArgs`] are set to default
@@ -1325,8 +1328,8 @@ impl PlotParameters {
     /// # Panics
     /// This method panics if the path cannot be casted to a str
     pub fn get_fpath(&self) -> OpmResult<String> {
-        let fdir = PathBuf::from(self.get_fdir()?);
-        let fname = PathBuf::from(self.get_fname()?);
+        let fdir = self.get_fdir()?;
+        let fname = self.get_fname()?;
 
         Ok(fdir.join(fname).to_str().unwrap().to_owned())
     }
@@ -1336,7 +1339,7 @@ impl PlotParameters {
     /// This method returns an [`OpmResult<String>`] containing the file directory
     /// # Errors
     /// This method throws an error if the argument is not found
-    pub fn get_fdir(&self) -> OpmResult<String> {
+    pub fn get_fdir(&self) -> OpmResult<PathBuf> {
         if let Some(PlotArgs::FDir(fdir)) = self.params.get("fdir") {
             Ok(fdir.clone())
         } else {
@@ -1688,7 +1691,7 @@ pub enum PlotArgs {
     ///Figure size in pixels. Holds an `(usize, usize)` tuple
     FigSize((u32, u32)),
     ///Path to the save directory of the image. Only necessary if the data is not written into a buffer. Holds a String
-    FDir(String),
+    FDir(PathBuf),
     ///Name of the file to be written. Holds a String
     FName(String),
     ///Plotting backend that should be used. Holds a [`PltBackEnd`] enum
@@ -1757,8 +1760,6 @@ mod test {
     }
     #[test]
     fn default_plot_params() {
-        let current_dir = current_dir().unwrap().to_str().unwrap().to_owned() + "\\";
-
         let plt_params = PlotParameters::default();
         assert_eq!(plt_params.get_backend().unwrap(), PltBackEnd::BMP);
         assert_eq!(plt_params.get_x_label().unwrap(), "x".to_owned());
@@ -1775,7 +1776,7 @@ mod test {
             format!("{:?}", plt_params.get_cmap().unwrap().get_gradient()),
             "Gradient(Turbo)".to_owned()
         );
-        assert_eq!(plt_params.get_fdir().unwrap(), current_dir);
+        assert_eq!(plt_params.get_fdir().unwrap(), current_dir().unwrap());
         assert_eq!(
             plt_params.get_fname().unwrap(),
             format!("opossum_default_plot_0.png")
@@ -1912,8 +1913,10 @@ mod test {
     #[test]
     fn plot_params_fdir() {
         let mut plt_params = PlotParameters::default();
-        plt_params.set(&PlotArgs::FDir(".\\".to_owned())).unwrap();
-        assert_eq!(plt_params.get_fdir().unwrap(), ".\\".to_owned());
+        plt_params
+            .set(&PlotArgs::FDir(PathBuf::from(".\\")))
+            .unwrap();
+        assert_eq!(plt_params.get_fdir().unwrap(), PathBuf::from(".\\"));
     }
     #[test]
     fn plot_params_fname() {
