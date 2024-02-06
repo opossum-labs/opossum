@@ -32,7 +32,7 @@ fn main() -> OpmResult<()> {
     let dist2 = scenery.add_node(Propagation::new("gap", Length::new::<millimeter>(100.0))?);
     scenery.connect_nodes(lens, "rear", dist2, "front")?;
     let mut last_node = dist2;
-    for _i in 0usize..50 {
+    for _i in 0usize..2 {
         let l1 = scenery.add_node(ParaxialSurface::new("f", Length::new::<millimeter>(100.0))?);
         let d1 = scenery.add_node(Propagation::new("2f", Length::new::<millimeter>(200.0))?);
         let l2 = scenery.add_node(ParaxialSurface::new("f", Length::new::<millimeter>(100.0))?);

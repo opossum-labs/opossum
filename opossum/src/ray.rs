@@ -139,6 +139,20 @@ impl Ray {
     pub fn wavelength(&self) -> Length {
         self.wvl
     }
+
+    /// Returns the position history of this [`Ray`].
+    #[must_use]
+    pub fn position_history(&self) -> Vec<Point3<Length>> {
+        let mut pos_mm = Vec::<Point3<Length>>::with_capacity(self.pos_hist.len());
+        for pos in self.pos_hist.iter(){
+            pos_mm.push(Point3::new(
+                Length::new::<millimeter>(pos.x),
+                Length::new::<millimeter>(pos.y),
+                Length::new::<millimeter>(pos.z),
+            ))
+        }
+        pos_mm
+    }
     /// freely propagate a ray along its direction. The length is given as the projection on the z-axis (=optical axis).
     ///
     /// # Errors
