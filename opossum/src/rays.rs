@@ -309,7 +309,7 @@ impl Rays {
     ///  - the given length is not finite.
     pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
         for ray in &mut self.rays {
-            *ray = ray.propagate_along_z(length_along_z)?;
+            ray.propagate_along_z(length_along_z)?;
         }
         Ok(())
     }
@@ -326,7 +326,7 @@ impl Rays {
             ));
         }
         for ray in &mut self.rays {
-            *ray = ray.refract_paraxial(focal_length)?;
+            ray.refract_paraxial(focal_length)?;
         }
         Ok(())
     }

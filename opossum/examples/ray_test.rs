@@ -40,11 +40,11 @@ fn main() -> OpmResult<()> {
     )?;
     println!("{:?}", ray);
     let length = Length::new::<millimeter>(50.0);
-    ray = ray.refract_paraxial(length)?;
-    ray = ray.propagate_along_z(length)?;
+    let _ = ray.refract_paraxial(length)?;
+    let _ = ray.propagate_along_z(length)?;
     println!("{:?}", ray);
-    ray = ray.propagate_along_z(length)?;
-    ray = ray.refract_paraxial(length)?;
+    let _ = ray.propagate_along_z(length)?;
+    let _ = ray.refract_paraxial(length)?;
     println!("{:?}", ray);
 
     let mut ray = SRay {
