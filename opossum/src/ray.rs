@@ -43,8 +43,10 @@ impl SplittingConfig {
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {
-    ///Stores all positions of the ray (in mm)
-    pos: Point3<f64>, // this should be a vector of points?
+    ///Stores the current position of the ray (in mm)
+    pos: Point3<f64>,
+    ///Stores the position history of the ray (in mm)
+    pos_hist: Vec<Point3<f64>>,
     /// stores the current propagation direction of the ray (stored as direction cosine)
     dir: Vector3<f64>,
     // ///stores the polarization vector (Jones vector) of the ray
@@ -99,12 +101,16 @@ impl Ray {
         if direction.norm().is_zero() {
             return Err(OpossumError::Other("length of direction must be >0".into()));
         }
+        let init_pos = Point3::new(
+            position.x.get::<millimeter>(),
+            position.y.get::<millimeter>(),
+            0.0,
+        );
+        let mut pos_hist = Vec::<Point3<f64>>::with_capacity(50);
+        pos_hist.push(init_pos);
         Ok(Self {
-            pos: Point3::new(
-                position.x.get::<millimeter>(),
-                position.y.get::<millimeter>(),
-                0.0,
-            ),
+            pos: init_pos,
+            pos_hist,
             dir: direction.normalize(),
             //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
             e: energy,
@@ -133,24 +139,38 @@ impl Ray {
     pub fn wavelength(&self) -> Length {
         self.wvl
     }
+
+    /// Returns the position history of this [`Ray`].
+    #[must_use]
+    pub fn position_history(&self) -> Vec<Point3<Length>> {
+        let mut pos_mm = Vec::<Point3<Length>>::with_capacity(self.pos_hist.len());
+        for pos in self.pos_hist.iter(){
+            pos_mm.push(Point3::new(
+                Length::new::<millimeter>(pos.x),
+                Length::new::<millimeter>(pos.y),
+                Length::new::<millimeter>(pos.z),
+            ))
+        }
+        pos_mm
+    }
     /// freely propagate a ray along its direction. The length is given as the projection on the z-axis (=optical axis).
     ///
     /// # Errors
     /// This functions retruns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
-    pub fn propagate_along_z(&self, length_along_z: Length) -> OpmResult<Self> {
+    pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
         if self.dir[2].abs() < f64::EPSILON {
             return Err(OpossumError::Other(
                 "z-Axis of direction vector must be != 0.0".into(),
             ));
         }
-        let mut new_ray = self.clone();
         let length_in_ray_dir = length_along_z.get::<millimeter>() / self.dir[2];
-        new_ray.pos = self.pos + length_in_ray_dir * self.dir;
+        self.pos += length_in_ray_dir * self.dir;
+        self.pos_hist.push(self.pos);
 
         let normalized_dir = self.dir.normalize();
         let length_in_ray_dir = length_along_z.get::<millimeter>() / normalized_dir[2];
-        new_ray.path_length += Length::new::<millimeter>(length_in_ray_dir);
-        Ok(new_ray)
+        self.path_length += Length::new::<millimeter>(length_in_ray_dir);
+        Ok(())
     }
     /// Refract a ray on a paraxial surface of a given focal length.
     ///
@@ -159,7 +179,7 @@ impl Ray {
     /// # Errors
     ///
     /// This function will return an error if the given focal length is zero or not finite
-    pub fn refract_paraxial(&self, focal_length: Length) -> OpmResult<Self> {
+    pub fn refract_paraxial(&mut self, focal_length: Length) -> OpmResult<()> {
         if focal_length.is_zero() || !focal_length.is_finite() {
             return Err(OpossumError::Other(
                 "focal length must be != 0.0 & finite".into(),
@@ -167,16 +187,14 @@ impl Ray {
         }
         let f = focal_length.get::<millimeter>();
         let optical_power = 1.0 / f;
-        let mut new_ray = self.clone();
-        new_ray.dir.x = optical_power.mul_add(-self.pos.x, self.dir.x);
-        new_ray.dir.y = optical_power.mul_add(-self.pos.y, self.dir.y);
-        new_ray.dir.z = 1.0;
+        self.dir.x = optical_power.mul_add(-self.pos.x, self.dir.x);
+        self.dir.y = optical_power.mul_add(-self.pos.y, self.dir.y);
+        self.dir.z = 1.0;
         // correct path length
         let r_square = self.pos.x.mul_add(self.pos.x, self.pos.y * self.pos.y);
         let f_square = f * f;
-        new_ray.path_length -=
-            Length::new::<millimeter>((r_square + f_square).sqrt()) - focal_length;
-        Ok(new_ray)
+        self.path_length -= Length::new::<millimeter>((r_square + f_square).sqrt()) - focal_length;
+        Ok(())
     }
 
     /// Attenuate a ray's energy by a given filter.
@@ -462,7 +480,7 @@ mod test {
     fn propagate_along_z() {
         let wvl = Length::new::<nanometer>(1053.0);
         let energy = Energy::new::<joule>(1.0);
-        let ray = Ray::new(
+        let mut ray = Ray::new(
             Point2::new(Length::zero(), Length::zero()),
             Vector3::new(0.0, 0.0, 1.0),
             wvl,
@@ -472,70 +490,66 @@ mod test {
         assert!(ray
             .propagate_along_z(Length::new::<millimeter>(1.0))
             .is_ok());
-        let newray = ray
-            .propagate_along_z(Length::new::<millimeter>(1.0))
+        ray.propagate_along_z(Length::new::<millimeter>(1.0))
             .unwrap();
-        assert_eq!(newray.wavelength(), wvl);
-        assert_eq!(newray.energy(), energy);
-        assert_eq!(newray.dir, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(ray.wavelength(), wvl);
+        assert_eq!(ray.energy(), energy);
+        assert_eq!(ray.dir, Vector3::new(0.0, 0.0, 1.0));
         assert_eq!(
-            ray.propagate_along_z(Length::new::<millimeter>(1.0))
-                .unwrap()
-                .position(),
-            Point3::new(
-                Length::zero(),
-                Length::zero(),
-                Length::new::<millimeter>(1.0)
-            )
-        );
-        assert_eq!(
-            ray.propagate_along_z(Length::new::<millimeter>(2.0))
-                .unwrap()
-                .position(),
+            ray.position(),
             Point3::new(
                 Length::zero(),
                 Length::zero(),
                 Length::new::<millimeter>(2.0)
             )
         );
+        let _ = ray.propagate_along_z(Length::new::<millimeter>(2.0));
+
         assert_eq!(
-            ray.propagate_along_z(Length::new::<millimeter>(-1.0))
-                .unwrap()
-                .position(),
+            ray.position(),
+            Point3::new(
+                Length::zero(),
+                Length::zero(),
+                Length::new::<millimeter>(4.0)
+            )
+        );
+        let _ = ray.propagate_along_z(Length::new::<millimeter>(-5.0));
+
+        assert_eq!(
+            ray.position(),
             Point3::new(
                 Length::zero(),
                 Length::zero(),
                 Length::new::<millimeter>(-1.0)
             )
         );
-        let ray = Ray::new(
+        let mut ray = Ray::new(
             Point2::new(Length::zero(), Length::zero()),
             Vector3::new(0.0, 1.0, 1.0),
             wvl,
             energy,
         )
         .unwrap();
+        let _ = ray.propagate_along_z(Length::new::<millimeter>(1.0));
         assert_eq!(
-            ray.propagate_along_z(Length::new::<millimeter>(1.0))
-                .unwrap()
-                .position(),
+            ray.position(),
             Point3::new(
                 Length::zero(),
                 Length::new::<millimeter>(1.0),
                 Length::new::<millimeter>(1.0)
             )
         );
+        let _ = ray.propagate_along_z(Length::new::<millimeter>(2.0));
+
         assert_eq!(
-            ray.propagate_along_z(Length::new::<millimeter>(2.0))
-                .unwrap()
-                .position(),
+            ray.position(),
             Point3::new(
                 Length::zero(),
-                Length::new::<millimeter>(2.0),
-                Length::new::<millimeter>(2.0)
+                Length::new::<millimeter>(3.0),
+                Length::new::<millimeter>(3.0)
             )
         );
-        let ray = Ray::new(
+        let mut ray = Ray::new(
             Point2::new(Length::zero(), Length::zero()),
             Vector3::new(0.0, 1.0, 0.0),
             wvl,
@@ -548,13 +562,17 @@ mod test {
     }
     #[test]
     fn refract_paraxial() {
-        let ray = Ray::new_collimated(
+        let mut ray = Ray::new_collimated(
             Point2::new(Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-        let refracted_ray = ray
+        let ray_dir = ray.dir;
+        let ray_pos = ray.pos;
+
+        let mut refracted_ray = ray.clone();
+        refracted_ray
             .refract_paraxial(Length::new::<millimeter>(100.0))
             .unwrap();
         assert_eq!(refracted_ray.pos, ray.pos);
@@ -574,19 +592,10 @@ mod test {
         assert!(ray
             .refract_paraxial(Length::new::<millimeter>(f64::NEG_INFINITY))
             .is_err());
-        assert_eq!(
-            ray.refract_paraxial(Length::new::<millimeter>(-100.0))
-                .unwrap()
-                .pos,
-            ray.pos
-        );
-        assert_eq!(
-            ray.refract_paraxial(Length::new::<millimeter>(-100.0))
-                .unwrap()
-                .dir,
-            ray.dir
-        );
-        let ray = Ray::new_collimated(
+        let _ = ray.refract_paraxial(Length::new::<millimeter>(-100.0));
+        assert_eq!(ray.pos, ray_pos);
+        assert_eq!(ray.dir, ray_dir);
+        let mut ray = Ray::new_collimated(
             Point2::new(
                 Length::new::<millimeter>(1.0),
                 Length::new::<millimeter>(2.0),
@@ -595,47 +604,33 @@ mod test {
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-        assert_eq!(
-            ray.refract_paraxial(Length::new::<millimeter>(100.0))
-                .unwrap()
-                .pos,
-            ray.pos
-        );
-        let ray_dir = ray
-            .refract_paraxial(Length::new::<millimeter>(100.0))
-            .unwrap()
-            .dir;
-        let test_ray_dir = Vector3::new(-1.0, -2.0, 100.0) / 100.0;
-        assert_abs_diff_eq!(ray_dir.x, test_ray_dir.x);
-        assert_abs_diff_eq!(ray_dir.y, test_ray_dir.y);
-        assert_abs_diff_eq!(ray_dir.z, test_ray_dir.z);
-        assert_eq!(
-            ray.refract_paraxial(Length::new::<millimeter>(-100.0))
-                .unwrap()
-                .pos,
-            ray.pos
-        );
-        let ray_dir = ray
-            .refract_paraxial(Length::new::<millimeter>(-100.0))
-            .unwrap()
-            .dir;
-        let test_ray_dir = Vector3::new(1.0, 2.0, 100.0) / 100.0;
-        assert_abs_diff_eq!(ray_dir.x, test_ray_dir.x);
-        assert_abs_diff_eq!(ray_dir.y, test_ray_dir.y);
-        assert_abs_diff_eq!(ray_dir.z, test_ray_dir.z);
+        let ray_pos = ray.pos;
+        let _ = ray.refract_paraxial(Length::new::<millimeter>(100.0));
+        assert_eq!(ray.pos, ray_pos);
 
-        let ray = Ray::new(
+        let test_ray_dir = Vector3::new(-1.0, -2.0, 100.0) / 100.0;
+        assert_abs_diff_eq!(ray.dir.x, test_ray_dir.x);
+        assert_abs_diff_eq!(ray.dir.y, test_ray_dir.y);
+        assert_abs_diff_eq!(ray.dir.z, test_ray_dir.z);
+        let _ = ray.refract_paraxial(Length::new::<millimeter>(-100.0));
+        assert_eq!(ray.pos, ray_pos);
+        let _ = ray.refract_paraxial(Length::new::<millimeter>(-100.0));
+
+        let test_ray_dir = Vector3::new(1.0, 2.0, 100.0) / 100.0;
+        assert_abs_diff_eq!(ray.dir.x, test_ray_dir.x);
+        assert_abs_diff_eq!(ray.dir.y, test_ray_dir.y);
+        assert_abs_diff_eq!(ray.dir.z, test_ray_dir.z);
+
+        let mut ray = Ray::new(
             Point2::new(Length::zero(), Length::new::<millimeter>(10.0)),
             Vector3::new(0.0, 0.0, 1.0),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-        let refracted_ray = ray
-            .refract_paraxial(Length::new::<millimeter>(10.0))
-            .unwrap();
+        let _ = ray.refract_paraxial(Length::new::<millimeter>(10.0));
         assert_abs_diff_eq!(
-            refracted_ray.path_length.get::<millimeter>(),
+            ray.path_length.get::<millimeter>(),
             -1.0 * (f64::sqrt(200.0) - 10.0),
             epsilon = 10.0 * f64::EPSILON
         );
