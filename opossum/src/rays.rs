@@ -1134,7 +1134,6 @@ mod test {
         .unwrap();
         rays.add_ray(ray);
         let spectrum = rays.to_spectrum(&Length::new::<nanometer>(0.5)).unwrap();
-        println!("{}", spectrum);
         assert_abs_diff_eq!(
             spectrum.total_energy(),
             4.0,

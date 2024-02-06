@@ -19,6 +19,7 @@ use chrono::Local;
 use genpdf::Alignment;
 use image::io::Reader;
 use image::DynamicImage;
+use log::warn;
 use petgraph::algo::toposort;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -533,7 +534,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
                 }
                 if let Some(opm_version) = opm_version {
                     if opm_version != env!("OPM_FILE_VERSION") {
-                        println!(
+                        warn!(
                             "\nWarning: version mismatch! File version {}, Appplication version {}",
                             opm_version,
                             env!("OPM_FILE_VERSION")
