@@ -261,6 +261,7 @@ impl OpticScenery {
                 .properties()
                 .node_type()?
                 .to_owned();
+
             let mut outgoing_edges = node
                 .optical_ref
                 .borrow_mut()
@@ -561,6 +562,7 @@ impl PdfReportable for OpticScenery {
             .map_err(|e| format!("failed to add diagram to report: {e}"))?
             .with_alignment(Alignment::Center);
         l.push(img);
+
         Ok(l)
     }
 }
