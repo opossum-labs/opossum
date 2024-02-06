@@ -2456,7 +2456,8 @@ mod test {
         let plt_dat_surf_triangle = PlotData::TriangulatedSurface(dummmy_triangles, dat_3d.clone());
 
         let mut plt_params = PlotParameters::default();
-        let _ = plt_params.set(&PlotArgs::FDir("./../opossum/playground/".into()));
+        let path = NamedTempFile::new().unwrap();
+        let _ = plt_params.set(&PlotArgs::FDir(path.path().parent().unwrap().into()));
         let _ = PlotType::Line2D(plt_params.clone()).plot(&plt_dat_dim2);
         let _ = PlotType::ColorMesh(plt_params.clone()).plot(&plt_dat_colormesh);
         let _ = PlotType::ColorTriangulated(plt_params.clone()).plot(&plt_dat_colortriangulated);
@@ -2491,8 +2492,9 @@ mod test {
         let plt_dat_surf_triangle = PlotData::TriangulatedSurface(dummmy_triangles, dat_3d.clone());
 
         let mut plt_params = PlotParameters::default();
+        let path = NamedTempFile::new().unwrap();
         let _ = plt_params
-            .set(&PlotArgs::FDir("./../opossum/playground/".into()))
+            .set(&PlotArgs::FDir(path.path().parent().unwrap().into()))
             .unwrap()
             .set(&PlotArgs::Backend(PltBackEnd::SVG))
             .unwrap()
@@ -2531,8 +2533,9 @@ mod test {
         let plt_dat_surf_triangle = PlotData::TriangulatedSurface(dummmy_triangles, dat_3d.clone());
 
         let mut plt_params = PlotParameters::default();
+        let path = NamedTempFile::new().unwrap();
         let _ = plt_params
-            .set(&PlotArgs::FDir("./../opossum/playground/".into()))
+            .set(&PlotArgs::FDir(path.path().parent().unwrap().into()))
             .unwrap()
             .set(&PlotArgs::Backend(PltBackEnd::Buf));
         let _ = PlotType::Line2D(plt_params.clone()).plot(&plt_dat_dim2);
