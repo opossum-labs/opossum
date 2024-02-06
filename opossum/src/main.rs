@@ -1,5 +1,4 @@
 use clap::Parser;
-use env_logger::Env;
 use opossum::error::OpmResult;
 use opossum::reporter::ReportGenerator;
 use opossum::{
@@ -12,6 +11,7 @@ use opossum::{
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
+use env_logger::Env;
 
 fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
     print!("\nReading model...");
