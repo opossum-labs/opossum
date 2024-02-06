@@ -2545,5 +2545,6 @@ mod test {
         let _ = PlotType::ColorTriangulated(plt_params.clone()).plot(&plt_dat_colortriangulated);
         let _ = PlotType::Scatter2D(plt_params.clone()).plot(&plt_dat_dim2);
         let _ = PlotType::TriangulatedSurface(plt_params.clone()).plot(&plt_dat_surf_triangle);
+        
     }
 }
