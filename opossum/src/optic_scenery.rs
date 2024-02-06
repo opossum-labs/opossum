@@ -14,6 +14,7 @@ use crate::optic_graph::OpticGraph;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
+use crate::rays::Rays;
 use crate::reporter::{AnalysisReport, PdfReportable};
 use chrono::Local;
 use genpdf::Alignment;
@@ -261,7 +262,6 @@ impl OpticScenery {
                 .properties()
                 .node_type()?
                 .to_owned();
-
             let mut outgoing_edges = node
                 .optical_ref
                 .borrow_mut()
@@ -343,6 +343,23 @@ impl OpticScenery {
             .node_weights()
             .filter(|node| node.optical_ref.borrow().is_detector());
         for node in detector_nodes {
+            if let Some(node_report) = node.optical_ref.borrow().report() {
+                analysis_report.add_detector(node_report);
+            }
+
+            node.optical_ref.borrow().export_data(report_dir)?;
+        }
+
+        let source_nodes = self
+            .g
+            .0
+            .node_weights()
+            .filter(|node| node.optical_ref.borrow().is_source());
+        let ray_source_bundles = Vec::<Rays>::new();
+        for node in source_nodes {
+            todo!();
+            //create report for sources
+            //must check if this is a raytrace analysis! otherwise this does not make sense!
             if let Some(node_report) = node.optical_ref.borrow().report() {
                 analysis_report.add_detector(node_report);
             }

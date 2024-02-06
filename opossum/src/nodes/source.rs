@@ -9,7 +9,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    rays::{DistributionStrategy, Rays},
+    rays::{DistributionStrategy, Rays}, reporter::NodeReport,
 };
 use nalgebra::Point2;
 use uom::num_traits::Zero;
@@ -165,6 +165,9 @@ impl Optical for Source {
     fn properties(&self) -> &Properties {
         &self.props
     }
+    fn is_source(&self) -> bool {
+        true
+    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         if name == "inverted" {
             let inverted = if let Proptype::Bool(inverted) = prop {
@@ -182,6 +185,37 @@ impl Optical for Source {
         } else {
             self.props.set(name, prop)
         }
+    }
+
+    fn report(&self) -> Option<NodeReport> {
+        todo!();
+        // let mut props = Properties::default();
+        // let data = &self.light_data;
+        // if let Some(light_data) = data {
+        //     let spectrum = match light_data {
+        //         LightData::Energy(e) => Some(e.spectrum.clone()),
+        //         LightData::Geometric(r) => r.to_spectrum(&Length::new::<nanometer>(0.2)).ok(),
+        //         LightData::Fourier => None,
+        //     };
+        //     if spectrum.is_some() {
+        //         props
+        //             .create("Spectrum", "Output spectrum", None, self.clone().into())
+        //             .unwrap();
+        //         props
+        //             .create(
+        //                 "Model",
+        //                 "Spectrometer model",
+        //                 None,
+        //                 self.props.get("spectrometer type").unwrap().clone(),
+        //             )
+        //             .unwrap();
+        //     }
+        // }
+        // Some(NodeReport::new(
+        //     self.properties().node_type().unwrap(),
+        //     self.properties().name().unwrap(),
+        //     props,
+        // ))
     }
 }
 
