@@ -1737,6 +1737,8 @@ fn linspace(start: f64, end: f64, num: f64) -> OpmResult<Matrix1xX<f64>> {
 
 #[cfg(test)]
 mod test {
+    use tempfile::NamedTempFile;
+
     use super::*;
     #[test]
     fn empty_plot_params() {
