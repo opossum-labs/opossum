@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! Module for handling optical rays
-use nalgebra::{Point2, Point3, Vector3};
+use nalgebra::{MatrixXx3, Point2, Point3, Vector3};
 use num::Zero;
 use serde_derive::{Deserialize, Serialize};
 use uom::si::{
@@ -142,14 +142,13 @@ impl Ray {
 
     /// Returns the position history of this [`Ray`].
     #[must_use]
-    pub fn position_history(&self) -> Vec<Point3<Length>> {
-        let mut pos_mm = Vec::<Point3<Length>>::with_capacity(self.pos_hist.len());
-        for pos in self.pos_hist.iter() {
-            pos_mm.push(Point3::new(
-                Length::new::<millimeter>(pos.x),
-                Length::new::<millimeter>(pos.y),
-                Length::new::<millimeter>(pos.z),
-            ))
+    pub fn position_history_in_mm(&self) -> MatrixXx3<f64> {
+        let mut pos_mm = MatrixXx3::zeros(self.pos_hist.len());
+
+        for (idx, pos) in self.pos_hist.iter().enumerate() {
+            pos_mm[(idx, 0)] = pos.x;
+            pos_mm[(idx, 1)] = pos.y;
+            pos_mm[(idx, 2)] = pos.z;
         }
         pos_mm
     }

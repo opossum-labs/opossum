@@ -1,13 +1,18 @@
 #![warn(missing_docs)]
 //! Module for handling ray bundles
 use std::ops::Range;
+use std::path::Path;
 
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
+use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
+use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
+use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
+use image::{DynamicImage, ImageBuffer, RgbImage};
 use kahan::KahanSummator;
 use nalgebra::{distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use rand::Rng;
@@ -428,7 +433,75 @@ impl Rays {
             self.add_ray(ray.clone());
         }
     }
+    /// Get the position history of all rays in thie ray bundle
+    ///
+    /// # Returns
+    /// This method returns a vector of N-row x 3 column matrices that contain the position history of all the rays
+    pub fn get_rays_position_history_in_mm(&self) -> RayPositionHistory {
+        let mut rays_pos_history = Vec::<MatrixXx3<f64>>::with_capacity(self.rays.len());
+        for ray in &self.rays {
+            rays_pos_history.push(ray.position_history_in_mm());
+        }
+        RayPositionHistory { rays_pos_history }
+    }
 }
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RayPositionHistory {
+    pub rays_pos_history: Vec<MatrixXx3<f64>>,
+}
+impl PdfReportable for RayPositionHistory {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let img = self.to_plot(Path::new(""), (1000, 850), PltBackEnd::Buf)?;
+        layout.push(
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
+                img.unwrap_or_else(ImageBuffer::default),
+            ))
+            .map_err(|e| format!("adding of image failed: {e}"))?,
+        );
+        Ok(layout)
+    }
+}
+
+impl From<Rays> for Proptype {
+    fn from(value: Rays) -> Self {
+        Self::RayPositionHistory(value.get_rays_position_history_in_mm())
+    }
+}
+
+impl Plottable for RayPositionHistory {
+    fn to_plot(
+        &self,
+        f_path: &Path,
+        img_size: (u32, u32),
+        backend: PltBackEnd,
+    ) -> OpmResult<Option<RgbImage>> {
+        let mut plt_params = PlotParameters::default();
+        match backend {
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
+            _ => plt_params
+                .set(&PlotArgs::FName(
+                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
+                ))?
+                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
+                .set(&PlotArgs::FigSize(img_size))?,
+        };
+        plt_params.set(&PlotArgs::Backend(backend))?;
+
+        let (mut plt_data_opt, mut plt_type) = if self.rays_pos_history.is_empty() {
+            (None, PlotType::MultiLine3D(plt_params))
+        } else {
+            let plt_type = PlotType::MultiLine3D(plt_params);
+            (self.get_plot_data(&plt_type)?, plt_type)
+        };
+        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+    }
+
+    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+        Ok(Some(PlotData::MultiDim3(self.rays_pos_history.clone())))
+    }
+}
+
 /// Strategy for the creation of a 2D point set
 pub enum DistributionStrategy {
     /// Circular, hexapolar distribution with a given number of rings within a given radius
@@ -494,11 +567,6 @@ fn sobol(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
     points
 }
 
-// impl From<Rays> for Proptype {
-//     fn from(value: Rays) -> Self {
-//         Self::Rays(value)
-//     }
-// }
 // impl PdfReportable for Rays {
 //     fn pdf_report(&self) -> crate::error::OpmResult<genpdf::elements::LinearLayout> {
 //         let mut layout = genpdf::elements::LinearLayout::vertical();

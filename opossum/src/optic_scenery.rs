@@ -357,14 +357,13 @@ impl OpticScenery {
             .filter(|node| node.optical_ref.borrow().is_source());
         let ray_source_bundles = Vec::<Rays>::new();
         for node in source_nodes {
-            todo!();
             //create report for sources
             //must check if this is a raytrace analysis! otherwise this does not make sense!
             if let Some(node_report) = node.optical_ref.borrow().report() {
                 analysis_report.add_detector(node_report);
             }
 
-            node.optical_ref.borrow().export_data(report_dir)?;
+            // node.optical_ref.borrow().export_data(report_dir)?;
         }
         Ok(analysis_report)
     }

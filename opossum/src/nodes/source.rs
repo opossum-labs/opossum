@@ -9,7 +9,8 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    rays::{DistributionStrategy, Rays}, reporter::NodeReport,
+    rays::{DistributionStrategy, Rays},
+    reporter::NodeReport,
 };
 use nalgebra::Point2;
 use uom::num_traits::Zero;
@@ -188,34 +189,25 @@ impl Optical for Source {
     }
 
     fn report(&self) -> Option<NodeReport> {
-        todo!();
-        // let mut props = Properties::default();
-        // let data = &self.light_data;
-        // if let Some(light_data) = data {
-        //     let spectrum = match light_data {
-        //         LightData::Energy(e) => Some(e.spectrum.clone()),
-        //         LightData::Geometric(r) => r.to_spectrum(&Length::new::<nanometer>(0.2)).ok(),
-        //         LightData::Fourier => None,
-        //     };
-        //     if spectrum.is_some() {
-        //         props
-        //             .create("Spectrum", "Output spectrum", None, self.clone().into())
-        //             .unwrap();
-        //         props
-        //             .create(
-        //                 "Model",
-        //                 "Spectrometer model",
-        //                 None,
-        //                 self.props.get("spectrometer type").unwrap().clone(),
-        //             )
-        //             .unwrap();
-        //     }
-        // }
-        // Some(NodeReport::new(
-        //     self.properties().node_type().unwrap(),
-        //     self.properties().name().unwrap(),
-        //     props,
-        // ))
+        let mut props = Properties::default();
+        let light_props = self.properties().get("light data");
+        if light_props.is_ok() {
+            if let Proptype::LightData(Some(LightData::Geometric(rays))) = light_props.unwrap() {
+                props
+                    .create(
+                        "Ray Propagation history",
+                        "Ray propagation history within the scenery",
+                        None,
+                        rays.clone().into(),
+                    )
+                    .unwrap();
+            }
+        }
+        Some(NodeReport::new(
+            self.properties().node_type().unwrap(),
+            self.properties().name().unwrap(),
+            props,
+        ))
     }
 }
 

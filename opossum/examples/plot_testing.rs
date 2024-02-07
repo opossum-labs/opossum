@@ -4,8 +4,14 @@ use nalgebra::{DMatrix, DVector, Matrix1xX, Matrix3xX, MatrixXx3};
 use opossum::{
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType, PltBackEnd},
+    rays::{DistributionStrategy, Rays},
 };
 use std::f64::{self, consts::PI};
+use uom::si::{
+    energy::{joule, Energy},
+    f64::Length,
+    length::{millimeter, nanometer},
+};
 // use voronator::delaunator::Point as v_point;
 // use voronator::VoronoiDiagram;
 
@@ -59,103 +65,133 @@ fn meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f6
 }
 
 fn main() -> OpmResult<()> {
-    //triangulation test
-    let dat = Matrix3xX::from_vec(vec![
-        0.,
-        0.,
-        1.,
-        f64::cos(2. * PI / 6. * 0.),
-        f64::sin(2. * PI / 6. * 0.),
-        0.,
-        f64::cos(2. * PI / 6. * 1.),
-        f64::sin(2. * PI / 6. * 1.),
-        0.,
-        f64::cos(2. * PI / 6. * 2.),
-        f64::sin(2. * PI / 6. * 2.),
-        0.,
-        f64::cos(2. * PI / 6. * 3.),
-        f64::sin(2. * PI / 6. * 3.),
-        0.,
-        f64::cos(2. * PI / 6. * 4.),
-        f64::sin(2. * PI / 6. * 4.),
-        0.,
-        f64::cos(2. * PI / 6. * 5.),
-        f64::sin(2. * PI / 6. * 5.),
-        0.,
-    ])
-    .transpose();
+    let mut rays = Rays::new_uniform_collimated(
+        Length::new::<millimeter>(10.),
+        Length::new::<nanometer>(1053.),
+        Energy::new::<joule>(1.),
+        &DistributionStrategy::Hexapolar(5),
+    )?;
+
+
+
+    rays.propagate_along_z(Length::new::<millimeter>(10.))?;
+    rays.refract_paraxial(Length::new::<millimeter>(10.))?;
+    rays.propagate_along_z(Length::new::<millimeter>(30.))?;
+    rays.refract_paraxial(Length::new::<millimeter>(20.))?;
+    rays.propagate_along_z(Length::new::<millimeter>(10.))?;
 
     let mut plt_params = PlotParameters::default();
-
     plt_params
-        .set(&PlotArgs::FName("triangle_test.png".into()))
-        .unwrap()
-        .set(&PlotArgs::FDir("./../opossum/playground/".into()))
-        .unwrap()
-        .set(&PlotArgs::FigSize((800, 1000)))
-        .unwrap();
-
-    plt_params.set(&PlotArgs::Backend(PltBackEnd::BMP)).unwrap();
-
-    let points: Vec<Point> = dat
-        .row_iter()
-        .map(|c| Point { x: c[0], y: c[1] })
-        .collect::<Vec<Point>>();
-
-    let trianglulation = triangulate(&points);
-    let triangles = trianglulation.triangles;
-
-    let tri_index_mat = Matrix3xX::from_vec(triangles).transpose();
-
-    let mut triangle_centroid_z = DVector::<f64>::zeros(tri_index_mat.column(0).len());
-
-    for (c, t) in izip!(tri_index_mat.row_iter(), triangle_centroid_z.iter_mut()) {
-        *t = (dat[(c[0], 2)] + dat[(c[1], 2)] + dat[(c[2], 2)]) / 3.;
-    }
-
-    let (plt_dat, plt_type) = (
-        PlotData::TriangulatedSurface(tri_index_mat, dat.clone()),
-        PlotType::TriangulatedSurface(plt_params),
-    );
+    .set(&PlotArgs::FName("ray_test.png".into()))
+    .unwrap()
+    .set(&PlotArgs::FDir("./opossum/playground/".into()))
+    .unwrap()
+    .set(&PlotArgs::FigSize((800, 1000)))
+    .unwrap();
+    let ray_pos_hist = rays.get_rays_position_history_in_mm();
+    let plt_dat = PlotData::MultiDim3(ray_pos_hist.rays_pos_history);
+    let plt_type = PlotType::MultiLine3D(plt_params);
     let _ = plt_type.plot(&plt_dat);
 
-    //colormesh test
-    let x = linspace(-50., 50., 101);
-    let y = linspace(-50., 50., 101);
-    let sigma = 5.;
 
-    let (xx, yy) = meshgrid(&x, &y);
-    let gaussian = (-0.5 * (xx.map(|x| x.powi(2)) + yy.map(|y| (y - 10.).powi(2)))
-        / f64::powi(sigma, 2))
-    .map(|x| x.exp())
-        * 2.;
 
-    let flat_x = DVector::from_vec(xx.iter().cloned().map(|x| x).collect::<Vec<f64>>());
-    let flat_y = DVector::from_vec(yy.iter().cloned().map(|x| x).collect::<Vec<f64>>());
-    let flat_z = DVector::from_vec(gaussian.iter().cloned().map(|x| x).collect::<Vec<f64>>());
+    // //triangulation test
+    // let dat = Matrix3xX::from_vec(vec![
+    //     0.,
+    //     0.,
+    //     1.,
+    //     f64::cos(2. * PI / 6. * 0.),
+    //     f64::sin(2. * PI / 6. * 0.),
+    //     0.,
+    //     f64::cos(2. * PI / 6. * 1.),
+    //     f64::sin(2. * PI / 6. * 1.),
+    //     0.,
+    //     f64::cos(2. * PI / 6. * 2.),
+    //     f64::sin(2. * PI / 6. * 2.),
+    //     0.,
+    //     f64::cos(2. * PI / 6. * 3.),
+    //     f64::sin(2. * PI / 6. * 3.),
+    //     0.,
+    //     f64::cos(2. * PI / 6. * 4.),
+    //     f64::sin(2. * PI / 6. * 4.),
+    //     0.,
+    //     f64::cos(2. * PI / 6. * 5.),
+    //     f64::sin(2. * PI / 6. * 5.),
+    //     0.,
+    // ])
+    // .transpose();
 
-    let mat3d = MatrixXx3::from_columns(&[flat_x, flat_y, flat_z]);
+    // let mut plt_params = PlotParameters::default();
 
-    let plt_dat_origin = PlotData::ColorMesh(x.transpose(), y.transpose(), gaussian.clone());
-    let plt_dat_binned = bin_2d_scatter_data(&PlotData::Dim3(mat3d)).unwrap();
+    // plt_params
+    //     .set(&PlotArgs::FName("triangle_test.png".into()))
+    //     .unwrap()
+    //     .set(&PlotArgs::FDir("./../opossum/playground/".into()))
+    //     .unwrap()
+    //     .set(&PlotArgs::FigSize((800, 1000)))
+    //     .unwrap();
 
-    let mut p_info_params = PlotParameters::default();
-    p_info_params
-        .set(&PlotArgs::Backend(PltBackEnd::BMP))
-        .unwrap()
-        .set(&PlotArgs::FName("pre_bin.png".into()))
-        .unwrap()
-        .set(&PlotArgs::FDir("./opossum/playground/".into()))
-        .unwrap();
+    // plt_params.set(&PlotArgs::Backend(PltBackEnd::BMP)).unwrap();
 
-    let plt_type = PlotType::ColorMesh(p_info_params.clone());
-    plt_type.plot(&plt_dat_origin)?;
+    // let points: Vec<Point> = dat
+    //     .row_iter()
+    //     .map(|c| Point { x: c[0], y: c[1] })
+    //     .collect::<Vec<Point>>();
 
-    p_info_params
-        .set(&PlotArgs::FName("post_bin.png".into()))
-        .unwrap();
-    let plt_type = PlotType::ColorMesh(p_info_params.clone());
-    plt_type.plot(&plt_dat_binned)?;
+    // let trianglulation = triangulate(&points);
+    // let triangles = trianglulation.triangles;
+
+    // let tri_index_mat = Matrix3xX::from_vec(triangles).transpose();
+
+    // let mut triangle_centroid_z = DVector::<f64>::zeros(tri_index_mat.column(0).len());
+
+    // for (c, t) in izip!(tri_index_mat.row_iter(), triangle_centroid_z.iter_mut()) {
+    //     *t = (dat[(c[0], 2)] + dat[(c[1], 2)] + dat[(c[2], 2)]) / 3.;
+    // }
+
+    // let (plt_dat, plt_type) = (
+    //     PlotData::TriangulatedSurface(tri_index_mat, dat.clone()),
+    //     PlotType::TriangulatedSurface(plt_params),
+    // );
+    // let _ = plt_type.plot(&plt_dat);
+
+    // //colormesh test
+    // let x = linspace(-50., 50., 101);
+    // let y = linspace(-50., 50., 101);
+    // let sigma = 5.;
+
+    // let (xx, yy) = meshgrid(&x, &y);
+    // let gaussian = (-0.5 * (xx.map(|x| x.powi(2)) + yy.map(|y| (y - 10.).powi(2)))
+    //     / f64::powi(sigma, 2))
+    // .map(|x| x.exp())
+    //     * 2.;
+
+    // let flat_x = DVector::from_vec(xx.iter().cloned().map(|x| x).collect::<Vec<f64>>());
+    // let flat_y = DVector::from_vec(yy.iter().cloned().map(|x| x).collect::<Vec<f64>>());
+    // let flat_z = DVector::from_vec(gaussian.iter().cloned().map(|x| x).collect::<Vec<f64>>());
+
+    // let mat3d = MatrixXx3::from_columns(&[flat_x, flat_y, flat_z]);
+
+    // let plt_dat_origin = PlotData::ColorMesh(x.transpose(), y.transpose(), gaussian.clone());
+    // let plt_dat_binned = bin_2d_scatter_data(&PlotData::Dim3(mat3d)).unwrap();
+
+    // let mut p_info_params = PlotParameters::default();
+    // p_info_params
+    //     .set(&PlotArgs::Backend(PltBackEnd::BMP))
+    //     .unwrap()
+    //     .set(&PlotArgs::FName("pre_bin.png".into()))
+    //     .unwrap()
+    //     .set(&PlotArgs::FDir("./opossum/playground/".into()))
+    //     .unwrap();
+
+    // let plt_type = PlotType::ColorMesh(p_info_params.clone());
+    // plt_type.plot(&plt_dat_origin)?;
+
+    // p_info_params
+    //     .set(&PlotArgs::FName("post_bin.png".into()))
+    //     .unwrap();
+    // let plt_type = PlotType::ColorMesh(p_info_params.clone());
+    // plt_type.plot(&plt_dat_binned)?;
 
     Ok(())
 }

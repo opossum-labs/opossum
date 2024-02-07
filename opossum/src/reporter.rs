@@ -190,8 +190,6 @@ impl ReportGenerator {
                     "cannot display scenery diagram. Is graphviz installed?",
                 ));
             }
-
-
         }
     }
     fn add_node_reports(&self, doc: &mut genpdf::Document) -> OpmResult<()> {
