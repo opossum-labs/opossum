@@ -449,10 +449,62 @@ impl Rays {
 pub struct RayPositionHistory {
     pub rays_pos_history: Vec<MatrixXx3<f64>>,
 }
+impl RayPositionHistory {
+    pub fn project_to_plane(
+        &self,
+        plane_normal_vec: Vector3<f64>,
+    ) -> OpmResult<Vec<MatrixXx2<f64>>> {
+        let vec_norm = plane_normal_vec.norm();
+
+        if vec_norm < f64::EPSILON {
+            return Err(OpossumError::Other(
+                "The plane normal vector must have a non-zero length!".into(),
+            ));
+        }
+
+        let normed_normal_vec = plane_normal_vec / vec_norm;
+
+        //define an axis on the plane.
+        //Do this by projection of one of the main coordinate axes onto that plane
+        //Beforehand check, if these axes are not parallel to the normal vec
+        let (co_ax_1, co_ax_2) =
+            if plane_normal_vec.cross(&Vector3::new(1., 0., 0.)).norm() < f64::EPSILON {
+                //parallel to the x-axis
+                (Vector3::new(0., 0., 1.), Vector3::new(0., 1., 0.))
+            } else if plane_normal_vec.cross(&Vector3::new(0., 1., 0.)).norm() < f64::EPSILON {
+                (Vector3::new(0., 0., 1.), Vector3::new(1., 0., 0.))
+            } else if plane_normal_vec.cross(&Vector3::new(0., 0., 1.)).norm() < f64::EPSILON {
+                (Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.))
+            } else {
+                //arbitrarily project x-axis onto that plane
+                let x_vec = Vector3::new(1., 0., 0.);
+                let mut proj_x = x_vec - x_vec.dot(&normed_normal_vec) * plane_normal_vec;
+                proj_x /= proj_x.norm();
+
+                //second axis defined by cross product of x-axis projection and plane normal, which yields another vector that is perpendicular to both others
+                (proj_x, proj_x.cross(&normed_normal_vec))
+            };
+
+        let mut projected_rays_pos =
+            Vec::<MatrixXx2<f64>>::with_capacity(self.rays_pos_history.len());
+        for ray_pos in &self.rays_pos_history {
+            let mut projected_ray_pos = MatrixXx2::<f64>::zeros(ray_pos.column(0).len());
+            for (row, pos) in ray_pos.row_iter().enumerate() {
+                let pos_t = pos.transpose();
+                let proj_pos = pos_t - pos_t.dot(&normed_normal_vec) * plane_normal_vec;
+
+                projected_ray_pos[(row, 0)] = proj_pos.dot(&co_ax_1);
+                projected_ray_pos[(row, 1)] = proj_pos.dot(&co_ax_2);
+            }
+            projected_rays_pos.push(projected_ray_pos)
+        }
+        Ok(projected_rays_pos)
+    }
+}
 impl PdfReportable for RayPositionHistory {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), (1000, 850), PltBackEnd::Buf)?;
+        let img = self.to_plot(Path::new(""), (1000, 1000), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),
@@ -486,19 +538,24 @@ impl Plottable for RayPositionHistory {
                 .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
                 .set(&PlotArgs::FigSize(img_size))?,
         };
-        plt_params.set(&PlotArgs::Backend(backend))?;
+        plt_params
+            .set(&PlotArgs::Backend(backend))?
+            .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
+            .set(&PlotArgs::XLabel("distance in mm (y axis)".into()))?;
 
-        let (mut plt_data_opt, mut plt_type) = if self.rays_pos_history.is_empty() {
-            (None, PlotType::MultiLine3D(plt_params))
+        let (plt_data_opt, plt_type) = if self.rays_pos_history.is_empty() {
+            (None, PlotType::MultiLine2D(plt_params))
         } else {
-            let plt_type = PlotType::MultiLine3D(plt_params);
+            let plt_type = PlotType::MultiLine2D(plt_params);
             (self.get_plot_data(&plt_type)?, plt_type)
         };
         plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
     }
 
-    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
-        Ok(Some(PlotData::MultiDim3(self.rays_pos_history.clone())))
+    fn get_plot_data(&self, _plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+        Ok(Some(PlotData::MultiDim2(
+            self.project_to_plane(Vector3::new(1., 0., 0.))?,
+        )))
     }
 }
 

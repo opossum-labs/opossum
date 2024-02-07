@@ -1,6 +1,6 @@
 use delaunator::{triangulate, Point};
 use itertools::izip;
-use nalgebra::{DMatrix, DVector, Matrix1xX, Matrix3xX, MatrixXx3};
+use nalgebra::{DMatrix, DVector, Matrix1xX, Matrix3xX, MatrixXx3, Vector3};
 use opossum::{
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType, PltBackEnd},
@@ -72,8 +72,6 @@ fn main() -> OpmResult<()> {
         &DistributionStrategy::Hexapolar(5),
     )?;
 
-
-
     rays.propagate_along_z(Length::new::<millimeter>(10.))?;
     rays.refract_paraxial(Length::new::<millimeter>(10.))?;
     rays.propagate_along_z(Length::new::<millimeter>(30.))?;
@@ -82,18 +80,20 @@ fn main() -> OpmResult<()> {
 
     let mut plt_params = PlotParameters::default();
     plt_params
-    .set(&PlotArgs::FName("ray_test.png".into()))
-    .unwrap()
-    .set(&PlotArgs::FDir("./opossum/playground/".into()))
-    .unwrap()
-    .set(&PlotArgs::FigSize((800, 1000)))
-    .unwrap();
+        .set(&PlotArgs::FName("ray_test.png".into()))
+        .unwrap()
+        .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .unwrap()
+        .set(&PlotArgs::FigSize((1500, 1500)))
+        .unwrap();
     let ray_pos_hist = rays.get_rays_position_history_in_mm();
-    let plt_dat = PlotData::MultiDim3(ray_pos_hist.rays_pos_history);
-    let plt_type = PlotType::MultiLine3D(plt_params);
+    // let plt_dat = PlotData::MultiDim3(ray_pos_hist.rays_pos_history);
+    // let plt_type = PlotType::MultiLine3D(plt_params);
+    // let _ = plt_type.plot(&plt_dat);
+
+    let plt_dat = PlotData::MultiDim2(ray_pos_hist.project_to_plane(Vector3::new(1., 0., 0.))?);
+    let plt_type = PlotType::MultiLine2D(plt_params);
     let _ = plt_type.plot(&plt_dat);
-
-
 
     // //triangulation test
     // let dat = Matrix3xX::from_vec(vec![
