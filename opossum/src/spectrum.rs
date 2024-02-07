@@ -139,6 +139,11 @@ impl Spectrum {
     /// the given energy / intensity. If the given wavelength does not exactly match a spectrum slot the energy is distributed
     /// over neighboring slots such that the total energy matches the given energy.
     ///
+    /// # Warnings
+    ///
+    /// This function emits a warning log entry if the peak wavelenth is not within the spectrum range. In this case the spectrum
+    /// is unmodified.
+    ///
     /// # Errors
     ///
     /// This function will return an [`OpossumError::Spectrum`] if

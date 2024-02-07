@@ -304,15 +304,6 @@ impl Plottable for Spectrometer {
             _ => Ok(None),
         }
     }
-    // fn create_plot<B: plotters::prelude::DrawingBackend>(&self, root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>) -> OpmResult<()> {
-    //     let plot_spec = self.get_plot_data()?;
-    //     let marker_color = RGBAColor{0:255, 1:0, 2:0, 3:1.};
-    //     let xlabel = "x (mm)";
-    //     let ylabel = "y (mm)";
-    //     self.plot_2d_line(&PlotData::Dim2(plot_spec), marker_color, vec![[true, true], [true, true]], xlabel, ylabel, root);
-
-    //     Ok(())
-    // }
 }
 
 #[cfg(test)]

@@ -9,6 +9,7 @@ use crate::nodes::FilterType;
 use crate::ray::{Ray, SplittingConfig};
 use crate::spectrum::Spectrum;
 use kahan::KahanSummator;
+use log::warn;
 use nalgebra::{distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
@@ -353,13 +354,21 @@ impl Rays {
     ///
     /// Removes all rays with an energy (per ray) below the given threshold.
     ///
+    /// # Warnings
+    ///
+    /// This function emits a warning log entry if the given threshold is negative. In this case the ray bundle is not modified.
+    ///
     /// # Errors
     ///
-    /// This function will return an error if the given energy threshold is negative or not finite.
+    /// This function will return an error if the given energy threshold is not finite.
     pub fn delete_by_threshold_energy(&mut self, min_energy_per_ray: Energy) -> OpmResult<()> {
-        if !min_energy_per_ray.is_finite() || min_energy_per_ray.is_sign_negative() {
+        if min_energy_per_ray.is_sign_negative() {
+            warn!("negative threshold energy given. Ray bundle unmodified.");
+            return Ok(());
+        }
+        if !min_energy_per_ray.is_finite() {
             return Err(OpossumError::Other(
-                "threshold energy must be >=0.0 and finite".into(),
+                "threshold energy must be finite".into(),
             ));
         };
         self.rays.retain(|ray| ray.energy() >= min_energy_per_ray);
@@ -592,6 +601,8 @@ mod test {
     use super::*;
     use crate::{aperture::CircleConfig, ray::SplittingConfig};
     use approx::assert_abs_diff_eq;
+    use log::Level;
+    use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
     fn strategy_random() {
@@ -985,6 +996,7 @@ mod test {
     }
     #[test]
     fn delete_by_threshold() {
+        testing_logger::setup();
         let mut rays = Rays::default();
         assert!(rays
             .delete_by_threshold_energy(Energy::new::<joule>(f64::NAN))
@@ -994,7 +1006,15 @@ mod test {
             .is_err());
         assert!(rays
             .delete_by_threshold_energy(Energy::new::<joule>(-0.1))
-            .is_err());
+            .is_ok());
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "negative threshold energy given. Ray bundle unmodified."
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
         assert!(rays
             .delete_by_threshold_energy(Energy::new::<joule>(0.0))
             .is_ok());
