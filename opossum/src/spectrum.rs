@@ -3,6 +3,7 @@
 use crate::error::{OpmResult, OpossumError};
 use csv::ReaderBuilder;
 use kahan::KahanSummator;
+use log::warn;
 use nalgebra::MatrixXx2;
 use serde_derive::{Deserialize, Serialize};
 use std::f64::consts::PI;
@@ -39,7 +40,7 @@ impl Spectrum {
                 "wavelength range must be in ascending order and not empty".into(),
             ));
         }
-        if range.start <= Length::zero() || range.end <= Length::zero() {
+        if range.start.is_sign_negative() || range.end.is_sign_negative() {
             return Err(OpossumError::Spectrum(
                 "wavelength range limits must both be positive".into(),
             ));
@@ -138,6 +139,11 @@ impl Spectrum {
     /// the given energy / intensity. If the given wavelength does not exactly match a spectrum slot the energy is distributed
     /// over neighboring slots such that the total energy matches the given energy.
     ///
+    /// # Warnings
+    ///
+    /// This function emits a warning log entry if the peak wavelenth is not within the spectrum range. In this case the spectrum
+    /// is unmodified.
+    ///
     /// # Errors
     ///
     /// This function will return an [`OpossumError::Spectrum`] if
@@ -146,9 +152,8 @@ impl Spectrum {
     pub fn add_single_peak(&mut self, wavelength: Length, value: f64) -> OpmResult<()> {
         let spectrum_range = self.range();
         if !spectrum_range.contains(&wavelength) {
-            return Err(OpossumError::Spectrum(
-                "wavelength is not in spectrum range".into(),
-            ));
+            warn!("peak wavelength is not in spectrum range. Spectrum unmodified.");
+            return Ok(());
         }
         if value < 0.0 {
             return Err(OpossumError::Spectrum("energy must be positive".into()));
@@ -476,37 +481,6 @@ impl<'a> IntoIterator for &'a Spectrum {
         self.iter()
     }
 }
-// impl PdfReportable for Spectrum {
-//     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-//         let mut layout = genpdf::elements::LinearLayout::vertical();
-//         let img = self.to_img_buf_plot((1200,800)).unwrap();
-//         layout.push(
-//             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
-//                 .map_err(|e| format!("adding of image failed: {e}"))?,
-//         );
-//         Ok(layout)
-//     }
-// }
-
-// impl Plottable for Spectrum{
-//     fn create_plot<B: plotters::prelude::DrawingBackend>(&self, root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>) -> OpmResult<()> {
-//         let data = self.data;
-//         if let Some(LightData::Geometric(rays)) = data {
-//             let rays_xy_pos = rays.get_xy_rays_pos();
-//             let marker_color = RGBAColor{0:255, 1:0, 2:0, 3:1.};
-//             let xlabel = "x (mm)";
-//             let ylabel = "y (mm)";
-//             self.plot_2d_scatter(&PlotData::Dim2(rays_xy_pos), marker_color, vec![[true, true], [true, true]], xlabel, ylabel, root);
-//         }
-//         Ok(())
-//     }
-// }
-
-// impl From<Spectrum> for Proptype {
-//     fn from(value: Spectrum) -> Self {
-//         Self::Spectrometer(value)
-//     }
-// }
 impl Display for Spectrum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_length = Length::format_args(nanometer, Abbreviation);
@@ -595,47 +569,15 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
         Some(s_out)
     }
 }
-// impl Plottable for Spectrum {
-//     fn chart<B: DrawingBackend>(&self, root: &DrawingArea<B, Shift>) -> OpmResult<()> {
-//         let x_left = self.data.first().unwrap().0;
-//         let x_right = self.data.last().unwrap().0;
-//         let y_range = fitting_range(self.data_vec().iter());
-//         let mut chart = ChartBuilder::on(root)
-//             .margin(5)
-//             .x_label_area_size(100)
-//             .y_label_area_size(100)
-//             .build_cartesian_2d(x_left * 1.0E3..x_right * 1.0E3, 0.0..y_range.end * 1E-3)
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-
-//         chart
-//             .configure_mesh()
-//             .x_desc("wavelength (nm)")
-//             .y_desc("value (1/nm)")
-//             .label_style(TextStyle::from(("sans-serif", 30).into_font()))
-//             .draw()
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-
-//         chart
-//             .draw_series(LineSeries::new(
-//                 self.data
-//                     .iter()
-//                     .map(|data| (data.0 * 1.0E3, data.1 * 1.0E-3)),
-//                 &RED,
-//             ))
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-//         root.present()
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-//         Ok(())
-//     }
-// }
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::spectrum_helper::{
         create_he_ne_spec, create_nd_glass_spec, create_nir_spec, create_visible_spec,
     };
-
-    use super::*;
     use approx::{assert_abs_diff_eq, AbsDiffEq};
+    use log::Level;
+    use testing_logger;
     fn prep() -> Spectrum {
         Spectrum::new(
             Length::new::<micrometer>(1.0)..Length::new::<micrometer>(4.0),
@@ -791,13 +733,30 @@ mod test {
     }
     #[test]
     fn set_single_peak_wrong_params() {
+        testing_logger::setup();
         let mut s = prep();
         assert!(s
             .add_single_peak(Length::new::<micrometer>(0.5), 1.0)
-            .is_err());
+            .is_ok());
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "peak wavelength is not in spectrum range. Spectrum unmodified."
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
         assert!(s
             .add_single_peak(Length::new::<micrometer>(4.0), 1.0)
-            .is_err());
+            .is_ok());
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "peak wavelength is not in spectrum range. Spectrum unmodified."
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
         assert!(s
             .add_single_peak(Length::new::<micrometer>(1.5), -1.0)
             .is_err());

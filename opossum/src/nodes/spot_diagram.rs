@@ -92,8 +92,6 @@ impl Optical for SpotDiagram {
                 self.properties().name()?
             )));
             self.to_plot(&file_path, (800, 800), PltBackEnd::SVG)
-
-            // self.to_svg_plot(&file_path, (800,800))
             // data.export(&file_path)
         } else {
             Err(OpossumError::Other(
@@ -215,46 +213,6 @@ impl Plottable for SpotDiagram {
             _ => Ok(None),
         }
     }
-
-    // fn create_plot<B: plotters::prelude::DrawingBackend>(&self, root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>) -> OpmResult<()> {
-
-    //     let data = &self.light_data;
-    //     if let Some(LightData::Geometric(rays)) = data {
-    //         let rays_xy_pos = rays.get_xy_rays_pos();
-    //         let marker_color = RGBAColor{0:255, 1:0, 2:0, 3:1.};
-    //         let xlabel = "x (mm)";
-    //         let ylabel = "y (mm)";
-    //         self.plot_2d_scatter(&PlotData::Dim2(rays_xy_pos), marker_color, vec![[true, true], [true, true]], xlabel, ylabel, root);
-    //     }
-
-    //     // let mut chart = ChartBuilder::on(root)
-    //     //     .margin(15)
-    //     //     .x_label_area_size(100)
-    //     //     .y_label_area_size(100)
-    //     //     .build_cartesian_2d(x_min..x_max, y_min..y_max)
-    //     //     .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-
-    //     // chart
-    //     //     .configure_mesh()
-    //     //     .x_desc("x (mm)")
-    //     //     .y_desc("y (mm)")
-    //     //     .label_style(TextStyle::from(("sans-serif", 30).into_font()))
-    //     //     .draw()
-    //     //     .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-    //     // let points: Vec<(f64, f64)> = self.rays.iter().map(|ray| (ray.pos.x, ray.pos.y)).collect();
-    //     // let series = PointSeries::of_element(points, 5, &RED, &|c, s, st| {
-    //     //     EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-    //     //         + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
-    //     // });
-
-    //     // chart
-    //     //     .draw_series(series)
-    //     //     .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-    //     // root.present()
-    //     //     .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-
-    //     Ok(())
-    // }
 }
 
 #[cfg(test)]

@@ -19,6 +19,7 @@ use chrono::Local;
 use genpdf::Alignment;
 use image::io::Reader;
 use image::DynamicImage;
+use log::warn;
 use petgraph::algo::toposort;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
@@ -242,40 +243,39 @@ impl OpticScenery {
             let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
             let neighbors = self.g.0.neighbors_undirected(idx);
             if neighbors.count() == 0 {
-                return Err(OpossumError::Analysis(format!(
-                    "found stale (completely unconnected) node {node_name}"
-                )));
-            }
-
-            let mut incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
-            // paranoia: check if all incoming ports are really input ports of the node to be analyzed
-            let input_ports = node.optical_ref.borrow().ports().input_names();
-            if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
-                return Err(OpossumError::Analysis("input light data contains port which is not an input port of the node. Data will be discarded.".into()));
-            }
-            incoming_edges = apodize_incoming_light(incoming_edges, node)?;
-            //
-            let node_type = node
-                .optical_ref
-                .borrow()
-                .properties()
-                .node_type()?
-                .to_owned();
-            let mut outgoing_edges = node
-                .optical_ref
-                .borrow_mut()
-                .analyze(incoming_edges, analyzer_type)
-                .map_err(|e| {
-                    OpossumError::Analysis(format!(
-                        "analysis of node {node_name} <{node_type}> failed: {e}"
-                    ))
-                })?;
-            outgoing_edges = apodize_outgoing_light(outgoing_edges, node)?;
-            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                threshold_by_energy(&mut outgoing_edges, config.min_energy_per_ray())?;
-            }
-            for outgoing_edge in outgoing_edges {
-                self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                warn!("stale (completely unconnected) node {node_name} found. Skipping.");
+            } else {
+                let mut incoming_edges: HashMap<String, Option<LightData>> =
+                    self.incoming_edges(idx);
+                // paranoia: check if all incoming ports are really input ports of the node to be analyzed
+                let input_ports = node.optical_ref.borrow().ports().input_names();
+                if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
+                    warn!("input light data contains port which is not an input port of the node {node_name}. Data will be discarded.");
+                }
+                incoming_edges = apodize_incoming_light(incoming_edges, node)?;
+                //
+                let node_type = node
+                    .optical_ref
+                    .borrow()
+                    .properties()
+                    .node_type()?
+                    .to_owned();
+                let mut outgoing_edges = node
+                    .optical_ref
+                    .borrow_mut()
+                    .analyze(incoming_edges, analyzer_type)
+                    .map_err(|e| {
+                        OpossumError::Analysis(format!(
+                            "analysis of node {node_name} <{node_type}> failed: {e}"
+                        ))
+                    })?;
+                outgoing_edges = apodize_outgoing_light(outgoing_edges, node)?;
+                if let AnalyzerType::RayTrace(config) = analyzer_type {
+                    threshold_by_energy(&mut outgoing_edges, config.min_energy_per_ray())?;
+                }
+                for outgoing_edge in outgoing_edges {
+                    self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                }
             }
         }
         Ok(())
@@ -533,8 +533,8 @@ impl<'de> Deserialize<'de> for OpticScenery {
                 }
                 if let Some(opm_version) = opm_version {
                     if opm_version != env!("OPM_FILE_VERSION") {
-                        println!(
-                            "\nWarning: version mismatch! File version {}, Appplication version {}",
+                        warn!(
+                            "model file version mismatch! File version {}, Appplication version {}",
                             opm_version,
                             env!("OPM_FILE_VERSION")
                         );
@@ -573,10 +573,12 @@ mod test {
     use crate::ray::Ray;
     use crate::rays::Rays;
     use crate::SplittingConfig;
+    use log::Level;
     use nalgebra::Point2;
     use num::Zero;
     use std::path::PathBuf;
     use std::{fs::File, io::Read};
+    use testing_logger;
     use uom::si::energy::joule;
     use uom::si::f64::Length;
     use uom::si::length::nanometer;
@@ -763,14 +765,18 @@ mod test {
     }
     #[test]
     fn analyze_stale_node() {
+        testing_logger::setup();
         let mut scenery = OpticScenery::new();
         scenery.add_node(Dummy::default());
-        let res = scenery.analyze(&AnalyzerType::Energy);
-        assert!(res.is_err());
-        assert_eq!(
-            res.unwrap_err().to_string(),
-            "Analysis:found stale (completely unconnected) node dummy"
-        );
+        assert!(scenery.analyze(&AnalyzerType::Energy).is_ok());
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "stale (completely unconnected) node dummy found. Skipping."
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
     }
     #[test]
     fn analyze_energy_threshold() {

@@ -119,7 +119,6 @@ impl WaveFrontErrorMap {
             })
         }
     }
-
     fn calc_wavefront_statistics(wf_dat: &DVector<f64>) -> OpmResult<(f64, f64)> {
         if wf_dat.is_empty() {
             Err(OpossumError::Other("Empty wavefront-data vector!".into()))
@@ -189,20 +188,6 @@ impl Optical for WaveFront {
             ))
         }
     }
-    // fn export_data(&self, report_dir: &Path) -> OpmResult<()> {
-    //     if let Some(data) = &self.light_data {
-    //         let mut file_path = PathBuf::from(report_dir);
-    //         file_path.push(format!(
-    //             "wavefront_diagram_{}.svg",
-    //             self.properties().name()?
-    //         ));
-    //         // self.to
-    //         // data.export(&file_path)
-    //         Ok(())
-    //     } else {
-    //         Ok(())
-    //     }
-    // }
     fn is_detector(&self) -> bool {
         true
     }
@@ -245,7 +230,6 @@ impl Optical for WaveFront {
 
 impl PdfReportable for WaveFrontData {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        // genpdf::elements::Paragraph::new(value.to_string())
         let mut layout = genpdf::elements::LinearLayout::vertical();
 
         layout.push(genpdf::elements::Paragraph::new(format!(

@@ -230,7 +230,7 @@ impl Optical for BeamSplitter {
                 Some(light_data)
             } else {
                 return Err(OpossumError::Analysis(format!(
-                    "beam splitter: no light data in input port <{input_port1}>"
+                    "beam splitter: no light data at input port <{input_port1}>"
                 )));
             }
         } else {
@@ -241,7 +241,7 @@ impl Optical for BeamSplitter {
                 Some(light_data)
             } else {
                 return Err(OpossumError::Analysis(format!(
-                    "beam splitter: no light data in input port <{input_port2}>"
+                    "beam splitter: no light data at input port <{input_port2}>"
                 )));
             }
         } else {

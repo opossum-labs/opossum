@@ -13,6 +13,7 @@ use genpdf::{
     style, Alignment, Scale,
 };
 use image::{io::Reader, DynamicImage};
+use log::warn;
 use serde_derive::{Deserialize, Serialize};
 use std::{io::Cursor, path::Path};
 #[derive(Serialize, Debug)]
@@ -126,11 +127,20 @@ impl ReportGenerator {
             .unwrap()
             .into_rgb8();
         let img = DynamicImage::ImageRgb8(img);
-        let image = elements::Image::from_dynamic_image(img)
-            .expect("Failed to load image")
-            .with_scale(Scale::new(0.2, 0.2))
-            .with_alignment(Alignment::Center);
-        doc.push(image);
+        if let Ok(image) = elements::Image::from_dynamic_image(img) {
+            doc.push(
+                image
+                    .with_scale(Scale::new(0.2, 0.2))
+                    .with_alignment(Alignment::Center),
+            );
+        } else {
+            doc.push(
+                elements::Paragraph::default()
+                    .styled_string("OPOSSUM", style::Style::new().with_font_size(20))
+                    .aligned(Alignment::Center),
+            );
+            warn!("report logo not found. Skip displaying.");
+        }
         let p = elements::Paragraph::default()
             .styled_string("Analysis Report", style::Effect::Bold)
             .aligned(genpdf::Alignment::Center);
@@ -174,6 +184,7 @@ impl ReportGenerator {
                 doc.push(elements::Paragraph::new(
                     "cannot display scenery diagram. Is graphviz installed?",
                 ));
+                warn!("cannot display scenery diagram in report. Is graphviz installed?");
             }
         }
     }
