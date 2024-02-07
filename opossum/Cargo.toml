@@ -64,6 +64,7 @@ num = "0.4.1"
 kahan = "0"
 log = "0"
 env_logger= "0"
+roots = "0"
 
 [features]
 doc-images = []
