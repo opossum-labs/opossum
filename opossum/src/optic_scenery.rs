@@ -576,7 +576,7 @@ mod test {
     use crate::rays::Rays;
     use crate::SplittingConfig;
     use log::Level;
-    use nalgebra::Point2;
+    use nalgebra::{Point2, Point3};
     use num::Zero;
     use std::path::PathBuf;
     use std::{fs::File, io::Read};
@@ -785,7 +785,7 @@ mod test {
         let mut rays = Rays::default();
         rays.add_ray(
             Ray::new_collimated(
-                Point2::new(Length::zero(), Length::zero()),
+                Point3::new(Length::zero(), Length::zero(), Length::zero()),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
             )
@@ -793,7 +793,7 @@ mod test {
         );
         rays.add_ray(
             Ray::new_collimated(
-                Point2::new(Length::zero(), Length::zero()),
+                Point3::new(Length::zero(), Length::zero(), Length::zero()),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(0.1),
             )

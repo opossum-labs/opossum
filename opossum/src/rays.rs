@@ -57,8 +57,8 @@ impl Rays {
                 "radius must be >= 0.0 and finite".into(),
             ));
         }
-        let points: Vec<Point2<Length>> = if size.is_zero() {
-            vec![Point2::new(Length::zero(), Length::zero())]
+        let points: Vec<Point3<Length>> = if size.is_zero() {
+            vec![Point3::new(Length::zero(), Length::zero(), Length::zero())]
         } else {
             strategy.generate(size)
         };
@@ -84,7 +84,7 @@ impl Rays {
     ///  - the given energy is < 0.0, nan, or +inf
     ///  - the given cone angle is < 0.0 degrees or >= 180.0 degrees
     pub fn new_hexapolar_point_source(
-        position: Point2<Length>,
+        position: Point3<Length>,
         cone_angle: Angle,
         number_of_rings: u8,
         wave_length: Length,
@@ -96,8 +96,8 @@ impl Rays {
             ));
         }
         let size_after_unit_length = (cone_angle / 2.0).tan().value;
-        let points: Vec<Point2<Length>> = if cone_angle.is_zero() {
-            vec![Point2::new(Length::zero(), Length::zero())]
+        let points: Vec<Point3<Length>> = if cone_angle.is_zero() {
+            vec![Point3::new(Length::zero(), Length::zero(), Length::zero())]
         } else {
             DistributionStrategy::Hexapolar(number_of_rings)
                 .generate(Length::new::<millimeter>(size_after_unit_length))
@@ -592,7 +592,7 @@ pub enum DistributionStrategy {
 impl DistributionStrategy {
     /// Generate a vector of 2D points within a given size (which depends on the concrete strategy)
     #[must_use]
-    pub fn generate(&self, size: Length) -> Vec<Point2<Length>> {
+    pub fn generate(&self, size: Length) -> Vec<Point3<Length>> {
         match self {
             Self::Hexapolar(rings) => hexapolar(*rings, size),
             Self::Random(nr_of_rays) => random(*nr_of_rays, size),
@@ -600,23 +600,23 @@ impl DistributionStrategy {
         }
     }
 }
-fn hexapolar(rings: u8, radius: Length) -> Vec<Point2<Length>> {
-    let mut points: Vec<Point2<Length>> = Vec::new();
+fn hexapolar(rings: u8, radius: Length) -> Vec<Point3<Length>> {
+    let mut points: Vec<Point3<Length>> = Vec::new();
     let radius_step = radius / f64::from(rings);
-    points.push(point![Length::zero(), Length::zero()]);
+    points.push(point![Length::zero(), Length::zero(), Length::zero()]);
     for ring in 0u8..rings {
         let radius = f64::from(ring + 1) * radius_step;
         let points_per_ring = 6 * (ring + 1);
         let angle_step = 2.0 * std::f64::consts::PI / f64::from(points_per_ring);
         for point_nr in 0u8..points_per_ring {
             let point = (f64::from(point_nr) * angle_step).sin_cos();
-            points.push(point![radius * point.0, radius * point.1]);
+            points.push(point![radius * point.0, radius * point.1, Length::zero()]);
         }
     }
     points
 }
-fn random(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
-    let mut points: Vec<Point2<Length>> = Vec::new();
+fn random(nr_of_rays: usize, side_length: Length) -> Vec<Point3<Length>> {
+    let mut points: Vec<Point3<Length>> = Vec::new();
     let mut rng = rand::thread_rng();
     for _ in 0..nr_of_rays {
         points.push(point![
@@ -625,21 +625,23 @@ fn random(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
             ),
             Length::new::<millimeter>(
                 rng.gen_range(-side_length.get::<millimeter>()..side_length.get::<millimeter>())
-            )
+            ),
+            Length::zero()
         ]);
     }
     points
 }
-fn sobol(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
+fn sobol(nr_of_rays: usize, side_length: Length) -> Vec<Point3<Length>> {
     let side_length = side_length.get::<millimeter>();
-    let mut points: Vec<Point2<Length>> = Vec::new();
+    let mut points: Vec<Point3<Length>> = Vec::new();
     let params = JoeKuoD6::minimal();
     let seq = Sobol::<f64>::new(2, &params);
     let offset = side_length / 2.0;
     for point in seq.take(nr_of_rays) {
         points.push(point!(
             Length::new::<millimeter>(point[0] - offset),
-            Length::new::<millimeter>(point[1] - offset)
+            Length::new::<millimeter>(point[1] - offset),
+            Length::zero()
         ));
     }
     points
@@ -721,7 +723,7 @@ mod test {
     }
     #[test]
     fn new_hexapolar_point_source() {
-        let position = Point2::new(Length::zero(), Length::zero());
+        let position = Point3::new(Length::zero(), Length::zero(), Length::zero());
         let wave_length = Length::new::<nanometer>(1053.0);
         let rays = Rays::new_hexapolar_point_source(
             position,
@@ -798,7 +800,7 @@ mod test {
         let mut rays = Rays::default();
         assert_eq!(rays.rays.len(), 0);
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -811,7 +813,7 @@ mod test {
         let mut rays = Rays::default();
         assert_eq!(rays.rays.len(), 0);
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -827,7 +829,7 @@ mod test {
         let mut rays = Rays::default();
         assert!(rays.total_energy().is_zero());
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -852,9 +854,10 @@ mod test {
         assert_eq!(rays.centroid(), None);
         rays.add_ray(
             Ray::new_collimated(
-                Point2::new(
+                Point3::new(
                     Length::new::<millimeter>(1.0),
                     Length::new::<millimeter>(2.0),
+                    Length::zero(),
                 ),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
@@ -863,9 +866,10 @@ mod test {
         );
         rays.add_ray(
             Ray::new_collimated(
-                Point2::new(
+                Point3::new(
                     Length::new::<millimeter>(2.0),
                     Length::new::<millimeter>(3.0),
+                    Length::zero(),
                 ),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
@@ -887,9 +891,10 @@ mod test {
         assert!(rays.beam_radius_geo().is_none());
         rays.add_ray(
             Ray::new_collimated(
-                Point2::new(
+                Point3::new(
                     Length::new::<millimeter>(1.0),
                     Length::new::<millimeter>(2.0),
+                    Length::zero(),
                 ),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
@@ -898,9 +903,10 @@ mod test {
         );
         rays.add_ray(
             Ray::new_collimated(
-                Point2::new(
+                Point3::new(
                     Length::new::<millimeter>(2.0),
                     Length::new::<millimeter>(3.0),
+                    Length::zero(),
                 ),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
@@ -918,9 +924,10 @@ mod test {
         assert!(rays.beam_radius_rms().is_none());
         rays.add_ray(
             Ray::new_collimated(
-                Point2::new(
+                Point3::new(
                     Length::new::<millimeter>(1.0),
                     Length::new::<millimeter>(1.0),
+                    Length::zero(),
                 ),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
@@ -930,9 +937,10 @@ mod test {
         assert_eq!(rays.beam_radius_rms().unwrap(), Length::zero());
         rays.add_ray(
             Ray::new_collimated(
-                Point2::new(
+                Point3::new(
                     Length::new::<millimeter>(0.0),
                     Length::new::<millimeter>(0.0),
+                    Length::zero(),
                 ),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
@@ -948,13 +956,17 @@ mod test {
     fn propagate_along_z_axis() {
         let mut rays = Rays::default();
         let ray0 = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         let ray1 = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::new::<millimeter>(1.0)),
+            Point3::new(
+                Length::zero(),
+                Length::new::<millimeter>(1.0),
+                Length::zero(),
+            ),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -999,13 +1011,17 @@ mod test {
             .refract_paraxial(Length::new::<millimeter>(100.0))
             .is_ok());
         let ray0 = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         let ray1 = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::new::<millimeter>(1.0)),
+            Point3::new(
+                Length::zero(),
+                Length::new::<millimeter>(1.0),
+                Length::zero(),
+            ),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -1029,7 +1045,11 @@ mod test {
         assert!(rays.filter_energy(&FilterType::Constant(-0.1)).is_err());
         assert!(rays.filter_energy(&FilterType::Constant(1.1)).is_err());
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::new::<millimeter>(1.0)),
+            Point3::new(
+                Length::zero(),
+                Length::new::<millimeter>(1.0),
+                Length::zero(),
+            ),
             Length::new::<nanometer>(1054.0),
             Energy::new::<joule>(1.0),
         )
@@ -1068,14 +1088,14 @@ mod test {
             .delete_by_threshold_energy(Energy::new::<joule>(0.0))
             .is_ok());
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         rays.add_ray(ray);
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(0.1),
         )
@@ -1095,15 +1115,16 @@ mod test {
     fn apodize() {
         let mut rays = Rays::default();
         let ray0 = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         let ray1 = Ray::new_collimated(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(1.0),
                 Length::new::<millimeter>(1.0),
+                Length::zero(),
             ),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
@@ -1122,16 +1143,17 @@ mod test {
         let mut rays = Rays::default();
         assert_eq!(rays.wavelength_range(), None);
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         rays.add_ray(ray);
         let ray = Ray::new_collimated(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(1.0),
                 Length::new::<millimeter>(1.0),
+                Length::zero(),
             ),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
@@ -1143,9 +1165,10 @@ mod test {
             Some(Length::new::<nanometer>(1053.0)..Length::new::<nanometer>(1053.0))
         );
         let ray = Ray::new_collimated(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(1.0),
                 Length::new::<millimeter>(1.0),
+                Length::zero(),
             ),
             Length::new::<nanometer>(1050.0),
             Energy::new::<joule>(1.0),
@@ -1157,9 +1180,10 @@ mod test {
             Some(Length::new::<nanometer>(1050.0)..Length::new::<nanometer>(1053.0))
         );
         let ray = Ray::new_collimated(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(1.0),
                 Length::new::<millimeter>(1.0),
+                Length::zero(),
             ),
             Length::new::<nanometer>(1051.0),
             Energy::new::<joule>(1.0),
@@ -1175,28 +1199,28 @@ mod test {
     fn to_spectrum() {
         let mut rays = Rays::default();
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         rays.add_ray(ray);
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         rays.add_ray(ray);
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1052.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         rays.add_ray(ray);
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1052.1),
             Energy::new::<joule>(1.0),
         )
@@ -1212,13 +1236,13 @@ mod test {
     #[test]
     fn split() {
         let ray1 = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         let ray2 = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1050.0),
             Energy::new::<joule>(2.0),
         )
