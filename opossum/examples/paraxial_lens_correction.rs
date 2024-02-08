@@ -2,7 +2,10 @@ use std::path::Path;
 
 use opossum::{
     error::OpmResult,
-    nodes::{create_point_ray_source, ParaxialSurface, Propagation, WaveFront},
+    nodes::{
+        create_point_ray_source, ray_propagation_detector::RayPropagationVisualizer,
+        ParaxialSurface, Propagation, WaveFront,
+    },
     OpticScenery,
 };
 use petgraph::prelude::NodeIndex;
@@ -43,7 +46,7 @@ fn main() -> OpmResult<()> {
         scenery.connect_nodes(l2, "rear", d2, "front")?;
         last_node = d2;
     }
-    let wf = scenery.add_node(WaveFront::new("wf"));
+    let wf = scenery.add_node(RayPropagationVisualizer::new("ray_prop"));
 
     scenery.connect_nodes(last_node, "rear", wf, "in1")?;
 

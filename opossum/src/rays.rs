@@ -562,7 +562,7 @@ impl Plottable for RayPositionHistory {
         plt_params
             .set(&PlotArgs::Backend(backend))?
             .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
-            .set(&PlotArgs::XLabel("distance in mm (y axis)".into()))?;
+            .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?;
 
         let (plt_data_opt, plt_type) = if self.rays_pos_history.is_empty() {
             (None, PlotType::MultiLine2D(plt_params))
