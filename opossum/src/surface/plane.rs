@@ -10,8 +10,9 @@ pub struct Plane {
     z: f64,
 }
 impl Plane {
-    pub fn new(z: f64) -> Self {
-        Plane { z }
+    #[must_use]
+    pub const fn new(z: f64) -> Self {
+        Self { z }
     }
 }
 
