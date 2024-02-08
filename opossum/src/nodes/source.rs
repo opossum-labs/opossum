@@ -11,7 +11,7 @@ use crate::{
     properties::{Properties, Proptype},
     rays::{DistributionStrategy, Rays},
 };
-use nalgebra::Point2;
+use nalgebra::Point3;
 use uom::num_traits::Zero;
 use uom::si::{
     f64::{Angle, Energy, Length},
@@ -48,7 +48,7 @@ pub fn create_collimated_ray_source(
 ///  - the given angle is < 0.0 degrees or >= 180.0 degrees.
 pub fn create_point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> {
     let rays = Rays::new_hexapolar_point_source(
-        Point2::new(Length::zero(), Length::zero()),
+        Point3::new(Length::zero(), Length::zero(), Length::zero()),
         cone_angle,
         3,
         Length::new::<nanometer>(1053.0),

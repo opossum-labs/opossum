@@ -281,7 +281,7 @@ mod test {
     use super::*;
     use crate::{analyzer::RayTraceConfig, ray::Ray, spectrum_helper::create_he_ne_spec};
     use approx::{assert_abs_diff_eq, AbsDiffEq};
-    use nalgebra::Point2;
+    use nalgebra::{Point2, Point3};
     use uom::num_traits::Zero;
     use uom::si::{
         energy::joule,
@@ -442,7 +442,7 @@ mod test {
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -473,7 +473,7 @@ mod test {
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -482,7 +482,7 @@ mod test {
         input.insert("input1".into(), Some(LightData::Geometric(rays)));
         let mut rays = Rays::default();
         let ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(0.5),
         )
