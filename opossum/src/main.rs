@@ -1,6 +1,7 @@
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info};
+use opossum::analyzer::AnalyzerType;
 use opossum::error::OpmResult;
 use opossum::reporter::ReportGenerator;
 use opossum::{
@@ -68,7 +69,7 @@ fn create_report_file(
     let pdf_generator = ReportGenerator::new(analysis_report);
     let mut report_path = report_directory.to_path_buf();
     report_path.push("report.pdf");
-    pdf_generator.generate_pdf(&report_path)?;
+    pdf_generator.generate_pdf(&report_path, analyzer)?;
     Ok(())
 }
 
