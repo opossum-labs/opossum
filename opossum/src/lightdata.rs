@@ -95,11 +95,6 @@ impl DataEnergy {
 //         self.spectrum.pdf_report()
 //     }
 // }
-// impl Plottable for DataEnergy {
-//     fn chart<B: DrawingBackend>(&self, root: &DrawingArea<B, Shift>) -> OpmResult<()> {
-//         self.spectrum.chart(root)
-//     }
-// }
 impl From<Option<LightData>> for Proptype {
     fn from(value: Option<LightData>) -> Self {
         Self::LightData(value)

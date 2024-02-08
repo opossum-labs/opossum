@@ -1,6 +1,6 @@
 use clap::Parser;
 use env_logger::Env;
-use opossum::analyzer::AnalyzerType;
+use log::{error, info};
 use opossum::error::OpmResult;
 use opossum::reporter::ReportGenerator;
 use opossum::{
@@ -15,14 +15,13 @@ use std::io::{self, Write};
 use std::path::Path;
 
 fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
-    print!("\nReading model...");
+    info!("Reading model...");
     let _ = io::stdout().flush();
     let contents = fs::read_to_string(path).map_err(|e| {
         OpossumError::Console(format!("cannot read file {} : {}", path.display(), e))
     })?;
     let scenery: OpticScenery = serde_json::from_str(&contents)
         .map_err(|e| OpossumError::OpticScenery(format!("parsing of model failed: {e}")))?;
-    println!("Success");
     Ok(scenery)
 }
 
@@ -35,7 +34,7 @@ fn create_dot_or_report_file_instance(
     let mut f_path = path.to_path_buf();
     f_path.push(f_name);
     f_path.set_extension(f_ext);
-    print!("Write {print_str} to {}...", f_path.display());
+    info!("Write {print_str} to {}...", f_path.display());
     let _ = io::stdout().flush();
 
     File::create(f_path)
@@ -47,7 +46,6 @@ fn create_dot_file(dot_path: &Path, fname: &str, scenery: &OpticScenery) -> OpmR
 
     write!(output, "{}", scenery.to_dot("LR")?)
         .map_err(|e| OpossumError::Other(format!("writing dot file failed: {e}")))?;
-    println!("Success");
     Ok(())
 }
 
@@ -70,8 +68,7 @@ fn create_report_file(
     let pdf_generator = ReportGenerator::new(analysis_report);
     let mut report_path = report_directory.to_path_buf();
     report_path.push("report.pdf");
-    pdf_generator.generate_pdf(&report_path, analyzer)?;
-    println!("Success");
+    pdf_generator.generate_pdf(&report_path)?;
     Ok(())
 }
 
@@ -96,13 +93,11 @@ fn main() -> OpmResult<()> {
         &scenery,
     )?;
     //analyze the scenery
-    print!("\nAnalyzing...");
-    let _ = io::stdout().flush();
+    info!("Analyzing...");
     if let Err(e) = scenery.analyze(&opossum_args.analyzer) {
-        println!("\nAnalysis error: {e}");
+        error!("Analysis error: {e}");
         return Ok(());
     }
-    println!("Success\n");
     //create the report file
     create_report_file(
         &opossum_args.report_directory,

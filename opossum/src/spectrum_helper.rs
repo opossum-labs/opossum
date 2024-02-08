@@ -3,6 +3,7 @@
 
 use crate::error::OpossumError;
 use crate::{error::OpmResult, spectrum::Spectrum};
+use log::warn;
 use num::Zero;
 use std::ops::Range;
 use uom::si::{
@@ -119,6 +120,10 @@ pub enum FilterType {
 /// Generate a filter spectrum spectrum of a given filter type
 ///
 /// This helper generates a transmission spectrum with the given range and resolution with a filter charcteristic by the given [`FilterType`].
+///
+/// # Warnings
+///
+/// This function emits a warning log if the given cut-off wavelength is outside the spectrum range.
 ///  
 /// # Errors
 ///
@@ -134,9 +139,7 @@ pub fn generate_filter_spectrum(
     match filter_type {
         FilterType::ShortPassStep { cut_off } => {
             if !range.contains(cut_off) {
-                return Err(OpossumError::Spectrum(
-                    "cut-off wavelength must be inside the spectrum range".into(),
-                ));
+                warn!("cut-off wavelength must be inside the spectrum range");
             }
             let mut cut_off_in_um = cut_off.get::<micrometer>();
             s.map_mut(|(lambda, _)| {
@@ -168,9 +171,7 @@ pub fn generate_filter_spectrum(
         }
         FilterType::LongPassStep { cut_off } => {
             if !range.contains(cut_off) {
-                return Err(OpossumError::Spectrum(
-                    "cut-off wavelength must be inside the spectrum range".into(),
-                ));
+                warn!("cut-off wavelength must be inside the spectrum range");
             }
             let mut cut_off_in_um = cut_off.get::<micrometer>();
             s.map_mut(|(lambda, _)| {
@@ -207,9 +208,13 @@ pub fn generate_filter_spectrum(
 #[cfg(test)]
 mod test {
     use super::*;
+    use log::Level;
     use num::Zero;
+    use testing_logger;
+
     #[test]
     fn test_short_pass_filter() {
+        testing_logger::setup();
         assert!(generate_filter_spectrum(
             Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
             Length::new::<micrometer>(1.0),
@@ -217,7 +222,16 @@ mod test {
                 cut_off: Length::new::<micrometer>(7.0)
             }
         )
-        .is_err());
+        .is_ok());
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "cut-off wavelength must be inside the spectrum range"
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
+
         let s = generate_filter_spectrum(
             Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
             Length::new::<micrometer>(1.0),
@@ -234,6 +248,7 @@ mod test {
 
     #[test]
     fn test_long_pass_filter() {
+        testing_logger::setup();
         assert!(generate_filter_spectrum(
             Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
             Length::new::<micrometer>(1.0),
@@ -241,7 +256,15 @@ mod test {
                 cut_off: Length::new::<micrometer>(7.0)
             }
         )
-        .is_err());
+        .is_ok());
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "cut-off wavelength must be inside the spectrum range"
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
         let s = generate_filter_spectrum(
             Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
             Length::new::<micrometer>(1.0),

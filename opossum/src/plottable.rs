@@ -7,6 +7,7 @@ use colorous::Gradient;
 use delaunator::{triangulate, Point};
 use image::RgbImage;
 use itertools::{iproduct, izip};
+use log::warn;
 use nalgebra::{
     ComplexField, DMatrix, DVector, DVectorSlice, Matrix1xX, Matrix3xX, MatrixXx1, MatrixXx2,
     MatrixXx3,
@@ -312,7 +313,7 @@ impl PlotType {
 
         let (z_shape_rows, z_shape_cols) = z_dat.shape();
         if z_shape_rows != y_ax.len() || z_shape_cols != x_ax.len() {
-            println!("Shapes of x,y and z do not match!");
+            warn!("Shapes of x,y and z do not match!");
             return;
         }
 
@@ -1898,8 +1899,6 @@ mod test {
 
         assert_eq!(plt_params.get_x_label().unwrap(), "new x test".to_owned());
         assert_eq!(plt_params.get_x_label_pos().unwrap(), LabelPos::Top);
-
-        println!("{}", plt_params.get_y_label().unwrap());
     }
     #[test]
     fn plot_params_set_invalid() {

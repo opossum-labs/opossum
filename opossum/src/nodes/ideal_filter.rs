@@ -34,7 +34,6 @@ impl PdfReportable for FilterType {
             ))),
             Self::Spectrum(_) => {
                 l.push(genpdf::elements::Text::new("transmission spectrum"));
-                // l.push(spectrum.pdf_report()?);
             }
         };
         Ok(l)
@@ -56,7 +55,6 @@ impl PdfReportable for FilterType {
 pub struct IdealFilter {
     props: Properties,
 }
-
 fn create_default_props() -> Properties {
     let mut props = Properties::new("ideal filter", "ideal filter");
     props
@@ -256,9 +254,44 @@ mod test {
     }
     #[test]
     fn new() {
+        assert!(IdealFilter::new("test", FilterType::Constant(1.1)).is_err());
+        assert!(IdealFilter::new("test", FilterType::Constant(-0.1)).is_err());
         let node = IdealFilter::new("test", FilterType::Constant(0.8)).unwrap();
         assert_eq!(node.properties().name().unwrap(), "test");
         assert_eq!(node.filter_type(), FilterType::Constant(0.8));
+    }
+    #[test]
+    fn set_transmission() {
+        let mut node = IdealFilter::default();
+        assert!(node.set_transmission(-0.1).is_err());
+        assert!(node.set_transmission(1.1).is_err());
+        assert!(node.set_transmission(0.5).is_ok());
+        assert_eq!(node.filter_type(), FilterType::Constant(0.5));
+    }
+    #[test]
+    fn optical_density() {
+        let mut node = IdealFilter::default();
+        assert_eq!(node.optical_density(), Some(0.0));
+        node.set_transmission(0.1).unwrap();
+        assert_eq!(node.optical_density(), Some(1.0));
+        node.set_transmission(0.01).unwrap();
+        assert_eq!(node.optical_density(), Some(2.0));
+        let node = IdealFilter::new(
+            "test",
+            FilterType::Spectrum(create_he_ne_spec(1.0).unwrap()),
+        )
+        .unwrap();
+        assert_eq!(node.optical_density(), None);
+    }
+    #[test]
+    fn set_optical_density() {
+        let mut node = IdealFilter::default();
+        assert!(node.set_optical_density(-1.0).is_err());
+        assert!(node.set_optical_density(1.0).is_ok());
+        assert_eq!(node.filter_type(), FilterType::Constant(0.1));
+        assert!(node.set_optical_density(f64::NAN).is_err());
+        assert!(node.set_optical_density(f64::INFINITY).is_ok());
+        assert_eq!(node.filter_type(), FilterType::Constant(0.0));
     }
     #[test]
     fn inverted() {

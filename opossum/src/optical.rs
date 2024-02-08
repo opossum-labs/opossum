@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 //! Contains the basic trait representing an optical element
 use image::RgbImage;
+use log::warn;
 
 use crate::analyzer::AnalyzerType;
 use crate::aperture::Aperture;
@@ -86,7 +87,7 @@ pub trait Optical: Dottable {
         _incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        print!(
+        warn!(
             "{}: No analyze function defined.",
             self.properties().node_type()?
         );

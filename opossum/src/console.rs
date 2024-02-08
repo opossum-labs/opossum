@@ -11,6 +11,7 @@ use std::io::{BufReader, BufWriter};
 
 use clap::builder::Str;
 use clap::{builder::OsStr, Parser};
+use log::info;
 use rprompt::prompt_reply_from_bufread;
 use std::{io::Write, string::String};
 use std::{
@@ -192,7 +193,7 @@ impl TryFrom<PartialArgs> for Args {
             &mut reader,
             &mut writer,
         )?;
-        println!("Path to optical-setup file: {}", file_path.display());
+        info!("Path to optical-setup file: {}", file_path.display());
 
         let analyzer = get_args(
             eval_analyzer_input,
@@ -201,7 +202,7 @@ impl TryFrom<PartialArgs> for Args {
             &mut reader,
             &mut writer,
         )?;
-        println!("Analyzer: {analyzer}");
+        info!("Analyzer: {analyzer}");
 
         let report_directory = get_args(
             eval_report_directory_input,
@@ -216,7 +217,7 @@ impl TryFrom<PartialArgs> for Args {
         } else {
             report_directory
         };
-        println!("Report directory: {}", report_directory.display());
+        info!("Report directory: {}", report_directory.display());
 
         Ok(Self {
             file_path,
@@ -284,7 +285,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
 pub fn show_intro() {
     let intro = create_intro();
     let version_str = format!("{: ^119}\n", "version ".to_owned() + &get_version());
-    println!("{intro}{version_str}");
+    info!("\n{intro}{version_str}");
 }
 
 #[cfg(test)]
@@ -471,7 +472,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         assert_eq!(file_path_str1, "./files_for_testing/CLI/opticscenery.opm");
 
         let mut reader = BufReader::new(&correct_file_path[..]);
-        let file_path2 = get_args(
+        get_args(
             eval_file_path_input,
             Some("./files_for_testing/CLI/not_an_opticscenery.opm"),
             "f",
@@ -479,9 +480,6 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             &mut writer,
         )
         .unwrap();
-        let file_path_str2 = file_path2.to_str().unwrap();
-        println!("{file_path_str2}");
-
         let mut reader = BufReader::new(&correct_file_path[..]);
         let file_path3 =
             get_args(eval_file_path_input, None, "f", &mut reader, &mut writer).unwrap();

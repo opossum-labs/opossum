@@ -175,7 +175,7 @@ impl Properties {
         self.props.get(name).map_or_else(
             || {
                 Err(OpossumError::Properties(format!(
-                    "property {name} not found"
+                    "property {name} does not exist"
                 )))
             },
             |property| {
