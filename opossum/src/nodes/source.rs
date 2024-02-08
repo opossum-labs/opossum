@@ -10,7 +10,6 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     rays::{DistributionStrategy, Rays},
-    reporter::NodeReport,
 };
 use nalgebra::Point2;
 use uom::num_traits::Zero;

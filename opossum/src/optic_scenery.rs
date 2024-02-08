@@ -14,7 +14,6 @@ use crate::optic_graph::OpticGraph;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
-use crate::rays::Rays;
 use crate::reporter::{AnalysisReport, PdfReportable};
 use chrono::Local;
 use genpdf::Alignment;

@@ -24,7 +24,9 @@ pub enum AnalyzerType {
     RayTrace(RayTraceConfig),
 }
 
-#[derive(Default, Debug, PartialEq, Copy, Clone)]
+/// enum to define the mode of the raytracing analysis.
+/// Currently only sequential mode
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum RayTracingMode {
     #[default]
     /// Sequential mode
@@ -60,7 +62,8 @@ impl RayTraceConfig {
     }
 
     /// Returns the ray-tracing mode of this config.
-    pub fn mode(&self) -> RayTracingMode {
+    #[must_use]
+    pub const fn mode(&self) -> RayTracingMode {
         self.mode
     }
 

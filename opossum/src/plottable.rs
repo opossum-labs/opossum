@@ -431,7 +431,7 @@ impl PlotType {
             //main plot
             //currently there is no support for axes labels in 3d plots
             let mut chart = Self::create_2d_plot_chart(
-                &root,
+                root,
                 plt.bounds.x.unwrap(),
                 plt.bounds.y.unwrap(),
                 &plt.label,
@@ -439,7 +439,7 @@ impl PlotType {
                 true,
             );
 
-            for line_dat in dat.iter() {
+            for line_dat in dat {
                 Self::draw_line_2d(
                     &mut chart,
                     &line_dat.column(0),
@@ -455,9 +455,9 @@ impl PlotType {
             _ = root.fill(&WHITE);
             //main plot
             //currently there is no support for axes labels in 3d plots
-            let mut chart = Self::create_3d_plot_chart(root, &plt);
+            let mut chart = Self::create_3d_plot_chart(root, plt);
 
-            for line_dat in dat.iter() {
+            for line_dat in dat {
                 Self::draw_line_3d(
                     &mut chart,
                     &line_dat.column(0),
@@ -475,7 +475,7 @@ impl PlotType {
 
             //main plot
             //currently there is no support for axes labels in 3d plots
-            let mut chart = Self::create_3d_plot_chart(root, &plt);
+            let mut chart = Self::create_3d_plot_chart(root, plt);
 
             Self::draw_triangle_surf(
                 &mut chart,
@@ -661,7 +661,7 @@ pub enum PlotData {
     Dim2(MatrixXx2<f64>),
     ///Triplet 3D data (e.g. x, y, z data) for scatter3D, Line3D or colorscatter. Data Structure as Matrix with N rows and three columns (x,y,z)
     Dim3(MatrixXx3<f64>),
-    //Vector of pairwise 2D data (e.g. x, y data) for MultiLine2D. Data Structure as Vector filled with Matrices with N rows and two columns (x,y)
+    ///Vector of pairwise 2D data (e.g. x, y data) for MultiLine2D. Data Structure as Vector filled with Matrices with N rows and two columns (x,y)
     MultiDim2(Vec<MatrixXx2<f64>>),
     ///Vector of triplet 3D data (e.g. x, y, z data) for MultiLine3D. Data Structure as Vector filled with Matrices with N rows and three columns (x,y,z)
     MultiDim3(Vec<MatrixXx3<f64>>),
@@ -731,7 +731,7 @@ impl PlotData {
 
                 let mut ax_lim_vec = Vec::<AxLims>::new();
                 for col in 0..num_cols {
-                    ax_lim_vec.push(self.get_min_max_data_values(&min_max.column(col)))
+                    ax_lim_vec.push(self.get_min_max_data_values(&min_max.column(col)));
                 }
                 ax_lim_vec
             }
@@ -749,7 +749,7 @@ impl PlotData {
 
                 let mut ax_lim_vec = Vec::<AxLims>::new();
                 for col in 0..num_cols {
-                    ax_lim_vec.push(self.get_min_max_data_values(&min_max.column(col)))
+                    ax_lim_vec.push(self.get_min_max_data_values(&min_max.column(col)));
                 }
                 ax_lim_vec
             }

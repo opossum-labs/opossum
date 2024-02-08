@@ -15,7 +15,6 @@ use crate::{
     SplittingConfig,
 };
 use genpdf::{elements::TableLayout, style};
-use nalgebra::MatrixXx3;
 use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::Debug;

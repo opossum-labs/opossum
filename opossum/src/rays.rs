@@ -437,6 +437,7 @@ impl Rays {
     ///
     /// # Returns
     /// This method returns a vector of N-row x 3 column matrices that contain the position history of all the rays
+    #[must_use]
     pub fn get_rays_position_history_in_mm(&self) -> RayPositionHistory {
         let mut rays_pos_history = Vec::<MatrixXx3<f64>>::with_capacity(self.rays.len());
         for ray in &self.rays {
@@ -456,7 +457,7 @@ impl RayPositionHistory {
     /// Projects a set of 3d vectors onto a plane
     /// # Attributes
     /// `plane_normal_vec`: normal vector of the plane to project onto
-    /// 
+    ///
     /// # Errors
     /// This function errors if the length of the plane normal vector is zero
     /// # Returns
@@ -496,7 +497,7 @@ impl RayPositionHistory {
                 (proj_x, proj_x.cross(&normed_normal_vec))
             };
 
-        let mut projected_rays_pos =
+        let mut rays_pos_projection =
             Vec::<MatrixXx2<f64>>::with_capacity(self.rays_pos_history.len());
         for ray_pos in &self.rays_pos_history {
             let mut projected_ray_pos = MatrixXx2::<f64>::zeros(ray_pos.column(0).len());
@@ -507,9 +508,9 @@ impl RayPositionHistory {
                 projected_ray_pos[(row, 0)] = proj_pos.dot(&co_ax_1);
                 projected_ray_pos[(row, 1)] = proj_pos.dot(&co_ax_2);
             }
-            projected_rays_pos.push(projected_ray_pos)
+            rays_pos_projection.push(projected_ray_pos);
         }
-        Ok(projected_rays_pos)
+        Ok(rays_pos_projection)
     }
 }
 impl PdfReportable for RayPositionHistory {
@@ -1216,5 +1217,4 @@ mod test {
             epsilon = 10.0 * f64::EPSILON
         );
     }
-
 }
