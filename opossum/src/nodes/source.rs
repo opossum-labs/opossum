@@ -165,6 +165,9 @@ impl Optical for Source {
     fn properties(&self) -> &Properties {
         &self.props
     }
+    fn is_source(&self) -> bool {
+        true
+    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         if name == "inverted" {
             let inverted = if let Proptype::Bool(inverted) = prop {

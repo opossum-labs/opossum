@@ -2,6 +2,7 @@
 //! Module for generating analysis reports in PDF format.
 
 use crate::{
+    analyzer::{AnalyzerType, RayTracingMode},
     error::{OpmResult, OpossumError},
     properties::{Properties, Proptype},
     OpticScenery,
@@ -118,7 +119,7 @@ impl ReportGenerator {
     pub const fn new(report: AnalysisReport) -> Self {
         Self { report }
     }
-    fn add_report_title(&self, doc: &mut genpdf::Document) {
+    fn add_report_title(&self, doc: &mut genpdf::Document, analyzer: &AnalyzerType) {
         let img_data = include_bytes!("../logo/Logo_square.png");
         let img = Reader::new(Cursor::new(img_data))
             .with_guessed_format()
@@ -143,6 +144,20 @@ impl ReportGenerator {
         }
         let p = elements::Paragraph::default()
             .styled_string("Analysis Report", style::Effect::Bold)
+            .aligned(genpdf::Alignment::Center);
+        // Add one or more elements
+        doc.push(p);
+        let analyzer_type = match analyzer {
+            AnalyzerType::Energy => "Energy",
+            AnalyzerType::RayTrace(config) => match config.mode() {
+                RayTracingMode::Sequential => "Sequential Ray Tracing",
+            },
+        };
+        let p = elements::Paragraph::default()
+            .styled_string(
+                format!("Analysis Type: {analyzer_type}"),
+                style::Effect::Bold,
+            )
             .aligned(genpdf::Alignment::Center);
         // Add one or more elements
         doc.push(p);
@@ -211,7 +226,7 @@ impl ReportGenerator {
     ///   - fonts are not found
     ///   - the file could not be generated on disk (disk full, not writable, etc...)
     ///   - individual erros while generating sub components of the report
-    pub fn generate_pdf(&self, path: &Path) -> OpmResult<()> {
+    pub fn generate_pdf(&self, path: &Path, analyzer: &AnalyzerType) -> OpmResult<()> {
         let font = include_bytes!("../fonts/LiberationSans-Regular.ttf");
         let font_data_regular = FontData::new(font.to_vec(), None)
             .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
@@ -235,7 +250,7 @@ impl ReportGenerator {
         let mut decorator = genpdf::SimplePageDecorator::new();
         decorator.set_margins(10);
         doc.set_page_decorator(decorator);
-        self.add_report_title(&mut doc);
+        self.add_report_title(&mut doc, analyzer);
         self.add_scenery_report(&mut doc);
         doc.push(genpdf::elements::PageBreak::new());
         self.add_node_reports(&mut doc)?;
@@ -283,18 +298,26 @@ mod test {
     fn report_generator_generate_pdf_empty_report() {
         let report = AnalysisReport::new(String::from("test"), DateTime::default());
         let generator = ReportGenerator::new(report);
-        assert!(generator.generate_pdf(Path::new("")).is_err());
+        assert!(generator
+            .generate_pdf(Path::new(""), &AnalyzerType::Energy)
+            .is_err());
         let path = NamedTempFile::new().unwrap();
-        assert!(generator.generate_pdf(path.path()).is_ok());
+        assert!(generator
+            .generate_pdf(path.path(), &AnalyzerType::Energy)
+            .is_ok());
     }
     #[test]
     fn report_generator_generate_pdf_with_scenery() {
         let mut analysis_report = AnalysisReport::new(String::from("test"), DateTime::default());
         analysis_report.add_scenery(&OpticScenery::default());
         let generator = ReportGenerator::new(analysis_report);
-        assert!(generator.generate_pdf(Path::new("")).is_err());
+        assert!(generator
+            .generate_pdf(Path::new(""), &AnalyzerType::Energy)
+            .is_err());
         let path = NamedTempFile::new().unwrap();
-        assert!(generator.generate_pdf(path.path()).is_ok());
+        assert!(generator
+            .generate_pdf(path.path(), &AnalyzerType::Energy)
+            .is_ok());
     }
     #[test]
     fn report_generator_generate_pdf_with_node_report() {
@@ -302,8 +325,12 @@ mod test {
         let node_report = NodeReport::new("test detector", "detector name", Properties::default());
         analysis_report.add_detector(node_report);
         let generator = ReportGenerator::new(analysis_report);
-        assert!(generator.generate_pdf(Path::new("")).is_err());
+        assert!(generator
+            .generate_pdf(Path::new(""), &AnalyzerType::Energy)
+            .is_err());
         let path = NamedTempFile::new().unwrap();
-        assert!(generator.generate_pdf(path.path()).is_ok());
+        assert!(generator
+            .generate_pdf(path.path(), &AnalyzerType::Energy)
+            .is_ok());
     }
 }

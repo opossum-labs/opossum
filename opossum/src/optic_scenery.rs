@@ -348,6 +348,7 @@ impl OpticScenery {
 
             node.optical_ref.borrow().export_data(report_dir)?;
         }
+
         Ok(analysis_report)
     }
     /// Save this [`OpticScenery`] to an .opm file with the given path
@@ -561,6 +562,7 @@ impl PdfReportable for OpticScenery {
             .map_err(|e| format!("failed to add diagram to report: {e}"))?
             .with_alignment(Alignment::Center);
         l.push(img);
+
         Ok(l)
     }
 }

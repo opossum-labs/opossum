@@ -1,13 +1,18 @@
 #![warn(missing_docs)]
 //! Module for handling ray bundles
 use std::ops::Range;
+use std::path::Path;
 
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
+use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
+use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
+use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
+use image::{DynamicImage, ImageBuffer, RgbImage};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
@@ -437,7 +442,144 @@ impl Rays {
             self.add_ray(ray.clone());
         }
     }
+    /// Get the position history of all rays in thie ray bundle
+    ///
+    /// # Returns
+    /// This method returns a vector of N-row x 3 column matrices that contain the position history of all the rays
+    #[must_use]
+    pub fn get_rays_position_history_in_mm(&self) -> RayPositionHistory {
+        let mut rays_pos_history = Vec::<MatrixXx3<f64>>::with_capacity(self.rays.len());
+        for ray in &self.rays {
+            rays_pos_history.push(ray.position_history_in_mm());
+        }
+        RayPositionHistory { rays_pos_history }
+    }
 }
+
+/// struct that holds the history of the ray positions that is needed for report generation
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RayPositionHistory {
+    /// vector of ray positions for each ray
+    pub rays_pos_history: Vec<MatrixXx3<f64>>,
+}
+impl RayPositionHistory {
+    /// Projects a set of 3d vectors onto a plane
+    /// # Attributes
+    /// `plane_normal_vec`: normal vector of the plane to project onto
+    ///
+    /// # Errors
+    /// This function errors if the length of the plane normal vector is zero
+    /// # Returns
+    /// This function returns a set of 2d vectors in the defined plane projected to a view that is perpendicular to this plane.
+    pub fn project_to_plane(
+        &self,
+        plane_normal_vec: Vector3<f64>,
+    ) -> OpmResult<Vec<MatrixXx2<f64>>> {
+        let vec_norm = plane_normal_vec.norm();
+
+        if vec_norm < f64::EPSILON {
+            return Err(OpossumError::Other(
+                "The plane normal vector must have a non-zero length!".into(),
+            ));
+        }
+
+        let normed_normal_vec = plane_normal_vec / vec_norm;
+
+        //define an axis on the plane.
+        //Do this by projection of one of the main coordinate axes onto that plane
+        //Beforehand check, if these axes are not parallel to the normal vec
+        let (co_ax_1, co_ax_2) =
+            if plane_normal_vec.cross(&Vector3::new(1., 0., 0.)).norm() < f64::EPSILON {
+                //parallel to the x-axis
+                (Vector3::new(0., 0., 1.), Vector3::new(0., 1., 0.))
+            } else if plane_normal_vec.cross(&Vector3::new(0., 1., 0.)).norm() < f64::EPSILON {
+                (Vector3::new(0., 0., 1.), Vector3::new(1., 0., 0.))
+            } else if plane_normal_vec.cross(&Vector3::new(0., 0., 1.)).norm() < f64::EPSILON {
+                (Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.))
+            } else {
+                //arbitrarily project x-axis onto that plane
+                let x_vec = Vector3::new(1., 0., 0.);
+                let mut proj_x = x_vec - x_vec.dot(&normed_normal_vec) * plane_normal_vec;
+                proj_x /= proj_x.norm();
+
+                //second axis defined by cross product of x-axis projection and plane normal, which yields another vector that is perpendicular to both others
+                (proj_x, proj_x.cross(&normed_normal_vec))
+            };
+
+        let mut rays_pos_projection =
+            Vec::<MatrixXx2<f64>>::with_capacity(self.rays_pos_history.len());
+        for ray_pos in &self.rays_pos_history {
+            let mut projected_ray_pos = MatrixXx2::<f64>::zeros(ray_pos.column(0).len());
+            for (row, pos) in ray_pos.row_iter().enumerate() {
+                let pos_t = pos.transpose();
+                let proj_pos = pos_t - pos_t.dot(&normed_normal_vec) * plane_normal_vec;
+
+                projected_ray_pos[(row, 0)] = proj_pos.dot(&co_ax_1);
+                projected_ray_pos[(row, 1)] = proj_pos.dot(&co_ax_2);
+            }
+            rays_pos_projection.push(projected_ray_pos);
+        }
+        Ok(rays_pos_projection)
+    }
+}
+impl PdfReportable for RayPositionHistory {
+    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
+        let mut layout = genpdf::elements::LinearLayout::vertical();
+        let img = self.to_plot(Path::new(""), (1000, 1000), PltBackEnd::Buf)?;
+        layout.push(
+            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
+                img.unwrap_or_else(ImageBuffer::default),
+            ))
+            .map_err(|e| format!("adding of image failed: {e}"))?,
+        );
+        Ok(layout)
+    }
+}
+
+impl From<Rays> for Proptype {
+    fn from(value: Rays) -> Self {
+        Self::RayPositionHistory(value.get_rays_position_history_in_mm())
+    }
+}
+
+impl Plottable for RayPositionHistory {
+    fn to_plot(
+        &self,
+        f_path: &Path,
+        img_size: (u32, u32),
+        backend: PltBackEnd,
+    ) -> OpmResult<Option<RgbImage>> {
+        let mut plt_params = PlotParameters::default();
+        match backend {
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
+            _ => plt_params
+                .set(&PlotArgs::FName(
+                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
+                ))?
+                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
+                .set(&PlotArgs::FigSize(img_size))?,
+        };
+        plt_params
+            .set(&PlotArgs::Backend(backend))?
+            .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
+            .set(&PlotArgs::XLabel("distance in mm (y axis)".into()))?;
+
+        let (plt_data_opt, plt_type) = if self.rays_pos_history.is_empty() {
+            (None, PlotType::MultiLine2D(plt_params))
+        } else {
+            let plt_type = PlotType::MultiLine2D(plt_params);
+            (self.get_plot_data(&plt_type)?, plt_type)
+        };
+        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+    }
+
+    fn get_plot_data(&self, _plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+        Ok(Some(PlotData::MultiDim2(
+            self.project_to_plane(Vector3::new(1., 0., 0.))?,
+        )))
+    }
+}
+
 /// Strategy for the creation of a 2D point set
 pub enum DistributionStrategy {
     /// Circular, hexapolar distribution with a given number of rings within a given radius
@@ -503,99 +645,6 @@ fn sobol(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
     points
 }
 
-// impl From<Rays> for Proptype {
-//     fn from(value: Rays) -> Self {
-//         Self::Rays(value)
-//     }
-// }
-// impl PdfReportable for Rays {
-//     fn pdf_report(&self) -> crate::error::OpmResult<genpdf::elements::LinearLayout> {
-//         let mut layout = genpdf::elements::LinearLayout::vertical();
-//         let img = self.to_img_buf_plot().unwrap();
-//         layout.push(
-//             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
-//                 .map_err(|e| format!("adding of image failed: {e}"))?,
-//         );
-//         Ok(layout)
-//     }
-// }
-// impl Plottable for Rays {
-//     fn chart<B: plotters::prelude::DrawingBackend>(
-//         &self,
-//         root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>,
-//     ) -> crate::error::OpmResult<()> {
-//         let mut x_min = self
-//             .rays
-//             .iter()
-//             .map(|r| r.pos.x)
-//             .fold(f64::INFINITY, f64::min)
-//             * 1.1;
-//         if !x_min.is_finite() {
-//             x_min = -1.0;
-//         }
-//         let mut x_max = self
-//             .rays
-//             .iter()
-//             .map(|r| r.pos.x)
-//             .fold(f64::NEG_INFINITY, f64::max)
-//             * 1.1;
-//         if !x_max.is_finite() {
-//             x_max = 1.0;
-//         }
-//         if (x_max - x_min).abs() < f64::EPSILON {
-//             x_max = 1.0;
-//             x_min = -1.0;
-//         }
-//         let mut y_min = self
-//             .rays
-//             .iter()
-//             .map(|r| r.pos.y)
-//             .fold(f64::INFINITY, f64::min)
-//             * 1.1;
-//         if !y_min.is_finite() {
-//             y_min = -1.0;
-//         }
-//         let mut y_max = self
-//             .rays
-//             .iter()
-//             .map(|r| r.pos.y)
-//             .fold(f64::NEG_INFINITY, f64::max)
-//             * 1.1;
-//         if !y_max.is_finite() {
-//             y_max = 1.0;
-//         }
-//         if (y_max - y_min).abs() < f64::EPSILON {
-//             y_max = 1.0;
-//             y_min = -1.0;
-//         }
-//         let mut chart = ChartBuilder::on(root)
-//             .margin(15)
-//             .x_label_area_size(100)
-//             .y_label_area_size(100)
-//             .build_cartesian_2d(x_min..x_max, y_min..y_max)
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-
-//         chart
-//             .configure_mesh()
-//             .x_desc("x (mm)")
-//             .y_desc("y (mm)")
-//             .label_style(TextStyle::from(("sans-serif", 30).into_font()))
-//             .draw()
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-//         let points: Vec<(f64, f64)> = self.rays.iter().map(|ray| (ray.pos.x, ray.pos.y)).collect();
-//         let series = PointSeries::of_element(points, 5, &RED, &|c, s, st| {
-//             EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-//                 + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
-//         });
-
-//         chart
-//             .draw_series(series)
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-//         root.present()
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-//         Ok(())
-//     }
-// }
 #[cfg(test)]
 mod test {
     use super::*;

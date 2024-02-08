@@ -40,10 +40,10 @@ pub enum PlotType {
     Line2D(PlotParameters),
     // ///Line plot in three dimensions for 3D data
     // Line3D,
-    // ///Line plot for multiple lines, e.g. rays, in two dimensions with pairwise data
-    // MultiLine2D,
-    // ///Line plot for multiple lines, e.g. rays, in three dimensions with 3D data
-    // MultiLine3D,
+    ///Line plot for multiple lines, e.g. rays, in two dimensions with pairwise data
+    MultiLine2D(PlotParameters),
+    ///Line plot for multiple lines, e.g. rays, in three dimensions with 3D data
+    MultiLine3D(PlotParameters),
     ///2D color plot of gridded data with color representing the amplitude over an x-y grid
     ColorMesh(PlotParameters),
 
@@ -61,6 +61,8 @@ impl PlotType {
             | Self::Scatter2D(p)
             | Self::Line2D(p)
             | Self::ColorTriangulated(p)
+            | Self::MultiLine3D(p)
+            | Self::MultiLine2D(p)
             | Self::TriangulatedSurface(p) => p,
         }
     }
@@ -70,6 +72,8 @@ impl PlotType {
             | Self::Scatter2D(p)
             | Self::Line2D(p)
             | Self::ColorTriangulated(p)
+            | Self::MultiLine3D(p)
+            | Self::MultiLine2D(p)
             | Self::TriangulatedSurface(p) => p,
         }
     }
@@ -86,6 +90,8 @@ impl PlotType {
             Self::ColorTriangulated(_) => Self::plot_color_triangulated(plot, backend),
             Self::Scatter2D(_) => Self::plot_2d_scatter(plot, backend),
             Self::Line2D(_) => Self::plot_2d_line(plot, backend),
+            Self::MultiLine3D(_) => Self::plot_3d_multi_line(plot, backend),
+            Self::MultiLine2D(_) => Self::plot_2d_multi_line(plot, backend),
         };
 
         Ok(())
@@ -152,7 +158,7 @@ impl PlotType {
         }
     }
 
-    fn draw_line<T: DrawingBackend>(
+    fn draw_line_2d<T: DrawingBackend>(
         chart: &mut ChartContext<'_, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
         x: &DVectorSlice<'_, f64>,
         y: &DVectorSlice<'_, f64>,
@@ -161,6 +167,25 @@ impl PlotType {
         chart
             .draw_series(LineSeries::new(
                 izip!(x, y).map(|xy| (*xy.0, *xy.1)),
+                line_color,
+            ))
+            .unwrap();
+    }
+
+    fn draw_line_3d<T: DrawingBackend>(
+        chart: &mut ChartContext<
+            '_,
+            T,
+            Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>,
+        >,
+        x: &DVectorSlice<'_, f64>,
+        y: &DVectorSlice<'_, f64>,
+        z: &DVectorSlice<'_, f64>,
+        line_color: &RGBAColor,
+    ) {
+        chart
+            .draw_series(LineSeries::new(
+                izip!(x, y, z).map(|xyz| (*xyz.0, *xyz.1, *xyz.2)),
                 line_color,
             ))
             .unwrap();
@@ -320,7 +345,7 @@ impl PlotType {
                 true,
                 true,
             );
-            Self::draw_line(&mut chart, &dat.column(0), &dat.column(1), &plt.color);
+            Self::draw_line_2d(&mut chart, &dat.column(0), &dat.column(1), &plt.color);
         }
 
         root.present().unwrap();
@@ -401,18 +426,57 @@ impl PlotType {
         }
     }
 
+    fn plot_2d_multi_line<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
+        if let Some(PlotData::MultiDim2(dat)) = plt.get_data() {
+            _ = root.fill(&WHITE);
+            //main plot
+            //currently there is no support for axes labels in 3d plots
+            let mut chart = Self::create_2d_plot_chart(
+                root,
+                plt.bounds.x.unwrap(),
+                plt.bounds.y.unwrap(),
+                &plt.label,
+                true,
+                true,
+            );
+
+            for line_dat in dat {
+                Self::draw_line_2d(
+                    &mut chart,
+                    &line_dat.column(0),
+                    &line_dat.column(1),
+                    &RGBAColor(255, 0, 0, 0.3),
+                );
+            }
+        }
+    }
+
+    fn plot_3d_multi_line<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
+        if let Some(PlotData::MultiDim3(dat)) = plt.get_data() {
+            _ = root.fill(&WHITE);
+            //main plot
+            //currently there is no support for axes labels in 3d plots
+            let mut chart = Self::create_3d_plot_chart(root, plt);
+
+            for line_dat in dat {
+                Self::draw_line_3d(
+                    &mut chart,
+                    &line_dat.column(0),
+                    &line_dat.column(1),
+                    &line_dat.column(2),
+                    &RGBAColor(255, 0, 0, 0.3),
+                );
+            }
+        }
+    }
+
     fn plot_triangulated_surface<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
         if let Some(PlotData::TriangulatedSurface(triangle_index, dat)) = plt.get_data() {
             _ = root.fill(&WHITE);
 
             //main plot
             //currently there is no support for axes labels in 3d plots
-            let mut chart = Self::create_3d_plot_chart(
-                root,
-                plt.bounds.x.unwrap(),
-                plt.bounds.z.unwrap(),
-                plt.bounds.y.unwrap(),
-            );
+            let mut chart = Self::create_3d_plot_chart(root, plt);
 
             Self::draw_triangle_surf(
                 &mut chart,
@@ -474,13 +538,16 @@ impl PlotType {
         root.present().unwrap();
     }
 
-    fn create_3d_plot_chart<T: DrawingBackend>(
-        root: &DrawingArea<T, Shift>,
-        x_bounds: AxLims,
-        y_bounds: AxLims,
-        z_bounds: AxLims,
-    ) -> ChartContext<'_, T, Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>> {
+    fn create_3d_plot_chart<'a, T: DrawingBackend>(
+        root: &'a DrawingArea<T, Shift>,
+        plot: &Plot,
+    ) -> ChartContext<'a, T, Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>> {
         root.fill(&WHITE).unwrap();
+
+        //plotters axes are defined with z going upwards. therefore, I change this
+        let x_bounds = plot.bounds.x.unwrap();
+        let y_bounds = plot.bounds.y.unwrap();
+        let z_bounds = plot.bounds.z.unwrap();
 
         let mut chart = ChartBuilder::on(root)
             .margin(20)
@@ -494,8 +561,8 @@ impl PlotType {
 
         chart.with_projection(
             |mut pb: plotters::coord::ranged3d::ProjectionMatrixBuilder| {
-                pb.pitch = 20. / 180. * PI;
-                pb.yaw = 20. / 180. * PI;
+                pb.pitch = 0. / 180. * PI;
+                pb.yaw = -90. / 180. * PI;
                 pb.scale = 0.7;
                 pb.into_matrix()
             },
@@ -595,10 +662,10 @@ pub enum PlotData {
     Dim2(MatrixXx2<f64>),
     ///Triplet 3D data (e.g. x, y, z data) for scatter3D, Line3D or colorscatter. Data Structure as Matrix with N rows and three columns (x,y,z)
     Dim3(MatrixXx3<f64>),
-    // ///Vector of pairwise 2D data (e.g. x, y data) for MultiLine2D. Data Structure as Vector filled with Matrices with N rows and two columns (x,y)
-    // MultiDim2(Vec<MatrixXx2<f64>>),
-    // ///Vector of triplet 3D data (e.g. x, y, z data) for MultiLine3D. Data Structure as Vector filled with Matrices with N rows and three columns (x,y,z)
-    // MultiDim3(Vec<MatrixXx3<f64>>),
+    ///Vector of pairwise 2D data (e.g. x, y data) for MultiLine2D. Data Structure as Vector filled with Matrices with N rows and two columns (x,y)
+    MultiDim2(Vec<MatrixXx2<f64>>),
+    ///Vector of triplet 3D data (e.g. x, y, z data) for MultiLine3D. Data Structure as Vector filled with Matrices with N rows and three columns (x,y,z)
+    MultiDim3(Vec<MatrixXx3<f64>>),
     /// Data to create a 2d colormesh plot. Vector with N entries for x, Vector with M entries for y and a Matrix with NxM entries for the colordata
     ColorMesh(DVector<f64>, DVector<f64>, DMatrix<f64>), // ColorScatter(DVector<f64>, DVector<f64>, DMatrix<f64>)
     /// Data to create a 2d triangulated color plot.
@@ -651,6 +718,41 @@ impl PlotData {
                     self.get_min_max_data_values(&DVectorSlice::from(y)),
                     self.get_min_max_data_values(&z_flat.column(0)),
                 ]
+            }
+            Self::MultiDim3(dat) => {
+                let num_cols = dat[0].row(0).len();
+                let mut min_max = MatrixXx3::zeros(dat.len() * 2);
+                for (row, d) in dat.iter().enumerate() {
+                    for col in 0..num_cols {
+                        let axlim = self.get_min_max_data_values(&d.column(col));
+                        min_max[(2 * row, col)] = axlim.min;
+                        min_max[(2 * row + 1, col)] = axlim.max;
+                    }
+                }
+
+                let mut ax_lim_vec = Vec::<AxLims>::new();
+                for col in 0..num_cols {
+                    ax_lim_vec.push(self.get_min_max_data_values(&min_max.column(col)));
+                }
+                ax_lim_vec
+            }
+
+            Self::MultiDim2(dat) => {
+                let num_cols = dat[0].row(0).len();
+                let mut min_max = MatrixXx2::zeros(dat.len() * 2);
+                for (row, d) in dat.iter().enumerate() {
+                    for col in 0..num_cols {
+                        let axlim = self.get_min_max_data_values(&d.column(col));
+                        min_max[(2 * row, col)] = axlim.min;
+                        min_max[(2 * row + 1, col)] = axlim.max;
+                    }
+                }
+
+                let mut ax_lim_vec = Vec::<AxLims>::new();
+                for col in 0..num_cols {
+                    ax_lim_vec.push(self.get_min_max_data_values(&min_max.column(col)));
+                }
+                ax_lim_vec
             }
         }
     }
