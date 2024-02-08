@@ -445,11 +445,22 @@ impl Rays {
         RayPositionHistory { rays_pos_history }
     }
 }
+
+/// struct that holds the history of the ray positions that is needed for report generation
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPositionHistory {
+    /// vector of ray positions for each ray
     pub rays_pos_history: Vec<MatrixXx3<f64>>,
 }
 impl RayPositionHistory {
+    /// Projects a set of 3d vectors onto a plane
+    /// # Attributes
+    /// `plane_normal_vec`: normal vector of the plane to project onto
+    /// 
+    /// # Errors
+    /// This function errors if the length of the plane normal vector is zero
+    /// # Returns
+    /// This function returns a set of 2d vectors in the defined plane projected to a view that is perpendicular to this plane.
     pub fn project_to_plane(
         &self,
         plane_normal_vec: Vector3<f64>,

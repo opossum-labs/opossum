@@ -187,28 +187,6 @@ impl Optical for Source {
             self.props.set(name, prop)
         }
     }
-
-    fn report(&self) -> Option<NodeReport> {
-        let mut props = Properties::default();
-        let light_props = self.properties().get("light data");
-        if light_props.is_ok() {
-            if let Proptype::LightData(Some(LightData::Geometric(rays))) = light_props.unwrap() {
-                props
-                    .create(
-                        "Ray Propagation history",
-                        "Ray propagation history within the scenery",
-                        None,
-                        rays.clone().into(),
-                    )
-                    .unwrap();
-            }
-        }
-        Some(NodeReport::new(
-            self.properties().node_type().unwrap(),
-            self.properties().name().unwrap(),
-            props,
-        ))
-    }
 }
 
 impl Dottable for Source {
