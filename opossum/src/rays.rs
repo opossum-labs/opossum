@@ -635,94 +635,6 @@ fn sobol(nr_of_rays: usize, side_length: Length) -> Vec<Point2<Length>> {
     points
 }
 
-// impl PdfReportable for Rays {
-//     fn pdf_report(&self) -> crate::error::OpmResult<genpdf::elements::LinearLayout> {
-//         let mut layout = genpdf::elements::LinearLayout::vertical();
-//         let img = self.to_img_buf_plot().unwrap();
-//         layout.push(
-//             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(img))
-//                 .map_err(|e| format!("adding of image failed: {e}"))?,
-//         );
-//         Ok(layout)
-//     }
-// }
-// impl Plottable for Rays {
-//     fn chart<B: plotters::prelude::DrawingBackend>(
-//         &self,
-//         root: &plotters::prelude::DrawingArea<B, plotters::coord::Shift>,
-//     ) -> crate::error::OpmResult<()> {
-//         let mut x_min = self
-//             .rays
-//             .iter()
-//             .map(|r| r.pos.x)
-//             .fold(f64::INFINITY, f64::min)
-//             * 1.1;
-//         if !x_min.is_finite() {
-//             x_min = -1.0;
-//         }
-//         let mut x_max = self
-//             .rays
-//             .iter()
-//             .map(|r| r.pos.x)
-//             .fold(f64::NEG_INFINITY, f64::max)
-//             * 1.1;
-//         if !x_max.is_finite() {
-//             x_max = 1.0;
-//         }
-//         if (x_max - x_min).abs() < f64::EPSILON {
-//             x_max = 1.0;
-//             x_min = -1.0;
-//         }
-//         let mut y_min = self
-//             .rays
-//             .iter()
-//             .map(|r| r.pos.y)
-//             .fold(f64::INFINITY, f64::min)
-//             * 1.1;
-//         if !y_min.is_finite() {
-//             y_min = -1.0;
-//         }
-//         let mut y_max = self
-//             .rays
-//             .iter()
-//             .map(|r| r.pos.y)
-//             .fold(f64::NEG_INFINITY, f64::max)
-//             * 1.1;
-//         if !y_max.is_finite() {
-//             y_max = 1.0;
-//         }
-//         if (y_max - y_min).abs() < f64::EPSILON {
-//             y_max = 1.0;
-//             y_min = -1.0;
-//         }
-//         let mut chart = ChartBuilder::on(root)
-//             .margin(15)
-//             .x_label_area_size(100)
-//             .y_label_area_size(100)
-//             .build_cartesian_2d(x_min..x_max, y_min..y_max)
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-
-//         chart
-//             .configure_mesh()
-//             .x_desc("x (mm)")
-//             .y_desc("y (mm)")
-//             .label_style(TextStyle::from(("sans-serif", 30).into_font()))
-//             .draw()
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-//         let points: Vec<(f64, f64)> = self.rays.iter().map(|ray| (ray.pos.x, ray.pos.y)).collect();
-//         let series = PointSeries::of_element(points, 5, &RED, &|c, s, st| {
-//             EmptyElement::at(c)    // We want to construct a composed element on-the-fly
-//                 + Circle::new((0,0),s,st.filled()) // At this point, the new pixel coordinate is established
-//         });
-
-//         chart
-//             .draw_series(series)
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-//         root.present()
-//             .map_err(|e| OpossumError::Other(format!("creation of plot failed: {e}")))?;
-//         Ok(())
-//     }
-// }
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1304,4 +1216,5 @@ mod test {
             epsilon = 10.0 * f64::EPSILON
         );
     }
+
 }
