@@ -1,6 +1,6 @@
 use opossum::{
     error::OpmResult,
-    nodes::{create_collimated_ray_source, ParaxialSurface, Propagation, SpotDiagram, WaveFront},
+    nodes::{create_collimated_ray_source, ParaxialSurface, Propagation, RayPropagationVisualizer, Spectrometer, SpectrometerType, SpotDiagram, WaveFront},
     OpticScenery,
 };
 use std::path::Path;
@@ -23,6 +23,8 @@ fn main() -> OpmResult<()> {
     let i_sp: petgraph::prelude::NodeIndex = scenery.add_node(SpotDiagram::new("spot 3"));
     let i_l2 = scenery.add_node(ParaxialSurface::new("lens", Length::new::<meter>(0.1))?);
     let i_wf3: petgraph::prelude::NodeIndex = scenery.add_node(WaveFront::new("wf_mon3"));
+    let i_r1: petgraph::prelude::NodeIndex = scenery.add_node(RayPropagationVisualizer::new("ray_mon1"));
+    let i_s1: petgraph::prelude::NodeIndex = scenery.add_node(Spectrometer::new("spec_mon", SpectrometerType::Ideal));
 
     scenery.connect_nodes(i_s, "out1", i_p1, "front")?;
     scenery.connect_nodes(i_p1, "rear", i_wf1, "in1")?;
@@ -32,6 +34,8 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_wf2, "out1", i_sp, "in1")?;
     scenery.connect_nodes(i_sp, "out1", i_l2, "front")?;
     scenery.connect_nodes(i_l2, "rear", i_wf3, "in1")?;
+    scenery.connect_nodes(i_wf3, "out1", i_r1, "in1")?;
+    scenery.connect_nodes(i_r1, "out1", i_s1, "in1")?;
 
     scenery.save_to_file(Path::new("./opossum/playground/wavefront.opm"))?;
     Ok(())

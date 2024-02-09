@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling optical spectra
 use crate::error::{OpmResult, OpossumError};
-use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
+use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable};
 use csv::ReaderBuilder;
 use kahan::KahanSummator;
 use log::warn;
@@ -476,30 +476,15 @@ impl Plottable for Spectrum {
             _ => Ok(None),
         }
     }
+    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
+        plt_params
+            .set(&PlotArgs::XLabel("wavelength in nm".into()))?
+            .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?;
+        Ok(())
+    }
 
-    fn to_plot(
-        &self,
-        f_path: &std::path::Path,
-        img_size: (u32, u32),
-        backend: crate::plottable::PltBackEnd,
-    ) -> OpmResult<Option<image::RgbImage>> {
-        let mut plt_params = PlotParameters::default();
-        match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
-            _ => plt_params
-                .set(&PlotArgs::FName(
-                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))?
-                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
-                .set(&PlotArgs::FigSize(img_size))?,
-        };
-        plt_params.set(&PlotArgs::Backend(backend))?;
-
-        let plt_type = PlotType::Line2D(plt_params);
-
-        let plt_data_opt = self.get_plot_data(&plt_type)?;
-
-        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
+        PlotType::Line2D(plt_params.clone())
     }
 }
 

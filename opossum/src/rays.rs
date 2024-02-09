@@ -12,7 +12,7 @@ use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
-use image::{DynamicImage, ImageBuffer, RgbImage};
+use image::{DynamicImage, ImageBuffer};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
@@ -239,6 +239,7 @@ impl Rays {
                 wavefront_error_maps: vec![WaveFrontErrorMap::new(&wf_err, center_wavelength)?],
             }))
         } else {
+            //do it for all wavelength resolutions
             todo!();
             // Ok(None)
         }
@@ -543,40 +544,25 @@ impl From<Rays> for Proptype {
 }
 
 impl Plottable for RayPositionHistory {
-    fn to_plot(
-        &self,
-        f_path: &Path,
-        img_size: (u32, u32),
-        backend: PltBackEnd,
-    ) -> OpmResult<Option<RgbImage>> {
-        let mut plt_params = PlotParameters::default();
-        match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
-            _ => plt_params
-                .set(&PlotArgs::FName(
-                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))?
-                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
-                .set(&PlotArgs::FigSize(img_size))?,
-        };
+    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
-            .set(&PlotArgs::Backend(backend))?
             .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
             .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?;
+        Ok(())
+    }
 
-        let (plt_data_opt, plt_type) = if self.rays_pos_history.is_empty() {
-            (None, PlotType::MultiLine2D(plt_params))
-        } else {
-            let plt_type = PlotType::MultiLine2D(plt_params);
-            (self.get_plot_data(&plt_type)?, plt_type)
-        };
-        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
+        PlotType::MultiLine2D(plt_params.clone())
     }
 
     fn get_plot_data(&self, _plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
-        Ok(Some(PlotData::MultiDim2(
-            self.project_to_plane(Vector3::new(1., 0., 0.))?,
-        )))
+        if self.rays_pos_history.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(PlotData::MultiDim2(
+                self.project_to_plane(Vector3::new(1., 0., 0.))?,
+            )))
+        }
     }
 }
 

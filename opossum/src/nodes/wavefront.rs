@@ -175,13 +175,23 @@ impl Optical for WaveFront {
         Ok(HashMap::from([(target.into(), data.clone())]))
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
-        if self.light_data.is_some() {
+        if let Some(LightData::Geometric(rays)) = &self.light_data {
+            let wf_data_opt =
+                rays.get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(1.))?;
+
             let mut file_path = PathBuf::from(report_dir);
             file_path.push(format!(
                 "wavefront_diagram_{}.png",
                 self.properties().name()?
             ));
-            self.to_plot(&file_path, (1000, 850), PltBackEnd::BMP)
+            if let Some(wf_data) = wf_data_opt {
+                //todo! for all wavelengths
+                wf_data.wavefront_error_maps[0].to_plot(&file_path, (1000, 850), PltBackEnd::BMP)
+            } else {
+                Err(OpossumError::Other(
+                    "Wavefront diagram: no wavefront data for export available".into(),
+                ))
+            }
         } else {
             Err(OpossumError::Other(
                 "Wavefront diagram: no light data for export available".into(),
@@ -265,108 +275,22 @@ impl Dottable for WaveFront {
     }
 }
 
-impl Plottable for WaveFront {
-    fn to_plot(
-        &self,
-        f_path: &Path,
-        img_size: (u32, u32),
-        backend: PltBackEnd,
-    ) -> OpmResult<Option<RgbImage>> {
-        let mut plt_params = PlotParameters::default();
-        match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
-            _ => plt_params
-                .set(&PlotArgs::FName(
-                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))?
-                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
-                .set(&PlotArgs::FigSize(img_size))?,
-        };
-        plt_params.set(&PlotArgs::Backend(backend))?;
-
-        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()))?;
-        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()))?;
-        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()))?;
-
-        let (mut plt_data_opt, mut plt_type) =
-            if let Some(LightData::Geometric(rays)) = &self.light_data {
-                if rays.nr_of_rays() > 10000 {
-                    let plt_type = PlotType::ColorMesh(plt_params);
-                    (self.get_plot_data(&plt_type)?, plt_type)
-                } else {
-                    let plt_type = PlotType::ColorTriangulated(plt_params);
-                    // let plt_type = PlotType::TriangulatedSurface(plt_params);
-                    (self.get_plot_data(&plt_type)?, plt_type)
-                }
-            } else {
-                (None, PlotType::ColorMesh(plt_params))
-            };
-
-        if let Some(plt_data) = &mut plt_data_opt {
-            let ranges = plt_data.get_axes_min_max_ranges();
-            if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
-                _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
-                    min: -1e-3,
-                    max: 1e-3,
-                })));
-            }
-        }
-
-        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
-    }
-
-    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
-        let data = &self.light_data;
-        match data {
-            Some(LightData::Geometric(rays)) => {
-                let plt_data =
-                    PlotData::Dim3(rays.wavefront_error_at_pos_in_units_of_wvl(Length::new::<
-                        nanometer,
-                    >(
-                        1053.
-                    )));
-                Ok(self.bin_or_triangulate_data(plt_type, &plt_data))
-            }
-            _ => Ok(None),
-        }
-    }
-}
-
 impl Plottable for WaveFrontErrorMap {
-    fn to_plot(
-        &self,
-        f_path: &Path,
-        img_size: (u32, u32),
-        backend: PltBackEnd,
-    ) -> OpmResult<Option<RgbImage>> {
-        let mut plt_params = PlotParameters::default();
-        match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
-            _ => plt_params
-                .set(&PlotArgs::FName(
-                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))?
-                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
-                .set(&PlotArgs::FigSize(img_size))?,
-        };
-        plt_params.set(&PlotArgs::Backend(backend))?;
-
-        plt_params.set(&PlotArgs::XLabel("x distance in mm".into()))?;
-        plt_params.set(&PlotArgs::YLabel("y distance in mm".into()))?;
-        plt_params.set(&PlotArgs::CBarLabel("Wavefront error in λ".into()))?;
-
-        let (mut plt_data_opt, mut plt_type) = if self.x.is_empty() {
-            (None, PlotType::ColorMesh(plt_params))
-        } else if self.x.len() > 10000 {
-            let plt_type = PlotType::ColorMesh(plt_params);
-            (self.get_plot_data(&plt_type)?, plt_type)
+    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
+        plt_params
+            .set(&PlotArgs::XLabel("x distance in mm".into()))?
+            .set(&PlotArgs::YLabel("y distance in mm".into()))?
+            .set(&PlotArgs::CBarLabel("wavefront error in λ".into()))?;
+        Ok(())
+    }
+    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
+        let mut plt_type = if self.x.is_empty() || self.x.len() > 10000 {
+            PlotType::ColorMesh(plt_params.clone())
         } else {
-            let plt_type = PlotType::ColorTriangulated(plt_params);
-            // let plt_type = PlotType::TriangulatedSurface(plt_params);
-            (self.get_plot_data(&plt_type)?, plt_type)
+            PlotType::ColorTriangulated(plt_params.clone())
         };
 
-        if let Some(plt_data) = &mut plt_data_opt {
+        if let Some(plt_data) = &self.get_plot_data(&plt_type).unwrap_or(None) {
             let ranges = plt_data.get_axes_min_max_ranges();
             if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
                 _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
@@ -376,7 +300,7 @@ impl Plottable for WaveFrontErrorMap {
             }
         }
 
-        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+        plt_type
     }
 
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {

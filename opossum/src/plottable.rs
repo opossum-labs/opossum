@@ -890,8 +890,7 @@ pub trait Plottable {
     /// Whether an error is thrown depends on the individual implementation of the method
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>>;
 
-    /// This method must be implemented in order to create a plot.
-    /// As the plot data may differ, the implementation must be done for each kind of plot
+    /// This method handles the plot creation for a specific data type or node type
     /// # Attributes
     /// - `f_path`: path to the file
     /// - `img_size`: the size of the image in pixels: (width, height)
@@ -903,7 +902,41 @@ pub trait Plottable {
         f_path: &Path,
         img_size: (u32, u32),
         backend: PltBackEnd,
-    ) -> OpmResult<Option<RgbImage>>;
+    ) -> OpmResult<Option<RgbImage>> {
+        let mut plt_params = PlotParameters::default();
+        match backend {
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
+            _ => plt_params
+                .set(&PlotArgs::FName(
+                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
+                ))?
+                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
+                .set(&PlotArgs::FigSize(img_size))?,
+        };
+        plt_params.set(&PlotArgs::Backend(backend))?;
+
+        let _ = self.add_plot_specific_params(&mut plt_params);
+
+        let plt_type = self.get_plot_type(&plt_params);
+
+        let plt_data_opt = self.get_plot_data(&plt_type)?;
+
+        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+    }
+
+    /// This method must be implemented in order to create a plot.
+    /// As the plot data may differ, the implementation must be done for each kind of plot
+    /// # Returns
+    /// This method returns the [`PlotParameters`] of this [`Plot`]
+    /// # Errors
+    /// This method errors if setting a plot parameter fails
+    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()>;
+
+    /// This method must be implemented in order to create a plot.
+    /// As the plot type may differ, the implementation must be done for each kind of plot
+    /// # Returns
+    /// This method returns the [`PlotType`] of this [`Plot`]
+    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType;
 
     /// This method triangulates [`PlotData`] of the variant Dim3,
     /// # Attributes
