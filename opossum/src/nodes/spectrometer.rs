@@ -285,22 +285,10 @@ impl Plottable for Spectrometer {
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
         let data = &self.light_data;
         match data {
-            Some(LightData::Geometric(rays)) => {
-                let spec = rays
-                    .to_spectrum(&Length::new::<nanometer>(0.2))?
-                    .get_plot_data();
-                match plt_type {
-                    PlotType::Line2D(_) => Ok(Some(PlotData::Dim2(spec))),
-                    _ => Ok(None),
-                }
-            }
-            Some(LightData::Energy(e)) => {
-                let spec = e.spectrum.get_plot_data();
-                match plt_type {
-                    PlotType::Line2D(_) => Ok(Some(PlotData::Dim2(spec))),
-                    _ => Ok(None),
-                }
-            }
+            Some(LightData::Geometric(rays)) => rays
+                .to_spectrum(&Length::new::<nanometer>(0.2))?
+                .get_plot_data(plt_type),
+            Some(LightData::Energy(e)) => e.spectrum.get_plot_data(plt_type),
             _ => Ok(None),
         }
     }

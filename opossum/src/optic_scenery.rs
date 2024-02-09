@@ -576,7 +576,7 @@ mod test {
     use crate::rays::Rays;
     use crate::SplittingConfig;
     use log::Level;
-    use nalgebra::{Point2, Point3};
+    use nalgebra::Point3;
     use num::Zero;
     use std::path::PathBuf;
     use std::{fs::File, io::Read};
