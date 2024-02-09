@@ -281,7 +281,7 @@ mod test {
     use super::*;
     use crate::{analyzer::RayTraceConfig, ray::Ray, spectrum_helper::create_he_ne_spec};
     use approx::{assert_abs_diff_eq, AbsDiffEq};
-    use nalgebra::{Point2, Point3};
+    use nalgebra::Point3;
     use uom::num_traits::Zero;
     use uom::si::{
         energy::joule,

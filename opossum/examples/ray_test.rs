@@ -1,4 +1,4 @@
-use nalgebra::{Point2, Point3};
+use nalgebra::Point3;
 use opossum::ray::Ray;
 use uom::num_traits::Zero;
 use uom::si::energy::joule;

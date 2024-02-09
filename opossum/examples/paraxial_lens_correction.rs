@@ -4,7 +4,7 @@ use opossum::{
     error::OpmResult,
     nodes::{
         create_point_ray_source, ray_propagation_detector::RayPropagationVisualizer,
-        ParaxialSurface, Propagation, WaveFront,
+        ParaxialSurface, Propagation,
     },
     OpticScenery,
 };

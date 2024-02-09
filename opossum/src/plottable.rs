@@ -894,7 +894,7 @@ pub trait Plottable {
     /// As the plot data may differ, the implementation must be done for each kind of plot
     /// # Attributes
     /// - `f_path`: path to the file
-    /// - `img_size`: the size of the image in pixels
+    /// - `img_size`: the size of the image in pixels: (width, height)
     /// - `backend`: used backend to create the plot. See [`PltBackEnd`]
     /// # Errors
     /// Whether an error is thrown depends on the individual implementation of the method
