@@ -1,6 +1,9 @@
 use opossum::{
     error::OpmResult,
-    nodes::{create_collimated_ray_source, ParaxialSurface, Propagation, RayPropagationVisualizer, Spectrometer, SpectrometerType, SpotDiagram, WaveFront},
+    nodes::{
+        create_collimated_ray_source, ParaxialSurface, Propagation, RayPropagationVisualizer,
+        Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
+    },
     OpticScenery,
 };
 use std::path::Path;
@@ -16,19 +19,22 @@ fn main() -> OpmResult<()> {
         create_collimated_ray_source(Length::new::<meter>(5e-3), Energy::new::<joule>(1.), 15)?;
     let i_s = scenery.add_node(source);
     let i_p1 = scenery.add_node(Propagation::new("propagation", Length::new::<meter>(0.1))?);
-    let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));
+    // let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));
     let i_l = scenery.add_node(ParaxialSurface::new("lens", Length::new::<meter>(0.1))?);
     let i_p2 = scenery.add_node(Propagation::new("propagation", Length::new::<meter>(0.2))?);
     let i_wf2: petgraph::prelude::NodeIndex = scenery.add_node(WaveFront::new("wf_monitor 2"));
     let i_sp: petgraph::prelude::NodeIndex = scenery.add_node(SpotDiagram::new("spot 3"));
     let i_l2 = scenery.add_node(ParaxialSurface::new("lens", Length::new::<meter>(0.1))?);
     let i_wf3: petgraph::prelude::NodeIndex = scenery.add_node(WaveFront::new("wf_mon3"));
-    let i_r1: petgraph::prelude::NodeIndex = scenery.add_node(RayPropagationVisualizer::new("ray_mon1"));
-    let i_s1: petgraph::prelude::NodeIndex = scenery.add_node(Spectrometer::new("spec_mon", SpectrometerType::Ideal));
+    let i_r1: petgraph::prelude::NodeIndex =
+        scenery.add_node(RayPropagationVisualizer::new("ray_mon1"));
+    let i_s1: petgraph::prelude::NodeIndex =
+        scenery.add_node(Spectrometer::new("spec_mon", SpectrometerType::Ideal));
 
     scenery.connect_nodes(i_s, "out1", i_p1, "front")?;
-    scenery.connect_nodes(i_p1, "rear", i_wf1, "in1")?;
-    scenery.connect_nodes(i_wf1, "out1", i_l, "front")?;
+    scenery.connect_nodes(i_p1, "rear", i_l, "front")?;
+    // scenery.connect_nodes(i_p1, "rear", i_wf1, "in1")?;
+    // scenery.connect_nodes(i_wf1, "out1", i_l, "front")?;
     scenery.connect_nodes(i_l, "rear", i_p2, "front")?;
     scenery.connect_nodes(i_p2, "rear", i_wf2, "in1")?;
     scenery.connect_nodes(i_wf2, "out1", i_sp, "in1")?;

@@ -7,6 +7,7 @@ use colorous::Gradient;
 use delaunator::{triangulate, Point};
 use image::RgbImage;
 use itertools::{iproduct, izip};
+use kahan::KahanSum;
 use log::warn;
 use nalgebra::{
     ComplexField, DMatrix, DVector, DVectorSlice, Matrix1xX, Matrix3xX, MatrixXx1, MatrixXx2,
@@ -265,10 +266,14 @@ impl PlotType {
     fn check_equistancy_of_mesh(ax_vals: &MatrixXx1<f64>) -> bool {
         let len_ax = ax_vals.len();
         let mut equi = true;
-        if len_ax > 1 {
-            let distance = ax_vals[1] - ax_vals[0];
+        if len_ax > 2 {
+            let mut distance = KahanSum::new_with_value(ax_vals[1]);
+            distance += -ax_vals[0];
             for idx in 2..len_ax {
-                if (distance - (ax_vals[idx] - ax_vals[idx - 1])).abs() > f64::EPSILON {
+                let mut diff = KahanSum::new_with_value(ax_vals[idx]);
+                diff += -ax_vals[idx - 1];
+                diff += -distance.sum();
+                if (diff.sum() / distance.sum()).abs() > 100. * f64::EPSILON {
                     equi = false;
                     break;
                 }
@@ -277,18 +282,18 @@ impl PlotType {
         equi
     }
 
-    fn get_ax_val_distance_if_equidistant(ax_vals: &MatrixXx1<f64>) -> OpmResult<f64> {
+    fn get_ax_val_distance_if_equidistant(ax_vals: &MatrixXx1<f64>) -> f64 {
         let mut dist = (ax_vals[1] - ax_vals[0]) / 2.;
         if Self::check_equistancy_of_mesh(ax_vals) {
             if dist <= 2. * f64::EPSILON {
                 dist = 0.5;
             }
         } else {
-            return Err(OpossumError::Other(
-                "Warning! The points on this axis are not equistant!".into(),
-            ));
+            warn!(
+                "Warning! The points on this axis are not equistant!\n This may distort the plot!"
+            );
         };
-        Ok(dist)
+        dist
     }
 
     fn draw_2d_colormesh<T: DrawingBackend>(
@@ -300,16 +305,7 @@ impl PlotType {
         cbounds: AxLims,
     ) {
         let x_dist = Self::get_ax_val_distance_if_equidistant(x_ax);
-        if x_dist.is_err() {
-            return;
-        };
         let y_dist = Self::get_ax_val_distance_if_equidistant(y_ax);
-        if y_dist.is_err() {
-            return;
-        };
-
-        let x_dist = x_dist.unwrap();
-        let y_dist = y_dist.unwrap();
 
         let (z_shape_rows, z_shape_cols) = z_dat.shape();
         if z_shape_rows != y_ax.len() || z_shape_cols != x_ax.len() {
@@ -1623,7 +1619,7 @@ impl PlotParameters {
             Ok(self)
         } else {
             Err(OpossumError::Other(format!(
-                "Parameter of plot argument \"{plt_arg:?}\" is invalid!"
+                "Parameter of plot argument \"{plt_arg:?}\" is invalid and could not be set!"
             )))
         }
     }
@@ -1853,15 +1849,19 @@ fn _meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f
 fn linspace(start: f64, end: f64, num: f64) -> OpmResult<Matrix1xX<f64>> {
     let num_usize = num.to_usize();
     if num_usize.is_some() {
-        let mut linspace = Matrix1xX::<f64>::from_element(num_usize.unwrap(), start);
-        let bin_size = (end - start)
-            / (num_usize
-                .unwrap()
-                .to_f64()
-                .expect("Cast from usize to f64 may truncate the value!")
-                - 1.);
-        for (i, val) in (0_u32..).zip(linspace.iter_mut()) {
-            *val += bin_size * f64::from(i);
+        let mut linspace = Matrix1xX::<f64>::zeros(num_usize.unwrap());
+        let mut range = KahanSum::<f64>::new_with_value(end);
+        range += -start;
+
+        let mut steps = KahanSum::<f64>::new_with_value(num);
+        steps += -1.;
+
+        let bin_size = range.sum() / steps.sum();
+
+        let mut summator: KahanSum<f64> = KahanSum::<f64>::new_with_value(start);
+        for val in linspace.iter_mut() {
+            *val = summator.sum();
+            summator += bin_size;
         }
         Ok(linspace)
     } else {
@@ -2531,19 +2531,20 @@ mod test {
     fn get_ax_val_distance_if_equidistant_test() {
         let x = linspace(0., 1., 101.).unwrap().transpose();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
-        assert!((dist.unwrap() - 0.005).abs() < f64::EPSILON);
-
-        let x = MatrixXx1::from_vec(vec![0., 1., 3.]);
-        let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
-        assert!(dist.is_err());
+        assert!((dist - 0.005).abs() < f64::EPSILON);
 
         let x = linspace(0., f64::EPSILON, 101.).unwrap().transpose();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
-        assert!((dist.unwrap() - 0.5).abs() < f64::EPSILON);
+        assert!((dist - 0.5).abs() < f64::EPSILON);
     }
     #[test]
     fn check_equistancy_of_mesh_test() {
         let x = linspace(0., 1., 101.).unwrap().transpose();
+        assert!(PlotType::check_equistancy_of_mesh(&x));
+
+        let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100.)
+            .unwrap()
+            .transpose();
         assert!(PlotType::check_equistancy_of_mesh(&x));
 
         let x = MatrixXx1::from_vec(vec![0., 1., 3.]);

@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use image::{DynamicImage, ImageBuffer, RgbImage};
+use log::warn;
 use nalgebra::{DVector, MatrixXx3};
 use serde_derive::{Deserialize, Serialize};
 use uom::si::f64::Length;
@@ -188,14 +189,12 @@ impl Optical for WaveFront {
                 //todo! for all wavelengths
                 wf_data.wavefront_error_maps[0].to_plot(&file_path, (1000, 850), PltBackEnd::BMP)
             } else {
-                Err(OpossumError::Other(
-                    "Wavefront diagram: no wavefront data for export available".into(),
-                ))
+                warn!("Wavefront diagram: no wavefront data for export available",);
+                Ok(None)
             }
         } else {
-            Err(OpossumError::Other(
-                "Wavefront diagram: no light data for export available".into(),
-            ))
+            warn!("Wavefront diagram: no light data for export available",);
+            Ok(None)
         }
     }
     fn is_detector(&self) -> bool {
