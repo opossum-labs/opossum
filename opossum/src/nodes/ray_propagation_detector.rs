@@ -5,7 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
+use crate::plottable::{Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::NodeReport;
 use crate::{
@@ -140,46 +140,5 @@ impl Optical for RayPropagationVisualizer {
 impl Dottable for RayPropagationVisualizer {
     fn node_color(&self) -> &str {
         "darkgreen"
-    }
-}
-
-impl Plottable for RayPropagationVisualizer {
-    fn to_plot(
-        &self,
-        f_path: &Path,
-        img_size: (u32, u32),
-        backend: PltBackEnd,
-    ) -> OpmResult<Option<RgbImage>> {
-        let mut plt_params = PlotParameters::default();
-        match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
-            _ => plt_params
-                .set(&PlotArgs::FName(
-                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))?
-                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
-                .set(&PlotArgs::FigSize(img_size))?,
-        };
-        plt_params.set(&PlotArgs::Backend(backend))?;
-
-        let plt_type = PlotType::MultiLine2D(plt_params);
-
-        let plt_data_opt = self.get_plot_data(&plt_type)?;
-
-        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
-    }
-
-    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
-        let data = &self.light_data;
-        match data {
-            Some(LightData::Geometric(rays)) => {
-                let rays_xy_pos = rays.get_xy_rays_pos();
-                match plt_type {
-                    PlotType::Scatter2D(_) => Ok(Some(PlotData::Dim2(rays_xy_pos))),
-                    _ => Ok(None),
-                }
-            }
-            _ => Ok(None),
-        }
     }
 }
