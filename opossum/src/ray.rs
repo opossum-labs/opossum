@@ -430,6 +430,7 @@ mod test {
         assert_eq!(ray.e, Energy::new::<joule>(1.0));
         assert_eq!(ray.energy(), Energy::new::<joule>(1.0));
         assert_eq!(ray.path_length, Length::zero());
+        assert_eq!(ray.refractive_index, 1.0);
         assert!(Ray::new(
             position,
             direction,
@@ -502,6 +503,38 @@ mod test {
         .is_err());
     }
     #[test]
+    fn refractive_index() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let energy = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Vector3::new(0.0, 0.0, 1.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
+        ray.refractive_index = 2.0;
+        assert_eq!(ray.refractive_index(), 2.0);
+    }
+    #[test]
+    fn set_refractive_index() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let energy = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Vector3::new(0.0, 0.0, 1.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
+        assert!(ray.set_refractive_index(f64::NAN).is_err());
+        assert!(ray.set_refractive_index(f64::INFINITY).is_err());
+        assert!(ray.set_refractive_index(0.99).is_err());
+        assert!(ray.set_refractive_index(1.0).is_ok());
+        assert!(ray.set_refractive_index(2.0).is_ok());
+        assert_eq!(ray.refractive_index, 2.0);
+    }
+    #[test]
     fn propagate_along_z() {
         let wvl = Length::new::<nanometer>(1053.0);
         let energy = Energy::new::<joule>(1.0);
@@ -528,6 +561,7 @@ mod test {
                 Length::new::<millimeter>(2.0)
             )
         );
+        assert_eq!(ray.path_length(), Length::new::<millimeter>(2.0));
         let _ = ray.propagate_along_z(Length::new::<millimeter>(2.0));
 
         assert_eq!(
@@ -584,6 +618,33 @@ mod test {
         assert!(ray
             .propagate_along_z(Length::new::<millimeter>(1.0))
             .is_err());
+    }
+    #[test]
+    fn propagate_along_z_refractive_index() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let energy = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Vector3::new(0.0, 0.0, 1.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
+        ray.set_refractive_index(2.0).unwrap();
+        ray.propagate_along_z(Length::new::<millimeter>(1.0))
+            .unwrap();
+        assert_eq!(ray.wavelength(), wvl);
+        assert_eq!(ray.energy(), energy);
+        assert_eq!(ray.dir, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(
+            ray.position(),
+            Point3::new(
+                Length::zero(),
+                Length::zero(),
+                Length::new::<millimeter>(1.0)
+            )
+        );
+        assert_eq!(ray.path_length(), Length::new::<millimeter>(2.0));
     }
     #[test]
     fn refract_paraxial() {
