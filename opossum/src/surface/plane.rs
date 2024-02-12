@@ -50,7 +50,6 @@ impl Surface for Plane {
 
 #[cfg(test)]
 mod test {
-    use nalgebra::Point2;
     use uom::si::{
         energy::joule,
         f64::{Energy, Length},
@@ -70,7 +69,8 @@ mod test {
     fn intersect_on_axis() {
         let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
         let ray = Ray::new(
-            Point2::new(
+            Point3::new(
+                Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(0.0),
             ),
@@ -95,7 +95,8 @@ mod test {
     fn intersect_on_axis_behind() {
         let s = Plane::new(Length::new::<millimeter>(-10.0)).unwrap();
         let ray = Ray::new(
-            Point2::new(
+            Point3::new(
+                Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(0.0),
             ),
@@ -110,8 +111,9 @@ mod test {
     fn intersect_off_axis() {
         let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
         let ray = Ray::new(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(0.0),
+                Length::new::<millimeter>(1.0),
                 Length::new::<millimeter>(1.0),
             ),
             Vector3::new(0.0, 0.0, 1.0),
@@ -131,9 +133,10 @@ mod test {
             ))
         );
         let ray = Ray::new(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(0.0),
             ),
             Vector3::new(0.0, 1.0, 1.0),
             Length::new::<nanometer>(1053.0),

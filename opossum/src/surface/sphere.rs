@@ -105,7 +105,6 @@ impl Surface for Sphere {
 
 #[cfg(test)]
 mod test {
-    use nalgebra::Point2;
     use uom::si::{
         energy::joule,
         f64::{Energy, Length},
@@ -159,7 +158,8 @@ mod test {
         )
         .unwrap();
         let ray = Ray::new(
-            Point2::new(
+            Point3::new(
+                Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(0.0),
             ),
@@ -199,7 +199,8 @@ mod test {
     #[test]
     fn intersect_on_axis_behind() {
         let ray = Ray::new(
-            Point2::new(
+            Point3::new(
+                Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(0.0),
             ),
@@ -224,9 +225,10 @@ mod test {
     #[test]
     fn intersect_collinear_no_intersect() {
         let ray = Ray::new(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(1.1),
+                Length::new::<millimeter>(0.0),
             ),
             Vector3::new(0.0, 0.0, 1.0),
             Length::new::<nanometer>(1053.0),
@@ -240,9 +242,10 @@ mod test {
         .unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
         let ray = Ray::new(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(-1.1),
+                Length::new::<millimeter>(0.0),
             ),
             Vector3::new(0.0, 0.0, 1.0),
             Length::new::<nanometer>(1053.0),
@@ -254,9 +257,10 @@ mod test {
     #[test]
     fn intersect_collinear_touch() {
         let ray = Ray::new(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(0.0),
                 Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(0.0),
             ),
             Vector3::new(0.0, 0.0, 1.0),
             Length::new::<nanometer>(1053.0),
@@ -280,8 +284,9 @@ mod test {
             ))
         );
         let ray = Ray::new(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(0.0),
+                Length::new::<millimeter>(-1.0),
                 Length::new::<millimeter>(-1.0),
             ),
             Vector3::new(0.0, 0.0, 1.0),

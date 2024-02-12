@@ -1,4 +1,4 @@
-use nalgebra::{Point2, Vector3};
+use nalgebra::{Point3, Vector3};
 use opossum::{
     error::OpmResult,
     ray::Ray,
@@ -16,8 +16,9 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(1.0),
     )?; //Plane::new(10.0);
     let ray = Ray::new(
-        Point2::new(
+        Point3::new(
             Length::new::<millimeter>(15.0),
+            Length::new::<millimeter>(0.0),
             Length::new::<millimeter>(0.0),
         ),
         Vector3::new(0.0, 0.0, 1.0),
