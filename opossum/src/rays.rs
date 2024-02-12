@@ -421,6 +421,22 @@ impl Rays {
         }
         Ok(spectrum)
     }
+    /// Set the refractive index of the medium all [`Rays`] are propagating in.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given refractive index is < 1.0 or not finite.
+    pub fn set_refractive_index(&mut self, refractive_index: f64) -> OpmResult<()> {
+        if refractive_index < 1.0 || !refractive_index.is_finite() {
+            return Err(OpossumError::Other(
+                "refractive index must be >=1.0 and finite".into(),
+            ));
+        }
+        for ray in &mut self.rays {
+            ray.set_refractive_index(refractive_index)?;
+        }
+        Ok(())
+    }
     /// Split a ray bundle
     ///
     /// This function splits a ray bundle determined by the given [`SplittingConfig`]. See [`split`](Ray::split) function for details.
@@ -809,6 +825,31 @@ mod test {
         let mut rays2 = rays.clone();
         rays.add_rays(&mut rays2);
         assert_eq!(rays.rays.len(), 2);
+    }
+    #[test]
+    fn set_refractive_index() {
+        let mut rays = Rays::default();
+        let ray = Ray::new_collimated(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        let ray = Ray::new_collimated(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        assert!(rays.set_refractive_index(0.9).is_err());
+        assert!(rays.set_refractive_index(f64::NAN).is_err());
+        assert!(rays.set_refractive_index(f64::INFINITY).is_err());
+        assert!(rays.set_refractive_index(1.0).is_ok());
+        rays.set_refractive_index(2.0).unwrap();
+        assert_eq!(rays.rays[0].refractive_index(), 2.0);
+        assert_eq!(rays.rays[1].refractive_index(), 2.0);
     }
     #[test]
     fn total_energy() {

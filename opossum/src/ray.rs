@@ -60,6 +60,8 @@ pub struct Ray {
     // //True if ray is allowd to further propagate, false else
     // //valid:  bool,
     path_length: Length,
+    // refractive index of the medium this ray is propagatin in.
+    refractive_index: f64,
 }
 impl Ray {
     /// Create a new collimated ray.
@@ -118,6 +120,7 @@ impl Ray {
             //id: 0,
             //bounce: 0,
             path_length: Length::zero(),
+            refractive_index: 1.0,
         })
     }
     /// Returns the position of thi [`Ray`].
@@ -154,6 +157,8 @@ impl Ray {
     }
     /// freely propagate a ray along its direction. The length is given as the projection on the z-axis (=optical axis).
     ///
+    /// This function also respects the refractive index sotred in the ray while calculating the optical path length.
+    ///
     /// # Errors
     /// This functions retruns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
     pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
@@ -168,7 +173,7 @@ impl Ray {
 
         let normalized_dir = self.dir.normalize();
         let length_in_ray_dir = length_along_z.get::<millimeter>() / normalized_dir[2];
-        self.path_length += Length::new::<millimeter>(length_in_ray_dir);
+        self.path_length += Length::new::<millimeter>(length_in_ray_dir) * self.refractive_index;
         Ok(())
     }
     /// Refract a ray on a paraxial surface of a given focal length.
@@ -198,7 +203,7 @@ impl Ray {
 
     /// Attenuate a ray's energy by a given filter.
     ///
-    /// This function attenuates the ray's energy by the given [`FilterType`]. For [`FilterType::Constant`] the energy is simply multiplied with the
+    /// This function attenuates the ray's energy by the given [`FilterType`]. For [`FilterType::Constant`] the energy is simply multiplied by the
     /// given transmission factor.
     /// # Errors
     ///
@@ -283,6 +288,25 @@ impl Ray {
     #[must_use]
     pub fn path_length(&self) -> Length {
         self.path_length
+    }
+    /// Returns the refractive index of this [`Ray`].
+    #[must_use]
+    pub const fn refractive_index(&self) -> f64 {
+        self.refractive_index
+    }
+    /// Sets the refractive index of this [`Ray`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given refractive inde is <1.0 or not finite.
+    pub fn set_refractive_index(&mut self, refractive_index: f64) -> OpmResult<()> {
+        if refractive_index < 1.0 || !refractive_index.is_finite() {
+            return Err(OpossumError::Other(
+                "refractive index must be >=1.0 and finite".into(),
+            ));
+        }
+        self.refractive_index = refractive_index;
+        Ok(())
     }
 }
 #[cfg(test)]
@@ -406,6 +430,7 @@ mod test {
         assert_eq!(ray.e, Energy::new::<joule>(1.0));
         assert_eq!(ray.energy(), Energy::new::<joule>(1.0));
         assert_eq!(ray.path_length, Length::zero());
+        assert_eq!(ray.refractive_index, 1.0);
         assert!(Ray::new(
             position,
             direction,
@@ -478,6 +503,38 @@ mod test {
         .is_err());
     }
     #[test]
+    fn refractive_index() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let energy = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Vector3::new(0.0, 0.0, 1.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
+        ray.refractive_index = 2.0;
+        assert_eq!(ray.refractive_index(), 2.0);
+    }
+    #[test]
+    fn set_refractive_index() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let energy = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Vector3::new(0.0, 0.0, 1.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
+        assert!(ray.set_refractive_index(f64::NAN).is_err());
+        assert!(ray.set_refractive_index(f64::INFINITY).is_err());
+        assert!(ray.set_refractive_index(0.99).is_err());
+        assert!(ray.set_refractive_index(1.0).is_ok());
+        assert!(ray.set_refractive_index(2.0).is_ok());
+        assert_eq!(ray.refractive_index, 2.0);
+    }
+    #[test]
     fn propagate_along_z() {
         let wvl = Length::new::<nanometer>(1053.0);
         let energy = Energy::new::<joule>(1.0);
@@ -504,6 +561,7 @@ mod test {
                 Length::new::<millimeter>(2.0)
             )
         );
+        assert_eq!(ray.path_length(), Length::new::<millimeter>(2.0));
         let _ = ray.propagate_along_z(Length::new::<millimeter>(2.0));
 
         assert_eq!(
@@ -560,6 +618,33 @@ mod test {
         assert!(ray
             .propagate_along_z(Length::new::<millimeter>(1.0))
             .is_err());
+    }
+    #[test]
+    fn propagate_along_z_refractive_index() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let energy = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Vector3::new(0.0, 0.0, 1.0),
+            wvl,
+            energy,
+        )
+        .unwrap();
+        ray.set_refractive_index(2.0).unwrap();
+        ray.propagate_along_z(Length::new::<millimeter>(1.0))
+            .unwrap();
+        assert_eq!(ray.wavelength(), wvl);
+        assert_eq!(ray.energy(), energy);
+        assert_eq!(ray.dir, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(
+            ray.position(),
+            Point3::new(
+                Length::zero(),
+                Length::zero(),
+                Length::new::<millimeter>(1.0)
+            )
+        );
+        assert_eq!(ray.path_length(), Length::new::<millimeter>(2.0));
     }
     #[test]
     fn refract_paraxial() {

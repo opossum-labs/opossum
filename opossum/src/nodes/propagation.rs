@@ -31,6 +31,7 @@ use uom::si::{f64::Length, length::millimeter};
 ///   - `apertures`
 ///   - `inverted`
 ///   - `distance`
+///   - `refractive index`
 #[derive(Debug, Clone)]
 pub struct Propagation {
     props: Properties,
@@ -46,6 +47,14 @@ fn create_default_props() -> Properties {
             "distance along the optical axis in mm",
             None,
             0.0.into(),
+        )
+        .unwrap();
+    props
+        .create(
+            "refractive index",
+            "refractive index of the medium",
+            None,
+            1.0.into(),
         )
         .unwrap();
     props.set("apertures", ports.into()).unwrap();
@@ -97,13 +106,17 @@ impl Optical for Propagation {
             AnalyzerType::Energy => (),
             AnalyzerType::RayTrace(_config) => {
                 if let Some(LightData::Geometric(mut rays)) = data {
-                    let length_along_z =
-                        if let Ok(Proptype::F64(length)) = self.props.get("distance") {
-                            *length
-                        } else {
-                            return Err(OpossumError::Analysis("cannot read distance".into()));
-                        };
-                    rays.propagate_along_z(Length::new::<millimeter>(length_along_z))?;
+                    let Ok(Proptype::F64(length_along_z)) = self.props.get("distance") else {
+                        return Err(OpossumError::Analysis("cannot read distance".into()));
+                    };
+                    let Ok(Proptype::F64(refractive_index)) = self.props.get("refractive index")
+                    else {
+                        return Err(OpossumError::Analysis(
+                            "cannot read refractive index".into(),
+                        ));
+                    };
+                    rays.set_refractive_index(*refractive_index)?;
+                    rays.propagate_along_z(Length::new::<millimeter>(*length_along_z))?;
                     data = Some(LightData::Geometric(rays));
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
