@@ -317,6 +317,7 @@ mod test {
         spectrum_helper::{self, generate_filter_spectrum},
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq};
+    use itertools::izip;
     use std::path::PathBuf;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
@@ -844,5 +845,27 @@ mod test {
         )
         .unwrap();
         assert!(ray.split(&SplittingConfig::Spectrum(spectrum)).is_err());
+    }
+    #[test]
+    fn position_history_in_mm_test() {
+        let mut ray = Ray::new(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Vector3::new(0., 1., 2.),
+            Length::new::<nanometer>(1053.),
+            Energy::new::<joule>(1.),
+        )
+        .unwrap();
+
+        let _ = ray.propagate_along_z(Length::new::<millimeter>(1.));
+        let _ = ray.propagate_along_z(Length::new::<millimeter>(2.));
+
+        let pos_hist_comp = MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5, 0., 1., 3.]);
+
+        let pos_hist = ray.position_history_in_mm();
+        for (row, row_calc) in izip!(pos_hist_comp.row_iter(), pos_hist.row_iter()) {
+            assert_eq!(row[0], row_calc[0]);
+            assert_eq!(row[1], row_calc[1]);
+            assert_eq!(row[2], row_calc[2]);
+        }
     }
 }

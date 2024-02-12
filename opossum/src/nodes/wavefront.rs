@@ -177,8 +177,9 @@ impl Optical for WaveFront {
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(LightData::Geometric(rays)) = &self.light_data {
-            let wf_data_opt =
-                rays.get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(1.))?;
+            let wf_data_opt = rays
+                .get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(1.))
+                .ok();
 
             let mut file_path = PathBuf::from(report_dir);
             file_path.push(format!(
@@ -213,8 +214,14 @@ impl Optical for WaveFront {
             let wf_data_opt =
                 rays.get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(1.));
 
-            if wf_data_opt.is_ok() && wf_data_opt.as_ref().unwrap().is_some() {
-                let wf_data = wf_data_opt.unwrap().unwrap();
+            if wf_data_opt.is_ok()
+                && !wf_data_opt
+                    .as_ref()
+                    .unwrap()
+                    .wavefront_error_maps
+                    .is_empty()
+            {
+                let wf_data = wf_data_opt.unwrap();
 
                 props
                 .create(

@@ -16,6 +16,7 @@ use image::{DynamicImage, ImageBuffer};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
+use num::ToPrimitive;
 use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
 use sobol::{params::JoeKuoD6, Sobol};
@@ -23,7 +24,7 @@ use uom::num_traits::Zero;
 use uom::si::angle::degree;
 use uom::si::energy::joule;
 use uom::si::f64::{Angle, Energy, Length};
-use uom::si::length::{millimeter, nanometer};
+use uom::si::length::{micrometer, millimeter, nanometer};
 
 /// Struct containing all relevant information of a ray bundle
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
@@ -226,22 +227,52 @@ impl Rays {
     ///
     /// # Errors
     /// This function errors for the moment if `center_wavelength_flag` is set to false
+    ///
+    /// # Panics
+    /// This method panics if the usize `to_f64()`conversion fails. This is not expected
     pub fn get_wavefront_data_in_units_of_wvl(
         &self,
         center_wavelength_flag: bool,
         spec_res: Length,
-    ) -> OpmResult<Option<WaveFrontData>> {
+    ) -> OpmResult<WaveFrontData> {
         let spec = self.to_spectrum(&spec_res)?;
         if center_wavelength_flag {
             let center_wavelength = spec.center_wavelength();
             let wf_err = self.wavefront_error_at_pos_in_units_of_wvl(center_wavelength);
-            Ok(Some(WaveFrontData {
+            Ok(WaveFrontData {
                 wavefront_error_maps: vec![WaveFrontErrorMap::new(&wf_err, center_wavelength)?],
-            }))
+            })
         } else {
-            //do it for all wavelength resolutions
-            todo!();
-            // Ok(None)
+            let spec_start = spec.range().start.get::<micrometer>();
+            let spec_res_micro = spec_res.get::<micrometer>();
+            let mut rays_sorted_by_spectrum = vec![Vec::<Ray>::new(); spec.data_vec().len()];
+            //sort rays into spectral resolution fields
+            for ray in &self.rays {
+                let index_opt = ((ray.wavelength().get::<micrometer>() - spec_start)
+                    / spec_res_micro)
+                    .floor()
+                    .to_usize();
+                if let Some(idx) = index_opt {
+                    rays_sorted_by_spectrum[idx].push(ray.clone());
+                }
+            }
+
+            let mut wf_error_maps =
+                Vec::<WaveFrontErrorMap>::with_capacity(rays_sorted_by_spectrum.len());
+            for (idx, rays) in rays_sorted_by_spectrum.iter().enumerate() {
+                if !rays.is_empty() {
+                    let wvl = idx.to_f64().unwrap().mul_add(spec_res_micro, spec_start);
+                    wf_error_maps.push(WaveFrontErrorMap::new(
+                        &Self::from(rays.clone())
+                            .wavefront_error_at_pos_in_units_of_wvl(Length::new::<micrometer>(wvl)),
+                        Length::new::<micrometer>(wvl),
+                    )?);
+                }
+            }
+
+            Ok(WaveFrontData {
+                wavefront_error_maps: wf_error_maps,
+            })
         }
     }
 
@@ -250,7 +281,7 @@ impl Rays {
     /// - `wavelength`: wave length that is used for this wavefront calculation
     ///
     /// # Returns
-    /// This method returns a Matrix with 3 columns for the x(1), y(2) and z(3) axes and a dynamic number of rows
+    /// This method returns a Matrix with 3 columns for the x(1) & y(2) axes and the negative optical path(3) and a dynamic number of rows. x & y referes to the transverse extend of the beam with reference to its the optical axis
     #[must_use]
     pub fn wavefront_error_at_pos_in_units_of_wvl(&self, wavelength: Length) -> MatrixXx3<f64> {
         let wvl = wavelength.get::<nanometer>();
@@ -282,7 +313,7 @@ impl Rays {
         wave_front_err
     }
 
-    /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx3<f64>]`.
+    /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx2<f64>]`.
     #[must_use]
     pub fn get_xy_rays_pos(&self) -> MatrixXx2<f64> {
         let mut rays_at_pos = MatrixXx2::from_element(self.rays.len(), 0.);
@@ -553,6 +584,12 @@ impl PdfReportable for RayPositionHistory {
     }
 }
 
+impl From<Vec<Ray>> for Rays {
+    fn from(value: Vec<Ray>) -> Self {
+        Self { rays: value }
+    }
+}
+
 impl From<Rays> for Proptype {
     fn from(value: Rays) -> Self {
         Self::RayPositionHistory(value.get_rays_position_history_in_mm())
@@ -654,6 +691,7 @@ mod test {
     use super::*;
     use crate::{aperture::CircleConfig, ray::SplittingConfig};
     use approx::assert_abs_diff_eq;
+    use itertools::izip;
     use log::Level;
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
@@ -1286,5 +1324,243 @@ mod test {
             2.4,
             epsilon = 10.0 * f64::EPSILON
         );
+    }
+
+    #[test]
+    fn get_rays_position_history_in_mm_test() {
+        let ray_vec = vec![Ray::new(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Vector3::new(0., 1., 2.),
+            Length::new::<nanometer>(1053.),
+            Energy::new::<joule>(1.),
+        )
+        .unwrap()];
+        let mut rays = Rays::from(ray_vec);
+
+        let _ = rays.propagate_along_z(Length::new::<millimeter>(1.));
+        let _ = rays.propagate_along_z(Length::new::<millimeter>(2.));
+
+        let pos_hist_comp = vec![MatrixXx3::from_vec(vec![
+            0., 0., 0., 0., 0.5, 1.5, 0., 1., 3.,
+        ])];
+
+        let pos_hist = rays.get_rays_position_history_in_mm();
+        for (ray_pos, ray_pos_calc) in izip!(pos_hist_comp.iter(), pos_hist.rays_pos_history.iter())
+        {
+            for (row, row_calc) in izip!(ray_pos.row_iter(), ray_pos_calc.row_iter()) {
+                assert_eq!(row[0], row_calc[0]);
+                assert_eq!(row[1], row_calc[1]);
+                assert_eq!(row[2], row_calc[2]);
+            }
+        }
+    }
+    #[test]
+    fn project_to_plane_test() {
+        let pos_hist = RayPositionHistory {
+            rays_pos_history: vec![
+                MatrixXx3::from_vec(vec![1., 0., 0.]),
+                MatrixXx3::from_vec(vec![0., 1., 0.]),
+                MatrixXx3::from_vec(vec![0., 0., 1.]),
+            ],
+        };
+        let projected_rays = pos_hist.project_to_plane(Vector3::new(1., 0., 0.)).unwrap();
+        assert_eq!(projected_rays[0][(0, 0)], 0.);
+        assert_eq!(projected_rays[0][(0, 1)], 0.);
+        assert_eq!(projected_rays[1][(0, 0)], 0.);
+        assert_eq!(projected_rays[1][(0, 1)], 1.);
+        assert_eq!(projected_rays[2][(0, 0)], 1.);
+        assert_eq!(projected_rays[2][(0, 1)], 0.);
+
+        let projected_rays = pos_hist.project_to_plane(Vector3::new(0., 1., 0.)).unwrap();
+        assert_eq!(projected_rays[0][(0, 0)], 0.);
+        assert_eq!(projected_rays[0][(0, 1)], 1.);
+        assert_eq!(projected_rays[1][(0, 0)], 0.);
+        assert_eq!(projected_rays[1][(0, 1)], 0.);
+        assert_eq!(projected_rays[2][(0, 0)], 1.);
+        assert_eq!(projected_rays[2][(0, 1)], 0.);
+
+        let projected_rays = pos_hist.project_to_plane(Vector3::new(0., 0., 1.)).unwrap();
+        assert_eq!(projected_rays[0][(0, 0)], 1.);
+        assert_eq!(projected_rays[0][(0, 1)], 0.);
+        assert_eq!(projected_rays[1][(0, 0)], 0.);
+        assert_eq!(projected_rays[1][(0, 1)], 1.);
+        assert_eq!(projected_rays[2][(0, 0)], 0.);
+        assert_eq!(projected_rays[2][(0, 1)], 0.);
+    }
+    #[test]
+    fn get_wavefront_data_in_units_of_wvl_test() {
+        //empty rays vector
+        let rays = Rays::from(Vec::<Ray>::new());
+        let wf_data = rays.get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(10.));
+        assert!(wf_data.is_err());
+
+        let mut rays = Rays::new_hexapolar_point_source(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Angle::new::<degree>(90.),
+            5,
+            Length::new::<nanometer>(1000.),
+            Energy::new::<joule>(1.),
+        )
+        .unwrap();
+
+        let _ = rays.propagate_along_z(Length::new::<millimeter>(10.));
+        let wf_data = rays
+            .get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(10.))
+            .unwrap();
+
+        assert!(wf_data.wavefront_error_maps.len() == 1);
+
+        rays.add_ray(
+            Ray::new(
+                Point3::new(Length::zero(), Length::zero(), Length::zero()),
+                Vector3::new(0., 1., 0.),
+                Length::new::<nanometer>(1005.),
+                Energy::new::<joule>(1.),
+            )
+            .unwrap(),
+        );
+
+        let wf_data = rays
+            .get_wavefront_data_in_units_of_wvl(false, Length::new::<nanometer>(10.))
+            .unwrap();
+
+        assert!(wf_data.wavefront_error_maps.len() == 1);
+
+        let wf_data = rays
+            .get_wavefront_data_in_units_of_wvl(false, Length::new::<nanometer>(3.))
+            .unwrap();
+
+        assert!(wf_data.wavefront_error_maps.len() == 2);
+        rays.add_ray(
+            Ray::new(
+                Point3::new(Length::zero(), Length::zero(), Length::zero()),
+                Vector3::new(0., 1., 0.),
+                Length::new::<nanometer>(1007.),
+                Energy::new::<joule>(1.),
+            )
+            .unwrap(),
+        );
+
+        let wf_data = rays
+            .get_wavefront_data_in_units_of_wvl(false, Length::new::<nanometer>(3.))
+            .unwrap();
+
+        assert!(wf_data.wavefront_error_maps.len() == 3);
+    }
+    #[test]
+    fn wavefront_error_at_pos_in_units_of_wvl_test() {
+        let mut rays = Rays::new_hexapolar_point_source(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Angle::new::<degree>(90.),
+            1,
+            Length::new::<nanometer>(1000.),
+            Energy::new::<joule>(1.),
+        )
+        .unwrap();
+        let _ = rays.propagate_along_z(Length::new::<millimeter>(10.));
+
+        let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(Length::new::<nanometer>(1000.));
+
+        for (i, val) in wf_error.column(2).iter().enumerate() {
+            if i != 0 {
+                assert!((val - (1. - f64::sqrt(2.)) * 10000.).abs() < f64::EPSILON * val.abs())
+            } else {
+                assert!(val.abs() < f64::EPSILON)
+            }
+        }
+
+        let mut rays = Rays::new_hexapolar_point_source(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Angle::new::<degree>(90.),
+            1,
+            Length::new::<nanometer>(500.),
+            Energy::new::<joule>(1.),
+        )
+        .unwrap();
+        let _ = rays.propagate_along_z(Length::new::<millimeter>(10.));
+
+        let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(Length::new::<nanometer>(500.));
+
+        for (i, val) in wf_error.column(2).iter().enumerate() {
+            if i != 0 {
+                assert!((val - (1. - f64::sqrt(2.)) * 20000.).abs() < f64::EPSILON * val.abs())
+            } else {
+                assert!(val.abs() < f64::EPSILON)
+            }
+        }
+    }
+    #[test]
+    fn get_xy_rays_pos_test() {
+        let rays = Rays::new_hexapolar_point_source(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Angle::new::<degree>(90.),
+            1,
+            Length::new::<nanometer>(1000.),
+            Energy::new::<joule>(1.),
+        )
+        .unwrap();
+
+        let xy_pos = rays.get_xy_rays_pos();
+        for val in xy_pos.row_iter() {
+            assert!(val[(0, 0)].abs() < f64::EPSILON);
+            assert!(val[(0, 1)].abs() < f64::EPSILON);
+        }
+
+        let pos_xy = MatrixXx2::from_vec(vec![1., 2., -10., -2000., 1., 2., -10., -2000.]);
+
+        let ray_vec = vec![
+            Ray::new(
+                Point3::new(
+                    Length::new::<millimeter>(1.),
+                    Length::new::<millimeter>(1.),
+                    Length::zero(),
+                ),
+                Vector3::new(0., 1., 0.),
+                Length::new::<nanometer>(1000.),
+                Energy::new::<joule>(1.),
+            )
+            .unwrap(),
+            Ray::new(
+                Point3::new(
+                    Length::new::<millimeter>(2.),
+                    Length::new::<millimeter>(2.),
+                    Length::zero(),
+                ),
+                Vector3::new(0., 1., 0.),
+                Length::new::<nanometer>(1000.),
+                Energy::new::<joule>(1.),
+            )
+            .unwrap(),
+            Ray::new(
+                Point3::new(
+                    Length::new::<millimeter>(-10.),
+                    Length::new::<millimeter>(-10.),
+                    Length::zero(),
+                ),
+                Vector3::new(0., 1., 0.),
+                Length::new::<nanometer>(1000.),
+                Energy::new::<joule>(1.),
+            )
+            .unwrap(),
+            Ray::new(
+                Point3::new(
+                    Length::new::<millimeter>(-2000.),
+                    Length::new::<millimeter>(-2000.),
+                    Length::zero(),
+                ),
+                Vector3::new(0., 1., 0.),
+                Length::new::<nanometer>(1000.),
+                Energy::new::<joule>(1.),
+            )
+            .unwrap(),
+        ];
+
+        let rays = Rays::from(ray_vec);
+        let xy_pos = rays.get_xy_rays_pos();
+
+        for (val_is, val_got) in izip!(pos_xy.row_iter(), xy_pos.row_iter()) {
+            assert!((val_is[(0, 0)] - val_got[(0, 0)]).abs() < f64::EPSILON * val_is[(0, 0)].abs());
+            assert!((val_is[(0, 1)] - val_got[(0, 1)]).abs() < f64::EPSILON * val_is[(0, 1)].abs());
+        }
     }
 }
