@@ -1,3 +1,6 @@
+//! Spherical surface
+//!
+//! This module implements a spherical surface with a given radius of curvature and a given z position on the optical axis.
 use super::Surface;
 use crate::error::OpmResult;
 use crate::error::OpossumError;
@@ -6,11 +9,12 @@ use nalgebra::Point3;
 use nalgebra::Vector3;
 use roots::find_roots_quadratic;
 use roots::Roots;
-use uom::si::length::millimeter;
+use uom::si::f64::Length;
+use uom::si::length::meter;
 
 pub struct Sphere {
-    z: f64,
-    radius: f64,
+    z: Length,
+    radius: Length,
 }
 impl Sphere {
     /// Generate a new [`Sphere`] surface with a given z position on the optical axis and a given radius of curvature.
@@ -18,7 +22,7 @@ impl Sphere {
     /// # Errors
     ///
     /// This function will return an error if the radius of curvature is 0.0 or not finite.
-    pub fn new(z: f64, radius_of_curvature: f64) -> OpmResult<Self> {
+    pub fn new(z: Length, radius_of_curvature: Length) -> OpmResult<Self> {
         if !radius_of_curvature.is_normal() {
             return Err(OpossumError::Other(
                 "radius of curvature must be != 0.0 and finite".into(),
@@ -31,7 +35,7 @@ impl Sphere {
     }
 }
 impl Surface for Sphere {
-    fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<f64>, Vector3<f64>)> {
+    fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         // sphere formula
         // x^2 + y^2 + (z-z_0)^2 = r^2
         //
@@ -44,16 +48,17 @@ impl Surface for Sphere {
         // c = p_x^2 + p_y^2 + p_z^2 - 2*z_0*p_z + z_0^2 - r^2
         let dir = ray.direction();
         let pos = Vector3::new(
-            ray.position().x.get::<millimeter>(),
-            ray.position().y.get::<millimeter>(),
-            ray.position().z.get::<millimeter>(),
+            ray.position().x.value,
+            ray.position().y.value,
+            ray.position().z.value,
         );
+        let z_0 = self.z.value;
+        let radius = self.radius.value;
         let a = dir.norm_squared();
-        let b = 2.0 * dir.z.mul_add(-self.z, dir.dot(&pos));
-        let c = self.radius.mul_add(
-            -self.radius,
-            self.z
-                .mul_add(self.z, (2.0 * self.z).mul_add(-pos.z, pos.norm_squared())),
+        let b = 2.0 * dir.z.mul_add(-z_0, dir.dot(&pos));
+        let c = radius.mul_add(
+            -radius,
+            z_0.mul_add(z_0, (2.0 * z_0).mul_add(-pos.z, pos.norm_squared())),
         );
         // Solve t of qudaratic equation
         let roots = find_roots_quadratic(a, b, c);
@@ -85,9 +90,16 @@ impl Surface for Sphere {
             }
             _ => unreachable!(),
         };
-        let center_point = Vector3::new(0.0, 0.0, self.z);
-        let normal_vector = Vector3::from(intersection_point) - center_point;
-        Some((intersection_point.into(), normal_vector))
+        let center_point = Vector3::new(0.0, 0.0, z_0);
+        let normal_vector = (Vector3::from(intersection_point) - center_point).normalize();
+        Some((
+            Point3::new(
+                Length::new::<meter>(intersection_point.x),
+                Length::new::<meter>(intersection_point.y),
+                Length::new::<meter>(intersection_point.z),
+            ),
+            normal_vector,
+        ))
     }
 }
 
@@ -97,26 +109,55 @@ mod test {
     use uom::si::{
         energy::joule,
         f64::{Energy, Length},
+        length::millimeter,
         length::nanometer,
     };
 
     use super::*;
     #[test]
     fn new() {
-        let s = Sphere::new(1.0, 2.0).unwrap();
-        assert_eq!(s.z, 3.0);
-        assert_eq!(s.radius, 2.0);
-        assert!(Sphere::new(1.0, 0.0).is_err());
-        assert!(Sphere::new(1.0, f64::NAN).is_err());
-        assert!(Sphere::new(1.0, f64::INFINITY).is_err());
-        assert!(Sphere::new(1.0, f64::NEG_INFINITY).is_err());
-        let s = Sphere::new(1.0, -2.0).unwrap();
-        assert_eq!(s.z, -1.0);
-        assert_eq!(s.radius, -2.0);
+        let s = Sphere::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(2.0),
+        )
+        .unwrap();
+        assert_eq!(s.z, Length::new::<millimeter>(3.0));
+        assert_eq!(s.radius, Length::new::<millimeter>(2.0));
+        assert!(Sphere::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(0.0)
+        )
+        .is_err());
+        assert!(Sphere::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(f64::NAN)
+        )
+        .is_err());
+        assert!(Sphere::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(f64::INFINITY)
+        )
+        .is_err());
+        assert!(Sphere::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(f64::NEG_INFINITY)
+        )
+        .is_err());
+        let s = Sphere::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(-2.0),
+        )
+        .unwrap();
+        assert_eq!(s.z, Length::new::<millimeter>(-1.0));
+        assert_eq!(s.radius, Length::new::<millimeter>(-2.0));
     }
     #[test]
     fn intersect_on_axis() {
-        let s = Sphere::new(10.0, 1.0).unwrap();
+        let s = Sphere::new(
+            Length::new::<millimeter>(10.0),
+            Length::new::<millimeter>(1.0),
+        )
+        .unwrap();
         let ray = Ray::new(
             Point2::new(
                 Length::new::<millimeter>(0.0),
@@ -129,12 +170,30 @@ mod test {
         .unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
-            Some((Point3::new(0.0, 0.0, 10.0), Vector3::new(0.0, 0.0, -1.0)))
+            Some((
+                Point3::new(
+                    Length::new::<millimeter>(0.0),
+                    Length::new::<millimeter>(0.0),
+                    Length::new::<millimeter>(10.0)
+                ),
+                Vector3::new(0.0, 0.0, -1.0)
+            ))
         );
-        let s = Sphere::new(10.0, -1.0).unwrap();
+        let s = Sphere::new(
+            Length::new::<millimeter>(10.0),
+            Length::new::<millimeter>(-1.0),
+        )
+        .unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
-            Some((Point3::new(0.0, 0.0, 10.0), Vector3::new(0.0, 0.0, 1.0)))
+            Some((
+                Point3::new(
+                    Length::new::<millimeter>(0.0),
+                    Length::new::<millimeter>(0.0),
+                    Length::new::<millimeter>(10.0)
+                ),
+                Vector3::new(0.0, 0.0, 1.0)
+            ))
         );
     }
     #[test]
@@ -149,9 +208,17 @@ mod test {
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-        let s = Sphere::new(-10.0, 1.0).unwrap();
+        let s = Sphere::new(
+            Length::new::<millimeter>(-10.0),
+            Length::new::<millimeter>(1.0),
+        )
+        .unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
-        let s = Sphere::new(-10.0, -1.0).unwrap();
+        let s = Sphere::new(
+            Length::new::<millimeter>(-10.0),
+            Length::new::<millimeter>(-1.0),
+        )
+        .unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
@@ -166,7 +233,11 @@ mod test {
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-        let s = Sphere::new(10.0, 1.0).unwrap();
+        let s = Sphere::new(
+            Length::new::<millimeter>(10.0),
+            Length::new::<millimeter>(1.0),
+        )
+        .unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
         let ray = Ray::new(
             Point2::new(
@@ -192,10 +263,21 @@ mod test {
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-        let s = Sphere::new(10.0, 1.0).unwrap();
+        let s = Sphere::new(
+            Length::new::<millimeter>(10.0),
+            Length::new::<millimeter>(1.0),
+        )
+        .unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
-            Some((Point3::new(0.0, 1.0, 11.0), Vector3::new(0.0, 1.0, 0.0)))
+            Some((
+                Point3::new(
+                    Length::new::<millimeter>(0.0),
+                    Length::new::<millimeter>(1.0),
+                    Length::new::<millimeter>(11.0)
+                ),
+                Vector3::new(0.0, 1.0, 0.0)
+            ))
         );
         let ray = Ray::new(
             Point2::new(
@@ -209,7 +291,14 @@ mod test {
         .unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
-            Some((Point3::new(0.0, -1.0, 11.0), Vector3::new(0.0, -1.0, 0.0)))
+            Some((
+                Point3::new(
+                    Length::new::<millimeter>(0.0),
+                    Length::new::<millimeter>(-1.0),
+                    Length::new::<millimeter>(11.0)
+                ),
+                Vector3::new(0.0, -1.0, 0.0)
+            ))
         );
     }
 }

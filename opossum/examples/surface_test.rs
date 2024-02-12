@@ -11,7 +11,10 @@ use uom::si::{
 };
 
 fn main() -> OpmResult<()> {
-    let surface = Sphere::new(10.0, 1.0)?; //Plane::new(10.0);
+    let surface = Sphere::new(
+        Length::new::<millimeter>(10.0),
+        Length::new::<millimeter>(1.0),
+    )?; //Plane::new(10.0);
     let ray = Ray::new(
         Point2::new(
             Length::new::<millimeter>(15.0),
