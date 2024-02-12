@@ -1,6 +1,8 @@
 //! An infinitely large flat 2D surface oriented perpendicular to the optical axis.
 
 use super::Surface;
+use crate::error::OpmResult;
+use crate::error::OpossumError;
 use crate::ray::Ray;
 use nalgebra::Point3;
 use nalgebra::Vector3;
@@ -10,9 +12,16 @@ pub struct Plane {
     z: f64,
 }
 impl Plane {
-    #[must_use]
-    pub const fn new(z: f64) -> Self {
-        Self { z }
+    /// Create a new [`Plane`] located at the given z position on the optical axis.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if z is not finite.
+    pub fn new(z: f64) -> OpmResult<Self> {
+        if !z.is_finite() {
+            return Err(OpossumError::Other("z must be finite".into()));
+        }
+        Ok(Self { z })
     }
 }
 
@@ -30,5 +39,18 @@ impl Surface for Plane {
         let intersection_point = Point3::new(ray_position.x, ray_position.y, self.z);
         let normal_vector = Vector3::new(0.0, 0.0, -1.0);
         Some((intersection_point, normal_vector))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn new() {
+        assert!(Plane::new(f64::NAN).is_err());
+        assert!(Plane::new(f64::NEG_INFINITY).is_err());
+        assert!(Plane::new(f64::INFINITY).is_err());
+        let p = Plane::new(1.0).unwrap();
+        assert_eq!(p.z, 1.0);
     }
 }
