@@ -214,7 +214,13 @@ impl Optical for WaveFront {
             let wf_data_opt =
                 rays.get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(1.));
 
-            if wf_data_opt.is_ok() && wf_data_opt.as_ref().unwrap().wavefront_error_maps.len() > 0 {
+            if wf_data_opt.is_ok()
+                && !wf_data_opt
+                    .as_ref()
+                    .unwrap()
+                    .wavefront_error_maps
+                    .is_empty()
+            {
                 let wf_data = wf_data_opt.unwrap();
 
                 props

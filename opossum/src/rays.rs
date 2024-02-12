@@ -15,9 +15,7 @@ use crate::spectrum::Spectrum;
 use image::{DynamicImage, ImageBuffer};
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::{
-    distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Rotation3, Vector2, Vector3,
-};
+use nalgebra::{distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
 use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
@@ -229,6 +227,9 @@ impl Rays {
     ///
     /// # Errors
     /// This function errors for the moment if `center_wavelength_flag` is set to false
+    ///
+    /// # Panics
+    /// This method panics if the usize `to_f64()`conversion fails. This is not expected
     pub fn get_wavefront_data_in_units_of_wvl(
         &self,
         center_wavelength_flag: bool,
@@ -260,7 +261,7 @@ impl Rays {
                 Vec::<WaveFrontErrorMap>::with_capacity(rays_sorted_by_spectrum.len());
             for (idx, rays) in rays_sorted_by_spectrum.iter().enumerate() {
                 if !rays.is_empty() {
-                    let wvl = spec_start + idx.to_f64().unwrap() * spec_res_micro;
+                    let wvl = idx.to_f64().unwrap().mul_add(spec_res_micro, spec_start);
                     wf_error_maps.push(WaveFrontErrorMap::new(
                         &Self::from(rays.clone())
                             .wavefront_error_at_pos_in_units_of_wvl(Length::new::<micrometer>(wvl)),
@@ -280,7 +281,7 @@ impl Rays {
     /// - `wavelength`: wave length that is used for this wavefront calculation
     ///
     /// # Returns
-    /// This method returns a Matrix with 3 columns for the x(1) & y(2) axes and -optical_path(3) and a dynamic number of rows. x & y referes to the transverse extend of the beam with reference to its the optical axis
+    /// This method returns a Matrix with 3 columns for the x(1) & y(2) axes and the negative optical path(3) and a dynamic number of rows. x & y referes to the transverse extend of the beam with reference to its the optical axis
     #[must_use]
     pub fn wavefront_error_at_pos_in_units_of_wvl(&self, wavelength: Length) -> MatrixXx3<f64> {
         let wvl = wavelength.get::<nanometer>();
@@ -676,7 +677,6 @@ mod test {
     use approx::assert_abs_diff_eq;
     use itertools::izip;
     use log::Level;
-    use num::integer::Roots;
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
     #[test]

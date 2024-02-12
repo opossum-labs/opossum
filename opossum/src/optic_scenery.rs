@@ -571,11 +571,13 @@ mod test {
     use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
     use crate::analyzer::RayTraceConfig;
-    use crate::nodes::{Detector, IdealFilter, Metertype, NodeReference, ParaxialSurface, Propagation, RayPropagationVisualizer, Spectrometer, SpotDiagram, WaveFront};
+    use crate::nodes::{
+        Detector, IdealFilter, Metertype, NodeReference, ParaxialSurface, Propagation,
+        RayPropagationVisualizer, Spectrometer, SpotDiagram, WaveFront,
+    };
     use crate::ray::Ray;
     use crate::rays::Rays;
     use crate::SplittingConfig;
-    use itertools::Group;
     use log::Level;
     use nalgebra::Point3;
     use num::Zero;
@@ -843,7 +845,7 @@ mod test {
             .is_err());
     }
     #[test]
-    fn is_source_test(){
+    fn is_source_test() {
         assert!(!BeamSplitter::default().is_source());
         assert!(!Detector::default().is_source());
         assert!(!Dummy::default().is_source());
@@ -868,6 +870,5 @@ mod test {
         let node_ref = scenery.node(idx2).unwrap();
         let not_src_ref = NodeReference::from_node(&node_ref);
         assert!(!not_src_ref.is_source());
-
     }
 }
