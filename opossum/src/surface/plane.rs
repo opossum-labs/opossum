@@ -44,6 +44,13 @@ impl Surface for Plane {
 
 #[cfg(test)]
 mod test {
+    use nalgebra::Point2;
+    use uom::si::{
+        energy::joule,
+        f64::{Energy, Length},
+        length::nanometer,
+    };
+
     use super::*;
     #[test]
     fn new() {
@@ -52,5 +59,70 @@ mod test {
         assert!(Plane::new(f64::INFINITY).is_err());
         let p = Plane::new(1.0).unwrap();
         assert_eq!(p.z, 1.0);
+    }
+    #[test]
+    fn intersect_on_axis() {
+        let s = Plane::new(10.0).unwrap();
+        let ray = Ray::new(
+            Point2::new(
+                Length::new::<millimeter>(0.0),
+                Length::new::<millimeter>(0.0),
+            ),
+            Vector3::new(0.0, 0.0, 1.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.calc_intersect_and_normal(&ray),
+            Some((Point3::new(0.0, 0.0, 10.0), Vector3::new(0.0, 0.0, -1.0)))
+        );
+    }
+    #[test]
+    fn intersect_on_axis_behind() {
+        let s = Plane::new(-10.0).unwrap();
+        let ray = Ray::new(
+            Point2::new(
+                Length::new::<millimeter>(0.0),
+                Length::new::<millimeter>(0.0),
+            ),
+            Vector3::new(0.0, 0.0, 1.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        assert_eq!(s.calc_intersect_and_normal(&ray), None);
+    }
+    #[test]
+    fn intersect_off_axis() {
+        let s = Plane::new(10.0).unwrap();
+        let ray = Ray::new(
+            Point2::new(
+                Length::new::<millimeter>(0.0),
+                Length::new::<millimeter>(1.0),
+            ),
+            Vector3::new(0.0, 0.0, 1.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.calc_intersect_and_normal(&ray),
+            Some((Point3::new(0.0, 1.0, 10.0), Vector3::new(0.0, 0.0, -1.0)))
+        );
+        let ray = Ray::new(
+            Point2::new(
+                Length::new::<millimeter>(0.0),
+                Length::new::<millimeter>(1.0),
+            ),
+            Vector3::new(0.0, 1.0, 1.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.calc_intersect_and_normal(&ray),
+            Some((Point3::new(0.0, 11.0, 10.0), Vector3::new(0.0, 0.0, -1.0)))
+        );
     }
 }
