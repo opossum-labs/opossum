@@ -827,6 +827,31 @@ mod test {
         assert_eq!(rays.rays.len(), 2);
     }
     #[test]
+    fn set_refractive_index() {
+        let mut rays = Rays::default();
+        let ray = Ray::new_collimated(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        let ray = Ray::new_collimated(
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray);
+        assert!(rays.set_refractive_index(0.9).is_err());
+        assert!(rays.set_refractive_index(f64::NAN).is_err());
+        assert!(rays.set_refractive_index(f64::INFINITY).is_err());
+        assert!(rays.set_refractive_index(1.0).is_ok());
+        rays.set_refractive_index(2.0).unwrap();
+        assert_eq!(rays.rays[0].refractive_index(), 2.0);
+        assert_eq!(rays.rays[1].refractive_index(), 2.0);
+    }
+    #[test]
     fn total_energy() {
         let mut rays = Rays::default();
         assert!(rays.total_energy().is_zero());
