@@ -10,6 +10,7 @@ use crate::{
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
+    rays::RayPositionHistory,
     reporter::{NodeReport, PdfReportable},
     SplittingConfig,
 };
@@ -481,6 +482,8 @@ pub enum Proptype {
     SpotDiagram(SpotDiagram),
     /// This property stores the wavefront Information [`WaveFrontData`]
     WaveFrontStats(WaveFrontData),
+    /// This property stores the ray position history of all [`Rays`] during propagation through the optic scenery
+    RayPositionHistory(RayPositionHistory),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
     /// a geometrical length
@@ -559,6 +562,8 @@ impl PdfReportable for Proptype {
             Self::Energy(value) => l.push(genpdf::elements::Paragraph::new(format_quantity(
                 joule, *value,
             ))),
+            Self::RayPositionHistory(value) => l.push(value.pdf_report()?),
+
             _ => l.push(
                 genpdf::elements::Paragraph::default()
                     .styled_string("unknown property type", style::Effect::Italic),

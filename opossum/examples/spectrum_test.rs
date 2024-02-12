@@ -1,5 +1,8 @@
+use std::path::Path;
+
+use opossum::plottable::PltBackEnd;
 use opossum::spectrum::Spectrum;
-use opossum::{error::OpmResult, spectrum_helper::create_visible_spec};
+use opossum::{error::OpmResult, plottable::Plottable, spectrum_helper::create_visible_spec};
 use uom::si::{f64::Length, length::nanometer};
 
 fn main() -> OpmResult<()> {
@@ -34,15 +37,24 @@ fn main() -> OpmResult<()> {
         0.02,
     )?;
     s.sub(&s3);
-    todo!();
-    // s.to_svg_plot(Path::new("./opossum/spectrum.svg"))?;
+    s.to_plot(
+        Path::new("./opossum/playground/spectrum.svg"),
+        (1000, 800),
+        PltBackEnd::SVG,
+    )?;
 
-    let s4 = Spectrum::from_csv("./opossum/NE03B.csv")?;
-    todo!();
-    // s4.to_svg_plot(Path::new("./opossum/ne03b_raw.svg"))?;
+    let s4 = Spectrum::from_csv("./opossum/playground/NE03B.csv")?;
+    s4.to_plot(
+        Path::new("./opossum/playground/ne03b_raw.svg"),
+        (1000, 800),
+        PltBackEnd::SVG,
+    )?;
     let mut s5 = create_visible_spec();
     s5.resample(&s4);
-    todo!();
-    // s5.to_svg_plot(Path::new("./opossum/ne03b.svg"))?;
+    s5.to_plot(
+        Path::new("./opossum/playground/ne03b.svg"),
+        (1000, 800),
+        PltBackEnd::SVG,
+    )?;
     Ok(())
 }

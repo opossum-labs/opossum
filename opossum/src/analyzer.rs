@@ -24,8 +24,10 @@ pub enum AnalyzerType {
     RayTrace(RayTraceConfig),
 }
 
-#[derive(Default, Debug, PartialEq)]
-enum RayTracingMode {
+/// enum to define the mode of the raytracing analysis.
+/// Currently only sequential mode
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone)]
+pub enum RayTracingMode {
     #[default]
     /// Sequential mode
     ///
@@ -57,6 +59,12 @@ impl RayTraceConfig {
     #[must_use]
     pub fn min_energy_per_ray(&self) -> Energy {
         self.min_energy_per_ray
+    }
+
+    /// Returns the ray-tracing mode of this config.
+    #[must_use]
+    pub const fn mode(&self) -> RayTracingMode {
+        self.mode
     }
 
     /// Sets the min energy per ray during analysis. Rays with energies lower than this limit will be dropped.

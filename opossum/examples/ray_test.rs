@@ -1,4 +1,4 @@
-use nalgebra::Point2;
+use nalgebra::Point3;
 use opossum::ray::Ray;
 use uom::num_traits::Zero;
 use uom::si::energy::joule;
@@ -34,7 +34,11 @@ impl SRay {
 }
 fn main() -> OpmResult<()> {
     let mut ray = Ray::new_collimated(
-        Point2::new(Length::zero(), Length::new::<millimeter>(10.0)),
+        Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(10.0),
+            Length::zero(),
+        ),
         Length::new::<nanometer>(1053.0),
         Energy::new::<joule>(1.0),
     )?;

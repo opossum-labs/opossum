@@ -107,6 +107,10 @@ pub trait Optical: Dottable {
     fn is_detector(&self) -> bool {
         false
     }
+    /// Returns `true` if the [`Optical`] represents a detector that can report analysis data.
+    fn is_source(&self) -> bool {
+        false
+    }
     /// Returns `true` if this [`Optical`] is inverted. The default implementation returns `false`.
     // fn inverted(&self) -> bool {
     //     false

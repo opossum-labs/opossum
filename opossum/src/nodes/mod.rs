@@ -8,6 +8,8 @@ mod ideal_filter;
 mod lens;
 mod paraxial_surface;
 mod propagation;
+/// ray propagation visualizer node
+pub mod ray_propagation_detector;
 mod reference;
 mod source;
 mod spectrometer;
@@ -40,6 +42,7 @@ pub use spectrometer::SpectrometerType;
 
 pub use spot_diagram::SpotDiagram;
 
+pub use ray_propagation_detector::RayPropagationVisualizer;
 pub use wavefront::{WaveFront, WaveFrontErrorMap};
 
 use uuid::Uuid;
@@ -110,6 +113,10 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         )),
         "paraxial" => Ok(OpticRef::new(
             Rc::new(RefCell::new(ParaxialSurface::default())),
+            uuid,
+        )),
+        "ray propagation" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(RayPropagationVisualizer::default())),
             uuid,
         )),
         _ => Err(OpossumError::Other(format!(

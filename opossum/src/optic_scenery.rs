@@ -348,6 +348,7 @@ impl OpticScenery {
 
             node.optical_ref.borrow().export_data(report_dir)?;
         }
+
         Ok(analysis_report)
     }
     /// Save this [`OpticScenery`] to an .opm file with the given path
@@ -561,6 +562,7 @@ impl PdfReportable for OpticScenery {
             .map_err(|e| format!("failed to add diagram to report: {e}"))?
             .with_alignment(Alignment::Center);
         l.push(img);
+
         Ok(l)
     }
 }
@@ -574,7 +576,7 @@ mod test {
     use crate::rays::Rays;
     use crate::SplittingConfig;
     use log::Level;
-    use nalgebra::Point2;
+    use nalgebra::Point3;
     use num::Zero;
     use std::path::PathBuf;
     use std::{fs::File, io::Read};
@@ -783,7 +785,7 @@ mod test {
         let mut rays = Rays::default();
         rays.add_ray(
             Ray::new_collimated(
-                Point2::new(Length::zero(), Length::zero()),
+                Point3::new(Length::zero(), Length::zero(), Length::zero()),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
             )
@@ -791,7 +793,7 @@ mod test {
         );
         rays.add_ray(
             Ray::new_collimated(
-                Point2::new(Length::zero(), Length::zero()),
+                Point3::new(Length::zero(), Length::zero(), Length::zero()),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(0.1),
             )

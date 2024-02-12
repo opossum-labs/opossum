@@ -175,29 +175,15 @@ impl PdfReportable for SpotDiagram {
 }
 
 impl Plottable for SpotDiagram {
-    fn to_plot(
-        &self,
-        f_path: &Path,
-        img_size: (u32, u32),
-        backend: PltBackEnd,
-    ) -> OpmResult<Option<RgbImage>> {
-        let mut plt_params = PlotParameters::default();
-        match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
-            _ => plt_params
-                .set(&PlotArgs::FName(
-                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))?
-                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
-                .set(&PlotArgs::FigSize(img_size))?,
-        };
-        plt_params.set(&PlotArgs::Backend(backend))?;
+    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
+        plt_params
+            .set(&PlotArgs::XLabel("distance in mm".into()))?
+            .set(&PlotArgs::YLabel("distance in mm".into()))?;
+        Ok(())
+    }
 
-        let plt_type = PlotType::Scatter2D(plt_params);
-
-        let plt_data_opt = self.get_plot_data(&plt_type)?;
-
-        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
+        PlotType::Scatter2D(plt_params.clone())
     }
 
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {

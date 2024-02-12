@@ -7,6 +7,7 @@ use colorous::Gradient;
 use delaunator::{triangulate, Point};
 use image::RgbImage;
 use itertools::{iproduct, izip};
+use kahan::KahanSum;
 use log::warn;
 use nalgebra::{
     ComplexField, DMatrix, DVector, DVectorSlice, Matrix1xX, Matrix3xX, MatrixXx1, MatrixXx2,
@@ -40,10 +41,10 @@ pub enum PlotType {
     Line2D(PlotParameters),
     // ///Line plot in three dimensions for 3D data
     // Line3D,
-    // ///Line plot for multiple lines, e.g. rays, in two dimensions with pairwise data
-    // MultiLine2D,
-    // ///Line plot for multiple lines, e.g. rays, in three dimensions with 3D data
-    // MultiLine3D,
+    ///Line plot for multiple lines, e.g. rays, in two dimensions with pairwise data
+    MultiLine2D(PlotParameters),
+    ///Line plot for multiple lines, e.g. rays, in three dimensions with 3D data
+    MultiLine3D(PlotParameters),
     ///2D color plot of gridded data with color representing the amplitude over an x-y grid
     ColorMesh(PlotParameters),
 
@@ -61,6 +62,8 @@ impl PlotType {
             | Self::Scatter2D(p)
             | Self::Line2D(p)
             | Self::ColorTriangulated(p)
+            | Self::MultiLine3D(p)
+            | Self::MultiLine2D(p)
             | Self::TriangulatedSurface(p) => p,
         }
     }
@@ -70,6 +73,8 @@ impl PlotType {
             | Self::Scatter2D(p)
             | Self::Line2D(p)
             | Self::ColorTriangulated(p)
+            | Self::MultiLine3D(p)
+            | Self::MultiLine2D(p)
             | Self::TriangulatedSurface(p) => p,
         }
     }
@@ -86,6 +91,8 @@ impl PlotType {
             Self::ColorTriangulated(_) => Self::plot_color_triangulated(plot, backend),
             Self::Scatter2D(_) => Self::plot_2d_scatter(plot, backend),
             Self::Line2D(_) => Self::plot_2d_line(plot, backend),
+            Self::MultiLine3D(_) => Self::plot_3d_multi_line(plot, backend),
+            Self::MultiLine2D(_) => Self::plot_2d_multi_line(plot, backend),
         };
 
         Ok(())
@@ -152,7 +159,7 @@ impl PlotType {
         }
     }
 
-    fn draw_line<T: DrawingBackend>(
+    fn draw_line_2d<T: DrawingBackend>(
         chart: &mut ChartContext<'_, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
         x: &DVectorSlice<'_, f64>,
         y: &DVectorSlice<'_, f64>,
@@ -161,6 +168,25 @@ impl PlotType {
         chart
             .draw_series(LineSeries::new(
                 izip!(x, y).map(|xy| (*xy.0, *xy.1)),
+                line_color,
+            ))
+            .unwrap();
+    }
+
+    fn draw_line_3d<T: DrawingBackend>(
+        chart: &mut ChartContext<
+            '_,
+            T,
+            Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>,
+        >,
+        x: &DVectorSlice<'_, f64>,
+        y: &DVectorSlice<'_, f64>,
+        z: &DVectorSlice<'_, f64>,
+        line_color: &RGBAColor,
+    ) {
+        chart
+            .draw_series(LineSeries::new(
+                izip!(x, y, z).map(|xyz| (*xyz.0, *xyz.1, *xyz.2)),
                 line_color,
             ))
             .unwrap();
@@ -240,10 +266,14 @@ impl PlotType {
     fn check_equistancy_of_mesh(ax_vals: &MatrixXx1<f64>) -> bool {
         let len_ax = ax_vals.len();
         let mut equi = true;
-        if len_ax > 1 {
-            let distance = ax_vals[1] - ax_vals[0];
+        if len_ax > 2 {
+            let mut distance = KahanSum::new_with_value(ax_vals[1]);
+            distance += -ax_vals[0];
             for idx in 2..len_ax {
-                if (distance - (ax_vals[idx] - ax_vals[idx - 1])).abs() > f64::EPSILON {
+                let mut diff = KahanSum::new_with_value(ax_vals[idx]);
+                diff += -ax_vals[idx - 1];
+                diff += -distance.sum();
+                if (diff.sum() / distance.sum()).abs() > 100. * f64::EPSILON {
                     equi = false;
                     break;
                 }
@@ -252,18 +282,18 @@ impl PlotType {
         equi
     }
 
-    fn get_ax_val_distance_if_equidistant(ax_vals: &MatrixXx1<f64>) -> OpmResult<f64> {
+    fn get_ax_val_distance_if_equidistant(ax_vals: &MatrixXx1<f64>) -> f64 {
         let mut dist = (ax_vals[1] - ax_vals[0]) / 2.;
         if Self::check_equistancy_of_mesh(ax_vals) {
             if dist <= 2. * f64::EPSILON {
                 dist = 0.5;
             }
         } else {
-            return Err(OpossumError::Other(
-                "Warning! The points on this axis are not equistant!".into(),
-            ));
+            warn!(
+                "Warning! The points on this axis are not equistant!\n This may distort the plot!"
+            );
         };
-        Ok(dist)
+        dist
     }
 
     fn draw_2d_colormesh<T: DrawingBackend>(
@@ -275,16 +305,7 @@ impl PlotType {
         cbounds: AxLims,
     ) {
         let x_dist = Self::get_ax_val_distance_if_equidistant(x_ax);
-        if x_dist.is_err() {
-            return;
-        };
         let y_dist = Self::get_ax_val_distance_if_equidistant(y_ax);
-        if y_dist.is_err() {
-            return;
-        };
-
-        let x_dist = x_dist.unwrap();
-        let y_dist = y_dist.unwrap();
 
         let (z_shape_rows, z_shape_cols) = z_dat.shape();
         if z_shape_rows != y_ax.len() || z_shape_cols != x_ax.len() {
@@ -320,7 +341,7 @@ impl PlotType {
                 true,
                 true,
             );
-            Self::draw_line(&mut chart, &dat.column(0), &dat.column(1), &plt.color);
+            Self::draw_line_2d(&mut chart, &dat.column(0), &dat.column(1), &plt.color);
         }
 
         root.present().unwrap();
@@ -401,18 +422,57 @@ impl PlotType {
         }
     }
 
+    fn plot_2d_multi_line<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
+        if let Some(PlotData::MultiDim2(dat)) = plt.get_data() {
+            _ = root.fill(&WHITE);
+            //main plot
+            //currently there is no support for axes labels in 3d plots
+            let mut chart = Self::create_2d_plot_chart(
+                root,
+                plt.bounds.x.unwrap(),
+                plt.bounds.y.unwrap(),
+                &plt.label,
+                true,
+                true,
+            );
+
+            for line_dat in dat {
+                Self::draw_line_2d(
+                    &mut chart,
+                    &line_dat.column(0),
+                    &line_dat.column(1),
+                    &RGBAColor(255, 0, 0, 0.3),
+                );
+            }
+        }
+    }
+
+    fn plot_3d_multi_line<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
+        if let Some(PlotData::MultiDim3(dat)) = plt.get_data() {
+            _ = root.fill(&WHITE);
+            //main plot
+            //currently there is no support for axes labels in 3d plots
+            let mut chart = Self::create_3d_plot_chart(root, plt);
+
+            for line_dat in dat {
+                Self::draw_line_3d(
+                    &mut chart,
+                    &line_dat.column(0),
+                    &line_dat.column(1),
+                    &line_dat.column(2),
+                    &RGBAColor(255, 0, 0, 0.3),
+                );
+            }
+        }
+    }
+
     fn plot_triangulated_surface<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
         if let Some(PlotData::TriangulatedSurface(triangle_index, dat)) = plt.get_data() {
             _ = root.fill(&WHITE);
 
             //main plot
             //currently there is no support for axes labels in 3d plots
-            let mut chart = Self::create_3d_plot_chart(
-                root,
-                plt.bounds.x.unwrap(),
-                plt.bounds.z.unwrap(),
-                plt.bounds.y.unwrap(),
-            );
+            let mut chart = Self::create_3d_plot_chart(root, plt);
 
             Self::draw_triangle_surf(
                 &mut chart,
@@ -474,13 +534,16 @@ impl PlotType {
         root.present().unwrap();
     }
 
-    fn create_3d_plot_chart<T: DrawingBackend>(
-        root: &DrawingArea<T, Shift>,
-        x_bounds: AxLims,
-        y_bounds: AxLims,
-        z_bounds: AxLims,
-    ) -> ChartContext<'_, T, Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>> {
+    fn create_3d_plot_chart<'a, T: DrawingBackend>(
+        root: &'a DrawingArea<T, Shift>,
+        plot: &Plot,
+    ) -> ChartContext<'a, T, Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>> {
         root.fill(&WHITE).unwrap();
+
+        //plotters axes are defined with z going upwards. therefore, I change this
+        let x_bounds = plot.bounds.x.unwrap();
+        let y_bounds = plot.bounds.y.unwrap();
+        let z_bounds = plot.bounds.z.unwrap();
 
         let mut chart = ChartBuilder::on(root)
             .margin(20)
@@ -494,8 +557,8 @@ impl PlotType {
 
         chart.with_projection(
             |mut pb: plotters::coord::ranged3d::ProjectionMatrixBuilder| {
-                pb.pitch = 20. / 180. * PI;
-                pb.yaw = 20. / 180. * PI;
+                pb.pitch = 0. / 180. * PI;
+                pb.yaw = -90. / 180. * PI;
                 pb.scale = 0.7;
                 pb.into_matrix()
             },
@@ -595,10 +658,10 @@ pub enum PlotData {
     Dim2(MatrixXx2<f64>),
     ///Triplet 3D data (e.g. x, y, z data) for scatter3D, Line3D or colorscatter. Data Structure as Matrix with N rows and three columns (x,y,z)
     Dim3(MatrixXx3<f64>),
-    // ///Vector of pairwise 2D data (e.g. x, y data) for MultiLine2D. Data Structure as Vector filled with Matrices with N rows and two columns (x,y)
-    // MultiDim2(Vec<MatrixXx2<f64>>),
-    // ///Vector of triplet 3D data (e.g. x, y, z data) for MultiLine3D. Data Structure as Vector filled with Matrices with N rows and three columns (x,y,z)
-    // MultiDim3(Vec<MatrixXx3<f64>>),
+    ///Vector of pairwise 2D data (e.g. x, y data) for MultiLine2D. Data Structure as Vector filled with Matrices with N rows and two columns (x,y)
+    MultiDim2(Vec<MatrixXx2<f64>>),
+    ///Vector of triplet 3D data (e.g. x, y, z data) for MultiLine3D. Data Structure as Vector filled with Matrices with N rows and three columns (x,y,z)
+    MultiDim3(Vec<MatrixXx3<f64>>),
     /// Data to create a 2d colormesh plot. Vector with N entries for x, Vector with M entries for y and a Matrix with NxM entries for the colordata
     ColorMesh(DVector<f64>, DVector<f64>, DMatrix<f64>), // ColorScatter(DVector<f64>, DVector<f64>, DMatrix<f64>)
     /// Data to create a 2d triangulated color plot.
@@ -651,6 +714,41 @@ impl PlotData {
                     self.get_min_max_data_values(&DVectorSlice::from(y)),
                     self.get_min_max_data_values(&z_flat.column(0)),
                 ]
+            }
+            Self::MultiDim3(dat) => {
+                let num_cols = dat[0].row(0).len();
+                let mut min_max = MatrixXx3::zeros(dat.len() * 2);
+                for (row, d) in dat.iter().enumerate() {
+                    for col in 0..num_cols {
+                        let axlim = self.get_min_max_data_values(&d.column(col));
+                        min_max[(2 * row, col)] = axlim.min;
+                        min_max[(2 * row + 1, col)] = axlim.max;
+                    }
+                }
+
+                let mut ax_lim_vec = Vec::<AxLims>::new();
+                for col in 0..num_cols {
+                    ax_lim_vec.push(self.get_min_max_data_values(&min_max.column(col)));
+                }
+                ax_lim_vec
+            }
+
+            Self::MultiDim2(dat) => {
+                let num_cols = dat[0].row(0).len();
+                let mut min_max = MatrixXx2::zeros(dat.len() * 2);
+                for (row, d) in dat.iter().enumerate() {
+                    for col in 0..num_cols {
+                        let axlim = self.get_min_max_data_values(&d.column(col));
+                        min_max[(2 * row, col)] = axlim.min;
+                        min_max[(2 * row + 1, col)] = axlim.max;
+                    }
+                }
+
+                let mut ax_lim_vec = Vec::<AxLims>::new();
+                for col in 0..num_cols {
+                    ax_lim_vec.push(self.get_min_max_data_values(&min_max.column(col)));
+                }
+                ax_lim_vec
             }
         }
     }
@@ -788,11 +886,10 @@ pub trait Plottable {
     /// Whether an error is thrown depends on the individual implementation of the method
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>>;
 
-    /// This method must be implemented in order to create a plot.
-    /// As the plot data may differ, the implementation must be done for each kind of plot
+    /// This method handles the plot creation for a specific data type or node type
     /// # Attributes
     /// - `f_path`: path to the file
-    /// - `img_size`: the size of the image in pixels
+    /// - `img_size`: the size of the image in pixels: (width, height)
     /// - `backend`: used backend to create the plot. See [`PltBackEnd`]
     /// # Errors
     /// Whether an error is thrown depends on the individual implementation of the method
@@ -801,7 +898,41 @@ pub trait Plottable {
         f_path: &Path,
         img_size: (u32, u32),
         backend: PltBackEnd,
-    ) -> OpmResult<Option<RgbImage>>;
+    ) -> OpmResult<Option<RgbImage>> {
+        let mut plt_params = PlotParameters::default();
+        match backend {
+            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
+            _ => plt_params
+                .set(&PlotArgs::FName(
+                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
+                ))?
+                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
+                .set(&PlotArgs::FigSize(img_size))?,
+        };
+        plt_params.set(&PlotArgs::Backend(backend))?;
+
+        let _ = self.add_plot_specific_params(&mut plt_params);
+
+        let plt_type = self.get_plot_type(&plt_params);
+
+        let plt_data_opt = self.get_plot_data(&plt_type)?;
+
+        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+    }
+
+    /// This method must be implemented in order to create a plot.
+    /// As the plot data may differ, the implementation must be done for each kind of plot
+    /// # Returns
+    /// This method returns the [`PlotParameters`] of this [`Plot`]
+    /// # Errors
+    /// This method errors if setting a plot parameter fails
+    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()>;
+
+    /// This method must be implemented in order to create a plot.
+    /// As the plot type may differ, the implementation must be done for each kind of plot
+    /// # Returns
+    /// This method returns the [`PlotType`] of this [`Plot`]
+    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType;
 
     /// This method triangulates [`PlotData`] of the variant Dim3,
     /// # Attributes
@@ -1488,7 +1619,7 @@ impl PlotParameters {
             Ok(self)
         } else {
             Err(OpossumError::Other(format!(
-                "Parameter of plot argument \"{plt_arg:?}\" is invalid!"
+                "Parameter of plot argument \"{plt_arg:?}\" is invalid and could not be set!"
             )))
         }
     }
@@ -1718,15 +1849,19 @@ fn _meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f
 fn linspace(start: f64, end: f64, num: f64) -> OpmResult<Matrix1xX<f64>> {
     let num_usize = num.to_usize();
     if num_usize.is_some() {
-        let mut linspace = Matrix1xX::<f64>::from_element(num_usize.unwrap(), start);
-        let bin_size = (end - start)
-            / (num_usize
-                .unwrap()
-                .to_f64()
-                .expect("Cast from usize to f64 may truncate the value!")
-                - 1.);
-        for (i, val) in (0_u32..).zip(linspace.iter_mut()) {
-            *val += bin_size * f64::from(i);
+        let mut linspace = Matrix1xX::<f64>::zeros(num_usize.unwrap());
+        let mut range = KahanSum::<f64>::new_with_value(end);
+        range += -start;
+
+        let mut steps = KahanSum::<f64>::new_with_value(num);
+        steps += -1.;
+
+        let bin_size = range.sum() / steps.sum();
+
+        let mut summator: KahanSum<f64> = KahanSum::<f64>::new_with_value(start);
+        for val in linspace.iter_mut() {
+            *val = summator.sum();
+            summator += bin_size;
         }
         Ok(linspace)
     } else {
@@ -1914,10 +2049,11 @@ mod test {
     #[test]
     fn plot_params_fdir() {
         let mut plt_params = PlotParameters::default();
+        let current_dir = current_dir().unwrap();
         plt_params
-            .set(&PlotArgs::FDir(PathBuf::from(".\\")))
+            .set(&PlotArgs::FDir(current_dir.clone()))
             .unwrap();
-        assert_eq!(plt_params.get_fdir().unwrap(), PathBuf::from(".\\"));
+        assert_eq!(plt_params.get_fdir().unwrap(), current_dir);
     }
     #[test]
     fn plot_params_fname() {
@@ -2396,19 +2532,20 @@ mod test {
     fn get_ax_val_distance_if_equidistant_test() {
         let x = linspace(0., 1., 101.).unwrap().transpose();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
-        assert!((dist.unwrap() - 0.005).abs() < f64::EPSILON);
-
-        let x = MatrixXx1::from_vec(vec![0., 1., 3.]);
-        let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
-        assert!(dist.is_err());
+        assert!((dist - 0.005).abs() < f64::EPSILON);
 
         let x = linspace(0., f64::EPSILON, 101.).unwrap().transpose();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
-        assert!((dist.unwrap() - 0.5).abs() < f64::EPSILON);
+        assert!((dist - 0.5).abs() < f64::EPSILON);
     }
     #[test]
     fn check_equistancy_of_mesh_test() {
         let x = linspace(0., 1., 101.).unwrap().transpose();
+        assert!(PlotType::check_equistancy_of_mesh(&x));
+
+        let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100.)
+            .unwrap()
+            .transpose();
         assert!(PlotType::check_equistancy_of_mesh(&x));
 
         let x = MatrixXx1::from_vec(vec![0., 1., 3.]);

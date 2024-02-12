@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! Module for handling optical rays
-use nalgebra::{Point2, Point3, Vector3};
+use nalgebra::{MatrixXx3, Point3, Vector3};
 use num::Zero;
 use serde_derive::{Deserialize, Serialize};
 use uom::si::{
@@ -71,7 +71,7 @@ impl Ray {
     ///  - the given wavelength is <= 0.0, `NaN` or +inf
     ///  - the given energy is < 0.0, `NaN` or +inf
     pub fn new_collimated(
-        position: Point2<Length>,
+        position: Point3<Length>,
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
@@ -79,7 +79,7 @@ impl Ray {
     }
     /// Creates a new [`Ray`].
     ///
-    /// The dircetion vector is normalized. The direction is thus stored aa (`direction cosine`)[`https://en.wikipedia.org/wiki/Direction_cosine`]
+    /// The dircetion vector is normalized. The direction is thus stored as (`direction cosine`)[`https://en.wikipedia.org/wiki/Direction_cosine`]
     ///
     /// # Errors
     /// This function returns an error if
@@ -87,7 +87,7 @@ impl Ray {
     ///  - the given energy is < 0.0, `NaN` or +inf
     ///  - the direction vector has a zero length
     pub fn new(
-        position: Point2<Length>,
+        position: Point3<Length>,
         direction: Vector3<f64>,
         wave_length: Length,
         energy: Energy,
@@ -142,14 +142,13 @@ impl Ray {
 
     /// Returns the position history of this [`Ray`].
     #[must_use]
-    pub fn position_history(&self) -> Vec<Point3<Length>> {
-        let mut pos_mm = Vec::<Point3<Length>>::with_capacity(self.pos_hist.len());
-        for pos in &self.pos_hist {
-            pos_mm.push(Point3::new(
-                Length::new::<millimeter>(pos.x),
-                Length::new::<millimeter>(pos.y),
-                Length::new::<millimeter>(pos.z),
-            ));
+    pub fn position_history_in_mm(&self) -> MatrixXx3<f64> {
+        let mut pos_mm = MatrixXx3::zeros(self.pos_hist.len());
+
+        for (idx, pos) in self.pos_hist.iter().enumerate() {
+            pos_mm[(idx, 0)] = pos.x;
+            pos_mm[(idx, 1)] = pos.y;
+            pos_mm[(idx, 2)] = pos.z;
         }
         pos_mm
     }
@@ -298,9 +297,10 @@ mod test {
     use uom::si::{energy::joule, length::nanometer};
     #[test]
     fn new_collimated() {
-        let position = Point2::new(
+        let position = Point3::new(
             Length::new::<millimeter>(1.0),
             Length::new::<millimeter>(2.0),
+            Length::new::<millimeter>(0.0),
         );
         let ray = Ray::new_collimated(
             position,
@@ -377,9 +377,10 @@ mod test {
     }
     #[test]
     fn new() {
-        let position = Point2::new(
+        let position = Point3::new(
             Length::new::<millimeter>(1.0),
             Length::new::<millimeter>(2.0),
+            Length::new::<millimeter>(0.0),
         );
         let direction = Vector3::new(0.0, 0.0, 2.0);
         let ray = Ray::new(
@@ -481,7 +482,7 @@ mod test {
         let wvl = Length::new::<nanometer>(1053.0);
         let energy = Energy::new::<joule>(1.0);
         let mut ray = Ray::new(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Vector3::new(0.0, 0.0, 1.0),
             wvl,
             energy,
@@ -524,7 +525,7 @@ mod test {
             )
         );
         let mut ray = Ray::new(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Vector3::new(0.0, 1.0, 1.0),
             wvl,
             energy,
@@ -550,7 +551,7 @@ mod test {
             )
         );
         let mut ray = Ray::new(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Vector3::new(0.0, 1.0, 0.0),
             wvl,
             energy,
@@ -563,7 +564,7 @@ mod test {
     #[test]
     fn refract_paraxial() {
         let mut ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -596,9 +597,10 @@ mod test {
         assert_eq!(ray.pos, ray_pos);
         assert_eq!(ray.dir, ray_dir);
         let mut ray = Ray::new_collimated(
-            Point2::new(
+            Point3::new(
                 Length::new::<millimeter>(1.0),
                 Length::new::<millimeter>(2.0),
+                Length::new::<millimeter>(0.0),
             ),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
@@ -622,7 +624,11 @@ mod test {
         assert_abs_diff_eq!(ray.dir.z, test_ray_dir.z);
 
         let mut ray = Ray::new(
-            Point2::new(Length::zero(), Length::new::<millimeter>(10.0)),
+            Point3::new(
+                Length::zero(),
+                Length::new::<millimeter>(10.0),
+                Length::zero(),
+            ),
             Vector3::new(0.0, 0.0, 1.0),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
@@ -637,7 +643,11 @@ mod test {
     }
     #[test]
     fn filter_energy() {
-        let position = Point2::new(Length::zero(), Length::new::<millimeter>(1.0));
+        let position = Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(1.0),
+            Length::zero(),
+        );
         let wvl = Length::new::<nanometer>(1054.0);
         let ray = Ray::new_collimated(position, wvl, Energy::new::<joule>(1.0)).unwrap();
         let new_ray = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
@@ -650,7 +660,11 @@ mod test {
     }
     #[test]
     fn filter_spectrum() {
-        let position = Point2::new(Length::zero(), Length::new::<millimeter>(1.0));
+        let position = Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(1.0),
+            Length::zero(),
+        );
         let e_1j = Energy::new::<joule>(1.0);
         let ray = Ray::new_collimated(position, Length::new::<nanometer>(502.0), e_1j).unwrap();
         let mut spec_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -675,7 +689,7 @@ mod test {
     #[test]
     fn split_by_ratio() {
         let mut ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1054.0),
             Energy::new::<joule>(1.0),
         )
@@ -692,7 +706,7 @@ mod test {
     #[test]
     fn split_by_spectrum() {
         let mut ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1000.0),
             Energy::new::<joule>(1.0),
         )
@@ -710,7 +724,7 @@ mod test {
         assert_eq!(ray.energy(), Energy::new::<joule>(0.0));
         assert_eq!(split_ray.energy(), Energy::new::<joule>(1.0));
         let mut ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1001.0),
             Energy::new::<joule>(1.0),
         )
@@ -719,7 +733,7 @@ mod test {
         assert_eq!(ray.energy(), Energy::zero());
         assert_eq!(split_ray.energy(), Energy::new::<joule>(1.0));
         let mut ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(999.0),
             Energy::new::<joule>(1.0),
         )
@@ -731,7 +745,7 @@ mod test {
     #[test]
     fn split_by_spectrum_fail() {
         let mut ray = Ray::new_collimated(
-            Point2::new(Length::zero(), Length::zero()),
+            Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1501.0),
             Energy::new::<joule>(1.0),
         )

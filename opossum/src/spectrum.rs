@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling optical spectra
 use crate::error::{OpmResult, OpossumError};
+use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable};
 use csv::ReaderBuilder;
 use kahan::KahanSummator;
 use log::warn;
@@ -460,17 +461,30 @@ impl Spectrum {
             })
             .collect();
     }
+}
 
-    ///Retrieves the plot data of the spectrum
-    #[must_use]
-    pub fn get_plot_data(&self) -> MatrixXx2<f64> {
+impl Plottable for Spectrum {
+    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
         let data = self.data.clone();
         let mut spec_mat = MatrixXx2::zeros(data.len());
         for (i, s) in data.iter().enumerate() {
             spec_mat[(i, 0)] = s.0;
             spec_mat[(i, 1)] = s.1;
         }
-        spec_mat
+        match plt_type {
+            PlotType::Line2D(_) | PlotType::Scatter2D(_) => Ok(Some(PlotData::Dim2(spec_mat))),
+            _ => Ok(None),
+        }
+    }
+    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
+        plt_params
+            .set(&PlotArgs::XLabel("wavelength in nm".into()))?
+            .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?;
+        Ok(())
+    }
+
+    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
+        PlotType::Line2D(plt_params.clone())
     }
 }
 

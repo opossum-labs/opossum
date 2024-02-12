@@ -2,7 +2,10 @@ use std::path::Path;
 
 use opossum::{
     error::OpmResult,
-    nodes::{create_point_ray_source, ParaxialSurface, Propagation, WaveFront},
+    nodes::{
+        create_point_ray_source, ray_propagation_detector::RayPropagationVisualizer,
+        ParaxialSurface, Propagation,
+    },
     OpticScenery,
 };
 use petgraph::prelude::NodeIndex;
@@ -32,7 +35,7 @@ fn main() -> OpmResult<()> {
     let dist2 = scenery.add_node(Propagation::new("gap", Length::new::<millimeter>(100.0))?);
     scenery.connect_nodes(lens, "rear", dist2, "front")?;
     let mut last_node = dist2;
-    for _i in 0usize..2 {
+    for _i in 0usize..1 {
         let l1 = scenery.add_node(ParaxialSurface::new("f", Length::new::<millimeter>(100.0))?);
         let d1 = scenery.add_node(Propagation::new("2f", Length::new::<millimeter>(200.0))?);
         let l2 = scenery.add_node(ParaxialSurface::new("f", Length::new::<millimeter>(100.0))?);
@@ -43,7 +46,7 @@ fn main() -> OpmResult<()> {
         scenery.connect_nodes(l2, "rear", d2, "front")?;
         last_node = d2;
     }
-    let wf = scenery.add_node(WaveFront::new("wf"));
+    let wf = scenery.add_node(RayPropagationVisualizer::new("ray_prop"));
 
     scenery.connect_nodes(last_node, "rear", wf, "in1")?;
 

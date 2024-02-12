@@ -1,6 +1,7 @@
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info};
+use opossum::analyzer::AnalyzerType;
 use opossum::error::OpmResult;
 use opossum::reporter::ReportGenerator;
 use opossum::{
@@ -53,6 +54,7 @@ fn create_report_file(
     report_directory: &Path,
     fname: &str,
     scenery: &OpticScenery,
+    analyzer: &AnalyzerType,
 ) -> OpmResult<()> {
     let mut output =
         create_dot_or_report_file_instance(report_directory, fname, "json", "detector report")?;
@@ -67,7 +69,7 @@ fn create_report_file(
     let pdf_generator = ReportGenerator::new(analysis_report);
     let mut report_path = report_directory.to_path_buf();
     report_path.push("report.pdf");
-    pdf_generator.generate_pdf(&report_path)?;
+    pdf_generator.generate_pdf(&report_path, analyzer)?;
     Ok(())
 }
 
@@ -98,7 +100,12 @@ fn main() -> OpmResult<()> {
         return Ok(());
     }
     //create the report file
-    create_report_file(&opossum_args.report_directory, "report", &scenery)
+    create_report_file(
+        &opossum_args.report_directory,
+        "report",
+        &scenery,
+        &opossum_args.analyzer,
+    )
 }
 
 #[cfg(test)]
@@ -157,10 +164,12 @@ mod test {
         let scenery =
             read_and_parse_model(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
                 .unwrap();
+
         let report_file = create_report_file(
             &PathBuf::from("./files_for_testing/report/_not_valid/"),
             "create_report_file_test",
             &scenery,
+            &AnalyzerType::Energy,
         );
         assert!(report_file.is_err());
     }

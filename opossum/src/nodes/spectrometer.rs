@@ -257,50 +257,24 @@ impl PdfReportable for Spectrometer {
 }
 
 impl Plottable for Spectrometer {
-    fn to_plot(
-        &self,
-        f_path: &Path,
-        img_size: (u32, u32),
-        backend: PltBackEnd,
-    ) -> OpmResult<Option<RgbImage>> {
-        let mut plt_params = PlotParameters::default();
-        match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
-            _ => plt_params
-                .set(&PlotArgs::FName(
-                    f_path.file_name().unwrap().to_str().unwrap().to_owned(),
-                ))?
-                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
-                .set(&PlotArgs::FigSize(img_size))?,
-        };
-        plt_params.set(&PlotArgs::Backend(backend))?;
+    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
+        plt_params
+            .set(&PlotArgs::XLabel("wavelength in nm".into()))?
+            .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?;
+        Ok(())
+    }
 
-        let plt_type = PlotType::Line2D(plt_params);
-
-        let plt_data_opt = self.get_plot_data(&plt_type)?;
-
-        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
+        PlotType::Line2D(plt_params.clone())
     }
 
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
         let data = &self.light_data;
         match data {
-            Some(LightData::Geometric(rays)) => {
-                let spec = rays
-                    .to_spectrum(&Length::new::<nanometer>(0.2))?
-                    .get_plot_data();
-                match plt_type {
-                    PlotType::Line2D(_) => Ok(Some(PlotData::Dim2(spec))),
-                    _ => Ok(None),
-                }
-            }
-            Some(LightData::Energy(e)) => {
-                let spec = e.spectrum.get_plot_data();
-                match plt_type {
-                    PlotType::Line2D(_) => Ok(Some(PlotData::Dim2(spec))),
-                    _ => Ok(None),
-                }
-            }
+            Some(LightData::Geometric(rays)) => rays
+                .to_spectrum(&Length::new::<nanometer>(0.2))?
+                .get_plot_data(plt_type),
+            Some(LightData::Energy(e)) => e.spectrum.get_plot_data(plt_type),
             _ => Ok(None),
         }
     }
