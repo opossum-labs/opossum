@@ -2049,10 +2049,11 @@ mod test {
     #[test]
     fn plot_params_fdir() {
         let mut plt_params = PlotParameters::default();
+        let current_dir = current_dir().unwrap();
         plt_params
-            .set(&PlotArgs::FDir(PathBuf::from(".\\")))
+            .set(&PlotArgs::FDir(current_dir.clone()))
             .unwrap();
-        assert_eq!(plt_params.get_fdir().unwrap(), PathBuf::from(".\\"));
+        assert_eq!(plt_params.get_fdir().unwrap(), current_dir);
     }
     #[test]
     fn plot_params_fname() {
