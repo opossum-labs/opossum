@@ -203,7 +203,7 @@ impl Ray {
 
     /// Attenuate a ray's energy by a given filter.
     ///
-    /// This function attenuates the ray's energy by the given [`FilterType`]. For [`FilterType::Constant`] the energy is simply multiplied with the
+    /// This function attenuates the ray's energy by the given [`FilterType`]. For [`FilterType::Constant`] the energy is simply multiplied by the
     /// given transmission factor.
     /// # Errors
     ///
