@@ -60,6 +60,8 @@ pub struct Ray {
     // //True if ray is allowd to further propagate, false else
     // //valid:  bool,
     path_length: Length,
+    // refractive index of the medium this ray is propagatin in.
+    refractive_index: f64,
 }
 impl Ray {
     /// Create a new collimated ray.
@@ -118,6 +120,7 @@ impl Ray {
             //id: 0,
             //bounce: 0,
             path_length: Length::zero(),
+            refractive_index: 1.0,
         })
     }
     /// Returns the position of thi [`Ray`].
@@ -154,6 +157,8 @@ impl Ray {
     }
     /// freely propagate a ray along its direction. The length is given as the projection on the z-axis (=optical axis).
     ///
+    /// This function also respects the refractive index sotred in the ray while calculating the optical path length.
+    ///
     /// # Errors
     /// This functions retruns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
     pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
@@ -168,7 +173,7 @@ impl Ray {
 
         let normalized_dir = self.dir.normalize();
         let length_in_ray_dir = length_along_z.get::<millimeter>() / normalized_dir[2];
-        self.path_length += Length::new::<millimeter>(length_in_ray_dir);
+        self.path_length += Length::new::<millimeter>(length_in_ray_dir) * self.refractive_index;
         Ok(())
     }
     /// Refract a ray on a paraxial surface of a given focal length.
@@ -283,6 +288,25 @@ impl Ray {
     #[must_use]
     pub fn path_length(&self) -> Length {
         self.path_length
+    }
+    /// Returns the refractive index of this [`Ray`].
+    #[must_use]
+    pub const fn refractive_index(&self) -> f64 {
+        self.refractive_index
+    }
+    /// Sets the refractive index of this [`Ray`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given refractive inde is <1.0 or not finite.
+    pub fn set_refractive_index(&mut self, refractive_index: f64) -> OpmResult<()> {
+        if refractive_index < 1.0 || !refractive_index.is_finite() {
+            return Err(OpossumError::Other(
+                "refractive index must be >=1.0 and finite".into(),
+            ));
+        }
+        self.refractive_index = refractive_index;
+        Ok(())
     }
 }
 #[cfg(test)]

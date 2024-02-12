@@ -421,6 +421,22 @@ impl Rays {
         }
         Ok(spectrum)
     }
+    /// Set the refractive index of the medium all [`Rays`] are propagating in.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given refractive index is < 1.0 or not finite.
+    pub fn set_refractive_index(&mut self, refractive_index: f64) -> OpmResult<()> {
+        if refractive_index < 1.0 || !refractive_index.is_finite() {
+            return Err(OpossumError::Other(
+                "refractive index must be >=1.0 and finite".into(),
+            ));
+        }
+        for ray in &mut self.rays {
+            ray.set_refractive_index(refractive_index)?;
+        }
+        Ok(())
+    }
     /// Split a ray bundle
     ///
     /// This function splits a ray bundle determined by the given [`SplittingConfig`]. See [`split`](Ray::split) function for details.
