@@ -124,6 +124,27 @@ impl Optical for NodeReference {
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Ok(self)
     }
+
+    fn is_source(&self) -> bool {
+        let rf = &self
+            .reference
+            .clone();
+        
+        if rf.is_none(){
+            return false
+        }
+        
+        let ref_node = rf.as_ref().unwrap().upgrade();
+
+        if ref_node.is_some(){
+            let ref_node_unwrap = ref_node.unwrap();
+            let ref_node_borrow = ref_node_unwrap.borrow();
+            ref_node_borrow.is_source()    
+        }
+        else{
+            false
+        }
+    }
 }
 
 impl Dottable for NodeReference {

@@ -571,10 +571,11 @@ mod test {
     use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
     use super::*;
     use crate::analyzer::RayTraceConfig;
-    use crate::nodes::{Detector, Metertype};
+    use crate::nodes::{Detector, IdealFilter, Metertype, NodeReference, ParaxialSurface, Propagation, RayPropagationVisualizer, Spectrometer, SpotDiagram, WaveFront};
     use crate::ray::Ray;
     use crate::rays::Rays;
     use crate::SplittingConfig;
+    use itertools::Group;
     use log::Level;
     use nalgebra::Point3;
     use num::Zero;
@@ -840,5 +841,33 @@ mod test {
                 "./invalid_file_path/invalid_file.invalid_ext"
             ))
             .is_err());
+    }
+    #[test]
+    fn is_source_test(){
+        assert!(!BeamSplitter::default().is_source());
+        assert!(!Detector::default().is_source());
+        assert!(!Dummy::default().is_source());
+        assert!(!EnergyMeter::default().is_source());
+        assert!(!IdealFilter::default().is_source());
+        assert!(!ParaxialSurface::default().is_source());
+        assert!(!Propagation::default().is_source());
+        assert!(!RayPropagationVisualizer::default().is_source());
+        assert!(!Spectrometer::default().is_source());
+        assert!(!SpotDiagram::default().is_source());
+        assert!(!WaveFront::default().is_source());
+        assert!(!NodeReference::default().is_source());
+        assert!(Source::default().is_source());
+
+        let mut scenery = OpticScenery::default();
+        let idx = scenery.add_node(Source::default());
+        let idx2 = scenery.add_node(Detector::default());
+        let node_ref = scenery.node(idx).unwrap();
+        let src_ref = NodeReference::from_node(&node_ref);
+        assert!(src_ref.is_source());
+
+        let node_ref = scenery.node(idx2).unwrap();
+        let not_src_ref = NodeReference::from_node(&node_ref);
+        assert!(!not_src_ref.is_source());
+
     }
 }
