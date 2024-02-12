@@ -12,7 +12,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     nodes::FilterType,
     properties::Proptype,
-    spectrum::Spectrum,
+    spectrum::Spectrum, surface::Surface,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -200,7 +200,24 @@ impl Ray {
         self.path_length -= Length::new::<millimeter>((r_square + f_square).sqrt()) - focal_length;
         Ok(())
     }
+    /// Refract a ray on a given surface using Snellius' law.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn refract_on_surface(&mut self, s: &dyn Surface, n2: f64) -> OpmResult<()> {
+        if n2<1.0 || !n2.is_finite() {
+            return Err(OpossumError::Other("the refractive index must be >=1.0 and finite".into()));
+        }
+        if let Some((intersection_point, surface_normal)) = s.calc_intersect_and_normal(self) {
+            self.pos=intersection_point.map(|c| c.get::<millimeter>());
 
+            Ok(())
+        }
+        else {
+            Ok(())
+        }
+    }
     /// Attenuate a ray's energy by a given filter.
     ///
     /// This function attenuates the ray's energy by the given [`FilterType`]. For [`FilterType::Constant`] the energy is simply multiplied by the
