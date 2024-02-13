@@ -206,7 +206,7 @@ impl Ray {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub fn refract_on_surface(&mut self, s: &dyn Surface, n2: f64) -> OpmResult<()> {
+    pub fn refract_on_surface(&mut self, s: &dyn Surface, n2: f64) -> OpmResult<Option<Vector3<f64>>> {
         if n2 < 1.0 || !n2.is_finite() {
             return Err(OpossumError::Other(
                 "the refractive index must be >=1.0 and finite".into(),
@@ -227,8 +227,12 @@ impl Ray {
                 - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
             self.pos = intersection_point.map(|c| c.get::<millimeter>());
             self.dir = refract_dir;
+
+            let reflected_dir=s1-2.0*(s1.dot(&n))*n;
+            Ok(Some(reflected_dir))
+        } else {
+            Ok(None)
         }
-        Ok(())
     }
     /// Attenuate a ray's energy by a given filter.
     ///
