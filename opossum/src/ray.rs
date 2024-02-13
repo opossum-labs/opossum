@@ -12,7 +12,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     nodes::FilterType,
     properties::Proptype,
-    spectrum::Spectrum, surface::Surface,
+    spectrum::Spectrum,
+    surface::Surface,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -206,17 +207,28 @@ impl Ray {
     ///
     /// This function will return an error if .
     pub fn refract_on_surface(&mut self, s: &dyn Surface, n2: f64) -> OpmResult<()> {
-        if n2<1.0 || !n2.is_finite() {
-            return Err(OpossumError::Other("the refractive index must be >=1.0 and finite".into()));
+        if n2 < 1.0 || !n2.is_finite() {
+            return Err(OpossumError::Other(
+                "the refractive index must be >=1.0 and finite".into(),
+            ));
         }
         if let Some((intersection_point, surface_normal)) = s.calc_intersect_and_normal(self) {
-            self.pos=intersection_point.map(|c| c.get::<millimeter>());
-
-            Ok(())
+            // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
+            // mu=n_1 / n_2
+            // s1: incoming direction (normalized??)
+            // n: surface normal (normalized??)
+            // s2: refracted dir
+            //
+            // s2 = mu * [ n x ( -n x s1) ] - n* sqrt(1 - mu^2 * (n x s1) dot (n x s1))
+            let mu = self.refractive_index / n2;
+            let s1 = self.dir.normalize();
+            let n = surface_normal.normalize();
+            let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
+                - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
+            self.pos = intersection_point.map(|c| c.get::<millimeter>());
+            self.dir = refract_dir;
         }
-        else {
-            Ok(())
-        }
+        Ok(())
     }
     /// Attenuate a ray's energy by a given filter.
     ///
