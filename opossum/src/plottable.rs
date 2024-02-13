@@ -1846,7 +1846,7 @@ fn _meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f
     (x_mat, y_mat)
 }
 
-fn linspace(start: f64, end: f64, num: f64) -> OpmResult<Matrix1xX<f64>> {
+pub fn linspace(start: f64, end: f64, num: f64) -> OpmResult<Matrix1xX<f64>> {
     let num_usize = num.to_usize();
     if num_usize.is_some() {
         let mut linspace = Matrix1xX::<f64>::zeros(num_usize.unwrap());

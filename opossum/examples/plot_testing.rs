@@ -15,28 +15,35 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(10.),
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
-        &DistributionStrategy::Hexapolar(5),
+        &DistributionStrategy::Fibonacci(100000),
     )?;
 
-    rays.propagate_along_z(Length::new::<millimeter>(10.))?;
-    rays.refract_paraxial(Length::new::<millimeter>(10.))?;
-    rays.propagate_along_z(Length::new::<millimeter>(30.))?;
-    rays.refract_paraxial(Length::new::<millimeter>(20.))?;
-    rays.propagate_along_z(Length::new::<millimeter>(10.))?;
+    println!("{}", rays.nr_of_rays());
+
+    // rays.propagate_along_z(Length::new::<millimeter>(10.))?;
+    // rays.refract_paraxial(Length::new::<millimeter>(10.))?;
+    // rays.propagate_along_z(Length::new::<millimeter>(30.))?;
+    // rays.refract_paraxial(Length::new::<millimeter>(20.))?;
+    // rays.propagate_along_z(Length::new::<millimeter>(10.))?;
 
     let mut plt_params = PlotParameters::default();
     plt_params
-        .set(&PlotArgs::FName("ray_test.png".into()))
+        .set(&PlotArgs::FName("ray_fluence_test.png".into()))
         .unwrap()
         .set(&PlotArgs::FDir("./opossum/playground/".into()))
         .unwrap()
-        .set(&PlotArgs::FigSize((1500, 1500)))
+        .set(&PlotArgs::FigSize((1000, 850)))
         .unwrap();
-    let ray_pos_hist = rays.get_rays_position_history_in_mm();
+    let (rays_fluence, y, x, _) = rays.calc_transversal_fluence(None, None)?;
 
-    let plt_dat = PlotData::MultiDim2(ray_pos_hist.project_to_plane(Vector3::new(1., 0., 0.))?);
-    let plt_type = PlotType::MultiLine2D(plt_params);
+    let plt_dat = PlotData::ColorMesh(y, x, rays_fluence);
+    let plt_type = PlotType::ColorMesh(plt_params);
     let _ = plt_type.plot(&plt_dat);
+
+    // let plt_dat = PlotData::Dim2(rays.get_xy_rays_pos());
+    // let plt_type = PlotType::Scatter2D(plt_params);
+    // let _ = plt_type.plot(&plt_dat);
+
 
     Ok(())
 }
