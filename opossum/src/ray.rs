@@ -784,6 +784,22 @@ mod test {
         assert_eq!(ray.dir, Vector3::new(0.0,0.0,1.0));
     }
     #[test]
+    fn refract_on_surface_non_intersecting() {
+        let position = Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(0.0),
+            Length::zero(),
+        );
+        let direction=Vector3::new(0.0,0.0,-1.0);
+        let wvl = Length::new::<nanometer>(1054.0);
+        let e = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new(position, direction, wvl, e).unwrap();
+        let s=Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        ray.refract_on_surface(&s, 1.5).unwrap();
+        assert_eq!(ray.pos, Point3::new(0.0,0.0,0.0));
+        assert_eq!(ray.dir, Vector3::new(0.0,0.0,-1.0));
+    }
+    #[test]
     fn refract_on_plane_non_collimated() {
         let position = Point3::new(
             Length::zero(),
@@ -808,6 +824,13 @@ mod test {
         assert_eq!(ray.pos, Point3::new(0.0,10.0,10.0));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], 0.4714045207910317);
+        assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
+        let direction=Vector3::new(1.0,0.0,1.0);
+        let mut ray = Ray::new(position, direction, wvl, e).unwrap();
+        ray.refract_on_surface(&s, 1.5).unwrap();
+        assert_eq!(ray.pos, Point3::new(10.0,0.0,10.0));
+        assert_eq!(ray.dir[0], 0.4714045207910317);
+        assert_abs_diff_eq!(ray.dir[1], 0.0);
         assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
     }
     #[test]
