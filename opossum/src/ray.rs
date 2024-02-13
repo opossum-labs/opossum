@@ -343,7 +343,7 @@ mod test {
     use super::*;
     use crate::{
         spectrum::Spectrum,
-        spectrum_helper::{self, generate_filter_spectrum},
+        spectrum_helper::{self, generate_filter_spectrum}, surface::Plane,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq};
     use itertools::izip;
@@ -755,6 +755,60 @@ mod test {
             -1.0 * (f64::sqrt(200.0) - 10.0),
             epsilon = 10.0 * f64::EPSILON
         );
+    }
+    #[test]
+    fn refract_on_plane_collimated() {
+        let position = Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(0.0),
+            Length::zero(),
+        );
+        let wvl = Length::new::<nanometer>(1054.0);
+        let e = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
+        let s=Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        assert!(ray.refract_on_surface(&s, 0.9).is_err());
+        assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
+        assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
+        ray.refract_on_surface(&s, 1.5).unwrap();
+        assert_eq!(ray.pos, Point3::new(0.0,0.0,10.0));
+        assert_eq!(ray.dir, Vector3::new(0.0,0.0,1.0));
+        let position = Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(1.0),
+            Length::zero(),
+        );
+        let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
+        ray.refract_on_surface(&s, 1.5).unwrap();
+        assert_eq!(ray.pos, Point3::new(0.0,1.0,10.0));
+        assert_eq!(ray.dir, Vector3::new(0.0,0.0,1.0));
+    }
+    #[test]
+    fn refract_on_plane_non_collimated() {
+        let position = Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(0.0),
+            Length::zero(),
+        );
+        let direction=Vector3::new(0.0,1.0,1.0);
+        let wvl = Length::new::<nanometer>(1054.0);
+        let e = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new(position, direction, wvl, e).unwrap();
+        let s=Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        assert!(ray.refract_on_surface(&s, 0.9).is_err());
+        assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
+        assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
+        ray.refract_on_surface(&s, 1.0).unwrap();
+        assert_eq!(ray.pos, Point3::new(0.0,10.0,10.0));
+        assert_eq!(ray.dir[0], 0.0);
+        assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
+        assert_abs_diff_eq!(ray.dir[2], direction.normalize()[2]);
+        let mut ray = Ray::new(position, direction, wvl, e).unwrap();
+        ray.refract_on_surface(&s, 1.5).unwrap();
+        assert_eq!(ray.pos, Point3::new(0.0,10.0,10.0));
+        assert_eq!(ray.dir[0], 0.0);
+        assert_abs_diff_eq!(ray.dir[1], 0.4714045207910317);
+        assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
     }
     #[test]
     fn filter_energy() {
