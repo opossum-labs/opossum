@@ -30,6 +30,7 @@ pub mod spectrum_helper;
 use chrono::DateTime;
 pub use optic_scenery::OpticScenery;
 pub mod console;
+pub mod distribution;
 mod optic_graph;
 pub mod optic_ref;
 pub mod ray;

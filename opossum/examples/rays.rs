@@ -1,4 +1,4 @@
-use opossum::{error::OpmResult, rays::Rays};
+use opossum::{distribution::DistributionStrategy, error::OpmResult, rays::Rays};
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
@@ -10,7 +10,7 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(1.0),
         Length::new::<nanometer>(1054.0),
         Energy::new::<joule>(1.0),
-        &opossum::rays::DistributionStrategy::Random(200),
+        &DistributionStrategy::Random(200),
     )?;
     Ok(())
     // rays.to_svg_plot(Path::new("./opossum/playground/rays.svg"))?;

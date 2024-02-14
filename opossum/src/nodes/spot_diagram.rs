@@ -204,10 +204,9 @@ impl Plottable for SpotDiagram {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::distribution::DistributionStrategy;
     use crate::{
-        analyzer::AnalyzerType,
-        lightdata::DataEnergy,
-        rays::{DistributionStrategy, Rays},
+        analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
     use uom::num_traits::Zero;
