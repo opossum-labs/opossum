@@ -1,8 +1,9 @@
 use nalgebra::Vector3;
 use opossum::{
+    distribution::DistributionStrategy,
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType},
-    rays::{DistributionStrategy, Rays},
+    rays::Rays,
 };
 use uom::si::{
     energy::{joule, Energy},

@@ -285,8 +285,9 @@ mod test {
     use super::*;
     use crate::{
         analyzer::AnalyzerType,
+        distribution::DistributionStrategy,
         lightdata::DataEnergy,
-        rays::{DistributionStrategy, Rays},
+        rays::Rays,
         spectrum_helper::{create_he_ne_spec, create_visible_spec},
     };
     use uom::{
