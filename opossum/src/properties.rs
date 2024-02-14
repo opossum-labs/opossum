@@ -474,15 +474,15 @@ pub enum Proptype {
     Uuid(Uuid),
     /// A property for storing [`OpticPorts`].
     OpticPorts(OpticPorts),
-    /// A property for storing an optical [`Aperture`]
+    /// A property for storing an optical [`Aperture`].
     Aperture(Aperture),
-    /// This property stores a [`Spectrum`](crate::spectrum::Spectrum)
+    /// A property for storing a [`Spectrum`](crate::spectrum::Spectrum).
     Spectrometer(Spectrometer),
     /// This property stores optical [`Rays`](crate::rays::Rays)
     SpotDiagram(SpotDiagram),
     /// This property stores the wavefront Information [`WaveFrontData`]
     WaveFrontStats(WaveFrontData),
-    /// This property stores the ray position history of all [`Rays`] during propagation through the optic scenery
+    /// This property stores the ray position history of all [`Rays`](crate::rays::Rays) during propagation through the optic scenery
     RayPositionHistory(RayPositionHistory),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
