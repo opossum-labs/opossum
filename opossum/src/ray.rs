@@ -65,21 +65,6 @@ pub struct Ray {
     refractive_index: f64,
 }
 impl Ray {
-    /// Create a new collimated ray.
-    ///
-    /// Generate a ray a horizontally polarized ray collinear with the z axis (optical axis).
-    ///
-    /// # Errors
-    /// This function returns an error if
-    ///  - the given wavelength is <= 0.0, `NaN` or +inf
-    ///  - the given energy is < 0.0, `NaN` or +inf
-    pub fn new_collimated(
-        position: Point3<Length>,
-        wave_length: Length,
-        energy: Energy,
-    ) -> OpmResult<Self> {
-        Self::new(position, Vector3::z(), wave_length, energy)
-    }
     /// Creates a new [`Ray`].
     ///
     /// The dircetion vector is normalized. The direction is thus stored as (`direction cosine`)[`https://en.wikipedia.org/wiki/Direction_cosine`]
@@ -109,22 +94,33 @@ impl Ray {
             position.y.get::<millimeter>(),
             0.0,
         );
-        let mut pos_hist = Vec::<Point3<f64>>::with_capacity(50);
-        pos_hist.push(init_pos);
         Ok(Self {
             pos: init_pos,
-            pos_hist,
+            pos_hist: Vec::<Point3<f64>>::with_capacity(50),
             dir: direction.normalize(),
             //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
             e: energy,
             wvl: wave_length,
-            //id: 0,
-            //bounce: 0,
             path_length: Length::zero(),
             refractive_index: 1.0,
         })
     }
-    /// Returns the position of thi [`Ray`].
+    /// Create a new collimated ray.
+    ///
+    /// Generate a ray a horizontally polarized ray collinear with the z axis (optical axis).
+    ///
+    /// # Errors
+    /// This function returns an error if
+    ///  - the given wavelength is <= 0.0, `NaN` or +inf
+    ///  - the given energy is < 0.0, `NaN` or +inf
+    pub fn new_collimated(
+        position: Point3<Length>,
+        wave_length: Length,
+        energy: Energy,
+    ) -> OpmResult<Self> {
+        Self::new(position, Vector3::z(), wave_length, energy)
+    }
+    /// Returns the position of this [`Ray`].
     #[must_use]
     pub fn position(&self) -> Point3<Length> {
         Point3::new(
@@ -143,7 +139,6 @@ impl Ray {
     pub fn wavelength(&self) -> Length {
         self.wvl
     }
-
     /// Returns the position history of this [`Ray`].
     #[must_use]
     pub fn position_history_in_mm(&self) -> MatrixXx3<f64> {
@@ -156,9 +151,9 @@ impl Ray {
         }
         pos_mm
     }
-    /// freely propagate a ray along its direction. The length is given as the projection on the z-axis (=optical axis).
+    /// Propagate a ray freely along its direction. The length is given as the projection on the z-axis (=optical axis).
     ///
-    /// This function also respects the refractive index sotred in the ray while calculating the optical path length.
+    /// This function also respects the refractive index stored in the ray while calculating the optical path length.
     ///
     /// # Errors
     /// This functions retruns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
@@ -372,86 +367,6 @@ mod test {
     use std::path::PathBuf;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
-    fn new_collimated() {
-        let position = Point3::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(2.0),
-            Length::new::<millimeter>(0.0),
-        );
-        let ray = Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
-        );
-        assert!(ray.is_ok());
-        let ray = ray.unwrap();
-        assert_eq!(ray.pos, Point3::new(1.0, 2.0, 0.0));
-        assert_eq!(ray.dir, Vector3::z());
-        assert_eq!(ray.wvl, Length::new::<nanometer>(1053.0));
-        assert_eq!(ray.e, Energy::new::<joule>(1.0));
-        assert_eq!(ray.path_length, Length::zero());
-        assert!(Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(0.0),
-            Energy::new::<joule>(1.0)
-        )
-        .is_err());
-        assert!(Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(-10.0),
-            Energy::new::<joule>(1.0)
-        )
-        .is_err());
-        assert!(Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(f64::NAN),
-            Energy::new::<joule>(1.0)
-        )
-        .is_err());
-        assert!(Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(f64::INFINITY),
-            Energy::new::<joule>(1.0)
-        )
-        .is_err());
-        assert!(Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(f64::NEG_INFINITY),
-            Energy::new::<joule>(1.0)
-        )
-        .is_err());
-        assert!(Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(0.0)
-        )
-        .is_ok());
-        assert!(Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(-0.1)
-        )
-        .is_err());
-        assert!(Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(f64::NAN)
-        )
-        .is_err());
-        assert!(Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(f64::INFINITY)
-        )
-        .is_err());
-        assert!(Ray::new_collimated(
-            position,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(f64::NEG_INFINITY)
-        )
-        .is_err());
-    }
-    #[test]
     fn new() {
         let position = Point3::new(
             Length::new::<millimeter>(1.0),
@@ -459,12 +374,9 @@ mod test {
             Length::new::<millimeter>(0.0),
         );
         let direction = Vector3::new(0.0, 0.0, 2.0);
-        let ray = Ray::new(
-            position,
-            direction,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
-        );
+        let energy = Energy::new::<joule>(1.0);
+        let wvl = Length::new::<nanometer>(1053.0);
+        let ray = Ray::new(position, direction, wvl, energy);
         assert!(ray.is_ok());
         let ray = ray.unwrap();
         assert_eq!(ray.pos, Point3::new(1.0, 2.0, 0.0));
@@ -483,76 +395,73 @@ mod test {
         assert_eq!(ray.energy(), Energy::new::<joule>(1.0));
         assert_eq!(ray.path_length, Length::zero());
         assert_eq!(ray.refractive_index, 1.0);
-        assert!(Ray::new(
-            position,
-            direction,
-            Length::new::<nanometer>(0.0),
-            Energy::new::<joule>(1.0)
-        )
-        .is_err());
-        assert!(Ray::new(
-            position,
-            direction,
-            Length::new::<nanometer>(-10.0),
-            Energy::new::<joule>(1.0)
-        )
-        .is_err());
+        assert_eq!(ray.pos_hist.len(), 0);
+        assert!(Ray::new(position, direction, Length::new::<nanometer>(0.0), energy).is_err());
+        assert!(Ray::new(position, direction, Length::new::<nanometer>(-10.0), energy).is_err());
         assert!(Ray::new(
             position,
             direction,
             Length::new::<nanometer>(f64::NAN),
-            Energy::new::<joule>(1.0)
+            energy
         )
         .is_err());
         assert!(Ray::new(
             position,
             direction,
             Length::new::<nanometer>(f64::INFINITY),
-            Energy::new::<joule>(1.0)
+            energy
         )
         .is_err());
         assert!(Ray::new(
             position,
             direction,
             Length::new::<nanometer>(f64::NEG_INFINITY),
-            Energy::new::<joule>(1.0)
+            energy
         )
         .is_err());
+        assert!(Ray::new(position, direction, wvl, Energy::new::<joule>(-0.1)).is_err());
+        assert!(Ray::new(position, direction, wvl, Energy::new::<joule>(f64::NAN)).is_err());
         assert!(Ray::new(
             position,
             direction,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(-0.1)
-        )
-        .is_err());
-        assert!(Ray::new(
-            position,
-            direction,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(f64::NAN)
-        )
-        .is_err());
-        assert!(Ray::new(
-            position,
-            direction,
-            Length::new::<nanometer>(1053.0),
+            wvl,
             Energy::new::<joule>(f64::INFINITY)
         )
         .is_err());
-        assert!(Ray::new(
-            position,
-            direction,
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(f64::NEG_INFINITY)
-        )
-        .is_err());
-        assert!(Ray::new(
-            position,
-            Vector3::new(0.0, 0.0, 0.0),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0)
-        )
-        .is_err());
+        assert!(Ray::new(position, Vector3::new(0.0, 0.0, 0.0), wvl, energy).is_err());
+    }
+    #[test]
+    fn new_collimated() {
+        let position = Point3::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(2.0),
+            Length::new::<millimeter>(0.0),
+        );
+        let wvl = Length::new::<nanometer>(1053.0);
+        let e = Energy::new::<joule>(1.0);
+        let ray = Ray::new_collimated(position, wvl, e);
+        assert!(ray.is_ok());
+        let ray = ray.unwrap();
+        assert_eq!(ray.pos, Point3::new(1.0, 2.0, 0.0));
+        assert_eq!(ray.dir, Vector3::z());
+        assert_eq!(ray.wvl, Length::new::<nanometer>(1053.0));
+        assert_eq!(ray.e, Energy::new::<joule>(1.0));
+        assert_eq!(ray.path_length, Length::zero());
+        assert_eq!(ray.pos_hist.len(), 0);
+        assert!(Ray::new_collimated(position, Length::new::<nanometer>(0.0), e).is_err());
+        assert!(Ray::new_collimated(position, Length::new::<nanometer>(-10.0), e).is_err());
+        assert!(Ray::new_collimated(position, Length::new::<nanometer>(f64::NAN), e).is_err());
+        assert!(Ray::new_collimated(position, Length::new::<nanometer>(f64::INFINITY), e).is_err());
+        assert!(
+            Ray::new_collimated(position, Length::new::<nanometer>(f64::NEG_INFINITY), e).is_err()
+        );
+        assert!(Ray::new_collimated(position, wvl, Energy::new::<joule>(0.0)).is_ok());
+        assert!(Ray::new_collimated(position, wvl, Energy::new::<joule>(-0.1)).is_err());
+        assert!(Ray::new_collimated(position, wvl, Energy::new::<joule>(f64::NAN)).is_err());
+        assert!(Ray::new_collimated(position, wvl, Energy::new::<joule>(f64::INFINITY)).is_err());
+        assert!(
+            Ray::new_collimated(position, wvl, Energy::new::<joule>(f64::NEG_INFINITY)).is_err()
+        );
     }
     #[test]
     fn refractive_index() {
