@@ -223,13 +223,19 @@ impl Ray {
             let mu = self.refractive_index / n2;
             let s1 = self.dir.normalize();
             let n = surface_normal.normalize();
-            let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
-                - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
-            self.pos = intersection_point.map(|c| c.get::<millimeter>());
-            self.dir = refract_dir;
-
+            let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
             let reflected_dir=s1-2.0*(s1.dot(&n))*n;
+            self.pos = intersection_point.map(|c| c.get::<millimeter>());
+            // check, if total reflection
+            if dis.is_sign_positive() {
+                let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
+                - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
+            self.dir = refract_dir;
             Ok(Some(reflected_dir))
+            } else {
+                self.dir=reflected_dir;
+                Ok(None)
+            } 
         } else {
             Ok(None)
         }
@@ -346,8 +352,7 @@ impl Ray {
 mod test {
     use super::*;
     use crate::{
-        spectrum::Spectrum,
-        spectrum_helper::{self, generate_filter_spectrum}, surface::Plane,
+        spectrum::Spectrum, spectrum_helper::{self, generate_filter_spectrum}, surface::Plane
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq};
     use itertools::izip;
@@ -836,6 +841,27 @@ mod test {
         assert_eq!(ray.dir[0], 0.4714045207910317);
         assert_abs_diff_eq!(ray.dir[1], 0.0);
         assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
+    }
+    #[test]
+    fn refract_on_surface_total_reflection() {
+        let position = Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(0.0),
+            Length::zero(),
+        );
+        let direction=Vector3::new(0.0,2.0,1.0);
+        let wvl = Length::new::<nanometer>(1054.0);
+        let e = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new(position, direction, wvl, e).unwrap();
+        ray.set_refractive_index(1.5).unwrap();
+        let s=Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let reflected=ray.refract_on_surface(&s, 1.0).unwrap();
+        assert!(reflected.is_none());
+        assert_eq!(ray.pos, Point3::new(0.0,20.0,10.0));
+        let test_reflect=Vector3::new(0.0,2.0,-1.0).normalize();
+        assert_abs_diff_eq!(ray.dir[0], test_reflect[0]);
+        assert_abs_diff_eq!(ray.dir[1], test_reflect[1]);
+        assert_abs_diff_eq!(ray.dir[2], test_reflect[2]);
     }
     #[test]
     fn filter_energy() {
