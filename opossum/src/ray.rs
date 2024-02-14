@@ -201,12 +201,23 @@ impl Ray {
         self.path_length -= Length::new::<millimeter>((r_square + f_square).sqrt()) - focal_length;
         Ok(())
     }
-    /// Refract a ray on a given surface using Snellius' law.
+    /// Refract the [`Ray`] on a given [`Surface`] using Snellius' law.
+    ///
+    /// This function refracts an incoming [`Ray`] on a given [`Surface`] thereby changing its position (= intersection point) and
+    /// its direction. The intial refractive index is (already) stored in the ray itself. The refractive index behind the surface is given
+    /// by the parameter `n2`. In addition, it returns the directional vector of the reflected ray. If the [`Ray`] does not intersect with
+    /// the surface, the [`Ray`] ist unmodified and `None` is returned (since there is no reflection). This function also considers
+    /// total reflection: If the n1 > n2 and the incoming angle is larger than Brewster's angle, the beam is totally reflected. In this case,
+    /// this function also returns `None` (since there is no additional relfected ray).
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
-    pub fn refract_on_surface(&mut self, s: &dyn Surface, n2: f64) -> OpmResult<Option<Vector3<f64>>> {
+    /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
+    pub fn refract_on_surface(
+        &mut self,
+        s: &dyn Surface,
+        n2: f64,
+    ) -> OpmResult<Option<Vector3<f64>>> {
         if n2 < 1.0 || !n2.is_finite() {
             return Err(OpossumError::Other(
                 "the refractive index must be >=1.0 and finite".into(),
@@ -224,18 +235,18 @@ impl Ray {
             let s1 = self.dir.normalize();
             let n = surface_normal.normalize();
             let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
-            let reflected_dir=s1-2.0*(s1.dot(&n))*n;
+            let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
             self.pos = intersection_point.map(|c| c.get::<millimeter>());
             // check, if total reflection
             if dis.is_sign_positive() {
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
-                - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
-            self.dir = refract_dir;
-            Ok(Some(reflected_dir))
+                    - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
+                self.dir = refract_dir;
+                Ok(Some(reflected_dir))
             } else {
-                self.dir=reflected_dir;
+                self.dir = reflected_dir;
                 Ok(None)
-            } 
+            }
         } else {
             Ok(None)
         }
@@ -352,7 +363,9 @@ impl Ray {
 mod test {
     use super::*;
     use crate::{
-        spectrum::Spectrum, spectrum_helper::{self, generate_filter_spectrum}, surface::Plane
+        spectrum::Spectrum,
+        spectrum_helper::{self, generate_filter_spectrum},
+        surface::Plane,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq};
     use itertools::izip;
@@ -775,13 +788,13 @@ mod test {
         let wvl = Length::new::<nanometer>(1054.0);
         let e = Energy::new::<joule>(1.0);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
-        let s=Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
         ray.refract_on_surface(&s, 1.5).unwrap();
-        assert_eq!(ray.pos, Point3::new(0.0,0.0,10.0));
-        assert_eq!(ray.dir, Vector3::new(0.0,0.0,1.0));
+        assert_eq!(ray.pos, Point3::new(0.0, 0.0, 10.0));
+        assert_eq!(ray.dir, Vector3::new(0.0, 0.0, 1.0));
         let position = Point3::new(
             Length::zero(),
             Length::new::<millimeter>(1.0),
@@ -789,8 +802,8 @@ mod test {
         );
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
-        assert_eq!(ray.pos, Point3::new(0.0,1.0,10.0));
-        assert_eq!(ray.dir, Vector3::new(0.0,0.0,1.0));
+        assert_eq!(ray.pos, Point3::new(0.0, 1.0, 10.0));
+        assert_eq!(ray.dir, Vector3::new(0.0, 0.0, 1.0));
     }
     #[test]
     fn refract_on_surface_non_intersecting() {
@@ -799,14 +812,14 @@ mod test {
             Length::new::<millimeter>(0.0),
             Length::zero(),
         );
-        let direction=Vector3::new(0.0,0.0,-1.0);
+        let direction = Vector3::new(0.0, 0.0, -1.0);
         let wvl = Length::new::<nanometer>(1054.0);
         let e = Energy::new::<joule>(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        let s=Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
-        assert_eq!(ray.pos, Point3::new(0.0,0.0,0.0));
-        assert_eq!(ray.dir, Vector3::new(0.0,0.0,-1.0));
+        assert_eq!(ray.pos, Point3::new(0.0, 0.0, 0.0));
+        assert_eq!(ray.dir, Vector3::new(0.0, 0.0, -1.0));
     }
     #[test]
     fn refract_on_plane_non_collimated() {
@@ -815,29 +828,29 @@ mod test {
             Length::new::<millimeter>(0.0),
             Length::zero(),
         );
-        let direction=Vector3::new(0.0,1.0,1.0);
+        let direction = Vector3::new(0.0, 1.0, 1.0);
         let wvl = Length::new::<nanometer>(1054.0);
         let e = Energy::new::<joule>(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        let s=Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
         ray.refract_on_surface(&s, 1.0).unwrap();
-        assert_eq!(ray.pos, Point3::new(0.0,10.0,10.0));
+        assert_eq!(ray.pos, Point3::new(0.0, 10.0, 10.0));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
         assert_abs_diff_eq!(ray.dir[2], direction.normalize()[2]);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
-        assert_eq!(ray.pos, Point3::new(0.0,10.0,10.0));
+        assert_eq!(ray.pos, Point3::new(0.0, 10.0, 10.0));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], 0.4714045207910317);
         assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
-        let direction=Vector3::new(1.0,0.0,1.0);
+        let direction = Vector3::new(1.0, 0.0, 1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
-        assert_eq!(ray.pos, Point3::new(10.0,0.0,10.0));
+        assert_eq!(ray.pos, Point3::new(10.0, 0.0, 10.0));
         assert_eq!(ray.dir[0], 0.4714045207910317);
         assert_abs_diff_eq!(ray.dir[1], 0.0);
         assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
@@ -849,16 +862,16 @@ mod test {
             Length::new::<millimeter>(0.0),
             Length::zero(),
         );
-        let direction=Vector3::new(0.0,2.0,1.0);
+        let direction = Vector3::new(0.0, 2.0, 1.0);
         let wvl = Length::new::<nanometer>(1054.0);
         let e = Energy::new::<joule>(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.set_refractive_index(1.5).unwrap();
-        let s=Plane::new(Length::new::<millimeter>(10.0)).unwrap();
-        let reflected=ray.refract_on_surface(&s, 1.0).unwrap();
+        let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let reflected = ray.refract_on_surface(&s, 1.0).unwrap();
         assert!(reflected.is_none());
-        assert_eq!(ray.pos, Point3::new(0.0,20.0,10.0));
-        let test_reflect=Vector3::new(0.0,2.0,-1.0).normalize();
+        assert_eq!(ray.pos, Point3::new(0.0, 20.0, 10.0));
+        let test_reflect = Vector3::new(0.0, 2.0, -1.0).normalize();
         assert_abs_diff_eq!(ray.dir[0], test_reflect[0]);
         assert_abs_diff_eq!(ray.dir[1], test_reflect[1]);
         assert_abs_diff_eq!(ray.dir[2], test_reflect[2]);
