@@ -87,10 +87,7 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
             Rc::new(RefCell::new(NodeReference::default())),
             uuid,
         )),
-        "lens" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(Lens::default())),
-            uuid,
-        )),
+        "lens" => Ok(OpticRef::new(Rc::new(RefCell::new(Lens::default())), uuid)),
         "light source" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Source::default())),
             uuid,

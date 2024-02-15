@@ -30,8 +30,10 @@ use uom::si::length::{micrometer, millimeter, nanometer};
 pub struct Rays {
     ///vector containing rays
     rays: Vec<Ray>,
-    //Maximum number of bounces
-    //max_bounces:    usize, do we need this here?
+    // ***
+    // *** only temporary before we have concept for coordinate system
+    // ***
+    dist_to_next_surface: Length,
 }
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis).
@@ -70,7 +72,10 @@ impl Rays {
             let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
-        Ok(Self { rays })
+        Ok(Self {
+            rays,
+            dist_to_next_surface: Length::zero(),
+        })
     }
     /// Generate a ray cone (= point source)
     ///
@@ -115,7 +120,10 @@ impl Rays {
             let ray = Ray::new(position, direction, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
-        Ok(Self { rays })
+        Ok(Self {
+            rays,
+            dist_to_next_surface: Length::zero(),
+        })
     }
     /// Returns the total energy of this [`Rays`].
     ///
@@ -501,6 +509,19 @@ impl Rays {
         }
         RayPositionHistory { rays_pos_history }
     }
+    /// Returns the dist to next surface of this [`Rays`].
+    ///
+    /// **Note**: This function is a hack and will be removed in later versions.
+    #[must_use]
+    pub fn dist_to_next_surface(&self) -> Length {
+        self.dist_to_next_surface
+    }
+    /// Sets the dist to next surface of this [`Rays`].
+    ///
+    /// **Note**: This function is a hack and will be removed in later versions.
+    pub fn set_dist_to_next_surface(&mut self, dist_to_next_surface: Length) {
+        self.dist_to_next_surface = dist_to_next_surface;
+    }
 }
 
 /// struct that holds the history of the ray positions that is needed for report generation
@@ -585,7 +606,10 @@ impl PdfReportable for RayPositionHistory {
 
 impl From<Vec<Ray>> for Rays {
     fn from(value: Vec<Ray>) -> Self {
-        Self { rays: value }
+        Self {
+            rays: value,
+            dist_to_next_surface: Length::zero(),
+        }
     }
 }
 

@@ -9,8 +9,9 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
 };
+use num::Zero;
 use std::collections::HashMap;
-use uom::si::{f64::Length, length::millimeter};
+use uom::si::f64::Length;
 /// Propagation along the optical axis (z-Axis)
 ///
 /// This node represents a free-space propagation along the optical axis (z-axis). So far,
@@ -46,7 +47,7 @@ fn create_default_props() -> Properties {
             "distance",
             "distance along the optical axis in mm",
             None,
-            0.0.into(),
+            Length::zero().into(),
         )
         .unwrap();
     props
@@ -86,7 +87,7 @@ impl Propagation {
         }
         let mut props = create_default_props();
         props.set("name", name.into())?;
-        props.set("distance", length_along_z.get::<millimeter>().into())?;
+        props.set("distance", length_along_z.into())?;
         Ok(Self { props })
     }
 }
@@ -106,7 +107,7 @@ impl Optical for Propagation {
             AnalyzerType::Energy => (),
             AnalyzerType::RayTrace(_config) => {
                 if let Some(LightData::Geometric(mut rays)) = data {
-                    let Ok(Proptype::F64(length_along_z)) = self.props.get("distance") else {
+                    let Ok(Proptype::Length(length_along_z)) = self.props.get("distance") else {
                         return Err(OpossumError::Analysis("cannot read distance".into()));
                     };
                     let Ok(Proptype::F64(refractive_index)) = self.props.get("refractive index")
@@ -116,7 +117,8 @@ impl Optical for Propagation {
                         ));
                     };
                     rays.set_refractive_index(*refractive_index)?;
-                    rays.propagate_along_z(Length::new::<millimeter>(*length_along_z))?;
+                    rays.set_dist_to_next_surface(*length_along_z);
+                    rays.propagate_along_z(*length_along_z)?;
                     data = Some(LightData::Geometric(rays));
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
@@ -145,6 +147,7 @@ mod test {
     use super::*;
     use crate::aperture::Aperture;
     use assert_matches::assert_matches;
+    use uom::si::length::millimeter;
     #[test]
     fn default() {
         let node = Propagation::default();

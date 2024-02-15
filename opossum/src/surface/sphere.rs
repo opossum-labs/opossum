@@ -12,6 +12,7 @@ use roots::Roots;
 use uom::si::f64::Length;
 use uom::si::length::meter;
 
+#[derive(Debug)]
 pub struct Sphere {
     z: Length,
     radius: Length,
