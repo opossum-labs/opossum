@@ -11,6 +11,7 @@ use crate::{
     properties::{Properties, Proptype},
     surface::Sphere,
 };
+use log::info;
 use uom::si::{f64::Length, length::millimeter};
 
 #[derive(Debug)]
@@ -21,7 +22,7 @@ fn create_default_props() -> Properties {
     let mut props = Properties::new("lens", "lens");
     props
         .create(
-            "front_curvature",
+            "front curvature",
             "radius of curvature of front surface",
             None,
             Length::new::<millimeter>(500.0).into(),
@@ -29,7 +30,7 @@ fn create_default_props() -> Properties {
         .unwrap();
     props
         .create(
-            "rear_curvature",
+            "rear curvature",
             "radius of curvature of rear surface",
             None,
             Length::new::<millimeter>(-500.0).into(),
@@ -116,20 +117,24 @@ impl Optical for Lens {
                             "cannot read refractive index".into(),
                         ));
                     };
-                    let next_z_pos=rays.absolute_z_of_last_surface()+rays.dist_to_next_surface();
+                    let next_z_pos =
+                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     let front_surface = Sphere::new(next_z_pos, *front_roc)?;
                     rays.refract_on_surface(&front_surface, *n2)?;
-                    let Ok(Proptype::Length(center_thickness)) = self.props.get("center thickness") else {
-                        return Err(OpossumError::Analysis("cannot read center thickness".into()));
-                    };
-                    rays.set_dist_to_next_surface(*center_thickness);
-                    let Ok(Proptype::Length(rear_roc)) = self.props.get("rear curvature") else {
-                        return Err(OpossumError::Analysis("cannot read rear curvature".into()));
-                    };
-                    let next_z_pos=rays.absolute_z_of_last_surface()+rays.dist_to_next_surface();
-                    let rear_surface = Sphere::new(next_z_pos, *rear_roc)?;
-                    rays.refract_on_surface(&rear_surface, 1.0)?;
-
+                    // let Ok(Proptype::Length(center_thickness)) = self.props.get("center thickness")
+                    // else {
+                    //     return Err(OpossumError::Analysis(
+                    //         "cannot read center thickness".into(),
+                    //     ));
+                    // };
+                    // rays.set_dist_to_next_surface(*center_thickness);
+                    // let Ok(Proptype::Length(rear_roc)) = self.props.get("rear curvature") else {
+                    //     return Err(OpossumError::Analysis("cannot read rear curvature".into()));
+                    // };
+                    // let next_z_pos =
+                    //     rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+                    // let rear_surface = Sphere::new(next_z_pos, *rear_roc)?;
+                    // rays.refract_on_surface(&rear_surface, 1.0)?;
                     Ok(HashMap::from([(
                         "rear".into(),
                         Some(LightData::Geometric(rays)),

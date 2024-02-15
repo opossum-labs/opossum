@@ -85,6 +85,7 @@ impl Optical for RayPropagationVisualizer {
         if let Some(LightData::Geometric(rays)) = data {
             let mut rays = rays.clone();
             rays.propagate_along_z()?;
+            self.light_data=Some(LightData::Geometric(rays.clone()));
             Ok(HashMap::from([(
                 outport.into(),
                 Some(LightData::Geometric(rays)),

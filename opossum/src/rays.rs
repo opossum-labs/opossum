@@ -366,7 +366,7 @@ impl Rays {
                 ray.propagate_along_z(self.dist_to_next_surface)?;
             }
         }
-        self.z_position+=self.dist_to_next_surface;
+        self.z_position += self.dist_to_next_surface;
         self.set_dist_zero();
         Ok(())
     }
@@ -396,7 +396,7 @@ impl Rays {
         for ray in &mut self.rays {
             ray.refract_on_surface(surface, n2)?;
         }
-        self.z_position+=self.dist_to_next_surface;
+        self.z_position += self.dist_to_next_surface;
         self.set_dist_zero();
         Ok(())
     }
@@ -641,7 +641,7 @@ impl From<Vec<Ray>> for Rays {
         Self {
             rays: value,
             dist_to_next_surface: Length::zero(),
-            z_position: Length::zero()
+            z_position: Length::zero(),
         }
     }
 }

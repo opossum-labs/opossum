@@ -282,7 +282,7 @@ impl Ray {
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
                     - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
                 self.dir = refract_dir;
-                self.refractive_index=n2;
+                self.refractive_index = n2;
                 Ok(Some(reflected_dir))
             } else {
                 self.dir = reflected_dir;
@@ -752,7 +752,7 @@ mod test {
                 Length::new::<millimeter>(10.0)
             )
         );
-        assert_eq!(ray.refractive_index,1.5);
+        assert_eq!(ray.refractive_index, 1.5);
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(
             ray.pos_hist,
@@ -793,7 +793,7 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), Length::zero())
         );
         assert_eq!(ray.dir, direction);
-        assert_eq!(ray.refractive_index,1.0);
+        assert_eq!(ray.refractive_index, 1.0);
     }
     #[test]
     fn refract_on_plane_non_collimated() {
