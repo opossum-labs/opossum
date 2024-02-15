@@ -131,14 +131,23 @@ impl Optical for EnergyMeter {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.properties().inverted()? {
+        let (inport, outport) = if self.properties().inverted()? {
             ("out1", "in1")
         } else {
             ("in1", "out1")
         };
-        let data = incoming_data.get(src).unwrap_or(&None);
+        let data = incoming_data.get(inport).unwrap_or(&None);
         self.light_data = data.clone();
-        Ok(HashMap::from([(target.into(), data.clone())]))
+        if let Some(LightData::Geometric(rays)) = data {
+            let mut rays = rays.clone();
+            rays.propagate_along_z()?;
+            Ok(HashMap::from([(
+                outport.into(),
+                Some(LightData::Geometric(rays)),
+            )]))
+        } else {
+            Ok(HashMap::from([(outport.into(), data.clone())]))
+        }
     }
     fn is_detector(&self) -> bool {
         true

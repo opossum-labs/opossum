@@ -2,6 +2,7 @@
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
+use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
@@ -63,13 +64,22 @@ impl Optical for Dummy {
         incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.properties().inverted()? {
+        let (inport, outport) = if self.properties().inverted()? {
             ("rear", "front")
         } else {
             ("front", "rear")
         };
-        let data = incoming_data.get(src).unwrap_or(&None);
-        Ok(HashMap::from([(target.into(), data.clone())]))
+        let data = incoming_data.get(inport).unwrap_or(&None);
+        if let Some(LightData::Geometric(rays)) = data {
+            let mut rays = rays.clone();
+            rays.propagate_along_z()?;
+            Ok(HashMap::from([(
+                outport.into(),
+                Some(LightData::Geometric(rays)),
+            )]))
+        } else {
+            Ok(HashMap::from([(outport.into(), data.clone())]))
+        }
     }
     fn properties(&self) -> &Properties {
         &self.props

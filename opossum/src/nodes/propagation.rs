@@ -118,7 +118,7 @@ impl Optical for Propagation {
                     };
                     rays.set_refractive_index(*refractive_index)?;
                     rays.set_dist_to_next_surface(*length_along_z);
-                    rays.propagate_along_z(*length_along_z)?;
+                    // rays.propagate_along_z(*length_along_z)?;
                     data = Some(LightData::Geometric(rays));
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
@@ -156,7 +156,10 @@ mod test {
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert!(node.properties().get("distance").is_ok());
-        assert_matches!(node.properties().get("distance").unwrap(), Proptype::F64(_));
+        assert_matches!(
+            node.properties().get("distance").unwrap(),
+            Proptype::Length(_)
+        );
         if let Ok(Proptype::F64(dist)) = node.properties().get("distance") {
             assert_eq!(dist, &0.0);
         }

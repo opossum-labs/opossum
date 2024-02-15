@@ -348,14 +348,18 @@ impl Rays {
 
     /// Propagate a ray bundle along the z axis.
     ///
+    /// The propagation length must be set with the function `set_dist_to_next_surface`.
     /// # Errors
     /// This function returns an error if
     ///  - the z component of a ray direction is zero.
     ///  - the given length is not finite.
-    pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
-        for ray in &mut self.rays {
-            ray.propagate_along_z(length_along_z)?;
+    pub fn propagate_along_z(&mut self) -> OpmResult<()> {
+        if !self.dist_to_next_surface.is_zero() {
+            for ray in &mut self.rays {
+                ray.propagate_along_z(self.dist_to_next_surface)?;
+            }
         }
+        self.set_dist_zero();
         Ok(())
     }
     /// Refract a ray bundle on a paraxial surface of given focal length.
@@ -521,6 +525,9 @@ impl Rays {
     /// **Note**: This function is a hack and will be removed in later versions.
     pub fn set_dist_to_next_surface(&mut self, dist_to_next_surface: Length) {
         self.dist_to_next_surface = dist_to_next_surface;
+    }
+    fn set_dist_zero(&mut self) {
+        self.dist_to_next_surface = Length::zero();
     }
 }
 
@@ -725,8 +732,8 @@ mod test {
                 Point3::new(Length::zero(), Length::zero(), Length::zero())
             )
         }
-        rays.propagate_along_z(Length::new::<millimeter>(1.0))
-            .unwrap();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(1.0));
+        rays.propagate_along_z().unwrap();
         assert_eq!(
             rays.rays[0].position(),
             Point3::new(
@@ -983,8 +990,8 @@ mod test {
         .unwrap();
         rays.add_ray(ray0);
         rays.add_ray(ray1);
-        rays.propagate_along_z(Length::new::<millimeter>(1.0))
-            .unwrap();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(1.0));
+        rays.propagate_along_z().unwrap();
         assert_eq!(
             rays.rays[0].position(),
             Point3::new(
@@ -1281,9 +1288,10 @@ mod test {
         )
         .unwrap()];
         let mut rays = Rays::from(ray_vec);
-
-        let _ = rays.propagate_along_z(Length::new::<millimeter>(1.));
-        let _ = rays.propagate_along_z(Length::new::<millimeter>(2.));
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(1.));
+        let _ = rays.propagate_along_z();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(2.));
+        let _ = rays.propagate_along_z();
 
         let pos_hist_comp = vec![MatrixXx3::from_vec(vec![
             0., 0., 0., 0., 0.5, 1.5, 0., 1., 3.,
@@ -1348,7 +1356,8 @@ mod test {
         )
         .unwrap();
 
-        let _ = rays.propagate_along_z(Length::new::<millimeter>(10.));
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+        let _ = rays.propagate_along_z();
         let wf_data = rays
             .get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(10.))
             .unwrap();
@@ -1402,7 +1411,8 @@ mod test {
             Energy::new::<joule>(1.),
         )
         .unwrap();
-        let _ = rays.propagate_along_z(Length::new::<millimeter>(10.));
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+        let _ = rays.propagate_along_z();
 
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(Length::new::<nanometer>(1000.));
 
@@ -1421,7 +1431,8 @@ mod test {
             Energy::new::<joule>(1.),
         )
         .unwrap();
-        let _ = rays.propagate_along_z(Length::new::<millimeter>(10.));
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+        let _ = rays.propagate_along_z();
 
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(Length::new::<nanometer>(500.));
 

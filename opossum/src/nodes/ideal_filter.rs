@@ -196,6 +196,7 @@ impl Optical for IdealFilter {
                         ));
                     }
                     let mut new_rays = r.clone();
+                    new_rays.propagate_along_z()?;
                     new_rays.filter_energy(&self.filter_type())?;
                     let light_data = Some(LightData::Geometric(new_rays));
                     return Ok(HashMap::from([(target.into(), light_data)]));

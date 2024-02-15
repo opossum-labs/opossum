@@ -98,6 +98,7 @@ impl Optical for ParaxialSurface {
                         } else {
                             return Err(OpossumError::Analysis("cannot read focal length".into()));
                         };
+                    rays.propagate_along_z()?;
                     rays.refract_paraxial(focal_length)?;
                     data = Some(LightData::Geometric(rays));
                 } else {

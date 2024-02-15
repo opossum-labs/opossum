@@ -18,12 +18,14 @@ fn main() -> OpmResult<()> {
         Energy::new::<joule>(1.),
         &DistributionStrategy::Hexapolar(5),
     )?;
-
-    rays.propagate_along_z(Length::new::<millimeter>(10.))?;
+    rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+    rays.propagate_along_z()?;
     rays.refract_paraxial(Length::new::<millimeter>(10.))?;
-    rays.propagate_along_z(Length::new::<millimeter>(30.))?;
+    rays.set_dist_to_next_surface(Length::new::<millimeter>(30.));
+    rays.propagate_along_z()?;
     rays.refract_paraxial(Length::new::<millimeter>(20.))?;
-    rays.propagate_along_z(Length::new::<millimeter>(10.))?;
+    rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+    rays.propagate_along_z()?;
 
     let mut plt_params = PlotParameters::default();
     plt_params

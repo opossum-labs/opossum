@@ -169,6 +169,7 @@ impl BeamSplitter {
             match input1 {
                 LightData::Geometric(r) => {
                     let mut in_ray = r.clone();
+                    in_ray.propagate_along_z()?;
                     let split_ray = in_ray.split(splitting_config)?;
                     (in_ray, split_ray)
                 }
@@ -185,6 +186,7 @@ impl BeamSplitter {
             match input2 {
                 LightData::Geometric(r) => {
                     let mut in_ray = r.clone();
+                    in_ray.propagate_along_z()?;
                     let split_ray = in_ray.split(splitting_config)?;
                     (in_ray, split_ray)
                 }
