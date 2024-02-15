@@ -116,8 +116,20 @@ impl Optical for Lens {
                             "cannot read refractive index".into(),
                         ));
                     };
-                    let front_surface = Sphere::new(rays.dist_to_next_surface(), *front_roc)?;
+                    let next_z_pos=rays.absolute_z_of_last_surface()+rays.dist_to_next_surface();
+                    let front_surface = Sphere::new(next_z_pos, *front_roc)?;
                     rays.refract_on_surface(&front_surface, *n2)?;
+                    let Ok(Proptype::Length(center_thickness)) = self.props.get("center thickness") else {
+                        return Err(OpossumError::Analysis("cannot read center thickness".into()));
+                    };
+                    rays.set_dist_to_next_surface(*center_thickness);
+                    let Ok(Proptype::Length(rear_roc)) = self.props.get("rear curvature") else {
+                        return Err(OpossumError::Analysis("cannot read rear curvature".into()));
+                    };
+                    let next_z_pos=rays.absolute_z_of_last_surface()+rays.dist_to_next_surface();
+                    let rear_surface = Sphere::new(next_z_pos, *rear_roc)?;
+                    rays.refract_on_surface(&rear_surface, 1.0)?;
+
                     Ok(HashMap::from([(
                         "rear".into(),
                         Some(LightData::Geometric(rays)),

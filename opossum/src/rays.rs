@@ -35,6 +35,10 @@ pub struct Rays {
     // *** only temporary before we have concept for coordinate system
     // ***
     dist_to_next_surface: Length,
+    z_position: Length,
+    // ***
+    // ***
+    // ***
 }
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis).
@@ -76,6 +80,7 @@ impl Rays {
         Ok(Self {
             rays,
             dist_to_next_surface: Length::zero(),
+            z_position: Length::zero(),
         })
     }
     /// Generate a ray cone (= point source)
@@ -124,6 +129,7 @@ impl Rays {
         Ok(Self {
             rays,
             dist_to_next_surface: Length::zero(),
+            z_position: Length::zero(),
         })
     }
     /// Returns the total energy of this [`Rays`].
@@ -360,6 +366,7 @@ impl Rays {
                 ray.propagate_along_z(self.dist_to_next_surface)?;
             }
         }
+        self.z_position+=self.dist_to_next_surface;
         self.set_dist_zero();
         Ok(())
     }
@@ -389,6 +396,7 @@ impl Rays {
         for ray in &mut self.rays {
             ray.refract_on_surface(surface, n2)?;
         }
+        self.z_position+=self.dist_to_next_surface;
         self.set_dist_zero();
         Ok(())
     }
@@ -542,6 +550,10 @@ impl Rays {
     fn set_dist_zero(&mut self) {
         self.dist_to_next_surface = Length::zero();
     }
+    /// Returns the absolute z of last surface of this [`Rays`].
+    pub fn absolute_z_of_last_surface(&self) -> Length {
+        self.z_position
+    }
 }
 
 /// struct that holds the history of the ray positions that is needed for report generation
@@ -629,6 +641,7 @@ impl From<Vec<Ray>> for Rays {
         Self {
             rays: value,
             dist_to_next_surface: Length::zero(),
+            z_position: Length::zero()
         }
     }
 }
