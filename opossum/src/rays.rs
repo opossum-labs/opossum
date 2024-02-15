@@ -13,6 +13,7 @@ use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
+use crate::surface::Surface;
 use image::{DynamicImage, ImageBuffer};
 use kahan::KahanSummator;
 use log::warn;
@@ -377,6 +378,18 @@ impl Rays {
         for ray in &mut self.rays {
             ray.refract_paraxial(focal_length)?;
         }
+        Ok(())
+    }
+    /// Refract a ray bundle on a [`Surface`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn refract_on_surface(&mut self, surface: &dyn Surface, n2: f64) -> OpmResult<()> {
+        for ray in &mut self.rays {
+            ray.refract_on_surface(surface, n2)?;
+        }
+        self.set_dist_zero();
         Ok(())
     }
     /// Filter a ray bundle by a given filter.

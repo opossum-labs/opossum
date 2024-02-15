@@ -1,11 +1,15 @@
 //! Spherical lens
+use std::collections::HashMap;
+
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
+    surface::Sphere,
 };
 use uom::si::{f64::Length, length::millimeter};
 
@@ -49,8 +53,8 @@ fn create_default_props() -> Properties {
         .unwrap();
 
     let mut ports = OpticPorts::new();
-    ports.create_input("in1").unwrap();
-    ports.create_output("out1").unwrap();
+    ports.create_input("front").unwrap();
+    ports.create_output("rear").unwrap();
     props.set("apertures", ports.into()).unwrap();
     props
 }
@@ -93,17 +97,37 @@ impl Lens {
 impl Optical for Lens {
     fn analyze(
         &mut self,
-        _incoming_data: LightResult,
+        incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
         match analyzer_type {
             AnalyzerType::Energy => Err(OpossumError::Analysis(
                 "Energy Analysis is not yet implemented for Lens Nodes".into(),
             )),
-            _ => Err(OpossumError::Analysis(
-                "No Analysis is currently implemented for Lens Nodes".into(),
-            )),
-            // AnalyzerType::RayTrace(_) => Ok(self.analyze_ray_trace(incoming_data)),
+            AnalyzerType::RayTrace(_) => {
+                let data = incoming_data.get("front").unwrap_or(&None);
+                if let Some(LightData::Geometric(rays)) = data {
+                    let mut rays = rays.clone();
+                    let Ok(Proptype::Length(front_roc)) = self.props.get("front curvature") else {
+                        return Err(OpossumError::Analysis("cannot read front curvature".into()));
+                    };
+                    let Ok(Proptype::F64(n2)) = self.props.get("refractive index") else {
+                        return Err(OpossumError::Analysis(
+                            "cannot read refractive index".into(),
+                        ));
+                    };
+                    let front_surface = Sphere::new(rays.dist_to_next_surface(), *front_roc)?;
+                    rays.refract_on_surface(&front_surface, *n2)?;
+                    Ok(HashMap::from([(
+                        "rear".into(),
+                        Some(LightData::Geometric(rays)),
+                    )]))
+                } else {
+                    Err(OpossumError::Analysis(
+                        "expected ray data at input port".into(),
+                    ))
+                }
+            }
         }
     }
     fn properties(&self) -> &Properties {
