@@ -1,3 +1,4 @@
+//! Spherical lens
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -6,139 +7,62 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
 };
-use uom::{si::f64::Length, si::length::meter};
-
-pub struct IdealLens;
+use num::Zero;
+use uom::si::{f64::Length, length::millimeter};
 
 #[derive(Debug)]
-pub struct RealLens {
-    curvatures: Vec<Length>,
-    center_thickness: Length,
-    z_pos: Length,
-    refractive_index: f64,
+pub struct Lens {
     props: Properties,
+    z_pos: Length,
 }
 fn create_default_props() -> Properties {
     let mut props = Properties::new("lens", "lens");
+    props.create("front_curvature", "radius of curvature of front surface", None, Length::new::<millimeter>(500.0).into()).unwrap();
+    props.create("rear_curvature", "radius of curvature of rear surface", None, Length::new::<millimeter>(-500.0).into()).unwrap();
+    props.create("center thickness", "thickness of the lens in the center", None, Length::new::<millimeter>(10.0).into()).unwrap();
+    props.create("refractive index", "refractive index of the lens material", None, 1.5.into()).unwrap();
+    
     let mut ports = OpticPorts::new();
     ports.create_input("in1").unwrap();
     ports.create_output("out1").unwrap();
     props.set("apertures", ports.into()).unwrap();
     props
 }
-
-impl RealLens {
+impl Default for Lens {
+    /// Create a 100mm focal lengths lens. LA1251-B from thorlabs. refractive inde hardcoded for n-bk7 at 1054 nm
+    fn default() -> Self {
+        Self {
+            props: create_default_props(),
+            z_pos: Length::zero()
+        }
+    }
+}
+impl Lens {
     #[must_use]
     pub fn new(
         front_curvature: Length,
         rear_curvature: Length,
         center_thickness: Length,
-        z_pos: Length,
         refractive_index: f64,
     ) -> Self {
+        let mut props=create_default_props();
+        props.set("front curvature", front_curvature.into()).unwrap();
+        props.set("rear curvature", rear_curvature.into()).unwrap();
+        props.set("center thickness", center_thickness.into()).unwrap();
+        props.set("refractive index", refractive_index.into()).unwrap();
         Self {
-            curvatures: vec![front_curvature, rear_curvature],
-            center_thickness,
-            z_pos,
-            refractive_index,
-            props: create_default_props(),
+            props,
+            z_pos: Length::zero()
         }
     }
-    #[must_use]
-    pub fn curvatures(&self) -> &Vec<Length> {
-        &self.curvatures
-    }
-
-    pub fn set_curvatures(&mut self, curvature_1: f64, curvature_2: f64) {
-        self.curvatures = vec![
-            Length::new::<meter>(curvature_1),
-            Length::new::<meter>(curvature_2),
-        ];
-    }
-
-    #[must_use]
-    pub fn thickness(&self) -> Length {
-        self.center_thickness
-    }
-
-    pub fn set_thickness(&mut self, thickness: f64) {
-        self.center_thickness = Length::new::<meter>(thickness);
-    }
-
     #[must_use]
     pub fn position(&self) -> Length {
         self.z_pos
     }
-
-    pub fn set_position(&mut self, position: f64) {
-        self.z_pos = Length::new::<meter>(position);
-    }
-
-    #[must_use]
-    pub const fn get_refractve_index(&self) -> f64 {
-        self.refractive_index
-    }
-
-    pub fn set_refractve_index(&mut self, refractive_index: f64) {
-        self.refractive_index = refractive_index;
-    }
-
-    // fn analyze_ray_trace(&mut self, incoming_data: LightResult) -> LightResult {
-    //     let remove_pedantic_clippy = self.center_thickness;
-    //     incoming_data
-    // let _in1: Option<&Option<LightData>> = incoming_data.get("in1");
-    // Ok(incoming_data)
-
-    // let mut in_rays: Vec<RayDataParaxial> = Vec::new();
-    // if let Some(Some(in1)) = in1 {
-    //     match in1 {
-    //         LightData::ParAxialRayTrace(rays) => in_rays = rays.rays,
-    //         _ => return Err(OpossumError::Analysis("expected set of rays".into())),
-    //     }
-    // };
-
-    // let out1_energy = Some(LightData::Energy(DataEnergy {
-    //     energy: in1_energy * self.ratio + in2_energy * (1.0 - self.ratio),
-    // }));
-    // Ok(HashMap::from([
-    //     ("out1_trans1_refl2".into(), out1_energy),
-    //     ("out2_trans2_refl1".into(), out2_energy),
-    // ]))
 }
 
-// fn ray_propagate(&mut self, rays: &mut Vec<RayDataParaxial>){
-//     for ray in rays.into_iter(){
-//         if ray.pos
-//     };
-// }
 
-// pub struct RayDataParaxial {
-//     // ray: Array1<f64>,
-//     ray: Array1<f64>,
-//     pos: Vec<[f64;3]>,
-//     index: usize,
-//     bounce_lvl: usize,
-//     max_bounces: usize,
-// }
-// }
-
-impl Default for RealLens {
-    /// Create a 100mm focal lengths lens. LA1251-B from thorlabs. refractive inde hardcoded for n-bk7 at 1054 nm
-    fn default() -> Self {
-        Self {
-            curvatures: vec![
-                Length::new::<meter>(51.5e-3),
-                Length::new::<meter>(f64::INFINITY),
-            ],
-            center_thickness: Length::new::<meter>(3.6e-3),
-            z_pos: Length::new::<meter>(0.0),
-            refractive_index: 1.5068,
-            props: create_default_props(),
-        }
-    }
-}
-
-impl Optical for RealLens {
+impl Optical for Lens {
     fn analyze(
         &mut self,
         _incoming_data: LightResult,
@@ -162,7 +86,7 @@ impl Optical for RealLens {
     }
 }
 
-impl Dottable for RealLens {
+impl Dottable for Lens {
     fn node_color(&self) -> &str {
         "blue"
     }

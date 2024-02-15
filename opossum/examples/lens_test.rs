@@ -1,6 +1,6 @@
 use opossum::error::OpmResult;
 use opossum::lightdata::{DataEnergy, LightData};
-use opossum::nodes::{EnergyMeter, RealLens, Source};
+use opossum::nodes::{EnergyMeter, Lens, Source};
 use opossum::spectrum_helper::create_he_ne_spec;
 use opossum::OpticScenery;
 use std::path::Path;
@@ -14,8 +14,8 @@ fn main() -> OpmResult<()> {
             spectrum: create_he_ne_spec(1.0)?,
         }),
     ));
-    let l1 = scenery.add_node(RealLens::default()); // Lens 1
-    let l2 = scenery.add_node(RealLens::default()); // Lens 2
+    let l1 = scenery.add_node(Lens::default()); // Lens 1
+    let l2 = scenery.add_node(Lens::default()); // Lens 2
     let det = scenery.add_node(EnergyMeter::default());
 
     scenery.connect_nodes(src, "out1", l1, "in1")?;
