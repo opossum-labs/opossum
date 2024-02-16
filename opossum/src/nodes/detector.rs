@@ -81,6 +81,7 @@ impl Optical for Detector {
         let data = incoming_data.get(inport).unwrap_or(&None);
         if let Some(LightData::Geometric(rays)) = data {
             let mut rays = rays.clone();
+            self.light_data = Some(LightData::Geometric(rays.clone()));
             rays.propagate_along_z()?;
             Ok(HashMap::from([(
                 outport.into(),

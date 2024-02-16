@@ -137,7 +137,7 @@ impl WaveFrontErrorMap {
                     .sum::<f64>()
                     / f64::from(i32::try_from(wf_dat.len()).unwrap()),
             );
-            Ok((rms * 1000., ptv * 1000.))
+            Ok((ptv * 1000., rms * 1000.))
         }
     }
 }
@@ -175,6 +175,7 @@ impl Optical for WaveFront {
         if let Some(LightData::Geometric(rays)) = data {
             let mut rays = rays.clone();
             rays.propagate_along_z()?;
+            self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(HashMap::from([(
                 outport.into(),
                 Some(LightData::Geometric(rays)),

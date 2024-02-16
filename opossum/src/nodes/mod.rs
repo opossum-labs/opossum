@@ -30,8 +30,9 @@ pub use lens::Lens;
 pub use paraxial_surface::ParaxialSurface;
 pub use propagation::Propagation;
 pub use reference::NodeReference;
-pub use source::create_collimated_ray_source;
+pub use source::create_line_collimated_ray_source;
 pub use source::create_point_ray_source;
+pub use source::create_round_collimated_ray_source;
 pub use source::Source;
 
 pub use energy_meter::EnergyMeter;

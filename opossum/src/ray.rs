@@ -208,9 +208,9 @@ impl Ray {
             length_in_ray_dir * self.dir.z,
         );
 
-        let normalized_dir = self.dir.normalize();
-        let length_in_ray_dir = length_along_z.get::<millimeter>() / normalized_dir[2];
-        self.path_length += Length::new::<millimeter>(length_in_ray_dir) * self.refractive_index;
+        //let normalized_dir = self.dir.normalize();
+        //let length_in_ray_dir = length_along_z.get::<millimeter>() / normalized_dir[2];
+        self.path_length += length_in_ray_dir * self.refractive_index * self.dir.norm();
         Ok(())
     }
     /// Refract a ray on a paraxial surface of a given focal length.
@@ -275,6 +275,10 @@ impl Ray {
             let n = surface_normal.normalize();
             let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
             let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
+            let pos_in_m = self.pos.map(|c| c.value);
+            let intersection_in_m = intersection_point.map(|c| c.value);
+            self.path_length +=
+                self.refractive_index * Length::new::<meter>((pos_in_m - intersection_in_m).norm());
             self.pos_hist.push(self.pos);
             self.pos = intersection_point;
             // check, if total reflection
