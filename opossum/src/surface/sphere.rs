@@ -92,7 +92,10 @@ impl Surface for Sphere {
             _ => unreachable!(),
         };
         let center_point = Vector3::new(0.0, 0.0, z_0);
-        let normal_vector = (Vector3::from(intersection_point) - center_point).normalize();
+        let mut normal_vector = (Vector3::from(intersection_point) - center_point).normalize();
+        if self.radius.is_sign_negative() {
+            normal_vector *= -1.0;
+        }
         Some((
             Point3::new(
                 Length::new::<meter>(intersection_point.x),
@@ -152,7 +155,7 @@ mod test {
         assert_eq!(s.radius, Length::new::<millimeter>(-2.0));
     }
     #[test]
-    fn intersect_on_axis() {
+    fn intersect_positive_on_axis() {
         let s = Sphere::new(
             Length::new::<millimeter>(10.0),
             Length::new::<millimeter>(1.0),
@@ -180,25 +183,9 @@ mod test {
                 Vector3::new(0.0, 0.0, -1.0)
             ))
         );
-        let s = Sphere::new(
-            Length::new::<millimeter>(10.0),
-            Length::new::<millimeter>(-1.0),
-        )
-        .unwrap();
-        assert_eq!(
-            s.calc_intersect_and_normal(&ray),
-            Some((
-                Point3::new(
-                    Length::new::<millimeter>(0.0),
-                    Length::new::<millimeter>(0.0),
-                    Length::new::<millimeter>(10.0)
-                ),
-                Vector3::new(0.0, 0.0, 1.0)
-            ))
-        );
     }
     #[test]
-    fn intersect_on_axis_behind() {
+    fn intersect_positive_on_axis_behind() {
         let ray = Ray::new(
             Point3::new(
                 Length::new::<millimeter>(0.0),
@@ -224,7 +211,7 @@ mod test {
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
-    fn intersect_collinear_no_intersect() {
+    fn intersect_positive_collinear_no_intersect() {
         let ray = Ray::new(
             Point3::new(
                 Length::new::<millimeter>(0.0),
@@ -256,7 +243,7 @@ mod test {
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
-    fn intersect_collinear_touch() {
+    fn intersect_positive_collinear_touch() {
         let ray = Ray::new(
             Point3::new(
                 Length::new::<millimeter>(0.0),
@@ -304,6 +291,36 @@ mod test {
                     Length::new::<millimeter>(11.0)
                 ),
                 Vector3::new(0.0, -1.0, 0.0)
+            ))
+        );
+    }
+    #[test]
+    fn intersect_negative_on_axis() {
+        let s = Sphere::new(
+            Length::new::<millimeter>(10.0),
+            Length::new::<millimeter>(-1.0),
+        )
+        .unwrap();
+        let ray = Ray::new(
+            Point3::new(
+                Length::new::<millimeter>(0.0),
+                Length::new::<millimeter>(0.0),
+                Length::new::<millimeter>(0.0),
+            ),
+            Vector3::new(0.0, 0.0, 1.0),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.calc_intersect_and_normal(&ray),
+            Some((
+                Point3::new(
+                    Length::new::<millimeter>(0.0),
+                    Length::new::<millimeter>(0.0),
+                    Length::new::<millimeter>(10.0)
+                ),
+                Vector3::new(0.0, 0.0, -1.0)
             ))
         );
     }

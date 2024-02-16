@@ -11,12 +11,21 @@ fn main() -> OpmResult<()> {
     scenery.set_description("Lens Ray-trace test".into())?;
 
     let src = scenery.add_node(
-        create_collimated_ray_source(Length::new::<millimeter>(3.0), Energy::new::<joule>(1.0), 3)
-            .unwrap(),
+        create_collimated_ray_source(
+            Length::new::<millimeter>(20.0),
+            Energy::new::<joule>(1.0),
+            3,
+        )
+        .unwrap(),
     );
-    let s1=scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(100.0))?);
-    let l1 = scenery.add_node(Lens::default());
-    let s2=scenery.add_node(Propagation::new("s2", Length::new::<millimeter>(200.0))?);
+    let s1 = scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(100.0))?);
+    let l1 = scenery.add_node(Lens::new(
+        Length::new::<millimeter>(50.0),
+        Length::new::<millimeter>(-50.0),
+        Length::new::<millimeter>(20.0),
+        1.5,
+    ));
+    let s2 = scenery.add_node(Propagation::new("s2", Length::new::<millimeter>(200.0))?);
     let det = scenery.add_node(RayPropagationVisualizer::default());
 
     scenery.connect_nodes(src, "out1", s1, "front")?;

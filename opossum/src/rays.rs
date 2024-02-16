@@ -551,6 +551,7 @@ impl Rays {
         self.dist_to_next_surface = Length::zero();
     }
     /// Returns the absolute z of last surface of this [`Rays`].
+    #[must_use]
     pub fn absolute_z_of_last_surface(&self) -> Length {
         self.z_position
     }
