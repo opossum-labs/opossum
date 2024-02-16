@@ -27,13 +27,13 @@ use uom::si::{
 pub fn create_collimated_ray_source(
     radius: Length,
     energy: Energy,
-    num_rings: u8,
+    nr_of_rings: u8,
 ) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
         radius,
         Length::new::<nanometer>(1053.0),
         energy,
-        &DistributionStrategy::Hexapolar(num_rings),
+        &DistributionStrategy::Hexapolar { nr_of_rings },
     )?;
     let light = LightData::Geometric(rays);
     Ok(Source::new("collimated ray source", &light))

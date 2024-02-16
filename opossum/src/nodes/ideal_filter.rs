@@ -349,7 +349,7 @@ mod test {
                 Length::new::<millimeter>(5.0),
                 Length::new::<nanometer>(1054.0),
                 Energy::new::<joule>(1.0),
-                &DistributionStrategy::Hexapolar(1),
+                &DistributionStrategy::Hexapolar { nr_of_rings: 1 },
             )
             .unwrap(),
         );

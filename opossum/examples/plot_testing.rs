@@ -16,7 +16,7 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(10.),
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
-        &DistributionStrategy::Hexapolar(5),
+        &DistributionStrategy::Hexapolar { nr_of_rings: 5 },
     )?;
     rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
     rays.propagate_along_z()?;

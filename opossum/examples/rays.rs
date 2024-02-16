@@ -10,7 +10,7 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(1.0),
         Length::new::<nanometer>(1054.0),
         Energy::new::<joule>(1.0),
-        &DistributionStrategy::Random(200),
+        &DistributionStrategy::Random { nr_of_points: 200 },
     )?;
     Ok(())
     // rays.to_svg_plot(Path::new("./opossum/playground/rays.svg"))?;

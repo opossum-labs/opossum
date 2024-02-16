@@ -9,25 +9,41 @@ use uom::si::{f64::Length, length::millimeter};
 
 /// Distribution strategies
 pub enum DistributionStrategy {
-    /// Circular, hexapolar distribution with a given number of rings within a given radius
-    Hexapolar(u8),
+    /// Circular, hexapolar distribution within a given radius
+    Hexapolar {
+        /// number of rings of the hexaploar pattern
+        nr_of_rings: u8,
+    },
     /// Square, random distribution with a given number of points within a given side length
-    Random(usize),
+    Random {
+        /// total number of points to be generated
+        nr_of_points: usize,
+    },
     /// Square, low-discrepancy quasirandom distribution with a given number of points within a given side length
-    Sobol(usize),
-    /// Square, evenly sized grid with the given number of points
-    Grid(usize),
+    Sobol {
+        /// total number of points to be generated
+        nr_of_points: usize,
+    },
+    /// Square, evenly sized grid
+    Grid {
+        /// number of points in x direction
+        nr_of_points_x: usize,
+        /// number of points in y direction
+        nr_of_points_y: usize,
+    },
 }
-
 impl DistributionStrategy {
     /// Generate a vector of 2D points within a given size (which depends on the concrete [`DistributionStrategy`])
     #[must_use]
     pub fn generate(&self, size: Length) -> Vec<Point3<Length>> {
         match self {
-            Self::Hexapolar(rings) => hexapolar(*rings, size),
-            Self::Random(nr_of_rays) => random(*nr_of_rays, size),
-            Self::Sobol(nr_of_rays) => sobol(*nr_of_rays, size),
-            Self::Grid(nr_of_rays) => grid(*nr_of_rays, size),
+            Self::Hexapolar { nr_of_rings } => hexapolar(*nr_of_rings, size),
+            Self::Random { nr_of_points } => random(*nr_of_points, size),
+            Self::Sobol { nr_of_points } => sobol(*nr_of_points, size),
+            Self::Grid {
+                nr_of_points_x,
+                nr_of_points_y,
+            } => grid(*nr_of_points_x, *nr_of_points_y, size),
         }
     }
 }
@@ -77,17 +93,38 @@ fn sobol(nr_of_rays: usize, side_length: Length) -> Vec<Point3<Length>> {
     }
     points
 }
-fn grid(nr_of_rays: usize, side_length: Length) -> Vec<Point3<Length>> {
+fn grid(nr_of_points_x: usize, nr_of_points_y: usize, side_length: Length) -> Vec<Point3<Length>> {
+    let nr_of_points_x = nr_of_points_x.clamp(1, usize::MAX);
+    let nr_of_points_y = nr_of_points_y.clamp(1, usize::MAX);
     #[allow(clippy::cast_precision_loss)]
-    let distance = side_length / ((nr_of_rays - 1) as f64);
-    let offset = side_length / 2.0;
+    let distance_x = if nr_of_points_x > 1 {
+        side_length / ((nr_of_points_x - 1) as f64)
+    } else {
+        Length::zero()
+    };
+    #[allow(clippy::cast_precision_loss)]
+    let distance_y = if nr_of_points_y > 1 {
+        side_length / ((nr_of_points_y - 1) as f64)
+    } else {
+        Length::zero()
+    };
+    let offset_x = if nr_of_points_x > 1 {
+        side_length / 2.0
+    } else {
+        Length::zero()
+    };
+    let offset_y = if nr_of_points_y > 1 {
+        side_length / 2.0
+    } else {
+        Length::zero()
+    };
     let mut points: Vec<Point3<Length>> = Vec::new();
-    for i_x in 0..nr_of_rays {
-        for i_y in 0..nr_of_rays {
+    for i_x in 0..nr_of_points_x {
+        for i_y in 0..nr_of_points_y {
             #[allow(clippy::cast_precision_loss)]
             points.push(Point3::new(
-                (i_x as f64) * distance - offset,
-                (i_y as f64) * distance - offset,
+                (i_x as f64) * distance_x - offset_x,
+                (i_y as f64) * distance_y - offset_y,
                 Length::zero(),
             ));
         }
@@ -99,17 +136,20 @@ mod test {
     use super::*;
     #[test]
     fn strategy_random() {
-        let strategy = DistributionStrategy::Random(10);
+        let strategy = DistributionStrategy::Random { nr_of_points: 10 };
         assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 10);
     }
     #[test]
     fn strategy_sobol() {
-        let strategy = DistributionStrategy::Sobol(10);
+        let strategy = DistributionStrategy::Sobol { nr_of_points: 10 };
         assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 10);
     }
     #[test]
-    fn strategy_grid() {
-        let strategy = DistributionStrategy::Grid(2);
+    fn strategy_grid_symmetric() {
+        let strategy = DistributionStrategy::Grid {
+            nr_of_points_x: 2,
+            nr_of_points_y: 2,
+        };
         let points = strategy.generate(Length::new::<millimeter>(1.0));
         assert_eq!(points.len(), 4);
         assert_eq!(
@@ -140,6 +180,44 @@ mod test {
             points[3],
             Point3::new(
                 Length::new::<millimeter>(0.5),
+                Length::new::<millimeter>(0.5),
+                Length::zero()
+            )
+        );
+    }
+    #[test]
+    fn strategy_grid_size_one() {
+        let strategy = DistributionStrategy::Grid {
+            nr_of_points_x: 1,
+            nr_of_points_y: 1,
+        };
+        let points = strategy.generate(Length::new::<millimeter>(1.0));
+        assert_eq!(points.len(), 1);
+        assert_eq!(
+            points[0],
+            Point3::new(Length::zero(), Length::zero(), Length::zero())
+        );
+    }
+    #[test]
+    fn strategy_grid_asymmetric() {
+        let strategy = DistributionStrategy::Grid {
+            nr_of_points_x: 1,
+            nr_of_points_y: 2,
+        };
+        let points = strategy.generate(Length::new::<millimeter>(1.0));
+        assert_eq!(points.len(), 2);
+        assert_eq!(
+            points[0],
+            Point3::new(
+                Length::zero(),
+                Length::new::<millimeter>(-0.5),
+                Length::zero()
+            )
+        );
+        assert_eq!(
+            points[1],
+            Point3::new(
+                Length::zero(),
                 Length::new::<millimeter>(0.5),
                 Length::zero()
             )

@@ -97,7 +97,7 @@ impl Rays {
     pub fn new_hexapolar_point_source(
         position: Point3<Length>,
         cone_angle: Angle,
-        number_of_rings: u8,
+        nr_of_rings: u8,
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
@@ -110,7 +110,7 @@ impl Rays {
         let points: Vec<Point3<Length>> = if cone_angle.is_zero() {
             vec![Point3::new(Length::zero(), Length::zero(), Length::zero())]
         } else {
-            DistributionStrategy::Hexapolar(number_of_rings)
+            DistributionStrategy::Hexapolar { nr_of_rings }
                 .generate(Length::new::<millimeter>(size_after_unit_length))
         };
         let nr_of_rays = points.len();
@@ -693,7 +693,7 @@ mod test {
     fn new_uniform_collimated() {
         let wvl = Length::new::<nanometer>(1054.0);
         let energy = Energy::new::<joule>(1.0);
-        let strategy = &DistributionStrategy::Hexapolar(2);
+        let strategy = &DistributionStrategy::Hexapolar { nr_of_rings: 2 };
         let rays =
             Rays::new_uniform_collimated(Length::new::<millimeter>(1.0), wvl, energy, strategy);
         assert!(rays.is_ok());
@@ -729,7 +729,7 @@ mod test {
     fn new_uniform_collimated_zero() {
         let wvl = Length::new::<nanometer>(1054.0);
         let energy = Energy::new::<joule>(1.0);
-        let strategy = &DistributionStrategy::Hexapolar(2);
+        let strategy = &DistributionStrategy::Hexapolar { nr_of_rings: 2 };
         let rays = Rays::new_uniform_collimated(Length::zero(), wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();
@@ -887,7 +887,9 @@ mod test {
             Length::new::<millimeter>(1.0),
             Length::new::<nanometer>(1054.0),
             Energy::new::<joule>(1.0),
-            &DistributionStrategy::Random(100000),
+            &DistributionStrategy::Random {
+                nr_of_points: 100000,
+            },
         )
         .unwrap();
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 1.0);
