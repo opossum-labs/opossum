@@ -3,7 +3,10 @@
 use std::f64::consts::PI;
 use std::ops::Range;
 use std::path::Path;
-
+use std::sync::Mutex;
+use voronator::polygon::Polygon;
+use voronator::VoronoiDiagram;
+use voronator::delaunator::{Coord, Point as VPoint};
 use crate::aperture::Aperture;
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
@@ -17,13 +20,15 @@ use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use delaunator::{triangulate, Point};
 use image::{DynamicImage, ImageBuffer};
-use itertools::izip;
+use itertools::{Itertools, izip};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{
     distance, point, DMatrix, DVector, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector2,
     Vector3,
 };
+use rayon::iter::{ParallelIterator, IntoParallelRefIterator};
+use ncollide2d::{math::Point as PNcol, shape::{TrianglePointLocation, Triangle}};
 use num::{Signed, ToPrimitive};
 use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
@@ -364,7 +369,8 @@ impl Rays {
         &self,
         propagation_axis_opt: Option<Vector3<f64>>,
         anchor_point_opt: Option<Point3<Length>>,
-    ) -> OpmResult<(DMatrix<f64>, DVector<f64>, DVector<f64>, f64)> {
+    ) -> OpmResult<(DMatrix<f64>, DVector<f64>, DVector<f64>, f64, f64)> {
+        let num_axes_points = 100.;
         let mut propagation_axis = if propagation_axis_opt.is_some()
             && propagation_axis_opt.unwrap().norm() > f64::EPSILON
         {
@@ -457,12 +463,13 @@ impl Rays {
             let ray_pos_vec = Vector3::from_vec(
                 ray.position()
                     .iter()
-                    .map(|p| p.get::<millimeter>())
+                    .map(|p| p.get::<centimeter>())
                     .collect::<Vec<f64>>(),
             );
             let closest_to_axis_vec = (ray_pos_vec
                 - anchor_point_vec
                 - (ray_pos_vec - anchor_point_vec).dot(&propagation_axis) * propagation_axis);
+
             rays_pos_projection[(row, 0)] = closest_to_axis_vec.dot(&co_ax1_dir);
             rays_pos_projection[(row, 1)] = closest_to_axis_vec.dot(&co_ax2_dir);
         }
@@ -476,46 +483,71 @@ impl Rays {
             rays_pos_projection.column(1).min(),
             rays_pos_projection.column(1).max(),
         )?;
-        let co_ax1_range = co_ax1_lim.max - co_ax1_lim.min;
-        let co_ax2_range = co_ax2_lim.max - co_ax2_lim.min;
         let co_ax1 = linspace(
             co_ax1_lim.min,
             co_ax1_lim.max,
-            1000.,
+            num_axes_points,
         )?;
         let co_ax2 = linspace(
             co_ax2_lim.min ,
             co_ax2_lim.max,
-            1000.,
+            num_axes_points,
         )?;
 
         let co_ax1_bin = co_ax1[1] - co_ax1[0];
         let co_ax2_bin = co_ax2[1] - co_ax2[0];
-        let bin_area =co_ax1_bin* co_ax2_bin;
 
-        //triangulation
-        let points: Vec<Point> = rays_pos_projection
+
+        let points:Vec<VPoint> = rays_pos_projection
             .row_iter()
-            .map(|c| Point { x: c[0], y: c[1] })
-            .collect::<Vec<Point>>();
+            .map(|c| VPoint::from_xy(c[0], c[1] ))
+            .collect();
 
-        let tri_index_mat = Matrix3xX::from_vec(triangulate(&points).triangles).transpose();
-        let mut fluence = DMatrix::<f64>::zeros(co_ax1.len(), co_ax2.len());
+        let bounding_polygon = Polygon::from_points(vec![VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.min), VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.max), VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.min), VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.max)]);
+        let voronoi = VoronoiDiagram::<VPoint>::new(&VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.min), &VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.max), &points).unwrap();
+        let v_cell_sites = &voronoi.sites;
+        let v_cells = voronoi.cells();
 
+        //initialized by energy. will be divided by the area of eacch voronoi cell
+        let mut fluence_scatter = self.rays.iter().map(|r| r.energy().get::<joule>()).collect::<Vec<f64>>();
+
+        for (idx, fl) in fluence_scatter.iter_mut().enumerate(){
+            let v_neighbours = v_cells[idx].points().iter().map(|p| Point2::new(p.x, p.y)).collect::<Vec<Point2<f64>>>();
+            let poly_area = self.calc_closed_poly_area(v_neighbours.clone());
+            *fl /= poly_area;
+        }
+        fluence_scatter.push(0.);
+        fluence_scatter.push(0.);
+        fluence_scatter.push(0.);
+        fluence_scatter.push(0.);
+        let triangles = voronoi.delaunay.triangles;
+        let tri_index_mat = Matrix3xX::from_vec(triangles).transpose();
+        let mut fluence = DMatrix::<f64>::from_element(co_ax1.len(), co_ax2.len(), f64::NAN);
+
+        let mut average = 0.;
+        let mut bin_count = 0;
         for tri_idxs in tri_index_mat.row_iter() {
-            let p1_vec = Vector3::new(points[tri_idxs[0]].x, points[tri_idxs[0]].y, 0.);
-            let p2_vec = Vector3::new(points[tri_idxs[1]].x, points[tri_idxs[1]].y, 0.);
-            let p3_vec = Vector3::new(points[tri_idxs[2]].x, points[tri_idxs[2]].y, 0.);
-
-            let p12_vec = p2_vec - p1_vec;
-            let p23_vec = p3_vec - p2_vec;
-            let p31_vec = p1_vec - p3_vec;
+            let p1_x = &v_cell_sites[tri_idxs[0]].x;
+            let p1_y = &v_cell_sites[tri_idxs[0]].y;
+            let p2_x = &v_cell_sites[tri_idxs[1]].x;
+            let p2_y = &v_cell_sites[tri_idxs[1]].y;
+            let p3_x = &v_cell_sites[tri_idxs[2]].x;
+            let p3_y = &v_cell_sites[tri_idxs[2]].y;
             
-            let tri_area = (p1_vec-p2_vec).cross(&(p1_vec-p3_vec)).norm();
+            let p12_x = p2_x -p1_x;
+            let p12_y = p2_y -p1_y;
+            let p23_x = p3_x -p2_x;
+            let p23_y = p3_y -p2_y;
+            let p31_x = p1_x -p3_x;
+            let p31_y = p1_y -p3_y;
+
+
+            let tri_area = (-p12_x*p31_y+p12_y*p31_x).abs();
+
 
             let (x_min, x_max, y_min, y_max) = tri_idxs
                 .iter()
-                .map(|p_id| (points[*p_id].x, points[*p_id].y))
+                .map(|p_id| (v_cell_sites[*p_id].x, v_cell_sites[*p_id].y))
                 .fold(
                     (
                         f64::INFINITY,
@@ -533,44 +565,106 @@ impl Rays {
                     },
                 );
 
-            let x_i = ((x_min - co_ax1[0]) / co_ax1_bin).to_usize().unwrap();
-            let x_f = ((x_max - co_ax1[0]) / co_ax1_bin).to_usize().unwrap();
-            let y_i = ((y_min - co_ax2[0]) / co_ax2_bin).to_usize().unwrap();
-            let y_f = ((y_max - co_ax2[0]) / co_ax2_bin).to_usize().unwrap();
+            let x_i = (x_min - co_ax1[0]) / co_ax1_bin;
+            let x_f = (x_max - co_ax1[0]) / co_ax1_bin;
+            let y_i = (y_min - co_ax2[0]) / co_ax2_bin;
+            let y_f = (y_max - co_ax2[0]) / co_ax2_bin;
 
+            if x_i.is_sign_negative() || y_i.is_sign_negative()
+            || y_f >= num_axes_points || x_f>= num_axes_points {
+                continue
+            }
+            
+            let x_i = x_i.to_usize().unwrap();
+            let x_f = x_f.to_usize().unwrap();
+            let y_i = y_i.to_usize().unwrap();
+            let y_f = y_f.to_usize().unwrap();
+            
+
+            let c11 = p1_x*p12_y;
+            let c12 = p1_y*p12_x;
+            let c21 = p2_x*p23_y;
+            let c22 = p2_y*p23_x;
+            let c31 = p3_x*p31_y;
+            let c32 = p3_y*p31_x;
+            
             for (x_index, x) in co_ax1.slice((0, x_i), (1, x_f-x_i+1)).iter().enumerate(){
                 for (y_index, y) in co_ax2.slice((0, y_i), (1, y_f-y_i+1)).iter().enumerate(){
-                    let xy1_vec = p1_vec-Vector3::new(*x,*y,0.);
-                    let xy2_vec = p2_vec-Vector3::new(*x,*y,0.);
-                    let xy3_vec = p3_vec-Vector3::new(*x,*y,0.);
-                    let cross_1 = xy1_vec.cross(&p12_vec).sum();
-                    let cross_2 = xy2_vec.cross(&p23_vec).sum();
-                    let cross_3 = xy3_vec.cross(&p31_vec).sum();
+                    
 
-                    if (cross_1.is_sign_negative() && cross_2.is_sign_negative() && cross_3.is_sign_negative()) ||  (cross_1.is_sign_positive() && cross_2.is_sign_positive() && cross_3.is_sign_positive()){
-                        //inside triangle
-                        let area1 = xy2_vec.cross(&xy3_vec).norm();
-                        let area2 = xy3_vec.cross(&xy1_vec).norm();
-                        let area3 = xy1_vec.cross(&xy2_vec).norm();
+                    let cross_1 = c11-x*p12_y - (c12-y*p12_x);
+                    let cross_2 = c21-x*p23_y - (c22-y*p23_x);
+                    let cross_3 = c31-x*p31_y - (c32-y*p31_x);
+
+                    let in_tri = (cross_1.is_sign_negative() && cross_2.is_sign_negative() && cross_3.is_sign_negative()) ||  (cross_1.is_sign_positive() && cross_2.is_sign_positive() && cross_3.is_sign_positive());
+   
+
+                    if in_tri{
+                        let p1xx = p1_x-x;
+                        let p1yy = p1_y-y;
+                        let p2xx = p2_x-x;
+                        let p2yy = p2_y-y;
+                        let p3xx = p3_x-x;
+                        let p3yy = p3_y-y;
+
+                        let area1 = (p2xx*p3yy - p2yy*p3xx).abs();
+                        let area2 = (p3xx*p1yy - p3yy*p1xx).abs();
+                        let area3 = (p1xx*p2yy - p1yy*p2xx).abs();
                         
-                        fluence[(y_index+y_i, x_index+x_i)] = (area1*self.rays[tri_idxs[0]].energy().get::<joule>() + area2*self.rays[tri_idxs[1]].energy().get::<joule>() + area3*self.rays[tri_idxs[2]].energy().get::<joule>())/tri_area;
+                        // fluence[(y_index+y_i, x_index+x_i)] = (area1*self.rays[tri_idxs[0]].energy().get::<joule>() + area2*self.rays[tri_idxs[1]].energy().get::<joule>() + area3*self.rays[tri_idxs[2]].energy().get::<joule>())/tri_area;
+                        fluence[(y_index+y_i, x_index+x_i)] = (area1*fluence_scatter[tri_idxs[0]] + area2*fluence_scatter[tri_idxs[1]] + area3*fluence_scatter[tri_idxs[2]])/tri_area;
+                        average += fluence[(y_index+y_i, x_index+x_i)];
+                        bin_count += 1;
                     }else{
                         continue
                     }
                 }
             }
+            
         }
 
-        fluence /= fluence.sum()/self.total_energy().get::<joule>()*bin_area;
+        average /= f64::from(bin_count);
+        let peak_fluence = fluence
+                .into_iter().fold(f64::NEG_INFINITY, |arg0, v| {
+                    if !v.is_nan(){
+                    f64::max(arg0, *v)
+                }
+            else{arg0}});
 
-        let peak_fluence = fluence.max();
 
         Ok((
             fluence,
             co_ax2.transpose(),
             co_ax1.transpose(),
             peak_fluence,
+            average
         ))
+    }
+
+    fn in_triangle(&self, x: &f64, y: &f64, 
+        p1x: &f64, p1y: &f64, 
+        p2x: &f64, p2y: &f64, 
+        p3x: &f64, p3y: &f64, 
+        p12x: &f64, p12y: &f64,
+        p23x: &f64, p23y: &f64,
+        p31x: &f64, p31y: &f64,
+) -> bool{
+        let cross_1 = (p1x-x)*p12y - (p1y-y)*p12x;
+        let cross_2 = (p2x-x)*p23y - (p2y-y)*p23x;
+        let cross_3 = (p3x-x)*p31y - (p3y-y)*p31x;
+
+        (cross_1.is_sign_negative() && cross_2.is_sign_negative() && cross_3.is_sign_negative()) ||  (cross_1.is_sign_positive() && cross_2.is_sign_positive() && cross_3.is_sign_positive())
+    }
+
+    pub fn calc_closed_poly_area(&self, poly_coords: Vec<Point2<f64>>) -> f64{
+        let mut area = 0.;
+        let num_points = poly_coords.len();
+        for i in 0..num_points{
+            let j = (i+1) % num_points;
+            area += poly_coords[i].x* poly_coords[j].y;
+            area -= poly_coords[i].y* poly_coords[j].x;
+        } 
+        area.abs()/2.
     }
 
     /// Add a single ray to the ray bundle.
@@ -878,6 +972,8 @@ pub enum DistributionStrategy {
     Sobol(usize),
     ///Fibonacci Sampling
     Fibonacci(usize),
+    ///Fibonacci Sampling square
+    FibonacciSquare(usize),
 }
 impl DistributionStrategy {
     /// Generate a vector of 2D points within a given size (which depends on the concrete strategy)
@@ -888,6 +984,7 @@ impl DistributionStrategy {
             Self::Random(nr_of_rays) => random(*nr_of_rays, size),
             Self::Sobol(nr_of_rays) => sobol(*nr_of_rays, size),
             Self::Fibonacci(nr_of_rays) => fibonacci(*nr_of_rays, size),
+            Self::FibonacciSquare(nr_of_rays) => fibonacci_square(*nr_of_rays, size),
         }
     }
 }
@@ -895,11 +992,24 @@ fn fibonacci(nr_of_rays: usize, radius: Length) -> Vec<Point3<Length>> {
     let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_rays);
     let golden_ratio = (1. + f64::sqrt(5.)) / 2.;
     for i in 0_usize..nr_of_rays {
-        let sin_cos = f64::sin_cos(2. * PI * i.to_f64().unwrap() / golden_ratio);
+        let sin_cos = f64::sin_cos(2. * PI * (i.to_f64().unwrap() / golden_ratio).fract());
         let sqrt_r = f64::sqrt(i.to_f64().unwrap() / nr_of_rays.to_f64().unwrap());
         points.push(point![
             radius * sin_cos.0 * sqrt_r,
             radius * sin_cos.1 * sqrt_r,
+            Length::zero()
+        ]);
+    }
+    points
+}
+fn fibonacci_square(nr_of_rays: usize, size: Length) -> Vec<Point3<Length>> {
+    let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_rays);
+    let golden_ratio = (1. + f64::sqrt(5.)) / 2.;
+    for i in 0_usize..nr_of_rays {
+        let i_f64 = i.to_f64().unwrap();
+        points.push(point![
+            size * (i_f64 / golden_ratio).fract(),
+            size * (i_f64/nr_of_rays.to_f64().unwrap()),
             Length::zero()
         ]);
     }
