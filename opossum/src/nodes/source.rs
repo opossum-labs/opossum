@@ -73,7 +73,7 @@ pub fn create_point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<S
         Point3::new(Length::zero(), Length::zero(), Length::zero()),
         cone_angle,
         3,
-        Length::new::<nanometer>(1053.0),
+        Length::new::<nanometer>(1000.0),
         energy,
     )?;
     let light = LightData::Geometric(rays);
