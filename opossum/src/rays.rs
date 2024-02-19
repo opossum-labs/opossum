@@ -8,6 +8,7 @@ use voronator::polygon::Polygon;
 use voronator::VoronoiDiagram;
 use voronator::delaunator::{Coord, Point as VPoint};
 use crate::aperture::Aperture;
+use crate::distribution::DistributionStrategy;
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
@@ -32,7 +33,6 @@ use ncollide2d::{math::Point as PNcol, shape::{TrianglePointLocation, Triangle}}
 use num::{Signed, ToPrimitive};
 use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
-use sobol::{params::JoeKuoD6, Sobol};
 use uom::num_traits::Zero;
 use uom::si::angle::degree;
 use uom::si::energy::joule;
@@ -961,107 +961,6 @@ impl Plottable for RayPositionHistory {
         }
     }
 }
-
-/// Strategy for the creation of a 2D point set
-pub enum DistributionStrategy {
-    /// Circular, hexapolar distribution with a given number of rings within a given radius
-    Hexapolar(u16),
-    /// Square, random distribution with a given number of points within a given side length
-    Random(usize),
-    /// Square, low-discrepancy quasirandom distribution with a given number of points within a given side length
-    Sobol(usize),
-    ///Fibonacci Sampling
-    Fibonacci(usize),
-    ///Fibonacci Sampling square
-    FibonacciSquare(usize),
-}
-impl DistributionStrategy {
-    /// Generate a vector of 2D points within a given size (which depends on the concrete strategy)
-    #[must_use]
-    pub fn generate(&self, size: Length) -> Vec<Point3<Length>> {
-        match self {
-            Self::Hexapolar(rings) => hexapolar(*rings, size),
-            Self::Random(nr_of_rays) => random(*nr_of_rays, size),
-            Self::Sobol(nr_of_rays) => sobol(*nr_of_rays, size),
-            Self::Fibonacci(nr_of_rays) => fibonacci(*nr_of_rays, size),
-            Self::FibonacciSquare(nr_of_rays) => fibonacci_square(*nr_of_rays, size),
-        }
-    }
-}
-fn fibonacci(nr_of_rays: usize, radius: Length) -> Vec<Point3<Length>> {
-    let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_rays);
-    let golden_ratio = (1. + f64::sqrt(5.)) / 2.;
-    for i in 0_usize..nr_of_rays {
-        let sin_cos = f64::sin_cos(2. * PI * (i.to_f64().unwrap() / golden_ratio).fract());
-        let sqrt_r = f64::sqrt(i.to_f64().unwrap() / nr_of_rays.to_f64().unwrap());
-        points.push(point![
-            radius * sin_cos.0 * sqrt_r,
-            radius * sin_cos.1 * sqrt_r,
-            Length::zero()
-        ]);
-    }
-    points
-}
-fn fibonacci_square(nr_of_rays: usize, size: Length) -> Vec<Point3<Length>> {
-    let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_rays);
-    let golden_ratio = (1. + f64::sqrt(5.)) / 2.;
-    for i in 0_usize..nr_of_rays {
-        let i_f64 = i.to_f64().unwrap();
-        points.push(point![
-            size * (i_f64 / golden_ratio).fract(),
-            size * (i_f64/nr_of_rays.to_f64().unwrap()),
-            Length::zero()
-        ]);
-    }
-    points
-}
-fn hexapolar(rings: u16, radius: Length) -> Vec<Point3<Length>> {
-    let mut points: Vec<Point3<Length>> = Vec::new();
-    let radius_step = radius / f64::from(rings);
-    points.push(point![Length::zero(), Length::zero(), Length::zero()]);
-    for ring in 0u16..rings {
-        let radius = f64::from(ring + 1) * radius_step;
-        let points_per_ring = 6 * (ring + 1);
-        let angle_step = 2.0 * std::f64::consts::PI / f64::from(points_per_ring);
-        for point_nr in 0u16..points_per_ring {
-            let point = (f64::from(point_nr) * angle_step).sin_cos();
-            points.push(point![radius * point.0, radius * point.1, Length::zero()]);
-        }
-    }
-    points
-}
-fn random(nr_of_rays: usize, side_length: Length) -> Vec<Point3<Length>> {
-    let mut points: Vec<Point3<Length>> = Vec::new();
-    let mut rng = rand::thread_rng();
-    for _ in 0..nr_of_rays {
-        points.push(point![
-            Length::new::<millimeter>(
-                rng.gen_range(-side_length.get::<millimeter>()..side_length.get::<millimeter>())
-            ),
-            Length::new::<millimeter>(
-                rng.gen_range(-side_length.get::<millimeter>()..side_length.get::<millimeter>())
-            ),
-            Length::zero()
-        ]);
-    }
-    points
-}
-fn sobol(nr_of_rays: usize, side_length: Length) -> Vec<Point3<Length>> {
-    let side_length = side_length.get::<millimeter>();
-    let mut points: Vec<Point3<Length>> = Vec::new();
-    let params = JoeKuoD6::minimal();
-    let seq = Sobol::<f64>::new(2, &params);
-    let offset = side_length / 2.0;
-    for point in seq.take(nr_of_rays) {
-        points.push(point!(
-            Length::new::<millimeter>(point[0] - offset),
-            Length::new::<millimeter>(point[1] - offset),
-            Length::zero()
-        ));
-    }
-    points
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1071,16 +970,6 @@ mod test {
     use log::Level;
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
-    #[test]
-    fn strategy_random() {
-        let strategy = DistributionStrategy::Random(10);
-        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 10);
-    }
-    #[test]
-    fn strategy_sobol() {
-        let strategy = DistributionStrategy::Sobol(10);
-        assert_eq!(strategy.generate(Length::new::<millimeter>(1.0)).len(), 10);
-    }
     #[test]
     fn default() {
         let rays = Rays::default();
@@ -1703,7 +1592,7 @@ mod test {
     }
 
     #[test]
-    fn get_rays_position_history_in_mm_test() {
+    fn get_rays_position_history_in_mm() {
         let ray_vec = vec![Ray::new(
             Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Vector3::new(0., 1., 2.),
@@ -1731,7 +1620,7 @@ mod test {
         }
     }
     #[test]
-    fn project_to_plane_test() {
+    fn project_to_plane() {
         let pos_hist = RayPositionHistory {
             rays_pos_history: vec![
                 MatrixXx3::from_vec(vec![1., 0., 0.]),
@@ -1764,7 +1653,7 @@ mod test {
         assert_eq!(projected_rays[2][(0, 1)], 0.);
     }
     #[test]
-    fn get_wavefront_data_in_units_of_wvl_test() {
+    fn get_wavefront_data_in_units_of_wvl() {
         //empty rays vector
         let rays = Rays::from(Vec::<Ray>::new());
         let wf_data = rays.get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(10.));
@@ -1824,7 +1713,7 @@ mod test {
         assert!(wf_data.wavefront_error_maps.len() == 3);
     }
     #[test]
-    fn wavefront_error_at_pos_in_units_of_wvl_test() {
+    fn wavefront_error_at_pos_in_units_of_wvl() {
         let mut rays = Rays::new_hexapolar_point_source(
             Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Angle::new::<degree>(90.),
@@ -1844,7 +1733,6 @@ mod test {
                 assert!(val.abs() < f64::EPSILON)
             }
         }
-
         let mut rays = Rays::new_hexapolar_point_source(
             Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Angle::new::<degree>(90.),

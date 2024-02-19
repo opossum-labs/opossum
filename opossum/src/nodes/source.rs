@@ -1,17 +1,17 @@
 #![warn(missing_docs)]
-use std::collections::HashMap;
-use std::fmt::Debug;
-
 use crate::{
+    distribution::DistributionStrategy,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    rays::{DistributionStrategy, Rays},
+    rays::Rays,
 };
 use nalgebra::Point3;
+use std::collections::HashMap;
+use std::fmt::Debug;
 use uom::num_traits::Zero;
 use uom::si::{
     f64::{Angle, Energy, Length},

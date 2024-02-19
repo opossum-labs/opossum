@@ -1,6 +1,4 @@
 #![warn(missing_docs)]
-use serde_derive::{Deserialize, Serialize};
-
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
@@ -10,6 +8,7 @@ use crate::optical::Optical;
 use crate::properties::{Properties, Proptype};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Config data for an [`IdealFilter`].
@@ -234,9 +233,10 @@ mod test {
 
     use crate::{
         analyzer::{AnalyzerType, RayTraceConfig},
+        distribution::DistributionStrategy,
         lightdata::DataEnergy,
         optical::LightResult,
-        rays::{DistributionStrategy, Rays},
+        rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
 

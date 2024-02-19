@@ -1,7 +1,8 @@
 use nalgebra::{Point2, Point3, Vector3};
 use num::Zero;
 use opossum::{
-    error::OpmResult, nodes::WaveFrontErrorMap, plottable::{PlotArgs, PlotData, PlotParameters, PlotType}, ray::Ray, rays::{DistributionStrategy, Rays}
+    distribution::DistributionStrategy,
+    error::OpmResult, nodes::WaveFrontErrorMap, plottable::{PlotArgs, PlotData, PlotParameters, PlotType}, ray::Ray, rays::Rays
 };
 use rayon::vec;
 use uom::si::{
