@@ -27,7 +27,7 @@ use uom::si::{
 pub fn create_collimated_ray_source(
     radius: Length,
     energy: Energy,
-    num_rings: u16,
+    num_rings: u8,
 ) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
         radius,

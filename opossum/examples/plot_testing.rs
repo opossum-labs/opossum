@@ -2,16 +2,19 @@ use nalgebra::{Point2, Point3, Vector3};
 use num::Zero;
 use opossum::{
     distribution::DistributionStrategy,
-    error::OpmResult, nodes::WaveFrontErrorMap, plottable::{PlotArgs, PlotData, PlotParameters, PlotType}, ray::Ray, rays::Rays
+    error::OpmResult,
+    nodes::WaveFrontErrorMap,
+    plottable::{PlotArgs, PlotData, PlotParameters, PlotType},
+    ray::Ray,
+    rays::Rays,
 };
 use rayon::vec;
+use std::time::{Duration, Instant};
 use uom::si::{
     energy::{joule, Energy},
     f64::Length,
     length::{centimeter, millimeter, nanometer},
 };
-use std::time::{Duration, Instant};
-
 
 fn main() -> OpmResult<()> {
     let mut rays = Rays::new_uniform_collimated(
@@ -28,42 +31,50 @@ fn main() -> OpmResult<()> {
     // return Ok(());
 
     let mut ray1 = Ray::new(
-        Point3::new(Length::new::<centimeter>(0.), Length::zero(), Length::zero()), 
-        Vector3::new(0.,0.,1.), 
-        Length::new::<nanometer>(1053.), 
-        Energy::new::<joule>(1.))?;
+        Point3::new(
+            Length::new::<centimeter>(0.),
+            Length::zero(),
+            Length::zero(),
+        ),
+        Vector3::new(0., 0., 1.),
+        Length::new::<nanometer>(1053.),
+        Energy::new::<joule>(1.),
+    )?;
     let mut ray2 = Ray::new(
-            Point3::new(Length::new::<centimeter>(5.), Length::zero(), Length::zero()), 
-            Vector3::new(0.,1.,1.), 
-            Length::new::<nanometer>(1053.), 
-            Energy::new::<joule>(1.))?;
+        Point3::new(
+            Length::new::<centimeter>(5.),
+            Length::zero(),
+            Length::zero(),
+        ),
+        Vector3::new(0., 1., 1.),
+        Length::new::<nanometer>(1053.),
+        Energy::new::<joule>(1.),
+    )?;
     // let ray3 = Ray::new(
-    //     Point3::new( Length::new::<centimeter>(0.), Length::new::<centimeter>(5.), Length::zero()), 
-    //     Vector3::new(0.,0.,1.), 
-    //     Length::new::<nanometer>(1053.), 
+    //     Point3::new( Length::new::<centimeter>(0.), Length::new::<centimeter>(5.), Length::zero()),
+    //     Vector3::new(0.,0.,1.),
+    //     Length::new::<nanometer>(1053.),
     //     Energy::new::<joule>(1.))?;
-    
+
     //     let ray4 = Ray::new(
-    //         Point3::new( Length::new::<centimeter>(5.), Length::new::<centimeter>(5.), Length::zero()), 
-    //         Vector3::new(0.,0.,1.), 
-    //         Length::new::<nanometer>(1053.), 
+    //         Point3::new( Length::new::<centimeter>(5.), Length::new::<centimeter>(5.), Length::zero()),
+    //         Vector3::new(0.,0.,1.),
+    //         Length::new::<nanometer>(1053.),
     //         Energy::new::<joule>(1.))?;
 
     //         let ray5 = Ray::new(
-    //             Point3::new( Length::new::<centimeter>(2.5), Length::new::<centimeter>(2.5), Length::zero()), 
-    //             Vector3::new(0.,0.,1.), 
-    //             Length::new::<nanometer>(1053.), 
+    //             Point3::new( Length::new::<centimeter>(2.5), Length::new::<centimeter>(2.5), Length::zero()),
+    //             Vector3::new(0.,0.,1.),
+    //             Length::new::<nanometer>(1053.),
     //             Energy::new::<joule>(1.))?;
 
-
-    let mut rays = Rays::from(vec![ray1, ray2]);
-    rays.propagate_along_z(Length::new::<millimeter>(10.));
+    // let mut rays = Rays::from(vec![ray1, ray2]);
+    // rays.propagate_along_z(Length::new::<millimeter>(10.));
 
     // WaveFrontErrorMap::new(rays.wavefront_error_at_pos_in_units_of_wvl(), wavelength)
 
     // println!("{}", ray1.path_length().get::<millimeter>());
     // println!("{}", ray2.path_length().get::<millimeter>());
-    
 
     // rays.refract_paraxial(Length::new::<millimeter>(10.))?;
     // rays.propagate_along_z(Length::new::<millimeter>(30.))?;
@@ -79,13 +90,20 @@ fn main() -> OpmResult<()> {
         .set(&PlotArgs::FigSize((1000, 850)))
         .unwrap();
     // let start: Instant = Instant::now();
-    let (rays_fluence, y, x, peak, average) = rays.calc_transversal_fluence(None, Some(Point3::new(Length::zero(), Length::zero(), Length::zero())))?;
+    let fluence_data = rays.calc_transversal_fluence(
+        None,
+        Some(Point3::new(Length::zero(), Length::zero(), Length::zero())),
+    )?;
     // let duration = start.elapsed();
     // println!("{duration:?}");
-    println!("{}", peak);
-    println!("{}", average);
+    println!("{}", fluence_data.peak);
+    println!("{}", fluence_data.average);
 
-    let plt_dat = PlotData::ColorMesh(y, x, rays_fluence);
+    let plt_dat = PlotData::ColorMesh(
+        fluence_data.x_data,
+        fluence_data.y_data,
+        fluence_data.distribution,
+    );
     let plt_type = PlotType::ColorMesh(plt_params);
     let _ = plt_type.plot(&plt_dat);
 

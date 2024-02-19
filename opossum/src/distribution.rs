@@ -2,9 +2,11 @@
 //! Module for creation of 2D point sets with a defined distribution
 
 use nalgebra::{point, Point3};
+use num::ToPrimitive;
 use num::Zero;
 use rand::Rng;
 use sobol::{params::JoeKuoD6, Sobol};
+use std::f64::consts::PI;
 use uom::si::{f64::Length, length::millimeter};
 
 /// Distribution strategies
@@ -17,6 +19,10 @@ pub enum DistributionStrategy {
     Sobol(usize),
     /// Square, evenly sized grid with the given number of points
     Grid(usize),
+    /// Fibonacci-distributed circular distribution with the given number of points
+    FibonacciCircular(usize),
+    /// Fibonacci-distributed square distribution with the given number of points
+    FibonacciSquare(usize),
 }
 
 impl DistributionStrategy {
@@ -28,9 +34,40 @@ impl DistributionStrategy {
             Self::Random(nr_of_rays) => random(*nr_of_rays, size),
             Self::Sobol(nr_of_rays) => sobol(*nr_of_rays, size),
             Self::Grid(nr_of_rays) => grid(*nr_of_rays, size),
+            Self::FibonacciCircular(nr_of_rays) => fibonacci(*nr_of_rays, size),
+            Self::FibonacciSquare(nr_of_rays) => fibonacci_square(*nr_of_rays, size),
         }
     }
 }
+
+fn fibonacci(nr_of_rays: usize, radius: Length) -> Vec<Point3<Length>> {
+    let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_rays);
+    let golden_ratio = (1. + f64::sqrt(5.)) / 2.;
+    for i in 0_usize..nr_of_rays {
+        let sin_cos = f64::sin_cos(2. * PI * (i.to_f64().unwrap() / golden_ratio).fract());
+        let sqrt_r = f64::sqrt(i.to_f64().unwrap() / nr_of_rays.to_f64().unwrap());
+        points.push(point![
+            radius * sin_cos.0 * sqrt_r,
+            radius * sin_cos.1 * sqrt_r,
+            Length::zero()
+        ]);
+    }
+    points
+}
+fn fibonacci_square(nr_of_rays: usize, size: Length) -> Vec<Point3<Length>> {
+    let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_rays);
+    let golden_ratio = (1. + f64::sqrt(5.)) / 2.;
+    for i in 0_usize..nr_of_rays {
+        let i_f64 = i.to_f64().unwrap();
+        points.push(point![
+            size * (i_f64 / golden_ratio).fract(),
+            size * (i_f64 / nr_of_rays.to_f64().unwrap()),
+            Length::zero()
+        ]);
+    }
+    points
+}
+
 fn hexapolar(rings: u8, radius: Length) -> Vec<Point3<Length>> {
     let mut points: Vec<Point3<Length>> = Vec::new();
     let radius_step = radius / f64::from(rings);

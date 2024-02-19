@@ -1,15 +1,9 @@
 #![warn(missing_docs)]
 //! Module for handling ray bundles
-use std::f64::consts::PI;
-use std::ops::Range;
-use std::path::Path;
-use std::sync::Mutex;
-use voronator::polygon::Polygon;
-use voronator::VoronoiDiagram;
-use voronator::delaunator::{Coord, Point as VPoint};
 use crate::aperture::Aperture;
 use crate::distribution::DistributionStrategy;
 use crate::error::{OpmResult, OpossumError};
+use crate::nodes::fluence_detector::FluenceData;
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
 use crate::plottable::{
@@ -19,25 +13,26 @@ use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
-use delaunator::{triangulate, Point};
 use image::{DynamicImage, ImageBuffer};
-use itertools::{Itertools, izip};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{
     distance, point, DMatrix, DVector, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector2,
     Vector3,
 };
-use rayon::iter::{ParallelIterator, IntoParallelRefIterator};
-use ncollide2d::{math::Point as PNcol, shape::{TrianglePointLocation, Triangle}};
-use num::{Signed, ToPrimitive};
-use rand::Rng;
+
+use num::ToPrimitive;
 use serde_derive::{Deserialize, Serialize};
+use std::ops::Range;
+use std::path::Path;
 use uom::num_traits::Zero;
 use uom::si::angle::degree;
 use uom::si::energy::joule;
 use uom::si::f64::{Angle, Energy, Length};
 use uom::si::length::{centimeter, micrometer, millimeter, nanometer};
+use voronator::delaunator::{Coord, Point as VPoint};
+use voronator::polygon::Polygon;
+use voronator::VoronoiDiagram;
 
 /// Struct containing all relevant information of a ray bundle
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
@@ -100,7 +95,7 @@ impl Rays {
     pub fn new_hexapolar_point_source(
         position: Point3<Length>,
         cone_angle: Angle,
-        number_of_rings: u16,
+        number_of_rings: u8,
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
@@ -369,7 +364,7 @@ impl Rays {
         &self,
         propagation_axis_opt: Option<Vector3<f64>>,
         anchor_point_opt: Option<Point3<Length>>,
-    ) -> OpmResult<(DMatrix<f64>, DVector<f64>, DVector<f64>, f64, f64)> {
+    ) -> OpmResult<FluenceData> {
         let num_axes_points = 100.;
         let mut propagation_axis = if propagation_axis_opt.is_some()
             && propagation_axis_opt.unwrap().norm() > f64::EPSILON
@@ -377,11 +372,11 @@ impl Rays {
             Ok(propagation_axis_opt.unwrap())
         } else {
             warn!("The provided propagation axis vector is None or has a length of zero! The propagation direction of the most centered ray will be used instead!");
-            if let Some(ray) = self.get_center_ray() {
-                Ok(ray.direction())
-            } else {
-                Err(OpossumError::Other("Transversal fluence could not be calculated, as no propagation axis could be defined!".into()))
-            }
+            self.get_center_ray()
+            .map_or_else(
+                || Err(OpossumError::Other("Transversal fluence could not be calculated, as no propagation axis could be defined!".into())), 
+                |ray| Ok(ray.direction())
+            )
         }?;
         propagation_axis /= propagation_axis.norm();
 
@@ -390,22 +385,18 @@ impl Rays {
                 anchor_point_opt
                     .unwrap()
                     .iter()
-                    .map(|x| x.get::<centimeter>())
+                    .map(uom::si::f64::Length::get::<centimeter>)
                     .collect::<Vec<f64>>(),
             ))
         } else {
             warn!("The provided anchor point is None! The position of the most centered ray will be used instead!");
 
-            if let Some(ray) = self.get_center_ray() {
-                Ok(Vector3::from_vec(
-                    ray.position()
-                        .iter()
-                        .map(|x| x.get::<centimeter>())
-                        .collect::<Vec<f64>>(),
-                ))
-            } else {
-                Err(OpossumError::Other("Transversal fluence could not be calculated, as no anchor point could be defined!".into()))
-            }
+            self.get_center_ray().map_or_else(|| Err(OpossumError::Other("Transversal fluence could not be calculated, as no anchor point could be defined!".into())), |ray| Ok(Vector3::from_vec(
+                     ray.position()
+                   .iter()
+                   .map(uom::si::f64::Length::get::<centimeter>)
+                   .collect::<Vec<f64>>(),
+           )))
         }?;
 
         //define the coordinate axes of the view onto the plane that is defined by the propagation axis as normal vector
@@ -463,7 +454,7 @@ impl Rays {
             let ray_pos_vec = Vector3::from_vec(
                 ray.position()
                     .iter()
-                    .map(|p| p.get::<centimeter>())
+                    .map(uom::si::f64::Length::get::<centimeter>)
                     .collect::<Vec<f64>>(),
             );
             let closest_to_axis_vec = (ray_pos_vec
@@ -483,37 +474,46 @@ impl Rays {
             rays_pos_projection.column(1).min(),
             rays_pos_projection.column(1).max(),
         )?;
-        let co_ax1 = linspace(
-            co_ax1_lim.min,
-            co_ax1_lim.max,
-            num_axes_points,
-        )?;
-        let co_ax2 = linspace(
-            co_ax2_lim.min ,
-            co_ax2_lim.max,
-            num_axes_points,
-        )?;
+        let co_ax1 = linspace(co_ax1_lim.min, co_ax1_lim.max, num_axes_points)?;
+        let co_ax2 = linspace(co_ax2_lim.min, co_ax2_lim.max, num_axes_points)?;
 
         let co_ax1_bin = co_ax1[1] - co_ax1[0];
         let co_ax2_bin = co_ax2[1] - co_ax2[0];
 
-
-        let points:Vec<VPoint> = rays_pos_projection
+        let points: Vec<VPoint> = rays_pos_projection
             .row_iter()
-            .map(|c| VPoint::from_xy(c[0], c[1] ))
+            .map(|c| VPoint::from_xy(c[0], c[1]))
             .collect();
 
-        let bounding_polygon = Polygon::from_points(vec![VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.min), VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.max), VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.min), VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.max)]);
-        let voronoi = VoronoiDiagram::<VPoint>::new(&VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.min), &VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.max), &points).unwrap();
+        let bounding_polygon = Polygon::from_points(vec![
+            VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.min),
+            VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.max),
+            VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.min),
+            VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.max),
+        ]);
+        let voronoi = VoronoiDiagram::<VPoint>::new(
+            &VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.min),
+            &VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.max),
+            &points,
+        )
+        .unwrap();
         let v_cell_sites = &voronoi.sites;
         let v_cells = voronoi.cells();
 
         //initialized by energy. will be divided by the area of eacch voronoi cell
-        let mut fluence_scatter = self.rays.iter().map(|r| r.energy().get::<joule>()).collect::<Vec<f64>>();
+        let mut fluence_scatter = self
+            .rays
+            .iter()
+            .map(|r| r.energy().get::<joule>())
+            .collect::<Vec<f64>>();
 
-        for (idx, fl) in fluence_scatter.iter_mut().enumerate(){
-            let v_neighbours = v_cells[idx].points().iter().map(|p| Point2::new(p.x, p.y)).collect::<Vec<Point2<f64>>>();
-            let poly_area = self.calc_closed_poly_area(v_neighbours.clone());
+        for (idx, fl) in fluence_scatter.iter_mut().enumerate() {
+            let v_neighbours = v_cells[idx]
+                .points()
+                .iter()
+                .map(|p| Point2::new(p.x, p.y))
+                .collect::<Vec<Point2<f64>>>();
+            let poly_area = Rays::calc_closed_poly_area(&v_neighbours);
             *fl /= poly_area;
         }
         fluence_scatter.push(0.);
@@ -533,17 +533,15 @@ impl Rays {
             let p2_y = &v_cell_sites[tri_idxs[1]].y;
             let p3_x = &v_cell_sites[tri_idxs[2]].x;
             let p3_y = &v_cell_sites[tri_idxs[2]].y;
-            
-            let p12_x = p2_x -p1_x;
-            let p12_y = p2_y -p1_y;
-            let p23_x = p3_x -p2_x;
-            let p23_y = p3_y -p2_y;
-            let p31_x = p1_x -p3_x;
-            let p31_y = p1_y -p3_y;
 
+            let p12_x = p2_x - p1_x;
+            let p12_y = p2_y - p1_y;
+            let p23_x = p3_x - p2_x;
+            let p23_y = p3_y - p2_y;
+            let p31_x = p1_x - p3_x;
+            let p31_y = p1_y - p3_y;
 
-            let tri_area = (-p12_x*p31_y+p12_y*p31_x).abs();
-
+            let tri_area = (-p12_x).mul_add(p31_y, p12_y * p31_x).abs();
 
             let (x_min, x_max, y_min, y_max) = tri_idxs
                 .iter()
@@ -570,101 +568,105 @@ impl Rays {
             let y_i = (y_min - co_ax2[0]) / co_ax2_bin;
             let y_f = (y_max - co_ax2[0]) / co_ax2_bin;
 
-            if x_i.is_sign_negative() || y_i.is_sign_negative()
-            || y_f >= num_axes_points || x_f>= num_axes_points {
-                continue
+            if x_i.is_sign_negative()
+                || y_i.is_sign_negative()
+                || y_f >= num_axes_points
+                || x_f >= num_axes_points
+            {
+                continue;
             }
-            
+
             let x_i = x_i.to_usize().unwrap();
             let x_f = x_f.to_usize().unwrap();
             let y_i = y_i.to_usize().unwrap();
             let y_f = y_f.to_usize().unwrap();
-            
 
-            let c11 = p1_x*p12_y;
-            let c12 = p1_y*p12_x;
-            let c21 = p2_x*p23_y;
-            let c22 = p2_y*p23_x;
-            let c31 = p3_x*p31_y;
-            let c32 = p3_y*p31_x;
-            
-            for (x_index, x) in co_ax1.slice((0, x_i), (1, x_f-x_i+1)).iter().enumerate(){
-                for (y_index, y) in co_ax2.slice((0, y_i), (1, y_f-y_i+1)).iter().enumerate(){
-                    
+            let c11 = p1_x * p12_y;
+            let c12 = p1_y * p12_x;
+            let c21 = p2_x * p23_y;
+            let c22 = p2_y * p23_x;
+            let c31 = p3_x * p31_y;
+            let c32 = p3_y * p31_x;
 
-                    let cross_1 = c11-x*p12_y - (c12-y*p12_x);
-                    let cross_2 = c21-x*p23_y - (c22-y*p23_x);
-                    let cross_3 = c31-x*p31_y - (c32-y*p31_x);
+            for (x_index, x) in co_ax1
+                .slice((0, x_i), (1, x_f - x_i + 1))
+                .iter()
+                .enumerate()
+            {
+                for (y_index, y) in co_ax2
+                    .slice((0, y_i), (1, y_f - y_i + 1))
+                    .iter()
+                    .enumerate()
+                {
+                    let cross_1 = c11 - x * p12_y - (c12 - y * p12_x);
+                    let cross_2 = c21 - x * p23_y - (c22 - y * p23_x);
+                    let cross_3 = c31 - x * p31_y - (c32 - y * p31_x);
 
-                    let in_tri = (cross_1.is_sign_negative() && cross_2.is_sign_negative() && cross_3.is_sign_negative()) ||  (cross_1.is_sign_positive() && cross_2.is_sign_positive() && cross_3.is_sign_positive());
-   
+                    let in_tri = (cross_1.is_sign_negative()
+                        && cross_2.is_sign_negative()
+                        && cross_3.is_sign_negative())
+                        || (cross_1.is_sign_positive()
+                            && cross_2.is_sign_positive()
+                            && cross_3.is_sign_positive());
 
-                    if in_tri{
-                        let p1xx = p1_x-x;
-                        let p1yy = p1_y-y;
-                        let p2xx = p2_x-x;
-                        let p2yy = p2_y-y;
-                        let p3xx = p3_x-x;
-                        let p3yy = p3_y-y;
+                    if in_tri {
+                        let p1xx = p1_x - x;
+                        let p1yy = p1_y - y;
+                        let p2xx = p2_x - x;
+                        let p2yy = p2_y - y;
+                        let p3xx = p3_x - x;
+                        let p3yy = p3_y - y;
 
-                        let area1 = (p2xx*p3yy - p2yy*p3xx).abs();
-                        let area2 = (p3xx*p1yy - p3yy*p1xx).abs();
-                        let area3 = (p1xx*p2yy - p1yy*p2xx).abs();
-                        
+                        let area1 = p2xx.mul_add(p3yy, -(p2yy * p3xx)).abs();
+                        let area2 = p3xx.mul_add(p1yy, -(p3yy * p1xx)).abs();
+                        let area3 = p1xx.mul_add(p2yy, -(p1yy * p2xx)).abs();
+
                         // fluence[(y_index+y_i, x_index+x_i)] = (area1*self.rays[tri_idxs[0]].energy().get::<joule>() + area2*self.rays[tri_idxs[1]].energy().get::<joule>() + area3*self.rays[tri_idxs[2]].energy().get::<joule>())/tri_area;
-                        fluence[(y_index+y_i, x_index+x_i)] = (area1*fluence_scatter[tri_idxs[0]] + area2*fluence_scatter[tri_idxs[1]] + area3*fluence_scatter[tri_idxs[2]])/tri_area;
-                        average += fluence[(y_index+y_i, x_index+x_i)];
+                        fluence[(y_index + y_i, x_index + x_i)] =
+                            area1 * fluence_scatter[tri_idxs[0]];
+                        fluence[(y_index + y_i, x_index + x_i)] +=
+                            area2 * fluence_scatter[tri_idxs[1]];
+                        fluence[(y_index + y_i, x_index + x_i)] +=
+                            area3 * fluence_scatter[tri_idxs[2]];
+                        fluence[(y_index + y_i, x_index + x_i)] /= tri_area;
+
+                        average += fluence[(y_index + y_i, x_index + x_i)];
                         bin_count += 1;
-                    }else{
-                        continue
+                    } else {
+                        continue;
                     }
                 }
             }
-            
         }
 
         average /= f64::from(bin_count);
-        let peak_fluence = fluence
-                .into_iter().fold(f64::NEG_INFINITY, |arg0, v| {
-                    if !v.is_nan(){
-                    f64::max(arg0, *v)
-                }
-            else{arg0}});
+        let peak_fluence = fluence.into_iter().fold(f64::NEG_INFINITY, |arg0, v| {
+            if v.is_nan() {
+                arg0
+            } else {
+                f64::max(arg0, *v)
+            }
+        });
 
-
-        Ok((
-            fluence,
-            co_ax2.transpose(),
-            co_ax1.transpose(),
+        Ok(FluenceData::new(
             peak_fluence,
-            average
+            average,
+            fluence,
+            co_ax1.transpose(),
+            co_ax2.transpose(),
         ))
     }
 
-    fn in_triangle(&self, x: &f64, y: &f64, 
-        p1x: &f64, p1y: &f64, 
-        p2x: &f64, p2y: &f64, 
-        p3x: &f64, p3y: &f64, 
-        p12x: &f64, p12y: &f64,
-        p23x: &f64, p23y: &f64,
-        p31x: &f64, p31y: &f64,
-) -> bool{
-        let cross_1 = (p1x-x)*p12y - (p1y-y)*p12x;
-        let cross_2 = (p2x-x)*p23y - (p2y-y)*p23x;
-        let cross_3 = (p3x-x)*p31y - (p3y-y)*p31x;
-
-        (cross_1.is_sign_negative() && cross_2.is_sign_negative() && cross_3.is_sign_negative()) ||  (cross_1.is_sign_positive() && cross_2.is_sign_positive() && cross_3.is_sign_positive())
-    }
-
-    pub fn calc_closed_poly_area(&self, poly_coords: Vec<Point2<f64>>) -> f64{
+    #[must_use]
+    fn calc_closed_poly_area(poly_coords: &[Point2<f64>]) -> f64 {
         let mut area = 0.;
         let num_points = poly_coords.len();
-        for i in 0..num_points{
-            let j = (i+1) % num_points;
-            area += poly_coords[i].x* poly_coords[j].y;
-            area -= poly_coords[i].y* poly_coords[j].x;
-        } 
-        area.abs()/2.
+        for i in 0..num_points {
+            let j = (i + 1) % num_points;
+            area += poly_coords[i].x * poly_coords[j].y;
+            area -= poly_coords[i].y * poly_coords[j].x;
+        }
+        area.abs() / 2.
     }
 
     /// Add a single ray to the ray bundle.

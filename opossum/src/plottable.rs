@@ -1846,6 +1846,14 @@ fn _meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f
     (x_mat, y_mat)
 }
 
+/// Creates a linearly spaced Vector (Matrix with1 column and `num` rows) from `start` to `end`
+/// # Attributes
+/// - `start`:  Start value of the array
+/// - `end`:    end value of the array
+/// - `num`:    number of elements
+///
+/// # Errors
+/// This function will return an error if `num` cannot be casted to usize.
 pub fn linspace(start: f64, end: f64, num: f64) -> OpmResult<Matrix1xX<f64>> {
     let num_usize = num.to_usize();
     if num_usize.is_some() {
