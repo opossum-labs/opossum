@@ -206,9 +206,6 @@ impl Ray {
             length_in_ray_dir * self.dir.y,
             length_in_ray_dir * self.dir.z,
         );
-
-        //let normalized_dir = self.dir.normalize();
-        //let length_in_ray_dir = length_along_z.get::<millimeter>() / normalized_dir[2];
         self.path_length += length_in_ray_dir * self.refractive_index * self.dir.norm();
         Ok(())
     }
@@ -226,10 +223,9 @@ impl Ray {
             ));
         }
         let optical_power = 1.0 / focal_length;
-
-        self.dir /=self.dir.z;
-        self.dir.x -= (optical_power * self.pos.x).value ;
-        self.dir.y -= (optical_power * self.pos.y).value ;
+        self.dir /= self.dir.z;
+        self.dir.x -= (optical_power * self.pos.x).value;
+        self.dir.y -= (optical_power * self.pos.y).value;
 
         // correct path length
         let r_square = self
@@ -776,15 +772,12 @@ mod test {
     }
     #[test]
     fn refract_on_plane_collimated() {
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(0.0),
-            Length::zero(),
-        );
+        let position = Point3::origin();
         let wvl = Length::new::<nanometer>(1054.0);
         let e = Energy::new::<joule>(1.0);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
-        let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let plane_z_pos = Length::new::<millimeter>(10.0);
+        let s = Plane::new(plane_z_pos).unwrap();
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -801,8 +794,9 @@ mod test {
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(
             ray.pos_hist,
-            vec![Point3::new(Length::zero(), Length::zero(), Length::zero())]
+            vec![Point3::origin()]
         );
+        assert_eq!(ray.path_length(), plane_z_pos);
         let position = Point3::new(
             Length::zero(),
             Length::new::<millimeter>(1.0),
@@ -819,6 +813,7 @@ mod test {
             )
         );
         assert_eq!(ray.dir, Vector3::z());
+        assert_eq!(ray.path_length, plane_z_pos);
     }
     #[test]
     fn refract_on_surface_non_intersecting() {
@@ -839,19 +834,17 @@ mod test {
         );
         assert_eq!(ray.dir, direction);
         assert_eq!(ray.refractive_index, 1.0);
+        assert_eq!(ray.path_length, Length::zero());
     }
     #[test]
     fn refract_on_plane_non_collimated() {
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(0.0),
-            Length::zero(),
-        );
+        let position = Point3::origin();
         let direction = Vector3::new(0.0, 1.0, 1.0);
         let wvl = Length::new::<nanometer>(1054.0);
         let e = Energy::new::<joule>(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let plane_z_pos = Length::new::<millimeter>(10.0);
+        let s = Plane::new(plane_z_pos).unwrap();
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -867,6 +860,7 @@ mod test {
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
         assert_abs_diff_eq!(ray.dir[2], direction.normalize()[2]);
+        assert_abs_diff_eq!(ray.path_length.value, 2.0_f64.sqrt()*plane_z_pos.value);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
         assert_eq!(

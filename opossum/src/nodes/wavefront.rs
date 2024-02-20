@@ -137,7 +137,7 @@ impl WaveFrontErrorMap {
                     .sum::<f64>()
                     / f64::from(i32::try_from(wf_dat.len()).unwrap()),
             );
-            Ok((ptv * 1000., rms * 1000.))
+            Ok((ptv, rms))
         }
     }
 }
@@ -258,11 +258,11 @@ impl PdfReportable for WaveFrontData {
         let mut layout = genpdf::elements::LinearLayout::vertical();
 
         layout.push(genpdf::elements::Paragraph::new(format!(
-            "ptv: {:.1} mλ",
+            "ptv: {:.4} λ",
             self.wavefront_error_maps[0].ptv
         )));
         layout.push(genpdf::elements::Paragraph::new(format!(
-            "rms: {:.1} mλ",
+            "rms: {:.4} λ",
             self.wavefront_error_maps[0].rms
         )));
         //todo! for all wavefronts!

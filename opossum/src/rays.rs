@@ -365,9 +365,9 @@ impl Rays {
             for ray in &mut self.rays {
                 ray.propagate_along_z(self.dist_to_next_surface)?;
             }
+            self.z_position += self.dist_to_next_surface;
+            self.set_dist_zero();
         }
-        self.z_position += self.dist_to_next_surface;
-        self.set_dist_zero();
         Ok(())
     }
     /// Refract a ray bundle on a paraxial surface of given focal length.
