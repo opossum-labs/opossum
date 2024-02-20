@@ -31,7 +31,7 @@ pub fn create_round_collimated_ray_source(
 ) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
         radius,
-        Length::new::<nanometer>(1053.0),
+        Length::new::<nanometer>(1000.0),
         energy,
         &DistributionStrategy::Hexapolar { nr_of_rings },
     )?;
