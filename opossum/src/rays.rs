@@ -17,8 +17,7 @@ use image::{DynamicImage, ImageBuffer};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{
-    distance, point, DMatrix, DVector, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector2,
-    Vector3,
+    distance, point, DMatrix, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3,
 };
 
 use num::ToPrimitive;
@@ -31,7 +30,6 @@ use uom::si::energy::joule;
 use uom::si::f64::{Angle, Energy, Length};
 use uom::si::length::{centimeter, micrometer, millimeter, nanometer};
 use voronator::delaunator::{Coord, Point as VPoint};
-use voronator::polygon::Polygon;
 use voronator::VoronoiDiagram;
 
 /// Struct containing all relevant information of a ray bundle
@@ -336,14 +334,17 @@ impl Rays {
     /// # Returns
     /// This function returns a Ray if the center ray could be retrieved or None if not. This may be the case when no centroid can be calculated or if the retrieved ray index is out of bound for the rays vector
     fn get_center_ray(&self) -> Option<Ray> {
-        if let Some(centroid) = self.centroid() {
+        self.centroid().map_or_else(|| {
+                     warn!("Center ray could not be retrieved, as the centroid could not be calculated! Maybe, the Rays vector is empty?");
+                     None
+                 }, |centroid| {
             let mut closest_dist = f64::INFINITY;
             let mut idx = 0_usize;
             for (i, ray) in self.rays.iter().enumerate() {
                 let ray_pos = ray.position();
-                let dist = (centroid.x.get::<millimeter>() - ray_pos.x.get::<millimeter>()).powi(2)
-                    + (centroid.y.get::<millimeter>() - ray_pos.y.get::<millimeter>()).powi(2)
-                    + (centroid.z.get::<millimeter>() - ray_pos.z.get::<millimeter>()).powi(2);
+                let mut dist = (centroid.x.get::<millimeter>() - ray_pos.x.get::<millimeter>()).powi(2);
+                    dist+= (centroid.y.get::<millimeter>() - ray_pos.y.get::<millimeter>()).powi(2);
+                    dist+= (centroid.z.get::<millimeter>() - ray_pos.z.get::<millimeter>()).powi(2);
 
                 if dist < closest_dist {
                     closest_dist = dist;
@@ -351,10 +352,7 @@ impl Rays {
                 }
             }
             self.rays.get(idx).cloned()
-        } else {
-            warn!("Center ray could not be retrieved, as the centroid could not be calculated! Maybe, the Rays vector is empty?");
-            None
-        }
+        } )
     }
 
     /// Caclulates the spatial energy distribution (fluence) of a ray bundle, its coordinates in the transversal plane and the peak fluence in J/cm²
@@ -400,53 +398,51 @@ impl Rays {
         }?;
 
         //define the coordinate axes of the view onto the plane that is defined by the propagation axis as normal vector
-        let (co_ax1_dir, co_ax2_dir) = if propagation_axis.cross(&Vector3::new(1., 0., 0.)).norm()
-            < f64::EPSILON
-        {
-            //parallel to the x-axis: co_ax_1: z-axis / co_ax2: y-axis
-            (Vector3::new(0., 0., 1.), Vector3::new(0., 1., 0.))
-        } else if propagation_axis.cross(&Vector3::new(0., 1., 0.)).norm() < f64::EPSILON {
-            //parallel to the y-axis: co_ax_1: z-axis / co_ax2: x-axis
-            (Vector3::new(0., 0., 1.), Vector3::new(1., 0., 0.))
-        } else if propagation_axis.cross(&Vector3::new(0., 0., 1.)).norm() < f64::EPSILON {
-            //parallel to the z-axis: co_ax_1: x-axis / co_ax2: y-axis
-            (Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.))
-        } else if propagation_axis.dot(&Vector3::new(1., 0., 0.)) < f64::EPSILON {
-            //propagation axis in yz plane
-            let co_ax1 = Vector3::new(1., 0., 0.);
-            (co_ax1, propagation_axis.cross(&co_ax1))
-        } else if propagation_axis.dot(&Vector3::new(0., 1., 0.)) < f64::EPSILON {
-            //propagation axis in xz plane
-            let co_ax1 = Vector3::new(0., 1., 0.);
-            (co_ax1, propagation_axis.cross(&co_ax1))
-        } else if propagation_axis.dot(&Vector3::new(0., 0., 1.)) < f64::EPSILON {
-            //propagation axis in xy plane
-            let co_ax1 = Vector3::new(0., 0., 1.);
-            (co_ax1, propagation_axis.cross(&co_ax1))
-        } else {
-            //propagation axis is in neither of the cartesian coordinate planes
-            //Choose the first coordinate axis by projecting the axes with the largest angle to the propagation axis onto the plane
-            //the second one is defined by the cross product of the first axis and the propagation axis
-            let xy_plane_angle = propagation_axis.dot(&Vector3::new(0., 0., 1.)).acos();
-            let xz_plane_angle = propagation_axis.dot(&Vector3::new(0., 1., 0.)).acos();
-            let yz_plane_angle = propagation_axis.dot(&Vector3::new(1., 0., 0.)).acos();
-
-            let mut co_ax1 = if xy_plane_angle >= xz_plane_angle && xy_plane_angle >= yz_plane_angle
-            {
-                propagation_axis
-                    - propagation_axis.dot(&Vector3::new(0., 0., 1.)) * Vector3::new(0., 0., 1.)
-            } else if xz_plane_angle >= xy_plane_angle && xz_plane_angle >= yz_plane_angle {
-                propagation_axis
-                    - propagation_axis.dot(&Vector3::new(0., 1., 0.)) * Vector3::new(0., 1., 0.)
+        let (co_ax1_dir, co_ax2_dir) =
+            if propagation_axis.cross(&Vector3::new(1., 0., 0.)).norm() < f64::EPSILON {
+                //parallel to the x-axis: co_ax_1: z-axis / co_ax2: y-axis
+                (Vector3::new(0., 0., 1.), Vector3::new(0., 1., 0.))
+            } else if propagation_axis.cross(&Vector3::new(0., 1., 0.)).norm() < f64::EPSILON {
+                //parallel to the y-axis: co_ax_1: z-axis / co_ax2: x-axis
+                (Vector3::new(0., 0., 1.), Vector3::new(1., 0., 0.))
+            } else if propagation_axis.cross(&Vector3::new(0., 0., 1.)).norm() < f64::EPSILON {
+                //parallel to the z-axis: co_ax_1: x-axis / co_ax2: y-axis
+                (Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.))
+            } else if propagation_axis.dot(&Vector3::new(1., 0., 0.)) < f64::EPSILON {
+                //propagation axis in yz plane
+                let co_ax1 = Vector3::new(1., 0., 0.);
+                (co_ax1, propagation_axis.cross(&co_ax1))
+            } else if propagation_axis.dot(&Vector3::new(0., 1., 0.)) < f64::EPSILON {
+                //propagation axis in xz plane
+                let co_ax1 = Vector3::new(0., 1., 0.);
+                (co_ax1, propagation_axis.cross(&co_ax1))
+            } else if propagation_axis.dot(&Vector3::new(0., 0., 1.)) < f64::EPSILON {
+                //propagation axis in xy plane
+                let co_ax1 = Vector3::new(0., 0., 1.);
+                (co_ax1, propagation_axis.cross(&co_ax1))
             } else {
-                propagation_axis
-                    - propagation_axis.dot(&Vector3::new(1., 0., 0.)) * Vector3::new(1., 0., 0.)
+                //propagation axis is in neither of the cartesian coordinate planes
+                //Choose the first coordinate axis by projecting the axes with the largest angle to the propagation axis onto the plane
+                //the second one is defined by the cross product of the first axis and the propagation axis
+                let p_zz_ang = propagation_axis.dot(&Vector3::new(0., 0., 1.)).acos();
+                let p_yy_ang = propagation_axis.dot(&Vector3::new(0., 1., 0.)).acos();
+                let p_xx_ang = propagation_axis.dot(&Vector3::new(1., 0., 0.)).acos();
+
+                let mut co_ax1 = if p_zz_ang >= p_yy_ang && p_zz_ang >= p_xx_ang {
+                    propagation_axis
+                        - propagation_axis.dot(&Vector3::new(0., 0., 1.)) * Vector3::new(0., 0., 1.)
+                } else if p_yy_ang >= p_zz_ang && p_yy_ang >= p_xx_ang {
+                    propagation_axis
+                        - propagation_axis.dot(&Vector3::new(0., 1., 0.)) * Vector3::new(0., 1., 0.)
+                } else {
+                    propagation_axis
+                        - propagation_axis.dot(&Vector3::new(1., 0., 0.)) * Vector3::new(1., 0., 0.)
+                };
+
+                co_ax1 /= co_ax1.norm();
+
+                (co_ax1, propagation_axis.cross(&co_ax1))
             };
-
-            co_ax1 /= co_ax1.norm();
-
-            (co_ax1, propagation_axis.cross(&co_ax1))
-        };
 
         //calculate the projection of the ray positions onto the new coordinate axes
         let mut rays_pos_projection = MatrixXx2::<f64>::zeros(self.rays.len());
@@ -457,9 +453,9 @@ impl Rays {
                     .map(uom::si::f64::Length::get::<centimeter>)
                     .collect::<Vec<f64>>(),
             );
-            let closest_to_axis_vec = (ray_pos_vec
+            let closest_to_axis_vec = ray_pos_vec
                 - anchor_point_vec
-                - (ray_pos_vec - anchor_point_vec).dot(&propagation_axis) * propagation_axis);
+                - (ray_pos_vec - anchor_point_vec).dot(&propagation_axis) * propagation_axis;
 
             rays_pos_projection[(row, 0)] = closest_to_axis_vec.dot(&co_ax1_dir);
             rays_pos_projection[(row, 1)] = closest_to_axis_vec.dot(&co_ax2_dir);
@@ -485,12 +481,6 @@ impl Rays {
             .map(|c| VPoint::from_xy(c[0], c[1]))
             .collect();
 
-        let bounding_polygon = Polygon::from_points(vec![
-            VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.min),
-            VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.max),
-            VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.min),
-            VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.max),
-        ]);
         let voronoi = VoronoiDiagram::<VPoint>::new(
             &VPoint::from_xy(co_ax1_lim.min, co_ax2_lim.min),
             &VPoint::from_xy(co_ax1_lim.max, co_ax2_lim.max),
@@ -513,7 +503,7 @@ impl Rays {
                 .iter()
                 .map(|p| Point2::new(p.x, p.y))
                 .collect::<Vec<Point2<f64>>>();
-            let poly_area = Rays::calc_closed_poly_area(&v_neighbours);
+            let poly_area = Self::calc_closed_poly_area(&v_neighbours);
             *fl /= poly_area;
         }
         fluence_scatter.push(0.);
@@ -534,14 +524,14 @@ impl Rays {
             let p3_x = &v_cell_sites[tri_idxs[2]].x;
             let p3_y = &v_cell_sites[tri_idxs[2]].y;
 
-            let p12_x = p2_x - p1_x;
-            let p12_y = p2_y - p1_y;
-            let p23_x = p3_x - p2_x;
-            let p23_y = p3_y - p2_y;
-            let p31_x = p1_x - p3_x;
-            let p31_y = p1_y - p3_y;
+            let p1p2_x = p2_x - p1_x;
+            let p1p2_y = p2_y - p1_y;
+            let p2p3_x = p3_x - p2_x;
+            let p2p3_y = p3_y - p2_y;
+            let p3p1_x = p1_x - p3_x;
+            let p3p1_y = p1_y - p3_y;
 
-            let tri_area = (-p12_x).mul_add(p31_y, p12_y * p31_x).abs();
+            let tri_area = (-p1p2_x).mul_add(p3p1_y, p1p2_y * p3p1_x).abs();
 
             let (x_min, x_max, y_min, y_max) = tri_idxs
                 .iter()
@@ -581,12 +571,12 @@ impl Rays {
             let y_i = y_i.to_usize().unwrap();
             let y_f = y_f.to_usize().unwrap();
 
-            let c11 = p1_x * p12_y;
-            let c12 = p1_y * p12_x;
-            let c21 = p2_x * p23_y;
-            let c22 = p2_y * p23_x;
-            let c31 = p3_x * p31_y;
-            let c32 = p3_y * p31_x;
+            let c11 = p1_x * p1p2_y;
+            let c12 = p1_y * p1p2_x;
+            let c21 = p2_x * p2p3_y;
+            let c22 = p2_y * p2p3_x;
+            let c31 = p3_x * p3p1_y;
+            let c32 = p3_y * p3p1_x;
 
             for (x_index, x) in co_ax1
                 .slice((0, x_i), (1, x_f - x_i + 1))
@@ -598,9 +588,9 @@ impl Rays {
                     .iter()
                     .enumerate()
                 {
-                    let cross_1 = c11 - x * p12_y - (c12 - y * p12_x);
-                    let cross_2 = c21 - x * p23_y - (c22 - y * p23_x);
-                    let cross_3 = c31 - x * p31_y - (c32 - y * p31_x);
+                    let cross_1 = c11 - x * p1p2_y - (c12 - y * p1p2_x);
+                    let cross_2 = c21 - x * p2p3_y - (c22 - y * p2p3_x);
+                    let cross_3 = c31 - x * p3p1_y - (c32 - y * p3p1_x);
 
                     let in_tri = (cross_1.is_sign_negative()
                         && cross_2.is_sign_negative()
@@ -610,16 +600,16 @@ impl Rays {
                             && cross_3.is_sign_positive());
 
                     if in_tri {
-                        let p1xx = p1_x - x;
-                        let p1yy = p1_y - y;
-                        let p2xx = p2_x - x;
-                        let p2yy = p2_y - y;
-                        let p3xx = p3_x - x;
-                        let p3yy = p3_y - y;
+                        let p1xpx = p1_x - x;
+                        let p1ypy = p1_y - y;
+                        let p2xpx = p2_x - x;
+                        let p2ypy = p2_y - y;
+                        let p3xpx = p3_x - x;
+                        let p3ypy = p3_y - y;
 
-                        let area1 = p2xx.mul_add(p3yy, -(p2yy * p3xx)).abs();
-                        let area2 = p3xx.mul_add(p1yy, -(p3yy * p1xx)).abs();
-                        let area3 = p1xx.mul_add(p2yy, -(p1yy * p2xx)).abs();
+                        let area1 = p2xpx.mul_add(p3ypy, -(p2ypy * p3xpx)).abs();
+                        let area2 = p3xpx.mul_add(p1ypy, -(p3ypy * p1xpx)).abs();
+                        let area3 = p1xpx.mul_add(p2ypy, -(p1ypy * p2xpx)).abs();
 
                         // fluence[(y_index+y_i, x_index+x_i)] = (area1*self.rays[tri_idxs[0]].energy().get::<joule>() + area2*self.rays[tri_idxs[1]].energy().get::<joule>() + area3*self.rays[tri_idxs[2]].energy().get::<joule>())/tri_area;
                         fluence[(y_index + y_i, x_index + x_i)] =
@@ -632,8 +622,6 @@ impl Rays {
 
                         average += fluence[(y_index + y_i, x_index + x_i)];
                         bin_count += 1;
-                    } else {
-                        continue;
                     }
                 }
             }

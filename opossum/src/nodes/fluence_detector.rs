@@ -95,12 +95,13 @@ impl Optical for FluenceDetector {
             )));
 
             let fluence_data_opt = rays.calc_transversal_fluence(None, None).ok();
-            if let Some(fluence_data) = fluence_data_opt {
-                fluence_data.to_plot(&file_path, (800, 800), PltBackEnd::BMP)
-            } else {
-                warn!("Fluence Detector diagram: no wavefront data for export available",);
-                Ok(None)
-            }
+            fluence_data_opt.map_or_else(
+                || {
+                    warn!("Fluence Detector diagram: no wavefront data for export available",);
+                    Ok(None)
+                },
+                |fluence_data| fluence_data.to_plot(&file_path, (800, 800), PltBackEnd::BMP),
+            )
             // data.export(&file_path)
         } else {
             Err(OpossumError::Other(
@@ -121,14 +122,14 @@ impl Optical for FluenceDetector {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
-            let fluence_data = rays.calc_transversal_fluence(None, None);
-            if fluence_data.is_ok() {
+            let fluence_data_res = rays.calc_transversal_fluence(None, None);
+            if let Ok(fluence_data) = fluence_data_res {
                 props
                     .create(
                         "Fluence",
                         "2D spatial energy distribution",
                         None,
-                        fluence_data.unwrap().into(),
+                        fluence_data.into(),
                     )
                     .unwrap();
             }
@@ -163,7 +164,8 @@ pub struct FluenceData {
 }
 
 impl FluenceData {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         peak: f64,
         average: f64,
         distribution: DMatrix<f64>,
