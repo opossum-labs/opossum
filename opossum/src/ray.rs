@@ -226,10 +226,11 @@ impl Ray {
             ));
         }
         let optical_power = 1.0 / focal_length;
-        let factor = 1.0 / self.dir.z;
-        self.dir.x -= (optical_power * self.pos.x).value / factor;
-        self.dir.y -= (optical_power * self.pos.y).value / factor;
-        self.dir.z = 1.0;
+
+        self.dir /=self.dir.z;
+        self.dir.x -= (optical_power * self.pos.x).value ;
+        self.dir.y -= (optical_power * self.pos.y).value ;
+
         // correct path length
         let r_square = self
             .pos

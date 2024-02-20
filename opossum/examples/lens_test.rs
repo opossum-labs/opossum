@@ -23,7 +23,7 @@ fn main() -> OpmResult<()> {
         Angle::new::<degree>(90.0),
         Energy::new::<joule>(1.0),
     )?);
-    let s1 = scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(100.0))?);
+    let s1 = scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(200.0))?);
     let l1 = scenery.add_node(ParaxialSurface::new(
         "f=100",
         Length::new::<millimeter>(100.0),
