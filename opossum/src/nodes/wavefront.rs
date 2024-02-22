@@ -14,6 +14,7 @@ use crate::plottable::{
 };
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
+use crate::surface::Plane;
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -174,7 +175,9 @@ impl Optical for WaveFront {
         let data = incoming_data.get(inport).unwrap_or(&None);
         if let Some(LightData::Geometric(rays)) = data {
             let mut rays = rays.clone();
-            rays.propagate_along_z()?;
+            let z_position=rays.absolute_z_of_last_surface()+rays.dist_to_next_surface();
+            let plane=Plane::new(z_position)?;
+            rays.refract_on_surface(&plane,1.0)?;
             self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(HashMap::from([(
                 outport.into(),
