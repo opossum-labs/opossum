@@ -94,7 +94,7 @@ impl Optical for FluenceDetector {
                 self.properties().name()?
             )));
 
-            let fluence_data_opt = rays.calc_transversal_fluence(None, None).ok();
+            let fluence_data_opt = rays.calc_transversal_fluence(None, None, true).ok();
             fluence_data_opt.map_or_else(
                 || {
                     warn!("Fluence Detector diagram: no wavefront data for export available",);
@@ -122,7 +122,7 @@ impl Optical for FluenceDetector {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
-            let fluence_data_res = rays.calc_transversal_fluence(None, None);
+            let fluence_data_res = rays.calc_transversal_fluence(None, None, true);
             if let Ok(fluence_data) = fluence_data_res {
                 props
                     .create(

@@ -2,6 +2,7 @@
 //! Trait for adding the possibility to generate a (x/y) plot of an element.
 use crate::error::OpmResult;
 use crate::error::OpossumError;
+use crate::utils::griddata::linspace;
 use approx::RelativeEq;
 use colorous::Gradient;
 use delaunator::{triangulate, Point};
@@ -10,7 +11,7 @@ use itertools::{iproduct, izip};
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{
-    ComplexField, DMatrix, DVector, DVectorSlice, Matrix1xX, Matrix3xX, MatrixXx1, MatrixXx2,
+    ComplexField, DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx1, MatrixXx2,
     MatrixXx3,
 };
 use num::ToPrimitive;
@@ -386,8 +387,7 @@ impl PlotType {
             );
 
             let c_dat = linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
-                .unwrap()
-                .transpose();
+                .unwrap();
             let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
             let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
             Self::draw_2d_colormesh(
@@ -395,7 +395,7 @@ impl PlotType {
                 &xxx,
                 &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
                     .unwrap()
-                    .transpose(),
+                    ,
                 &d_mat,
                 &plt.cbar.cmap,
                 plt.bounds.z.unwrap(),
@@ -504,7 +504,7 @@ impl PlotType {
 
             let c_dat = linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
                 .unwrap()
-                .transpose();
+                ;
             let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
             let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
             Self::draw_2d_colormesh(
@@ -512,7 +512,7 @@ impl PlotType {
                 &xxx,
                 &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
                     .unwrap()
-                    .transpose(),
+                    ,
                 &d_mat,
                 &plt.cbar.cmap,
                 plt.bounds.z.unwrap(),
@@ -1015,7 +1015,7 @@ pub trait Plottable {
                 }
             }
 
-            Some(PlotData::ColorMesh(x.transpose(), y.transpose(), zz))
+            Some(PlotData::ColorMesh(x, y, zz))
         } else {
             None
         }
@@ -1829,55 +1829,7 @@ pub enum PlotArgs {
     ///Plotting backend that should be used. Holds a [`PltBackEnd`] enum
     Backend(PltBackEnd),
 }
-fn _meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f64>) {
-    let x_len = x.len();
-    let y_len = y.len();
 
-    let mut x_mat = DMatrix::<f64>::zeros(y_len, x_len);
-    let mut y_mat = DMatrix::<f64>::zeros(y_len, x_len);
-
-    for x_id in 0..x_len {
-        for y_id in 0..y_len {
-            x_mat[(y_id, x_id)] = x[x_id];
-            y_mat[(y_id, x_id)] = y[y_id];
-        }
-    }
-
-    (x_mat, y_mat)
-}
-
-/// Creates a linearly spaced Vector (Matrix with1 column and `num` rows) from `start` to `end`
-/// # Attributes
-/// - `start`:  Start value of the array
-/// - `end`:    end value of the array
-/// - `num`:    number of elements
-///
-/// # Errors
-/// This function will return an error if `num` cannot be casted to usize.
-pub fn linspace(start: f64, end: f64, num: f64) -> OpmResult<Matrix1xX<f64>> {
-    let num_usize = num.to_usize();
-    if num_usize.is_some() {
-        let mut linspace = Matrix1xX::<f64>::zeros(num_usize.unwrap());
-        let mut range = KahanSum::<f64>::new_with_value(end);
-        range += -start;
-
-        let mut steps = KahanSum::<f64>::new_with_value(num);
-        steps += -1.;
-
-        let bin_size = range.sum() / steps.sum();
-
-        let mut summator: KahanSum<f64> = KahanSum::<f64>::new_with_value(start);
-        for val in linspace.iter_mut() {
-            *val = summator.sum();
-            summator += bin_size;
-        }
-        Ok(linspace)
-    } else {
-        Err(OpossumError::Other(
-            "Cannot cast num value to usize!".into(),
-        ))
-    }
-}
 
 #[cfg(test)]
 mod test {
@@ -2339,8 +2291,8 @@ mod test {
     #[test]
     fn new_plot() {
         let plt_params = PlotParameters::default();
-        let x = linspace(0., 2., 3.).unwrap().transpose();
-        let y = linspace(3., 5., 3.).unwrap().transpose();
+        let x = linspace(0., 2., 3.).unwrap();
+        let y = linspace(3., 5., 3.).unwrap();
         let plt_dat_dim2 = PlotData::Dim2(MatrixXx2::from_columns(&[x, y]));
 
         let plot = Plot::new(&plt_dat_dim2, &plt_params);
@@ -2356,8 +2308,8 @@ mod test {
         let plt_params = PlotParameters::default();
         let mut plot = Plot::try_from(&plt_params).unwrap();
 
-        let x = linspace(0., 2., 3.).unwrap().transpose();
-        let y = linspace(3., 5., 3.).unwrap().transpose();
+        let x = linspace(0., 2., 3.).unwrap();
+        let y = linspace(3., 5., 3.).unwrap();
         let plt_dat_dim2 = PlotData::Dim2(MatrixXx2::from_columns(&[x, y]));
 
         assert!(plot.get_data().is_none());
@@ -2371,7 +2323,7 @@ mod test {
     #[test]
     fn define_data_based_axes_bounds_test() {
         let x = linspace(0., 1., 2.).unwrap().transpose();
-        let dat_2d = MatrixXx2::from_columns(&[x.clone(), x]);
+        let dat_2d = MatrixXx2::from_columns(&[x.clone().transpose(), x.transpose()]);
         let plt_dat_dim2 = PlotData::Dim2(dat_2d);
 
         let axlims = plt_dat_dim2.define_data_based_axes_bounds(true);
@@ -2383,9 +2335,9 @@ mod test {
     #[test]
     fn define_plot_axes_bounds() {
         //define test data
-        let x = linspace(-2., -1., 2.).unwrap().transpose();
-        let y = linspace(2., 3., 2.).unwrap().transpose();
-        let z = linspace(4., 5., 2.).unwrap().transpose();
+        let x = linspace(-2., -1., 2.).unwrap();
+        let y = linspace(2., 3., 2.).unwrap();
+        let z = linspace(4., 5., 2.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
         let dummmy_triangles: Vec<usize> = vec![1, 2, 3, 4, 5, 6];
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -2538,22 +2490,22 @@ mod test {
     }
     #[test]
     fn get_ax_val_distance_if_equidistant_test() {
-        let x = linspace(0., 1., 101.).unwrap().transpose();
+        let x = linspace(0., 1., 101.).unwrap();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
         assert!((dist - 0.005).abs() < f64::EPSILON);
 
-        let x = linspace(0., f64::EPSILON, 101.).unwrap().transpose();
+        let x = linspace(0., f64::EPSILON, 101.).unwrap();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
         assert!((dist - 0.5).abs() < f64::EPSILON);
     }
     #[test]
     fn check_equistancy_of_mesh_test() {
-        let x = linspace(0., 1., 101.).unwrap().transpose();
+        let x = linspace(0., 1., 101.).unwrap();
         assert!(PlotType::check_equistancy_of_mesh(&x));
 
         let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100.)
             .unwrap()
-            .transpose();
+            ;
         assert!(PlotType::check_equistancy_of_mesh(&x));
 
         let x = MatrixXx1::from_vec(vec![0., 1., 3.]);
@@ -2577,9 +2529,9 @@ mod test {
     #[test]
     fn create_plots_png_test() {
         //define test data
-        let x = linspace(-2., -1., 3.).unwrap().transpose();
-        let y = linspace(2., 3., 3.).unwrap().transpose();
-        let z = linspace(4., 5., 3.).unwrap().transpose();
+        let x = linspace(-2., -1., 3.).unwrap();
+        let y = linspace(2., 3., 3.).unwrap();
+        let z = linspace(4., 5., 3.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -2613,9 +2565,9 @@ mod test {
     #[test]
     fn create_plots_svg_test() {
         //define test data
-        let x = linspace(-2., -1., 3.).unwrap().transpose();
-        let y = linspace(2., 3., 3.).unwrap().transpose();
-        let z = linspace(4., 5., 3.).unwrap().transpose();
+        let x = linspace(-2., -1., 3.).unwrap();
+        let y = linspace(2., 3., 3.).unwrap();
+        let z = linspace(4., 5., 3.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -2654,9 +2606,9 @@ mod test {
     #[test]
     fn create_plots_buffer_test() {
         //define test data
-        let x = linspace(-2., -1., 3.).unwrap().transpose();
-        let y = linspace(2., 3., 3.).unwrap().transpose();
-        let z = linspace(4., 5., 3.).unwrap().transpose();
+        let x = linspace(-2., -1., 3.).unwrap();
+        let y = linspace(2., 3., 3.).unwrap();
+        let z = linspace(4., 5., 3.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);

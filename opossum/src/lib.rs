@@ -38,6 +38,7 @@ pub mod rays;
 pub use ray::SplittingConfig;
 pub mod reporter;
 pub mod surface;
+pub mod utils;
 
 /// Return the version information of the currently built OPOSSUM executable.
 ///

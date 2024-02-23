@@ -93,6 +93,7 @@ fn main() -> OpmResult<()> {
     let fluence_data = rays.calc_transversal_fluence(
         None,
         Some(Point3::new(Length::zero(), Length::zero(), Length::zero())),
+        true
     )?;
     // let duration = start.elapsed();
     // println!("{duration:?}");
