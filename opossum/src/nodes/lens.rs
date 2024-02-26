@@ -78,19 +78,13 @@ impl Lens {
         rear_curvature: Length,
         center_thickness: Length,
         refractive_index: f64,
-    ) -> Self {
+    ) -> OpmResult<Self> {
         let mut props = create_default_props();
-        props
-            .set("front curvature", front_curvature.into())
-            .unwrap();
-        props.set("rear curvature", rear_curvature.into()).unwrap();
-        props
-            .set("center thickness", center_thickness.into())
-            .unwrap();
-        props
-            .set("refractive index", refractive_index.into())
-            .unwrap();
-        Self { props }
+        props.set("front curvature", front_curvature.into())?;
+        props.set("rear curvature", rear_curvature.into())?;
+        props.set("center thickness", center_thickness.into())?;
+        props.set("refractive index", refractive_index.into())?;
+        Ok(Self { props })
     }
 }
 

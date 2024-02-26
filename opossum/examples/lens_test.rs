@@ -23,7 +23,7 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(-205.55),
         Length::new::<millimeter>(2.79),
         1.5068,
-    ));
+    )?);
     let s2 = scenery.add_node(Propagation::new(
         "s2",
         Length::new::<millimeter>(404.44560),
@@ -33,7 +33,7 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(-205.55),
         Length::new::<millimeter>(2.79),
         1.5068,
-    ));
+    )?);
     let s3 = scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(50.0))?);
     let det = scenery.add_node(RayPropagationVisualizer::default());
     let wf = scenery.add_node(WaveFront::default());
