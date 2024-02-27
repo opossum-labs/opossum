@@ -68,11 +68,11 @@ impl Default for Lens {
 impl Lens {
     /// Creates a new [`Lens`].
     ///
-    /// # Panics
+    /// This function creates a lens with spherical front and back surfaces, a given center thickness and refractive index.
+    /// The radii of curvature must not be zero. The given refractive index must not be < 1.0.
+    /// # Errors
     ///
-    /// Panics if .
-    #[must_use]
-
+    /// This function return an error if the given parameters are not correct.
     pub fn new(
         front_curvature: Length,
         rear_curvature: Length,

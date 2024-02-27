@@ -1,6 +1,7 @@
 use opossum::error::OpmResult;
 use opossum::nodes::{
-    create_round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer, SpotDiagram, WaveFront
+    create_round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer, SpotDiagram,
+    WaveFront,
 };
 use opossum::OpticScenery;
 use std::path::Path;
@@ -22,7 +23,10 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(10.0),
         2.0,
     )?);
-    let s2 = scenery.add_node(Propagation::new("s2", Length::new::<millimeter>(197.22992))?);
+    let s2 = scenery.add_node(Propagation::new(
+        "s2",
+        Length::new::<millimeter>(197.22992),
+    )?);
     let l2 = scenery.add_node(Lens::new(
         Length::new::<millimeter>(200.0),
         Length::new::<millimeter>(-200.0),
@@ -32,7 +36,7 @@ fn main() -> OpmResult<()> {
     let s3 = scenery.add_node(Propagation::new("s3", Length::new::<millimeter>(30.0))?);
     let det = scenery.add_node(RayPropagationVisualizer::default());
     let wf = scenery.add_node(WaveFront::default());
-    let sd=scenery.add_node(SpotDiagram::default());
+    let sd = scenery.add_node(SpotDiagram::default());
     scenery.connect_nodes(src, "out1", s1, "front")?;
     scenery.connect_nodes(s1, "rear", l1, "front")?;
     scenery.connect_nodes(l1, "rear", s2, "front")?;

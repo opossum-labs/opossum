@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use crate::ray::SplittingConfig;
+use crate::surface::Plane;
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -168,10 +169,13 @@ impl BeamSplitter {
         let (mut in_ray1, split1) = if let Some(input1) = in1 {
             match input1 {
                 LightData::Geometric(r) => {
-                    let mut in_ray = r.clone();
-                    in_ray.propagate_along_z()?;
-                    let split_ray = in_ray.split(splitting_config)?;
-                    (in_ray, split_ray)
+                    let mut rays = r.clone();
+                    let z_position =
+                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+                    let plane = Plane::new(z_position)?;
+                    rays.refract_on_surface(&plane, 1.0)?;
+                    let split_rays = rays.split(splitting_config)?;
+                    (rays, split_rays)
                 }
                 _ => {
                     return Err(OpossumError::Analysis(
@@ -185,10 +189,13 @@ impl BeamSplitter {
         let (mut in_ray2, split2) = if let Some(input2) = in2 {
             match input2 {
                 LightData::Geometric(r) => {
-                    let mut in_ray = r.clone();
-                    in_ray.propagate_along_z()?;
-                    let split_ray = in_ray.split(splitting_config)?;
-                    (in_ray, split_ray)
+                    let mut rays = r.clone();
+                    let z_position =
+                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+                    let plane = Plane::new(z_position)?;
+                    rays.refract_on_surface(&plane, 1.0)?;
+                    let split_rays = rays.split(splitting_config)?;
+                    (rays, split_rays)
                 }
                 _ => {
                     return Err(OpossumError::Analysis(

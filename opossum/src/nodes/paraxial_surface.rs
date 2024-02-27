@@ -10,6 +10,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
+    surface::Plane,
 };
 use uom::num_traits::Zero;
 use uom::si::{f64::Length, length::millimeter};
@@ -98,7 +99,10 @@ impl Optical for ParaxialSurface {
                         } else {
                             return Err(OpossumError::Analysis("cannot read focal length".into()));
                         };
-                    rays.propagate_along_z()?;
+                    let z_position =
+                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+                    let plane = Plane::new(z_position)?;
+                    rays.refract_on_surface(&plane, 1.0)?;
                     rays.refract_paraxial(focal_length)?;
                     data = Some(LightData::Geometric(rays));
                 } else {

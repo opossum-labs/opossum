@@ -792,10 +792,7 @@ mod test {
         );
         assert_eq!(ray.refractive_index, 1.5);
         assert_eq!(ray.dir, Vector3::z());
-        assert_eq!(
-            ray.pos_hist,
-            vec![Point3::origin()]
-        );
+        assert_eq!(ray.pos_hist, vec![Point3::origin()]);
         assert_eq!(ray.path_length(), plane_z_pos);
         let position = Point3::new(
             Length::zero(),
@@ -860,7 +857,7 @@ mod test {
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
         assert_abs_diff_eq!(ray.dir[2], direction.normalize()[2]);
-        assert_abs_diff_eq!(ray.path_length.value, 2.0_f64.sqrt()*plane_z_pos.value);
+        assert_abs_diff_eq!(ray.path_length.value, 2.0_f64.sqrt() * plane_z_pos.value);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
         assert_eq!(

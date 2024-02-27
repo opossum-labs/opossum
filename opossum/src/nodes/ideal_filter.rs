@@ -8,6 +8,7 @@ use crate::optical::Optical;
 use crate::properties::{Properties, Proptype};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
+use crate::surface::Plane;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -195,10 +196,13 @@ impl Optical for IdealFilter {
                             "expected ray tracing analyzer for LightData::Geometric".into(),
                         ));
                     }
-                    let mut new_rays = r.clone();
-                    new_rays.propagate_along_z()?;
-                    new_rays.filter_energy(&self.filter_type())?;
-                    let light_data = Some(LightData::Geometric(new_rays));
+                    let mut rays = r.clone();
+                    let z_position =
+                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+                    let plane = Plane::new(z_position)?;
+                    rays.refract_on_surface(&plane, 1.0)?;
+                    rays.filter_energy(&self.filter_type())?;
+                    let light_data = Some(LightData::Geometric(rays));
                     return Ok(HashMap::from([(target.into(), light_data)]));
                 }
                 LightData::Fourier => {
