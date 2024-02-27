@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-use petgraph::{algo::is_cyclic_directed, prelude::DiGraph, stable_graph::NodeIndex};
+use petgraph::{algo::{connected_components, is_cyclic_directed}, prelude::DiGraph, stable_graph::NodeIndex};
 use serde::{
     de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
@@ -116,6 +116,9 @@ impl OpticGraph {
         self.0
             .node_weights()
             .any(|node| node.optical_ref.borrow().is_detector())
+    }
+    pub fn is_single_tree(&self) -> bool {
+        connected_components(&self.0) == 1
     }
 }
 impl Serialize for OpticGraph {
