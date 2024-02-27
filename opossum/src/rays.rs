@@ -13,6 +13,7 @@ use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
+use crate::surface::Surface;
 use image::{DynamicImage, ImageBuffer};
 use kahan::KahanSummator;
 use log::warn;
@@ -30,8 +31,14 @@ use uom::si::length::{micrometer, millimeter, nanometer};
 pub struct Rays {
     ///vector containing rays
     rays: Vec<Ray>,
-    //Maximum number of bounces
-    //max_bounces:    usize, do we need this here?
+    // ***
+    // *** only temporary before we have concept for coordinate system
+    // ***
+    dist_to_next_surface: Length,
+    z_position: Length,
+    // ***
+    // ***
+    // ***
 }
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis).
@@ -70,7 +77,11 @@ impl Rays {
             let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
-        Ok(Self { rays })
+        Ok(Self {
+            rays,
+            dist_to_next_surface: Length::zero(),
+            z_position: Length::zero(),
+        })
     }
     /// Generate a ray cone (= point source)
     ///
@@ -86,7 +97,7 @@ impl Rays {
     pub fn new_hexapolar_point_source(
         position: Point3<Length>,
         cone_angle: Angle,
-        number_of_rings: u8,
+        nr_of_rings: u8,
         wave_length: Length,
         energy: Energy,
     ) -> OpmResult<Self> {
@@ -99,7 +110,7 @@ impl Rays {
         let points: Vec<Point3<Length>> = if cone_angle.is_zero() {
             vec![Point3::new(Length::zero(), Length::zero(), Length::zero())]
         } else {
-            DistributionStrategy::Hexapolar(number_of_rings)
+            DistributionStrategy::Hexapolar { nr_of_rings }
                 .generate(Length::new::<millimeter>(size_after_unit_length))
         };
         let nr_of_rays = points.len();
@@ -115,7 +126,11 @@ impl Rays {
             let ray = Ray::new(position, direction, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
-        Ok(Self { rays })
+        Ok(Self {
+            rays,
+            dist_to_next_surface: Length::zero(),
+            z_position: Length::zero(),
+        })
     }
     /// Returns the total energy of this [`Rays`].
     ///
@@ -340,13 +355,18 @@ impl Rays {
 
     /// Propagate a ray bundle along the z axis.
     ///
+    /// The propagation length must be set with the function `set_dist_to_next_surface`.
     /// # Errors
     /// This function returns an error if
     ///  - the z component of a ray direction is zero.
     ///  - the given length is not finite.
-    pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
-        for ray in &mut self.rays {
-            ray.propagate_along_z(length_along_z)?;
+    pub fn propagate_along_z(&mut self) -> OpmResult<()> {
+        if !self.dist_to_next_surface.is_zero() {
+            for ray in &mut self.rays {
+                ray.propagate_along_z(self.dist_to_next_surface)?;
+            }
+            self.z_position += self.dist_to_next_surface;
+            self.set_dist_zero();
         }
         Ok(())
     }
@@ -365,6 +385,19 @@ impl Rays {
         for ray in &mut self.rays {
             ray.refract_paraxial(focal_length)?;
         }
+        Ok(())
+    }
+    /// Refract a ray bundle on a [`Surface`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn refract_on_surface(&mut self, surface: &dyn Surface, n2: f64) -> OpmResult<()> {
+        for ray in &mut self.rays {
+            ray.refract_on_surface(surface, n2)?;
+        }
+        self.z_position += self.dist_to_next_surface;
+        self.set_dist_zero();
         Ok(())
     }
     /// Filter a ray bundle by a given filter.
@@ -501,6 +534,27 @@ impl Rays {
         }
         RayPositionHistory { rays_pos_history }
     }
+    /// Returns the dist to next surface of this [`Rays`].
+    ///
+    /// **Note**: This function is a hack and will be removed in later versions.
+    #[must_use]
+    pub fn dist_to_next_surface(&self) -> Length {
+        self.dist_to_next_surface
+    }
+    /// Sets the dist to next surface of this [`Rays`].
+    ///
+    /// **Note**: This function is a hack and will be removed in later versions.
+    pub fn set_dist_to_next_surface(&mut self, dist_to_next_surface: Length) {
+        self.dist_to_next_surface = dist_to_next_surface;
+    }
+    fn set_dist_zero(&mut self) {
+        self.dist_to_next_surface = Length::zero();
+    }
+    /// Returns the absolute z of last surface of this [`Rays`].
+    #[must_use]
+    pub fn absolute_z_of_last_surface(&self) -> Length {
+        self.z_position
+    }
 }
 
 /// struct that holds the history of the ray positions that is needed for report generation
@@ -585,7 +639,11 @@ impl PdfReportable for RayPositionHistory {
 
 impl From<Vec<Ray>> for Rays {
     fn from(value: Vec<Ray>) -> Self {
-        Self { rays: value }
+        Self {
+            rays: value,
+            dist_to_next_surface: Length::zero(),
+            z_position: Length::zero(),
+        }
     }
 }
 
@@ -635,7 +693,7 @@ mod test {
     fn new_uniform_collimated() {
         let wvl = Length::new::<nanometer>(1054.0);
         let energy = Energy::new::<joule>(1.0);
-        let strategy = &DistributionStrategy::Hexapolar(2);
+        let strategy = &DistributionStrategy::Hexapolar { nr_of_rings: 2 };
         let rays =
             Rays::new_uniform_collimated(Length::new::<millimeter>(1.0), wvl, energy, strategy);
         assert!(rays.is_ok());
@@ -671,7 +729,7 @@ mod test {
     fn new_uniform_collimated_zero() {
         let wvl = Length::new::<nanometer>(1054.0);
         let energy = Energy::new::<joule>(1.0);
-        let strategy = &DistributionStrategy::Hexapolar(2);
+        let strategy = &DistributionStrategy::Hexapolar { nr_of_rings: 2 };
         let rays = Rays::new_uniform_collimated(Length::zero(), wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();
@@ -701,8 +759,8 @@ mod test {
                 Point3::new(Length::zero(), Length::zero(), Length::zero())
             )
         }
-        rays.propagate_along_z(Length::new::<millimeter>(1.0))
-            .unwrap();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(1.0));
+        rays.propagate_along_z().unwrap();
         assert_eq!(
             rays.rays[0].position(),
             Point3::new(
@@ -829,7 +887,9 @@ mod test {
             Length::new::<millimeter>(1.0),
             Length::new::<nanometer>(1054.0),
             Energy::new::<joule>(1.0),
-            &DistributionStrategy::Random(100000),
+            &DistributionStrategy::Random {
+                nr_of_points: 100000,
+            },
         )
         .unwrap();
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 1.0);
@@ -959,8 +1019,8 @@ mod test {
         .unwrap();
         rays.add_ray(ray0);
         rays.add_ray(ray1);
-        rays.propagate_along_z(Length::new::<millimeter>(1.0))
-            .unwrap();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(1.0));
+        rays.propagate_along_z().unwrap();
         assert_eq!(
             rays.rays[0].position(),
             Point3::new(
@@ -1257,9 +1317,10 @@ mod test {
         )
         .unwrap()];
         let mut rays = Rays::from(ray_vec);
-
-        let _ = rays.propagate_along_z(Length::new::<millimeter>(1.));
-        let _ = rays.propagate_along_z(Length::new::<millimeter>(2.));
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(1.));
+        let _ = rays.propagate_along_z();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(2.));
+        let _ = rays.propagate_along_z();
 
         let pos_hist_comp = vec![MatrixXx3::from_vec(vec![
             0., 0., 0., 0., 0.5, 1.5, 0., 1., 3.,
@@ -1324,7 +1385,8 @@ mod test {
         )
         .unwrap();
 
-        let _ = rays.propagate_along_z(Length::new::<millimeter>(10.));
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+        let _ = rays.propagate_along_z();
         let wf_data = rays
             .get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(10.))
             .unwrap();
@@ -1378,7 +1440,8 @@ mod test {
             Energy::new::<joule>(1.),
         )
         .unwrap();
-        let _ = rays.propagate_along_z(Length::new::<millimeter>(10.));
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+        let _ = rays.propagate_along_z();
 
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(Length::new::<nanometer>(1000.));
 
@@ -1397,7 +1460,8 @@ mod test {
             Energy::new::<joule>(1.),
         )
         .unwrap();
-        let _ = rays.propagate_along_z(Length::new::<millimeter>(10.));
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+        let _ = rays.propagate_along_z();
 
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(Length::new::<nanometer>(500.));
 

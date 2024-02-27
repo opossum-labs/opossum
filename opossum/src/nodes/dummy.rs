@@ -2,10 +2,12 @@
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::OpmResult;
+use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::NodeReport;
+use crate::surface::Plane;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -63,13 +65,24 @@ impl Optical for Dummy {
         incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.properties().inverted()? {
+        let (inport, outport) = if self.properties().inverted()? {
             ("rear", "front")
         } else {
             ("front", "rear")
         };
-        let data = incoming_data.get(src).unwrap_or(&None);
-        Ok(HashMap::from([(target.into(), data.clone())]))
+        let data = incoming_data.get(inport).unwrap_or(&None);
+        if let Some(LightData::Geometric(rays)) = data {
+            let mut rays = rays.clone();
+            let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+            let plane = Plane::new(z_position)?;
+            rays.refract_on_surface(&plane, 1.0)?;
+            Ok(HashMap::from([(
+                outport.into(),
+                Some(LightData::Geometric(rays)),
+            )]))
+        } else {
+            Ok(HashMap::from([(outport.into(), data.clone())]))
+        }
     }
     fn properties(&self) -> &Properties {
         &self.props

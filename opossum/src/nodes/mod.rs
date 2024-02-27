@@ -26,12 +26,13 @@ pub use dummy::Dummy;
 pub use group::NodeGroup;
 pub use group::PortMap;
 pub use ideal_filter::{FilterType, IdealFilter};
-pub use lens::{IdealLens, RealLens};
+pub use lens::Lens;
 pub use paraxial_surface::ParaxialSurface;
 pub use propagation::Propagation;
 pub use reference::NodeReference;
-pub use source::create_collimated_ray_source;
+pub use source::create_line_collimated_ray_source;
 pub use source::create_point_ray_source;
+pub use source::create_round_collimated_ray_source;
 pub use source::Source;
 
 pub use energy_meter::EnergyMeter;
@@ -87,10 +88,7 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
             Rc::new(RefCell::new(NodeReference::default())),
             uuid,
         )),
-        "real lens" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(RealLens::default())),
-            uuid,
-        )),
+        "lens" => Ok(OpticRef::new(Rc::new(RefCell::new(Lens::default())), uuid)),
         "light source" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Source::default())),
             uuid,

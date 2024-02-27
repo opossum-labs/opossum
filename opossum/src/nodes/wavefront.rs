@@ -14,6 +14,7 @@ use crate::plottable::{
 };
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
+use crate::surface::Plane;
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -137,7 +138,7 @@ impl WaveFrontErrorMap {
                     .sum::<f64>()
                     / f64::from(i32::try_from(wf_dat.len()).unwrap()),
             );
-            Ok((rms * 1000., ptv * 1000.))
+            Ok((ptv, rms))
         }
     }
 }
@@ -166,14 +167,25 @@ impl Optical for WaveFront {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.properties().inverted()? {
+        let (inport, outport) = if self.properties().inverted()? {
             ("out1", "in1")
         } else {
             ("in1", "out1")
         };
-        let data = incoming_data.get(src).unwrap_or(&None);
-        self.light_data = data.clone();
-        Ok(HashMap::from([(target.into(), data.clone())]))
+        let data = incoming_data.get(inport).unwrap_or(&None);
+        if let Some(LightData::Geometric(rays)) = data {
+            let mut rays = rays.clone();
+            let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+            let plane = Plane::new(z_position)?;
+            rays.refract_on_surface(&plane, 1.0)?;
+            self.light_data = Some(LightData::Geometric(rays.clone()));
+            Ok(HashMap::from([(
+                outport.into(),
+                Some(LightData::Geometric(rays)),
+            )]))
+        } else {
+            Ok(HashMap::from([(outport.into(), data.clone())]))
+        }
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(LightData::Geometric(rays)) = &self.light_data {
@@ -249,11 +261,11 @@ impl PdfReportable for WaveFrontData {
         let mut layout = genpdf::elements::LinearLayout::vertical();
 
         layout.push(genpdf::elements::Paragraph::new(format!(
-            "ptv: {:.1} mλ",
+            "ptv: {:.4} λ",
             self.wavefront_error_maps[0].ptv
         )));
         layout.push(genpdf::elements::Paragraph::new(format!(
-            "rms: {:.1} mλ",
+            "rms: {:.4} λ",
             self.wavefront_error_maps[0].rms
         )));
         //todo! for all wavefronts!

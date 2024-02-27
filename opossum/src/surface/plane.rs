@@ -8,6 +8,7 @@ use crate::ray::Ray;
 use nalgebra::{Point3, Vector3};
 use uom::si::{f64::Length, length::meter};
 
+#[derive(Debug)]
 pub struct Plane {
     z: Length,
 }
