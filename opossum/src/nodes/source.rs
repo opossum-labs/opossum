@@ -50,7 +50,7 @@ pub fn create_line_collimated_ray_source(
 ) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
         size_y,
-        Length::new::<nanometer>(1053.0),
+        Length::new::<nanometer>(1000.0),
         energy,
         &DistributionStrategy::Grid {
             nr_of_points_x: 1,

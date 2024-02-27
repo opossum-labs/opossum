@@ -126,6 +126,7 @@ impl Optical for Lens {
                     };
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+                    rays.set_refractive_index(*n2)?;
                     let rear_surface = Sphere::new(next_z_pos, *rear_roc)?;
                     rays.refract_on_surface(&rear_surface, 1.0)?;
                     Ok(HashMap::from([(
