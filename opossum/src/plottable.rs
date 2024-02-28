@@ -11,8 +11,7 @@ use itertools::{iproduct, izip};
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{
-    ComplexField, DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx1, MatrixXx2,
-    MatrixXx3,
+    ComplexField, DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3,
 };
 use num::ToPrimitive;
 use plotters::chart::MeshStyle;
@@ -386,16 +385,14 @@ impl PlotType {
                 false,
             );
 
-            let c_dat = linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
-                .unwrap();
+            let c_dat =
+                linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap();
             let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
             let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
             Self::draw_2d_colormesh(
                 &mut chart,
                 &xxx,
-                &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
-                    .unwrap()
-                    ,
+                &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap(),
                 &d_mat,
                 &plt.cbar.cmap,
                 plt.bounds.z.unwrap(),
@@ -502,17 +499,14 @@ impl PlotType {
                 false,
             );
 
-            let c_dat = linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
-                .unwrap()
-                ;
+            let c_dat =
+                linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap();
             let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
             let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
             Self::draw_2d_colormesh(
                 &mut chart,
                 &xxx,
-                &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
-                    .unwrap()
-                    ,
+                &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap(),
                 &d_mat,
                 &plt.cbar.cmap,
                 plt.bounds.z.unwrap(),
@@ -1830,7 +1824,6 @@ pub enum PlotArgs {
     Backend(PltBackEnd),
 }
 
-
 #[cfg(test)]
 mod test {
     use tempfile::NamedTempFile;
@@ -2503,9 +2496,7 @@ mod test {
         let x = linspace(0., 1., 101.).unwrap();
         assert!(PlotType::check_equistancy_of_mesh(&x));
 
-        let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100.)
-            .unwrap()
-            ;
+        let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100.).unwrap();
         assert!(PlotType::check_equistancy_of_mesh(&x));
 
         let x = MatrixXx1::from_vec(vec![0., 1., 3.]);

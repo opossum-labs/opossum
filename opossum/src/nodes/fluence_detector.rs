@@ -154,30 +154,44 @@ impl From<FluenceData> for Proptype {
     }
 }
 
+/// Struct to hold the fluence information of a beam
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FluenceData {
+    /// peak fluence of the beam
     pub peak: f64,
+    /// average fluence of the beam
     pub average: f64,
+    /// 2d fluence distribution of the beam
     pub distribution: DMatrix<f64>,
+    /// x coordinates of the fluence distribution
     pub x_data: DVector<f64>,
+    /// y coordinates of the fluence distribution
     pub y_data: DVector<f64>,
 }
 
 impl FluenceData {
-    #[must_use]
-    pub const fn new(
+    /// Constructs a new [`FluenceData`] struct
+    /// # Errors
+    /// This function errors if the shape of input distribution and x-y coordinates does not match
+    pub fn new(
         peak: f64,
         average: f64,
         distribution: DMatrix<f64>,
         x_data: DVector<f64>,
         y_data: DVector<f64>,
-    ) -> Self {
-        Self {
-            peak,
-            average,
-            distribution,
-            x_data,
-            y_data,
+    ) -> OpmResult<Self> {
+        if y_data.len() != distribution.shape().0 || x_data.len() != distribution.shape().1 {
+            Err(OpossumError::Other(
+                "Shape of input distribution and x-y coordinates does not match!".into(),
+            ))
+        } else {
+            Ok(Self {
+                peak,
+                average,
+                distribution,
+                x_data,
+                y_data,
+            })
         }
     }
 }

@@ -3,6 +3,7 @@ mod beam_splitter;
 mod detector;
 mod dummy;
 mod energy_meter;
+/// fluence measurement node
 pub mod fluence_detector;
 mod group;
 mod ideal_filter;

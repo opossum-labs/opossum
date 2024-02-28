@@ -13,18 +13,20 @@ use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
-use crate::utils::griddata::{create_voronoi_cells, calc_closed_poly_area, interpolate_2d_triangulated_scatter_data, create_linspace_axes}; 
+use crate::utils::griddata::{
+    calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
+    interpolate_3d_triangulated_scatter_data, VoronoiData,
+};
 use image::{DynamicImage, ImageBuffer};
 use itertools::izip;
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{
-    distance, point, DVector, DVectorSlice, Matrix3x1, MatrixXx2, MatrixXx3,
-    Point2, Point3, Vector2, Vector3,
+    distance, point, DVector, Matrix3x1, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3,
 };
-use std::ops::Add;
 use num::ToPrimitive;
 use serde_derive::{Deserialize, Serialize};
+use std::ops::Add;
 use std::ops::Range;
 use std::path::Path;
 use uom::num_traits::Zero;
@@ -32,7 +34,6 @@ use uom::si::angle::degree;
 use uom::si::energy::joule;
 use uom::si::f64::{Angle, Energy, Length};
 use uom::si::length::{centimeter, micrometer, millimeter, nanometer};
-use voronator::{delaunator::{Coord, Point as VPoint},VoronoiDiagram};
 
 /// Struct containing all relevant information of a ray bundle
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
@@ -407,8 +408,6 @@ impl Rays {
         }
     }
 
-
-
     fn project_rays_pos_to_plane(
         &self,
         plane_normal_anchor: &Matrix3x1<f64>,
@@ -426,7 +425,7 @@ impl Rays {
             );
             let closest_to_axis_vec = ray_pos_vec
                 - plane_normal_anchor
-                - (ray_pos_vec - plane_normal_anchor).dot(&plane_normal) * plane_normal;
+                - (ray_pos_vec - plane_normal_anchor).dot(plane_normal) * plane_normal;
 
             rays_pos_projection[(row, 0)] = closest_to_axis_vec.dot(plane_co_ax_1);
             rays_pos_projection[(row, 1)] = closest_to_axis_vec.dot(plane_co_ax_2);
@@ -479,10 +478,12 @@ impl Rays {
         projected_ray_pos: &MatrixXx2<f64>,
         proj_ax1_lim: AxLims,
         proj_ax2_lim: AxLims,
-    ) -> OpmResult<(DVector<f64>, VoronoiDiagram<VPoint>)> {
-        let voronoi =             create_voronoi_cells(projected_ray_pos, &proj_ax1_lim, &proj_ax2_lim)
-            .ok_or("Voronoi diagram for fluence estimation could not be created!".to_owned())?;
-    
+    ) -> OpmResult<VoronoiData> {
+        let voronoi = create_voronoi_cells(projected_ray_pos, &proj_ax1_lim, &proj_ax2_lim)
+            .ok_or_else(|| {
+                "Voronoi diagram for fluence estimation could not be created!".to_owned()
+            })?;
+
         //get the voronoi cells
         let v_cells = voronoi.cells();
 
@@ -494,14 +495,12 @@ impl Rays {
                 .iter()
                 .map(|p| Point2::new(p.x, p.y))
                 .collect::<Vec<Point2<f64>>>();
-            let poly_area = calc_closed_poly_area(&v_neighbours);
+            let poly_area = calc_closed_poly_area(&v_neighbours)?;
             fluence_scatter[idx] = self.rays[idx].energy().get::<joule>() / poly_area;
         }
 
-        Ok((fluence_scatter, voronoi))
+        Ok(VoronoiData::new(voronoi, fluence_scatter))
     }
-
-    
 
     /// Calculates the spatial energy distribution (fluence) of a ray bundle, its coordinates in the transversal plane and the peak fluence in J/cm²
     /// # Attributes
@@ -513,7 +512,7 @@ impl Rays {
         &self,
         propagation_axis_opt: Option<Vector3<f64>>,
         anchor_point_opt: Option<Point3<Length>>,
-        interpolation_flag: bool
+        interpolation_flag: bool,
     ) -> OpmResult<FluenceData> {
         let num_axes_points = 100.;
 
@@ -538,45 +537,40 @@ impl Rays {
             create_linspace_axes(rays_pos_projection.column(0), num_axes_points)?;
         let (co_ax2, co_ax2_lim) =
             create_linspace_axes(rays_pos_projection.column(1), num_axes_points)?;
-        let co_ax1_bin = co_ax1[1] - co_ax1[0];
-        let co_ax2_bin = co_ax2[1] - co_ax2[0];
 
         // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
-        let (fluence_scatter, voronoi) =
+        let voronoi_fluence_scatter =
             self.calc_ray_fluence_in_voronoi_cells(&rays_pos_projection, co_ax1_lim, co_ax2_lim)?;
 
-        if interpolation_flag{
-            let (interp_fluence, interp_mask) = interpolate_2d_triangulated_scatter_data(&voronoi, &DVectorSlice::from(&fluence_scatter), &co_ax1, &co_ax2); 
-        
+        if interpolation_flag {
+            let (interp_fluence, interp_mask) = interpolate_3d_triangulated_scatter_data(
+                &voronoi_fluence_scatter,
+                &co_ax1,
+                &co_ax2,
+            )?;
 
-            let (peak_fluence, mut average) = izip!(interp_fluence.into_iter(), interp_mask.into_iter()).fold(
-                (f64::NEG_INFINITY, 0.), |arg0, v| {
+            let (peak_fluence, mut average) = izip!(
+                interp_fluence.into_iter(),
+                interp_mask.into_iter()
+            )
+            .fold((f64::NEG_INFINITY, 0.), |arg0, v| {
                 let max_val = if v.0.is_nan() {
                     arg0.0
                 } else {
                     f64::max(arg0.0, *v.0)
                 };
-                let average_val = if v.1 > &f64::EPSILON{
+                let average_val = if v.1 > &f64::EPSILON {
                     f64::add(arg0.1, *v.1)
-                }
-                else{
+                } else {
                     arg0.1
                 };
                 (max_val, average_val)
-            }
-        );
+            });
 
             average /= interp_mask.sum();
-    
-            Ok(FluenceData::new(
-                peak_fluence,
-                average,
-                interp_fluence,
-                co_ax1,
-                co_ax2,
-            ))
-        }
-        else{
+
+            FluenceData::new(peak_fluence, average, interp_fluence, co_ax1, co_ax2)
+        } else {
             todo!()
         }
     }

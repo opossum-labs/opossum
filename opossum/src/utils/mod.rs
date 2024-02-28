@@ -1,7 +1,7 @@
 //! Module for additional computational capabilities
 
-pub mod griddata;
 pub mod geom_transformation;
+pub mod griddata;
 
 // pub use griddata::*;
 // pub use geom_transformation::*;
