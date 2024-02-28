@@ -232,6 +232,9 @@ impl OpticScenery {
     /// # Errors
     /// This function returns an error if an underlying node-specific analysis function returns an error.
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> OpmResult<()> {
+        if !&self.g.is_single_tree() {
+            warn!("Scenery contains unconnected sub-trees. Analysis might not be complete.");
+        }
         let sorted = toposort(&self.g.0, None)
             .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
         for idx in sorted {
@@ -779,6 +782,26 @@ mod test {
             assert_eq!(
                 captured_logs[0].body,
                 "stale (completely unconnected) node dummy found. Skipping."
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
+    }
+    #[test]
+    fn analyze_unconnected_sub_trees() {
+        testing_logger::setup();
+        let mut scenery = OpticScenery::new();
+        let n1 = scenery.add_node(Dummy::default());
+        let n2 = scenery.add_node(Dummy::default());
+        let n3 = scenery.add_node(Dummy::default());
+        let n4 = scenery.add_node(Dummy::default());
+        scenery.connect_nodes(n1, "rear", n2, "front").unwrap();
+        scenery.connect_nodes(n3, "rear", n4, "front").unwrap();
+        assert!(scenery.analyze(&AnalyzerType::Energy).is_ok());
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "Scenery contains unconnected sub-trees. Analysis might not be complete."
             );
             assert_eq!(captured_logs[0].level, Level::Warn);
         });

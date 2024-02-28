@@ -1,5 +1,9 @@
 #![warn(missing_docs)]
-use petgraph::{algo::is_cyclic_directed, prelude::DiGraph, stable_graph::NodeIndex};
+use petgraph::{
+    algo::{connected_components, is_cyclic_directed},
+    prelude::DiGraph,
+    stable_graph::NodeIndex,
+};
 use serde::{
     de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
@@ -116,6 +120,9 @@ impl OpticGraph {
         self.0
             .node_weights()
             .any(|node| node.optical_ref.borrow().is_detector())
+    }
+    pub fn is_single_tree(&self) -> bool {
+        connected_components(&self.0) == 1
     }
 }
 impl Serialize for OpticGraph {
@@ -342,6 +349,19 @@ mod test {
         let uuid = graph.0.node_weight(n1).unwrap().uuid();
         assert_eq!(graph.node_idx(uuid), Some(n1));
         assert_eq!(graph.node_idx(Uuid::new_v4()), None);
+    }
+    #[test]
+    fn is_single_tree() {
+        let mut graph = OpticGraph::default();
+        let n1 = graph.add_node(Dummy::default());
+        let n2 = graph.add_node(Dummy::default());
+        let n3 = graph.add_node(Dummy::default());
+        let n4 = graph.add_node(Dummy::default());
+        graph.connect_nodes(n1, "rear", n2, "front").unwrap();
+        graph.connect_nodes(n3, "rear", n4, "front").unwrap();
+        assert_eq!(graph.is_single_tree(), false);
+        graph.connect_nodes(n2, "rear", n3, "front").unwrap();
+        assert_eq!(graph.is_single_tree(), true);
     }
     #[test]
     fn serialize_deserialize() {
