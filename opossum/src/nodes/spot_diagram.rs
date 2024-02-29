@@ -216,7 +216,7 @@ impl Plottable for SpotDiagram {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::distribution::DistributionStrategy;
+    use crate::distributions::Hexapolar;
     use crate::{
         analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays,
         spectrum_helper::create_he_ne_spec,
@@ -338,10 +338,9 @@ mod test {
         assert!(node_report.properties().contains("Spot diagram"));
         sd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::zero(),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
-                &DistributionStrategy::Hexapolar { nr_of_rings: 1 },
+                &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
         ));

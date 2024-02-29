@@ -1,6 +1,6 @@
 use nalgebra::Vector3;
 use opossum::{
-    distribution::DistributionStrategy,
+    distributions::Hexapolar,
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType},
     rays::Rays,
@@ -13,10 +13,9 @@ use uom::si::{
 
 fn main() -> OpmResult<()> {
     let mut rays = Rays::new_uniform_collimated(
-        Length::new::<millimeter>(10.),
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
-        &DistributionStrategy::Hexapolar { nr_of_rings: 5 },
+        &Hexapolar::new(Length::new::<millimeter>(10.), 5)?,
     )?;
     rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
     rays.propagate_along_z()?;

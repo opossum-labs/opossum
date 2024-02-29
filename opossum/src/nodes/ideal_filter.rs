@@ -238,7 +238,7 @@ mod test {
 
     use crate::{
         analyzer::{AnalyzerType, RayTraceConfig},
-        distribution::DistributionStrategy,
+        distributions::Hexapolar,
         lightdata::DataEnergy,
         optical::LightResult,
         rays::Rays,
@@ -350,10 +350,9 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<millimeter>(5.0),
                 Length::new::<nanometer>(1054.0),
                 Energy::new::<joule>(1.0),
-                &DistributionStrategy::Hexapolar { nr_of_rings: 1 },
+                &Hexapolar::new(Length::new::<millimeter>(5.0), 1).unwrap(),
             )
             .unwrap(),
         );

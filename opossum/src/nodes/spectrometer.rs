@@ -298,7 +298,7 @@ mod test {
     use super::*;
     use crate::{
         analyzer::AnalyzerType,
-        distribution::DistributionStrategy,
+        distributions::Hexapolar,
         lightdata::DataEnergy,
         rays::Rays,
         spectrum_helper::{create_he_ne_spec, create_visible_spec},
@@ -444,10 +444,9 @@ mod test {
         assert_eq!(nr_of_props, 0);
         sd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::zero(),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
-                &DistributionStrategy::Hexapolar { nr_of_rings: 1 },
+                &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
         ));
