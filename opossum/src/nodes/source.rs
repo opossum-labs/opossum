@@ -50,7 +50,7 @@ pub fn create_line_collimated_ray_source(
     let rays = Rays::new_uniform_collimated(
         Length::new::<nanometer>(1000.0),
         energy,
-        &Grid::new(1, nr_of_points_y, size_y),
+        &Grid::new((Length::zero(), size_y),(1, nr_of_points_y))?
     )?;
     let light = LightData::Geometric(rays);
     Ok(Source::new("collimated ray source", &light))

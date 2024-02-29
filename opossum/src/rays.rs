@@ -871,7 +871,8 @@ mod test {
                 Length::new::<millimeter>(1.0),
                 Length::new::<millimeter>(1.0),
                 100000,
-            ),
+            )
+            .unwrap(),
         )
         .unwrap();
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 1.0);

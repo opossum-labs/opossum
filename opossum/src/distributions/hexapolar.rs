@@ -1,3 +1,4 @@
+//! Circular, hexapolar distribution
 use super::Distribution;
 use nalgebra::{point, Point3};
 use num::Zero;
@@ -8,6 +9,7 @@ pub struct Hexapolar {
     radius: Length,
 }
 impl Hexapolar {
+    #[must_use]
     pub fn new(radius: Length, nr_of_rings: u8) -> Self {
         Self {
             nr_of_rings,

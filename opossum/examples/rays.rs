@@ -13,7 +13,7 @@ fn main() -> OpmResult<()> {
             Length::new::<millimeter>(1.0),
             Length::new::<millimeter>(1.0),
             200,
-        ),
+        )?,
     )?;
     Ok(())
     // rays.to_svg_plot(Path::new("./opossum/playground/rays.svg"))?;
