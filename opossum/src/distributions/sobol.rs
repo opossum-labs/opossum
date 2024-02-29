@@ -1,5 +1,5 @@
-use super::Distribution;
 /// Rectangluar, low-discrepancy quasirandom distribution
+use super::Distribution;
 use crate::error::{OpmResult, OpossumError};
 use nalgebra::{point, Point3};
 use num::Zero;
