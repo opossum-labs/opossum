@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 use crate::{
-    distribution::DistributionStrategy,
+    distributions::{Grid, Hexapolar},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -30,10 +30,9 @@ pub fn create_round_collimated_ray_source(
     nr_of_rings: u8,
 ) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
-        radius,
         Length::new::<nanometer>(1000.0),
         energy,
-        &DistributionStrategy::Hexapolar { nr_of_rings },
+        &Hexapolar::new(radius, nr_of_rings),
     )?;
     let light = LightData::Geometric(rays);
     Ok(Source::new("collimated ray source", &light))
@@ -49,13 +48,9 @@ pub fn create_line_collimated_ray_source(
     nr_of_points_y: usize,
 ) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
-        size_y,
         Length::new::<nanometer>(1000.0),
         energy,
-        &DistributionStrategy::Grid {
-            nr_of_points_x: 1,
-            nr_of_points_y,
-        },
+        &Grid::new(1, nr_of_points_y, size_y),
     )?;
     let light = LightData::Geometric(rays);
     Ok(Source::new("collimated ray source", &light))

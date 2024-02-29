@@ -1,4 +1,4 @@
-use opossum::{distribution::DistributionStrategy, error::OpmResult, rays::Rays};
+use opossum::{distributions::Random, error::OpmResult, rays::Rays};
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
@@ -7,10 +7,13 @@ use uom::si::{
 
 fn main() -> OpmResult<()> {
     let _rays = Rays::new_uniform_collimated(
-        Length::new::<millimeter>(1.0),
         Length::new::<nanometer>(1054.0),
         Energy::new::<joule>(1.0),
-        &DistributionStrategy::Random { nr_of_points: 200 },
+        &Random::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(1.0),
+            200,
+        ),
     )?;
     Ok(())
     // rays.to_svg_plot(Path::new("./opossum/playground/rays.svg"))?;

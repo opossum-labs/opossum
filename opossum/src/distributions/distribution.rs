@@ -47,21 +47,7 @@ impl DistributionStrategy {
         }
     }
 }
-fn hexapolar(rings: u8, radius: Length) -> Vec<Point3<Length>> {
-    let mut points: Vec<Point3<Length>> = Vec::new();
-    let radius_step = radius / f64::from(rings);
-    points.push(point![Length::zero(), Length::zero(), Length::zero()]);
-    for ring in 0u8..rings {
-        let radius = f64::from(ring + 1) * radius_step;
-        let points_per_ring = 6 * (ring + 1);
-        let angle_step = 2.0 * std::f64::consts::PI / f64::from(points_per_ring);
-        for point_nr in 0u8..points_per_ring {
-            let point = (f64::from(point_nr) * angle_step).sin_cos();
-            points.push(point![radius * point.0, radius * point.1, Length::zero()]);
-        }
-    }
-    points
-}
+
 fn random(nr_of_rays: usize, side_length: Length) -> Vec<Point3<Length>> {
     let mut points: Vec<Point3<Length>> = Vec::new();
     let mut rng = rand::thread_rng();

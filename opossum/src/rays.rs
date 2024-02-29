@@ -4,7 +4,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use crate::aperture::Aperture;
-use crate::distribution::DistributionStrategy;
+use crate::distributions::{Distribution, Hexapolar};
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
@@ -54,21 +54,11 @@ impl Rays {
     ///  - the given energy is <= 0.0, NaN or +inf
     ///  - the given size is < 0.0, NaN or +inf
     pub fn new_uniform_collimated(
-        size: Length,
         wave_length: Length,
         energy: Energy,
-        strategy: &DistributionStrategy,
+        strategy: &dyn Distribution,
     ) -> OpmResult<Self> {
-        if size.is_sign_negative() || !size.is_finite() {
-            return Err(OpossumError::Other(
-                "radius must be >= 0.0 and finite".into(),
-            ));
-        }
-        let points: Vec<Point3<Length>> = if size.is_zero() {
-            vec![Point3::new(Length::zero(), Length::zero(), Length::zero())]
-        } else {
-            strategy.generate(size)
-        };
+        let points = strategy.generate();
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::new();
         #[allow(clippy::cast_precision_loss)]
@@ -110,8 +100,11 @@ impl Rays {
         let points: Vec<Point3<Length>> = if cone_angle.is_zero() {
             vec![Point3::new(Length::zero(), Length::zero(), Length::zero())]
         } else {
-            DistributionStrategy::Hexapolar { nr_of_rings }
-                .generate(Length::new::<millimeter>(size_after_unit_length))
+            Hexapolar::new(
+                Length::new::<millimeter>(size_after_unit_length),
+                nr_of_rings,
+            )
+            .generate()
         };
         let nr_of_rays = points.len();
         #[allow(clippy::cast_precision_loss)]
@@ -678,7 +671,11 @@ impl Plottable for RayPositionHistory {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{aperture::CircleConfig, ray::SplittingConfig};
+    use crate::{
+        aperture::CircleConfig,
+        distributions::{Hexapolar, Random},
+        ray::SplittingConfig,
+    };
     use approx::assert_abs_diff_eq;
     use itertools::izip;
     use log::Level;
@@ -693,9 +690,8 @@ mod test {
     fn new_uniform_collimated() {
         let wvl = Length::new::<nanometer>(1054.0);
         let energy = Energy::new::<joule>(1.0);
-        let strategy = &DistributionStrategy::Hexapolar { nr_of_rings: 2 };
-        let rays =
-            Rays::new_uniform_collimated(Length::new::<millimeter>(1.0), wvl, energy, strategy);
+        let strategy = &Hexapolar::new(Length::new::<millimeter>(1.0), 2);
+        let rays = Rays::new_uniform_collimated(wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();
         assert_eq!(rays.rays.len(), 19);
@@ -703,34 +699,19 @@ mod test {
             Energy::abs(rays.total_energy() - Energy::new::<joule>(1.0))
                 < Energy::new::<joule>(10.0 * f64::EPSILON)
         );
-        assert!(Rays::new_uniform_collimated(
-            Length::new::<millimeter>(-0.1),
-            wvl,
-            energy,
-            strategy
-        )
-        .is_err(),);
-        assert!(Rays::new_uniform_collimated(
-            Length::new::<millimeter>(f64::NAN),
-            wvl,
-            energy,
-            strategy
-        )
-        .is_err(),);
-        assert!(Rays::new_uniform_collimated(
-            Length::new::<millimeter>(f64::INFINITY),
-            wvl,
-            energy,
-            strategy
-        )
-        .is_err(),);
+        let strategy = &Hexapolar::new(Length::new::<millimeter>(-1.0), 2);
+        assert!(Rays::new_uniform_collimated(wvl, energy, strategy).is_err(),);
+        let strategy = &Hexapolar::new(Length::new::<millimeter>(f64::NAN), 2);
+        assert!(Rays::new_uniform_collimated(wvl, energy, strategy).is_err(),);
+        let strategy = &Hexapolar::new(Length::new::<millimeter>(f64::INFINITY), 2);
+        assert!(Rays::new_uniform_collimated(wvl, energy, strategy).is_err(),);
     }
     #[test]
     fn new_uniform_collimated_zero() {
         let wvl = Length::new::<nanometer>(1054.0);
         let energy = Energy::new::<joule>(1.0);
-        let strategy = &DistributionStrategy::Hexapolar { nr_of_rings: 2 };
-        let rays = Rays::new_uniform_collimated(Length::zero(), wvl, energy, strategy);
+        let strategy = &Hexapolar::new(Length::zero(), 2);
+        let rays = Rays::new_uniform_collimated(wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();
         assert_eq!(rays.rays.len(), 1);
@@ -884,12 +865,13 @@ mod test {
         assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
 
         let rays = Rays::new_uniform_collimated(
-            Length::new::<millimeter>(1.0),
             Length::new::<nanometer>(1054.0),
             Energy::new::<joule>(1.0),
-            &DistributionStrategy::Random {
-                nr_of_points: 100000,
-            },
+            &Random::new(
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(1.0),
+                100000,
+            ),
         )
         .unwrap();
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 1.0);
