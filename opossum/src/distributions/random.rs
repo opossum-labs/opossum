@@ -1,6 +1,6 @@
 //! Rectangular, uniform random distribution
-use crate::error::{OpmResult, OpossumError};
 use super::Distribution;
+use crate::error::{OpmResult, OpossumError};
 use nalgebra::{point, Point3};
 use num::Zero;
 use rand::Rng;
@@ -12,6 +12,14 @@ pub struct Random {
     side_length_y: Length,
 }
 impl Random {
+    /// Create a new [`Random`] distribution generator.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///   - both side lengths are zero.
+    ///   - a side length must be >= zero and finite.
+    ///   - `nr_of_points` must be >= 1.
     pub fn new(
         side_length_x: Length,
         side_length_y: Length,

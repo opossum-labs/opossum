@@ -446,7 +446,7 @@ mod test {
             Rays::new_uniform_collimated(
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
-                &Hexapolar::new(Length::zero(), 1),
+                &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
         ));

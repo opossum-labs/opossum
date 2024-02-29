@@ -1,6 +1,6 @@
+use super::Distribution;
 /// Rectangluar, low-discrepancy quasirandom distribution
 use crate::error::{OpmResult, OpossumError};
-use super::Distribution;
 use nalgebra::{point, Point3};
 use num::Zero;
 use sobol::{params::JoeKuoD6, Sobol};
@@ -13,6 +13,14 @@ pub struct SobolDist {
 }
 
 impl SobolDist {
+    /// Create a new [`SobolDist`] (Sobol) distribution generator.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///   - both side lengths are zero.
+    ///   - one side length is negative or not finite
+    ///   - `nr_of_points` is zero.
     pub fn new(
         side_length_x: Length,
         side_length_y: Length,
@@ -23,12 +31,12 @@ impl SobolDist {
                 "At least one side length must be != zero".into(),
             ));
         };
-        if side_length_x.is_sign_negative() || !side_length_x.is_normal() {
+        if side_length_x.is_sign_negative() || !side_length_x.is_finite() {
             return Err(OpossumError::Other(
                 "side_length_x must be >= zero and finite".into(),
             ));
         };
-        if side_length_y.is_sign_negative() || !side_length_y.is_normal() {
+        if side_length_y.is_sign_negative() || !side_length_y.is_finite() {
             return Err(OpossumError::Other(
                 "side_length_y must be >= zero and finite".into(),
             ));

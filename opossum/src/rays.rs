@@ -103,7 +103,7 @@ impl Rays {
             Hexapolar::new(
                 Length::new::<millimeter>(size_after_unit_length),
                 nr_of_rings,
-            )
+            )?
             .generate()
         };
         let nr_of_rays = points.len();
@@ -690,7 +690,7 @@ mod test {
     fn new_uniform_collimated() {
         let wvl = Length::new::<nanometer>(1054.0);
         let energy = Energy::new::<joule>(1.0);
-        let strategy = &Hexapolar::new(Length::new::<millimeter>(1.0), 2);
+        let strategy = &Hexapolar::new(Length::new::<millimeter>(1.0), 2).unwrap();
         let rays = Rays::new_uniform_collimated(wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();
@@ -699,18 +699,12 @@ mod test {
             Energy::abs(rays.total_energy() - Energy::new::<joule>(1.0))
                 < Energy::new::<joule>(10.0 * f64::EPSILON)
         );
-        let strategy = &Hexapolar::new(Length::new::<millimeter>(-1.0), 2);
-        assert!(Rays::new_uniform_collimated(wvl, energy, strategy).is_err(),);
-        let strategy = &Hexapolar::new(Length::new::<millimeter>(f64::NAN), 2);
-        assert!(Rays::new_uniform_collimated(wvl, energy, strategy).is_err(),);
-        let strategy = &Hexapolar::new(Length::new::<millimeter>(f64::INFINITY), 2);
-        assert!(Rays::new_uniform_collimated(wvl, energy, strategy).is_err(),);
     }
     #[test]
     fn new_uniform_collimated_zero() {
         let wvl = Length::new::<nanometer>(1054.0);
         let energy = Energy::new::<joule>(1.0);
-        let strategy = &Hexapolar::new(Length::zero(), 2);
+        let strategy = &Hexapolar::new(Length::zero(), 2).unwrap();
         let rays = Rays::new_uniform_collimated(wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();

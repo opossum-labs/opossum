@@ -1,6 +1,6 @@
 //! Rectangular, evenly sized grid distribution
-use crate::error::OpmResult;
 use super::Distribution;
+use crate::error::{OpmResult, OpossumError};
 use nalgebra::Point3;
 use num::Zero;
 use uom::si::f64::Length;
@@ -11,7 +11,35 @@ pub struct Grid {
 }
 
 impl Grid {
+    /// Create a new [`Grid`] distribution generator.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///  - both side lengths are zero.
+    ///  - one `side_length` components is negative or not finite.
+    ///  - one `nr_of_points` components is zero.
     pub fn new(side_length: (Length, Length), nr_of_points: (usize, usize)) -> OpmResult<Self> {
+        if side_length.0.is_zero() && side_length.1.is_zero() {
+            return Err(OpossumError::Other(
+                "at least one side length must be > zero".into(),
+            ));
+        }
+        if side_length.0.is_sign_negative() || !side_length.0.is_normal() {
+            return Err(OpossumError::Other(
+                "side length x must be >= zero and finite".into(),
+            ));
+        }
+        if side_length.1.is_sign_negative() || !side_length.1.is_normal() {
+            return Err(OpossumError::Other(
+                "side length x must be >= zero and finite".into(),
+            ));
+        }
+        if nr_of_points.0.is_zero() || nr_of_points.1.is_zero() {
+            return Err(OpossumError::Other(
+                "both components of nr_of_points must be > 0".into(),
+            ));
+        }
         Ok(Self {
             nr_of_points,
             side_length,
@@ -22,7 +50,7 @@ impl Grid {
 impl Distribution for Grid {
     fn generate(&self) -> Vec<Point3<Length>> {
         let nr_of_points_x = self.nr_of_points.0.clamp(1, usize::MAX);
-        let nr_of_points_y = self.nr_of_points.0.clamp(1, usize::MAX);
+        let nr_of_points_y = self.nr_of_points.1.clamp(1, usize::MAX);
         #[allow(clippy::cast_precision_loss)]
         let distance_x = if nr_of_points_x > 1 {
             self.side_length.0 / ((nr_of_points_x - 1) as f64)
@@ -64,6 +92,76 @@ impl Distribution for Grid {
 mod test {
     use super::*;
     use uom::si::length::millimeter;
+    #[test]
+    fn new_wrong() {
+        assert!(Grid::new((Length::zero(), Length::zero()), (1, 1)).is_err());
+
+        assert!(Grid::new(
+            (
+                Length::new::<millimeter>(-0.1),
+                Length::new::<millimeter>(1.0)
+            ),
+            (1, 1)
+        )
+        .is_err());
+        assert!(Grid::new(
+            (
+                Length::new::<millimeter>(f64::NAN),
+                Length::new::<millimeter>(1.0)
+            ),
+            (1, 1)
+        )
+        .is_err());
+        assert!(Grid::new(
+            (
+                Length::new::<millimeter>(f64::INFINITY),
+                Length::new::<millimeter>(1.0)
+            ),
+            (1, 1)
+        )
+        .is_err());
+
+        assert!(Grid::new(
+            (
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(-0.1)
+            ),
+            (1, 1)
+        )
+        .is_err());
+        assert!(Grid::new(
+            (
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(f64::NAN)
+            ),
+            (1, 1)
+        )
+        .is_err());
+        assert!(Grid::new(
+            (
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(f64::INFINITY)
+            ),
+            (1, 1)
+        )
+        .is_err());
+        assert!(Grid::new(
+            (
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(1.0)
+            ),
+            (0, 1)
+        )
+        .is_err());
+        assert!(Grid::new(
+            (
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(1.0)
+            ),
+            (1, 0)
+        )
+        .is_err());
+    }
     #[test]
     fn generate_symmetric() {
         let strategy = Grid::new(
