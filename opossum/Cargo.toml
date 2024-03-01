@@ -25,6 +25,7 @@ product-icon = "opossum/logo/Logo_square.ico"
 banner = "opossum/logo/Logo_InstallBanner.png"
 dialog = "opossum/logo/Logo_InstallDialog.png"
 
+
 [dependencies]
 petgraph = { version = "0", features = ["serde-1"] } # the graph library
 uom = {version="0", features = ["serde"] }
@@ -32,6 +33,7 @@ serde = { version = "1" }
 serde_derive = "1"
 serde_yaml = "0"
 serde_json = "1"
+
 
 csv = "1"
 plotters = "0.3.5"
@@ -82,3 +84,4 @@ vergen = { version = "8", features = [
   "git",
   "gitcl",
 ] } # get git version infos compiled in binary
+

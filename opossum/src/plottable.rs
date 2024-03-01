@@ -2,7 +2,10 @@
 //! Trait for adding the possibility to generate a (x/y) plot of an element.
 use crate::error::OpmResult;
 use crate::error::OpossumError;
+use crate::utils::filter_data::filter_nan_infinite;
 use crate::utils::griddata::linspace;
+use approx::abs_diff_eq;
+use approx::abs_diff_ne;
 use approx::RelativeEq;
 use colorous::Gradient;
 use delaunator::{triangulate, Point};
@@ -677,7 +680,7 @@ impl PlotData {
     /// This method returns the maximum and minimum data values on this axis in form of an [`AxLims`] struct
     #[must_use]
     pub fn get_min_max_data_values(&self, ax_vals: &DVectorSlice<'_, f64>) -> AxLims {
-        let filtered_ax_vals = Self::filter_nan_infinite(ax_vals);
+        let filtered_ax_vals = filter_nan_infinite(ax_vals);
         AxLims {
             min: filtered_ax_vals.min(),
             max: filtered_ax_vals.max(),
@@ -747,21 +750,21 @@ impl PlotData {
         }
     }
 
-    /// This method filters out all NaN and infinite values  
-    /// # Attributes
-    /// - `ax_vals`: dynamically sized vector slice of the data vector on this axis
-    /// # Returns
-    /// This method returns an array containing only the non-NaN and finite entries of the passed vector
-    #[must_use]
-    pub fn filter_nan_infinite(ax_vals: &DVectorSlice<'_, f64>) -> MatrixXx1<f64> {
-        MatrixXx1::from(
-            ax_vals
-                .iter()
-                .copied()
-                .filter(|x| !x.is_nan() & x.is_finite())
-                .collect::<Vec<f64>>(),
-        )
-    }
+    // /// This method filters out all NaN and infinite values  
+    // /// # Attributes
+    // /// - `ax_vals`: dynamically sized vector slice of the data vector on this axis
+    // /// # Returns
+    // /// This method returns an array containing only the non-NaN and finite entries of the passed vector
+    // #[must_use]
+    // pub fn filter_nan_infinite(ax_vals: &DVectorSlice<'_, f64>) -> MatrixXx1<f64> {
+    //     MatrixXx1::from(
+    //         ax_vals
+    //             .iter()
+    //             .copied()
+    //             .filter(|x| x.is_finite())
+    //             .collect::<Vec<f64>>(),
+    //     )
+    // }
 
     /// Defines the plot-axes bounds of this [`PlotData`].
     /// # Attributes
@@ -816,13 +819,12 @@ impl AxLims {
         }
     }
 
-    fn check_validity(self) -> bool {
+    /// Checks the validity of the delivered min and max values and returns a true if it is valid, false otherwise
+    pub fn check_validity(self) -> bool {
         self.max.is_finite()
-            && !self.max.is_nan()
-            && self.min.is_finite()
-            && !self.min.is_nan()
-            && (self.max - self.min).abs() > f64::EPSILON
-            && self.max > self.min
+        && self.min.is_finite()
+        && abs_diff_ne!(self.max, self.min)
+        && self.max > self.min
     }
 
     /// Shifts the minimum and the maximum to lower and higher values respectively.
@@ -2272,15 +2274,7 @@ mod test {
         let _ = plt_params.set(&PlotArgs::FName("test.abcdefghijkelemenop".to_owned()));
         assert!(plt_params.check_backend_file_ext_compatibility().is_ok());
     }
-    #[test]
-    fn linspace_test() {
-        let x = linspace(1., 3., 3.).unwrap();
-        assert_eq!(x.len(), 3);
-        assert!((x[0] - 1.).abs() < f64::EPSILON);
-        assert!((x[1] - 2.).abs() < f64::EPSILON);
-        assert!((x[2] - 3.).abs() < f64::EPSILON);
-        assert!(linspace(1., 3., -3.).is_err());
-    }
+
     #[test]
     fn new_plot() {
         let plt_params = PlotParameters::default();

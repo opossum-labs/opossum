@@ -13,9 +13,12 @@ use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
-use crate::utils::griddata::{
-    calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
-    interpolate_3d_triangulated_scatter_data, VoronoiData,
+use crate::utils::{
+    geom_transformation::project_pos_to_plane_with_base_vectors,
+    griddata::{
+        calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
+        interpolate_3d_triangulated_scatter_data, VoronoiData,
+    },
 };
 use image::{DynamicImage, ImageBuffer};
 use itertools::izip;
@@ -358,80 +361,80 @@ impl Rays {
         } )
     }
 
-    fn get_projection_coordinate_axes_directions(
-        propagation_axis: &Vector3<f64>,
-    ) -> (Vector3<f64>, Vector3<f64>) {
-        //define the coordinate axes of the view onto the plane that is defined by the propagation axis as normal vector
-        if propagation_axis.cross(&Vector3::new(1., 0., 0.)).norm() < f64::EPSILON {
-            //parallel to the x-axis: co_ax_1: z-axis / co_ax2: y-axis
-            (Vector3::new(0., 0., 1.), Vector3::new(0., 1., 0.))
-        } else if propagation_axis.cross(&Vector3::new(0., 1., 0.)).norm() < f64::EPSILON {
-            //parallel to the y-axis: co_ax_1: z-axis / co_ax2: x-axis
-            (Vector3::new(0., 0., 1.), Vector3::new(1., 0., 0.))
-        } else if propagation_axis.cross(&Vector3::new(0., 0., 1.)).norm() < f64::EPSILON {
-            //parallel to the z-axis: co_ax_1: x-axis / co_ax2: y-axis
-            (Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.))
-        } else if propagation_axis.dot(&Vector3::new(1., 0., 0.)) < f64::EPSILON {
-            //propagation axis in yz plane
-            let co_ax1 = Vector3::new(1., 0., 0.);
-            (co_ax1, propagation_axis.cross(&co_ax1))
-        } else if propagation_axis.dot(&Vector3::new(0., 1., 0.)) < f64::EPSILON {
-            //propagation axis in xz plane
-            let co_ax1 = Vector3::new(0., 1., 0.);
-            (co_ax1, propagation_axis.cross(&co_ax1))
-        } else if propagation_axis.dot(&Vector3::new(0., 0., 1.)) < f64::EPSILON {
-            //propagation axis in xy plane
-            let co_ax1 = Vector3::new(0., 0., 1.);
-            (co_ax1, propagation_axis.cross(&co_ax1))
-        } else {
-            //propagation axis is in neither of the cartesian coordinate planes
-            //Choose the first coordinate axis by projecting the axes with the largest angle to the propagation axis onto the plane
-            //the second one is defined by the cross product of the first axis and the propagation axis
-            let p_zz_ang = propagation_axis.dot(&Vector3::new(0., 0., 1.)).acos();
-            let p_yy_ang = propagation_axis.dot(&Vector3::new(0., 1., 0.)).acos();
-            let p_xx_ang = propagation_axis.dot(&Vector3::new(1., 0., 0.)).acos();
+    // fn create_projection_coordinate_axes_directions(
+    //     propagation_axis: &Vector3<f64>,
+    // ) -> (Vector3<f64>, Vector3<f64>) {
+    //     //define the coordinate axes of the view onto the plane that is defined by the propagation axis as normal vector
+    //     if propagation_axis.cross(&Vector3::new(1., 0., 0.)).norm() < f64::EPSILON {
+    //         //parallel to the x-axis: co_ax_1: z-axis / co_ax2: y-axis
+    //         (Vector3::new(0., 0., 1.), Vector3::new(0., 1., 0.))
+    //     } else if propagation_axis.cross(&Vector3::new(0., 1., 0.)).norm() < f64::EPSILON {
+    //         //parallel to the y-axis: co_ax_1: z-axis / co_ax2: x-axis
+    //         (Vector3::new(0., 0., 1.), Vector3::new(1., 0., 0.))
+    //     } else if propagation_axis.cross(&Vector3::new(0., 0., 1.)).norm() < f64::EPSILON {
+    //         //parallel to the z-axis: co_ax_1: x-axis / co_ax2: y-axis
+    //         (Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.))
+    //     } else if propagation_axis.dot(&Vector3::new(1., 0., 0.)) < f64::EPSILON {
+    //         //propagation axis in yz plane
+    //         let co_ax1 = Vector3::new(1., 0., 0.);
+    //         (co_ax1, propagation_axis.cross(&co_ax1))
+    //     } else if propagation_axis.dot(&Vector3::new(0., 1., 0.)) < f64::EPSILON {
+    //         //propagation axis in xz plane
+    //         let co_ax1 = Vector3::new(0., 1., 0.);
+    //         (co_ax1, propagation_axis.cross(&co_ax1))
+    //     } else if propagation_axis.dot(&Vector3::new(0., 0., 1.)) < f64::EPSILON {
+    //         //propagation axis in xy plane
+    //         let co_ax1 = Vector3::new(0., 0., 1.);
+    //         (co_ax1, propagation_axis.cross(&co_ax1))
+    //     } else {
+    //         //propagation axis is in neither of the cartesian coordinate planes
+    //         //Choose the first coordinate axis by projecting the axes with the largest angle to the propagation axis onto the plane
+    //         //the second one is defined by the cross product of the first axis and the propagation axis
+    //         let p_zz_ang = propagation_axis.dot(&Vector3::new(0., 0., 1.)).acos();
+    //         let p_yy_ang = propagation_axis.dot(&Vector3::new(0., 1., 0.)).acos();
+    //         let p_xx_ang = propagation_axis.dot(&Vector3::new(1., 0., 0.)).acos();
 
-            let mut co_ax1 = if p_zz_ang >= p_yy_ang && p_zz_ang >= p_xx_ang {
-                propagation_axis
-                    - propagation_axis.dot(&Vector3::new(0., 0., 1.)) * Vector3::new(0., 0., 1.)
-            } else if p_yy_ang >= p_zz_ang && p_yy_ang >= p_xx_ang {
-                propagation_axis
-                    - propagation_axis.dot(&Vector3::new(0., 1., 0.)) * Vector3::new(0., 1., 0.)
-            } else {
-                propagation_axis
-                    - propagation_axis.dot(&Vector3::new(1., 0., 0.)) * Vector3::new(1., 0., 0.)
-            };
+    //         let mut co_ax1 = if p_zz_ang >= p_yy_ang && p_zz_ang >= p_xx_ang {
+    //             propagation_axis
+    //                 - propagation_axis.dot(&Vector3::new(0., 0., 1.)) * Vector3::new(0., 0., 1.)
+    //         } else if p_yy_ang >= p_zz_ang && p_yy_ang >= p_xx_ang {
+    //             propagation_axis
+    //                 - propagation_axis.dot(&Vector3::new(0., 1., 0.)) * Vector3::new(0., 1., 0.)
+    //         } else {
+    //             propagation_axis
+    //                 - propagation_axis.dot(&Vector3::new(1., 0., 0.)) * Vector3::new(1., 0., 0.)
+    //         };
 
-            co_ax1 /= co_ax1.norm();
+    //         co_ax1 /= co_ax1.norm();
 
-            (co_ax1, propagation_axis.cross(&co_ax1))
-        }
-    }
+    //         (co_ax1, propagation_axis.cross(&co_ax1))
+    //     }
+    // }
 
-    fn project_rays_pos_to_plane(
-        &self,
-        plane_normal_anchor: &Matrix3x1<f64>,
-        plane_normal: &Matrix3x1<f64>,
-        plane_co_ax_1: &Matrix3x1<f64>,
-        plane_co_ax_2: &Matrix3x1<f64>,
-    ) -> MatrixXx2<f64> {
-        let mut rays_pos_projection = MatrixXx2::<f64>::zeros(self.rays.len());
-        for (row, ray) in self.rays.iter().enumerate() {
-            let ray_pos_vec = Vector3::from_vec(
-                ray.position()
-                    .iter()
-                    .map(uom::si::f64::Length::get::<centimeter>)
-                    .collect::<Vec<f64>>(),
-            );
-            let closest_to_axis_vec = ray_pos_vec
-                - plane_normal_anchor
-                - (ray_pos_vec - plane_normal_anchor).dot(plane_normal) * plane_normal;
+    // fn project_rays_pos_to_plane(
+    //     &self,
+    //     plane_normal_anchor: &Matrix3x1<f64>,
+    //     plane_normal: &Matrix3x1<f64>,
+    //     plane_co_ax_1: &Matrix3x1<f64>,
+    //     plane_co_ax_2: &Matrix3x1<f64>,
+    // ) -> MatrixXx2<f64> {
+    //     let mut rays_pos_projection = MatrixXx2::<f64>::zeros(self.rays.len());
+    //     for (row, ray) in self.rays.iter().enumerate() {
+    //         let ray_pos_vec = Vector3::from_vec(
+    //             ray.position()
+    //                 .iter()
+    //                 .map(uom::si::f64::Length::get::<centimeter>)
+    //                 .collect::<Vec<f64>>(),
+    //         );
+    //         let closest_to_axis_vec = ray_pos_vec
+    //             - plane_normal_anchor
+    //             - (ray_pos_vec - plane_normal_anchor).dot(plane_normal) * plane_normal;
 
-            rays_pos_projection[(row, 0)] = closest_to_axis_vec.dot(plane_co_ax_1);
-            rays_pos_projection[(row, 1)] = closest_to_axis_vec.dot(plane_co_ax_2);
-        }
-        rays_pos_projection
-    }
+    //         rays_pos_projection[(row, 0)] = closest_to_axis_vec.dot(plane_co_ax_1);
+    //         rays_pos_projection[(row, 1)] = closest_to_axis_vec.dot(plane_co_ax_2);
+    //     }
+    //     rays_pos_projection
+    // }
 
     fn eval_and_get_plane_normal_and_anchor(
         &self,
@@ -479,10 +482,11 @@ impl Rays {
         proj_ax1_lim: AxLims,
         proj_ax2_lim: AxLims,
     ) -> OpmResult<VoronoiData> {
-        let voronoi = create_voronoi_cells(projected_ray_pos, &proj_ax1_lim, &proj_ax2_lim)
-            .ok_or_else(|| {
-                "Voronoi diagram for fluence estimation could not be created!".to_owned()
-            })?;
+        let voronoi = create_voronoi_cells(projected_ray_pos, &proj_ax1_lim, &proj_ax2_lim).or(
+            Err(OpossumError::Other(
+                "Voronoi diagram for fluence estimation could not be created!".into(),
+            )),
+        )?;
 
         //get the voronoi cells
         let v_cells = voronoi.cells();
@@ -521,16 +525,30 @@ impl Rays {
             self.eval_and_get_plane_normal_and_anchor(propagation_axis_opt, anchor_point_opt)?;
 
         //define the coordinate axes of the view onto the plane that is defined by the propagation axis as normal vector
-        let (co_ax1_dir, co_ax2_dir) =
-            Self::get_projection_coordinate_axes_directions(&propagation_axis);
+        // let (co_ax1_dir, co_ax2_dir) =
+        //     Self::create_projection_coordinate_axes_directions(&propagation_axis);
 
-        //calculate the projection of the ray positions onto the new coordinate axes
-        let rays_pos_projection = self.project_rays_pos_to_plane(
+        // get ray positions
+        let rays_pos_vec = self
+            .rays
+            .iter()
+            .map(|ray| {
+                Vector3::from_vec(
+                    ray.position()
+                        .iter()
+                        .map(uom::si::f64::Length::get::<centimeter>)
+                        .collect::<Vec<f64>>(),
+                )
+            })
+            .collect::<Vec<Vector3<f64>>>();
+        // calculate the projection of the ray positions onto the new coordinate axes
+        let rays_pos_projection = project_pos_to_plane_with_base_vectors(
             &anchor_point_vec,
             &propagation_axis,
-            &co_ax1_dir,
-            &co_ax2_dir,
-        );
+            None,
+            None,
+            &rays_pos_vec,
+        )?;
 
         //axes definition
         let (co_ax1, co_ax1_lim) =
