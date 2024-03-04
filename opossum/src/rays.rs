@@ -3,7 +3,7 @@
 use crate::aperture::Aperture;
 use crate::distribution::DistributionStrategy;
 use crate::error::{OpmResult, OpossumError};
-use crate::nodes::fluence_detector::FluenceData;
+use crate::nodes::fluence_detector::ScatteredRaysFluenceData;
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
 use crate::plottable::{
@@ -17,7 +17,7 @@ use crate::utils::{
     geom_transformation::project_pos_to_plane_with_base_vectors,
     griddata::{
         calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
-        interpolate_3d_triangulated_scatter_data, VoronoiData,
+        interpolate_3d_triangulated_scatter_data, VoronoiedData,
     },
 };
 use image::{DynamicImage, ImageBuffer};
@@ -481,12 +481,13 @@ impl Rays {
         projected_ray_pos: &MatrixXx2<f64>,
         proj_ax1_lim: AxLims,
         proj_ax2_lim: AxLims,
-    ) -> OpmResult<VoronoiData> {
-        let voronoi = create_voronoi_cells(projected_ray_pos, &proj_ax1_lim, &proj_ax2_lim).or(
-            Err(OpossumError::Other(
-                "Voronoi diagram for fluence estimation could not be created!".into(),
-            )),
-        )?;
+    ) -> OpmResult<VoronoiedData> {
+        let voronoi = create_voronoi_cells(projected_ray_pos, &proj_ax1_lim, &proj_ax2_lim)
+            .map_err(|_| {
+                OpossumError::Other(
+                    "Voronoi diagram for fluence estimation could not be created!".into(),
+                )
+            })?;
 
         //get the voronoi cells
         let v_cells = voronoi.cells();
@@ -503,7 +504,7 @@ impl Rays {
             fluence_scatter[idx] = self.rays[idx].energy().get::<joule>() / poly_area;
         }
 
-        Ok(VoronoiData::new(voronoi, fluence_scatter))
+        VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)
     }
 
     /// Calculates the spatial energy distribution (fluence) of a ray bundle, its coordinates in the transversal plane and the peak fluence in J/cm²
@@ -517,16 +518,12 @@ impl Rays {
         propagation_axis_opt: Option<Vector3<f64>>,
         anchor_point_opt: Option<Point3<Length>>,
         interpolation_flag: bool,
-    ) -> OpmResult<FluenceData> {
+    ) -> OpmResult<ScatteredRaysFluenceData> {
         let num_axes_points = 100.;
 
         // get the propagation axis and its anchor point
         let (propagation_axis, anchor_point_vec) =
             self.eval_and_get_plane_normal_and_anchor(propagation_axis_opt, anchor_point_opt)?;
-
-        //define the coordinate axes of the view onto the plane that is defined by the propagation axis as normal vector
-        // let (co_ax1_dir, co_ax2_dir) =
-        //     Self::create_projection_coordinate_axes_directions(&propagation_axis);
 
         // get ray positions
         let rays_pos_vec = self
@@ -587,7 +584,7 @@ impl Rays {
 
             average /= interp_mask.sum();
 
-            FluenceData::new(peak_fluence, average, interp_fluence, co_ax1, co_ax2)
+            ScatteredRaysFluenceData::new(peak_fluence, average, interp_fluence, co_ax1, co_ax2)
         } else {
             todo!()
         }
@@ -1788,7 +1785,7 @@ mod test {
         // assert_eq!(fluence.row(1).len(), )
     }
     #[test]
-    fn get_Center_ray_test() {
+    fn get_center_ray_test() {
         todo!();
     }
 }

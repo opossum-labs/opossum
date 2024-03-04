@@ -1,8 +1,9 @@
-use approx::{abs_diff_eq, abs_diff_ne, assert_abs_diff_eq};
+use approx::{abs_diff_eq, abs_diff_ne, relative_eq};
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx2, MatrixXx3, Point2};
 use num::ToPrimitive;
+use serde::{Deserialize, Serialize};
 use voronator::{
     delaunator::{Coord, Point as VPoint},
     VoronoiDiagram,
@@ -15,17 +16,71 @@ use crate::{
 
 use super::filter_data::filter_nan_infinite;
 
-pub struct VoronoiData {
+#[derive(Clone, Debug)]
+pub struct VoronoiedData {
     voronoi_diagram: VoronoiDiagram<VPoint>,
-    z_data: DVector<f64>,
+    z_data: Option<DVector<f64>>,
 }
 
-impl VoronoiData {
-    #[must_use]
-    pub const fn new(voronoi_diagram: VoronoiDiagram<VPoint>, z_data: DVector<f64>) -> Self {
-        Self {
+impl VoronoiedData {
+    /// Creates a new [`VoronoiedData`] struct by voronating thhe coordinates and combining them with data, if provided
+    /// # Attributes
+    /// `xy_coordinates`: coordinates of the data points
+    /// `data`: data to combine with voronoi cells
+    /// # Errors
+    /// This function errors if the number of voronoi cells and data points are not equal or if the creation of voronoi cells fails
+    pub fn new(
+        xy_coordinates: &MatrixXx2<f64>,
+        z_data_opt: Option<DVector<f64>>,
+    ) -> OpmResult<Self> {
+        let x_bounds = AxLims::new(
+            xy_coordinates.column(0).min(),
+            xy_coordinates.column(0).max(),
+        )?;
+        let y_bounds = AxLims::new(
+            xy_coordinates.column(1).min(),
+            xy_coordinates.column(1).max(),
+        )?;
+
+        let voronoi_diagram = create_voronoi_cells(xy_coordinates, &x_bounds, &y_bounds)?;
+
+        let z_data = if let Some(z_data) = z_data_opt {
+            if xy_coordinates.shape().0 != z_data.len() {
+                return Err(OpossumError::Other("Number of point coordinates and data value is not the same! Cannot assign values to voronoi cells!".into()));
+            };
+            let mut z_data_voronoi = DVector::from_element(voronoi_diagram.sites.len(), f64::NAN);
+            z_data_voronoi
+                .slice_mut((0, 0), (z_data.len(), 1))
+                .set_column(0, &z_data);
+
+            Some(z_data_voronoi)
+        } else {
+            None
+        };
+
+        Ok(Self {
             voronoi_diagram,
             z_data,
+        })
+    }
+
+    /// Creates a new [`VoronoiedData`] struct by combining an exisiting voronoi diagram with data
+    /// # Attributes
+    /// `voronoi`: voronoi diagram created with voronator crate
+    /// `data`: data to combine with voronoi cells
+    /// # Errors
+    /// This function errors if the number of voronoi cells and data points are not equal
+    pub fn combine_data_with_voronoi_diagram(
+        voronoi: VoronoiDiagram<VPoint>,
+        data: DVector<f64>,
+    ) -> OpmResult<Self> {
+        if voronoi.sites.len() == data.len() {
+            Ok(Self {
+                voronoi_diagram: voronoi,
+                z_data: Some(data),
+            })
+        } else {
+            Err(OpossumError::Other("Number of voronoi-diagram sites and data values is not the same! Cannot combine data and voronoi cells!".into()))
         }
     }
     #[must_use]
@@ -33,7 +88,7 @@ impl VoronoiData {
         &self.voronoi_diagram
     }
     #[must_use]
-    pub const fn get_z_data(&self) -> &DVector<f64> {
+    pub const fn get_z_data(&self) -> &Option<DVector<f64>> {
         &self.z_data
     }
 }
@@ -53,6 +108,11 @@ pub fn calc_closed_poly_area(poly_coords: &[Point2<f64>]) -> OpmResult<f64> {
     } else {
         for i in 0..num_points {
             let j = (i + 1) % num_points;
+            if !poly_coords[i].x.is_finite() || !poly_coords[i].y.is_finite() {
+                return Err(OpossumError::Other(
+                    "Non-finite polygon coordinates!".into(),
+                ));
+            }
             area += poly_coords[i].x * poly_coords[j].y;
             area -= poly_coords[i].y * poly_coords[j].x;
         }
@@ -75,15 +135,15 @@ pub fn interpolate_3d_scatter_data(
     x_interp: &DVector<f64>,
     y_interp: &DVector<f64>,
 ) -> OpmResult<(DMatrix<f64>, DMatrix<f64>)> {
-    let x_interp_filtered = filter_nan_infinite(&DVectorSlice::from(x_interp));
-    let y_interp_filtered = filter_nan_infinite(&DVectorSlice::from(y_interp));
-    if x_interp_filtered.len() < 2 || y_interp_filtered.len() < 2{
+    let x_interp_filtered = filter_nan_infinite(x_interp.as_slice());
+    let y_interp_filtered = filter_nan_infinite(y_interp.as_slice());
+    if x_interp_filtered.len() < 2 || y_interp_filtered.len() < 2 {
         return Err(OpossumError::Other(
             "Length of interpolation ranges must be larger than 1 to define the interpolation bounds".into(),
         ));
     };
 
-    if scattered_data.column(0).len() < 3{
+    if scattered_data.column(0).len() < 3 {
         return Err(OpossumError::Other(
             "Number of scattered data points must be at least 3 to define a triangle, which is necessary to interpolate!".into(),
         ));
@@ -140,7 +200,7 @@ pub fn linspace(start: f64, end: f64, num: f64) -> OpmResult<DVector<f64>> {
     };
 
     if num < 2. {
-        warn!("Using linspace with less than two elements results in an empty Vector for num=0 or a Vector with one entry being num=start")
+        warn!("Using linspace with less than two elements results in an empty Vector for num=0 or a Vector with one entry being num=start");
     }
     num.to_usize().map_or_else(
         || {
@@ -179,11 +239,11 @@ pub fn create_linspace_axes(
     data: DVectorSlice<'_, f64>,
     num_axes_points: f64,
 ) -> OpmResult<(DVector<f64>, AxLims)> {
-    let filtered_data = filter_nan_infinite(&data);
-    if filtered_data.len() < 2{
+    let filtered_data = filter_nan_infinite(data.as_slice());
+    if filtered_data.len() < 2 {
         return Err(OpossumError::Other(
             "Length of input data after filtering out non-finite values is below 2! Creating a linearly-spaced array from 1 value is not possible!".into(),
-        ))
+        ));
     }
     let ax_lim = AxLims::new(filtered_data.min(), filtered_data.max())?;
     if num_axes_points < 1. {
@@ -201,7 +261,12 @@ pub fn create_linspace_axes(
 /// - `xy_coord`: Matrix of x-y coordinates of scattered points with the first column being the x coordinates and the second column being the y coordinates of these points
 /// - `x_bounds`: Boundary x-coordinates of the scattered data points.
 /// - `y_bounds`: Boundary y-coordinates of the scattered data points.
-#[must_use]
+/// # Errors
+/// This function errors if
+/// - coordinate values are non-finite or NAN
+/// - boundary values are non-finite or NAN
+/// - all points are on the same line and can therefore not be triangulated properly
+/// - the generation of the voronoi diagram fails
 pub fn create_voronoi_cells(
     xy_coord: &MatrixXx2<f64>,
     x_bounds: &AxLims,
@@ -221,19 +286,15 @@ pub fn create_voronoi_cells(
         })
         .collect::<OpmResult<Vec<VPoint>>>()?;
 
-    
-    if !x_bounds.check_validity() || !y_bounds.check_validity()
-    {
+    if !x_bounds.check_validity() || !y_bounds.check_validity() {
         Err(OpossumError::Other(
             "Boundary values for voronoi-diagram generation must be finite!".into(),
         ))
-    } 
-    else if all_points_on_same_line(xy_coord){
+    } else if all_points_on_same_line(xy_coord) {
         Err(OpossumError::Other(
-            "The passed points lie on the same line! Triangulation not possible!".into(),
+            "All passed points lie on the same line! Triangulation not possible!".into(),
         ))
-    }
-    else {
+    } else {
         //create the voronoi diagram with the minimum and maximum values of the axes as bounds
         VoronoiDiagram::<VPoint>::new(
             &VPoint::from_xy(x_bounds.min, y_bounds.min),
@@ -255,7 +316,7 @@ pub fn create_valued_voronoi_cells(
     xyz_data: &MatrixXx3<f64>,
     x_bounds: &AxLims,
     y_bounds: &AxLims,
-) -> OpmResult<VoronoiData> {
+) -> OpmResult<VoronoiedData> {
     let voronoi_diagram = create_voronoi_cells(
         &MatrixXx2::from_columns(&[xyz_data.column(0), xyz_data.column(1)]),
         x_bounds,
@@ -264,12 +325,11 @@ pub fn create_valued_voronoi_cells(
 
     let z_data = xyz_data.column(2);
     let mut z_data_voronoi = DVector::from_element(voronoi_diagram.sites.len(), f64::NAN);
-    z_data_voronoi.slice_mut((0,0), (z_data.len(),1)).set_column(0, &z_data);
+    z_data_voronoi
+        .slice_mut((0, 0), (z_data.len(), 1))
+        .set_column(0, &z_data);
 
-    Ok(VoronoiData::new(
-        voronoi_diagram,
-        DVector::from_column_slice(&z_data_voronoi.as_slice()),
-    ))
+    VoronoiedData::combine_data_with_voronoi_diagram(voronoi_diagram, z_data_voronoi)
 }
 
 /// Interpolation of scattered 3d data (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
@@ -287,13 +347,17 @@ pub fn create_valued_voronoi_cells(
 /// This function panics if the conversion from usize to f64 fails. May be the case for extremely large numbers
 #[allow(clippy::too_many_lines)]
 pub fn interpolate_3d_triangulated_scatter_data(
-    voronoi: &VoronoiData,
+    voronoi: &VoronoiedData,
     x_interp: &DVector<f64>,
     y_interp: &DVector<f64>,
 ) -> OpmResult<(DMatrix<f64>, DMatrix<f64>)> {
     let num_axes_points_x = x_interp.len();
     let num_axes_points_y = y_interp.len();
-
+    let Some(z_data) = voronoi.get_z_data() else {
+        return Err(OpossumError::Other(
+            "No data defined! Cannot interpolate!".into(),
+        ));
+    };
     if num_axes_points_x < 1 || num_axes_points_y < 1 {
         return Err(OpossumError::Other(
             "Cannot interpolate data, as one of the interpolation vectors have zero length".into(),
@@ -304,15 +368,33 @@ pub fn interpolate_3d_triangulated_scatter_data(
     let tri_index_mat =
         Matrix3xX::from_vec(voronoi.voronoi_diagram.delaunay.triangles.clone()).transpose();
     let mut mask = DMatrix::from_element(num_axes_points_x, num_axes_points_y, 0.);
+
+    let x_interp_min = x_interp.min();
+    let y_interp_min = y_interp.min();
+
+    let x_binning = if num_axes_points_x == 1 {
+        f64::INFINITY
+    } else {
+        x_interp[1] - x_interp[0]
+    };
+    let y_binning = if num_axes_points_y == 1 {
+        f64::INFINITY
+    } else {
+        y_interp[1] - y_interp[0]
+    };
+
     let num_axes_points_x = num_axes_points_x.to_f64().unwrap();
     let num_axes_points_y = num_axes_points_x.to_f64().unwrap();
-
-    let x_binning = x_interp[1] - x_interp[0];
-    let y_binning = y_interp[1] - y_interp[0];
 
     let v_cell_sites = &voronoi.voronoi_diagram.sites;
 
     for tri_idxs in tri_index_mat.row_iter() {
+        if z_data[tri_idxs[0]].is_nan()
+            || z_data[tri_idxs[1]].is_nan()
+            || z_data[tri_idxs[2]].is_nan()
+        {
+            continue;
+        }
         let p1_x = &v_cell_sites[tri_idxs[0]].x;
         let p1_y = &v_cell_sites[tri_idxs[0]].y;
         let p2_x = &v_cell_sites[tri_idxs[1]].x;
@@ -349,24 +431,26 @@ pub fn interpolate_3d_triangulated_scatter_data(
                 },
             );
 
-        let x_i = (x_min - x_interp[0]) / x_binning;
-        let x_f = (x_max - x_interp[0]) / x_binning;
-        let y_i = (y_min - y_interp[0]) / y_binning;
-        let y_f = (y_max - y_interp[0]) / y_binning;
-
-        if x_i.is_sign_negative()
-            || y_i.is_sign_negative()
-            || y_f >= num_axes_points_y
-            || x_f >= num_axes_points_x
-        {
-            continue;
-        }
-
-
-        let x_i = x_i.to_usize().unwrap();
-        let x_f = x_f.to_usize().unwrap();
-        let y_i = y_i.to_usize().unwrap();
-        let y_f = y_f.to_usize().unwrap();
+        let (x_i, x_f) = if relative_eq!(num_axes_points_x, 1.0) {
+            (0, 0)
+        } else {
+            let x_i = (x_min - x_interp_min) / x_binning;
+            let x_f = (x_max - x_interp_min) / x_binning;
+            if x_i.is_sign_negative() || x_f >= num_axes_points_x {
+                continue;
+            };
+            (x_i.to_usize().unwrap(), x_f.to_usize().unwrap())
+        };
+        let (y_i, y_f) = if relative_eq!(num_axes_points_y, 1.0) {
+            (0, 0)
+        } else {
+            let y_i = (y_min - y_interp_min) / y_binning;
+            let y_f = (y_max - y_interp_min) / y_binning;
+            if y_i.is_sign_negative() || y_f >= num_axes_points_y {
+                continue;
+            };
+            (y_i.to_usize().unwrap(), y_f.to_usize().unwrap())
+        };
 
         let c11 = p1_x * p1p2_y;
         let c12 = p1_y * p1p2_x;
@@ -410,13 +494,9 @@ pub fn interpolate_3d_triangulated_scatter_data(
                     let area1 = p2xpx.mul_add(p3ypy, -(p2ypy * p3xpx)).abs();
                     let area2 = p3xpx.mul_add(p1ypy, -(p3ypy * p1xpx)).abs();
                     let area3 = p1xpx.mul_add(p2ypy, -(p1ypy * p2xpx)).abs();
-
-                    interp_data[(y_index + y_i, x_index + x_i)] =
-                        area1 * voronoi.z_data[tri_idxs[0]];
-                    interp_data[(y_index + y_i, x_index + x_i)] +=
-                        area2 * voronoi.z_data[tri_idxs[1]];
-                    interp_data[(y_index + y_i, x_index + x_i)] +=
-                        area3 * voronoi.z_data[tri_idxs[2]];
+                    interp_data[(y_index + y_i, x_index + x_i)] = area1 * z_data[tri_idxs[0]];
+                    interp_data[(y_index + y_i, x_index + x_i)] += area2 * z_data[tri_idxs[1]];
+                    interp_data[(y_index + y_i, x_index + x_i)] += area3 * z_data[tri_idxs[2]];
                     interp_data[(y_index + y_i, x_index + x_i)] /= tri_area;
 
                     mask[(y_index + y_i, x_index + x_i)] = 1.;
@@ -427,7 +507,7 @@ pub fn interpolate_3d_triangulated_scatter_data(
     Ok((interp_data, mask))
 }
 
-fn all_points_on_same_line(point_coords: &MatrixXx2<f64>) -> bool{
+fn all_points_on_same_line(point_coords: &MatrixXx2<f64>) -> bool {
     let num_points = point_coords.column(0).len();
     if num_points < 3 {
         //two points are always on the same line
@@ -437,7 +517,7 @@ fn all_points_on_same_line(point_coords: &MatrixXx2<f64>) -> bool{
         let mut on_line = true;
         for i in 2..num_points {
             let line_2 = point_coords.row(i) - point_coords.row(0);
-            if abs_diff_ne!(line_1[0]*line_2[1] - line_1[1]*line_2[0], 0.){
+            if abs_diff_ne!(line_1[0].mul_add(line_2[1], -(line_1[1] * line_2[0])), 0.) {
                 on_line = false;
                 break;
             }
@@ -451,148 +531,213 @@ mod test {
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::Matrix2xX;
 
-
     use super::*;
     #[test]
-    fn all_points_on_same_line_test(){
-        let points = Matrix2xX::from_vec(vec![
-            0., 0.,
-            1., 1.,
-            2., 2.,
-            ]).transpose();
+    fn all_points_on_same_line_test() {
+        let points = Matrix2xX::from_vec(vec![0., 0., 1., 1., 2., 2.]).transpose();
         assert!(all_points_on_same_line(&points));
 
-        let points = Matrix2xX::from_vec(vec![
-            0., 0.,
-            1., 1.,
-            2., 2.,
-            2., 3.,
-            ]).transpose();
+        let points = Matrix2xX::from_vec(vec![0., 0., 1., 1., 2., 2., 2., 3.]).transpose();
         assert!(!all_points_on_same_line(&points));
 
-        let points = Matrix2xX::from_vec(vec![
-            0., 0.,
-            1., 1.,
-            ]).transpose();
+        let points = Matrix2xX::from_vec(vec![0., 0., 1., 1.]).transpose();
         assert!(all_points_on_same_line(&points));
 
-        let points = Matrix2xX::from_vec(vec![
-            0., f64::NAN,
-            1., 1.,
-            2., 2.,
-            ]).transpose();
+        let points = Matrix2xX::from_vec(vec![0., f64::NAN, 1., 1., 2., 2.]).transpose();
         assert!(!all_points_on_same_line(&points));
 
-        let points = Matrix2xX::from_vec(vec![
-            0., f64::INFINITY,
-            1., 1.,
-            2., 2.,
-            ]).transpose();
+        let points = Matrix2xX::from_vec(vec![0., f64::INFINITY, 1., 1., 2., 2.]).transpose();
         assert!(!all_points_on_same_line(&points));
 
-        let points = Matrix2xX::from_vec(vec![
-            0., f64::NEG_INFINITY,
-            1., 1.,
-            2., 2.,
-            ]).transpose();
+        let points = Matrix2xX::from_vec(vec![0., f64::NEG_INFINITY, 1., 1., 2., 2.]).transpose();
         assert!(!all_points_on_same_line(&points));
-
     }
     #[test]
     fn new_voronoi_data() {
-        todo!()
+        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
+        let z_data = DVector::from_vec(vec![-10., 0., 500.]);
+        assert!(VoronoiedData::new(&xy_coord, Some(z_data)).is_ok());
+
+        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5]).transpose();
+        let z_data = DVector::from_vec(vec![-10., 0., 500.]);
+        assert!(VoronoiedData::new(&xy_coord, Some(z_data)).is_err());
     }
     #[test]
     fn get_voronoi_diagram_test() {
-        todo!()
+        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
+        let x_bounds = AxLims { min: 0., max: 3. };
+        let y_bounds = AxLims { min: 1.5, max: 15. };
+        let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds).unwrap();
+
+        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
+        let z_data = DVector::from_vec(vec![-10., 0., 500.]);
+        let v_dat = VoronoiedData::new(&xy_coord, Some(z_data)).unwrap();
+
+        let v_diag = v_dat.get_voronoi_diagram();
+
+        assert_eq!(voronoi, v_diag.clone());
     }
     #[test]
     fn get_z_data_test() {
-        todo!()
+        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
+        let v_dat =
+            VoronoiedData::new(&xy_coord, Some(DVector::from_vec(vec![-10., 0., 500.]))).unwrap();
+
+        let z_dat = v_dat.get_z_data();
+        assert!(z_dat.is_some());
+        let z_dat = z_dat.clone().unwrap();
+
+        assert_relative_eq!(-10., z_dat[0]);
+        assert_relative_eq!(0., z_dat[1]);
+        assert_relative_eq!(500., z_dat[2]);
+        assert!(z_dat[3].is_nan());
+        assert!(z_dat[4].is_nan());
+        assert!(z_dat[5].is_nan());
+        assert!(z_dat[6].is_nan());
+
+        let v_dat = VoronoiedData::new(&xy_coord, None).unwrap();
+
+        let z_dat = v_dat.get_z_data();
+        assert!(z_dat.is_none());
     }
     #[test]
     fn calc_closed_poly_area_test() {
-        todo!()
+        let poly_triangle = vec![
+            Point2::new(0., 0.),
+            Point2::new(1., 0.),
+            Point2::new(0., 1.),
+        ];
+        let poly_rect = vec![
+            Point2::new(0., 0.),
+            Point2::new(1., 0.),
+            Point2::new(1., 1.),
+            Point2::new(0., 1.),
+        ];
+        let poly_oct = vec![
+            Point2::new(0., 0.),
+            Point2::new(1., 0.),
+            Point2::new(2., 1.),
+            Point2::new(2., 2.),
+            Point2::new(1., 3.),
+            Point2::new(0., 3.),
+            Point2::new(-1., 2.),
+            Point2::new(-1., 1.),
+        ];
+        let poly_same_line = vec![
+            Point2::new(0., 0.),
+            Point2::new(1., 1.),
+            Point2::new(2., 2.),
+        ];
+
+        assert_relative_eq!(calc_closed_poly_area(&poly_triangle).unwrap(), 0.5);
+        assert_relative_eq!(calc_closed_poly_area(&poly_rect).unwrap(), 1.);
+        assert_relative_eq!(calc_closed_poly_area(&poly_oct).unwrap(), 7.);
+        assert_relative_eq!(calc_closed_poly_area(&poly_same_line).unwrap(), 0.);
+    }
+    #[test]
+    fn calc_closed_poly_area_invalid_polygon_test() {
+        let poly_triangle = vec![Point2::new(0., 0.), Point2::new(1., 0.)];
+        assert!(calc_closed_poly_area(&poly_triangle).is_err());
+        let poly_triangle = vec![
+            Point2::new(0., 0.),
+            Point2::new(1., 0.),
+            Point2::new(0., f64::NAN),
+        ];
+        assert!(calc_closed_poly_area(&poly_triangle).is_err());
+        let poly_triangle = vec![
+            Point2::new(0., 0.),
+            Point2::new(1., 0.),
+            Point2::new(0., f64::INFINITY),
+        ];
+        assert!(calc_closed_poly_area(&poly_triangle).is_err());
+        let poly_triangle = vec![
+            Point2::new(0., 0.),
+            Point2::new(1., 0.),
+            Point2::new(0., f64::NEG_INFINITY),
+        ];
+        assert!(calc_closed_poly_area(&poly_triangle).is_err());
     }
     #[test]
     fn interpolate_3d_scatter_data_value_test() {
-        let scattered_data = Matrix3xX::from_vec(vec![
-            0., 0., 0.,
-            1., 0., 0.,
-            0., 1., 1.,
-            1., 1., 1.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 1., 1., 1., 1.]).transpose();
 
         let x_interp = linspace(-0.5, 1., 4.).unwrap();
         let y_interp = linspace(-0.5, 1., 4.).unwrap();
-        let (interp_data, _) = interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
+        let (interp_data, _) =
+            interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
 
-        assert!(interp_data[(0,0)].is_nan());
-        assert!(interp_data[(0,1)].is_nan());
-        assert!(interp_data[(0,2)].is_nan());
-        assert!(interp_data[(0,3)].is_nan());
-        assert!(interp_data[(1,0)].is_nan());
-        assert_abs_diff_eq!(interp_data[(1,1)], 0.0);
-        assert_abs_diff_eq!(interp_data[(1,2)], 0.0);
-        assert_abs_diff_eq!(interp_data[(1,3)], 0.0);
-        assert!(interp_data[(2,0)].is_nan());
-        assert_abs_diff_eq!(interp_data[(2,1)], 0.5);
-        assert_abs_diff_eq!(interp_data[(2,2)], 0.5);
-        assert_abs_diff_eq!(interp_data[(2,3)], 0.5);
-        assert!(interp_data[(3,0)].is_nan());
-        assert_abs_diff_eq!(interp_data[(3,1)], 1.0);
-        assert_abs_diff_eq!(interp_data[(3,2)], 1.0);
-        assert_abs_diff_eq!(interp_data[(3,3)], 1.0);
+        assert!(interp_data[(0, 0)].is_nan());
+        assert!(interp_data[(0, 1)].is_nan());
+        assert!(interp_data[(0, 2)].is_nan());
+        assert!(interp_data[(0, 3)].is_nan());
+        assert!(interp_data[(1, 0)].is_nan());
+        assert_abs_diff_eq!(interp_data[(1, 1)], 0.0);
+        assert_abs_diff_eq!(interp_data[(1, 2)], 0.0);
+        assert_abs_diff_eq!(interp_data[(1, 3)], 0.0);
+        assert!(interp_data[(2, 0)].is_nan());
+        assert_abs_diff_eq!(interp_data[(2, 1)], 0.5);
+        assert_abs_diff_eq!(interp_data[(2, 2)], 0.5);
+        assert_abs_diff_eq!(interp_data[(2, 3)], 0.5);
+        assert!(interp_data[(3, 0)].is_nan());
+        assert_abs_diff_eq!(interp_data[(3, 1)], 1.0);
+        assert_abs_diff_eq!(interp_data[(3, 2)], 1.0);
+        assert_abs_diff_eq!(interp_data[(3, 3)], 1.0);
     }
     #[test]
     fn interpolate_3d_scatter_data_mask_test() {
-        let scattered_data = Matrix3xX::from_vec(vec![
-            0., 0., 0.,
-            1., 0., 0.,
-            0., 1., 1.,
-            1., 1., 1.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 1., 1., 1., 1.]).transpose();
 
         let x_interp = linspace(-0.5, 1., 4.).unwrap();
         let y_interp = linspace(-0.5, 1., 4.).unwrap();
-        let (_, mask) = interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
+        let (data, mask) =
+            interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
 
-        assert_abs_diff_eq!(mask[(0,0)],0.);
-        assert_abs_diff_eq!(mask[(0,1)],0.);
-        assert_abs_diff_eq!(mask[(0,2)],0.);
-        assert_abs_diff_eq!(mask[(0,3)],0.);
-        assert_abs_diff_eq!(mask[(1,0)],0.);
-        assert_abs_diff_eq!(mask[(1,1)], 1.);
-        assert_abs_diff_eq!(mask[(1,2)], 1.);
-        assert_abs_diff_eq!(mask[(1,3)], 1.);
-        assert_abs_diff_eq!(mask[(2,0)],0.);
-        assert_abs_diff_eq!(mask[(2,1)], 1.);
-        assert_abs_diff_eq!(mask[(2,2)], 1.);
-        assert_abs_diff_eq!(mask[(2,3)], 1.);
-        assert_abs_diff_eq!(mask[(3,0)],0.);
-        assert_abs_diff_eq!(mask[(3,1)], 1.0);
-        assert_abs_diff_eq!(mask[(3,2)], 1.0);
-        assert_abs_diff_eq!(mask[(3,3)], 1.0);
+        assert_abs_diff_eq!(mask[(0, 0)], 0.);
+        assert_abs_diff_eq!(mask[(0, 1)], 0.);
+        assert_abs_diff_eq!(mask[(0, 2)], 0.);
+        assert_abs_diff_eq!(mask[(0, 3)], 0.);
+        assert_abs_diff_eq!(mask[(1, 0)], 0.);
+        assert_abs_diff_eq!(mask[(1, 1)], 1.);
+        assert_abs_diff_eq!(mask[(1, 2)], 1.);
+        assert_abs_diff_eq!(mask[(1, 3)], 1.);
+        assert_abs_diff_eq!(mask[(2, 0)], 0.);
+        assert_abs_diff_eq!(mask[(2, 1)], 1.);
+        assert_abs_diff_eq!(mask[(2, 2)], 1.);
+        assert_abs_diff_eq!(mask[(2, 3)], 1.);
+        assert_abs_diff_eq!(mask[(3, 0)], 0.);
+        assert_abs_diff_eq!(mask[(3, 1)], 1.0);
+        assert_abs_diff_eq!(mask[(3, 2)], 1.0);
+        assert_abs_diff_eq!(mask[(3, 3)], 1.0);
     }
 
     #[test]
     fn interpolate_3d_scatter_data_amount_data_test() {
-        let scattered_data = Matrix3xX::from_vec(vec![
-            0., 0., 0.,
-            1., 0., 0.,
-            0., 1., 1.,
-            1., 1., 1.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 1., 1., 1., 1.]).transpose();
         let x_interp = linspace(-0.5, 1., 4.).unwrap();
         let y_interp = linspace(-0.5, 1., 4.).unwrap();
-        assert!(interpolate_3d_scatter_data(&scattered_data, &DVector::from_vec(vec![0.]), &y_interp).is_err());
-        assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &DVector::from_vec(vec![0.])).is_err());
-        assert!(interpolate_3d_scatter_data(&scattered_data, &DVector::from_vec(vec![0.]), &DVector::from_vec(vec![0.])).is_err());
+        assert!(interpolate_3d_scatter_data(
+            &scattered_data,
+            &DVector::from_vec(vec![0.]),
+            &y_interp
+        )
+        .is_err());
+        assert!(interpolate_3d_scatter_data(
+            &scattered_data,
+            &x_interp,
+            &DVector::from_vec(vec![0.])
+        )
+        .is_err());
+        assert!(interpolate_3d_scatter_data(
+            &scattered_data,
+            &DVector::from_vec(vec![0.]),
+            &DVector::from_vec(vec![0.])
+        )
+        .is_err());
 
-        let scattered_data = Matrix3xX::from_vec(vec![
-            0., 0., 0.,
-            1., 0., 0.,
-            ]).transpose();
+        let scattered_data = Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0.]).transpose();
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
     }
     #[test]
@@ -600,78 +745,74 @@ mod test {
         let x_interp = linspace(-0.5, 1., 4.).unwrap();
         let y_interp = linspace(-0.5, 1., 4.).unwrap();
 
-        
-        let scattered_data = Matrix3xX::from_vec(vec![
-            -1., 0., f64::NAN,
-            1., 0., 0.,
-            0., 1., 0.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![-1., 0., f64::NAN, 1., 0., 0., 0., 1., 0.]).transpose();
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
 
-        let scattered_data = Matrix3xX::from_vec(vec![
-            -1., 0., f64::NEG_INFINITY,
-            1., 0., 0.,
-            0., 1., 0.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![-1., 0., f64::NEG_INFINITY, 1., 0., 0., 0., 1., 0.])
+                .transpose();
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
 
-        let scattered_data = Matrix3xX::from_vec(vec![
-            -1., 0., f64::INFINITY,
-            1., 0., 0.,
-            0., 1., 0.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![-1., 0., f64::INFINITY, 1., 0., 0., 0., 1., 0.]).transpose();
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
 
-        let scattered_data = Matrix3xX::from_vec(vec![
-            -1., 0., -1.,
-            1., 0., 0.,
-            0., 1., 0.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![-1., 0., -1., 1., 0., 0., 0., 1., 0.]).transpose();
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
-
     }
     #[test]
     fn interpolate_3d_scatter_data_finite_coordinates_test() {
         let x_interp = linspace(-0.5, 1., 4.).unwrap();
         let y_interp = linspace(-0.5, 1., 4.).unwrap();
-        let scattered_data = Matrix3xX::from_vec(vec![
-            f64::NAN, 0., 0.,
-            1., 0., 0.,
-            0., 1., 0.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![f64::NAN, 0., 0., 1., 0., 0., 0., 1., 0.]).transpose();
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
-        let scattered_data = Matrix3xX::from_vec(vec![
-            f64::NEG_INFINITY, 0., 0.,
-            1., 0., 0.,
-            0., 1., 0.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![f64::NEG_INFINITY, 0., 0., 1., 0., 0., 0., 1., 0.])
+                .transpose();
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
-        let scattered_data = Matrix3xX::from_vec(vec![
-            f64::INFINITY, 0., 0.,
-            1., 0., 0.,
-            0., 1., 0.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![f64::INFINITY, 0., 0., 1., 0., 0., 0., 1., 0.]).transpose();
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
 
-        let scattered_data = Matrix3xX::from_vec(vec![
-            -1., 0., 0.,
-            1., 0., 0.,
-            0., 1., 0.
-            ]).transpose();
+        let scattered_data =
+            Matrix3xX::from_vec(vec![-1., 0., 0., 1., 0., 0., 0., 1., 0.]).transpose();
 
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
 
-        let scattered_data = Matrix3xX::from_vec(vec![
-            0., 0., 0.,
-            1., 0., 0.,
-            0., 1., 0.
-            ]).transpose();
-            
+        let scattered_data =
+            Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 0.]).transpose();
+
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
     }
     #[test]
     fn interpolate_3d_triangulated_scatter_data_test() {
-        todo!()
+        let xy_coord = Matrix2xX::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.5, 1.]).transpose();
+        let z_data = DVector::from_vec(vec![0., 0., 1.]);
+        let v_data = VoronoiedData::new(&xy_coord, Some(z_data)).unwrap();
+
+        let x_interp = linspace(0.5, 1., 1.).unwrap();
+        let y_interp = linspace(0.5, 1., 1.).unwrap();
+        let (interp_data, _) =
+            interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp).unwrap();
+        assert_relative_eq!(interp_data[(0, 0)], 0.5);
+
+        let x_interp = linspace(0., 1., 3.).unwrap();
+        let y_interp = linspace(0., 1., 3.).unwrap();
+        let (interp_data, interp_mask) =
+            interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp).unwrap();
+
+        assert_relative_eq!(interp_data[(0, 0)], 0.);
+        assert_relative_eq!(interp_data[(0, 1)], 0.);
+        assert_relative_eq!(interp_data[(0, 2)], 0.);
+        assert!(interp_data[(1, 0)].is_nan());
+        assert_relative_eq!(interp_data[(1, 1)], 0.5);
+        assert!(interp_data[(1, 2)].is_nan());
+        assert!(interp_data[(2, 0)].is_nan());
+        assert_relative_eq!(interp_data[(2, 1)], 1.);
+        assert!(interp_data[(2, 2)].is_nan());
     }
     #[test]
     fn meshgrid_value_test() {
@@ -705,7 +846,6 @@ mod test {
         let (yy, xx) = meshgrid(&y, &x).unwrap();
         assert_eq!(xx.shape(), (3, 2));
         assert_eq!(yy.shape(), (3, 2));
-
     }
     #[test]
     fn linspace_test() {
@@ -728,7 +868,7 @@ mod test {
     }
     #[test]
     fn create_linspace_axes_test() {
-        let x_dat = DVector::from_vec(vec![0.,-3.,10.,50.]);
+        let x_dat = DVector::from_vec(vec![0., -3., 10., 50.]);
         let num_axes_points = 100.;
         let (x, xlim) = create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).unwrap();
         assert_eq!(x.len(), 100);
@@ -737,48 +877,51 @@ mod test {
         assert_abs_diff_eq!(xlim.min, x[0]);
         assert_abs_diff_eq!(xlim.max, x[99]);
 
-        let x_dat = DVector::from_vec(vec![0.,-3.,10.,f64::INFINITY]);
+        let x_dat = DVector::from_vec(vec![0., -3., 10., f64::INFINITY]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_ok());
-        let x_dat = DVector::from_vec(vec![0.,-3.,10.,f64::NEG_INFINITY]);
+        let x_dat = DVector::from_vec(vec![0., -3., 10., f64::NEG_INFINITY]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_ok());
-        let x_dat = DVector::from_vec(vec![0.,-3.,10.,f64::NAN]);
+        let x_dat = DVector::from_vec(vec![0., -3., 10., f64::NAN]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_ok());
-        let x_dat = DVector::from_vec(vec![0.,0.,f64::NAN,f64::INFINITY]);
+        let x_dat = DVector::from_vec(vec![0., 0., f64::NAN, f64::INFINITY]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
-        let x_dat = DVector::from_vec(vec![0.,f64::NAN,f64::INFINITY]);
+        let x_dat = DVector::from_vec(vec![0., f64::NAN, f64::INFINITY]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
-        let x_dat = DVector::from_vec(vec![0.,0.]);
+        let x_dat = DVector::from_vec(vec![0., 0.]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
-        let x_dat = DVector::from_vec(vec![0.,f64::NAN]);
+        let x_dat = DVector::from_vec(vec![0., f64::NAN]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
-        let x_dat = DVector::from_vec(vec![0.,f64::INFINITY]);
+        let x_dat = DVector::from_vec(vec![0., f64::INFINITY]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
-        let x_dat = DVector::from_vec(vec![0.,f64::NEG_INFINITY]);
+        let x_dat = DVector::from_vec(vec![0., f64::NEG_INFINITY]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
         let x_dat = DVector::from_vec(vec![f64::NAN, f64::NAN, f64::NAN]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
 
-        let x_dat = DVector::from_vec(vec![0.,-3.,10.,f64::INFINITY]);
+        let x_dat = DVector::from_vec(vec![0., -3., 10., f64::INFINITY]);
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), 0.).is_err());
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::NAN).is_err());
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::INFINITY).is_err());
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::NEG_INFINITY).is_err());
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), -1.).is_err());
-
     }
     #[test]
-    fn create_voronoi_cells_test() {
-
-        todo!();
-        //points on same line test!
-
-        let xy_coord = MatrixXx2::<f64>::zeros(0);
-        let x_bounds = AxLims { min: 0., max: 0. };
-        let y_bounds = AxLims { min: 0., max: 0. };
+    fn create_voronoi_cells_same_line_test() {
+        let xy_coord = Matrix2xX::from_vec(vec![0., 0., 1., 1., 2., 2., 1000., 1000.]).transpose();
+        let x_bounds = AxLims {
+            min: 0.,
+            max: 1000.,
+        };
+        let y_bounds = AxLims {
+            min: 0.,
+            max: 1000.,
+        };
         let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
         assert!(voronoi.is_err());
-
-        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5]).transpose();
+    }
+    #[test]
+    fn create_voronoi_cells_site_coordinates_test() {
+        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
         let x_bounds = AxLims { min: 0., max: 2. };
         let y_bounds = AxLims { min: 0., max: 2. };
         let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
@@ -787,6 +930,18 @@ mod test {
         let unwrapped_voronoi = voronoi.unwrap();
         assert_relative_eq!(unwrapped_voronoi.sites[0].x, 1.0);
         assert_relative_eq!(unwrapped_voronoi.sites[0].y, 1.5);
+        assert_relative_eq!(unwrapped_voronoi.sites[1].x, 0.0);
+        assert_relative_eq!(unwrapped_voronoi.sites[1].y, 2.5);
+        assert_relative_eq!(unwrapped_voronoi.sites[2].x, 3.0);
+        assert_relative_eq!(unwrapped_voronoi.sites[2].y, 15.);
+    }
+    #[test]
+    fn create_voronoi_cells_invalid_bounds_test() {
+        let xy_coord = MatrixXx2::<f64>::zeros(0);
+        let x_bounds = AxLims { min: 0., max: 0. };
+        let y_bounds = AxLims { min: 0., max: 0. };
+        let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
+        assert!(voronoi.is_err());
 
         let xy_coord = MatrixXx2::<f64>::zeros(0);
         let x_bounds = AxLims {
@@ -817,7 +972,9 @@ mod test {
         let y_bounds = AxLims { min: 0., max: 0. };
         let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
         assert!(voronoi.is_err());
-
+    }
+    #[test]
+    fn create_voronoi_cells_invalid_site_coordinates_test() {
         let xy_coord = Matrix2xX::from_vec(vec![1.0, f64::NAN]).transpose();
         let x_bounds = AxLims { min: 0., max: 2. };
         let y_bounds = AxLims { min: 0., max: 2. };
@@ -836,12 +993,28 @@ mod test {
         let x_bounds = AxLims { min: 0., max: 2. };
         let y_bounds = AxLims { min: 0., max: 2. };
         let voronoi = create_valued_voronoi_cells(&xyz_coord, &x_bounds, &y_bounds);
+        assert!(voronoi.is_err());
+
+        let xyz_coord =
+            Matrix3xX::from_vec(vec![1.0, 1.5, 10., 2.0, 2.5, 20., -1.0, -3.5, 30.]).transpose();
+        let x_bounds = AxLims { min: -1., max: 2. };
+        let y_bounds = AxLims {
+            min: -3.5,
+            max: 2.5,
+        };
+        let voronoi = create_valued_voronoi_cells(&xyz_coord, &x_bounds, &y_bounds);
         assert!(voronoi.is_ok());
 
         let unwrapped_voronoi = voronoi.unwrap();
+        let z_data = unwrapped_voronoi.z_data.unwrap();
         assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[0].x, 1.0);
         assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[0].y, 1.5);
-        assert_relative_eq!(unwrapped_voronoi.z_data[0], 10.);
+        assert_relative_eq!(z_data[0], 10.);
+        assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[1].x, 2.0);
+        assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[1].y, 2.5);
+        assert_relative_eq!(z_data[1], 20.);
+        assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[2].x, -1.0);
+        assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[2].y, -3.5);
+        assert_relative_eq!(z_data[2], 30.);
     }
-
 }

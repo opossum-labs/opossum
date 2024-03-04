@@ -1,5 +1,6 @@
 //!for all the functions, structs or trait that may be used for geometrical transformations
 #![warn(missing_docs)]
+use approx::relative_eq;
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
 
 use crate::error::{OpmResult, OpossumError};
@@ -12,7 +13,6 @@ use crate::error::{OpmResult, OpossumError};
 /// `plane_normal_vector`: normal vector of the plane
 /// # Errors
 /// This function errors if the plane normal vector has a zero length
-#[must_use]
 pub fn define_plane_coordinate_axes_directions(
     plane_normal_vector: &Vector3<f64>,
 ) -> OpmResult<(Vector3<f64>, Vector3<f64>)> {
@@ -74,24 +74,38 @@ pub fn define_plane_coordinate_axes_directions(
 /// # Attributes
 /// `plane_normal_anchor`: anchor point that lies on the plane
 /// `plane_normal_vector`: normal vector of the plane
+/// # Errors
+/// This function errors if the plane normal vector has a zero length or any of the provided input plane vectors includes a non finite entry
 #[must_use]
 pub fn project_points_to_plane(
     plane_normal_anchor: &Vector3<f64>,
     plane_normal_vector: &Vector3<f64>,
     points_to_project: &[Vector3<f64>],
-) -> MatrixXx3<f64> {
+) -> OpmResult<MatrixXx3<f64>> {
+    if relative_eq!(plane_normal_vector.norm(), 0.0)
+        || plane_normal_vector.iter().any(|x| !f64::is_finite(*x))
+    {
+        return Err(OpossumError::Other(
+            "plane normal vector must have a non zero length and be finite!".into(),
+        ));
+    };
+    if plane_normal_anchor.iter().any(|x| !f64::is_finite(*x)) {
+        return Err(OpossumError::Other(
+            "plane normal anchor must be finite!".into(),
+        ));
+    };
+
     let mut pos_projection = MatrixXx3::<f64>::zeros(points_to_project.len());
     for (row, pos) in points_to_project.iter().enumerate() {
-        let closest_to_axis_vec = pos
-            - plane_normal_anchor
-            - (pos - plane_normal_anchor).dot(plane_normal_vector) * plane_normal_vector;
+        let normed_normal_vec = plane_normal_vector / plane_normal_vector.norm();
+        let displacement_vector = pos - plane_normal_anchor;
 
-        pos_projection.set_row(
-            row,
-            &(plane_normal_anchor - closest_to_axis_vec).transpose(),
-        );
+        let projection = plane_normal_anchor + displacement_vector
+            - displacement_vector.dot(&normed_normal_vec) * normed_normal_vec;
+
+        pos_projection.set_row(row, &projection.transpose());
     }
-    pos_projection
+    Ok(pos_projection)
 }
 
 /// Projects points onto a defined plane and represents their position as combination of distances along the base vectors of that plane.
@@ -102,8 +116,7 @@ pub fn project_points_to_plane(
 /// `plane_base_vec_1_opt`: first base vector of the plane.
 /// `plane_base_vec_2_opt`: second base vector of the plane
 /// # Errors
-/// This function errors if the plane normal vector has a zero length
-#[must_use]
+/// This function errors if the plane normal vector has a zero length or any of the provided input plane vectors includes a non finite_vector
 pub fn project_pos_to_plane_with_base_vectors(
     plane_normal_anchor: &Vector3<f64>,
     plane_normal_vector: &Vector3<f64>,
@@ -111,9 +124,16 @@ pub fn project_pos_to_plane_with_base_vectors(
     plane_base_vec_2_opt: Option<&Vector3<f64>>,
     points_to_project: &[Vector3<f64>],
 ) -> OpmResult<MatrixXx2<f64>> {
-    if plane_normal_vector.norm() < f64::EPSILON {
+    if relative_eq!(plane_normal_vector.norm(), 0.0)
+        || plane_normal_vector.iter().any(|x| !f64::is_finite(*x))
+    {
         return Err(OpossumError::Other(
-            "plane normal vector must have a non zero length!".into(),
+            "plane normal vector must have a non zero length and be finite!".into(),
+        ));
+    };
+    if plane_normal_anchor.iter().any(|x| !f64::is_finite(*x)) {
+        return Err(OpossumError::Other(
+            "plane normal anchor must be finite!".into(),
         ));
     };
 
@@ -135,6 +155,20 @@ pub fn project_pos_to_plane_with_base_vectors(
         define_plane_coordinate_axes_directions(plane_normal_vector)?
     };
 
+    if plane_co_ax_1.iter().any(|x| !f64::is_finite(*x))
+        || plane_co_ax_2.iter().any(|x| !f64::is_finite(*x))
+    {
+        return Err(OpossumError::Other(
+            "base vector of the plane contains non-finite values!".into(),
+        ));
+    };
+
+    if relative_eq!(plane_co_ax_1.norm(), 0.0) || relative_eq!(plane_co_ax_2.norm(), 0.0) {
+        return Err(OpossumError::Other(
+            "base vector of the plane has a length of zero!".into(),
+        ));
+    };
+
     let mut pos_projection = MatrixXx2::<f64>::zeros(points_to_project.len());
     for (row, pos) in points_to_project.iter().enumerate() {
         let closest_to_axis_vec = pos
@@ -149,15 +183,249 @@ pub fn project_pos_to_plane_with_base_vectors(
 
 #[cfg(test)]
 mod test {
+    use approx::assert_relative_eq;
+
     use super::*;
     #[test]
-    fn create_projection_coordinate_axes_directions_test() {
-        todo!()
+    fn define_plane_coordinate_axes_directions_test() {
+        assert!(define_plane_coordinate_axes_directions(&Vector3::new(0., 0., 0.)).is_err());
+
+        let (ax1, ax2) =
+            define_plane_coordinate_axes_directions(&Vector3::new(1., 0., 0.)).unwrap();
+        assert_relative_eq!(ax1, Vector3::new(0., 0., 1.));
+        assert_relative_eq!(ax2, Vector3::new(0., 1., 0.));
+
+        let (ax1, ax2) =
+            define_plane_coordinate_axes_directions(&Vector3::new(0., 1., 0.)).unwrap();
+        assert_relative_eq!(ax1, Vector3::new(0., 0., 1.));
+        assert_relative_eq!(ax2, Vector3::new(1., 0., 0.));
+
+        let (ax1, ax2) =
+            define_plane_coordinate_axes_directions(&Vector3::new(0., 0., 1.)).unwrap();
+        assert_relative_eq!(ax1, Vector3::new(1., 0., 0.));
+        assert_relative_eq!(ax2, Vector3::new(0., 1., 0.));
+
+        let (ax1, ax2) =
+            define_plane_coordinate_axes_directions(&Vector3::new(0., 1., 1.)).unwrap();
+        assert_relative_eq!(ax1, Vector3::new(1., 0., 0.));
+        assert_relative_eq!(
+            ax2,
+            Vector3::new(0., 1., 1.).cross(&Vector3::new(1., 0., 0.))
+        );
+
+        let (ax1, ax2) =
+            define_plane_coordinate_axes_directions(&Vector3::new(1., 0., 1.)).unwrap();
+        assert_relative_eq!(ax1, Vector3::new(0., 1., 0.));
+        assert_relative_eq!(
+            ax2,
+            Vector3::new(1., 0., 1.).cross(&Vector3::new(0., 1., 0.))
+        );
+
+        let (ax1, ax2) =
+            define_plane_coordinate_axes_directions(&Vector3::new(1., 1., 0.)).unwrap();
+        assert_relative_eq!(ax1, Vector3::new(0., 0., 1.));
+        assert_relative_eq!(
+            ax2,
+            Vector3::new(1., 1., 0.).cross(&Vector3::new(0., 0., 1.))
+        );
+
+        let (ax1, ax2) =
+            define_plane_coordinate_axes_directions(&Vector3::new(1., 0.1, 0.1)).unwrap();
+        assert_relative_eq!(
+            ax1,
+            Vector3::new(0.9950371902099893, 0.09950371902099893, 0.0)
+        );
+        assert_relative_eq!(
+            ax2,
+            Vector3::new(-0.009950371902099894, 0.09950371902099893, 0.0)
+        );
     }
-    fn project_pos_to_plane_test() {
-        todo!()
+    #[test]
+    fn project_points_to_plane_test() {
+        let pos = project_points_to_plane(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 1.),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)],
+        )
+        .unwrap();
+
+        assert_relative_eq!(pos[(0, 0)], 0.);
+        assert_relative_eq!(pos[(0, 1)], 0.);
+        assert_relative_eq!(pos[(1, 0)], 10.);
+        assert_relative_eq!(pos[(1, 1)], 1.);
+
+        assert!(project_points_to_plane(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 0.),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+        )
+        .is_err());
+
+        assert!(project_points_to_plane(
+            &Vector3::new(0., 0., f64::NAN),
+            &Vector3::new(0., 0., 1.),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+        )
+        .is_err());
+
+        assert!(project_points_to_plane(
+            &Vector3::new(0., 0., f64::INFINITY),
+            &Vector3::new(0., 0., 1.),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+        )
+        .is_err());
+
+        assert!(project_points_to_plane(
+            &Vector3::new(0., 0., f64::NEG_INFINITY),
+            &Vector3::new(0., 0., 1.),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+        )
+        .is_err());
+
+        assert!(project_points_to_plane(
+            &Vector3::new(0., 0., 1.),
+            &Vector3::new(0., 1., f64::NAN),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+        )
+        .is_err());
+
+        assert!(project_points_to_plane(
+            &Vector3::new(0., 0., 1.),
+            &Vector3::new(0., 1., f64::INFINITY),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+        )
+        .is_err());
+
+        assert!(project_points_to_plane(
+            &Vector3::new(0., 0., 1.),
+            &Vector3::new(0., 1., f64::NEG_INFINITY),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 1., 3.)]
+        )
+        .is_err());
     }
+    #[test]
     fn project_pos_to_plane_with_base_vectors_test() {
-        todo!()
+        let projection = project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(1., 0., 0.)),
+            Some(&Vector3::new(0., 1., 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        );
+        assert!(projection.is_ok());
+
+        let proj = projection.unwrap();
+        assert_relative_eq!(proj[(0, 0)], 0.);
+        assert_relative_eq!(proj[(0, 1)], 0.);
+        assert_relative_eq!(proj[(1, 0)], 10.);
+        assert_relative_eq!(proj[(1, 1)], 0.);
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 0.),
+            Some(&Vector3::new(1., 0., 0.)),
+            Some(&Vector3::new(0., 1., 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., f64::NAN),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(1., 0., 0.)),
+            Some(&Vector3::new(0., 1., 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., f64::INFINITY),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(1., 0., 0.)),
+            Some(&Vector3::new(0., 1., 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., f64::NEG_INFINITY),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(1., 0., 0.)),
+            Some(&Vector3::new(0., 1., 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(0., 0., 0.)),
+            Some(&Vector3::new(0., 1., 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(1., 0., 0.)),
+            Some(&Vector3::new(0., 0., 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(1., f64::NAN, 0.)),
+            Some(&Vector3::new(0., 1., 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(1., f64::INFINITY, 0.)),
+            Some(&Vector3::new(0., 1., 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(1., f64::NEG_INFINITY, 0.)),
+            Some(&Vector3::new(0., 1., 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(0., 1., 0.)),
+            Some(&Vector3::new(1., f64::NAN, 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(0., 1., 0.)),
+            Some(&Vector3::new(1., f64::INFINITY, 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
+
+        assert!(project_pos_to_plane_with_base_vectors(
+            &Vector3::new(0., 0., 0.),
+            &Vector3::new(0., 0., 1.),
+            Some(&Vector3::new(0., 1., 0.)),
+            Some(&Vector3::new(1., f64::NEG_INFINITY, 0.)),
+            &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
+        )
+        .is_err());
     }
 }

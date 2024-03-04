@@ -5,7 +5,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
-        fluence_detector::FluenceData, wavefront::WaveFrontData, FilterType, Metertype, PortMap,
+        fluence_detector::ScatteredRaysFluenceData, wavefront::WaveFrontData, FilterType, Metertype, PortMap,
         Spectrometer, SpectrometerType, SpotDiagram,
     },
     optic_graph::OpticGraph,
@@ -481,7 +481,7 @@ pub enum Proptype {
     /// This property stores optical [`Rays`](crate::rays::Rays)
     SpotDiagram(SpotDiagram),
     /// This property stores the fluence information [`FluenceData`]
-    FluenceDetector(FluenceData),
+    FluenceDetector(ScatteredRaysFluenceData),
     /// This property stores the wavefront Information [`WaveFrontData`]
     WaveFrontStats(WaveFrontData),
     /// This property stores the ray position history of all [`Rays`](crate::rays::Rays) during propagation through the optic scenery

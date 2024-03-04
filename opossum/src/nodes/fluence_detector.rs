@@ -10,6 +10,7 @@ use crate::lightdata::LightData;
 use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
+use crate::utils::griddata::VoronoiedData;
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -97,7 +98,7 @@ impl Optical for FluenceDetector {
             let fluence_data_opt = rays.calc_transversal_fluence(None, None, true).ok();
             fluence_data_opt.map_or_else(
                 || {
-                    warn!("Fluence Detector diagram: no wavefront data for export available",);
+                    warn!("Fluence Detector diagram: no fluence data for export available",);
                     Ok(None)
                 },
                 |fluence_data| fluence_data.to_plot(&file_path, (800, 800), PltBackEnd::BMP),
@@ -148,55 +149,59 @@ impl Dottable for FluenceDetector {
     }
 }
 
-impl From<FluenceData> for Proptype {
-    fn from(value: FluenceData) -> Self {
+impl From<ScatteredRaysFluenceData> for Proptype {
+    fn from(value: ScatteredRaysFluenceData) -> Self {
         Self::FluenceDetector(value)
     }
 }
 
 /// Struct to hold the fluence information of a beam
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FluenceData {
+#[derive(Clone, Debug)]
+pub struct ScatteredRaysFluenceData {
     /// peak fluence of the beam
-    pub peak: f64,
+    peak: f64,
     /// average fluence of the beam
-    pub average: f64,
-    /// 2d fluence distribution of the beam
-    pub distribution: DMatrix<f64>,
-    /// x coordinates of the fluence distribution
-    pub x_data: DVector<f64>,
-    /// y coordinates of the fluence distribution
-    pub y_data: DVector<f64>,
+    average: f64,
+    /// Voronoidata of the rays fluence
+    voronoied_fluence: VoronoiedData,
+    // /// 2d fluence distribution of the beam.
+    // pub interp_distribution: DMatrix<f64>,
+    // /// x coordinates of the fluence distribution
+    // pub interp_x_data: DVector<f64>,
+    // /// y coordinates of the fluence distribution
+    // pub interp_y_data: DVector<f64>,
 }
 
-impl FluenceData {
-    /// Constructs a new [`FluenceData`] struct
-    /// # Errors
-    /// This function errors if the shape of input distribution and x-y coordinates does not match
-    pub fn new(
+impl ScatteredRaysFluenceData {
+    /// Constructs a new [`ScatteredRaysFluenceData`] struct
+    #[must_use]
+    pub const fn new(
         peak: f64,
         average: f64,
-        distribution: DMatrix<f64>,
-        x_data: DVector<f64>,
-        y_data: DVector<f64>,
-    ) -> OpmResult<Self> {
-        if y_data.len() != distribution.shape().0 || x_data.len() != distribution.shape().1 {
-            Err(OpossumError::Other(
-                "Shape of input distribution and x-y coordinates does not match!".into(),
-            ))
-        } else {
-            Ok(Self {
-                peak,
-                average,
-                distribution,
-                x_data,
-                y_data,
-            })
+        voronoied_fluence: VoronoiedData, 
+        // distribution: DVector<f64>,
+        // x_data: DVector<f64>,
+        // y_data: DVector<f64>,
+        // interp_plot:  bool
+    ) -> Self {
+        
+        Self {
+            peak,
+            average,
+            voronoied_fluence
         }
+    }
+
+    pub const fn get_peak_fluence(&self) -> f64{
+        self.peak
+    }
+
+    pub const fn get_average_fluence(&self) -> f64{
+        self.average
     }
 }
 
-impl PdfReportable for FluenceData {
+impl PdfReportable for ScatteredRaysFluenceData {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
         layout.push(genpdf::elements::Paragraph::new(format!(
@@ -218,7 +223,7 @@ impl PdfReportable for FluenceData {
     }
 }
 
-impl Plottable for FluenceData {
+impl Plottable for ScatteredRaysFluenceData {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm".into()))?
@@ -234,10 +239,12 @@ impl Plottable for FluenceData {
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
         match plt_type {
             PlotType::ColorMesh(_) => Ok(Some(PlotData::ColorMesh(
-                self.x_data.clone(),
-                self.y_data.clone(),
-                self.distribution.clone(),
+                self.interp_x_data.clone(),
+                self.interp_y_data.clone(),
+                self.interp_distribution.resize(self.interp_y_data.len(), self.interp_x_data.len(), f64::NAN),
             ))),
+            PlotType::ColorVoronoi(_) => Ok(Some(PlotData::ColorVoronoi())),
+
             _ => Ok(None),
         }
     }

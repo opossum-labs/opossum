@@ -101,9 +101,9 @@ fn main() -> OpmResult<()> {
     println!("{}", fluence_data.average);
 
     let plt_dat = PlotData::ColorMesh(
-        fluence_data.x_data,
-        fluence_data.y_data,
-        fluence_data.distribution,
+        fluence_data.interp_x_data,
+        fluence_data.interp_y_data,
+        fluence_data.interp_distribution,
     );
     let plt_type = PlotType::ColorMesh(plt_params);
     let _ = plt_type.plot(&plt_dat);

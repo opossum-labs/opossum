@@ -1,7 +1,6 @@
 //!This module should contain all the functions that are used for filtering arrays, vectors and such.
 
-use nalgebra::{DVector, DVectorSlice};
-
+use nalgebra::DVector;
 
 /// This method filters out all NaN and infinite values  
 /// # Attributes
@@ -9,7 +8,7 @@ use nalgebra::{DVector, DVectorSlice};
 /// # Returns
 /// This method returns an array containing only the non-NaN and finite entries of the passed vector
 #[must_use]
-pub fn filter_nan_infinite(ax_vals: &DVectorSlice<'_, f64>) -> DVector<f64> {
+pub fn filter_nan_infinite(ax_vals: &[f64]) -> DVector<f64> {
     DVector::from(
         ax_vals
             .iter()
