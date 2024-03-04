@@ -121,6 +121,7 @@ impl WaveFrontErrorMap {
             })
         }
     }
+    /// Note: RMS calculation is performed from wavefront data - avg. OPD !!! (compatible with ZEMAX)
     fn calc_wavefront_statistics(wf_dat: &DVector<f64>) -> OpmResult<(f64, f64)> {
         if wf_dat.is_empty() {
             Err(OpossumError::Other("Empty wavefront-data vector!".into()))
@@ -128,11 +129,13 @@ impl WaveFrontErrorMap {
             let max = wf_dat.max();
             let min = wf_dat.min();
             let ptv = max - min;
-
+            #[allow(clippy::cast_precision_loss)]
+            let avg = wf_dat.sum() / wf_dat.len() as f64;
+            // let avg=0.0;
             let rms = f64::sqrt(
                 wf_dat
                     .iter()
-                    .map(|l| l.powi(2))
+                    .map(|l| (l - avg) * (l - avg))
                     .collect::<Vec<f64>>()
                     .iter()
                     .sum::<f64>()
@@ -328,5 +331,30 @@ impl Plottable for WaveFrontErrorMap {
             DVector::from_vec(self.wf_map.clone()),
         ]));
         Ok(self.bin_or_triangulate_data(plt_type, &plt_data))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{ray::Ray, rays::Rays};
+    use approx::assert_abs_diff_eq;
+    use nalgebra::Point3;
+    use uom::si::{energy::joule, f64::Energy};
+    #[test]
+    fn calc_wavefront_statistics() {
+        let wvl = Length::new::<nanometer>(1000.);
+        let en = Energy::new::<joule>(1.);
+
+        let mut rays = Rays::default();
+        let ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
+        rays.add_ray(ray);
+        let mut ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
+        ray.propagate_along_z(wvl).unwrap(); // generate a path difference of 1 lambda
+        rays.add_ray(ray);
+        let wavefront_error = rays.wavefront_error_at_pos_in_units_of_wvl(wvl);
+        let wvf_map = WaveFrontErrorMap::new(&wavefront_error, wvl).unwrap();
+        assert_eq!(wvf_map.ptv, 1.0);
+        assert_abs_diff_eq!(wvf_map.rms, 0.5);
     }
 }

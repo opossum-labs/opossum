@@ -282,7 +282,6 @@ impl Rays {
             })
         }
     }
-
     /// Calculates the wavefront error of a ray bundle with a specified wavelength at a certain position along the optical axis in the optical system
     /// # Attributes
     /// - `wavelength`: wave length that is used for this wavefront calculation
