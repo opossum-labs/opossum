@@ -13,7 +13,7 @@ keywords = ["laser", "optics", "physics", "simulation"]
 categories = ["science", "simulation"]
 publish = true
 build = "build.rs"
-readme = "README.md"
+readme = "../README.md"
 
 [package.metadata.wix]
 upgrade-guid = "6A79F3B1-0417-472C-8C99-F1ADB17DE27D"
