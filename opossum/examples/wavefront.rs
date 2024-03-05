@@ -1,7 +1,7 @@
 use opossum::{
     error::OpmResult,
     nodes::{
-        create_collimated_ray_source, ParaxialSurface, Propagation, RayPropagationVisualizer,
+        create_round_collimated_ray_source, ParaxialSurface, Propagation, RayPropagationVisualizer,
         Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
     },
     OpticScenery,
@@ -15,8 +15,11 @@ use uom::si::{
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Wavefont Demo")?;
-    let source =
-        create_collimated_ray_source(Length::new::<meter>(5e-3), Energy::new::<joule>(1.), 15)?;
+    let source = create_round_collimated_ray_source(
+        Length::new::<meter>(5e-3),
+        Energy::new::<joule>(1.),
+        15,
+    )?;
     let i_s = scenery.add_node(source);
     let i_p1 = scenery.add_node(Propagation::new("propagation", Length::new::<meter>(0.1))?);
     // let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));

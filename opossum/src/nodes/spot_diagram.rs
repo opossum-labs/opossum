@@ -8,6 +8,7 @@ use crate::lightdata::LightData;
 use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
+use crate::surface::Plane;
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -76,14 +77,25 @@ impl Optical for SpotDiagram {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.properties().inverted()? {
+        let (inport, outport) = if self.properties().inverted()? {
             ("out1", "in1")
         } else {
             ("in1", "out1")
         };
-        let data = incoming_data.get(src).unwrap_or(&None);
-        self.light_data = data.clone();
-        Ok(HashMap::from([(target.into(), data.clone())]))
+        let data = incoming_data.get(inport).unwrap_or(&None);
+        if let Some(LightData::Geometric(rays)) = data {
+            let mut rays = rays.clone();
+            let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+            let plane = Plane::new(z_position)?;
+            rays.refract_on_surface(&plane, 1.0)?;
+            self.light_data = Some(LightData::Geometric(rays.clone()));
+            Ok(HashMap::from([(
+                outport.into(),
+                Some(LightData::Geometric(rays)),
+            )]))
+        } else {
+            Ok(HashMap::from([(outport.into(), data.clone())]))
+        }
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if self.light_data.is_some() {
@@ -204,7 +216,7 @@ impl Plottable for SpotDiagram {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::distribution::DistributionStrategy;
+    use crate::distributions::Hexapolar;
     use crate::{
         analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays,
         spectrum_helper::create_he_ne_spec,
@@ -326,10 +338,9 @@ mod test {
         assert!(node_report.properties().contains("Spot diagram"));
         sd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::zero(),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
-                &DistributionStrategy::Hexapolar(1),
+                &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
         ));

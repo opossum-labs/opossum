@@ -41,7 +41,7 @@ plotters = "0.3.5"
 approx = "0" # assert macros for comparison of floats with tolerance
 clap = { version = "4", features = ["derive", "string"] } # command line argument parser
 rprompt = "2.0"
-strum = { version = "0.25.0", features = ["derive"] }
+strum = { version = "0.26", features = ["derive"] }
 
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
 
@@ -58,9 +58,7 @@ itertools = "0.12.0"
 nalgebra = "0.30"
 ncollide2d = { version = "0.33.0", features = ["serde-serialize"] }
 colorous = "1.0.12"
-strum_macros = "0.25.3"
-plotters-backend = "0.3.5"
-plotters-bitmap = "0.3.3"
+strum_macros = "0.26"
 delaunator = "1.0.2"
 num = "0.4.1"
 kahan = "0"
@@ -69,6 +67,9 @@ env_logger= "0"
 roots = "0"
 rayon = "1.8.1"
 voronator = "0.2.1"
+
+[lints.rust]
+# missing_docs = "warn"
 
 [features]
 doc-images = []

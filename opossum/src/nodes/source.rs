@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 use crate::{
-    distribution::DistributionStrategy,
+    distributions::{Grid, Hexapolar},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -24,16 +24,33 @@ use uom::si::{
 /// # Errors
 /// This functions returns an error if
 ///  - the given energy is < 0.0, Nan, or +inf.
-pub fn create_collimated_ray_source(
+pub fn create_round_collimated_ray_source(
     radius: Length,
     energy: Energy,
-    num_rings: u8,
+    nr_of_rings: u8,
 ) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
-        radius,
-        Length::new::<nanometer>(1053.0),
+        Length::new::<nanometer>(1000.0),
         energy,
-        &DistributionStrategy::Hexapolar(num_rings),
+        &Hexapolar::new(radius, nr_of_rings)?,
+    )?;
+    let light = LightData::Geometric(rays);
+    Ok(Source::new("collimated ray source", &light))
+}
+/// Create [`Source`] containing a line of rays along the y axis.
+///
+/// # Errors
+///
+/// This function will return an error if .
+pub fn create_line_collimated_ray_source(
+    size_y: Length,
+    energy: Energy,
+    nr_of_points_y: usize,
+) -> OpmResult<Source> {
+    let rays = Rays::new_uniform_collimated(
+        Length::new::<nanometer>(1000.0),
+        energy,
+        &Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?,
     )?;
     let light = LightData::Geometric(rays);
     Ok(Source::new("collimated ray source", &light))
@@ -51,7 +68,7 @@ pub fn create_point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<S
         Point3::new(Length::zero(), Length::zero(), Length::zero()),
         cone_angle,
         3,
-        Length::new::<nanometer>(1053.0),
+        Length::new::<nanometer>(1000.0),
         energy,
     )?;
     let light = LightData::Geometric(rays);
@@ -204,32 +221,32 @@ mod test {
     use uom::si::{angle::degree, energy::joule, length::millimeter};
     #[test]
     fn test_create_collimated_ray_source() {
-        assert!(create_collimated_ray_source(
+        assert!(create_round_collimated_ray_source(
             Length::new::<millimeter>(1.0),
             Energy::new::<joule>(-0.1),
             3
         )
         .is_err());
-        assert!(create_collimated_ray_source(
+        assert!(create_round_collimated_ray_source(
             Length::new::<millimeter>(1.0),
             Energy::new::<joule>(f64::NAN),
             3
         )
         .is_err());
-        assert!(create_collimated_ray_source(
+        assert!(create_round_collimated_ray_source(
             Length::new::<millimeter>(1.0),
             Energy::new::<joule>(f64::INFINITY),
             3
         )
         .is_err());
-        assert!(create_collimated_ray_source(
+        assert!(create_round_collimated_ray_source(
             Length::new::<millimeter>(-0.1),
             Energy::new::<joule>(1.0),
             3
         )
         .is_err());
-        let src =
-            create_collimated_ray_source(Length::zero(), Energy::new::<joule>(1.0), 3).unwrap();
+        let src = create_round_collimated_ray_source(Length::zero(), Energy::new::<joule>(1.0), 3)
+            .unwrap();
         if let Proptype::LightData(light_data) = src.properties().get("light data").unwrap() {
             if let Some(LightData::Geometric(rays)) = light_data {
                 assert_eq!(rays.nr_of_rays(), 1);
@@ -244,7 +261,7 @@ mod test {
         } else {
             panic!("property light data has wrong type");
         }
-        let src = create_collimated_ray_source(
+        let src = create_round_collimated_ray_source(
             Length::new::<millimeter>(1.0),
             Energy::new::<joule>(1.0),
             3,

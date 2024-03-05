@@ -1,7 +1,7 @@
 use nalgebra::{Point2, Point3, Vector3};
 use num::Zero;
 use opossum::{
-    distribution::DistributionStrategy,
+    distributions::Hexapolar,
     error::OpmResult,
     nodes::WaveFrontErrorMap,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType},
@@ -18,68 +18,18 @@ use uom::si::{
 
 fn main() -> OpmResult<()> {
     let mut rays = Rays::new_uniform_collimated(
-        Length::new::<millimeter>(10.),
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
-        &DistributionStrategy::FibonacciSquare(1000),
+        &Hexapolar::new(Length::new::<millimeter>(10.), 5)?,
     )?;
-
-    // let points = vec![Point2::new(0., 0.), Point2::new(1., 0.),Point2::new(1., 1.)];
-    // let area = rays.calc_closed_poly_area(points);
-
-    // println!("{area}");
-    // return Ok(());
-
-    let mut ray1 = Ray::new(
-        Point3::new(
-            Length::new::<centimeter>(0.),
-            Length::zero(),
-            Length::zero(),
-        ),
-        Vector3::new(0., 0., 1.),
-        Length::new::<nanometer>(1053.),
-        Energy::new::<joule>(1.),
-    )?;
-    let mut ray2 = Ray::new(
-        Point3::new(
-            Length::new::<centimeter>(5.),
-            Length::zero(),
-            Length::zero(),
-        ),
-        Vector3::new(0., 1., 1.),
-        Length::new::<nanometer>(1053.),
-        Energy::new::<joule>(1.),
-    )?;
-    // let ray3 = Ray::new(
-    //     Point3::new( Length::new::<centimeter>(0.), Length::new::<centimeter>(5.), Length::zero()),
-    //     Vector3::new(0.,0.,1.),
-    //     Length::new::<nanometer>(1053.),
-    //     Energy::new::<joule>(1.))?;
-
-    //     let ray4 = Ray::new(
-    //         Point3::new( Length::new::<centimeter>(5.), Length::new::<centimeter>(5.), Length::zero()),
-    //         Vector3::new(0.,0.,1.),
-    //         Length::new::<nanometer>(1053.),
-    //         Energy::new::<joule>(1.))?;
-
-    //         let ray5 = Ray::new(
-    //             Point3::new( Length::new::<centimeter>(2.5), Length::new::<centimeter>(2.5), Length::zero()),
-    //             Vector3::new(0.,0.,1.),
-    //             Length::new::<nanometer>(1053.),
-    //             Energy::new::<joule>(1.))?;
-
-    // let mut rays = Rays::from(vec![ray1, ray2]);
-    // rays.propagate_along_z(Length::new::<millimeter>(10.));
-
-    // WaveFrontErrorMap::new(rays.wavefront_error_at_pos_in_units_of_wvl(), wavelength)
-
-    // println!("{}", ray1.path_length().get::<millimeter>());
-    // println!("{}", ray2.path_length().get::<millimeter>());
-
-    // rays.refract_paraxial(Length::new::<millimeter>(10.))?;
-    // rays.propagate_along_z(Length::new::<millimeter>(30.))?;
-    // rays.refract_paraxial(Length::new::<millimeter>(20.))?;
-    // rays.propagate_along_z(Length::new::<millimeter>(10.))?;
+    rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+    rays.propagate_along_z()?;
+    rays.refract_paraxial(Length::new::<millimeter>(10.))?;
+    rays.set_dist_to_next_surface(Length::new::<millimeter>(30.));
+    rays.propagate_along_z()?;
+    rays.refract_paraxial(Length::new::<millimeter>(20.))?;
+    rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+    rays.propagate_along_z()?;
 
     let mut plt_params = PlotParameters::default();
     plt_params

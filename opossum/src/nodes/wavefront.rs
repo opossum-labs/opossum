@@ -14,6 +14,7 @@ use crate::plottable::{
 };
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
+use crate::surface::Plane;
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -120,6 +121,7 @@ impl WaveFrontErrorMap {
             })
         }
     }
+    /// Note: RMS calculation is performed from wavefront data - avg. OPD !!! (compatible with ZEMAX)
     fn calc_wavefront_statistics(wf_dat: &DVector<f64>) -> OpmResult<(f64, f64)> {
         if wf_dat.is_empty() {
             Err(OpossumError::Other("Empty wavefront-data vector!".into()))
@@ -127,17 +129,19 @@ impl WaveFrontErrorMap {
             let max = wf_dat.max();
             let min = wf_dat.min();
             let ptv = max - min;
-
+            #[allow(clippy::cast_precision_loss)]
+            let avg = wf_dat.sum() / wf_dat.len() as f64;
+            // let avg=0.0;
             let rms = f64::sqrt(
                 wf_dat
                     .iter()
-                    .map(|l| l.powi(2))
+                    .map(|l| (l - avg) * (l - avg))
                     .collect::<Vec<f64>>()
                     .iter()
                     .sum::<f64>()
                     / f64::from(i32::try_from(wf_dat.len()).unwrap()),
             );
-            Ok((rms * 1000., ptv * 1000.))
+            Ok((ptv, rms))
         }
     }
 }
@@ -166,14 +170,25 @@ impl Optical for WaveFront {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.properties().inverted()? {
+        let (inport, outport) = if self.properties().inverted()? {
             ("out1", "in1")
         } else {
             ("in1", "out1")
         };
-        let data = incoming_data.get(src).unwrap_or(&None);
-        self.light_data = data.clone();
-        Ok(HashMap::from([(target.into(), data.clone())]))
+        let data = incoming_data.get(inport).unwrap_or(&None);
+        if let Some(LightData::Geometric(rays)) = data {
+            let mut rays = rays.clone();
+            let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+            let plane = Plane::new(z_position)?;
+            rays.refract_on_surface(&plane, 1.0)?;
+            self.light_data = Some(LightData::Geometric(rays.clone()));
+            Ok(HashMap::from([(
+                outport.into(),
+                Some(LightData::Geometric(rays)),
+            )]))
+        } else {
+            Ok(HashMap::from([(outport.into(), data.clone())]))
+        }
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(LightData::Geometric(rays)) = &self.light_data {
@@ -249,11 +264,11 @@ impl PdfReportable for WaveFrontData {
         let mut layout = genpdf::elements::LinearLayout::vertical();
 
         layout.push(genpdf::elements::Paragraph::new(format!(
-            "ptv: {:.1} mλ",
+            "ptv: {:.4} λ",
             self.wavefront_error_maps[0].ptv
         )));
         layout.push(genpdf::elements::Paragraph::new(format!(
-            "rms: {:.1} mλ",
+            "rms: {:.4} λ",
             self.wavefront_error_maps[0].rms
         )));
         //todo! for all wavefronts!
@@ -316,5 +331,30 @@ impl Plottable for WaveFrontErrorMap {
             DVector::from_vec(self.wf_map.clone()),
         ]));
         Ok(self.bin_or_triangulate_data(plt_type, &plt_data))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{ray::Ray, rays::Rays};
+    use approx::assert_abs_diff_eq;
+    use nalgebra::Point3;
+    use uom::si::{energy::joule, f64::Energy};
+    #[test]
+    fn calc_wavefront_statistics() {
+        let wvl = Length::new::<nanometer>(1000.);
+        let en = Energy::new::<joule>(1.);
+
+        let mut rays = Rays::default();
+        let ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
+        rays.add_ray(ray);
+        let mut ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
+        ray.propagate_along_z(wvl).unwrap(); // generate a path difference of 1 lambda
+        rays.add_ray(ray);
+        let wavefront_error = rays.wavefront_error_at_pos_in_units_of_wvl(wvl);
+        let wvf_map = WaveFrontErrorMap::new(&wavefront_error, wvl).unwrap();
+        assert_eq!(wvf_map.ptv, 1.0);
+        assert_abs_diff_eq!(wvf_map.rms, 0.5);
     }
 }

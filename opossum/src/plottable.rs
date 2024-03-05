@@ -438,7 +438,7 @@ impl PlotType {
                     &mut chart,
                     &line_dat.column(0),
                     &line_dat.column(1),
-                    &RGBAColor(255, 0, 0, 0.3),
+                    &RGBAColor(255, 0, 0, 1.0),
                 );
             }
         }

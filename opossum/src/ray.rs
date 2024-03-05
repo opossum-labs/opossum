@@ -89,9 +89,8 @@ impl Ray {
         if direction.norm().is_zero() {
             return Err(OpossumError::Other("length of direction must be >0".into()));
         }
-        let init_pos = Point3::new(position.x, position.y, Length::zero());
         Ok(Self {
-            pos: init_pos,
+            pos: position,
             pos_hist: Vec::<Point3<Length>>::with_capacity(50),
             dir: direction.normalize(),
             //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
@@ -207,10 +206,7 @@ impl Ray {
             length_in_ray_dir * self.dir.y,
             length_in_ray_dir * self.dir.z,
         );
-
-        let normalized_dir = self.dir.normalize();
-        let length_in_ray_dir = length_along_z.get::<millimeter>() / normalized_dir[2];
-        self.path_length += Length::new::<millimeter>(length_in_ray_dir) * self.refractive_index;
+        self.path_length += length_in_ray_dir * self.refractive_index * self.dir.norm();
         Ok(())
     }
     /// Refract a ray on a paraxial surface of a given focal length.
@@ -227,9 +223,10 @@ impl Ray {
             ));
         }
         let optical_power = 1.0 / focal_length;
-        self.dir.x = optical_power.value.mul_add(-self.pos.x.value, self.dir.x);
-        self.dir.y = optical_power.value.mul_add(-self.pos.y.value, self.dir.y);
-        self.dir.z = 1.0;
+        self.dir /= self.dir.z;
+        self.dir.x -= (optical_power * self.pos.x).value;
+        self.dir.y -= (optical_power * self.pos.y).value;
+
         // correct path length
         let r_square = self
             .pos
@@ -237,7 +234,7 @@ impl Ray {
             .value
             .mul_add(self.pos.x.value, self.pos.y.value * self.pos.y.value);
         let f_square = (focal_length * focal_length).value;
-        self.path_length -= Length::new::<meter>((r_square + f_square).sqrt()) - focal_length;
+        self.path_length -= Length::new::<meter>((r_square + f_square).sqrt()) - focal_length.abs();
         Ok(())
     }
     /// Refract the [`Ray`] on a given [`Surface`] using Snellius' law.
@@ -275,6 +272,10 @@ impl Ray {
             let n = surface_normal.normalize();
             let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
             let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
+            let pos_in_m = self.pos.map(|c| c.value);
+            let intersection_in_m = intersection_point.map(|c| c.value);
+            self.path_length +=
+                self.refractive_index * Length::new::<meter>((pos_in_m - intersection_in_m).norm());
             self.pos_hist.push(self.pos);
             self.pos = intersection_point;
             // check, if total reflection
@@ -282,6 +283,7 @@ impl Ray {
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
                     - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
                 self.dir = refract_dir;
+                self.refractive_index = n2;
                 Ok(Some(reflected_dir))
             } else {
                 self.dir = reflected_dir;
@@ -386,7 +388,7 @@ mod test {
         let pos = Point3::new(
             Length::new::<millimeter>(1.0),
             Length::new::<millimeter>(2.0),
-            Length::new::<millimeter>(0.0),
+            Length::new::<millimeter>(3.0),
         );
         let dir = Vector3::new(0.0, 0.0, 2.0);
         let e = Energy::new::<joule>(1.0);
@@ -395,14 +397,7 @@ mod test {
         assert!(ray.is_ok());
         let ray = ray.unwrap();
         assert_eq!(ray.pos, pos);
-        assert_eq!(
-            ray.position(),
-            Point3::new(
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(2.0),
-                Length::zero()
-            )
-        );
+        assert_eq!(ray.position(), pos);
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.wvl, wvl);
         assert_eq!(ray.wavelength(), wvl);
@@ -649,25 +644,15 @@ mod test {
         assert_eq!(ray.path_length(), Length::new::<millimeter>(2.0));
     }
     #[test]
-    fn refract_paraxial() {
+    fn refract_paraxial_wrong_params() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let e = Energy::new::<joule>(1.0);
         let mut ray = Ray::new_collimated(
             Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
+            wvl,
+            e,
         )
         .unwrap();
-        let ray_dir = ray.dir;
-        let ray_pos = ray.pos;
-
-        let mut refracted_ray = ray.clone();
-        refracted_ray
-            .refract_paraxial(Length::new::<millimeter>(100.0))
-            .unwrap();
-        assert_eq!(refracted_ray.pos, ray.pos);
-        assert_eq!(refracted_ray.dir, ray.dir);
-        assert_eq!(refracted_ray.e, ray.e);
-        assert_eq!(refracted_ray.path_length, ray.path_length);
-
         assert!(ray
             .refract_paraxial(Length::new::<millimeter>(0.0))
             .is_err());
@@ -680,65 +665,119 @@ mod test {
         assert!(ray
             .refract_paraxial(Length::new::<millimeter>(f64::NEG_INFINITY))
             .is_err());
-        let _ = ray.refract_paraxial(Length::new::<millimeter>(-100.0));
-        assert_eq!(ray.pos, ray_pos);
-        assert_eq!(ray.dir, ray_dir);
-        let mut ray = Ray::new_collimated(
-            Point3::new(
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(2.0),
-                Length::new::<millimeter>(0.0),
-            ),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
-        let ray_pos = ray.pos;
-        let _ = ray.refract_paraxial(Length::new::<millimeter>(100.0));
-        assert_eq!(ray.pos, ray_pos);
+    }
+    #[test]
+    fn refract_paraxial_on_axis() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let e = Energy::new::<joule>(1.0);
+        let pos: Point3<Length> = Point3::origin();
+        let ray = Ray::new_collimated(pos, wvl, e).unwrap();
+        let ray_dir = ray.dir;
+        let mut refracted_ray = ray.clone();
+        refracted_ray
+            .refract_paraxial(Length::new::<millimeter>(100.0))
+            .unwrap();
+        assert_eq!(refracted_ray.pos, pos);
+        assert_eq!(refracted_ray.dir, ray.dir);
+        assert_eq!(refracted_ray.e, e);
+        assert_eq!(refracted_ray.wvl, wvl);
+        assert_eq!(refracted_ray.path_length, Length::zero());
 
+        let mut refracted_ray = ray.clone();
+        refracted_ray
+            .refract_paraxial(Length::new::<millimeter>(-100.0))
+            .unwrap();
+        assert_eq!(refracted_ray.pos, pos);
+        assert_eq!(refracted_ray.dir, ray_dir);
+        assert_eq!(refracted_ray.e, e);
+        assert_eq!(refracted_ray.wvl, wvl);
+        assert_eq!(refracted_ray.path_length, Length::zero());
+    }
+    #[test]
+    fn refract_paraxial_collimated() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let e = Energy::new::<joule>(1.0);
+        let pos = Point3::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(2.0),
+            Length::new::<millimeter>(0.0),
+        );
+
+        let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
+        ray.refract_paraxial(Length::new::<millimeter>(100.0))
+            .unwrap();
+        assert_eq!(ray.pos, pos);
         let test_ray_dir = Vector3::new(-1.0, -2.0, 100.0) / 100.0;
         assert_abs_diff_eq!(ray.dir.x, test_ray_dir.x);
         assert_abs_diff_eq!(ray.dir.y, test_ray_dir.y);
         assert_abs_diff_eq!(ray.dir.z, test_ray_dir.z);
-        let _ = ray.refract_paraxial(Length::new::<millimeter>(-100.0));
-        assert_eq!(ray.pos, ray_pos);
-        let _ = ray.refract_paraxial(Length::new::<millimeter>(-100.0));
 
+        let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
+        ray.refract_paraxial(Length::new::<millimeter>(-100.0))
+            .unwrap();
+        assert_eq!(ray.pos, pos);
         let test_ray_dir = Vector3::new(1.0, 2.0, 100.0) / 100.0;
         assert_abs_diff_eq!(ray.dir.x, test_ray_dir.x);
         assert_abs_diff_eq!(ray.dir.y, test_ray_dir.y);
         assert_abs_diff_eq!(ray.dir.z, test_ray_dir.z);
 
-        let mut ray = Ray::new(
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(10.0),
-                Length::zero(),
-            ),
-            Vector3::z(),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
-        let _ = ray.refract_paraxial(Length::new::<millimeter>(10.0));
+        let pos = Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(10.0),
+            Length::zero(),
+        );
+        let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
+        ray.refract_paraxial(Length::new::<millimeter>(10.0))
+            .unwrap();
         assert_abs_diff_eq!(
             ray.path_length.get::<millimeter>(),
             -1.0 * (f64::sqrt(200.0) - 10.0),
             epsilon = 10.0 * f64::EPSILON
         );
+        let pos = Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(100.0),
+            Length::zero(),
+        );
+        let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
+        ray.refract_paraxial(Length::new::<millimeter>(100.0))
+            .unwrap();
+        assert_eq!(ray.pos, pos);
+        let test_ray_dir = Vector3::new(0.0, -100.0, 100.0) / 100.0;
+        assert_abs_diff_eq!(ray.dir, test_ray_dir);
+    }
+    #[test]
+    fn refract_paraxial_recollimate() {
+        let wvl = Length::new::<nanometer>(1053.0);
+        let e = Energy::new::<joule>(1.0);
+        let pos = Point3::new(
+            Length::zero(),
+            Length::new::<millimeter>(100.0),
+            Length::new::<millimeter>(100.0),
+        );
+        let dir = Vector3::new(0.0, 1.0, 1.0);
+        let mut ray = Ray::new(pos, dir, wvl, e).unwrap();
+
+        ray.refract_paraxial(Length::new::<millimeter>(100.0))
+            .unwrap();
+        assert_eq!(ray.pos, pos);
+        assert_eq!(ray.dir, Vector3::z());
+
+        let dir = Vector3::new(0.0, -1.0, 1.0);
+        let mut ray = Ray::new(pos, dir, wvl, e).unwrap();
+        ray.refract_paraxial(Length::new::<millimeter>(-100.0))
+            .unwrap();
+        assert_eq!(ray.pos, pos);
+        assert_eq!(ray.dir, Vector3::z());
     }
     #[test]
     fn refract_on_plane_collimated() {
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(0.0),
-            Length::zero(),
-        );
+        let position = Point3::origin();
         let wvl = Length::new::<nanometer>(1054.0);
         let e = Energy::new::<joule>(1.0);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
-        let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let plane_z_pos = Length::new::<millimeter>(10.0);
+        let s = Plane::new(plane_z_pos).unwrap();
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -751,11 +790,10 @@ mod test {
                 Length::new::<millimeter>(10.0)
             )
         );
+        assert_eq!(ray.refractive_index, 1.5);
         assert_eq!(ray.dir, Vector3::z());
-        assert_eq!(
-            ray.pos_hist,
-            vec![Point3::new(Length::zero(), Length::zero(), Length::zero())]
-        );
+        assert_eq!(ray.pos_hist, vec![Point3::origin()]);
+        assert_eq!(ray.path_length(), plane_z_pos);
         let position = Point3::new(
             Length::zero(),
             Length::new::<millimeter>(1.0),
@@ -772,6 +810,7 @@ mod test {
             )
         );
         assert_eq!(ray.dir, Vector3::z());
+        assert_eq!(ray.path_length, plane_z_pos);
     }
     #[test]
     fn refract_on_surface_non_intersecting() {
@@ -791,19 +830,18 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), Length::zero())
         );
         assert_eq!(ray.dir, direction);
+        assert_eq!(ray.refractive_index, 1.0);
+        assert_eq!(ray.path_length, Length::zero());
     }
     #[test]
     fn refract_on_plane_non_collimated() {
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(0.0),
-            Length::zero(),
-        );
+        let position = Point3::origin();
         let direction = Vector3::new(0.0, 1.0, 1.0);
         let wvl = Length::new::<nanometer>(1054.0);
         let e = Energy::new::<joule>(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let plane_z_pos = Length::new::<millimeter>(10.0);
+        let s = Plane::new(plane_z_pos).unwrap();
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -819,6 +857,7 @@ mod test {
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
         assert_abs_diff_eq!(ray.dir[2], direction.normalize()[2]);
+        assert_abs_diff_eq!(ray.path_length.value, 2.0_f64.sqrt() * plane_z_pos.value);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
         assert_eq!(
