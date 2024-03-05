@@ -379,9 +379,9 @@ impl Ray {
     pub const fn valid(&self) -> bool {
         self.valid
     }
-    /// Sets the validity of this [`Ray`].
-    pub fn set_valid(&mut self, valid: bool) {
-        self.valid = valid;
+    /// Invalidates this [`Ray`].
+    pub fn set_invalid(&mut self) {
+        self.valid = false;
     }
 }
 #[cfg(test)]
@@ -419,6 +419,7 @@ mod test {
         assert_eq!(ray.path_length, Length::zero());
         assert_eq!(ray.refractive_index, 1.0);
         assert_eq!(ray.pos_hist.len(), 0);
+        assert_eq!(ray.valid, true);
         assert!(Ray::new(pos, dir, Length::new::<nanometer>(0.0), e).is_err());
         assert!(Ray::new(pos, dir, Length::new::<nanometer>(-10.0), e).is_err());
         assert!(Ray::new(pos, dir, Length::new::<nanometer>(f64::NAN), e).is_err());
@@ -447,6 +448,7 @@ mod test {
         assert_eq!(ray.e, e);
         assert_eq!(ray.path_length, Length::zero());
         assert_eq!(ray.pos_hist.len(), 0);
+        assert_eq!(ray.valid, true);
         assert!(Ray::new_collimated(pos, Length::new::<nanometer>(0.0), e).is_err());
         assert!(Ray::new_collimated(pos, Length::new::<nanometer>(-10.0), e).is_err());
         assert!(Ray::new_collimated(pos, Length::new::<nanometer>(f64::NAN), e).is_err());
@@ -457,6 +459,33 @@ mod test {
         assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(f64::NAN)).is_err());
         assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(f64::INFINITY)).is_err());
         assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(f64::NEG_INFINITY)).is_err());
+    }
+    #[test]
+    fn valid() {
+        let pos = Point3::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(2.0),
+            Length::new::<millimeter>(0.0),
+        );
+        let wvl = Length::new::<nanometer>(1053.0);
+        let e = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
+        assert_eq!(ray.valid(), true);
+        ray.valid = false;
+        assert_eq!(ray.valid(), false);
+    }
+    #[test]
+    fn set_valid() {
+        let pos = Point3::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(2.0),
+            Length::new::<millimeter>(0.0),
+        );
+        let wvl = Length::new::<nanometer>(1053.0);
+        let e = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
+        ray.set_invalid();
+        assert_eq!(ray.valid(), false);
     }
     #[test]
     fn refractive_index() {
