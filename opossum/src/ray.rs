@@ -58,8 +58,8 @@ pub struct Ray {
     wvl: Length,
     // ///Bounce count of the ray. Necessary to check if the maximum number of bounces is reached
     // bounce: usize,
-    // //True if ray is allowd to further propagate, false else
-    // //valid:  bool,
+    /// True if ray is allowd to further propagate, false else
+    valid: bool,
     path_length: Length,
     // refractive index of the medium this ray is propagatin in.
     refractive_index: f64,
@@ -98,6 +98,7 @@ impl Ray {
             wvl: wave_length,
             path_length: Length::zero(),
             refractive_index: 1.0,
+            valid: true,
         })
     }
     /// Create a new collimated ray.
@@ -370,6 +371,18 @@ impl Ray {
         split_ray.e *= 1.0 - splitting_ratio;
         Ok(split_ray)
     }
+    /// Returns the validity of this [`Ray`].
+    ///
+    /// The `valid` status denotes, if a [`Ray`] should be further propagated thorugh a system. A [`Ray`] is set to invalid if e.g.
+    /// its energy is below a given energy threshold or missed an optical surface.
+    #[must_use]
+    pub const fn valid(&self) -> bool {
+        self.valid
+    }
+    /// Invalidates this [`Ray`].
+    pub fn set_invalid(&mut self) {
+        self.valid = false;
+    }
 }
 #[cfg(test)]
 mod test {
@@ -406,6 +419,7 @@ mod test {
         assert_eq!(ray.path_length, Length::zero());
         assert_eq!(ray.refractive_index, 1.0);
         assert_eq!(ray.pos_hist.len(), 0);
+        assert_eq!(ray.valid, true);
         assert!(Ray::new(pos, dir, Length::new::<nanometer>(0.0), e).is_err());
         assert!(Ray::new(pos, dir, Length::new::<nanometer>(-10.0), e).is_err());
         assert!(Ray::new(pos, dir, Length::new::<nanometer>(f64::NAN), e).is_err());
@@ -434,6 +448,7 @@ mod test {
         assert_eq!(ray.e, e);
         assert_eq!(ray.path_length, Length::zero());
         assert_eq!(ray.pos_hist.len(), 0);
+        assert_eq!(ray.valid, true);
         assert!(Ray::new_collimated(pos, Length::new::<nanometer>(0.0), e).is_err());
         assert!(Ray::new_collimated(pos, Length::new::<nanometer>(-10.0), e).is_err());
         assert!(Ray::new_collimated(pos, Length::new::<nanometer>(f64::NAN), e).is_err());
@@ -444,6 +459,33 @@ mod test {
         assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(f64::NAN)).is_err());
         assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(f64::INFINITY)).is_err());
         assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(f64::NEG_INFINITY)).is_err());
+    }
+    #[test]
+    fn valid() {
+        let pos = Point3::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(2.0),
+            Length::new::<millimeter>(0.0),
+        );
+        let wvl = Length::new::<nanometer>(1053.0);
+        let e = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
+        assert_eq!(ray.valid(), true);
+        ray.valid = false;
+        assert_eq!(ray.valid(), false);
+    }
+    #[test]
+    fn set_valid() {
+        let pos = Point3::new(
+            Length::new::<millimeter>(1.0),
+            Length::new::<millimeter>(2.0),
+            Length::new::<millimeter>(0.0),
+        );
+        let wvl = Length::new::<nanometer>(1053.0);
+        let e = Energy::new::<joule>(1.0);
+        let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
+        ray.set_invalid();
+        assert_eq!(ray.valid(), false);
     }
     #[test]
     fn refractive_index() {

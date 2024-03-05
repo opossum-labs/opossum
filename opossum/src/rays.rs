@@ -135,38 +135,48 @@ impl Rays {
     }
     /// Returns the total energy of this [`Rays`].
     ///
-    /// This simply sums up all energies of the individual rays.
+    /// This function returns the sum of all `valid` individual [`Ray`] energies.
     #[must_use]
     pub fn total_energy(&self) -> Energy {
         let energies: Vec<f64> = self
             .rays
             .iter()
+            .filter(|r| r.valid())
             .map(|r| r.energy().get::<joule>())
             .collect();
         let kahan_sum: kahan::KahanSum<f64> = energies.iter().kahan_sum();
         Energy::new::<joule>(kahan_sum.sum())
     }
     /// Returns the number of rays of this [`Rays`].
+    ///
+    /// The given switch determines wehther all [`Ray`]s or only `valid` [`Ray`]s will be counted.
     #[must_use]
-    pub fn nr_of_rays(&self) -> usize {
-        self.rays.len()
+    pub fn nr_of_rays(&self, valid_only: bool) -> usize {
+        if valid_only {
+            self.rays.iter().filter(|r| r.valid()).count()
+        } else {
+            self.rays.len()
+        }
     }
     /// Apodize (cut out or attenuate) the ray bundle by a given [`Aperture`].
     ///
+    /// This function only affects `valid` [`Ray`]s in the bundle.
     /// # Errors
     ///
     /// This function returns an error if a single ray cannot be propery apodized (e.g. filter factor outside (0.0..=1.0)).
     pub fn apodize(&mut self, aperture: &Aperture) -> OpmResult<()> {
         let mut new_rays: Vec<Ray> = Vec::new();
         for ray in &self.rays {
-            let pos = point![
-                ray.position().x.get::<millimeter>(),
-                ray.position().y.get::<millimeter>()
-            ];
-            let ap_factor = aperture.apodization_factor(&pos);
-            if ap_factor > 0.0 {
-                let new_ray = ray.filter_energy(&FilterType::Constant(ap_factor))?;
-                new_rays.push(new_ray);
+            if ray.valid() {
+                let pos = point![
+                    ray.position().x.get::<millimeter>(),
+                    ray.position().y.get::<millimeter>()
+                ];
+                let ap_factor = aperture.apodization_factor(&pos);
+                if ap_factor > 0.0 {
+                    let new_ray = ray.filter_energy(&FilterType::Constant(ap_factor))?;
+                    new_rays.push(new_ray);
+                }
             }
         }
         self.rays = new_rays;
@@ -174,39 +184,42 @@ impl Rays {
     }
     /// Returns the centroid of this [`Rays`].
     ///
-    /// This functions returns the centroid of the positions of this ray bundle. The function returns `None` if [`Rays`] is empty.
+    /// This functions returns the centroid of the positions (`valid` [`Ray`]s only) of this ray bundle. The
+    /// function returns `None` if [`Rays`] is empty.
     #[must_use]
     pub fn centroid(&self) -> Option<Point3<Length>> {
         #[allow(clippy::cast_precision_loss)]
-        let len = self.rays.len() as f64;
+        let len = self.nr_of_rays(true) as f64;
         if len == 0.0 {
             return None;
         }
-        let c = self
-            .rays
-            .iter()
-            .fold((Length::zero(), Length::zero(), Length::zero()), |c, r| {
+        let c = self.rays.iter().filter(|r| r.valid()).fold(
+            (Length::zero(), Length::zero(), Length::zero()),
+            |c, r| {
                 let pos = r.position();
                 (c.0 + pos.x, c.1 + pos.y, c.2 + pos.z)
-            });
+            },
+        );
         Some(Point3::new(c.0 / len, c.1 / len, c.2 / len))
     }
     /// Returns the geometric beam radius [`Rays`].
     ///
-    /// This function calculates the maximum distance of a ray bundle from its centroid.
+    /// This function calculates the maximum distance of a ray bundle (`valid` [`Ray`]s only ) from its centroid.
     #[must_use]
     pub fn beam_radius_geo(&self) -> Option<Length> {
         self.centroid().map(|c| {
             let c_in_millimeter = Point2::new(c.x.get::<millimeter>(), c.y.get::<millimeter>());
             let mut max_dist = 0.0;
             for ray in &self.rays {
-                let ray_2d = Point2::new(
-                    ray.position().x.get::<millimeter>(),
-                    ray.position().y.get::<millimeter>(),
-                );
-                let dist = distance(&ray_2d, &c_in_millimeter);
-                if dist > max_dist {
-                    max_dist = dist;
+                if ray.valid() {
+                    let ray_2d = Point2::new(
+                        ray.position().x.get::<millimeter>(),
+                        ray.position().y.get::<millimeter>(),
+                    );
+                    let dist = distance(&ray_2d, &c_in_millimeter);
+                    if dist > max_dist {
+                        max_dist = dist;
+                    }
                 }
             }
             Length::new::<millimeter>(max_dist)
@@ -222,14 +235,16 @@ impl Rays {
             let c_in_millimeter = Point2::new(c.x.get::<millimeter>(), c.y.get::<millimeter>());
             let mut sum_dist_sq = 0.0;
             for ray in &self.rays {
-                let ray_2d = Point2::new(
-                    ray.position().x.get::<millimeter>(),
-                    ray.position().y.get::<millimeter>(),
-                );
-                sum_dist_sq += distance(&ray_2d, &c_in_millimeter).powi(2);
+                if ray.valid() {
+                    let ray_2d = Point2::new(
+                        ray.position().x.get::<millimeter>(),
+                        ray.position().y.get::<millimeter>(),
+                    );
+                    sum_dist_sq += distance(&ray_2d, &c_in_millimeter).powi(2);
+                }
             }
             #[allow(clippy::cast_precision_loss)]
-            let nr_of_rays = self.rays.len() as f64;
+            let nr_of_rays = self.nr_of_rays(true) as f64;
             sum_dist_sq /= nr_of_rays;
             Length::new::<millimeter>(sum_dist_sq.sqrt())
         })
@@ -328,12 +343,16 @@ impl Rays {
     }
 
     /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx2<f64>]`.
+    ///
+    /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be retruned.
     #[must_use]
-    pub fn get_xy_rays_pos(&self) -> MatrixXx2<f64> {
+    pub fn get_xy_rays_pos(&self, valid_only: bool) -> MatrixXx2<f64> {
         let mut rays_at_pos = MatrixXx2::from_element(self.rays.len(), 0.);
         for (row, ray) in self.rays.iter().enumerate() {
-            rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
-            rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
+            if !valid_only || ray.valid() {
+                rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
+                rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
+            }
         }
         rays_at_pos
     }
@@ -436,10 +455,11 @@ impl Rays {
     pub fn add_rays(&mut self, rays: &mut Self) {
         self.rays.append(&mut rays.rays);
     }
-
     /// Propagate a ray bundle along the z axis.
     ///
-    /// The propagation length must be set with the function `set_dist_to_next_surface`.
+    /// This function propgatates all valid [`Ray`]s along the z axis. The propagation length must be
+    /// set with the function `set_dist_to_next_surface`.
+    ///
     /// # Errors
     /// This function returns an error if
     ///  - the z component of a ray direction is zero.
@@ -447,7 +467,9 @@ impl Rays {
     pub fn propagate_along_z(&mut self) -> OpmResult<()> {
         if !self.dist_to_next_surface.is_zero() {
             for ray in &mut self.rays {
-                ray.propagate_along_z(self.dist_to_next_surface)?;
+                if ray.valid() {
+                    ray.propagate_along_z(self.dist_to_next_surface)?;
+                }
             }
             self.z_position += self.dist_to_next_surface;
             self.set_dist_zero();
@@ -455,6 +477,8 @@ impl Rays {
         Ok(())
     }
     /// Refract a ray bundle on a paraxial surface of given focal length.
+    ///
+    /// This function refracts all valid [`Ray`]s.
     ///
     /// # Errors
     /// This function returns an error if
@@ -467,18 +491,24 @@ impl Rays {
             ));
         }
         for ray in &mut self.rays {
-            ray.refract_paraxial(focal_length)?;
+            if ray.valid() {
+                ray.refract_paraxial(focal_length)?;
+            }
         }
         Ok(())
     }
     /// Refract a ray bundle on a [`Surface`].
+    ///
+    /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
     /// # Errors
     ///
     /// This function will return an error if .
     pub fn refract_on_surface(&mut self, surface: &dyn Surface, n2: f64) -> OpmResult<()> {
         for ray in &mut self.rays {
-            ray.refract_on_surface(surface, n2)?;
+            if ray.valid() {
+                ray.refract_on_surface(surface, n2)?;
+            }
         }
         self.z_position += self.dist_to_next_surface;
         self.set_dist_zero();
@@ -486,7 +516,7 @@ impl Rays {
     }
     /// Filter a ray bundle by a given filter.
     ///
-    /// Filter the energy of of the rays by a given [`FilterType`].
+    /// Filter the energy of of all `valid` rays by a given [`FilterType`].
     /// # Errors
     ///
     /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the range `(0.0..=1.0)`.
@@ -499,13 +529,15 @@ impl Rays {
             }
         }
         for ray in &mut self.rays {
-            *ray = ray.filter_energy(filter)?;
+            if (*ray).valid() {
+                *ray = ray.filter_energy(filter)?;
+            }
         }
         Ok(())
     }
-    /// Remove rays below a given energy threshold.
+    /// Invalidate all [`Ray`]s below a given energy threshold.
     ///
-    /// Removes all rays with an energy (per ray) below the given threshold.
+    /// Sets all rays with an energy (per ray) below the given threshold to the `invalid` state.
     ///
     /// # Warnings
     ///
@@ -514,7 +546,7 @@ impl Rays {
     /// # Errors
     ///
     /// This function will return an error if the given energy threshold is not finite.
-    pub fn delete_by_threshold_energy(&mut self, min_energy_per_ray: Energy) -> OpmResult<()> {
+    pub fn invalidate_by_threshold_energy(&mut self, min_energy_per_ray: Energy) -> OpmResult<()> {
         if min_energy_per_ray.is_sign_negative() {
             warn!("negative threshold energy given. Ray bundle unmodified.");
             return Ok(());
@@ -524,12 +556,17 @@ impl Rays {
                 "threshold energy must be finite".into(),
             ));
         };
-        self.rays.retain(|ray| ray.energy() >= min_energy_per_ray);
+        let _ = self
+            .rays
+            .iter_mut()
+            .filter(|r| r.energy() < min_energy_per_ray)
+            .map(Ray::set_invalid)
+            .count();
         Ok(())
     }
     /// Returns the wavelength range of this [`Rays`].
     ///
-    /// This functions returns the minimum and maximum wavelength of the containing rays as `Range`. If [`Rays`] is empty, `None` is returned.
+    /// This functions returns the minimum and maximum wavelength of the containing `valid` rays as `Range`. If [`Rays`] is empty, `None` is returned.
     #[must_use]
     pub fn wavelength_range(&self) -> Option<Range<Length>> {
         if self.rays.is_empty() {
@@ -538,19 +575,22 @@ impl Rays {
         let mut min = Length::new::<millimeter>(f64::INFINITY);
         let mut max = Length::zero();
         for ray in &self.rays {
-            let w = ray.wavelength();
-            if w > max {
-                max = w;
-            }
-            if w < min {
-                min = w;
+            if ray.valid() {
+                let w = ray.wavelength();
+                if w > max {
+                    max = w;
+                }
+                if w < min {
+                    min = w;
+                }
             }
         }
         Some(min..max)
     }
     /// Create a [`Spectrum`] (with a given resolution) from a ray bundle.
     ///
-    /// This functions creates a spectrum by adding all individual rays from ray bundle with respect to their particular wavelength and energy.
+    /// This functions creates a spectrum by adding all individual `valid` rays from ray bundle with
+    /// respect to their particular wavelength and energy.
     ///
     /// # Errors
     ///
@@ -564,7 +604,9 @@ impl Rays {
         range.end += *resolution * 2.0; // add 2* resolution to be sure to have all rays included in the wavelength range...
         let mut spectrum = Spectrum::new(range, *resolution)?;
         for ray in &self.rays {
-            spectrum.add_single_peak(ray.wavelength(), ray.energy().get::<joule>())?;
+            if ray.valid() {
+                spectrum.add_single_peak(ray.wavelength(), ray.energy().get::<joule>())?;
+            }
         }
         Ok(spectrum)
     }
@@ -579,22 +621,31 @@ impl Rays {
                 "refractive index must be >=1.0 and finite".into(),
             ));
         }
-        for ray in &mut self.rays {
-            ray.set_refractive_index(refractive_index)?;
+        if self.nr_of_rays(true).is_zero() {
+            warn!("ray bundle contains no valid rays for setting the refractive index");
+        } else {
+            for ray in &mut self.rays {
+                if ray.valid() {
+                    ray.set_refractive_index(refractive_index)?;
+                }
+            }
         }
         Ok(())
     }
     /// Split a ray bundle
     ///
     /// This function splits a ray bundle determined by the given [`SplittingConfig`]. See [`split`](Ray::split) function for details.
+    /// **Note**: Only `valid`[`Ray`]s in the bunlde will be affected.
     /// # Errors
     ///
     /// This function will return an error if the underlying split function for a single ray returns an error.
     pub fn split(&mut self, config: &SplittingConfig) -> OpmResult<Self> {
         let mut split_rays = Self::default();
         for ray in &mut self.rays {
-            let split_ray = ray.split(config)?;
-            split_rays.add_ray(split_ray);
+            if ray.valid() {
+                let split_ray = ray.split(config)?;
+                split_rays.add_ray(split_ray);
+            }
         }
         Ok(split_rays)
     }
@@ -778,7 +829,7 @@ mod test {
     #[test]
     fn default() {
         let rays = Rays::default();
-        assert_eq!(rays.nr_of_rays(), 0);
+        assert_eq!(rays.nr_of_rays(false), 0);
     }
     #[test]
     fn new_uniform_collimated() {
@@ -788,7 +839,7 @@ mod test {
         let rays = Rays::new_uniform_collimated(wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();
-        assert_eq!(rays.rays.len(), 19);
+        assert_eq!(rays.nr_of_rays(true), 19);
         assert!(
             Energy::abs(rays.total_energy() - Energy::new::<joule>(1.0))
                 < Energy::new::<joule>(10.0 * f64::EPSILON)
@@ -802,7 +853,7 @@ mod test {
         let rays = Rays::new_uniform_collimated(wvl, energy, strategy);
         assert!(rays.is_ok());
         let rays = rays.unwrap();
-        assert_eq!(rays.rays.len(), 1);
+        assert_eq!(rays.nr_of_rays(true), 1);
         assert_eq!(
             rays.rays[0].position(),
             Point3::new(Length::zero(), Length::zero(), Length::zero())
@@ -876,7 +927,7 @@ mod test {
             Energy::new::<joule>(1.0),
         )
         .unwrap();
-        assert_eq!(rays.nr_of_rays(), 1);
+        assert_eq!(rays.nr_of_rays(false), 1);
         assert_eq!(
             rays.rays[0].position(),
             Point3::new(position.x, position.y, Length::zero())
@@ -886,7 +937,7 @@ mod test {
     #[test]
     fn add_ray() {
         let mut rays = Rays::default();
-        assert_eq!(rays.rays.len(), 0);
+        assert_eq!(rays.nr_of_rays(false), 0);
         let ray = Ray::new_collimated(
             Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
@@ -894,12 +945,12 @@ mod test {
         )
         .unwrap();
         rays.add_ray(ray);
-        assert_eq!(rays.rays.len(), 1);
+        assert_eq!(rays.nr_of_rays(false), 1);
     }
     #[test]
     fn add_rays() {
         let mut rays = Rays::default();
-        assert_eq!(rays.rays.len(), 0);
+        assert_eq!(rays.nr_of_rays(false), 0);
         let ray = Ray::new_collimated(
             Point3::new(Length::zero(), Length::zero(), Length::zero()),
             Length::new::<nanometer>(1053.0),
@@ -907,23 +958,33 @@ mod test {
         )
         .unwrap();
         rays.add_ray(ray);
-        assert_eq!(rays.rays.len(), 1);
+        assert_eq!(rays.nr_of_rays(false), 1);
         let mut rays2 = rays.clone();
         rays.add_rays(&mut rays2);
-        assert_eq!(rays.rays.len(), 2);
+        assert_eq!(rays.nr_of_rays(false), 2);
     }
     #[test]
     fn set_refractive_index() {
+        testing_logger::setup();
         let mut rays = Rays::default();
+        rays.set_refractive_index(1.5).unwrap();
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "ray bundle contains no valid rays for setting the refractive index"
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
         let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         rays.add_ray(ray);
         let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -942,7 +1003,7 @@ mod test {
         let mut rays = Rays::default();
         assert!(rays.total_energy().is_zero());
         let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -950,6 +1011,15 @@ mod test {
         rays.add_ray(ray.clone());
         assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
         rays.add_ray(ray.clone());
+        assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
+        let mut ray = Ray::new_collimated(
+            Point3::origin(),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        ray.set_invalid();
+        rays.add_ray(ray);
         assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
 
         let rays = Rays::new_uniform_collimated(
@@ -1001,6 +1071,26 @@ mod test {
                 Length::zero()
             )
         );
+        let mut ray = Ray::new_collimated(
+            Point3::new(
+                Length::new::<millimeter>(2.0),
+                Length::new::<millimeter>(3.0),
+                Length::zero(),
+            ),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        ray.set_invalid();
+        rays.add_ray(ray);
+        assert_eq!(
+            rays.centroid().unwrap(),
+            Point3::new(
+                Length::new::<millimeter>(1.5),
+                Length::new::<millimeter>(2.5),
+                Length::zero()
+            )
+        );
     }
     #[test]
     fn beam_radius_geo() {
@@ -1034,6 +1124,21 @@ mod test {
             rays.beam_radius_geo().unwrap(),
             Length::new::<millimeter>(0.5_f64.sqrt())
         );
+        let mut ray = Ray::new_collimated(
+            Point3::new(
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(15.0),
+                Length::zero(),
+            ),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        ray.set_invalid();
+        assert_eq!(
+            rays.beam_radius_geo().unwrap(),
+            Length::new::<millimeter>(0.5_f64.sqrt())
+        );
     }
     #[test]
     fn beam_radius_rms() {
@@ -1054,11 +1159,7 @@ mod test {
         assert_eq!(rays.beam_radius_rms().unwrap(), Length::zero());
         rays.add_ray(
             Ray::new_collimated(
-                Point3::new(
-                    Length::new::<millimeter>(0.0),
-                    Length::new::<millimeter>(0.0),
-                    Length::zero(),
-                ),
+                Point3::origin(),
                 Length::new::<nanometer>(1053.0),
                 Energy::new::<joule>(1.0),
             )
@@ -1068,12 +1169,28 @@ mod test {
             rays.beam_radius_rms().unwrap(),
             Length::new::<millimeter>(f64::sqrt(2.0) / 2.0)
         );
+        let mut ray = Ray::new_collimated(
+            Point3::new(
+                Length::new::<millimeter>(1.0),
+                Length::new::<millimeter>(15.0),
+                Length::zero(),
+            ),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        ray.set_invalid();
+        rays.add_ray(ray);
+        assert_eq!(
+            rays.beam_radius_rms().unwrap(),
+            Length::new::<millimeter>(f64::sqrt(2.0) / 2.0)
+        );
     }
     #[test]
     fn propagate_along_z_axis() {
         let mut rays = Rays::default();
         let ray0 = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -1181,17 +1298,17 @@ mod test {
         assert_eq!(rays.rays.len(), 1);
     }
     #[test]
-    fn delete_by_threshold() {
+    fn invalidate_by_threshold() {
         testing_logger::setup();
         let mut rays = Rays::default();
         assert!(rays
-            .delete_by_threshold_energy(Energy::new::<joule>(f64::NAN))
+            .invalidate_by_threshold_energy(Energy::new::<joule>(f64::NAN))
             .is_err());
         assert!(rays
-            .delete_by_threshold_energy(Energy::new::<joule>(f64::INFINITY))
+            .invalidate_by_threshold_energy(Energy::new::<joule>(f64::INFINITY))
             .is_err());
         assert!(rays
-            .delete_by_threshold_energy(Energy::new::<joule>(-0.1))
+            .invalidate_by_threshold_energy(Energy::new::<joule>(-0.1))
             .is_ok());
         testing_logger::validate(|captured_logs| {
             assert_eq!(captured_logs.len(), 1);
@@ -1202,7 +1319,7 @@ mod test {
             assert_eq!(captured_logs[0].level, Level::Warn);
         });
         assert!(rays
-            .delete_by_threshold_energy(Energy::new::<joule>(0.0))
+            .invalidate_by_threshold_energy(Energy::new::<joule>(0.0))
             .is_ok());
         let ray = Ray::new_collimated(
             Point3::new(Length::zero(), Length::zero(), Length::zero()),
@@ -1218,21 +1335,21 @@ mod test {
         )
         .unwrap();
         rays.add_ray(ray);
-        rays.delete_by_threshold_energy(Energy::new::<joule>(0.1))
+        rays.invalidate_by_threshold_energy(Energy::new::<joule>(0.1))
             .unwrap();
-        assert_eq!(rays.nr_of_rays(), 2);
-        rays.delete_by_threshold_energy(Energy::new::<joule>(0.5))
+        assert_eq!(rays.nr_of_rays(true), 2);
+        rays.invalidate_by_threshold_energy(Energy::new::<joule>(0.5))
             .unwrap();
-        assert_eq!(rays.nr_of_rays(), 1);
-        rays.delete_by_threshold_energy(Energy::new::<joule>(1.1))
+        assert_eq!(rays.nr_of_rays(true), 1);
+        rays.invalidate_by_threshold_energy(Energy::new::<joule>(1.1))
             .unwrap();
-        assert_eq!(rays.nr_of_rays(), 0);
+        assert_eq!(rays.nr_of_rays(true), 0);
     }
     #[test]
     fn apodize() {
         let mut rays = Rays::default();
         let ray0 = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
@@ -1257,55 +1374,36 @@ mod test {
     }
     #[test]
     fn wavelength_range() {
+        let e = Energy::new::<joule>(1.0);
         let mut rays = Rays::default();
         assert_eq!(rays.wavelength_range(), None);
-        let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(Point3::origin(), Length::new::<nanometer>(1053.0), e).unwrap();
         rays.add_ray(ray);
-        let ray = Ray::new_collimated(
-            Point3::new(
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(1.0),
-                Length::zero(),
-            ),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(Point3::origin(), Length::new::<nanometer>(1053.0), e).unwrap();
         rays.add_ray(ray);
         assert_eq!(
             rays.wavelength_range(),
             Some(Length::new::<nanometer>(1053.0)..Length::new::<nanometer>(1053.0))
         );
-        let ray = Ray::new_collimated(
-            Point3::new(
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(1.0),
-                Length::zero(),
-            ),
-            Length::new::<nanometer>(1050.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(Point3::origin(), Length::new::<nanometer>(1050.0), e).unwrap();
         rays.add_ray(ray);
         assert_eq!(
             rays.wavelength_range(),
             Some(Length::new::<nanometer>(1050.0)..Length::new::<nanometer>(1053.0))
         );
-        let ray = Ray::new_collimated(
-            Point3::new(
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(1.0),
-                Length::zero(),
-            ),
-            Length::new::<nanometer>(1051.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(Point3::origin(), Length::new::<nanometer>(1051.0), e).unwrap();
+        rays.add_ray(ray);
+        assert_eq!(
+            rays.wavelength_range(),
+            Some(Length::new::<nanometer>(1050.0)..Length::new::<nanometer>(1053.0))
+        );
+        let mut ray =
+            Ray::new_collimated(Point3::origin(), Length::new::<nanometer>(1000.0), e).unwrap();
+        ray.set_invalid();
         rays.add_ray(ray);
         assert_eq!(
             rays.wavelength_range(),
@@ -1314,34 +1412,29 @@ mod test {
     }
     #[test]
     fn to_spectrum() {
+        let e = Energy::new::<joule>(1.0);
         let mut rays = Rays::default();
-        let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(Point3::origin(), Length::new::<nanometer>(1053.0), e).unwrap();
         rays.add_ray(ray);
-        let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(Point3::origin(), Length::new::<nanometer>(1053.0), e).unwrap();
         rays.add_ray(ray);
-        let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1052.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(Point3::origin(), Length::new::<nanometer>(1052.0), e).unwrap();
         rays.add_ray(ray);
-        let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1052.1),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(Point3::origin(), Length::new::<nanometer>(1052.1), e).unwrap();
+        rays.add_ray(ray);
+        let spectrum = rays.to_spectrum(&Length::new::<nanometer>(0.5)).unwrap();
+        assert_abs_diff_eq!(
+            spectrum.total_energy(),
+            4.0,
+            epsilon = 100000.0 * f64::EPSILON
+        );
+        let mut ray =
+            Ray::new_collimated(Point3::origin(), Length::new::<nanometer>(1052.1), e).unwrap();
+        ray.set_invalid();
         rays.add_ray(ray);
         let spectrum = rays.to_spectrum(&Length::new::<nanometer>(0.5)).unwrap();
         assert_abs_diff_eq!(
@@ -1353,13 +1446,13 @@ mod test {
     #[test]
     fn split() {
         let ray1 = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Length::new::<nanometer>(1053.0),
             Energy::new::<joule>(1.0),
         )
         .unwrap();
         let ray2 = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Length::new::<nanometer>(1050.0),
             Energy::new::<joule>(2.0),
         )
@@ -1376,12 +1469,28 @@ mod test {
             2.4,
             epsilon = 10.0 * f64::EPSILON
         );
+        let mut rays = Rays::default();
+        rays.add_ray(ray1.clone());
+        rays.add_ray(ray2.clone());
+        let mut ray = Ray::new_collimated(
+            Point3::origin(),
+            Length::new::<nanometer>(1053.0),
+            Energy::new::<joule>(5.0),
+        )
+        .unwrap();
+        ray.set_invalid();
+        rays.add_ray(ray);
+        assert_abs_diff_eq!(
+            split_rays.total_energy().get::<joule>(),
+            2.4,
+            epsilon = 10.0 * f64::EPSILON
+        );
     }
 
     #[test]
     fn get_rays_position_history_in_mm() {
         let ray_vec = vec![Ray::new(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Vector3::new(0., 1., 2.),
             Length::new::<nanometer>(1053.),
             Energy::new::<joule>(1.),
@@ -1448,7 +1557,7 @@ mod test {
         assert!(wf_data.is_err());
 
         let mut rays = Rays::new_hexapolar_point_source(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Angle::new::<degree>(90.),
             5,
             Length::new::<nanometer>(1000.),
@@ -1461,19 +1570,16 @@ mod test {
         let wf_data = rays
             .get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(10.))
             .unwrap();
-
         assert!(wf_data.wavefront_error_maps.len() == 1);
-
         rays.add_ray(
             Ray::new(
-                Point3::new(Length::zero(), Length::zero(), Length::zero()),
+                Point3::origin(),
                 Vector3::new(0., 1., 0.),
                 Length::new::<nanometer>(1005.),
                 Energy::new::<joule>(1.),
             )
             .unwrap(),
         );
-
         let wf_data = rays
             .get_wavefront_data_in_units_of_wvl(false, Length::new::<nanometer>(10.))
             .unwrap();
@@ -1487,7 +1593,7 @@ mod test {
         assert!(wf_data.wavefront_error_maps.len() == 2);
         rays.add_ray(
             Ray::new(
-                Point3::new(Length::zero(), Length::zero(), Length::zero()),
+                Point3::origin(),
                 Vector3::new(0., 1., 0.),
                 Length::new::<nanometer>(1007.),
                 Energy::new::<joule>(1.),
@@ -1504,7 +1610,7 @@ mod test {
     #[test]
     fn wavefront_error_at_pos_in_units_of_wvl() {
         let mut rays = Rays::new_hexapolar_point_source(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Angle::new::<degree>(90.),
             1,
             Length::new::<nanometer>(1000.),
@@ -1524,7 +1630,7 @@ mod test {
             }
         }
         let mut rays = Rays::new_hexapolar_point_source(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Angle::new::<degree>(90.),
             1,
             Length::new::<nanometer>(500.),
@@ -1545,9 +1651,9 @@ mod test {
         }
     }
     #[test]
-    fn get_xy_rays_pos_test() {
+    fn get_xy_rays_pos() {
         let rays = Rays::new_hexapolar_point_source(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            Point3::origin(),
             Angle::new::<degree>(90.),
             1,
             Length::new::<nanometer>(1000.),
@@ -1555,7 +1661,7 @@ mod test {
         )
         .unwrap();
 
-        let xy_pos = rays.get_xy_rays_pos();
+        let xy_pos = rays.get_xy_rays_pos(false);
         for val in xy_pos.row_iter() {
             assert!(val[(0, 0)].abs() < f64::EPSILON);
             assert!(val[(0, 1)].abs() < f64::EPSILON);
@@ -1611,7 +1717,7 @@ mod test {
         ];
 
         let rays = Rays::from(ray_vec);
-        let xy_pos = rays.get_xy_rays_pos();
+        let xy_pos = rays.get_xy_rays_pos(false);
 
         for (val_is, val_got) in izip!(pos_xy.row_iter(), xy_pos.row_iter()) {
             assert!((val_is[(0, 0)] - val_got[(0, 0)]).abs() < f64::EPSILON * val_is[(0, 0)].abs());

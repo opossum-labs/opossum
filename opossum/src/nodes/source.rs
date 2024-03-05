@@ -249,7 +249,7 @@ mod test {
             .unwrap();
         if let Proptype::LightData(light_data) = src.properties().get("light data").unwrap() {
             if let Some(LightData::Geometric(rays)) = light_data {
-                assert_eq!(rays.nr_of_rays(), 1);
+                assert_eq!(rays.nr_of_rays(true), 1);
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
                     1.0,
@@ -275,7 +275,7 @@ mod test {
                 1.0,
                 epsilon = 10.0 * f64::EPSILON
             );
-            assert_eq!(rays.nr_of_rays(), 37);
+            assert_eq!(rays.nr_of_rays(true), 37);
         } else {
             panic!("error unpacking data");
         }
@@ -294,7 +294,7 @@ mod test {
                 1.0,
                 epsilon = 10.0 * f64::EPSILON
             );
-            assert_eq!(rays.nr_of_rays(), 1);
+            assert_eq!(rays.nr_of_rays(true), 1);
         } else {
             panic!("cannot unpack light data property");
         }
@@ -308,7 +308,7 @@ mod test {
                 1.0,
                 epsilon = 10.0 * f64::EPSILON
             );
-            assert_eq!(rays.nr_of_rays(), 37);
+            assert_eq!(rays.nr_of_rays(true), 37);
         } else {
             panic!("cannot unpack light data property");
         }
