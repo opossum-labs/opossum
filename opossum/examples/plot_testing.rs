@@ -1,6 +1,5 @@
-use nalgebra::Vector3;
 use opossum::{
-    distributions::Hexapolar,
+    distributions::{FibonacciEllipse, FibonacciRectangle},
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType},
     rays::Rays,
@@ -15,29 +14,50 @@ fn main() -> OpmResult<()> {
     let mut rays = Rays::new_uniform_collimated(
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
-        &Hexapolar::new(Length::new::<millimeter>(10.), 5)?,
+        &FibonacciRectangle::new(
+            Length::new::<millimeter>(1.),
+            Length::new::<millimeter>(1.),
+            1000,
+        )?,
     )?;
-    rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
-    rays.propagate_along_z()?;
-    rays.refract_paraxial(Length::new::<millimeter>(10.))?;
-    rays.set_dist_to_next_surface(Length::new::<millimeter>(30.));
-    rays.propagate_along_z()?;
-    rays.refract_paraxial(Length::new::<millimeter>(20.))?;
-    rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
-    rays.propagate_along_z()?;
+    // rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+    // rays.propagate_along_z()?;
+    // rays.refract_paraxial(Length::new::<millimeter>(10.))?;
+    // rays.set_dist_to_next_surface(Length::new::<millimeter>(30.));
+    // rays.propagate_along_z()?;
+    // rays.refract_paraxial(Length::new::<millimeter>(20.))?;
+    // rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+    // rays.propagate_along_z()?;
 
     let mut plt_params = PlotParameters::default();
     plt_params
-        .set(&PlotArgs::FName("ray_test.png".into()))
+        .set(&PlotArgs::FName("ray_fluence_test_random.png".into()))
         .unwrap()
         .set(&PlotArgs::FDir("./opossum/playground/".into()))
         .unwrap()
-        .set(&PlotArgs::FigSize((1500, 1500)))
+        .set(&PlotArgs::FigSize((1000, 850)))
         .unwrap();
-    let ray_pos_hist = rays.get_rays_position_history_in_mm();
+    // let start: Instant = Instant::now();
+    let fluence_data = rays.calc_fluence_at_position()?;
+    // let duration = start.elapsed();
+    // println!("{duration:?}");
+    println!("{}", fluence_data.get_peak_fluence());
+    println!("{}", fluence_data.get_average_fluence());
+    let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
+    let plt_dat = PlotData::ColorMesh(fl_x, fl_y, fl_d);
+    let plt_type = PlotType::ColorMesh(plt_params);
+    let _ = plt_type.plot(&plt_dat);
 
-    let plt_dat = PlotData::MultiDim2(ray_pos_hist.project_to_plane(Vector3::new(1., 0., 0.))?);
-    let plt_type = PlotType::MultiLine2D(plt_params);
+    let mut plt_params = PlotParameters::default();
+    plt_params
+        .set(&PlotArgs::FName("spot_ray_fluence_test.png".into()))
+        .unwrap()
+        .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .unwrap()
+        .set(&PlotArgs::FigSize((1000, 850)))
+        .unwrap();
+    let plt_dat = PlotData::Dim2(rays.get_xy_rays_pos());
+    let plt_type = PlotType::Scatter2D(plt_params);
     let _ = plt_type.plot(&plt_dat);
 
     Ok(())

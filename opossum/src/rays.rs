@@ -1,25 +1,33 @@
 #![warn(missing_docs)]
 //! Module for handling ray bundles
-use std::ops::Range;
-use std::path::Path;
-
 use crate::aperture::Aperture;
 use crate::distributions::{Distribution, Hexapolar};
 use crate::error::{OpmResult, OpossumError};
+use crate::nodes::fluence_detector::FluenceData;
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
-use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
+use crate::plottable::{
+    AxLims, PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd,
+};
 use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use crate::surface::Surface;
+use crate::utils::griddata::{
+    calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
+    interpolate_3d_triangulated_scatter_data, VoronoiedData,
+};
 use image::{DynamicImage, ImageBuffer};
+use itertools::izip;
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::{distance, point, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
+use nalgebra::{distance, point, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
 use serde_derive::{Deserialize, Serialize};
+use std::ops::Add;
+use std::ops::Range;
+use std::path::Path;
 use uom::num_traits::Zero;
 use uom::si::angle::degree;
 use uom::si::energy::joule;
@@ -48,8 +56,8 @@ impl Rays {
     ///
     /// If the given size id zero, a bundle consisting of a single ray along the optical - position (0.0,0.0,0.0) - axis is generated.
     ///
-    /// # Errors
     /// This function returns an error if
+    /// # Errors
     ///  - the given wavelength is <= 0.0, NaN or +inf
     ///  - the given energy is <= 0.0, NaN or +inf
     ///  - the given size is < 0.0, NaN or +inf
@@ -328,6 +336,90 @@ impl Rays {
             rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
         }
         rays_at_pos
+    }
+
+    fn calc_ray_fluence_in_voronoi_cells(
+        &self,
+        projected_ray_pos: &MatrixXx2<f64>,
+        proj_ax1_lim: AxLims,
+        proj_ax2_lim: AxLims,
+    ) -> OpmResult<VoronoiedData> {
+        let voronoi = create_voronoi_cells(projected_ray_pos, &proj_ax1_lim, &proj_ax2_lim)
+            .map_err(|_| {
+                OpossumError::Other(
+                    "Voronoi diagram for fluence estimation could not be created!".into(),
+                )
+            })?;
+
+        //get the voronoi cells
+        let v_cells = voronoi.cells();
+
+        let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), 0.);
+
+        for idx in 0..self.rays.len() {
+            let v_neighbours = v_cells[idx]
+                .points()
+                .iter()
+                .map(|p| Point2::new(p.x, p.y))
+                .collect::<Vec<Point2<f64>>>();
+            let poly_area = calc_closed_poly_area(&v_neighbours)?;
+            fluence_scatter[idx] = self.rays[idx].energy().get::<joule>() / poly_area;
+        }
+
+        VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)
+    }
+
+    /// Calculates the spatial energy distribution (fluence) of a ray bundle, its coordinates in a plane transversal to its propagation diraction and the peak fluence in J/cm²
+    /// # Errors
+    /// This function errors if
+    /// - creation of hte linearly spaced axes fails
+    /// - voronating the ray position or the fluence calculation in the voronoi cells fails
+    /// - interpolation fails
+    pub fn calc_fluence_at_position(&self) -> OpmResult<FluenceData> {
+        let num_axes_points = 100.;
+
+        // get ray positions
+        let rays_pos_vec = self.get_xy_rays_pos() / 10.; //for centimeter;
+
+        //axes definition
+        let (co_ax1, co_ax1_lim) = create_linspace_axes(rays_pos_vec.column(0), num_axes_points)?;
+        let (co_ax2, co_ax2_lim) = create_linspace_axes(rays_pos_vec.column(1), num_axes_points)?;
+
+        // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
+        let voronoi_fluence_scatter =
+            self.calc_ray_fluence_in_voronoi_cells(&rays_pos_vec, co_ax1_lim, co_ax2_lim)?;
+
+        //currently only interpolation. voronoid data for plotting must still be implemented
+        let (interp_fluence, interp_mask) =
+            interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter, &co_ax1, &co_ax2)?;
+
+        let (peak_fluence, mut average) = izip!(
+            interp_fluence.into_iter(),
+            interp_mask.into_iter()
+        )
+        .fold((f64::NEG_INFINITY, 0.), |arg0, v| {
+            let max_val = if v.0.is_nan() {
+                arg0.0
+            } else {
+                f64::max(arg0.0, *v.0)
+            };
+            let average_val = if v.1 > &f64::EPSILON {
+                f64::add(arg0.1, *v.0)
+            } else {
+                arg0.1
+            };
+            (max_val, average_val)
+        });
+
+        average /= interp_mask.sum();
+
+        Ok(FluenceData::new(
+            peak_fluence,
+            average,
+            interp_fluence,
+            co_ax1,
+            co_ax2,
+        ))
     }
 
     /// Add a single ray to the ray bundle.
@@ -672,14 +764,17 @@ mod test {
     use super::*;
     use crate::{
         aperture::CircleConfig,
-        distributions::{Hexapolar, Random},
+        distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         ray::SplittingConfig,
     };
-    use approx::assert_abs_diff_eq;
+    use approx::{assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use itertools::izip;
     use log::Level;
     use testing_logger;
-    use uom::si::{energy::joule, length::nanometer};
+    use uom::si::{
+        energy::joule,
+        length::{centimeter, nanometer},
+    };
     #[test]
     fn default() {
         let rays = Rays::default();
@@ -1522,5 +1617,47 @@ mod test {
             assert!((val_is[(0, 0)] - val_got[(0, 0)]).abs() < f64::EPSILON * val_is[(0, 0)].abs());
             assert!((val_is[(0, 1)] - val_got[(0, 1)]).abs() < f64::EPSILON * val_is[(0, 1)].abs());
         }
+    }
+    #[test]
+    fn calc_fluence_at_position_test() {
+        let rays = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+            &FibonacciRectangle::new(
+                Length::new::<centimeter>(1.),
+                Length::new::<centimeter>(1.),
+                1000,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        let fluence = rays.calc_fluence_at_position().unwrap();
+        assert!(approx::RelativeEq::relative_eq(
+            &fluence.get_average_fluence(),
+            &1.,
+            0.01,
+            0.01
+        ));
+
+        let rays = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+            &FibonacciRectangle::new(
+                Length::new::<centimeter>(1.),
+                Length::new::<centimeter>(2.),
+                10000,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        let fluence = rays.calc_fluence_at_position().unwrap();
+        assert!(approx::RelativeEq::relative_eq(
+            &fluence.get_average_fluence(),
+            &0.5,
+            0.01,
+            0.01
+        ));
     }
 }

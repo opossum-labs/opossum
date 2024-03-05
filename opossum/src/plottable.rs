@@ -2,6 +2,9 @@
 //! Trait for adding the possibility to generate a (x/y) plot of an element.
 use crate::error::OpmResult;
 use crate::error::OpossumError;
+use crate::utils::filter_data::filter_nan_infinite;
+use crate::utils::griddata::linspace;
+use approx::abs_diff_ne;
 use approx::RelativeEq;
 use colorous::Gradient;
 use delaunator::{triangulate, Point};
@@ -9,10 +12,7 @@ use image::RgbImage;
 use itertools::{iproduct, izip};
 use kahan::KahanSum;
 use log::warn;
-use nalgebra::{
-    ComplexField, DMatrix, DVector, DVectorSlice, Matrix1xX, Matrix3xX, MatrixXx1, MatrixXx2,
-    MatrixXx3,
-};
+use nalgebra::{DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3};
 use num::ToPrimitive;
 use plotters::chart::MeshStyle;
 use plotters::{
@@ -385,17 +385,14 @@ impl PlotType {
                 false,
             );
 
-            let c_dat = linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
-                .unwrap()
-                .transpose();
+            let c_dat =
+                linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap();
             let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
             let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
             Self::draw_2d_colormesh(
                 &mut chart,
                 &xxx,
-                &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
-                    .unwrap()
-                    .transpose(),
+                &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap(),
                 &d_mat,
                 &plt.cbar.cmap,
                 plt.bounds.z.unwrap(),
@@ -502,17 +499,14 @@ impl PlotType {
                 false,
             );
 
-            let c_dat = linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
-                .unwrap()
-                .transpose();
+            let c_dat =
+                linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap();
             let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
             let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
             Self::draw_2d_colormesh(
                 &mut chart,
                 &xxx,
-                &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.)
-                    .unwrap()
-                    .transpose(),
+                &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap(),
                 &d_mat,
                 &plt.cbar.cmap,
                 plt.bounds.z.unwrap(),
@@ -683,7 +677,7 @@ impl PlotData {
     /// This method returns the maximum and minimum data values on this axis in form of an [`AxLims`] struct
     #[must_use]
     pub fn get_min_max_data_values(&self, ax_vals: &DVectorSlice<'_, f64>) -> AxLims {
-        let filtered_ax_vals = Self::filter_nan_infinite(ax_vals);
+        let filtered_ax_vals = filter_nan_infinite(ax_vals.into());
         AxLims {
             min: filtered_ax_vals.min(),
             max: filtered_ax_vals.max(),
@@ -753,21 +747,21 @@ impl PlotData {
         }
     }
 
-    /// This method filters out all NaN and infinite values  
-    /// # Attributes
-    /// - `ax_vals`: dynamically sized vector slice of the data vector on this axis
-    /// # Returns
-    /// This method returns an array containing only the non-NaN and finite entries of the passed vector
-    #[must_use]
-    pub fn filter_nan_infinite(ax_vals: &DVectorSlice<'_, f64>) -> MatrixXx1<f64> {
-        MatrixXx1::from(
-            ax_vals
-                .iter()
-                .copied()
-                .filter(|x| !x.is_nan() & x.is_finite())
-                .collect::<Vec<f64>>(),
-        )
-    }
+    // /// This method filters out all NaN and infinite values
+    // /// # Attributes
+    // /// - `ax_vals`: dynamically sized vector slice of the data vector on this axis
+    // /// # Returns
+    // /// This method returns an array containing only the non-NaN and finite entries of the passed vector
+    // #[must_use]
+    // pub fn filter_nan_infinite(ax_vals: &DVectorSlice<'_, f64>) -> MatrixXx1<f64> {
+    //     MatrixXx1::from(
+    //         ax_vals
+    //             .iter()
+    //             .copied()
+    //             .filter(|x| x.is_finite())
+    //             .collect::<Vec<f64>>(),
+    //     )
+    // }
 
     /// Defines the plot-axes bounds of this [`PlotData`].
     /// # Attributes
@@ -822,12 +816,12 @@ impl AxLims {
         }
     }
 
-    fn check_validity(self) -> bool {
+    /// Checks the validity of the delivered min and max values and returns a true if it is valid, false otherwise
+    #[must_use]
+    pub fn check_validity(self) -> bool {
         self.max.is_finite()
-            && !self.max.is_nan()
             && self.min.is_finite()
-            && !self.min.is_nan()
-            && (self.max - self.min).abs() > f64::EPSILON
+            && abs_diff_ne!(self.max, self.min)
             && self.max > self.min
     }
 
@@ -1015,7 +1009,7 @@ pub trait Plottable {
                 }
             }
 
-            Some(PlotData::ColorMesh(x.transpose(), y.transpose(), zz))
+            Some(PlotData::ColorMesh(x, y, zz))
         } else {
             None
         }
@@ -1829,47 +1823,6 @@ pub enum PlotArgs {
     ///Plotting backend that should be used. Holds a [`PltBackEnd`] enum
     Backend(PltBackEnd),
 }
-fn _meshgrid(x: &Matrix1xX<f64>, y: &Matrix1xX<f64>) -> (DMatrix<f64>, DMatrix<f64>) {
-    let x_len = x.len();
-    let y_len = y.len();
-
-    let mut x_mat = DMatrix::<f64>::zeros(y_len, x_len);
-    let mut y_mat = DMatrix::<f64>::zeros(y_len, x_len);
-
-    for x_id in 0..x_len {
-        for y_id in 0..y_len {
-            x_mat[(y_id, x_id)] = x[x_id];
-            y_mat[(y_id, x_id)] = y[y_id];
-        }
-    }
-
-    (x_mat, y_mat)
-}
-
-fn linspace(start: f64, end: f64, num: f64) -> OpmResult<Matrix1xX<f64>> {
-    let num_usize = num.to_usize();
-    if num_usize.is_some() {
-        let mut linspace = Matrix1xX::<f64>::zeros(num_usize.unwrap());
-        let mut range = KahanSum::<f64>::new_with_value(end);
-        range += -start;
-
-        let mut steps = KahanSum::<f64>::new_with_value(num);
-        steps += -1.;
-
-        let bin_size = range.sum() / steps.sum();
-
-        let mut summator: KahanSum<f64> = KahanSum::<f64>::new_with_value(start);
-        for val in linspace.iter_mut() {
-            *val = summator.sum();
-            summator += bin_size;
-        }
-        Ok(linspace)
-    } else {
-        Err(OpossumError::Other(
-            "Cannot cast num value to usize!".into(),
-        ))
-    }
-}
 
 #[cfg(test)]
 mod test {
@@ -2319,20 +2272,12 @@ mod test {
         let _ = plt_params.set(&PlotArgs::FName("test.abcdefghijkelemenop".to_owned()));
         assert!(plt_params.check_backend_file_ext_compatibility().is_ok());
     }
-    #[test]
-    fn linspace_test() {
-        let x = linspace(1., 3., 3.).unwrap();
-        assert_eq!(x.len(), 3);
-        assert!((x[0] - 1.).abs() < f64::EPSILON);
-        assert!((x[1] - 2.).abs() < f64::EPSILON);
-        assert!((x[2] - 3.).abs() < f64::EPSILON);
-        assert!(linspace(1., 3., -3.).is_err());
-    }
+
     #[test]
     fn new_plot() {
         let plt_params = PlotParameters::default();
-        let x = linspace(0., 2., 3.).unwrap().transpose();
-        let y = linspace(3., 5., 3.).unwrap().transpose();
+        let x = linspace(0., 2., 3.).unwrap();
+        let y = linspace(3., 5., 3.).unwrap();
         let plt_dat_dim2 = PlotData::Dim2(MatrixXx2::from_columns(&[x, y]));
 
         let plot = Plot::new(&plt_dat_dim2, &plt_params);
@@ -2348,8 +2293,8 @@ mod test {
         let plt_params = PlotParameters::default();
         let mut plot = Plot::try_from(&plt_params).unwrap();
 
-        let x = linspace(0., 2., 3.).unwrap().transpose();
-        let y = linspace(3., 5., 3.).unwrap().transpose();
+        let x = linspace(0., 2., 3.).unwrap();
+        let y = linspace(3., 5., 3.).unwrap();
         let plt_dat_dim2 = PlotData::Dim2(MatrixXx2::from_columns(&[x, y]));
 
         assert!(plot.get_data().is_none());
@@ -2363,7 +2308,7 @@ mod test {
     #[test]
     fn define_data_based_axes_bounds_test() {
         let x = linspace(0., 1., 2.).unwrap().transpose();
-        let dat_2d = MatrixXx2::from_columns(&[x.clone(), x]);
+        let dat_2d = MatrixXx2::from_columns(&[x.clone().transpose(), x.transpose()]);
         let plt_dat_dim2 = PlotData::Dim2(dat_2d);
 
         let axlims = plt_dat_dim2.define_data_based_axes_bounds(true);
@@ -2375,9 +2320,9 @@ mod test {
     #[test]
     fn define_plot_axes_bounds() {
         //define test data
-        let x = linspace(-2., -1., 2.).unwrap().transpose();
-        let y = linspace(2., 3., 2.).unwrap().transpose();
-        let z = linspace(4., 5., 2.).unwrap().transpose();
+        let x = linspace(-2., -1., 2.).unwrap();
+        let y = linspace(2., 3., 2.).unwrap();
+        let z = linspace(4., 5., 2.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
         let dummmy_triangles: Vec<usize> = vec![1, 2, 3, 4, 5, 6];
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -2530,22 +2475,20 @@ mod test {
     }
     #[test]
     fn get_ax_val_distance_if_equidistant_test() {
-        let x = linspace(0., 1., 101.).unwrap().transpose();
+        let x = linspace(0., 1., 101.).unwrap();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
         assert!((dist - 0.005).abs() < f64::EPSILON);
 
-        let x = linspace(0., f64::EPSILON, 101.).unwrap().transpose();
+        let x = linspace(0., f64::EPSILON, 101.).unwrap();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
         assert!((dist - 0.5).abs() < f64::EPSILON);
     }
     #[test]
     fn check_equistancy_of_mesh_test() {
-        let x = linspace(0., 1., 101.).unwrap().transpose();
+        let x = linspace(0., 1., 101.).unwrap();
         assert!(PlotType::check_equistancy_of_mesh(&x));
 
-        let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100.)
-            .unwrap()
-            .transpose();
+        let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100.).unwrap();
         assert!(PlotType::check_equistancy_of_mesh(&x));
 
         let x = MatrixXx1::from_vec(vec![0., 1., 3.]);
@@ -2569,9 +2512,9 @@ mod test {
     #[test]
     fn create_plots_png_test() {
         //define test data
-        let x = linspace(-2., -1., 3.).unwrap().transpose();
-        let y = linspace(2., 3., 3.).unwrap().transpose();
-        let z = linspace(4., 5., 3.).unwrap().transpose();
+        let x = linspace(-2., -1., 3.).unwrap();
+        let y = linspace(2., 3., 3.).unwrap();
+        let z = linspace(4., 5., 3.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -2605,9 +2548,9 @@ mod test {
     #[test]
     fn create_plots_svg_test() {
         //define test data
-        let x = linspace(-2., -1., 3.).unwrap().transpose();
-        let y = linspace(2., 3., 3.).unwrap().transpose();
-        let z = linspace(4., 5., 3.).unwrap().transpose();
+        let x = linspace(-2., -1., 3.).unwrap();
+        let y = linspace(2., 3., 3.).unwrap();
+        let z = linspace(4., 5., 3.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -2646,9 +2589,9 @@ mod test {
     #[test]
     fn create_plots_buffer_test() {
         //define test data
-        let x = linspace(-2., -1., 3.).unwrap().transpose();
-        let y = linspace(2., 3., 3.).unwrap().transpose();
-        let z = linspace(4., 5., 3.).unwrap().transpose();
+        let x = linspace(-2., -1., 3.).unwrap();
+        let y = linspace(2., 3., 3.).unwrap();
+        let z = linspace(4., 5., 3.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);

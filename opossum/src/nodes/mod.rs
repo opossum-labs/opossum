@@ -3,6 +3,8 @@ mod beam_splitter;
 mod detector;
 mod dummy;
 mod energy_meter;
+/// fluence measurement node
+pub mod fluence_detector;
 mod group;
 mod ideal_filter;
 mod lens;
@@ -41,6 +43,7 @@ pub use energy_meter::Metertype;
 pub use spectrometer::Spectrometer;
 pub use spectrometer::SpectrometerType;
 
+pub use fluence_detector::FluenceDetector;
 pub use spot_diagram::SpotDiagram;
 
 pub use ray_propagation_detector::RayPropagationVisualizer;
@@ -115,6 +118,10 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         )),
         "ray propagation" => Ok(OpticRef::new(
             Rc::new(RefCell::new(RayPropagationVisualizer::default())),
+            uuid,
+        )),
+        "fluence detector" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(FluenceDetector::default())),
             uuid,
         )),
         _ => Err(OpossumError::Other(format!(

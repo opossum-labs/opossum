@@ -1,3 +1,5 @@
+//! Mainf function of Opossum
+#![warn(missing_docs)]
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info};
