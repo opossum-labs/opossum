@@ -18,6 +18,7 @@ fn main() -> OpmResult<()> {
     )?);
     let s1 = scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(30.0))?);
     let l1 = scenery.add_node(Lens::new(
+        "l1",
         Length::new::<millimeter>(200.0),
         Length::new::<millimeter>(-200.0),
         Length::new::<millimeter>(10.0),
@@ -28,6 +29,7 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(197.22992),
     )?);
     let l2 = scenery.add_node(Lens::new(
+        "l1",
         Length::new::<millimeter>(200.0),
         Length::new::<millimeter>(-200.0),
         Length::new::<millimeter>(10.0),

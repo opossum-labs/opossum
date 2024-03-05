@@ -94,12 +94,15 @@ impl Lens {
     ///
     /// This function return an error if the given parameters are not correct.
     pub fn new(
+        name: &str,
         front_curvature: Length,
         rear_curvature: Length,
         center_thickness: Length,
         refractive_index: f64,
     ) -> OpmResult<Self> {
         let mut props = create_default_props();
+        props.set("name", name.into())?;
+
         if front_curvature.is_zero() || front_curvature.is_nan() {
             return Err(OpossumError::Other(
                 "front curvature must not be 0.0 or NaN".into(),
@@ -202,15 +205,145 @@ impl Dottable for Lens {
 }
 #[cfg(test)]
 mod test {
+    use nalgebra::Vector3;
+    use uom::si::{energy::joule, f64::Energy, length::nanometer};
+
+    use crate::{analyzer::RayTraceConfig, distributions::Hexapolar, rays::Rays};
+
     use super::*;
     #[test]
     fn default() {
-        let node=Lens::default();
+        let node = Lens::default();
         assert_eq!(node.properties().name().unwrap(), "lens");
         assert_eq!(node.properties().node_type().unwrap(), "lens");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "blue");
         assert!(node.as_group().is_err());
+        let Ok(Proptype::Length(roc)) = node.props.get("front curvature") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(500.0));
+        let Ok(Proptype::Length(roc)) = node.props.get("rear curvature") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(-500.0));
+        let Ok(Proptype::Length(roc)) = node.props.get("center thickness") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(10.0));
+        let Ok(Proptype::F64(index)) = node.props.get("refractive index") else {
+            panic!()
+        };
+        assert_eq!(*index, 1.5);
+    }
+    #[test]
+    fn new() {
+        let roc = Length::new::<millimeter>(100.0);
+        let ct = Length::new::<millimeter>(11.0);
+        assert!(Lens::new("test", roc, roc, ct, 0.9).is_err());
+        assert!(Lens::new("test", roc, roc, ct, f64::NAN).is_err());
+        assert!(Lens::new("test", roc, roc, ct, f64::INFINITY).is_err());
+
+        assert!(Lens::new("test", roc, roc, Length::new::<millimeter>(-0.1), 1.5).is_err());
+        assert!(Lens::new("test", roc, roc, Length::new::<millimeter>(f64::NAN), 1.5).is_err());
+        assert!(Lens::new(
+            "test",
+            roc,
+            roc,
+            Length::new::<millimeter>(f64::INFINITY),
+            1.5
+        )
+        .is_err());
+
+        assert!(Lens::new("test", roc, Length::zero(), ct, 1.5).is_err());
+        assert!(Lens::new("test", roc, Length::new::<millimeter>(f64::NAN), ct, 1.5).is_err());
+        assert!(Lens::new(
+            "test",
+            roc,
+            Length::new::<millimeter>(f64::INFINITY),
+            ct,
+            1.5
+        )
+        .is_ok());
+        assert!(Lens::new(
+            "test",
+            roc,
+            Length::new::<millimeter>(f64::NEG_INFINITY),
+            ct,
+            1.5
+        )
+        .is_ok());
+
+        assert!(Lens::new("test", Length::zero(), roc, ct, 1.5).is_err());
+        assert!(Lens::new("test", Length::new::<millimeter>(f64::NAN), roc, ct, 1.5).is_err());
+        assert!(Lens::new(
+            "test",
+            Length::new::<millimeter>(f64::INFINITY),
+            roc,
+            ct,
+            1.5
+        )
+        .is_ok());
+        assert!(Lens::new(
+            "test",
+            Length::new::<millimeter>(f64::NEG_INFINITY),
+            roc,
+            ct,
+            1.5
+        )
+        .is_ok());
+        let node = Lens::new("test", roc, roc, ct, 2.0).unwrap();
+        assert_eq!(node.props.name().unwrap(), "test");
+        let Ok(Proptype::Length(roc)) = node.props.get("front curvature") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(100.0));
+        let Ok(Proptype::Length(roc)) = node.props.get("rear curvature") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(100.0));
+        let Ok(Proptype::Length(roc)) = node.props.get("center thickness") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(11.0));
+        let Ok(Proptype::F64(index)) = node.props.get("refractive index") else {
+            panic!()
+        };
+        assert_eq!(*index, 2.0);
+    }
+    #[test]
+    fn analyze_flatflat() {
+        let mut node = Lens::new(
+            "test",
+            Length::new::<millimeter>(f64::INFINITY),
+            Length::new::<millimeter>(f64::INFINITY),
+            Length::new::<millimeter>(10.0),
+            2.0,
+        )
+        .unwrap();
+        let mut rays = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+            &Hexapolar::new(Length::new::<millimeter>(10.0), 3).unwrap(),
+        )
+        .unwrap();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.0));
+        let mut incoming_data = HashMap::default();
+        incoming_data.insert("front".into(), Some(LightData::Geometric(rays)));
+        let output = node
+            .analyze(
+                incoming_data,
+                &AnalyzerType::RayTrace(RayTraceConfig::default()),
+            )
+            .unwrap();
+        if let Some(Some(LightData::Geometric(rays)))=output.get("rear") {
+            for ray in rays.iter() {
+                assert_eq!(ray.direction(), Vector3::z());
+                assert_eq!(ray.path_length(), Length::new::<millimeter>(30.0));
+            }
+        } else {
+            assert!(false);
+        }
     }
 }
