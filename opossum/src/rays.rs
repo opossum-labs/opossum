@@ -398,7 +398,7 @@ impl Rays {
         let num_axes_points = 100.;
 
         // get ray positions
-        let rays_pos_vec = self.get_xy_rays_pos() / 10.; //for centimeter;
+        let rays_pos_vec = self.get_xy_rays_pos(true) / 10.; //for centimeter;
 
         //axes definition
         let (co_ax1, co_ax1_lim) = create_linspace_axes(rays_pos_vec.column(0), num_axes_points)?;
@@ -815,10 +815,10 @@ mod test {
     use super::*;
     use crate::{
         aperture::CircleConfig,
-        distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
+        distributions::{FibonacciRectangle, Hexapolar, Random},
         ray::SplittingConfig,
     };
-    use approx::{assert_abs_diff_eq, assert_relative_eq, relative_eq};
+    use approx::assert_abs_diff_eq;
     use itertools::izip;
     use log::Level;
     use testing_logger;

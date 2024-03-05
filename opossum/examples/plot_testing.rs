@@ -1,5 +1,5 @@
 use opossum::{
-    distributions::{FibonacciEllipse, FibonacciRectangle},
+    distributions::FibonacciRectangle,
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType},
     rays::Rays,
@@ -11,7 +11,7 @@ use uom::si::{
 };
 
 fn main() -> OpmResult<()> {
-    let mut rays = Rays::new_uniform_collimated(
+    let rays = Rays::new_uniform_collimated(
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
         &FibonacciRectangle::new(
@@ -56,7 +56,7 @@ fn main() -> OpmResult<()> {
         .unwrap()
         .set(&PlotArgs::FigSize((1000, 850)))
         .unwrap();
-    let plt_dat = PlotData::Dim2(rays.get_xy_rays_pos());
+    let plt_dat = PlotData::Dim2(rays.get_xy_rays_pos(true));
     let plt_type = PlotType::Scatter2D(plt_params);
     let _ = plt_type.plot(&plt_dat);
 
