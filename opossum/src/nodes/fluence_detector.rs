@@ -10,7 +10,7 @@ use crate::lightdata::LightData;
 use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::reporter::{NodeReport, PdfReportable};
-use crate::utils::griddata::VoronoiedData;
+use crate::surface::Plane;
 use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -79,14 +79,25 @@ impl Optical for FluenceDetector {
         incoming_data: LightResult,
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.properties().inverted()? {
+        let (inport, outport) = if self.properties().inverted()? {
             ("out1", "in1")
         } else {
             ("in1", "out1")
         };
-        let data = incoming_data.get(src).unwrap_or(&None);
-        self.light_data = data.clone();
-        Ok(HashMap::from([(target.into(), data.clone())]))
+        let data = incoming_data.get(inport).unwrap_or(&None);
+        if let Some(LightData::Geometric(rays)) = data {
+            let mut rays = rays.clone();
+            let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+            let plane = Plane::new(z_position)?;
+            rays.refract_on_surface(&plane, 1.0)?;
+            self.light_data = Some(LightData::Geometric(rays.clone()));
+            Ok(HashMap::from([(
+                outport.into(),
+                Some(LightData::Geometric(rays)),
+            )]))
+        } else {
+            Ok(HashMap::from([(outport.into(), data.clone())]))
+        }
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(LightData::Geometric(rays)) = &self.light_data {
@@ -95,7 +106,7 @@ impl Optical for FluenceDetector {
                 self.properties().name()?
             )));
 
-            let fluence_data_opt = rays.calc_transversal_fluence(None, None).ok();
+            let fluence_data_opt = rays.calc_fluence_at_position().ok();
             fluence_data_opt.map_or_else(
                 || {
                     warn!("Fluence Detector diagram: no fluence data for export available",);
@@ -123,7 +134,7 @@ impl Optical for FluenceDetector {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
-            let fluence_data_res = rays.calc_transversal_fluence(None, None);
+            let fluence_data_res = rays.calc_fluence_at_position();
             if let Ok(fluence_data) = fluence_data_res {
                 props
                     .create(
@@ -163,11 +174,11 @@ pub struct FluenceData {
     /// average fluence of the beam
     average: f64,
     /// 2d fluence distribution of the beam.
-    pub interp_distribution: DMatrix<f64>,
+    interp_distribution: DMatrix<f64>,
     /// x coordinates of the fluence distribution
-    pub interp_x_data: DVector<f64>,
+    x_data: DVector<f64>,
     /// y coordinates of the fluence distribution
-    pub interp_y_data: DVector<f64>,
+    y_data: DVector<f64>,
 }
 
 impl FluenceData {
@@ -177,25 +188,38 @@ impl FluenceData {
         peak: f64,
         average: f64,
         interp_distribution: DMatrix<f64>,
-        interp_x_data: DVector<f64>,
-        interp_y_data: DVector<f64>,
+        x_data: DVector<f64>,
+        y_data: DVector<f64>,
     ) -> Self {
-        
         Self {
             peak,
             average,
             interp_distribution,
-            interp_x_data,
-            interp_y_data
+            x_data,
+            y_data,
         }
     }
 
-    pub const fn get_peak_fluence(&self) -> f64{
+    /// Returns the peak fluence value
+    #[must_use]
+    pub const fn get_peak_fluence(&self) -> f64 {
         self.peak
     }
 
-    pub const fn get_average_fluence(&self) -> f64{
+    /// Returns the average fluence value
+    #[must_use]
+    pub const fn get_average_fluence(&self) -> f64 {
         self.average
+    }
+
+    /// Returns the fluence distribution and the corresponding x and y axes in a tuple (x, y, distribution)
+    #[must_use]
+    pub fn get_fluence_distribution(&self) -> (DVector<f64>, DVector<f64>, DMatrix<f64>) {
+        (
+            self.x_data.clone(),
+            self.y_data.clone(),
+            self.interp_distribution.clone(),
+        )
     }
 }
 
@@ -210,7 +234,7 @@ impl PdfReportable for FluenceData {
             "Average fluence: {:.1} W/cm²",
             self.average
         )));
-        let img = self.to_plot(Path::new(""), (800, 800), PltBackEnd::Buf)?;
+        let img = self.to_plot(Path::new(""), (1000, 800), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),
@@ -237,12 +261,11 @@ impl Plottable for FluenceData {
     fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
         match plt_type {
             PlotType::ColorMesh(_) => Ok(Some(PlotData::ColorMesh(
-                self.interp_x_data.clone(),
-                self.interp_y_data.clone(),
+                self.x_data.clone(),
+                self.y_data.clone(),
                 self.interp_distribution.clone(),
             ))),
             // PlotType::ColorVoronoi(_) => Ok(Some(PlotData::ColorVoronoi())),
-
             _ => Ok(None),
         }
     }

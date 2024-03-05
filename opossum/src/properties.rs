@@ -557,6 +557,7 @@ impl PdfReportable for Proptype {
             Self::Spectrometer(value) => l.push(value.pdf_report()?),
             Self::SpotDiagram(value) => l.push(value.pdf_report()?),
             Self::WaveFrontStats(value) => l.push(value.pdf_report()?),
+            Self::FluenceDetector(value) => l.push(value.pdf_report()?),
             Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
             Self::Length(value) => l.push(genpdf::elements::Paragraph::new(format_quantity(
                 meter, *value,

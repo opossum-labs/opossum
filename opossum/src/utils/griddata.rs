@@ -3,7 +3,6 @@ use kahan::KahanSum;
 use log::warn;
 use nalgebra::{DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx2, MatrixXx3, Point2};
 use num::ToPrimitive;
-use serde::{Deserialize, Serialize};
 use voronator::{
     delaunator::{Coord, Point as VPoint},
     VoronoiDiagram,

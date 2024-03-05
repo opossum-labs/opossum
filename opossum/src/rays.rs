@@ -14,20 +14,15 @@ use crate::ray::{Ray, SplittingConfig};
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use crate::surface::Surface;
-use crate::utils::{
-    geom_transformation::project_pos_to_plane_with_base_vectors,
-    griddata::{
-        calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
-        interpolate_3d_triangulated_scatter_data, VoronoiedData,
-    },
+use crate::utils::griddata::{
+    calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
+    interpolate_3d_triangulated_scatter_data, VoronoiedData,
 };
 use image::{DynamicImage, ImageBuffer};
 use itertools::izip;
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::{
-    distance, point, DVector, Matrix3x1, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3,
-};
+use nalgebra::{distance, point, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
 use serde_derive::{Deserialize, Serialize};
 use std::ops::Add;
@@ -37,7 +32,7 @@ use uom::num_traits::Zero;
 use uom::si::angle::degree;
 use uom::si::energy::joule;
 use uom::si::f64::{Angle, Energy, Length};
-use uom::si::length::{centimeter, micrometer, millimeter, nanometer};
+use uom::si::length::{micrometer, millimeter, nanometer};
 
 /// Struct containing all relevant information of a ray bundle
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
@@ -343,146 +338,6 @@ impl Rays {
         rays_at_pos
     }
 
-    /// Retrieves the center ray of the ray bundle by comparing the distance to its centroid
-    /// # Returns
-    /// This function returns a Ray if the center ray could be retrieved or None if not. This may be the case when no centroid can be calculated or if the retrieved ray index is out of bound for the rays vector
-    fn get_center_ray(&self) -> Option<Ray> {
-        self.centroid().map_or_else(|| {
-                     warn!("Center ray could not be retrieved, as the centroid could not be calculated! Maybe, the Rays vector is empty?");
-                     None
-                 }, |centroid| {
-            let mut closest_dist = f64::INFINITY;
-            let mut idx = 0_usize;
-            for (i, ray) in self.rays.iter().enumerate() {
-                let ray_pos = ray.position();
-                let mut dist = (centroid.x.get::<millimeter>() - ray_pos.x.get::<millimeter>()).powi(2);
-                    dist+= (centroid.y.get::<millimeter>() - ray_pos.y.get::<millimeter>()).powi(2);
-                    dist+= (centroid.z.get::<millimeter>() - ray_pos.z.get::<millimeter>()).powi(2);
-
-                if dist < closest_dist {
-                    closest_dist = dist;
-                    idx = i;
-                }
-            }
-            self.rays.get(idx).cloned()
-        } )
-    }
-
-    // fn create_projection_coordinate_axes_directions(
-    //     propagation_axis: &Vector3<f64>,
-    // ) -> (Vector3<f64>, Vector3<f64>) {
-    //     //define the coordinate axes of the view onto the plane that is defined by the propagation axis as normal vector
-    //     if propagation_axis.cross(&Vector3::new(1., 0., 0.)).norm() < f64::EPSILON {
-    //         //parallel to the x-axis: co_ax_1: z-axis / co_ax2: y-axis
-    //         (Vector3::new(0., 0., 1.), Vector3::new(0., 1., 0.))
-    //     } else if propagation_axis.cross(&Vector3::new(0., 1., 0.)).norm() < f64::EPSILON {
-    //         //parallel to the y-axis: co_ax_1: z-axis / co_ax2: x-axis
-    //         (Vector3::new(0., 0., 1.), Vector3::new(1., 0., 0.))
-    //     } else if propagation_axis.cross(&Vector3::new(0., 0., 1.)).norm() < f64::EPSILON {
-    //         //parallel to the z-axis: co_ax_1: x-axis / co_ax2: y-axis
-    //         (Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.))
-    //     } else if propagation_axis.dot(&Vector3::new(1., 0., 0.)) < f64::EPSILON {
-    //         //propagation axis in yz plane
-    //         let co_ax1 = Vector3::new(1., 0., 0.);
-    //         (co_ax1, propagation_axis.cross(&co_ax1))
-    //     } else if propagation_axis.dot(&Vector3::new(0., 1., 0.)) < f64::EPSILON {
-    //         //propagation axis in xz plane
-    //         let co_ax1 = Vector3::new(0., 1., 0.);
-    //         (co_ax1, propagation_axis.cross(&co_ax1))
-    //     } else if propagation_axis.dot(&Vector3::new(0., 0., 1.)) < f64::EPSILON {
-    //         //propagation axis in xy plane
-    //         let co_ax1 = Vector3::new(0., 0., 1.);
-    //         (co_ax1, propagation_axis.cross(&co_ax1))
-    //     } else {
-    //         //propagation axis is in neither of the cartesian coordinate planes
-    //         //Choose the first coordinate axis by projecting the axes with the largest angle to the propagation axis onto the plane
-    //         //the second one is defined by the cross product of the first axis and the propagation axis
-    //         let p_zz_ang = propagation_axis.dot(&Vector3::new(0., 0., 1.)).acos();
-    //         let p_yy_ang = propagation_axis.dot(&Vector3::new(0., 1., 0.)).acos();
-    //         let p_xx_ang = propagation_axis.dot(&Vector3::new(1., 0., 0.)).acos();
-
-    //         let mut co_ax1 = if p_zz_ang >= p_yy_ang && p_zz_ang >= p_xx_ang {
-    //             propagation_axis
-    //                 - propagation_axis.dot(&Vector3::new(0., 0., 1.)) * Vector3::new(0., 0., 1.)
-    //         } else if p_yy_ang >= p_zz_ang && p_yy_ang >= p_xx_ang {
-    //             propagation_axis
-    //                 - propagation_axis.dot(&Vector3::new(0., 1., 0.)) * Vector3::new(0., 1., 0.)
-    //         } else {
-    //             propagation_axis
-    //                 - propagation_axis.dot(&Vector3::new(1., 0., 0.)) * Vector3::new(1., 0., 0.)
-    //         };
-
-    //         co_ax1 /= co_ax1.norm();
-
-    //         (co_ax1, propagation_axis.cross(&co_ax1))
-    //     }
-    // }
-
-    // fn project_rays_pos_to_plane(
-    //     &self,
-    //     plane_normal_anchor: &Matrix3x1<f64>,
-    //     plane_normal: &Matrix3x1<f64>,
-    //     plane_co_ax_1: &Matrix3x1<f64>,
-    //     plane_co_ax_2: &Matrix3x1<f64>,
-    // ) -> MatrixXx2<f64> {
-    //     let mut rays_pos_projection = MatrixXx2::<f64>::zeros(self.rays.len());
-    //     for (row, ray) in self.rays.iter().enumerate() {
-    //         let ray_pos_vec = Vector3::from_vec(
-    //             ray.position()
-    //                 .iter()
-    //                 .map(uom::si::f64::Length::get::<centimeter>)
-    //                 .collect::<Vec<f64>>(),
-    //         );
-    //         let closest_to_axis_vec = ray_pos_vec
-    //             - plane_normal_anchor
-    //             - (ray_pos_vec - plane_normal_anchor).dot(plane_normal) * plane_normal;
-
-    //         rays_pos_projection[(row, 0)] = closest_to_axis_vec.dot(plane_co_ax_1);
-    //         rays_pos_projection[(row, 1)] = closest_to_axis_vec.dot(plane_co_ax_2);
-    //     }
-    //     rays_pos_projection
-    // }
-
-    fn eval_and_get_plane_normal_and_anchor(
-        &self,
-        propagation_axis_opt: Option<Vector3<f64>>,
-        anchor_point_opt: Option<Point3<Length>>,
-    ) -> OpmResult<(Matrix3x1<f64>, Matrix3x1<f64>)> {
-        let mut propagation_axis = if propagation_axis_opt.is_some()
-            && propagation_axis_opt.unwrap().norm() > f64::EPSILON
-        {
-            Ok(propagation_axis_opt.unwrap())
-        } else {
-            warn!("The provided propagation axis vector is None or has a length of zero! The propagation direction of the most centered ray will be used instead!");
-            self.get_center_ray()
-            .map_or_else(
-                || Err(OpossumError::Other("Transversal fluence could not be calculated, as no propagation axis could be defined!".into())), 
-                |ray| Ok(ray.direction())
-            )
-        }?;
-        propagation_axis /= propagation_axis.norm();
-
-        let anchor_point_vec = if anchor_point_opt.is_some() {
-            Ok(Vector3::from_vec(
-                anchor_point_opt
-                    .unwrap()
-                    .iter()
-                    .map(uom::si::f64::Length::get::<centimeter>)
-                    .collect::<Vec<f64>>(),
-            ))
-        } else {
-            warn!("The provided anchor point is None! The position of the most centered ray will be used instead!");
-
-            self.get_center_ray().map_or_else(|| Err(OpossumError::Other("Transversal fluence could not be calculated, as no anchor point could be defined!".into())), |ray| Ok(Vector3::from_vec(
-                     ray.position()
-                   .iter()
-                   .map(uom::si::f64::Length::get::<centimeter>)
-                   .collect::<Vec<f64>>(),
-           )))
-        }?;
-        Ok((propagation_axis, anchor_point_vec))
-    }
-
     fn calc_ray_fluence_in_voronoi_cells(
         &self,
         projected_ray_pos: &MatrixXx2<f64>,
@@ -515,61 +370,28 @@ impl Rays {
     }
 
     /// Calculates the spatial energy distribution (fluence) of a ray bundle, its coordinates in a plane transversal to its propagation diraction and the peak fluence in J/cm²
-    /// # Attributes
-    /// `propagation_axis_opt`: propagation axis of this ray bundle. If None, the direction of the most centered ray is used
-    /// `anchor_point_opt`: anchor point of the propagation axis of this ray bundle. If None, the anchor point of the most centered ray is used
     /// # Errors
-    /// This function errors if defining the anchor point or the propagation axis fails
-    pub fn calc_transversal_fluence(
-        &self,
-        propagation_axis_opt: Option<Vector3<f64>>,
-        anchor_point_opt: Option<Point3<Length>>,
-        // interpolation_flag: bool,
-    ) -> OpmResult<FluenceData> {
+    /// This function errors if
+    /// - creation of hte linearly spaced axes fails
+    /// - voronating the ray position or the fluence calculation in the voronoi cells fails
+    /// - interpolation fails
+    pub fn calc_fluence_at_position(&self) -> OpmResult<FluenceData> {
         let num_axes_points = 100.;
 
-        // get the propagation axis and its anchor point
-        let (propagation_axis, anchor_point_vec) =
-            self.eval_and_get_plane_normal_and_anchor(propagation_axis_opt, anchor_point_opt)?;
-
         // get ray positions
-        let rays_pos_vec = self
-            .rays
-            .iter()
-            .map(|ray| {
-                Vector3::from_vec(
-                    ray.position()
-                        .iter()
-                        .map(uom::si::f64::Length::get::<centimeter>)
-                        .collect::<Vec<f64>>(),
-                )
-            })
-            .collect::<Vec<Vector3<f64>>>();
-        // calculate the projection of the ray positions onto the new coordinate axes
-        let rays_pos_projection = project_pos_to_plane_with_base_vectors(
-            &anchor_point_vec,
-            &propagation_axis,
-            None,
-            None,
-            &rays_pos_vec,
-        )?;
+        let rays_pos_vec = self.get_xy_rays_pos()/10.;//for centimeter;
 
         //axes definition
-        let (co_ax1, co_ax1_lim) =
-            create_linspace_axes(rays_pos_projection.column(0), num_axes_points)?;
-        let (co_ax2, co_ax2_lim) =
-            create_linspace_axes(rays_pos_projection.column(1), num_axes_points)?;
+        let (co_ax1, co_ax1_lim) = create_linspace_axes(rays_pos_vec.column(0), num_axes_points)?;
+        let (co_ax2, co_ax2_lim) = create_linspace_axes(rays_pos_vec.column(1), num_axes_points)?;
 
         // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
         let voronoi_fluence_scatter =
-        self.calc_ray_fluence_in_voronoi_cells(&rays_pos_projection, co_ax1_lim, co_ax2_lim)?;
+            self.calc_ray_fluence_in_voronoi_cells(&rays_pos_vec, co_ax1_lim, co_ax2_lim)?;
 
         //currently only interpolation. voronoid data for plotting must still be implemented
-        let (interp_fluence, interp_mask) = interpolate_3d_triangulated_scatter_data(
-            &voronoi_fluence_scatter,
-            &co_ax1,
-            &co_ax2,
-        )?;
+        let (interp_fluence, interp_mask) =
+            interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter, &co_ax1, &co_ax2)?;
 
         let (peak_fluence, mut average) = izip!(
             interp_fluence.into_iter(),
@@ -582,7 +404,7 @@ impl Rays {
                 f64::max(arg0.0, *v.0)
             };
             let average_val = if v.1 > &f64::EPSILON {
-                f64::add(arg0.1, *v.1)
+                f64::add(arg0.1, *v.0)
             } else {
                 arg0.1
             };
@@ -591,8 +413,13 @@ impl Rays {
 
         average /= interp_mask.sum();
 
-        Ok(FluenceData::new(peak_fluence, average, interp_fluence, co_ax1, co_ax2))
-        
+        Ok(FluenceData::new(
+            peak_fluence,
+            average,
+            interp_fluence,
+            co_ax1,
+            co_ax2,
+        ))
     }
 
     /// Add a single ray to the ray bundle.
@@ -937,14 +764,14 @@ mod test {
     use super::*;
     use crate::{
         aperture::CircleConfig,
-        distributions::{Hexapolar, Random},
+        distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         ray::SplittingConfig,
     };
-    use approx::assert_abs_diff_eq;
+    use approx::{assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use itertools::izip;
     use log::Level;
     use testing_logger;
-    use uom::si::{energy::joule, length::nanometer};
+    use uom::si::{energy::joule, length::{centimeter, nanometer}};
     #[test]
     fn default() {
         let rays = Rays::default();
@@ -1789,105 +1616,25 @@ mod test {
         }
     }
     #[test]
-    fn calc_transversal_fluence_test() {
-        // let rays = Rays::new_uniform_collimated(
-        //     Length::new::<millimeter>(10.0),
-        //     Length::new::<nanometer>(1000.0),
-        //     Energy::new::<joule>(1.0),
-        //     &DistributionStrategy::FibonacciSquare(1000),
-        // )
-        // .unwrap();
-        
-        // let fluence = rays.calc_transversal_fluence(None, None).unwrap();
-        // assert_relative_eq!(fluence.get_average_fluence(), 1.);
+    fn calc_fluence_at_position_test() {
+        let rays = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+            &FibonacciRectangle::new(Length::new::<centimeter>(1.), Length::new::<centimeter>(1.), 1000).unwrap(),
+        )
+        .unwrap();
 
-        let rays =  Rays::from(vec![
-            Ray::new(
-                Point3::new(
-                    Length::new::<millimeter>(-1.),
-                    Length::new::<millimeter>(0.),
-                    Length::zero(),
-                ),
-                Vector3::new(0., 0., 1.),
-                Length::new::<nanometer>(1000.),
-                Energy::new::<joule>(1.),
-            )
-            .unwrap(),
-            Ray::new(
-                Point3::new(
-                    Length::new::<millimeter>(1.),
-                    Length::new::<millimeter>(0.),
-                    Length::zero(),
-                ),
-                Vector3::new(0., 0., 1.),
-                Length::new::<nanometer>(1000.),
-                Energy::new::<joule>(1.),
-            )
-            .unwrap(),
-            // Ray::new(
-            //     Point3::new(
-            //         Length::new::<millimeter>(-1.),
-            //         Length::new::<millimeter>(1.),
-            //         Length::zero(),
-            //     ),
-            //     Vector3::new(0., 0., 1.),
-            //     Length::new::<nanometer>(1000.),
-            //     Energy::new::<joule>(1.),
-            // )
-            // .unwrap(),
-            // Ray::new(
-            //     Point3::new(
-            //         Length::new::<millimeter>(1.),
-            //         Length::new::<millimeter>(1.),
-            //         Length::zero(),
-            //     ),
-            //     Vector3::new(0., 0., 1.),
-            //     Length::new::<nanometer>(1000.),
-            //     Energy::new::<joule>(1.),
-            // )
-            // .unwrap(),
-            Ray::new(
-                Point3::new(
-                    Length::new::<millimeter>(0.),
-                    Length::new::<millimeter>(0.),
-                    Length::zero(),
-                ),
-                Vector3::new(0., 0., 1.),
-                Length::new::<nanometer>(1000.),
-                Energy::new::<joule>(1.),
-            )
-            .unwrap()
-        ]);
-        let fluence = rays.calc_transversal_fluence(Some(Vector3::new(0.,1.,1.)), None).unwrap();
-        println!("{}",fluence.get_average_fluence());
-        assert_relative_eq!(fluence.get_average_fluence(), 1./f64::sqrt(2.));
+        let fluence = rays.calc_fluence_at_position().unwrap();
+        assert!(approx::RelativeEq::relative_eq(&fluence.get_average_fluence(), &1., 0.01, 0.01));
 
-        todo!();
-        //invalid propagation axis
-        // let prop_axis = Vector3::new(0., 0., 0.);
-        // assert!(rays.calc_transversal_fluence(normal_vec).is_err());
+        let rays = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+            &FibonacciRectangle::new(Length::new::<centimeter>(1.), Length::new::<centimeter>(2.), 10000).unwrap(),
+        )
+        .unwrap();
 
-        // let prop_axis = Vector3::new(0., 0., 1.);
-        // let (fluence, average, peak) = rays.calc_transversal_fluence(normal_vec).unwrap();
-        // assert_relative_eq!(peak, 1./PI);
-        // assert_relative_eq!(average, 1./PI);
-
-        // let prop_axis = Vector3::new(0., 1., 1.);
-        // let (fluence, average, peak) = rays.calc_transversal_fluence(normal_vec).unwrap();
-        // assert_relative_eq!(peak, 1./PI);
-        // assert_relative_eq!(average, 1./PI);
-
-        // let prop_axis = Vector3::new(1., 1., 1.);
-        // let (fluence, average, peak) = rays.calc_transversal_fluence(normal_vec).unwrap();
-        // assert_relative_eq!(peak, 1./PI/f64::sqrt(2.));
-        // assert_relative_eq!(average, 1./PI/f64::sqrt(3.));
-
-        //not deciedd yet. depends on when to bin or when to interpolate
-        // assert_eq!(fluence.row(0).len(), )
-        // assert_eq!(fluence.row(1).len(), )
-    }
-    #[test]
-    fn get_center_ray_test() {
-        todo!();
+        let fluence = rays.calc_fluence_at_position().unwrap();
+        assert!(approx::RelativeEq::relative_eq(&fluence.get_average_fluence(), &0.5, 0.01, 0.01));
     }
 }

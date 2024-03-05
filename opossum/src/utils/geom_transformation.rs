@@ -76,7 +76,6 @@ pub fn define_plane_coordinate_axes_directions(
 /// `plane_normal_vector`: normal vector of the plane
 /// # Errors
 /// This function errors if the plane normal vector has a zero length or any of the provided input plane vectors includes a non finite entry
-#[must_use]
 pub fn project_points_to_plane(
     plane_normal_anchor: &Vector3<f64>,
     plane_normal_vector: &Vector3<f64>,
@@ -116,7 +115,7 @@ pub fn project_points_to_plane(
 /// `plane_base_vec_1_opt`: first base vector of the plane.
 /// `plane_base_vec_2_opt`: second base vector of the plane
 /// # Errors
-/// This function errors if the plane normal vector has a zero length or any of the provided input plane vectors includes a non finite_vector
+/// This function errors if the plane normal vector has a zero length or any of the provided input plane vectors includes a non `finite_vector`
 pub fn project_pos_to_plane_with_base_vectors(
     plane_normal_anchor: &Vector3<f64>,
     plane_normal_vector: &Vector3<f64>,
