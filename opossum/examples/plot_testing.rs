@@ -11,11 +11,14 @@ use uom::si::{
 };
 
 fn main() -> OpmResult<()> {
-
     let mut rays = Rays::new_uniform_collimated(
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
-        &FibonacciRectangle::new(Length::new::<millimeter>(1.), Length::new::<millimeter>(1.), 1000)?,
+        &FibonacciRectangle::new(
+            Length::new::<millimeter>(1.),
+            Length::new::<millimeter>(1.),
+            1000,
+        )?,
     )?;
     // rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
     // rays.propagate_along_z()?;
@@ -35,8 +38,7 @@ fn main() -> OpmResult<()> {
         .set(&PlotArgs::FigSize((1000, 850)))
         .unwrap();
     // let start: Instant = Instant::now();
-    let fluence_data = rays.calc_fluence_at_position(        
-    )?;
+    let fluence_data = rays.calc_fluence_at_position()?;
     // let duration = start.elapsed();
     // println!("{duration:?}");
     println!("{}", fluence_data.get_peak_fluence());

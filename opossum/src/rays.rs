@@ -379,7 +379,7 @@ impl Rays {
         let num_axes_points = 100.;
 
         // get ray positions
-        let rays_pos_vec = self.get_xy_rays_pos()/10.;//for centimeter;
+        let rays_pos_vec = self.get_xy_rays_pos() / 10.; //for centimeter;
 
         //axes definition
         let (co_ax1, co_ax1_lim) = create_linspace_axes(rays_pos_vec.column(0), num_axes_points)?;
@@ -771,7 +771,10 @@ mod test {
     use itertools::izip;
     use log::Level;
     use testing_logger;
-    use uom::si::{energy::joule, length::{centimeter, nanometer}};
+    use uom::si::{
+        energy::joule,
+        length::{centimeter, nanometer},
+    };
     #[test]
     fn default() {
         let rays = Rays::default();
@@ -1620,21 +1623,41 @@ mod test {
         let rays = Rays::new_uniform_collimated(
             Length::new::<nanometer>(1000.0),
             Energy::new::<joule>(1.0),
-            &FibonacciRectangle::new(Length::new::<centimeter>(1.), Length::new::<centimeter>(1.), 1000).unwrap(),
+            &FibonacciRectangle::new(
+                Length::new::<centimeter>(1.),
+                Length::new::<centimeter>(1.),
+                1000,
+            )
+            .unwrap(),
         )
         .unwrap();
 
         let fluence = rays.calc_fluence_at_position().unwrap();
-        assert!(approx::RelativeEq::relative_eq(&fluence.get_average_fluence(), &1., 0.01, 0.01));
+        assert!(approx::RelativeEq::relative_eq(
+            &fluence.get_average_fluence(),
+            &1.,
+            0.01,
+            0.01
+        ));
 
         let rays = Rays::new_uniform_collimated(
             Length::new::<nanometer>(1000.0),
             Energy::new::<joule>(1.0),
-            &FibonacciRectangle::new(Length::new::<centimeter>(1.), Length::new::<centimeter>(2.), 10000).unwrap(),
+            &FibonacciRectangle::new(
+                Length::new::<centimeter>(1.),
+                Length::new::<centimeter>(2.),
+                10000,
+            )
+            .unwrap(),
         )
         .unwrap();
 
         let fluence = rays.calc_fluence_at_position().unwrap();
-        assert!(approx::RelativeEq::relative_eq(&fluence.get_average_fluence(), &0.5, 0.01, 0.01));
+        assert!(approx::RelativeEq::relative_eq(
+            &fluence.get_average_fluence(),
+            &0.5,
+            0.01,
+            0.01
+        ));
     }
 }

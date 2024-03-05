@@ -1,7 +1,8 @@
 use opossum::{
     error::OpmResult,
     nodes::{
-        create_round_collimated_ray_source, FluenceDetector, ParaxialSurface, Propagation, RayPropagationVisualizer, Spectrometer, SpectrometerType, SpotDiagram, WaveFront
+        create_round_collimated_ray_source, FluenceDetector, ParaxialSurface, Propagation,
+        RayPropagationVisualizer, Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
     },
     OpticScenery,
 };
@@ -30,9 +31,9 @@ fn main() -> OpmResult<()> {
     let i_wf3: petgraph::prelude::NodeIndex = scenery.add_node(WaveFront::new("wf_mon3"));
     let i_r1: petgraph::prelude::NodeIndex =
         scenery.add_node(RayPropagationVisualizer::new("ray_mon1"));
-        let i_s1: petgraph::prelude::NodeIndex =
+    let i_s1: petgraph::prelude::NodeIndex =
         scenery.add_node(Spectrometer::new("spec_mon", SpectrometerType::Ideal));
-        let i_fl1: petgraph::prelude::NodeIndex =
+    let i_fl1: petgraph::prelude::NodeIndex =
         scenery.add_node(FluenceDetector::new("fluence monitor"));
 
     scenery.connect_nodes(i_s, "out1", i_p1, "front")?;
