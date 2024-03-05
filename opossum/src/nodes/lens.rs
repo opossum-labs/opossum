@@ -10,13 +10,14 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    surface::Sphere,
+    surface::{Plane, Sphere},
 };
+use num::Zero;
 use uom::si::{f64::Length, length::millimeter};
 
 #[derive(Debug)]
 /// A real lens with spherical (or flat) surfaces.
-/// 
+///
 ///
 /// ## Optical Ports
 ///   - Inputs
@@ -76,6 +77,7 @@ fn create_default_props() -> Properties {
     props
 }
 impl Default for Lens {
+    /// Create a lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
     fn default() -> Self {
         Self {
             props: create_default_props(),
@@ -86,7 +88,8 @@ impl Lens {
     /// Creates a new [`Lens`].
     ///
     /// This function creates a lens with spherical front and back surfaces, a given center thickness and refractive index.
-    /// The radii of curvature must not be zero. The given refractive index must not be < 1.0.
+    /// The radii of curvature must not be zero. The given refractive index must not be < 1.0. A radius of curvature of +/- infinity corresponds to a flat surface.
+    ///
     /// # Errors
     ///
     /// This function return an error if the given parameters are not correct.
@@ -97,9 +100,29 @@ impl Lens {
         refractive_index: f64,
     ) -> OpmResult<Self> {
         let mut props = create_default_props();
+        if front_curvature.is_zero() || front_curvature.is_nan() {
+            return Err(OpossumError::Other(
+                "front curvature must not be 0.0 or NaN".into(),
+            ));
+        }
         props.set("front curvature", front_curvature.into())?;
+        if rear_curvature.is_zero() || rear_curvature.is_nan() {
+            return Err(OpossumError::Other(
+                "rear curvature must not be 0.0 or NaN".into(),
+            ));
+        }
         props.set("rear curvature", rear_curvature.into())?;
+        if center_thickness.is_sign_negative() || !center_thickness.is_finite() {
+            return Err(OpossumError::Other(
+                "rear curvature must be >= 0.0 and finite".into(),
+            ));
+        }
         props.set("center thickness", center_thickness.into())?;
+        if refractive_index < 1.0 || !refractive_index.is_finite() {
+            return Err(OpossumError::Other(
+                "refractive index must be >= 1.0 and finite".into(),
+            ));
+        }
         props.set("refractive index", refractive_index.into())?;
         Ok(Self { props })
     }
@@ -129,8 +152,11 @@ impl Optical for Lens {
                     };
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let front_surface = Sphere::new(next_z_pos, *front_roc)?;
-                    rays.refract_on_surface(&front_surface, *n2)?;
+                    if (*front_roc).is_infinite() {
+                        rays.refract_on_surface(&Plane::new(next_z_pos)?, *n2)?;
+                    } else {
+                        rays.refract_on_surface(&Sphere::new(next_z_pos, *front_roc)?, *n2)?;
+                    };
                     let Ok(Proptype::Length(center_thickness)) = self.props.get("center thickness")
                     else {
                         return Err(OpossumError::Analysis(
@@ -144,8 +170,11 @@ impl Optical for Lens {
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     rays.set_refractive_index(*n2)?;
-                    let rear_surface = Sphere::new(next_z_pos, *rear_roc)?;
-                    rays.refract_on_surface(&rear_surface, 1.0)?;
+                    if (*rear_roc).is_infinite() {
+                        rays.refract_on_surface(&Plane::new(next_z_pos)?, 1.0)?;
+                    } else {
+                        rays.refract_on_surface(&Sphere::new(next_z_pos, *rear_roc)?, 1.0)?;
+                    };
                     Ok(HashMap::from([(
                         "rear".into(),
                         Some(LightData::Geometric(rays)),
@@ -169,5 +198,19 @@ impl Optical for Lens {
 impl Dottable for Lens {
     fn node_color(&self) -> &str {
         "blue"
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn default() {
+        let node=Lens::default();
+        assert_eq!(node.properties().name().unwrap(), "lens");
+        assert_eq!(node.properties().node_type().unwrap(), "lens");
+        assert_eq!(node.is_detector(), false);
+        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.node_color(), "blue");
+        assert!(node.as_group().is_err());
     }
 }
