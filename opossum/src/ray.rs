@@ -59,7 +59,7 @@ pub struct Ray {
     // ///Bounce count of the ray. Necessary to check if the maximum number of bounces is reached
     // bounce: usize,
     /// True if ray is allowd to further propagate, false else
-    valid:  bool,
+    valid: bool,
     path_length: Length,
     // refractive index of the medium this ray is propagatin in.
     refractive_index: f64,
@@ -98,7 +98,7 @@ impl Ray {
             wvl: wave_length,
             path_length: Length::zero(),
             refractive_index: 1.0,
-            valid: true
+            valid: true,
         })
     }
     /// Create a new collimated ray.
@@ -375,8 +375,13 @@ impl Ray {
     ///
     /// The `valid` status denotes, if a [`Ray`] should be further propagated thorugh a system. A [`Ray`] is set to invalid if e.g.
     /// its energy is below a given energy threshold or missed an optical surface.
-    pub fn valid(&self) -> bool {
+    #[must_use]
+    pub const fn valid(&self) -> bool {
         self.valid
+    }
+    /// Sets the validity of this [`Ray`].
+    pub fn set_valid(&mut self, valid: bool) {
+        self.valid = valid;
     }
 }
 #[cfg(test)]
