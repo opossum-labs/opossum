@@ -1,4 +1,5 @@
-//! Spherical lens
+#![warn(missing_docs)]
+//! Lens with spherical or flat surfaces
 use std::collections::HashMap;
 
 use crate::{
@@ -14,6 +15,22 @@ use crate::{
 use uom::si::{f64::Length, length::millimeter};
 
 #[derive(Debug)]
+/// A real lens with spherical (or flat) surfaces.
+/// 
+///
+/// ## Optical Ports
+///   - Inputs
+///     - `front`
+///   - Outputs
+///     - `rear`
+///
+/// ## Properties
+///   - `name`
+///   - `inverted`
+///   - `front curvature`
+///   - `rear curvature`
+///   - `center thickness`
+///   - `refractive index`
 pub struct Lens {
     props: Properties,
 }
