@@ -3,7 +3,7 @@
 use crate::aperture::Aperture;
 use crate::distribution::DistributionStrategy;
 use crate::error::{OpmResult, OpossumError};
-use crate::nodes::fluence_detector::ScatteredRaysFluenceData;
+use crate::nodes::fluence_detector::FluenceData;
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
 use crate::plottable::{
@@ -507,7 +507,7 @@ impl Rays {
         VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)
     }
 
-    /// Calculates the spatial energy distribution (fluence) of a ray bundle, its coordinates in the transversal plane and the peak fluence in J/cm²
+    /// Calculates the spatial energy distribution (fluence) of a ray bundle, its coordinates in a plane transversal to its propagation diraction and the peak fluence in J/cm²
     /// # Attributes
     /// `propagation_axis_opt`: propagation axis of this ray bundle. If None, the direction of the most centered ray is used
     /// `anchor_point_opt`: anchor point of the propagation axis of this ray bundle. If None, the anchor point of the most centered ray is used
@@ -517,8 +517,8 @@ impl Rays {
         &self,
         propagation_axis_opt: Option<Vector3<f64>>,
         anchor_point_opt: Option<Point3<Length>>,
-        interpolation_flag: bool,
-    ) -> OpmResult<ScatteredRaysFluenceData> {
+        // interpolation_flag: bool,
+    ) -> OpmResult<FluenceData> {
         let num_axes_points = 100.;
 
         // get the propagation axis and its anchor point
@@ -555,39 +555,37 @@ impl Rays {
 
         // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
         let voronoi_fluence_scatter =
-            self.calc_ray_fluence_in_voronoi_cells(&rays_pos_projection, co_ax1_lim, co_ax2_lim)?;
+        self.calc_ray_fluence_in_voronoi_cells(&rays_pos_projection, co_ax1_lim, co_ax2_lim)?;
 
-        if interpolation_flag {
-            let (interp_fluence, interp_mask) = interpolate_3d_triangulated_scatter_data(
-                &voronoi_fluence_scatter,
-                &co_ax1,
-                &co_ax2,
-            )?;
+        //currently only interpolation. voronoid data for plotting must still be implemented
+        let (interp_fluence, interp_mask) = interpolate_3d_triangulated_scatter_data(
+            &voronoi_fluence_scatter,
+            &co_ax1,
+            &co_ax2,
+        )?;
 
-            let (peak_fluence, mut average) = izip!(
-                interp_fluence.into_iter(),
-                interp_mask.into_iter()
-            )
-            .fold((f64::NEG_INFINITY, 0.), |arg0, v| {
-                let max_val = if v.0.is_nan() {
-                    arg0.0
-                } else {
-                    f64::max(arg0.0, *v.0)
-                };
-                let average_val = if v.1 > &f64::EPSILON {
-                    f64::add(arg0.1, *v.1)
-                } else {
-                    arg0.1
-                };
-                (max_val, average_val)
-            });
+        let (peak_fluence, mut average) = izip!(
+            interp_fluence.into_iter(),
+            interp_mask.into_iter()
+        )
+        .fold((f64::NEG_INFINITY, 0.), |arg0, v| {
+            let max_val = if v.0.is_nan() {
+                arg0.0
+            } else {
+                f64::max(arg0.0, *v.0)
+            };
+            let average_val = if v.1 > &f64::EPSILON {
+                f64::add(arg0.1, *v.1)
+            } else {
+                arg0.1
+            };
+            (max_val, average_val)
+        });
 
-            average /= interp_mask.sum();
+        average /= interp_mask.sum();
 
-            ScatteredRaysFluenceData::new(peak_fluence, average, interp_fluence, co_ax1, co_ax2)
-        } else {
-            todo!()
-        }
+        Ok(FluenceData::new(peak_fluence, average, interp_fluence, co_ax1, co_ax2))
+        
     }
 
     /// Add a single ray to the ray bundle.
@@ -1752,13 +1750,77 @@ mod test {
     }
     #[test]
     fn calc_transversal_fluence_test() {
-        let rays = Rays::new_uniform_collimated(
-            Length::new::<millimeter>(10.0),
-            Length::new::<nanometer>(1054.0),
-            Energy::new::<joule>(1.0),
-            &DistributionStrategy::Hexapolar(15),
-        )
-        .unwrap();
+        // let rays = Rays::new_uniform_collimated(
+        //     Length::new::<millimeter>(10.0),
+        //     Length::new::<nanometer>(1000.0),
+        //     Energy::new::<joule>(1.0),
+        //     &DistributionStrategy::FibonacciSquare(1000),
+        // )
+        // .unwrap();
+        
+        // let fluence = rays.calc_transversal_fluence(None, None).unwrap();
+        // assert_relative_eq!(fluence.get_average_fluence(), 1.);
+
+        let rays =  Rays::from(vec![
+            Ray::new(
+                Point3::new(
+                    Length::new::<millimeter>(-1.),
+                    Length::new::<millimeter>(0.),
+                    Length::zero(),
+                ),
+                Vector3::new(0., 0., 1.),
+                Length::new::<nanometer>(1000.),
+                Energy::new::<joule>(1.),
+            )
+            .unwrap(),
+            Ray::new(
+                Point3::new(
+                    Length::new::<millimeter>(1.),
+                    Length::new::<millimeter>(0.),
+                    Length::zero(),
+                ),
+                Vector3::new(0., 0., 1.),
+                Length::new::<nanometer>(1000.),
+                Energy::new::<joule>(1.),
+            )
+            .unwrap(),
+            // Ray::new(
+            //     Point3::new(
+            //         Length::new::<millimeter>(-1.),
+            //         Length::new::<millimeter>(1.),
+            //         Length::zero(),
+            //     ),
+            //     Vector3::new(0., 0., 1.),
+            //     Length::new::<nanometer>(1000.),
+            //     Energy::new::<joule>(1.),
+            // )
+            // .unwrap(),
+            // Ray::new(
+            //     Point3::new(
+            //         Length::new::<millimeter>(1.),
+            //         Length::new::<millimeter>(1.),
+            //         Length::zero(),
+            //     ),
+            //     Vector3::new(0., 0., 1.),
+            //     Length::new::<nanometer>(1000.),
+            //     Energy::new::<joule>(1.),
+            // )
+            // .unwrap(),
+            Ray::new(
+                Point3::new(
+                    Length::new::<millimeter>(0.),
+                    Length::new::<millimeter>(0.),
+                    Length::zero(),
+                ),
+                Vector3::new(0., 0., 1.),
+                Length::new::<nanometer>(1000.),
+                Energy::new::<joule>(1.),
+            )
+            .unwrap()
+        ]);
+        let fluence = rays.calc_transversal_fluence(Some(Vector3::new(0.,1.,1.)), None).unwrap();
+        println!("{}",fluence.get_average_fluence());
+        assert_relative_eq!(fluence.get_average_fluence(), 1./f64::sqrt(2.));
 
         todo!();
         //invalid propagation axis

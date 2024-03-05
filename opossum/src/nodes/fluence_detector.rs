@@ -95,7 +95,7 @@ impl Optical for FluenceDetector {
                 self.properties().name()?
             )));
 
-            let fluence_data_opt = rays.calc_transversal_fluence(None, None, true).ok();
+            let fluence_data_opt = rays.calc_transversal_fluence(None, None).ok();
             fluence_data_opt.map_or_else(
                 || {
                     warn!("Fluence Detector diagram: no fluence data for export available",);
@@ -123,7 +123,7 @@ impl Optical for FluenceDetector {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
-            let fluence_data_res = rays.calc_transversal_fluence(None, None, true);
+            let fluence_data_res = rays.calc_transversal_fluence(None, None);
             if let Ok(fluence_data) = fluence_data_res {
                 props
                     .create(
@@ -149,46 +149,44 @@ impl Dottable for FluenceDetector {
     }
 }
 
-impl From<ScatteredRaysFluenceData> for Proptype {
-    fn from(value: ScatteredRaysFluenceData) -> Self {
+impl From<FluenceData> for Proptype {
+    fn from(value: FluenceData) -> Self {
         Self::FluenceDetector(value)
     }
 }
 
 /// Struct to hold the fluence information of a beam
-#[derive(Clone, Debug)]
-pub struct ScatteredRaysFluenceData {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FluenceData {
     /// peak fluence of the beam
     peak: f64,
     /// average fluence of the beam
     average: f64,
-    /// Voronoidata of the rays fluence
-    voronoied_fluence: VoronoiedData,
-    // /// 2d fluence distribution of the beam.
-    // pub interp_distribution: DMatrix<f64>,
-    // /// x coordinates of the fluence distribution
-    // pub interp_x_data: DVector<f64>,
-    // /// y coordinates of the fluence distribution
-    // pub interp_y_data: DVector<f64>,
+    /// 2d fluence distribution of the beam.
+    pub interp_distribution: DMatrix<f64>,
+    /// x coordinates of the fluence distribution
+    pub interp_x_data: DVector<f64>,
+    /// y coordinates of the fluence distribution
+    pub interp_y_data: DVector<f64>,
 }
 
-impl ScatteredRaysFluenceData {
-    /// Constructs a new [`ScatteredRaysFluenceData`] struct
+impl FluenceData {
+    /// Constructs a new [`FluenceData`] struct
     #[must_use]
     pub const fn new(
         peak: f64,
         average: f64,
-        voronoied_fluence: VoronoiedData, 
-        // distribution: DVector<f64>,
-        // x_data: DVector<f64>,
-        // y_data: DVector<f64>,
-        // interp_plot:  bool
+        interp_distribution: DMatrix<f64>,
+        interp_x_data: DVector<f64>,
+        interp_y_data: DVector<f64>,
     ) -> Self {
         
         Self {
             peak,
             average,
-            voronoied_fluence
+            interp_distribution,
+            interp_x_data,
+            interp_y_data
         }
     }
 
@@ -201,7 +199,7 @@ impl ScatteredRaysFluenceData {
     }
 }
 
-impl PdfReportable for ScatteredRaysFluenceData {
+impl PdfReportable for FluenceData {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
         layout.push(genpdf::elements::Paragraph::new(format!(
@@ -223,7 +221,7 @@ impl PdfReportable for ScatteredRaysFluenceData {
     }
 }
 
-impl Plottable for ScatteredRaysFluenceData {
+impl Plottable for FluenceData {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm".into()))?
@@ -241,9 +239,9 @@ impl Plottable for ScatteredRaysFluenceData {
             PlotType::ColorMesh(_) => Ok(Some(PlotData::ColorMesh(
                 self.interp_x_data.clone(),
                 self.interp_y_data.clone(),
-                self.interp_distribution.resize(self.interp_y_data.len(), self.interp_x_data.len(), f64::NAN),
+                self.interp_distribution.clone(),
             ))),
-            PlotType::ColorVoronoi(_) => Ok(Some(PlotData::ColorVoronoi())),
+            // PlotType::ColorVoronoi(_) => Ok(Some(PlotData::ColorVoronoi())),
 
             _ => Ok(None),
         }

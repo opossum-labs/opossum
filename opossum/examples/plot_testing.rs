@@ -93,12 +93,11 @@ fn main() -> OpmResult<()> {
     let fluence_data = rays.calc_transversal_fluence(
         None,
         Some(Point3::new(Length::zero(), Length::zero(), Length::zero())),
-        true,
     )?;
     // let duration = start.elapsed();
     // println!("{duration:?}");
-    println!("{}", fluence_data.peak);
-    println!("{}", fluence_data.average);
+    println!("{}", fluence_data.get_peak_fluence());
+    println!("{}", fluence_data.get_average_fluence());
 
     let plt_dat = PlotData::ColorMesh(
         fluence_data.interp_x_data,
