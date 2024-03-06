@@ -158,8 +158,8 @@ impl Rays {
             self.rays.len()
         }
     }
-     /// Returns the iterator of this [`Rays`].
-     pub fn iter(&self) -> std::slice::Iter<'_, Ray> {
+    /// Returns the iterator of this [`Rays`].
+    pub fn iter(&self) -> std::slice::Iter<'_, Ray> {
         self.rays.iter()
     }
     /// Apodize (cut out or attenuate) the ray bundle by a given [`Aperture`].
@@ -789,6 +789,14 @@ impl From<Vec<Ray>> for Rays {
 impl From<Rays> for Proptype {
     fn from(value: Rays) -> Self {
         Self::RayPositionHistory(value.get_rays_position_history_in_mm())
+    }
+}
+
+impl<'a> IntoIterator for &'a Rays {
+    type IntoIter = std::slice::Iter<'a, crate::ray::Ray>;
+    type Item = &'a crate::ray::Ray;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 

@@ -339,7 +339,7 @@ mod test {
             )
             .unwrap();
         if let Some(Some(LightData::Geometric(rays))) = output.get("rear") {
-            for ray in rays.iter() {
+            for ray in rays {
                 assert_eq!(ray.direction(), Vector3::z());
                 assert_eq!(ray.path_length(), Length::new::<millimeter>(30.0));
             }
@@ -374,7 +374,7 @@ mod test {
             )
             .unwrap();
         if let Some(Some(LightData::Geometric(rays))) = output.get("rear") {
-            for ray in rays.iter() {
+            for ray in rays {
                 assert_eq!(ray.direction(), Vector3::z());
             }
         } else {
