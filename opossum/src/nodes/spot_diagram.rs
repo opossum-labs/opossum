@@ -202,7 +202,7 @@ impl Plottable for SpotDiagram {
         let data = &self.light_data;
         match data {
             Some(LightData::Geometric(rays)) => {
-                let rays_xy_pos = rays.get_xy_rays_pos();
+                let rays_xy_pos = rays.get_xy_rays_pos(true);
                 match plt_type {
                     PlotType::Scatter2D(_) => Ok(Some(PlotData::Dim2(rays_xy_pos))),
                     _ => Ok(None),

@@ -1,4 +1,5 @@
-//! Spherical lens
+#![warn(missing_docs)]
+//! Lens with spherical or flat surfaces
 use std::collections::HashMap;
 
 use crate::{
@@ -9,11 +10,28 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    surface::Sphere,
+    surface::{Plane, Sphere},
 };
+use num::Zero;
 use uom::si::{f64::Length, length::millimeter};
 
 #[derive(Debug)]
+/// A real lens with spherical (or flat) surfaces.
+///
+///
+/// ## Optical Ports
+///   - Inputs
+///     - `front`
+///   - Outputs
+///     - `rear`
+///
+/// ## Properties
+///   - `name`
+///   - `inverted`
+///   - `front curvature`
+///   - `rear curvature`
+///   - `center thickness`
+///   - `refractive index`
 pub struct Lens {
     props: Properties,
 }
@@ -59,6 +77,7 @@ fn create_default_props() -> Properties {
     props
 }
 impl Default for Lens {
+    /// Create a lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
     fn default() -> Self {
         Self {
             props: create_default_props(),
@@ -69,20 +88,45 @@ impl Lens {
     /// Creates a new [`Lens`].
     ///
     /// This function creates a lens with spherical front and back surfaces, a given center thickness and refractive index.
-    /// The radii of curvature must not be zero. The given refractive index must not be < 1.0.
+    /// The radii of curvature must not be zero. The given refractive index must not be < 1.0. A radius of curvature of +/- infinity
+    /// corresponds to a flat surface.
+    ///
     /// # Errors
     ///
     /// This function return an error if the given parameters are not correct.
     pub fn new(
+        name: &str,
         front_curvature: Length,
         rear_curvature: Length,
         center_thickness: Length,
         refractive_index: f64,
     ) -> OpmResult<Self> {
         let mut props = create_default_props();
+        props.set("name", name.into())?;
+
+        if front_curvature.is_zero() || front_curvature.is_nan() {
+            return Err(OpossumError::Other(
+                "front curvature must not be 0.0 or NaN".into(),
+            ));
+        }
         props.set("front curvature", front_curvature.into())?;
+        if rear_curvature.is_zero() || rear_curvature.is_nan() {
+            return Err(OpossumError::Other(
+                "rear curvature must not be 0.0 or NaN".into(),
+            ));
+        }
         props.set("rear curvature", rear_curvature.into())?;
+        if center_thickness.is_sign_negative() || !center_thickness.is_finite() {
+            return Err(OpossumError::Other(
+                "rear curvature must be >= 0.0 and finite".into(),
+            ));
+        }
         props.set("center thickness", center_thickness.into())?;
+        if refractive_index < 1.0 || !refractive_index.is_finite() {
+            return Err(OpossumError::Other(
+                "refractive index must be >= 1.0 and finite".into(),
+            ));
+        }
         props.set("refractive index", refractive_index.into())?;
         Ok(Self { props })
     }
@@ -112,8 +156,11 @@ impl Optical for Lens {
                     };
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let front_surface = Sphere::new(next_z_pos, *front_roc)?;
-                    rays.refract_on_surface(&front_surface, *n2)?;
+                    if (*front_roc).is_infinite() {
+                        rays.refract_on_surface(&Plane::new(next_z_pos)?, *n2)?;
+                    } else {
+                        rays.refract_on_surface(&Sphere::new(next_z_pos, *front_roc)?, *n2)?;
+                    };
                     let Ok(Proptype::Length(center_thickness)) = self.props.get("center thickness")
                     else {
                         return Err(OpossumError::Analysis(
@@ -127,8 +174,11 @@ impl Optical for Lens {
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     rays.set_refractive_index(*n2)?;
-                    let rear_surface = Sphere::new(next_z_pos, *rear_roc)?;
-                    rays.refract_on_surface(&rear_surface, 1.0)?;
+                    if (*rear_roc).is_infinite() {
+                        rays.refract_on_surface(&Plane::new(next_z_pos)?, 1.0)?;
+                    } else {
+                        rays.refract_on_surface(&Sphere::new(next_z_pos, *rear_roc)?, 1.0)?;
+                    };
                     Ok(HashMap::from([(
                         "rear".into(),
                         Some(LightData::Geometric(rays)),
@@ -152,5 +202,205 @@ impl Optical for Lens {
 impl Dottable for Lens {
     fn node_color(&self) -> &str {
         "blue"
+    }
+}
+#[cfg(test)]
+mod test {
+    use nalgebra::Vector3;
+    use uom::si::{energy::joule, f64::Energy, length::nanometer};
+
+    use crate::{analyzer::RayTraceConfig, distributions::Hexapolar, rays::Rays};
+
+    use super::*;
+    #[test]
+    fn default() {
+        let node = Lens::default();
+        assert_eq!(node.properties().name().unwrap(), "lens");
+        assert_eq!(node.properties().node_type().unwrap(), "lens");
+        assert_eq!(node.is_detector(), false);
+        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.node_color(), "blue");
+        assert!(node.as_group().is_err());
+        let Ok(Proptype::Length(roc)) = node.props.get("front curvature") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(500.0));
+        let Ok(Proptype::Length(roc)) = node.props.get("rear curvature") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(-500.0));
+        let Ok(Proptype::Length(roc)) = node.props.get("center thickness") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(10.0));
+        let Ok(Proptype::F64(index)) = node.props.get("refractive index") else {
+            panic!()
+        };
+        assert_eq!(*index, 1.5);
+    }
+    #[test]
+    fn new() {
+        let roc = Length::new::<millimeter>(100.0);
+        let ct = Length::new::<millimeter>(11.0);
+        assert!(Lens::new("test", roc, roc, ct, 0.9).is_err());
+        assert!(Lens::new("test", roc, roc, ct, f64::NAN).is_err());
+        assert!(Lens::new("test", roc, roc, ct, f64::INFINITY).is_err());
+
+        assert!(Lens::new("test", roc, roc, Length::new::<millimeter>(-0.1), 1.5).is_err());
+        assert!(Lens::new("test", roc, roc, Length::new::<millimeter>(f64::NAN), 1.5).is_err());
+        assert!(Lens::new(
+            "test",
+            roc,
+            roc,
+            Length::new::<millimeter>(f64::INFINITY),
+            1.5
+        )
+        .is_err());
+
+        assert!(Lens::new("test", roc, Length::zero(), ct, 1.5).is_err());
+        assert!(Lens::new("test", roc, Length::new::<millimeter>(f64::NAN), ct, 1.5).is_err());
+        assert!(Lens::new(
+            "test",
+            roc,
+            Length::new::<millimeter>(f64::INFINITY),
+            ct,
+            1.5
+        )
+        .is_ok());
+        assert!(Lens::new(
+            "test",
+            roc,
+            Length::new::<millimeter>(f64::NEG_INFINITY),
+            ct,
+            1.5
+        )
+        .is_ok());
+
+        assert!(Lens::new("test", Length::zero(), roc, ct, 1.5).is_err());
+        assert!(Lens::new("test", Length::new::<millimeter>(f64::NAN), roc, ct, 1.5).is_err());
+        assert!(Lens::new(
+            "test",
+            Length::new::<millimeter>(f64::INFINITY),
+            roc,
+            ct,
+            1.5
+        )
+        .is_ok());
+        assert!(Lens::new(
+            "test",
+            Length::new::<millimeter>(f64::NEG_INFINITY),
+            roc,
+            ct,
+            1.5
+        )
+        .is_ok());
+        let node = Lens::new("test", roc, roc, ct, 2.0).unwrap();
+        assert_eq!(node.props.name().unwrap(), "test");
+        let Ok(Proptype::Length(roc)) = node.props.get("front curvature") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(100.0));
+        let Ok(Proptype::Length(roc)) = node.props.get("rear curvature") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(100.0));
+        let Ok(Proptype::Length(roc)) = node.props.get("center thickness") else {
+            panic!()
+        };
+        assert_eq!(*roc, Length::new::<millimeter>(11.0));
+        let Ok(Proptype::F64(index)) = node.props.get("refractive index") else {
+            panic!()
+        };
+        assert_eq!(*index, 2.0);
+    }
+    #[test]
+    fn analyze_flatflat() {
+        let mut node = Lens::new(
+            "test",
+            Length::new::<millimeter>(f64::INFINITY),
+            Length::new::<millimeter>(f64::NEG_INFINITY),
+            Length::new::<millimeter>(10.0),
+            2.0,
+        )
+        .unwrap();
+        let mut rays = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+            &Hexapolar::new(Length::new::<millimeter>(10.0), 3).unwrap(),
+        )
+        .unwrap();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.0));
+        let mut incoming_data = HashMap::default();
+        incoming_data.insert("front".into(), Some(LightData::Geometric(rays)));
+        let output = node
+            .analyze(
+                incoming_data,
+                &AnalyzerType::RayTrace(RayTraceConfig::default()),
+            )
+            .unwrap();
+        if let Some(Some(LightData::Geometric(rays))) = output.get("rear") {
+            for ray in rays {
+                assert_eq!(ray.direction(), Vector3::z());
+                assert_eq!(ray.path_length(), Length::new::<millimeter>(30.0));
+            }
+        } else {
+            assert!(false);
+        }
+    }
+    #[test]
+    fn analyze_biconvex() {
+        // biconvex lens with index of 1.0 (="neutral" lens)
+        let mut node = Lens::new(
+            "test",
+            Length::new::<millimeter>(100.0),
+            Length::new::<millimeter>(-100.0),
+            Length::new::<millimeter>(10.0),
+            1.0,
+        )
+        .unwrap();
+        let mut rays = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+            &Hexapolar::new(Length::new::<millimeter>(10.0), 3).unwrap(),
+        )
+        .unwrap();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.0));
+        let mut incoming_data = HashMap::default();
+        incoming_data.insert("front".into(), Some(LightData::Geometric(rays)));
+        let output = node
+            .analyze(
+                incoming_data,
+                &AnalyzerType::RayTrace(RayTraceConfig::default()),
+            )
+            .unwrap();
+        if let Some(Some(LightData::Geometric(rays))) = output.get("rear") {
+            for ray in rays {
+                assert_eq!(ray.direction(), Vector3::z());
+            }
+        } else {
+            assert!(false);
+        }
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut node = Lens::default();
+        let mut rays = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+            &Hexapolar::new(Length::new::<millimeter>(10.0), 3).unwrap(),
+        )
+        .unwrap();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.0));
+        let mut incoming_data = HashMap::default();
+        incoming_data.insert("rear".into(), Some(LightData::Geometric(rays.clone())));
+        assert!(node
+            .analyze(
+                incoming_data,
+                &AnalyzerType::RayTrace(RayTraceConfig::default())
+            )
+            .is_err());
+        let mut incoming_data = HashMap::default();
+        incoming_data.insert("front".into(), Some(LightData::Geometric(rays)));
+        assert!(node.analyze(incoming_data, &AnalyzerType::Energy).is_err());
     }
 }

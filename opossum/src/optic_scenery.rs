@@ -436,7 +436,7 @@ fn threshold_by_energy(
 ) -> OpmResult<()> {
     for light_data in &mut *outgoing_edges {
         if let Some(LightData::Geometric(rays)) = light_data.1 {
-            rays.delete_by_threshold_energy(energy_threshold)?;
+            rays.invalidate_by_threshold_energy(energy_threshold)?;
         }
     }
     Ok(())
