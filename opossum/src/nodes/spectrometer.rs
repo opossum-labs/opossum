@@ -299,8 +299,8 @@ mod test {
     use super::*;
     use crate::{
         analyzer::AnalyzerType,
-        distributions::Hexapolar,
         lightdata::DataEnergy,
+        position_distributions::Hexapolar,
         rays::Rays,
         spectrum_helper::{create_he_ne_spec, create_visible_spec},
     };

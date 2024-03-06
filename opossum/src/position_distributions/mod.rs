@@ -13,6 +13,6 @@ pub use hexapolar::Hexapolar;
 pub use random::Random;
 pub use sobol::SobolDist;
 
-pub trait Distribution {
+pub trait PositionDistribution {
     fn generate(&self) -> Vec<Point3<Length>>;
 }

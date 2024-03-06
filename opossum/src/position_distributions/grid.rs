@@ -1,5 +1,5 @@
 //! Rectangular, evenly sized grid distribution
-use super::Distribution;
+use super::PositionDistribution;
 use crate::error::{OpmResult, OpossumError};
 use nalgebra::Point3;
 use num::Zero;
@@ -47,7 +47,7 @@ impl Grid {
     }
 }
 
-impl Distribution for Grid {
+impl PositionDistribution for Grid {
     fn generate(&self) -> Vec<Point3<Length>> {
         let nr_of_points_x = self.nr_of_points.0.clamp(1, usize::MAX);
         let nr_of_points_y = self.nr_of_points.1.clamp(1, usize::MAX);

@@ -1,7 +1,7 @@
 //! Circular, hexapolar distribution
 use crate::error::{OpmResult, OpossumError};
 
-use super::Distribution;
+use super::PositionDistribution;
 use nalgebra::{point, Point3};
 use num::Zero;
 use uom::si::f64::Length;
@@ -31,7 +31,7 @@ impl Hexapolar {
         })
     }
 }
-impl Distribution for Hexapolar {
+impl PositionDistribution for Hexapolar {
     fn generate(&self) -> Vec<Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::new();
         // Add center point

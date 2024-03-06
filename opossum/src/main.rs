@@ -112,10 +112,9 @@ fn main() -> OpmResult<()> {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use petgraph::adj::NodeIndex;
     use std::path::PathBuf;
-
-    use super::*;
 
     #[test]
     fn read_and_parse_model_test() {
