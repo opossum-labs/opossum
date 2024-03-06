@@ -209,7 +209,7 @@ mod test {
     use nalgebra::Vector3;
     use uom::si::{energy::joule, f64::Energy, length::nanometer};
 
-    use crate::{analyzer::RayTraceConfig, distributions::Hexapolar, rays::Rays};
+    use crate::{analyzer::RayTraceConfig, position_distributions::Hexapolar, rays::Rays};
 
     use super::*;
     #[test]

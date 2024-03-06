@@ -1,5 +1,4 @@
 use opossum::{
-    distributions::FibonacciRectangle,
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType},
     position_distributions::{FibonacciEllipse, FibonacciRectangle},

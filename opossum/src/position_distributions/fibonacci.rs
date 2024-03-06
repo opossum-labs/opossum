@@ -243,13 +243,11 @@ mod test {
     }
     #[test]
     fn generate_one_rect() {
-        let g = FibonacciRectangle::new(Length::zero(), Length::zero(), 1).unwrap();
-        assert_eq!(g.generate().len(), 1);
+        assert!(FibonacciRectangle::new(Length::zero(), Length::zero(), 1).is_err());
     }
     #[test]
     fn generate_one_ellipse() {
-        let g = FibonacciEllipse::new(Length::zero(), Length::zero(), 1).unwrap();
-        assert_eq!(g.generate().len(), 1);
+        assert!(FibonacciEllipse::new(Length::zero(), Length::zero(), 1).is_err());
     }
     #[test]
     fn generate_rect() {

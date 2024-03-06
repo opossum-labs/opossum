@@ -95,20 +95,49 @@ impl Rays {
     ///  - the given size is < 0.0, NaN or +inf
     pub fn new_collimated(
         wave_length: Length,
-        total_energy: Energy,
         energy_strategy: &dyn EnergyDistribution,
         pos_strategy: &dyn PositionDistribution,
     ) -> OpmResult<Self> {
         let ray_pos = pos_strategy.generate();
+
         //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
-        let ray_pos_plane = ray_pos.iter().map(|p| Point2::<f64>::new(p.x.get::<millimeter>(), p.y.get::<millimeter>())).collect::<Vec<Point2<f64>>>();
-        let ray_energies= energy_strategy.apply(total_energy, ray_pos_plane);
+        let ray_pos_plane = ray_pos
+            .iter()
+            .map(|p| Point2::<f64>::new(p.x.get::<millimeter>(), p.y.get::<millimeter>()))
+            .collect::<Vec<Point2<f64>>>();
+        //apply distribution strategy
+        let ray_energies = energy_strategy.apply(&ray_pos_plane);
+
+        //sum up energy of rays that are valid: energy is larger than machine epsilon times total energy
+        let min_energy = f64::EPSILON * energy_strategy.get_total_energy();
+        let total_energy_valid_rays = Energy::new::<joule>(
+            ray_energies
+                .iter()
+                .map(|e| {
+                    if *e > min_energy {
+                        e.get::<joule>()
+                    } else {
+                        0.
+                    }
+                })
+                .collect::<Vec<f64>>()
+                .iter()
+                .kahan_sum()
+                .sum(),
+        );
+        //scaling factor if a significant amount of enery has been lost
+        let energy_scale_factor = energy_strategy.get_total_energy() / total_energy_valid_rays;
+
+        //create rays
         let nr_of_rays = ray_pos.len();
         let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
         for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
-            let ray = Ray::new_collimated(*pos, wave_length, *energy)?;
-            rays.push(ray);
+            if *energy > f64::EPSILON * energy_strategy.get_total_energy() {
+                let ray = Ray::new_collimated(*pos, wave_length, *energy * energy_scale_factor)?;
+                rays.push(ray);
+            }
         }
+
         Ok(Self {
             rays,
             dist_to_next_surface: Length::zero(),
@@ -861,25 +890,41 @@ mod test {
     use super::*;
     use crate::{
         aperture::CircleConfig,
-        position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
+        energy_distributions::General2DGaussian,
+        position_distributions::{FibonacciRectangle, Hexapolar, Random},
         ray::SplittingConfig,
     };
-    use approx::assert_abs_diff_eq;
+    use approx::{assert_abs_diff_eq, assert_relative_eq};
     use itertools::izip;
     use log::Level;
     use testing_logger;
     use uom::si::{
+        angle::radian,
         energy::joule,
         length::{centimeter, nanometer},
     };
     #[test]
     fn default() {
         let rays = Rays::default();
-        assert_eq!(rays.nr_of_rays(), 0);
+        assert_eq!(rays.nr_of_rays(true), 0);
+        assert_eq!(rays.nr_of_rays(false), 0);
     }
     #[test]
-    fn new_collimated_gaussian(){
-        todo!()
+    fn new_collimated_gaussian() {
+        let wvl = Length::new::<nanometer>(1054.0);
+        let pos_strategy = &Hexapolar::new(Length::new::<millimeter>(1.0), 2).unwrap();
+        let energy_strategy = &General2DGaussian::new(
+            Energy::new::<joule>(1.),
+            Point2::new(0., 0.),
+            Point2::new(1., 1.),
+            1.,
+            Angle::new::<radian>(0.),
+            true,
+        )
+        .unwrap();
+        let rays = Rays::new_collimated(wvl, energy_strategy, pos_strategy).unwrap();
+
+        assert_relative_eq!(rays.total_energy().get::<joule>(), 1.)
     }
     #[test]
     fn new_uniform_collimated() {
