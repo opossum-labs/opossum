@@ -88,7 +88,8 @@ impl Lens {
     /// Creates a new [`Lens`].
     ///
     /// This function creates a lens with spherical front and back surfaces, a given center thickness and refractive index.
-    /// The radii of curvature must not be zero. The given refractive index must not be < 1.0. A radius of curvature of +/- infinity corresponds to a flat surface.
+    /// The radii of curvature must not be zero. The given refractive index must not be < 1.0. A radius of curvature of +/- infinity
+    /// corresponds to a flat surface.
     ///
     /// # Errors
     ///
@@ -317,7 +318,7 @@ mod test {
         let mut node = Lens::new(
             "test",
             Length::new::<millimeter>(f64::INFINITY),
-            Length::new::<millimeter>(f64::INFINITY),
+            Length::new::<millimeter>(f64::NEG_INFINITY),
             Length::new::<millimeter>(10.0),
             2.0,
         )
@@ -337,7 +338,7 @@ mod test {
                 &AnalyzerType::RayTrace(RayTraceConfig::default()),
             )
             .unwrap();
-        if let Some(Some(LightData::Geometric(rays)))=output.get("rear") {
+        if let Some(Some(LightData::Geometric(rays))) = output.get("rear") {
             for ray in rays.iter() {
                 assert_eq!(ray.direction(), Vector3::z());
                 assert_eq!(ray.path_length(), Length::new::<millimeter>(30.0));
@@ -345,5 +346,61 @@ mod test {
         } else {
             assert!(false);
         }
+    }
+    #[test]
+    fn analyze_biconvex() {
+        // biconvex lens with index of 1.0 (="neutral" lens)
+        let mut node = Lens::new(
+            "test",
+            Length::new::<millimeter>(100.0),
+            Length::new::<millimeter>(-100.0),
+            Length::new::<millimeter>(10.0),
+            1.0,
+        )
+        .unwrap();
+        let mut rays = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+            &Hexapolar::new(Length::new::<millimeter>(10.0), 3).unwrap(),
+        )
+        .unwrap();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.0));
+        let mut incoming_data = HashMap::default();
+        incoming_data.insert("front".into(), Some(LightData::Geometric(rays)));
+        let output = node
+            .analyze(
+                incoming_data,
+                &AnalyzerType::RayTrace(RayTraceConfig::default()),
+            )
+            .unwrap();
+        if let Some(Some(LightData::Geometric(rays))) = output.get("rear") {
+            for ray in rays.iter() {
+                assert_eq!(ray.direction(), Vector3::z());
+            }
+        } else {
+            assert!(false);
+        }
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut node = Lens::default();
+        let mut rays = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1000.0),
+            Energy::new::<joule>(1.0),
+            &Hexapolar::new(Length::new::<millimeter>(10.0), 3).unwrap(),
+        )
+        .unwrap();
+        rays.set_dist_to_next_surface(Length::new::<millimeter>(10.0));
+        let mut incoming_data = HashMap::default();
+        incoming_data.insert("rear".into(), Some(LightData::Geometric(rays.clone())));
+        assert!(node
+            .analyze(
+                incoming_data,
+                &AnalyzerType::RayTrace(RayTraceConfig::default())
+            )
+            .is_err());
+        let mut incoming_data = HashMap::default();
+        incoming_data.insert("front".into(), Some(LightData::Geometric(rays)));
+        assert!(node.analyze(incoming_data, &AnalyzerType::Energy).is_err());
     }
 }
