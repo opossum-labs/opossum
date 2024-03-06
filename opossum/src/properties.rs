@@ -11,6 +11,7 @@ use crate::{
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     rays::RayPositionHistory,
+    refractive_index::RefractiveIndexType,
     reporter::{NodeReport, PdfReportable},
     SplittingConfig,
 };
@@ -492,6 +493,8 @@ pub enum Proptype {
     Length(Length),
     /// an energy value
     Energy(Energy),
+    /// a optical refractive index model
+    RefractiveIndex(RefractiveIndexType),
 }
 fn format_value_with_prefix(value: f64) -> String {
     if value.is_nan() {

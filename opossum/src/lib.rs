@@ -36,10 +36,10 @@ pub mod optic_ref;
 pub mod ray;
 pub mod rays;
 pub use ray::SplittingConfig;
+pub mod refractive_index;
 pub mod reporter;
 pub mod surface;
 pub mod utils;
-pub mod refractive_index;
 
 /// Return the version information of the currently built OPOSSUM executable.
 ///

@@ -10,6 +10,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
+    refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Plane, Sphere},
 };
 use num::Zero;
@@ -66,7 +67,7 @@ fn create_default_props() -> Properties {
             "refractive index",
             "refractive index of the lens material",
             None,
-            1.5.into(),
+            RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()).into(),
         )
         .unwrap();
 
@@ -99,7 +100,7 @@ impl Lens {
         front_curvature: Length,
         rear_curvature: Length,
         center_thickness: Length,
-        refractive_index: f64,
+        refractive_index: &dyn RefractiveIndex,
     ) -> OpmResult<Self> {
         let mut props = create_default_props();
         props.set("name", name.into())?;
@@ -122,12 +123,7 @@ impl Lens {
             ));
         }
         props.set("center thickness", center_thickness.into())?;
-        if refractive_index < 1.0 || !refractive_index.is_finite() {
-            return Err(OpossumError::Other(
-                "refractive index must be >= 1.0 and finite".into(),
-            ));
-        }
-        props.set("refractive index", refractive_index.into())?;
+        props.set("refractive index", refractive_index.to_enum().into())?;
         Ok(Self { props })
     }
 }
@@ -242,29 +238,48 @@ mod test {
     fn new() {
         let roc = Length::new::<millimeter>(100.0);
         let ct = Length::new::<millimeter>(11.0);
-        assert!(Lens::new("test", roc, roc, ct, 0.9).is_err());
-        assert!(Lens::new("test", roc, roc, ct, f64::NAN).is_err());
-        assert!(Lens::new("test", roc, roc, ct, f64::INFINITY).is_err());
+        let ref_index = RefrIndexConst::new(1.5).unwrap();
 
-        assert!(Lens::new("test", roc, roc, Length::new::<millimeter>(-0.1), 1.5).is_err());
-        assert!(Lens::new("test", roc, roc, Length::new::<millimeter>(f64::NAN), 1.5).is_err());
+        assert!(Lens::new(
+            "test",
+            roc,
+            roc,
+            Length::new::<millimeter>(-0.1),
+            &ref_index
+        )
+        .is_err());
+        assert!(Lens::new(
+            "test",
+            roc,
+            roc,
+            Length::new::<millimeter>(f64::NAN),
+            &ref_index
+        )
+        .is_err());
         assert!(Lens::new(
             "test",
             roc,
             roc,
             Length::new::<millimeter>(f64::INFINITY),
-            1.5
+            &ref_index
         )
         .is_err());
 
-        assert!(Lens::new("test", roc, Length::zero(), ct, 1.5).is_err());
-        assert!(Lens::new("test", roc, Length::new::<millimeter>(f64::NAN), ct, 1.5).is_err());
+        assert!(Lens::new("test", roc, Length::zero(), ct, &ref_index).is_err());
+        assert!(Lens::new(
+            "test",
+            roc,
+            Length::new::<millimeter>(f64::NAN),
+            ct,
+            &ref_index
+        )
+        .is_err());
         assert!(Lens::new(
             "test",
             roc,
             Length::new::<millimeter>(f64::INFINITY),
             ct,
-            1.5
+            &ref_index
         )
         .is_ok());
         assert!(Lens::new(
@@ -272,18 +287,25 @@ mod test {
             roc,
             Length::new::<millimeter>(f64::NEG_INFINITY),
             ct,
-            1.5
+            &ref_index
         )
         .is_ok());
 
-        assert!(Lens::new("test", Length::zero(), roc, ct, 1.5).is_err());
-        assert!(Lens::new("test", Length::new::<millimeter>(f64::NAN), roc, ct, 1.5).is_err());
+        assert!(Lens::new("test", Length::zero(), roc, ct, &ref_index).is_err());
+        assert!(Lens::new(
+            "test",
+            Length::new::<millimeter>(f64::NAN),
+            roc,
+            ct,
+            &ref_index
+        )
+        .is_err());
         assert!(Lens::new(
             "test",
             Length::new::<millimeter>(f64::INFINITY),
             roc,
             ct,
-            1.5
+            &ref_index
         )
         .is_ok());
         assert!(Lens::new(
@@ -291,10 +313,11 @@ mod test {
             Length::new::<millimeter>(f64::NEG_INFINITY),
             roc,
             ct,
-            1.5
+            &ref_index
         )
         .is_ok());
-        let node = Lens::new("test", roc, roc, ct, 2.0).unwrap();
+        let ref_index = RefrIndexConst::new(2.0).unwrap();
+        let node = Lens::new("test", roc, roc, ct, &ref_index).unwrap();
         assert_eq!(node.props.name().unwrap(), "test");
         let Ok(Proptype::Length(roc)) = node.props.get("front curvature") else {
             panic!()
@@ -308,10 +331,12 @@ mod test {
             panic!()
         };
         assert_eq!(*roc, Length::new::<millimeter>(11.0));
-        let Ok(Proptype::F64(index)) = node.props.get("refractive index") else {
+        let Ok(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_index_const))) =
+            node.props.get("refractive index")
+        else {
             panic!()
         };
-        assert_eq!(*index, 2.0);
+        assert_eq!((*ref_index_const).get_refractive_index(Length::zero()), 2.0);
     }
     #[test]
     fn analyze_flatflat() {
@@ -320,7 +345,7 @@ mod test {
             Length::new::<millimeter>(f64::INFINITY),
             Length::new::<millimeter>(f64::NEG_INFINITY),
             Length::new::<millimeter>(10.0),
-            2.0,
+            &RefrIndexConst::new(2.0).unwrap(),
         )
         .unwrap();
         let mut rays = Rays::new_uniform_collimated(
@@ -355,7 +380,7 @@ mod test {
             Length::new::<millimeter>(100.0),
             Length::new::<millimeter>(-100.0),
             Length::new::<millimeter>(10.0),
-            1.0,
+            &RefrIndexConst::new(1.0).unwrap(),
         )
         .unwrap();
         let mut rays = Rays::new_uniform_collimated(

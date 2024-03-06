@@ -3,6 +3,7 @@ use opossum::nodes::{
     create_round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer, SpotDiagram,
     WaveFront,
 };
+use opossum::refractive_index::RefrIndexConst;
 use opossum::OpticScenery;
 use std::path::Path;
 use uom::si::energy::joule;
@@ -22,7 +23,7 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(200.0),
         Length::new::<millimeter>(-200.0),
         Length::new::<millimeter>(10.0),
-        2.0,
+        &RefrIndexConst::new(2.0).unwrap(),
     )?);
     let s2 = scenery.add_node(Propagation::new(
         "s2",
@@ -33,7 +34,7 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(200.0),
         Length::new::<millimeter>(-200.0),
         Length::new::<millimeter>(10.0),
-        2.0,
+        &RefrIndexConst::new(2.0).unwrap(),
     )?);
     let s3 = scenery.add_node(Propagation::new("s3", Length::new::<millimeter>(30.0))?);
     let det = scenery.add_node(RayPropagationVisualizer::default());
