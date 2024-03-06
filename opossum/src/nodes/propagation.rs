@@ -8,6 +8,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
+    refractive_index::refr_index_vaccuum,
 };
 use num::Zero;
 use std::collections::HashMap;
@@ -55,7 +56,7 @@ fn create_default_props() -> Properties {
             "refractive index",
             "refractive index of the medium",
             None,
-            1.0.into(),
+            refr_index_vaccuum().into(),
         )
         .unwrap();
     props.set("apertures", ports.into()).unwrap();
@@ -110,13 +111,14 @@ impl Optical for Propagation {
                     let Ok(Proptype::Length(length_along_z)) = self.props.get("distance") else {
                         return Err(OpossumError::Analysis("cannot read distance".into()));
                     };
-                    let Ok(Proptype::F64(refractive_index)) = self.props.get("refractive index")
+                    let Ok(Proptype::RefractiveIndex(refractive_index)) =
+                        self.props.get("refractive index")
                     else {
                         return Err(OpossumError::Analysis(
                             "cannot read refractive index".into(),
                         ));
                     };
-                    rays.set_refractive_index(*refractive_index)?;
+                    rays.set_refractive_index(refractive_index)?;
                     rays.set_dist_to_next_surface(*length_along_z);
                     // rays.propagate_along_z(*length_along_z)?;
                     data = Some(LightData::Geometric(rays));

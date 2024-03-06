@@ -3,6 +3,7 @@ use crate::dottable::Dottable;
 use crate::error::OpmResult;
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Proptype};
+use crate::refractive_index::refr_index_vaccuum;
 use crate::reporter::{NodeReport, PdfReportable};
 use crate::surface::Plane;
 use crate::{
@@ -143,7 +144,7 @@ impl Optical for EnergyMeter {
             let mut rays = rays.clone();
             let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
             let plane = Plane::new(z_position)?;
-            rays.refract_on_surface(&plane, 1.0)?;
+            rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(HashMap::from([(
                 outport.into(),
