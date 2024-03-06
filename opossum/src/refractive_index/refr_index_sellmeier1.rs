@@ -17,6 +17,11 @@ pub struct RefrIndexSellmeier1 {
     l3: f64,
 }
 impl RefrIndexSellmeier1 {
+    /// Create a new refractive index model following the Sellmeier equation.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given coefficients are not finite.
     pub fn new(k1: f64, k2: f64, k3: f64, l1: f64, l2: f64, l3: f64) -> OpmResult<Self> {
         if !k1.is_finite() || !k2.is_finite() || !k3.is_finite() {
             return Err(OpossumError::Other(
