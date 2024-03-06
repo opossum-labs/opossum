@@ -39,6 +39,7 @@ pub use ray::SplittingConfig;
 pub mod reporter;
 pub mod surface;
 pub mod utils;
+pub mod refractive_index;
 
 /// Return the version information of the currently built OPOSSUM executable.
 ///
