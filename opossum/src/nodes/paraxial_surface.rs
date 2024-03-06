@@ -10,6 +10,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
+    refractive_index::refr_index_vaccuum,
     surface::Plane,
 };
 use uom::num_traits::Zero;
@@ -102,7 +103,7 @@ impl Optical for ParaxialSurface {
                     let z_position =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     let plane = Plane::new(z_position)?;
-                    rays.refract_on_surface(&plane, 1.0)?;
+                    rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     rays.refract_paraxial(focal_length)?;
                     data = Some(LightData::Geometric(rays));
                 } else {

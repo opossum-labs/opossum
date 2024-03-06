@@ -145,7 +145,9 @@ impl Optical for Lens {
                     let Ok(Proptype::Length(front_roc)) = self.props.get("front curvature") else {
                         return Err(OpossumError::Analysis("cannot read front curvature".into()));
                     };
-                    let Ok(Proptype::F64(n2)) = self.props.get("refractive index") else {
+                    let Ok(Proptype::RefractiveIndex(index_model)) =
+                        self.props.get("refractive index")
+                    else {
                         return Err(OpossumError::Analysis(
                             "cannot read refractive index".into(),
                         ));
@@ -153,9 +155,12 @@ impl Optical for Lens {
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     if (*front_roc).is_infinite() {
-                        rays.refract_on_surface(&Plane::new(next_z_pos)?, *n2)?;
+                        rays.refract_on_surface(&Plane::new(next_z_pos)?, index_model)?;
                     } else {
-                        rays.refract_on_surface(&Sphere::new(next_z_pos, *front_roc)?, *n2)?;
+                        rays.refract_on_surface(
+                            &Sphere::new(next_z_pos, *front_roc)?,
+                            index_model,
+                        )?;
                     };
                     let Ok(Proptype::Length(center_thickness)) = self.props.get("center thickness")
                     else {
@@ -169,11 +174,12 @@ impl Optical for Lens {
                     };
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    rays.set_refractive_index(*n2)?;
+                    rays.set_refractive_index(index_model)?;
+                    let index_1_0 = &RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap());
                     if (*rear_roc).is_infinite() {
-                        rays.refract_on_surface(&Plane::new(next_z_pos)?, 1.0)?;
+                        rays.refract_on_surface(&Plane::new(next_z_pos)?, index_1_0)?;
                     } else {
-                        rays.refract_on_surface(&Sphere::new(next_z_pos, *rear_roc)?, 1.0)?;
+                        rays.refract_on_surface(&Sphere::new(next_z_pos, *rear_roc)?, index_1_0)?;
                     };
                     Ok(HashMap::from([(
                         "rear".into(),
@@ -229,10 +235,10 @@ mod test {
             panic!()
         };
         assert_eq!(*roc, Length::new::<millimeter>(10.0));
-        let Ok(Proptype::F64(index)) = node.props.get("refractive index") else {
+        let Ok(Proptype::RefractiveIndex(index)) = node.props.get("refractive index") else {
             panic!()
         };
-        assert_eq!(*index, 1.5);
+        assert_eq!((*index).get_refractive_index(Length::zero()), 1.5);
     }
     #[test]
     fn new() {

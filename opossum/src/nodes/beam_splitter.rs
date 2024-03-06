@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use crate::ray::SplittingConfig;
+use crate::refractive_index::refr_index_vaccuum;
 use crate::surface::Plane;
 use crate::{
     analyzer::AnalyzerType,
@@ -173,7 +174,7 @@ impl BeamSplitter {
                     let z_position =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     let plane = Plane::new(z_position)?;
-                    rays.refract_on_surface(&plane, 1.0)?;
+                    rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     let split_rays = rays.split(splitting_config)?;
                     (rays, split_rays)
                 }
@@ -193,7 +194,7 @@ impl BeamSplitter {
                     let z_position =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     let plane = Plane::new(z_position)?;
-                    rays.refract_on_surface(&plane, 1.0)?;
+                    rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     let split_rays = rays.split(splitting_config)?;
                     (rays, split_rays)
                 }

@@ -11,6 +11,7 @@ use crate::plottable::{
 };
 use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
+use crate::refractive_index::RefractiveIndexType;
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use crate::surface::Surface;
@@ -508,9 +509,14 @@ impl Rays {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub fn refract_on_surface(&mut self, surface: &dyn Surface, n2: f64) -> OpmResult<()> {
+    pub fn refract_on_surface(
+        &mut self,
+        surface: &dyn Surface,
+        refractive_index: &RefractiveIndexType,
+    ) -> OpmResult<()> {
         for ray in &mut self.rays {
             if ray.valid() {
+                let n2 = refractive_index.get_refractive_index(ray.wavelength());
                 ray.refract_on_surface(surface, n2)?;
             }
         }
@@ -619,18 +625,18 @@ impl Rays {
     /// # Errors
     ///
     /// This function will return an error if the given refractive index is < 1.0 or not finite.
-    pub fn set_refractive_index(&mut self, refractive_index: f64) -> OpmResult<()> {
-        if refractive_index < 1.0 || !refractive_index.is_finite() {
-            return Err(OpossumError::Other(
-                "refractive index must be >=1.0 and finite".into(),
-            ));
-        }
+    pub fn set_refractive_index(
+        &mut self,
+        refractive_index: &RefractiveIndexType,
+    ) -> OpmResult<()> {
         if self.nr_of_rays(true).is_zero() {
             warn!("ray bundle contains no valid rays for setting the refractive index");
         } else {
             for ray in &mut self.rays {
                 if ray.valid() {
-                    ray.set_refractive_index(refractive_index)?;
+                    ray.set_refractive_index(
+                        refractive_index.get_refractive_index(ray.wavelength()),
+                    )?;
                 }
             }
         }
@@ -829,6 +835,7 @@ mod test {
         aperture::CircleConfig,
         distributions::{FibonacciRectangle, Hexapolar, Random},
         ray::SplittingConfig,
+        refractive_index::RefrIndexConst,
     };
     use approx::assert_abs_diff_eq;
     use itertools::izip;
@@ -979,7 +986,10 @@ mod test {
     fn set_refractive_index() {
         testing_logger::setup();
         let mut rays = Rays::default();
-        rays.set_refractive_index(1.5).unwrap();
+        rays.set_refractive_index(&RefractiveIndexType::Const(
+            RefrIndexConst::new(1.5).unwrap(),
+        ))
+        .unwrap();
         testing_logger::validate(|captured_logs| {
             assert_eq!(captured_logs.len(), 1);
             assert_eq!(
@@ -1002,11 +1012,10 @@ mod test {
         )
         .unwrap();
         rays.add_ray(ray);
-        assert!(rays.set_refractive_index(0.9).is_err());
-        assert!(rays.set_refractive_index(f64::NAN).is_err());
-        assert!(rays.set_refractive_index(f64::INFINITY).is_err());
-        assert!(rays.set_refractive_index(1.0).is_ok());
-        rays.set_refractive_index(2.0).unwrap();
+        rays.set_refractive_index(&RefractiveIndexType::Const(
+            RefrIndexConst::new(2.0).unwrap(),
+        ))
+        .unwrap();
         assert_eq!(rays.rays[0].refractive_index(), 2.0);
         assert_eq!(rays.rays[1].refractive_index(), 2.0);
     }

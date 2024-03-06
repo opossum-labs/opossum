@@ -5,6 +5,17 @@ use super::{RefractiveIndex, RefractiveIndexType};
 use crate::error::OpmResult;
 use crate::error::OpossumError;
 
+#[must_use]
+/// Create a refractive index model representing vacuum.
+///
+/// Constant (wavelength independant) refractive index of 1.0.
+///
+/// # Panics
+/// This function could theorectically panic.
+pub fn refr_index_vaccuum() -> RefractiveIndexType {
+    RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap())
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RefrIndexConst {
     refractive_index: f64,
@@ -48,12 +59,12 @@ mod test {
     }
     #[test]
     fn get_refractive_index() {
-        let i=RefrIndexConst::new(1.5).unwrap();
+        let i = RefrIndexConst::new(1.5).unwrap();
         assert_eq!(i.get_refractive_index(Length::zero()), 1.5);
     }
     #[test]
     fn get_enum() {
-        let i=RefrIndexConst::new(1.5).unwrap();
+        let i = RefrIndexConst::new(1.5).unwrap();
         assert!(matches!(i.to_enum(), RefractiveIndexType::Const(_)));
     }
 }
