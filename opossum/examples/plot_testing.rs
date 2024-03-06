@@ -1,7 +1,7 @@
 use opossum::{
-    distributions::{FibonacciEllipse, FibonacciRectangle},
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType},
+    position_distributions::{FibonacciEllipse, FibonacciRectangle},
     rays::Rays,
 };
 use uom::si::{

@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
 use crate::{
-    distributions::{Grid, Hexapolar},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
+    position_distributions::{Grid, Hexapolar},
     properties::{Properties, Proptype},
     rays::Rays,
 };

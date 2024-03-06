@@ -238,9 +238,9 @@ mod test {
 
     use crate::{
         analyzer::{AnalyzerType, RayTraceConfig},
-        distributions::Hexapolar,
         lightdata::DataEnergy,
         optical::LightResult,
+        position_distributions::Hexapolar,
         rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };

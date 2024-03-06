@@ -1,5 +1,5 @@
 /// Rectangluar, low-discrepancy quasirandom distribution
-use super::Distribution;
+use super::PositionDistribution;
 use crate::error::{OpmResult, OpossumError};
 use nalgebra::{point, Point3};
 use num::Zero;
@@ -52,7 +52,7 @@ impl SobolDist {
     }
 }
 
-impl Distribution for SobolDist {
+impl PositionDistribution for SobolDist {
     fn generate(&self) -> Vec<nalgebra::Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::new();
         let params = JoeKuoD6::minimal();

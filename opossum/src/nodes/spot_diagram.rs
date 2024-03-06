@@ -216,7 +216,7 @@ impl Plottable for SpotDiagram {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::distributions::Hexapolar;
+    use crate::position_distributions::Hexapolar;
     use crate::{
         analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays,
         spectrum_helper::create_he_ne_spec,

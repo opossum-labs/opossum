@@ -1,5 +1,5 @@
 //! Rectangular, uniform random distribution
-use super::Distribution;
+use super::PositionDistribution;
 use crate::error::{OpmResult, OpossumError};
 use nalgebra::{point, Point3};
 use num::Zero;
@@ -50,7 +50,7 @@ impl Random {
         })
     }
 }
-impl Distribution for Random {
+impl PositionDistribution for Random {
     fn generate(&self) -> Vec<nalgebra::Point3<Length>> {
         let mut points: Vec<Point3<Length>> = Vec::new();
         let mut rng = rand::thread_rng();

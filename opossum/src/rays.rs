@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling ray bundles
 use crate::aperture::Aperture;
-use crate::distributions::{Distribution, Hexapolar};
+use crate::energy_distributions::EnergyDistribution;
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::fluence_detector::FluenceData;
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
@@ -9,6 +9,7 @@ use crate::nodes::FilterType;
 use crate::plottable::{
     AxLims, PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd,
 };
+use crate::position_distributions::{Hexapolar, PositionDistribution};
 use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
 use crate::reporter::PdfReportable;
@@ -49,7 +50,7 @@ pub struct Rays {
     // ***
 }
 impl Rays {
-    /// Generate a set of collimated rays (collinear with optical axis).
+    /// Generate a set of collimated rays (collinear with optical axis) with uniform energy distribution.
     ///
     /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
     /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`DistributionStrategy`].
@@ -64,7 +65,7 @@ impl Rays {
     pub fn new_uniform_collimated(
         wave_length: Length,
         energy: Energy,
-        strategy: &dyn Distribution,
+        strategy: &dyn PositionDistribution,
     ) -> OpmResult<Self> {
         let points = strategy.generate();
         let nr_of_rays = points.len();
@@ -73,6 +74,39 @@ impl Rays {
         let energy_per_ray = energy / nr_of_rays as f64;
         for point in points {
             let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
+            rays.push(ray);
+        }
+        Ok(Self {
+            rays,
+            dist_to_next_surface: Length::zero(),
+            z_position: Length::zero(),
+        })
+    }
+
+    /// Generate a set of collimated rays (collinear with optical axis) with specified energy distribution and position distribution.
+    ///
+    /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
+    /// distributed according to the specified distribution function over the indivual rays: [`EnergyDistribution`]. The ray positions are distributed according to the given [`PositionDistribution`].
+    ///  
+    /// This function returns an error if
+    /// # Errors
+    ///  - the given wavelength is <= 0.0, NaN or +inf
+    ///  - the given energy is <= 0.0, NaN or +inf
+    ///  - the given size is < 0.0, NaN or +inf
+    pub fn new_collimated(
+        wave_length: Length,
+        total_energy: Energy,
+        energy_strategy: &dyn EnergyDistribution,
+        pos_strategy: &dyn PositionDistribution,
+    ) -> OpmResult<Self> {
+        let ray_pos = pos_strategy.generate();
+        //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
+        let ray_pos_plane = ray_pos.iter().map(|p| Point2::<f64>::new(p.x.get::<millimeter>(), p.y.get::<millimeter>())).collect::<Vec<Point2<f64>>>();
+        let ray_energies= energy_strategy.apply(total_energy, ray_pos_plane);
+        let nr_of_rays = ray_pos.len();
+        let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
+        for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
+            let ray = Ray::new_collimated(*pos, wave_length, *energy)?;
             rays.push(ray);
         }
         Ok(Self {
@@ -764,7 +798,7 @@ mod test {
     use super::*;
     use crate::{
         aperture::CircleConfig,
-        distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
+        position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         ray::SplittingConfig,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq, relative_eq};
@@ -779,6 +813,10 @@ mod test {
     fn default() {
         let rays = Rays::default();
         assert_eq!(rays.nr_of_rays(), 0);
+    }
+    #[test]
+    fn new_collimated_gaussian(){
+        todo!()
     }
     #[test]
     fn new_uniform_collimated() {

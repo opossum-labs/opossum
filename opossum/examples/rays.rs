@@ -1,4 +1,4 @@
-use opossum::{distributions::Random, error::OpmResult, rays::Rays};
+use opossum::{error::OpmResult, position_distributions::Random, rays::Rays};
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
