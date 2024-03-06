@@ -690,7 +690,7 @@ mod test {
 
         let x_interp = linspace(-0.5, 1., 4.).unwrap();
         let y_interp = linspace(-0.5, 1., 4.).unwrap();
-        let (data, mask) =
+        let (_data, mask) =
             interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
 
         assert_abs_diff_eq!(mask[(0, 0)], 0.);
@@ -800,7 +800,7 @@ mod test {
 
         let x_interp = linspace(0., 1., 3.).unwrap();
         let y_interp = linspace(0., 1., 3.).unwrap();
-        let (interp_data, interp_mask) =
+        let (interp_data, _interp_mask) =
             interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp).unwrap();
 
         assert_relative_eq!(interp_data[(0, 0)], 0.);

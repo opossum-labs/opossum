@@ -158,6 +158,10 @@ impl Rays {
             self.rays.len()
         }
     }
+     /// Returns the iterator of this [`Rays`].
+     pub fn iter(&self) -> std::slice::Iter<'_, Ray> {
+        self.rays.iter()
+    }
     /// Apodize (cut out or attenuate) the ray bundle by a given [`Aperture`].
     ///
     /// This function only affects `valid` [`Ray`]s in the bundle.
