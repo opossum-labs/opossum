@@ -6,6 +6,7 @@ use nalgebra::{point, Point3};
 use num::Zero;
 use uom::si::f64::Length;
 
+#[derive(Clone)]
 pub struct Hexapolar {
     nr_of_rings: u8,
     radius: Length,
