@@ -56,9 +56,9 @@ fn main() -> OpmResult<()> {
         .unwrap()
         .set(&PlotArgs::FigSize((1000, 850)))
         .unwrap();
-    let plt_dat = PlotData::Dim2(rays.get_xy_rays_pos(true));
-    let plt_type = PlotType::Scatter2D(plt_params);
-    let _ = plt_type.plot(&plt_dat);
+    // let plt_dat = PlotData::Dim2(rays.get_xy_rays_pos(true));
+    // let plt_type = PlotType::Scatter2D(plt_params);
+    // let _ = plt_type.plot(&plt_dat);
 
     Ok(())
 }

@@ -6,6 +6,7 @@ use csv::ReaderBuilder;
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::MatrixXx2;
+use plotters::style::RGBAColor;
 use serde_derive::{Deserialize, Serialize};
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
@@ -472,7 +473,7 @@ impl Plottable for Spectrum {
             spec_mat[(i, 1)] = s.1;
         }
         match plt_type {
-            PlotType::Line2D(_) | PlotType::Scatter2D(_) => Ok(Some(PlotData::Dim2(spec_mat))),
+            PlotType::Line2D(_) | PlotType::Scatter2D(_) => Ok(Some(PlotData::Dim2(spec_mat, vec![RGBAColor(255,0,0,1.)]))),
             _ => Ok(None),
         }
     }

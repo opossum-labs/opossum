@@ -1,11 +1,14 @@
 #![warn(missing_docs)]
+use colorous::Gradient;
 use image::{DynamicImage, ImageBuffer, RgbImage};
+use plotters::style::RGBAColor;
 use serde_derive::{Deserialize, Serialize};
+use uom::si::length::nanometer;
 
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
+use crate::plottable::{CGradient, LabelPos, PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::refractive_index::refr_index_vaccuum;
 use crate::reporter::{NodeReport, PdfReportable};
@@ -192,6 +195,7 @@ impl Plottable for SpotDiagram {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm".into()))?
             .set(&PlotArgs::YLabel("distance in mm".into()))?;
+
         Ok(())
     }
 
@@ -204,8 +208,24 @@ impl Plottable for SpotDiagram {
         match data {
             Some(LightData::Geometric(rays)) => {
                 let rays_xy_pos = rays.get_xy_rays_pos(true);
+                let mut unique_wvls = rays.get_unique_wavelengths(true);
+                let color = if unique_wvls.len() >  1{
+                    unique_wvls.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    let wvl_range = *unique_wvls.last().unwrap()*2. - *unique_wvls.first().unwrap()*2.;
+                    let mut color = Vec::<RGBAColor>::with_capacity(rays.nr_of_rays(true));
+                    let grad = colorous::TURBO;
+                    for ray in rays{
+                        let grad_val = 0.42+(ray.wavelength()-unique_wvls[0]).get::<nanometer>()/wvl_range.get::<nanometer>();
+                        let rgbcolor = grad.eval_continuous(grad_val);
+                        color.push(RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.));
+                    }
+                    color
+                }
+                else{
+                    vec![RGBAColor(255, 0, 0, 1.)]
+                };
                 match plt_type {
-                    PlotType::Scatter2D(_) => Ok(Some(PlotData::Dim2(rays_xy_pos))),
+                    PlotType::Scatter2D(_) => Ok(Some(PlotData::Dim2(rays_xy_pos, color))),
                     _ => Ok(None),
                 }
             }
