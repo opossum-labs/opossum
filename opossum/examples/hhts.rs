@@ -1,5 +1,13 @@
+use std::path::Path;
+
 use opossum::{
-    error::OpmResult, lightdata::LightData, nodes::Source, position_distributions::Hexapolar, rays::Rays, refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1}, OpticScenery
+    error::OpmResult,
+    lightdata::LightData,
+    nodes::{Lens, Propagation, RayPropagationVisualizer, Source},
+    position_distributions::Hexapolar,
+    rays::Rays,
+    refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
+    OpticScenery,
 };
 use uom::si::{
     energy::joule,
@@ -48,10 +56,51 @@ fn main() -> OpmResult<()> {
     rays.add_rays(&mut rays_2w);
 
     let mut scenery = OpticScenery::default();
-    scenery.set_description("HHT Sensor");
+    scenery.set_description("HHT Sensor")?;
 
-    let src=scenery.add_node(Source::new("src", &LightData::Geometric(rays)));
+    let src = scenery.add_node(Source::new("src", &LightData::Geometric(rays)));
+    let d1 = scenery.add_node(Propagation::new("d1", Length::new::<millimeter>(2000.0))?);
+    let t1_l1a = scenery.add_node(Lens::new(
+        "T1 L1a",
+        Length::new::<millimeter>(518.34008),
+        Length::new::<millimeter>(-847.40402),
+        Length::new::<millimeter>(30.0),
+        &refr_index_hk9l,
+    )?);
+    let d2 = scenery.add_node(Propagation::new("d2", Length::new::<millimeter>(10.0))?);
+    let t1_l1b = scenery.add_node(Lens::new(
+        "T1 L1b",
+        Length::new::<millimeter>(-788.45031),
+        Length::new::<millimeter>(-2551.88619),
+        Length::new::<millimeter>(21.66602),
+        &refr_index_hzf52,
+    )?);
+    let d3 = scenery.add_node(Propagation::new(
+        "d3",
+        Length::new::<millimeter>(937.23608),
+    )?);
+    let t1_l2a = scenery.add_node(Lens::new(
+        "T1 L2a",
+        Length::new::<millimeter>(-88.51496),
+        Length::new::<millimeter>(f64::INFINITY),
+        Length::new::<millimeter>(5.77736),
+        &refr_index_hzf52,
+    )?);
+    let d4 = scenery.add_node(Propagation::new(
+        "d4",
+        Length::new::<millimeter>(8.85423),
+    )?);
+    scenery.connect_nodes(src, "out1", d1, "front")?;
+    scenery.connect_nodes(d1, "rear", t1_l1a, "front")?;
+    scenery.connect_nodes(t1_l1a, "rear", d2, "front")?;
+    scenery.connect_nodes(d2, "rear", t1_l1b, "front")?;
+    scenery.connect_nodes(t1_l1b, "rear", d3, "front")?;
+    scenery.connect_nodes(d3, "rear", t1_l2a, "front")?;
+    scenery.connect_nodes(t1_l2a, "rear", d4, "front")?;
 
-    
+    let det_prop = scenery.add_node(RayPropagationVisualizer::new("det"));
+    scenery.connect_nodes(d4, "rear", det_prop, "in1")?;
+
+    scenery.save_to_file(Path::new("./opossum/playground/hhts.opm"))?;
     Ok(())
 }

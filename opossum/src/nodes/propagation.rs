@@ -120,7 +120,6 @@ impl Optical for Propagation {
                     };
                     rays.set_refractive_index(refractive_index)?;
                     rays.set_dist_to_next_surface(*length_along_z);
-                    // rays.propagate_along_z(*length_along_z)?;
                     data = Some(LightData::Geometric(rays));
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
