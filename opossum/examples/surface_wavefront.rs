@@ -15,7 +15,7 @@ fn main() -> OpmResult<()> {
     let src = scenery.add_node(create_round_collimated_ray_source(
         Length::new::<millimeter>(5.0),
         Energy::new::<joule>(1.0),
-        20,
+        5,
     )?);
     let s1 = scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(30.0))?);
     let l1 = scenery.add_node(Lens::new(

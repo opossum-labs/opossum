@@ -3,12 +3,11 @@ use opossum::{
     energy_distributions::general_gaussian::General2DGaussian,
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotType},
-    position_distributions::{FibonacciEllipse, FibonacciRectangle, Grid, Random, SobolDist},
+    position_distributions::FibonacciRectangle,
     rays::Rays,
 };
-use sobol::Sobol;
 use uom::si::{
-    angle::{degree, radian},
+    angle::degree,
     energy::joule,
     f64::{Angle, Energy, Length},
     length::{millimeter, nanometer},

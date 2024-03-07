@@ -120,7 +120,7 @@ pub fn calc_closed_poly_area(poly_coords: &[Point2<f64>]) -> OpmResult<f64> {
 }
 
 /// Interpolation of scattered 3d data (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
-/// The interpolation is done via delaunay triangulation of the data points and interpolating on the desired points (`y_interp`, `y_interp`) using barycentric coordinates of the triangles
+/// The interpolation is done via delaunay triangulation of the data points and interpolating on the desired points (`x_interp`, `y_interp`) using barycentric coordinates of the triangles
 /// # Attributes
 /// `scattered_data`: Scattered data to be interpolated. The data should be structures as x-column, y-column, data-column
 /// `x_interp`: x-coordinates of the points on which this function should interpolate
