@@ -233,8 +233,8 @@ impl Rays {
     ///
     /// This function returns an error if a single ray cannot be propery apodized (e.g. filter factor outside (0.0..=1.0)).
     pub fn apodize(&mut self, aperture: &Aperture) -> OpmResult<()> {
-        let mut new_rays: Vec<Ray> = Vec::new();
-        for ray in &self.rays {
+        // let mut new_rays: Vec<Ray> = Vec::new();
+        for ray in &mut self.rays {
             if ray.valid() {
                 let pos = point![
                     ray.position().x.get::<millimeter>(),
@@ -242,12 +242,16 @@ impl Rays {
                 ];
                 let ap_factor = aperture.apodization_factor(&pos);
                 if ap_factor > 0.0 {
-                    let new_ray = ray.filter_energy(&FilterType::Constant(ap_factor))?;
-                    new_rays.push(new_ray);
+                    let _ = ray.filter_energy(&FilterType::Constant(ap_factor))?;
+                    // new_rays.push(new_ray);
+                }
+                else{
+                    ray.add_to_pos_hist(ray.position());
+                    ray.set_invalid()
                 }
             }
         }
-        self.rays = new_rays;
+        // self.rays = new_rays;
         Ok(())
     }
     /// Returns the centroid of this [`Rays`].
@@ -603,7 +607,7 @@ impl Rays {
         }
         for ray in &mut self.rays {
             if (*ray).valid() {
-                *ray = ray.filter_energy(filter)?;
+                let _  = ray.filter_energy(filter)?;
             }
         }
         Ok(())
@@ -1378,28 +1382,29 @@ mod test {
     }
     #[test]
     fn filter_energy() {
-        let mut rays = Rays::default();
-        assert!(rays.filter_energy(&FilterType::Constant(0.5)).is_ok());
-        assert!(rays.filter_energy(&FilterType::Constant(-0.1)).is_err());
-        assert!(rays.filter_energy(&FilterType::Constant(1.1)).is_err());
-        let ray = Ray::new_collimated(
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(1.0),
-                Length::zero(),
-            ),
-            Length::new::<nanometer>(1054.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
-        rays.add_ray(ray.clone());
-        let new_ray = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
-        rays.filter_energy(&FilterType::Constant(0.3)).unwrap();
-        assert_eq!(rays.rays[0].position(), new_ray.position());
-        assert_eq!(rays.rays[0].direction(), new_ray.direction());
-        assert_eq!(rays.rays[0].wavelength(), new_ray.wavelength());
-        assert_eq!(rays.rays[0].energy(), new_ray.energy());
-        assert_eq!(rays.rays.len(), 1);
+        todo!();
+        // let mut rays = Rays::default();
+        // assert!(rays.filter_energy(&FilterType::Constant(0.5)).is_ok());
+        // assert!(rays.filter_energy(&FilterType::Constant(-0.1)).is_err());
+        // assert!(rays.filter_energy(&FilterType::Constant(1.1)).is_err());
+        // let ray = Ray::new_collimated(
+        //     Point3::new(
+        //         Length::zero(),
+        //         Length::new::<millimeter>(1.0),
+        //         Length::zero(),
+        //     ),
+        //     Length::new::<nanometer>(1054.0),
+        //     Energy::new::<joule>(1.0),
+        // )
+        // .unwrap();
+        // rays.add_ray(ray.clone());
+        // let new_ray = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        // rays.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        // assert_eq!(rays.rays[0].position(), new_ray.position());
+        // assert_eq!(rays.rays[0].direction(), new_ray.direction());
+        // assert_eq!(rays.rays[0].wavelength(), new_ray.wavelength());
+        // assert_eq!(rays.rays[0].energy(), new_ray.energy());
+        // assert_eq!(rays.rays.len(), 1);
     }
     #[test]
     fn invalidate_by_threshold() {
