@@ -233,7 +233,6 @@ impl Rays {
     ///
     /// This function returns an error if a single ray cannot be propery apodized (e.g. filter factor outside (0.0..=1.0)).
     pub fn apodize(&mut self, aperture: &Aperture) -> OpmResult<()> {
-        // let mut new_rays: Vec<Ray> = Vec::new();
         for ray in &mut self.rays {
             if ray.valid() {
                 let pos = point![
@@ -242,16 +241,13 @@ impl Rays {
                 ];
                 let ap_factor = aperture.apodization_factor(&pos);
                 if ap_factor > 0.0 {
-                    let _ = ray.filter_energy(&FilterType::Constant(ap_factor))?;
-                    // new_rays.push(new_ray);
-                }
-                else{
+                    ray.filter_energy(&FilterType::Constant(ap_factor))?;
+                } else {
                     ray.add_to_pos_hist(ray.position());
-                    ray.set_invalid()
+                    ray.set_invalid();
                 }
             }
         }
-        // self.rays = new_rays;
         Ok(())
     }
     /// Returns the centroid of this [`Rays`].
@@ -607,7 +603,7 @@ impl Rays {
         }
         for ray in &mut self.rays {
             if (*ray).valid() {
-                let _  = ray.filter_energy(filter)?;
+                ray.filter_energy(filter)?;
             }
         }
         Ok(())

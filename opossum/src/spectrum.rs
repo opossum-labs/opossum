@@ -259,7 +259,7 @@ impl Spectrum {
     /// Returns the center wavelength of this [`Spectrum`].
     ///
     /// This function calculates the first moment of the spectral distribution.
-    /// The calculated value represents the average wavelength and is thereofre returned as the "center wavelength" of this [`Spectrum`].
+    /// The calculated value represents the average wavelength and is therefore returned as the "center wavelength" of this [`Spectrum`].
     #[must_use]
     pub fn center_wavelength(&self) -> Length {
         let spec_int_vec = self

@@ -56,7 +56,7 @@ fn main() -> OpmResult<()> {
     let mut rays_2w = Rays::new_uniform_collimated(wvl_2w, energy_2w, &beam_dist_2w)?;
 
     let mut rays = rays_1w;
-     rays.add_rays(&mut rays_2w);
+    rays.add_rays(&mut rays_2w);
 
     let mut scenery = OpticScenery::default();
     scenery.set_description("HHT Sensor")?;

@@ -132,10 +132,10 @@ impl Ray {
     pub fn wavelength(&self) -> Length {
         self.wvl
     }
-    /// Adds a position to the position history of the ray. 
+    /// Adds a position to the position history of the ray.
     /// This is, for example, necessary for adding the position when the ray may be set invalid at an aperture.
-    pub fn add_to_pos_hist(&mut self, pos: Point3<Length>){
-        self.pos_hist.push(pos)
+    pub fn add_to_pos_hist(&mut self, pos: Point3<Length>) {
+        self.pos_hist.push(pos);
     }
     /// Returns the position history of this [`Ray`].
     ///
