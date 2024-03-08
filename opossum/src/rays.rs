@@ -218,11 +218,7 @@ impl Rays {
     /// The given switch determines wehther all [`Ray`]s or only `valid` [`Ray`]s will be counted.
     #[must_use]
     pub fn nr_of_rays(&self, valid_only: bool) -> usize {
-        if valid_only {
-            self.rays.iter().filter(|r| r.valid()).count()
-        } else {
-            self.rays.len()
-        }
+        self.rays.iter().filter(|r| r.valid() || !valid_only).count()
     }
     /// Returns the iterator of this [`Rays`].
     pub fn iter(&self) -> std::slice::Iter<'_, Ray> {
@@ -414,10 +410,10 @@ impl Rays {
     #[must_use]
     pub fn wavefront_error_at_pos_in_units_of_wvl(&self, wavelength: Length) -> MatrixXx3<f64> {
         let wvl = wavelength.get::<nanometer>();
-        let mut wave_front_err = MatrixXx3::from_element(self.rays.len(), 0.);
+        let mut wave_front_err = MatrixXx3::from_element(self.nr_of_rays(true), 0.);
         let mut min_radius = f64::INFINITY;
         let mut path_length_at_center = 0.;
-        for (i, ray) in self.rays.iter().enumerate() {
+        for (i, ray) in self.rays.iter().filter(|r| r.valid()).enumerate() {
             let position = Vector2::new(
                 ray.position().x.get::<millimeter>(),
                 ray.position().y.get::<millimeter>(),
@@ -447,12 +443,11 @@ impl Rays {
     /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be retruned.
     #[must_use]
     pub fn get_xy_rays_pos(&self, valid_only: bool) -> MatrixXx2<f64> {
-        let mut rays_at_pos = MatrixXx2::from_element(self.rays.len(), 0.);
-        for (row, ray) in self.rays.iter().enumerate() {
-            if !valid_only || ray.valid() {
-                rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
-                rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
-            }
+        let mut rays_at_pos = MatrixXx2::from_element(self.nr_of_rays(valid_only), 0.);
+        for (row, ray) in self.rays.iter().filter(|r| !valid_only || r.valid()).enumerate() {
+            rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
+            rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
+
         }
         rays_at_pos
     }
@@ -475,7 +470,7 @@ impl Rays {
 
         let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), 0.);
 
-        for idx in 0..self.rays.len() {
+        for idx in 0..self.nr_of_rays(true) {
             let v_neighbours = v_cells[idx]
                 .points()
                 .iter()
