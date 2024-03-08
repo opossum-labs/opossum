@@ -132,19 +132,19 @@ impl Ray {
     pub fn wavelength(&self) -> Length {
         self.wvl
     }
+    /// Adds a position to the position history of the ray. 
+    /// This is, for example, necessary for adding the position when the ray may be set invalid at an aperture.
+    pub fn add_to_pos_hist(&mut self, pos: Point3<Length>){
+        self.pos_hist.push(pos)
+    }
     /// Returns the position history of this [`Ray`].
     ///
-    /// This funtion returns a matrix with all positions (end of propagation and intersection points) of a ray path.
+    /// This function returns a matrix with all positions (end of propagation and intersection points) of a ray path.
     /// **Note**: This function adds to current ray position to the list.
     #[must_use]
     pub fn position_history_in_mm(&self) -> MatrixXx3<f64> {
         let nr_of_pos = self.pos_hist.len();
-        let mut pos_mm: nalgebra::Matrix<
-            f64,
-            nalgebra::Dynamic,
-            nalgebra::Const<3>,
-            nalgebra::VecStorage<f64, nalgebra::Dynamic, nalgebra::Const<3>>,
-        > = MatrixXx3::zeros(nr_of_pos + 1);
+        let mut pos_mm = MatrixXx3::zeros(nr_of_pos + 1);
 
         for (idx, pos) in self.pos_hist.iter().enumerate() {
             pos_mm[(idx, 0)] = pos.x.get::<millimeter>();
@@ -295,7 +295,7 @@ impl Ray {
     /// # Errors
     ///
     /// This function will return an error if the transmission factor for the [`FilterType::Constant`] is not within the interval `(0.0..=1.0)`
-    pub fn filter_energy(&self, filter: &FilterType) -> OpmResult<Self> {
+    pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
         let transmission = match filter {
             FilterType::Constant(t) => {
                 if !(0.0..=1.0).contains(t) {
@@ -316,9 +316,10 @@ impl Ray {
                 }
             }
         };
-        let mut new_ray = self.clone();
-        new_ray.e *= transmission;
-        Ok(new_ray)
+        self.e *= transmission;
+        // let mut new_ray = self.clone();
+        // new_ray.e *= transmission;
+        Ok(())
     }
     /// Split a ray with the given energy splitting ratio.
     ///
@@ -952,60 +953,62 @@ mod test {
     }
     #[test]
     fn filter_energy() {
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(1.0),
-            Length::zero(),
-        );
-        let wvl = Length::new::<nanometer>(1054.0);
-        let ray = Ray::new_collimated(position, wvl, Energy::new::<joule>(1.0)).unwrap();
-        let new_ray = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
-        assert_eq!(
-            new_ray.pos,
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(1.0),
-                Length::zero()
-            )
-        );
-        assert_eq!(new_ray.dir, Vector3::z());
-        assert_eq!(new_ray.wvl, wvl);
-        assert_eq!(new_ray.e, Energy::new::<joule>(0.3));
-        assert!(ray.filter_energy(&FilterType::Constant(-0.1)).is_err());
-        assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
+        todo!();
+        // let position = Point3::new(
+        //     Length::zero(),
+        //     Length::new::<millimeter>(1.0),
+        //     Length::zero(),
+        // );
+        // let wvl = Length::new::<nanometer>(1054.0);
+        // let ray = Ray::new_collimated(position, wvl, Energy::new::<joule>(1.0)).unwrap();
+        // let new_ray = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        // assert_eq!(
+        //     new_ray.pos,
+        //     Point3::new(
+        //         Length::zero(),
+        //         Length::new::<millimeter>(1.0),
+        //         Length::zero()
+        //     )
+        // );
+        // assert_eq!(new_ray.dir, Vector3::z());
+        // assert_eq!(new_ray.wvl, wvl);
+        // assert_eq!(new_ray.e, Energy::new::<joule>(0.3));
+        // assert!(ray.filter_energy(&FilterType::Constant(-0.1)).is_err());
+        // assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
     }
     #[test]
     fn filter_spectrum() {
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(1.0),
-            Length::zero(),
-        );
-        let e_1j = Energy::new::<joule>(1.0);
-        let ray = Ray::new_collimated(position, Length::new::<nanometer>(502.0), e_1j).unwrap();
-        let mut spec_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        spec_path.push("files_for_testing/spectrum/test_filter.csv");
-        let s = Spectrum::from_csv(spec_path.to_str().unwrap()).unwrap();
-        let filter = FilterType::Spectrum(s);
-        let filtered_ray = ray.filter_energy(&filter).unwrap();
-        assert_eq!(filtered_ray.e, e_1j);
-        assert_eq!(filtered_ray.pos, ray.pos);
-        assert_eq!(filtered_ray.dir, ray.dir);
-        assert_eq!(filtered_ray.wvl, ray.wvl);
-        assert_eq!(filtered_ray.path_length, ray.path_length);
-        assert_eq!(filtered_ray.pos_hist, ray.pos_hist);
-        let ray = Ray::new_collimated(position, Length::new::<nanometer>(500.0), e_1j).unwrap();
-        let filtered_ray = ray.filter_energy(&filter).unwrap();
-        assert_eq!(filtered_ray.energy(), Energy::new::<joule>(0.0));
-        let ray = Ray::new_collimated(position, Length::new::<nanometer>(501.5), e_1j).unwrap();
-        let filtered_ray = ray.filter_energy(&filter).unwrap();
-        assert!(abs_diff_eq!(
-            filtered_ray.energy().get::<joule>(),
-            0.5,
-            epsilon = 300.0 * f64::EPSILON
-        ));
-        let ray = Ray::new_collimated(position, Length::new::<nanometer>(506.0), e_1j).unwrap();
-        assert!(ray.filter_energy(&filter).is_err());
+        todo!();
+        // let position = Point3::new(
+        //     Length::zero(),
+        //     Length::new::<millimeter>(1.0),
+        //     Length::zero(),
+        // );
+        // let e_1j = Energy::new::<joule>(1.0);
+        // let ray = Ray::new_collimated(position, Length::new::<nanometer>(502.0), e_1j).unwrap();
+        // let mut spec_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        // spec_path.push("files_for_testing/spectrum/test_filter.csv");
+        // let s = Spectrum::from_csv(spec_path.to_str().unwrap()).unwrap();
+        // let filter = FilterType::Spectrum(s);
+        // let filtered_ray = ray.filter_energy(&filter).unwrap();
+        // assert_eq!(filtered_ray.e, e_1j);
+        // assert_eq!(filtered_ray.pos, ray.pos);
+        // assert_eq!(filtered_ray.dir, ray.dir);
+        // assert_eq!(filtered_ray.wvl, ray.wvl);
+        // assert_eq!(filtered_ray.path_length, ray.path_length);
+        // assert_eq!(filtered_ray.pos_hist, ray.pos_hist);
+        // let ray = Ray::new_collimated(position, Length::new::<nanometer>(500.0), e_1j).unwrap();
+        // let filtered_ray = ray.filter_energy(&filter).unwrap();
+        // assert_eq!(filtered_ray.energy(), Energy::new::<joule>(0.0));
+        // let ray = Ray::new_collimated(position, Length::new::<nanometer>(501.5), e_1j).unwrap();
+        // let filtered_ray = ray.filter_energy(&filter).unwrap();
+        // assert!(abs_diff_eq!(
+        //     filtered_ray.energy().get::<joule>(),
+        //     0.5,
+        //     epsilon = 300.0 * f64::EPSILON
+        // ));
+        // let ray = Ray::new_collimated(position, Length::new::<nanometer>(506.0), e_1j).unwrap();
+        // assert!(ray.filter_energy(&filter).is_err());
     }
     #[test]
     fn split_by_ratio() {
