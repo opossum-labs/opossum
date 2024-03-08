@@ -360,7 +360,8 @@ impl OpticScenery {
     ///
     /// This function will return an error if the file path cannot be created or it cannot write into the file (e.g. no space).
     pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
-        let serialized = serde_json::to_string_pretty(&self).map_err(|e| {
+        // let serialized = serde_json::to_string_pretty(&self).map_err(|e| {
+        let serialized = serde_yaml::to_string(&self).map_err(|e| {
             OpossumError::OpticScenery(format!("deserialization of OpticScenery failed: {e}"))
         })?;
         let mut output = File::create(path).map_err(|e| {

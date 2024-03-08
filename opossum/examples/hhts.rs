@@ -58,6 +58,21 @@ fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
     scenery.set_description("HHT Sensor")?;
 
+    // scenery.add_node(Dummy::default());
+    // scenery.add_node(WaveFront::default());
+    // scenery.add_node(SpotDiagram::default());
+    // scenery.add_node(Spectrometer::default());
+    // scenery.add_node(RayPropagationVisualizer::default());
+    // scenery.add_node(ParaxialSurface::default());
+    // scenery.add_node(Detector::default());
+    // scenery.add_node(NodeGroup::default());
+    // scenery.add_node(FluenceDetector::default());
+    // scenery.add_node(EnergyMeter::default());
+    // scenery.add_node(BeamSplitter::default());
+    // scenery.add_node(IdealFilter::default());
+    // scenery.add_node(Propagation::default());
+    // scenery.add_node(Lens::default());
+
     let src = scenery.add_node(Source::new("src", &LightData::Geometric(rays)));
     let d1 = scenery.add_node(Propagation::new("d1", Length::new::<millimeter>(2000.0))?);
     let t1_l1a = scenery.add_node(Lens::new(
@@ -86,10 +101,7 @@ fn main() -> OpmResult<()> {
         Length::new::<millimeter>(5.77736),
         &refr_index_hzf52,
     )?);
-    let d4 = scenery.add_node(Propagation::new(
-        "d4",
-        Length::new::<millimeter>(8.85423),
-    )?);
+    let d4 = scenery.add_node(Propagation::new("d4", Length::new::<millimeter>(8.85423))?);
     scenery.connect_nodes(src, "out1", d1, "front")?;
     scenery.connect_nodes(d1, "rear", t1_l1a, "front")?;
     scenery.connect_nodes(t1_l1a, "rear", d2, "front")?;

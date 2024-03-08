@@ -2,6 +2,7 @@
 use crate::ray::SplittingConfig;
 use crate::refractive_index::refr_index_vaccuum;
 use crate::surface::Plane;
+use crate::utils::EnumProxy;
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -42,7 +43,10 @@ fn create_default_props() -> Properties {
             "splitter config",
             "config data of the beam splitter",
             None,
-            SplittingConfig::Ratio(0.5).into(),
+            EnumProxy::<SplittingConfig> {
+                value: SplittingConfig::Ratio(0.5),
+            }
+            .into(),
         )
         .unwrap();
     let mut ports = OpticPorts::new();
@@ -65,7 +69,13 @@ impl BeamSplitter {
             ));
         }
         let mut props = create_default_props();
-        props.set("splitter config", config.clone().into())?;
+        props.set(
+            "splitter config",
+            EnumProxy::<SplittingConfig> {
+                value: config.clone(),
+            }
+            .into(),
+        )?;
         props.set("name", name.into())?;
         Ok(Self { props })
     }
@@ -77,7 +87,7 @@ impl BeamSplitter {
     #[must_use]
     pub fn splitting_config(&self) -> SplittingConfig {
         if let Ok(Proptype::SplitterType(config)) = self.props.get("splitter config") {
-            return (*config).clone();
+            return config.value.clone();
         }
         panic!("property `splitter config` does not exist or has wrong data format")
     }
@@ -91,7 +101,13 @@ impl BeamSplitter {
         //         "ratio must be within (0.0..1.0) and finite".into(),
         //     ));
         // }
-        self.props.set("splitter config", config.clone().into())?;
+        self.props.set(
+            "splitter config",
+            EnumProxy::<SplittingConfig> {
+                value: config.clone(),
+            }
+            .into(),
+        )?;
         Ok(())
     }
     fn split_spectrum(
@@ -175,7 +191,7 @@ impl BeamSplitter {
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     let plane = Plane::new(z_position)?;
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
-                    let split_rays = rays.split(splitting_config)?;
+                    let split_rays = rays.split(&splitting_config.value)?;
                     (rays, split_rays)
                 }
                 _ => {
@@ -195,7 +211,7 @@ impl BeamSplitter {
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     let plane = Plane::new(z_position)?;
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
-                    let split_rays = rays.split(splitting_config)?;
+                    let split_rays = rays.split(&splitting_config.value)?;
                     (rays, split_rays)
                 }
                 _ => {

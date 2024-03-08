@@ -12,6 +12,7 @@ use crate::{
     properties::{Properties, Proptype},
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Plane, Sphere},
+    utils::EnumProxy,
 };
 use num::Zero;
 use uom::si::{f64::Length, length::millimeter};
@@ -67,7 +68,10 @@ fn create_default_props() -> Properties {
             "refractive index",
             "refractive index of the lens material",
             None,
-            RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()).into(),
+            EnumProxy::<RefractiveIndexType> {
+                value: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
+            }
+            .into(),
         )
         .unwrap();
 
@@ -123,7 +127,13 @@ impl Lens {
             ));
         }
         props.set("center thickness", center_thickness.into())?;
-        props.set("refractive index", refractive_index.to_enum().into())?;
+        props.set(
+            "refractive index",
+            EnumProxy::<RefractiveIndexType> {
+                value: refractive_index.to_enum(),
+            }
+            .into(),
+        )?;
         Ok(Self { props })
     }
 }
@@ -155,11 +165,11 @@ impl Optical for Lens {
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     if (*front_roc).is_infinite() {
-                        rays.refract_on_surface(&Plane::new(next_z_pos)?, index_model)?;
+                        rays.refract_on_surface(&Plane::new(next_z_pos)?, &index_model.value)?;
                     } else {
                         rays.refract_on_surface(
                             &Sphere::new(next_z_pos, *front_roc)?,
-                            index_model,
+                            &index_model.value,
                         )?;
                     };
                     let Ok(Proptype::Length(center_thickness)) = self.props.get("center thickness")
@@ -174,7 +184,7 @@ impl Optical for Lens {
                     };
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    rays.set_refractive_index(index_model)?;
+                    rays.set_refractive_index(&index_model.value)?;
                     let index_1_0 = &RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap());
                     if (*rear_roc).is_infinite() {
                         rays.refract_on_surface(&Plane::new(next_z_pos)?, index_1_0)?;
@@ -238,7 +248,7 @@ mod test {
         let Ok(Proptype::RefractiveIndex(index)) = node.props.get("refractive index") else {
             panic!()
         };
-        assert_eq!((*index).get_refractive_index(Length::zero()), 1.5);
+        assert_eq!((*index).value.get_refractive_index(Length::zero()), 1.5);
     }
     #[test]
     fn new() {
@@ -337,8 +347,9 @@ mod test {
             panic!()
         };
         assert_eq!(*roc, Length::new::<millimeter>(11.0));
-        let Ok(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_index_const))) =
-            node.props.get("refractive index")
+        let Ok(Proptype::RefractiveIndex(EnumProxy::<RefractiveIndexType> {
+            value: RefractiveIndexType::Const(ref_index_const),
+        })) = node.props.get("refractive index")
         else {
             panic!()
         };

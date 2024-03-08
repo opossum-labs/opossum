@@ -11,7 +11,6 @@ use uom::si::{
 use crate::{
     error::{OpmResult, OpossumError},
     nodes::FilterType,
-    properties::Proptype,
     spectrum::Spectrum,
     surface::Surface,
 };
@@ -23,11 +22,6 @@ pub enum SplittingConfig {
     Ratio(f64),
     /// A beam splitter with a given transmission spectrum
     Spectrum(Spectrum),
-}
-impl From<SplittingConfig> for Proptype {
-    fn from(value: SplittingConfig) -> Self {
-        Self::SplitterType(value)
-    }
 }
 impl SplittingConfig {
     /// Check validity of [`SplittingConfig`].

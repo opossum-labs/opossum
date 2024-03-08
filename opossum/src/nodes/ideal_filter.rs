@@ -10,6 +10,7 @@ use crate::refractive_index::refr_index_vaccuum;
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use crate::surface::Plane;
+use crate::utils::EnumProxy;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -20,11 +21,6 @@ pub enum FilterType {
     Constant(f64),
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
-}
-impl From<FilterType> for Proptype {
-    fn from(value: FilterType) -> Self {
-        Self::FilterType(value)
-    }
 }
 impl PdfReportable for FilterType {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
@@ -63,7 +59,10 @@ fn create_default_props() -> Properties {
             "filter type",
             "used filter algorithm",
             None,
-            FilterType::Constant(1.0).into(),
+            EnumProxy::<FilterType> {
+                value: FilterType::Constant(1.0),
+            }
+            .into(),
         )
         .unwrap();
     let mut ports = OpticPorts::new();
@@ -96,7 +95,10 @@ impl IdealFilter {
             }
         }
         let mut props = create_default_props();
-        props.set("filter type", filter_type.into())?;
+        props.set(
+            "filter type",
+            EnumProxy::<FilterType> { value: filter_type }.into(),
+        )?;
         props.set("name", name.into())?;
         Ok(Self { props })
     }
@@ -107,7 +109,7 @@ impl IdealFilter {
     #[must_use]
     pub fn filter_type(&self) -> FilterType {
         if let Proptype::FilterType(filter_type) = self.props.get("filter type").unwrap() {
-            filter_type.clone()
+            filter_type.value.clone()
         } else {
             panic!("wrong data type")
         }
@@ -120,8 +122,13 @@ impl IdealFilter {
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
     pub fn set_transmission(&mut self, transmission: f64) -> OpmResult<()> {
         if (0.0..=1.0).contains(&transmission) {
-            self.props
-                .set("filter type", FilterType::Constant(transmission).into())?;
+            self.props.set(
+                "filter type",
+                EnumProxy::<FilterType> {
+                    value: FilterType::Constant(transmission),
+                }
+                .into(),
+            )?;
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -139,7 +146,10 @@ impl IdealFilter {
         if density >= 0.0 {
             self.props.set(
                 "filter type",
-                FilterType::Constant(f64::powf(10.0, -1.0 * density)).into(),
+                EnumProxy::<FilterType> {
+                    value: FilterType::Constant(f64::powf(10.0, -1.0 * density)),
+                }
+                .into(),
             )?;
             Ok(())
         } else {

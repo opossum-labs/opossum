@@ -13,6 +13,7 @@ use crate::{
     rays::RayPositionHistory,
     refractive_index::RefractiveIndexType,
     reporter::{NodeReport, PdfReportable},
+    utils::EnumProxy,
     SplittingConfig,
 };
 use genpdf::{elements::TableLayout, style};
@@ -458,13 +459,13 @@ pub enum Proptype {
     /// A boolean property
     Bool(bool),
     /// An optional [`LightData`] property
-    LightData(Option<LightData>),
+    LightData(EnumProxy<Option<LightData>>),
     /// A property for storing a complete `OpticGraph` to be used by [`OpticScenery`](crate::OpticScenery).
     OpticGraph(OpticGraph),
     /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
-    FilterType(FilterType),
+    FilterType(EnumProxy<FilterType>),
     /// Property for storing a [`SplittingConfig`] of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
-    SplitterType(SplittingConfig),
+    SplitterType(EnumProxy<SplittingConfig>),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.
@@ -494,7 +495,7 @@ pub enum Proptype {
     /// an energy value
     Energy(Energy),
     /// a optical refractive index model
-    RefractiveIndex(RefractiveIndexType),
+    RefractiveIndex(EnumProxy<RefractiveIndexType>),
 }
 fn format_value_with_prefix(value: f64) -> String {
     if value.is_nan() {
@@ -554,7 +555,7 @@ impl PdfReportable for Proptype {
             Self::I32(value) => l.push(genpdf::elements::Paragraph::new(format!("{value}"))),
             Self::F64(value) => l.push(genpdf::elements::Paragraph::new(format!("{value:.6}"))),
             Self::Bool(value) => l.push(genpdf::elements::Paragraph::new(value.to_string())),
-            Self::FilterType(value) => l.push(value.pdf_report()?),
+            Self::FilterType(value) => l.push(value.value.pdf_report()?),
             Self::SpectrometerType(value) => l.push(value.pdf_report()?),
             Self::Metertype(value) => l.push(value.pdf_report()?),
             Self::Spectrometer(value) => l.push(value.pdf_report()?),
