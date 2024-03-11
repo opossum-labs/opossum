@@ -133,47 +133,65 @@ fn main() -> OpmResult<()> {
     // 1w branch
 
     // Distance T1 -> T2 1w 637.5190 (-100.0 because of d6)
-    let d_1w_7=scenery.add_node(Propagation::new("1w d7", Length::new::<millimeter>(537.5190))?);
-    let t2_1w_in=scenery.add_node(Lens::new(
+    let d_1w_7 = scenery.add_node(Propagation::new(
+        "1w d7",
+        Length::new::<millimeter>(537.5190),
+    )?);
+    let t2_1w_in = scenery.add_node(Lens::new(
         "T2 1w In",
         Length::new::<millimeter>(405.38435),
         Length::new::<millimeter>(-702.52114),
         Length::new::<millimeter>(9.5),
         &refr_index_hk9l,
     )?);
-    let d_1w_8=scenery.add_node(Propagation::new("1w d8", Length::new::<millimeter>(442.29480))?);
-    let t2_1w_field=scenery.add_node(Lens::new(
+    let d_1w_8 = scenery.add_node(Propagation::new(
+        "1w d8",
+        Length::new::<millimeter>(442.29480),
+    )?);
+    let t2_1w_field = scenery.add_node(Lens::new(
         "T2 1w Field",
         Length::new::<millimeter>(179.59020),
         Length::new::<millimeter>(f64::INFINITY),
         Length::new::<millimeter>(9.5),
         &refr_index_hk9l,
     )?);
-    let d_1w_9=scenery.add_node(Propagation::new("1w d9", Length::new::<millimeter>(429.20520))?);
-    let t2_1w_exit=scenery.add_node(Lens::new(
+    let d_1w_9 = scenery.add_node(Propagation::new(
+        "1w d9",
+        Length::new::<millimeter>(429.20520),
+    )?);
+    let t2_1w_exit = scenery.add_node(Lens::new(
         "T2 1w Exit",
         Length::new::<millimeter>(f64::INFINITY),
         Length::new::<millimeter>(-202.81235),
         Length::new::<millimeter>(9.5),
         &refr_index_hk9l,
     )?);
-    let d_1w_10=scenery.add_node(Propagation::new("1w d10", Length::new::<millimeter>(664.58900))?);
-    let t3_1w_input=scenery.add_node(Lens::new(
+    let d_1w_10 = scenery.add_node(Propagation::new(
+        "1w d10",
+        Length::new::<millimeter>(664.58900),
+    )?);
+    let t3_1w_input = scenery.add_node(Lens::new(
         "T3 1w Input",
         Length::new::<millimeter>(f64::INFINITY),
         Length::new::<millimeter>(-417.35031),
         Length::new::<millimeter>(9.5),
         &refr_index_hk9l,
     )?);
-    let d_1w_11=scenery.add_node(Propagation::new("1w d11", Length::new::<millimeter>(1181.0000))?);
-    let t3_1w_exit=scenery.add_node(Lens::new(
+    let d_1w_11 = scenery.add_node(Propagation::new(
+        "1w d11",
+        Length::new::<millimeter>(1181.0000),
+    )?);
+    let t3_1w_exit = scenery.add_node(Lens::new(
         "T3 1w Exit",
         Length::new::<millimeter>(156.35054),
         Length::new::<millimeter>(f64::INFINITY),
         Length::new::<millimeter>(9.5),
         &refr_index_hk9l,
     )?);
-    let d_1w_12=scenery.add_node(Propagation::new("1w d12", Length::new::<millimeter>(279.86873))?);
+    let d_1w_12 = scenery.add_node(Propagation::new(
+        "1w d12",
+        Length::new::<millimeter>(279.86873),
+    )?);
 
     scenery.connect_nodes(bs, "out2_trans2_refl1", d_1w_7, "front")?;
     scenery.connect_nodes(d_1w_7, "rear", t2_1w_in, "front")?;

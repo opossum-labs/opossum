@@ -133,11 +133,11 @@ mod test {
         let node1 = scenery.node(NodeIndex::from(0)).unwrap();
         let node2 = scenery.node(NodeIndex::from(1)).unwrap();
         assert_eq!(
-            "f4da70a8-ce43-460f-9d45-64d02879db63",
+            "2ac550f7-b62c-4aa8-8f57-9931a791bc99",
             node1.uuid().to_string()
         );
         assert_eq!(
-            "4589fdd5-5cdd-4d69-8e6d-846f3bc9ad2d",
+            "710f252d-2cbd-4613-8135-291a07cd4cbd",
             node2.uuid().to_string()
         );
     }

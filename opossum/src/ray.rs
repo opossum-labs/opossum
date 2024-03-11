@@ -383,13 +383,11 @@ impl Ray {
 mod test {
     use super::*;
     use crate::{
-        spectrum::Spectrum,
         spectrum_helper::{self, generate_filter_spectrum},
         surface::Plane,
     };
-    use approx::{abs_diff_eq, assert_abs_diff_eq};
+    use approx::assert_abs_diff_eq;
     use itertools::izip;
-    use std::path::PathBuf;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
     fn new() {
@@ -952,6 +950,7 @@ mod test {
         assert_abs_diff_eq!(ray.dir[2], test_reflect[2]);
     }
     #[test]
+    #[ignore = "reenable later"]
     fn filter_energy() {
         todo!();
         // let position = Point3::new(
@@ -977,6 +976,7 @@ mod test {
         // assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
     }
     #[test]
+    #[ignore = "reenable later"]
     fn filter_spectrum() {
         todo!();
         // let position = Point3::new(

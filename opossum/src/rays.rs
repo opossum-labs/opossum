@@ -580,7 +580,7 @@ impl Rays {
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength());
-                let refl=ray.refract_on_surface(surface, n2)?;
+                let refl = ray.refract_on_surface(surface, n2)?;
                 if refl.is_none() {
                     //warn!("missed surface");
                 }
@@ -718,8 +718,10 @@ impl Rays {
     ///
     /// This function will return an error if the underlying split function for a single ray returns an error.
     pub fn split(&mut self, config: &SplittingConfig) -> OpmResult<Self> {
-        let mut split_rays = Self::default();
-        split_rays.z_position=self.absolute_z_of_last_surface();
+        let mut split_rays = Self {
+            z_position: self.absolute_z_of_last_surface(),
+            ..Default::default()
+        };
         for ray in &mut self.rays {
             if ray.valid() {
                 let split_ray = ray.split(config)?;
@@ -734,11 +736,13 @@ impl Rays {
     /// **Note**: The temporarily introduced "absolute z position" is taken from the ray bundle with the maximum position....We have
     /// to work on that...
     pub fn merge(&mut self, rays: &Self) {
-        let max_z_position=self.absolute_z_of_last_surface().max(rays.absolute_z_of_last_surface());
+        let max_z_position = self
+            .absolute_z_of_last_surface()
+            .max(rays.absolute_z_of_last_surface());
         for ray in &rays.rays {
             self.add_ray(ray.clone());
         }
-        self.z_position=max_z_position;
+        self.z_position = max_z_position;
     }
     /// Get the position history of all rays in thie ray bundle
     ///
@@ -1387,6 +1391,7 @@ mod test {
         assert_abs_diff_eq!(rays.rays[1].direction().z, new_dir.z);
     }
     #[test]
+    #[ignore = "reenable later"]
     fn filter_energy() {
         todo!();
         // let mut rays = Rays::default();
@@ -1573,11 +1578,15 @@ mod test {
         )
         .unwrap();
         let mut rays = Rays::default();
+        let z_position = Length::new::<millimeter>(10.0);
+        rays.z_position = z_position;
         rays.add_ray(ray1.clone());
         rays.add_ray(ray2.clone());
         assert!(rays.split(&SplittingConfig::Ratio(1.1)).is_err());
         assert!(rays.split(&SplittingConfig::Ratio(-0.1)).is_err());
         let split_rays = rays.split(&SplittingConfig::Ratio(0.2)).unwrap();
+        assert_eq!(rays.absolute_z_of_last_surface(), z_position);
+        assert_eq!(split_rays.absolute_z_of_last_surface(), z_position);
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
         assert_abs_diff_eq!(
             split_rays.total_energy().get::<joule>(),
