@@ -19,7 +19,7 @@ use uom::si::{
 };
 
 fn main() -> OpmResult<()> {
-    let wvl_1w = Length::new::<nanometer>(1053.0);
+    let wvl_1w = Length::new::<nanometer>(1054.0);
     let wvl_2w = wvl_1w / 2.0;
 
     let energy_1w = Energy::new::<joule>(100.0);
@@ -56,7 +56,7 @@ fn main() -> OpmResult<()> {
     let mut rays_2w = Rays::new_uniform_collimated(wvl_2w, energy_2w, &beam_dist_2w)?;
 
     let mut rays = rays_1w;
-    rays.add_rays(&mut rays_2w);
+    //rays.add_rays(&mut rays_2w);
 
     let mut scenery = OpticScenery::default();
     scenery.set_description("HHT Sensor")?;
@@ -197,11 +197,11 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(det_wavefront_1w, "out1", det_spot_diagram_1w, "in1")?;
 
     // 2w branch
-    let det_wavefront_2w = scenery.add_node(WaveFront::new("Wavefront 2w"));
-    scenery.connect_nodes(bs, "out1_trans1_refl2", det_wavefront_2w, "in1")?;
+    // let det_wavefront_2w = scenery.add_node(WaveFront::new("Wavefront 2w"));
+    // scenery.connect_nodes(bs, "out1_trans1_refl2", det_wavefront_2w, "in1")?;
 
-    let det_spot_diagram_2w = scenery.add_node(SpotDiagram::new("Spot diagram 2w"));
-    scenery.connect_nodes(det_wavefront_2w, "out1", det_spot_diagram_2w, "in1")?;
+    // let det_spot_diagram_2w = scenery.add_node(SpotDiagram::new("Spot diagram 2w"));
+    // scenery.connect_nodes(det_wavefront_2w, "out1", det_spot_diagram_2w, "in1")?;
 
     scenery.save_to_file(Path::new("./opossum/playground/hhts.opm"))?;
     Ok(())

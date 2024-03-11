@@ -580,7 +580,12 @@ impl Rays {
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength());
-                ray.refract_on_surface(surface, n2)?;
+                let refl=ray.refract_on_surface(surface, n2)?;
+                if refl.is_none() {
+                    //warn!("missed surface");
+                }
+            } else {
+                warn!("invalid ray - not propagating");
             }
         }
         self.z_position += self.dist_to_next_surface;
@@ -714,6 +719,7 @@ impl Rays {
     /// This function will return an error if the underlying split function for a single ray returns an error.
     pub fn split(&mut self, config: &SplittingConfig) -> OpmResult<Self> {
         let mut split_rays = Self::default();
+        split_rays.z_position=self.absolute_z_of_last_surface();
         for ray in &mut self.rays {
             if ray.valid() {
                 let split_ray = ray.split(config)?;
@@ -725,10 +731,14 @@ impl Rays {
     /// Merge two ray bundles.
     ///
     /// This function simply adds the given rays to the existing ray bundle.
+    /// **Note**: The temporarily introduced "absolute z position" is taken from the ray bundle with the maximum position....We have
+    /// to work on that...
     pub fn merge(&mut self, rays: &Self) {
+        let max_z_position=self.absolute_z_of_last_surface().max(rays.absolute_z_of_last_surface());
         for ray in &rays.rays {
             self.add_ray(ray.clone());
         }
+        self.z_position=max_z_position;
     }
     /// Get the position history of all rays in thie ray bundle
     ///
