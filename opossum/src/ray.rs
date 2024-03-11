@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling optical rays
+use std::fmt::Display;
+
 use nalgebra::{MatrixXx3, Point3, Vector3};
 use num::Zero;
 use serde_derive::{Deserialize, Serialize};
@@ -377,6 +379,15 @@ impl Ray {
     /// Invalidates this [`Ray`].
     pub fn set_invalid(&mut self) {
         self.valid = false;
+    }
+}
+impl Display for Ray {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "pos: {:?}, dir: {:?}, energy: {:?}, valid: {}, ",
+            self.pos, self.dir, self.e, self.valid
+        )
     }
 }
 #[cfg(test)]

@@ -27,6 +27,7 @@ use log::warn;
 use nalgebra::{distance, point, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
 use serde_derive::{Deserialize, Serialize};
+use std::fmt::Display;
 use std::ops::Add;
 use std::ops::Range;
 use std::path::Path;
@@ -54,7 +55,7 @@ impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis) with uniform energy distribution.
     ///
     /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
-    /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`DistributionStrategy`].
+    /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`PositionDistribution`].
     ///
     /// If the given size id zero, a bundle consisting of a single ray along the optical - position (0.0,0.0,0.0) - axis is generated.
     ///
@@ -569,6 +570,10 @@ impl Rays {
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
+    /// # Warnings
+    ///
+    /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
+    ///
     /// # Errors
     ///
     /// This function will return an error if .
@@ -577,19 +582,19 @@ impl Rays {
         surface: &dyn Surface,
         refractive_index: &RefractiveIndexType,
     ) -> OpmResult<()> {
+        let mut valid_rays_found = false;
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength());
-                let refl = ray.refract_on_surface(surface, n2)?;
-                if refl.is_none() {
-                    //warn!("missed surface");
-                }
-            } else {
-                warn!("invalid ray - not propagating");
+                ray.refract_on_surface(surface, n2)?;
+                valid_rays_found = true;
             }
         }
         self.z_position += self.dist_to_next_surface;
         self.set_dist_zero();
+        if !valid_rays_found {
+            warn!("ray bundle contains no valid rays - not propagating");
+        }
         Ok(())
     }
     /// Filter a ray bundle by a given filter.
@@ -779,6 +784,14 @@ impl Rays {
     }
 }
 
+impl Display for Rays {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for ray in self {
+            let _ = writeln!(f, "{ray}");
+        }
+        write!(f, "# of rays: {:?}", self.nr_of_rays(false))
+    }
+}
 /// struct that holds the history of the ray positions that is needed for report generation
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPositionHistory {

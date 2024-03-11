@@ -4,7 +4,8 @@ use opossum::{
     error::OpmResult,
     lightdata::LightData,
     nodes::{
-        BeamSplitter, Lens, Propagation, RayPropagationVisualizer, Source, SpotDiagram, WaveFront,
+        BeamSplitter, EnergyMeter, Lens, Metertype, Propagation, RayPropagationVisualizer, Source,
+        SpotDiagram, WaveFront,
     },
     position_distributions::Hexapolar,
     rays::Rays,
@@ -23,9 +24,9 @@ fn main() -> OpmResult<()> {
     let wvl_2w = wvl_1w / 2.0;
 
     let energy_1w = Energy::new::<joule>(100.0);
-    let energy_2w = Energy::new::<joule>(100.0);
+    let energy_2w = Energy::new::<joule>(50.0);
 
-    let beam_dist_1w = Hexapolar::new(Length::new::<millimeter>(76.05493), 6)?;
+    let beam_dist_1w = Hexapolar::new(Length::new::<millimeter>(76.05493), 0)?;
     let beam_dist_2w = beam_dist_1w.clone();
 
     let refr_index_hk9l = RefrIndexSellmeier1::new(
@@ -56,7 +57,7 @@ fn main() -> OpmResult<()> {
     let mut rays_2w = Rays::new_uniform_collimated(wvl_2w, energy_2w, &beam_dist_2w)?;
 
     let mut rays = rays_1w;
-    //rays.add_rays(&mut rays_2w);
+    rays.add_rays(&mut rays_2w);
 
     let mut scenery = OpticScenery::default();
     scenery.set_description("HHT Sensor")?;
@@ -214,12 +215,97 @@ fn main() -> OpmResult<()> {
     let det_spot_diagram_1w = scenery.add_node(SpotDiagram::new("Spot diagram 1w"));
     scenery.connect_nodes(det_wavefront_1w, "out1", det_spot_diagram_1w, "in1")?;
 
-    // 2w branch
-    // let det_wavefront_2w = scenery.add_node(WaveFront::new("Wavefront 2w"));
-    // scenery.connect_nodes(bs, "out1_trans1_refl2", det_wavefront_2w, "in1")?;
+    let det_energy_1w =
+        scenery.add_node(EnergyMeter::new("Energy 1w", Metertype::IdealEnergyMeter));
+    scenery.connect_nodes(det_spot_diagram_1w, "out1", det_energy_1w, "in1")?;
 
-    // let det_spot_diagram_2w = scenery.add_node(SpotDiagram::new("Spot diagram 2w"));
-    // scenery.connect_nodes(det_wavefront_2w, "out1", det_spot_diagram_2w, "in1")?;
+    // 2w branch
+
+    // Distance T1 -> T2 1w 637.5190 (-100.0 because of d6)
+    let d_2w_7 = scenery.add_node(Propagation::new(
+        "2w d7",
+        Length::new::<millimeter>(474.589),
+    )?);
+    let t2_2w_in = scenery.add_node(Lens::new(
+        "T2 2w In",
+        Length::new::<millimeter>(536.5733),
+        Length::new::<millimeter>(-677.68238),
+        Length::new::<millimeter>(9.5),
+        &refr_index_hk9l,
+    )?);
+    let d_2w_8 = scenery.add_node(Propagation::new(
+        "2w d8",
+        Length::new::<millimeter>(409.38829),
+    )?);
+    let t2_2w_field = scenery.add_node(Lens::new(
+        "T2 2w Field",
+        Length::new::<millimeter>(208.48421),
+        Length::new::<millimeter>(f64::INFINITY),
+        Length::new::<millimeter>(9.5),
+        &refr_index_hk9l,
+    )?);
+    let d_2w_9 = scenery.add_node(Propagation::new(
+        "2w d9",
+        Length::new::<millimeter>(512.11171),
+    )?);
+    let t2_2w_exit = scenery.add_node(Lens::new(
+        "T2 2w Exit",
+        Length::new::<millimeter>(-767.51217),
+        Length::new::<millimeter>(-178.98988),
+        Length::new::<millimeter>(9.5),
+        &refr_index_hk9l,
+    )?);
+    let d_2w_10 = scenery.add_node(Propagation::new(
+        "2w d10",
+        Length::new::<millimeter>(622.09000),
+    )?);
+    let t3_2w_input = scenery.add_node(Lens::new(
+        "T3 2w Input",
+        Length::new::<millimeter>(932.92634),
+        Length::new::<millimeter>(-724.14405),
+        Length::new::<millimeter>(9.5),
+        &refr_index_hk9l,
+    )?);
+    let d_2w_11 = scenery.add_node(Propagation::new(
+        "2w d11",
+        Length::new::<millimeter>(1181.0000),
+    )?);
+    let t3_2w_exit = scenery.add_node(Lens::new(
+        "T3 2w Exit",
+        Length::new::<millimeter>(161.31174),
+        Length::new::<millimeter>(-1069.52277),
+        Length::new::<millimeter>(9.5),
+        &refr_index_hk9l,
+    )?);
+    let d_2w_12 = scenery.add_node(Propagation::new(
+        "2w d12",
+        Length::new::<millimeter>(250.35850),
+    )?);
+
+    scenery.connect_nodes(bs, "out1_trans1_refl2", d_2w_7, "front")?;
+    scenery.connect_nodes(d_2w_7, "rear", t2_2w_in, "front")?;
+    scenery.connect_nodes(t2_2w_in, "rear", d_2w_8, "front")?;
+    scenery.connect_nodes(d_2w_8, "rear", t2_2w_field, "front")?;
+    scenery.connect_nodes(t2_2w_field, "rear", d_2w_9, "front")?;
+    scenery.connect_nodes(d_2w_9, "rear", t2_2w_exit, "front")?;
+    scenery.connect_nodes(t2_2w_exit, "rear", d_2w_10, "front")?;
+    scenery.connect_nodes(d_2w_10, "rear", t3_2w_input, "front")?;
+    scenery.connect_nodes(t3_2w_input, "rear", d_2w_11, "front")?;
+    scenery.connect_nodes(d_2w_11, "rear", t3_2w_exit, "front")?;
+    scenery.connect_nodes(t3_2w_exit, "rear", d_2w_12, "front")?;
+
+    let det_prop_2w = scenery.add_node(RayPropagationVisualizer::new("Ray propgation 2w"));
+    scenery.connect_nodes(d_2w_12, "rear", det_prop_2w, "in1")?;
+
+    let det_wavefront_2w = scenery.add_node(WaveFront::new("Wavefront 2w"));
+    scenery.connect_nodes(det_prop_2w, "out1", det_wavefront_2w, "in1")?;
+
+    let det_spot_diagram_2w = scenery.add_node(SpotDiagram::new("Spot diagram 2w"));
+    scenery.connect_nodes(det_wavefront_2w, "out1", det_spot_diagram_2w, "in1")?;
+
+    let det_energy_2w =
+        scenery.add_node(EnergyMeter::new("Energy 2w", Metertype::IdealEnergyMeter));
+    scenery.connect_nodes(det_spot_diagram_2w, "out1", det_energy_2w, "in1")?;
 
     scenery.save_to_file(Path::new("./opossum/playground/hhts.opm"))?;
     Ok(())
