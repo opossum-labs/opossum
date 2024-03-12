@@ -2,6 +2,7 @@
 use image::{DynamicImage, ImageBuffer, RgbImage};
 use log::warn;
 use nalgebra::{DVector, DVectorSlice, MatrixXx3};
+use plotters::style::RGBAColor;
 use serde_derive::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::nanometer;
@@ -10,7 +11,7 @@ use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::plottable::{
-    AxLims, PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd,
+    AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd
 };
 use crate::properties::{Properties, Proptype};
 use crate::refractive_index::refr_index_vaccuum;
@@ -314,9 +315,10 @@ impl Plottable for WaveFrontErrorMap {
         // };
         let mut plt_type = PlotType::ColorMesh(plt_params.clone());
 
-        if let Some(plt_data) = &self.get_plot_data(&plt_type).unwrap_or(None) {
-            let ranges = plt_data.get_axes_min_max_ranges();
-            if ranges[2].min > -1e-3 && ranges[2].max < 1e-3 {
+        if let Some(plt_series) = &self.get_plot_series(&plt_type).unwrap_or(None) {
+            let ranges = plt_series[0].define_data_based_axes_bounds(false);
+            let z_bounds = ranges.get_z_bounds().unwrap_or(AxLims::new(-0.5e-3, 0.5e-3).unwrap());
+            if z_bounds.min > -1e-3 && z_bounds.max < 1e-3 {
                 _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
                     min: -1e-3,
                     max: 1e-3,
@@ -327,7 +329,7 @@ impl Plottable for WaveFrontErrorMap {
         plt_type
     }
 
-    fn get_plot_data(&self, _plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+    fn get_plot_series(&self, _plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
         let (x_interp, _) =
             create_linspace_axes(DVectorSlice::from(&DVector::from_vec(self.x.clone())), 100.)?;
         let (y_interp, _) =
@@ -340,7 +342,8 @@ impl Plottable for WaveFrontErrorMap {
         let (interp_dat, _) = interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp)?;
 
         let plt_data = PlotData::ColorMesh(x_interp, y_interp, interp_dat);
-        Ok(Some(plt_data))
+        let plt_series = PlotSeries::new(&plt_data, RGBAColor(255,0,0,1.), None);
+        Ok(Some(vec![plt_series]))
         // Ok(self.bin_or_triangulate_data(plt_type, &plt_data))
     }
 }

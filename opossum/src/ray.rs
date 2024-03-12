@@ -148,19 +148,19 @@ impl Ray {
     /// This function returns a matrix with all positions (end of propagation and intersection points) of a ray path.
     /// **Note**: This function adds to current ray position to the list.
     #[must_use]
-    pub fn position_history_in_mm(&self) -> MatrixXx3<f64> {
+    pub fn position_history(&self) -> MatrixXx3<Length> {
         let nr_of_pos = self.pos_hist.len();
-        let mut pos_mm = MatrixXx3::zeros(nr_of_pos + 1);
+        let mut positions = MatrixXx3::<Length>::zeros(nr_of_pos + 1);
 
         for (idx, pos) in self.pos_hist.iter().enumerate() {
-            pos_mm[(idx, 0)] = pos.x.get::<millimeter>();
-            pos_mm[(idx, 1)] = pos.y.get::<millimeter>();
-            pos_mm[(idx, 2)] = pos.z.get::<millimeter>();
+            positions[(idx, 0)] = pos.x;
+            positions[(idx, 1)] = pos.y;
+            positions[(idx, 2)] = pos.z;
         }
-        pos_mm[(nr_of_pos, 0)] = self.pos.x.get::<millimeter>();
-        pos_mm[(nr_of_pos, 1)] = self.pos.y.get::<millimeter>();
-        pos_mm[(nr_of_pos, 2)] = self.pos.z.get::<millimeter>();
-        pos_mm
+        positions[(nr_of_pos, 0)] = self.pos.x;
+        positions[(nr_of_pos, 1)] = self.pos.y;
+        positions[(nr_of_pos, 2)] = self.pos.z;
+        positions
     }
     /// Returns the path length of this [`Ray`].
     ///
@@ -1103,9 +1103,9 @@ mod test {
         let _ = ray.propagate_along_z(Length::new::<millimeter>(1.));
         let _ = ray.propagate_along_z(Length::new::<millimeter>(2.));
 
-        let pos_hist_comp = MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5, 0., 1., 3.]);
+        let pos_hist_comp = MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5, 0., 1., 3.].iter().map(|x| Length::new::<millimeter>(*x)).collect::<Vec<Length>>());
 
-        let pos_hist = ray.position_history_in_mm();
+        let pos_hist = ray.position_history();
         for (row, row_calc) in izip!(pos_hist_comp.row_iter(), pos_hist.row_iter()) {
             assert_eq!(row[0], row_calc[0]);
             assert_eq!(row[1], row_calc[1]);

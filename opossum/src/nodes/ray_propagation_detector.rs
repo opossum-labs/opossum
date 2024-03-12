@@ -101,7 +101,7 @@ impl Optical for RayPropagationVisualizer {
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if self.light_data.is_some() {
             if let Some(LightData::Geometric(rays)) = &self.light_data {
-                let ray_prop_data = rays.get_rays_position_history_in_mm();
+                let ray_prop_data = rays.get_rays_position_history()?;
 
                 let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
                     "ray_propagation_{}.svg",
@@ -133,14 +133,17 @@ impl Optical for RayPropagationVisualizer {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
-            props
-                .create(
-                    "Ray Propagation visualization plot",
-                    "Ray plot",
-                    None,
-                    rays.clone().into(),
-                )
-                .unwrap();
+            let proptype = rays.clone().try_into();
+            if proptype.is_ok() {
+                props
+                    .create(
+                        "Ray Propagation visualization plot",
+                        "Ray plot",
+                        None,
+                        proptype.unwrap(),
+                    )
+                    .unwrap();
+            }
         }
         Some(NodeReport::new(
             self.properties().node_type().unwrap(),

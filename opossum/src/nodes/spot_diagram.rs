@@ -1,14 +1,16 @@
 #![warn(missing_docs)]
 use colorous::Gradient;
 use image::{DynamicImage, ImageBuffer, RgbImage};
+use itertools::izip;
 use plotters::style::RGBAColor;
 use serde_derive::{Deserialize, Serialize};
+use uom::si::f64::Length;
 use uom::si::length::nanometer;
 
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::plottable::{CGradient, LabelPos, PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
+use crate::plottable::{CGradient, LabelPos, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::refractive_index::refr_index_vaccuum;
 use crate::reporter::{NodeReport, PdfReportable};
@@ -203,29 +205,32 @@ impl Plottable for SpotDiagram {
         PlotType::Scatter2D(plt_params.clone())
     }
 
-    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = &self.light_data;
         match data {
             Some(LightData::Geometric(rays)) => {
-                let rays_xy_pos = rays.get_xy_rays_pos(true);
-                let mut unique_wvls = rays.get_unique_wavelengths(true);
-                let color = if unique_wvls.len() >  1{
-                    unique_wvls.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                    let wvl_range = *unique_wvls.last().unwrap()*2. - *unique_wvls.first().unwrap()*2.;
-                    let mut color = Vec::<RGBAColor>::with_capacity(rays.nr_of_rays(true));
-                    let grad = colorous::TURBO;
-                    for ray in rays{
-                        let grad_val = 0.42+(ray.wavelength()-unique_wvls[0]).get::<nanometer>()/wvl_range.get::<nanometer>();
-                        let rgbcolor = grad.eval_continuous(grad_val);
-                        color.push(RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.));
-                    }
-                    color
+                let (split_rays_bundles, wavelengths) = rays.split_ray_bundle_by_wavelength(Length::new::<nanometer>(1.), true)?;
+                let num_series = split_rays_bundles.len();
+                let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
+
+                let color_grad = colorous::TURBO;    
+                let wvl_range = if num_series == 1{
+                    1.
                 }
                 else{
-                    vec![RGBAColor(255, 0, 0, 1.)]
+                    (wavelengths[num_series-1]*2. - wavelengths[0]*2.).get::<nanometer>()
                 };
+
+                for (ray_bundle, wvl) in izip!(split_rays_bundles.iter(), wavelengths.iter()){
+                    let grad_val = 0.42+(*wvl-wavelengths[0]).get::<nanometer>()/wvl_range;
+                    let rgbcolor = color_grad.eval_continuous(grad_val);
+                    let series_label = format!("{:.1} nm", wvl.get::<nanometer>());
+                    let data = PlotData::Dim2(ray_bundle.get_xy_rays_pos(true));
+                    plt_series.push(PlotSeries::new(&data, RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.), Some(series_label)));
+                }
+                
                 match plt_type {
-                    PlotType::Scatter2D(_) => Ok(Some(PlotData::Dim2(rays_xy_pos, color))),
+                    PlotType::Scatter2D(_) => Ok(Some(plt_series)),
                     _ => Ok(None),
                 }
             }

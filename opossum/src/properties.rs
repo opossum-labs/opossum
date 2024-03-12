@@ -10,7 +10,7 @@ use crate::{
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
-    rays::RayPositionHistory,
+    rays::RayPositionHistories,
     refractive_index::RefractiveIndexType,
     reporter::{NodeReport, PdfReportable},
     SplittingConfig,
@@ -486,7 +486,7 @@ pub enum Proptype {
     /// This property stores the wavefront Information [`WaveFrontData`]
     WaveFrontStats(WaveFrontData),
     /// This property stores the ray position history of all [`Rays`](crate::rays::Rays) during propagation through the optic scenery
-    RayPositionHistory(RayPositionHistory),
+    RayPositionHistory(RayPositionHistories),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
     /// a geometrical length

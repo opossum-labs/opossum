@@ -7,7 +7,7 @@ use crate::nodes::fluence_detector::FluenceData;
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
 use crate::plottable::{
-    AxLims, PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd,
+    AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd
 };
 use crate::position_distributions::{Hexapolar, PositionDistribution};
 use crate::properties::Proptype;
@@ -16,18 +16,19 @@ use crate::refractive_index::RefractiveIndexType;
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use crate::surface::Surface;
+use crate::utils::filter_data::get_unique_values;
 use crate::utils::griddata::{
-    calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
-    interpolate_3d_triangulated_scatter_data, VoronoiedData,
+    calc_closed_poly_area, create_linspace_axes, create_voronoi_cells, interpolate_3d_triangulated_scatter_data, linspace, VoronoiedData
 };
 use approx::{relative_eq, relative_ne};
 use image::{DynamicImage, ImageBuffer};
 use itertools::izip;
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::{distance, point, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
+use nalgebra::{distance, point, ComplexField, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
 use plotters::style::RGBAColor;
+use rayon::vec;
 use serde_derive::{Deserialize, Serialize};
 use std::ops::Add;
 use std::ops::Range;
@@ -259,24 +260,16 @@ impl Rays {
     }
     /// Finds all unique wavelengths in this raybundle and returns them in a vector
     pub fn get_unique_wavelengths(&self, valid_only: bool) -> Vec<Length>{
-        let mut unique_wavelengths = Vec::<Length>::new();
-        for ray in &self.rays{
-            if !ray.valid() && valid_only{
-                continue
-            }
-            let wvl = ray.wavelength();
-            let mut unique = true;
-            for u_wvl in &unique_wavelengths{
-                if relative_eq!(u_wvl.get::<nanometer>(), wvl.get::<nanometer>()){
-                    unique = false;
-                    break;
-                };
-            }
-            if unique{
-                unique_wavelengths.push(wvl);
-            }
-        }
-        unique_wavelengths
+
+        //get all wavelengths of the rays converted to nm
+        let wvls = self.rays.iter().filter_map(|r|  (r.valid() || !valid_only).then(|| r.wavelength().get::<nanometer>())).collect::<Vec<f64>>();
+        
+        //get unique wavelengths
+        let unique_wvls = get_unique_values(wvls.as_slice());
+
+        //return as Vec<Length>
+        unique_wvls.iter().map(|w| Length::new::<nanometer>(*w)).collect::<Vec<Length>>()
+        
     }
     /// Returns the centroid of this [`Rays`].
     ///
@@ -757,19 +750,77 @@ impl Rays {
             self.add_ray(ray.clone());
         }
     }
-    /// Get the position history of all rays in thie ray bundle
+
+    /// Split an existing ray bundle into multiple ray bundles corresponding to their wavelength
+    /// # Attributes
+    /// - `wavelength_bin_size`: size of the wavelength binning
+    ///
+    /// If there is only one wavelength, the same ray bundle is returned
+    pub fn split_ray_bundle_by_wavelength(&self, wavelength_bin_size: Length, valid_only: bool) -> OpmResult<(Vec<Self>, Vec<Length>)>{
+        let mut unique_wavelengths =  self.get_unique_wavelengths(valid_only);
+        
+        if unique_wavelengths.len() == 1{
+            Ok((vec![self.clone()], unique_wavelengths))
+        }
+        else{
+            unique_wavelengths.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let bin_size: f64 = wavelength_bin_size.get::<nanometer>();
+            let start_wvl = (unique_wavelengths[0]-wavelength_bin_size/2.).get::<nanometer>();
+
+            let mut ray_bundles = Vec::<Rays>::new();
+            let mut ray_center_wavelength = Vec::<Length>::new();
+
+            for ray in &self.rays{
+                let r_wvl = ray.wavelength().get::<nanometer>();
+                let insertion_index = ((r_wvl-start_wvl)/bin_size).floor();
+                if ray_bundles.is_empty(){
+                    ray_bundles.push(Self::from(vec![ray.clone()]));
+                    ray_center_wavelength.push(unique_wavelengths[0] + insertion_index*wavelength_bin_size);
+                }
+                else{
+                    let len_bundles = ray_bundles.len();
+                    for (i, bundle) in ray_bundles.clone().iter().enumerate(){
+                        let bundle_wvl = bundle.rays[0].wavelength().get::<nanometer>();
+                        let insertion_index_bundle = ((bundle_wvl-start_wvl)/bin_size).floor();
+                        if  relative_eq!(insertion_index_bundle, insertion_index){
+                            ray_bundles[i].add_ray(ray.clone());
+                            break;
+                        }
+                        else if insertion_index < insertion_index_bundle{
+                            ray_bundles.insert(i, Self::from(vec![ray.clone()]));
+                            ray_center_wavelength.insert(i, unique_wavelengths[0] + insertion_index*wavelength_bin_size);
+                            break;
+                        }
+                        else if i == len_bundles-1{
+                            ray_bundles.push(Self::from(vec![ray.clone()]));
+                            ray_center_wavelength.push(unique_wavelengths[0] + insertion_index*wavelength_bin_size);
+                        }
+                    }
+                }
+            }
+            
+            Ok((ray_bundles, ray_center_wavelength))
+        }
+    }
+
+    /// Get the position history of all rays in this ray bundle
     ///
     /// # Returns
     /// This method returns a vector of N-row x 3 column matrices that contain the position history of all the rays
     #[must_use]
-    pub fn get_rays_position_history_in_mm(&self) -> RayPositionHistory {
-        let mut rays_pos_history = Vec::<MatrixXx3<f64>>::with_capacity(self.rays.len());
-        let mut ray_wvl = Vec::<f64>::with_capacity(self.rays.len());
-        for ray in &self.rays {
-            rays_pos_history.push(ray.position_history_in_mm());
-            ray_wvl.push(ray.wavelength().get::<nanometer>())
+    pub fn get_rays_position_history(&self) -> OpmResult<RayPositionHistories> {
+        let (rays_by_wavelength, wavelengths) = self.split_ray_bundle_by_wavelength(Length::new::<nanometer>(1.), false)?;
+
+        let mut ray_pos_hists = Vec::<RayPositionHistorySpectrum>::with_capacity(wavelengths.len());
+        for (ray_bundle, wvl) in izip!(rays_by_wavelength, wavelengths){
+            let mut rays_pos_history = Vec::<MatrixXx3<Length>>::with_capacity(ray_bundle.rays.len());
+            for ray in &ray_bundle {
+                rays_pos_history.push(ray.position_history());
+            }
+            ray_pos_hists.push(RayPositionHistorySpectrum::new(rays_pos_history, wvl, Length::new::<nanometer>(1.))?);
         }
-        RayPositionHistory { rays_pos_history, wavelength: ray_wvl }
+        
+        Ok(RayPositionHistories{ rays_pos_history: ray_pos_hists })
     }
     /// Returns the dist to next surface of this [`Rays`].
     ///
@@ -794,14 +845,49 @@ impl Rays {
     }
 }
 
-/// struct that holds the history of the ray positions that is needed for report generation
+/// struct that holds the history of the rays' positions for rays of a specific wavelength
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RayPositionHistory {
-    /// vector of ray positions for each ray
-    pub rays_pos_history: Vec<MatrixXx3<f64>>,
-    pub wavelength: Vec<f64>
+pub struct RayPositionHistorySpectrum{
+    history: Vec<MatrixXx3<Length>>,
+    center_wavelength: Length,
+    wavelength_bin_size: Length,
+
 }
-impl RayPositionHistory {
+impl RayPositionHistorySpectrum{
+    ///creates a new [`RayPositionHistorySpectrum`] struct.
+    /// # Attributes
+    /// - `history`: position history of the ray bundle
+    /// - `center_wavelength`: wavelength of this ray bundle
+    /// - `wavelength_bin_size`: wavelength resolution of this ray bundle. 
+    /// All rays positions in this struct correspond to rays with a wavelength in the bin:
+    /// [`center_wavelength` - wavelength_bin_size/2; `center_wavelength` + wavelength_bin_size/2)
+    #[must_use]
+    pub fn new(history: Vec<MatrixXx3<Length>>, center_wavelength: Length, wavelength_bin_size: Length) -> OpmResult<Self>{
+        if !center_wavelength.is_normal() || center_wavelength.is_sign_negative(){
+            return Err(OpossumError::Other("center wavelength must be finite, non-zero and non-negative!".into()));
+        }
+        if !wavelength_bin_size.is_normal() || wavelength_bin_size.is_sign_negative(){
+            return Err(OpossumError::Other("wavelength bin size must be finite, non-zero and non-negative!".into()));
+        }
+        Ok(Self { history, center_wavelength, wavelength_bin_size })
+    }
+
+    /// Returns the ray-position history stored in this [`RayPositionHistorySpectrum`] struct.
+    #[must_use]
+    pub const fn get_history(&self) -> &Vec<MatrixXx3<Length>>{
+        &self.history
+    }
+    /// Returns the center wavelength of the rays whose position histories are stored in this [`RayPositionHistorySpectrum`] struct.
+    #[must_use]
+    pub const fn get_center_wavelength(&self) -> &Length{
+        &self.center_wavelength
+    }
+    /// Returns the wavelength bin size in which all the rays of this [`RayPositionHistorySpectrum`] struct are inside.
+    #[must_use]
+    pub const fn get_wavelength_bin_size(&self) -> &Length{
+        &self.wavelength_bin_size
+    }
+
     /// Projects a set of 3d vectors onto a plane
     /// # Attributes
     /// `plane_normal_vec`: normal vector of the plane to project onto
@@ -813,7 +899,7 @@ impl RayPositionHistory {
     pub fn project_to_plane(
         &self,
         plane_normal_vec: Vector3<f64>,
-    ) -> OpmResult<Vec<MatrixXx2<f64>>> {
+    ) -> OpmResult<Vec<MatrixXx2<Length>>> {
         let vec_norm = plane_normal_vec.norm();
 
         if vec_norm < f64::EPSILON {
@@ -846,22 +932,36 @@ impl RayPositionHistory {
             };
 
         let mut rays_pos_projection =
-            Vec::<MatrixXx2<f64>>::with_capacity(self.rays_pos_history.len());
-        for ray_pos in &self.rays_pos_history {
-            let mut projected_ray_pos = MatrixXx2::<f64>::zeros(ray_pos.column(0).len());
+            Vec::<MatrixXx2<Length>>::with_capacity(self.history.len());
+        for ray_pos in &self.history {
+            let mut projected_ray_pos = MatrixXx2::<Length>::zeros(ray_pos.column(0).len());
             for (row, pos) in ray_pos.row_iter().enumerate() {
-                let pos_t = pos.transpose();
+                // let pos_t = Vector3::from_vec(pos.transpose().iter().map(|p| p.get::<millimeter>()).collect::<Vec<f64>>());
+                let pos_t = Vector3::from_vec(pos.iter().map(|p| p.get::<millimeter>()).collect::<Vec<f64>>());
                 let proj_pos = pos_t - pos_t.dot(&normed_normal_vec) * plane_normal_vec;
 
-                projected_ray_pos[(row, 0)] = proj_pos.dot(&co_ax_1);
-                projected_ray_pos[(row, 1)] = proj_pos.dot(&co_ax_2);
+                projected_ray_pos[(row, 0)] = Length::new::<millimeter>(proj_pos.dot(&co_ax_1));
+                projected_ray_pos[(row, 1)] = Length::new::<millimeter>(proj_pos.dot(&co_ax_2));
             }
             rays_pos_projection.push(projected_ray_pos);
         }
         Ok(rays_pos_projection)
     }
 }
-impl PdfReportable for RayPositionHistory {
+/// struct that holds the history of the ray positions that is needed for report generation
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RayPositionHistories {
+    /// vector of ray positions for each raybundle at a specifc sptracl position
+    pub rays_pos_history: Vec<RayPositionHistorySpectrum>,
+}
+
+impl RayPositionHistories{
+    pub fn get_center_wavelengths(&self) -> Vec<Length>{
+        self.rays_pos_history.iter().map(|r| *r.get_center_wavelength()).collect::<Vec<Length>>()
+    }
+}
+
+impl PdfReportable for RayPositionHistories {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
         let img = self.to_plot(Path::new(""), (1000, 1000), PltBackEnd::Buf)?;
@@ -885,9 +985,10 @@ impl From<Vec<Ray>> for Rays {
     }
 }
 
-impl From<Rays> for Proptype {
-    fn from(value: Rays) -> Self {
-        Self::RayPositionHistory(value.get_rays_position_history_in_mm())
+impl TryFrom<Rays> for Proptype {
+    type Error = OpossumError;
+    fn try_from(value: Rays) -> OpmResult<Self> {
+        Ok(Self::RayPositionHistory(value.get_rays_position_history()?))
     }
 }
 
@@ -899,7 +1000,7 @@ impl<'a> IntoIterator for &'a Rays {
     }
 }
 
-impl Plottable for RayPositionHistory {
+impl Plottable for RayPositionHistories {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
@@ -911,35 +1012,41 @@ impl Plottable for RayPositionHistory {
         PlotType::MultiLine2D(plt_params.clone())
     }
 
-    fn get_plot_data(&self, _plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+    fn get_plot_series(&self, _plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
         if self.rays_pos_history.is_empty() {
             Ok(None)
         } else {
+            let num_series = self.rays_pos_history.len();
+            let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
             
-            let mut sorted_wvl = self.wavelength.clone();
-            sorted_wvl.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let mut wavelengths = self.get_center_wavelengths().iter().map(|wvl| wvl.get::<nanometer>()).collect::<Vec<f64>>();
+            wavelengths.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-            let color = if self.wavelength.len() > 1 && relative_ne!(sorted_wvl.first().unwrap(), sorted_wvl.last().unwrap()){
+            let color_grad = colorous::TURBO;
 
-                let wvl_range = sorted_wvl.last().unwrap()*2. - sorted_wvl.first().unwrap()*2.;
-                
-                let mut color = Vec::<Vec<RGBAColor>>::with_capacity(self.rays_pos_history.len());
-                let grad = colorous::TURBO;
-                for wvl in &self.wavelength{
-                    let grad_val = 0.42+(wvl-sorted_wvl[0])/wvl_range;
-                    let rgbcolor = grad.eval_continuous(grad_val);
-                    color.push(vec![RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.)]);
-                }
-                color
-
+            let wvl_range = if num_series == 1{
+                1.
             }
             else{
-                vec![vec![RGBAColor(255, 0, 0, 1.)]]
+                wavelengths[num_series-1]*2. - wavelengths[0]*2.
             };
 
-            Ok(Some(PlotData::MultiDim2(
-                self.project_to_plane(Vector3::new(1., 0., 0.))?, color
-            )))
+            for ray_pos_hist in &self.rays_pos_history{
+                let wvl = ray_pos_hist.get_center_wavelength().get::<nanometer>();
+                let grad_val = 0.42+(wvl-wavelengths[0])/wvl_range;
+                let rgbcolor = color_grad.eval_continuous(grad_val);
+                let projected_positions = ray_pos_hist.project_to_plane(Vector3::new(1., 0., 0.))?;
+                let mut proj_pos_mm = Vec::<MatrixXx2<f64>>::with_capacity(projected_positions.len());
+                for ray_pos in projected_positions.iter(){
+                    proj_pos_mm.push(MatrixXx2::from_vec(ray_pos.iter().map(|x| x.get::<millimeter>()).collect::<Vec<f64>>()));
+                }
+
+                let plt_data = PlotData::MultiDim2(proj_pos_mm);
+                let series_label = format!("{wvl:.1} nm");
+                plt_series.push(PlotSeries::new(&plt_data, RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.), Some(series_label)));
+            }
+
+            Ok(Some(plt_series))
         }
     }
 }
@@ -1663,13 +1770,13 @@ mod test {
             0., 0., 0., 0., 0.5, 1.5, 0., 1., 3.,
         ])];
 
-        let pos_hist = rays.get_rays_position_history_in_mm();
-        for (ray_pos, ray_pos_calc) in izip!(pos_hist_comp.iter(), pos_hist.rays_pos_history.iter())
+        let pos_hist = rays.get_rays_position_history().unwrap();
+        for (ray_pos, ray_pos_calc) in izip!(pos_hist_comp.iter(), pos_hist.rays_pos_history[0].get_history().iter())
         {
             for (row, row_calc) in izip!(ray_pos.row_iter(), ray_pos_calc.row_iter()) {
-                assert_eq!(row[0], row_calc[0]);
-                assert_eq!(row[1], row_calc[1]);
-                assert_eq!(row[2], row_calc[2]);
+                assert_eq!(row[0], row_calc[0].get::<millimeter>());
+                assert_eq!(row[1], row_calc[1].get::<millimeter>());
+                assert_eq!(row[2], row_calc[2].get::<millimeter>());
             }
         }
     }
