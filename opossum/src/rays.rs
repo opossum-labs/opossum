@@ -416,13 +416,13 @@ impl Rays {
     /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be returned.
     #[must_use]
     pub fn get_xy_rays_pos(&self, valid_only: bool) -> MatrixXx2<f64> {
-        let rays_iter=self.iter().filter(|r| !valid_only || r.valid());
+        let rays_iter = self.iter().filter(|r| !valid_only || r.valid());
         let mut rays_at_pos = MatrixXx2::from_element(self.nr_of_rays(valid_only), 0.);
-        let mut row=0;
+        let mut row = 0;
         for ray in rays_iter {
             rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
             rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
-            row+=1;
+            row += 1;
         }
         rays_at_pos
     }
@@ -901,7 +901,9 @@ impl Plottable for RayPositionHistory {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
-            .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?;
+            .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?
+            .set(&PlotArgs::FigSize((1600, 800)))?;
+
         Ok(())
     }
 
