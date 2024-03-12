@@ -290,7 +290,7 @@ impl PlotType {
             }
         } else {
             warn!(
-                "Warning! The points on this axis are not equistant!\n This may distort the plot!"
+                "Warning! The points on this axis are not equistant! This may distort the plot!"
             );
         };
         dist

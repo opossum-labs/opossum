@@ -16,7 +16,7 @@ fn main() -> OpmResult<()> {
     ));
     let filt = scenery.add_node(IdealFilter::new(
         "50 % filter",
-        opossum::nodes::FilterType::Constant(0.5),
+        &opossum::nodes::FilterType::Constant(0.5),
     )?);
     let reference = scenery.add_node(NodeReference::from_node(&scenery.node(filt).unwrap()));
     let detector = scenery.add_node(EnergyMeter::default());

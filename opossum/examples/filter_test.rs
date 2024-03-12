@@ -20,10 +20,10 @@ fn main() -> OpmResult<()> {
         }),
     ));
     let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap());
-    let filter_spectrum = Spectrum::from_csv("./opossum/NE03B.csv")?;
+    let filter_spectrum = Spectrum::from_csv("./opossum/opossum/NE03B.csv")?;
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
-        FilterType::Spectrum(filter_spectrum),
+        &FilterType::Spectrum(filter_spectrum),
     )?);
     let i_d1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",

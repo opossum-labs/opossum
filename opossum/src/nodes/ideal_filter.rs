@@ -86,9 +86,9 @@ impl IdealFilter {
     ///
     /// This function will return an [`OpossumError::Other`] if the filter type is
     /// [`FilterType::Constant`] and the transmission factor is outside the interval [0.0; 1.0].
-    pub fn new(name: &str, filter_type: FilterType) -> OpmResult<Self> {
+    pub fn new(name: &str, filter_type: &FilterType) -> OpmResult<Self> {
         if let FilterType::Constant(transmission) = filter_type {
-            if !(0.0..=1.0).contains(&transmission) {
+            if !(0.0..=1.0).contains(transmission) {
                 return Err(OpossumError::Other(
                     "attenuation must be in interval [0.0; 1.0]".into(),
                 ));
@@ -97,7 +97,10 @@ impl IdealFilter {
         let mut props = create_default_props();
         props.set(
             "filter type",
-            EnumProxy::<FilterType> { value: filter_type }.into(),
+            EnumProxy::<FilterType> {
+                value: filter_type.clone(),
+            }
+            .into(),
         )?;
         props.set("name", name.into())?;
         Ok(Self { props })
@@ -270,9 +273,9 @@ mod test {
     }
     #[test]
     fn new() {
-        assert!(IdealFilter::new("test", FilterType::Constant(1.1)).is_err());
-        assert!(IdealFilter::new("test", FilterType::Constant(-0.1)).is_err());
-        let node = IdealFilter::new("test", FilterType::Constant(0.8)).unwrap();
+        assert!(IdealFilter::new("test", &FilterType::Constant(1.1)).is_err());
+        assert!(IdealFilter::new("test", &FilterType::Constant(-0.1)).is_err());
+        let node = IdealFilter::new("test", &FilterType::Constant(0.8)).unwrap();
         assert_eq!(node.properties().name().unwrap(), "test");
         assert_eq!(node.filter_type(), FilterType::Constant(0.8));
     }
@@ -294,7 +297,7 @@ mod test {
         assert_eq!(node.optical_density(), Some(2.0));
         let node = IdealFilter::new(
             "test",
-            FilterType::Spectrum(create_he_ne_spec(1.0).unwrap()),
+            &FilterType::Spectrum(create_he_ne_spec(1.0).unwrap()),
         )
         .unwrap();
         assert_eq!(node.optical_density(), None);
@@ -330,7 +333,7 @@ mod test {
     }
     #[test]
     fn analyze_energy_ok() {
-        let mut node = IdealFilter::new("test", FilterType::Constant(0.5)).unwrap();
+        let mut node = IdealFilter::new("test", &FilterType::Constant(0.5)).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
@@ -357,7 +360,7 @@ mod test {
     }
     #[test]
     fn analyzer_geometric_fixed() {
-        let mut node = IdealFilter::new("test", FilterType::Constant(0.3)).unwrap();
+        let mut node = IdealFilter::new("test", &FilterType::Constant(0.3)).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
             Rays::new_uniform_collimated(
@@ -395,7 +398,7 @@ mod test {
     }
     #[test]
     fn analyze_inverse() {
-        let mut node = IdealFilter::new("test", FilterType::Constant(0.5)).unwrap();
+        let mut node = IdealFilter::new("test", &FilterType::Constant(0.5)).unwrap();
         node.set_property("inverted", true.into()).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {

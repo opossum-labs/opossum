@@ -413,15 +413,16 @@ impl Rays {
 
     /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx2<f64>]`.
     ///
-    /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be retruned.
+    /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be returned.
     #[must_use]
     pub fn get_xy_rays_pos(&self, valid_only: bool) -> MatrixXx2<f64> {
-        let mut rays_at_pos = MatrixXx2::from_element(self.rays.len(), 0.);
-        for (row, ray) in self.rays.iter().enumerate() {
-            if !valid_only || ray.valid() {
-                rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
-                rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
-            }
+        let rays_iter=self.iter().filter(|r| !valid_only || r.valid());
+        let mut rays_at_pos = MatrixXx2::from_element(self.nr_of_rays(valid_only), 0.);
+        let mut row=0;
+        for ray in rays_iter {
+            rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
+            rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
+            row+=1;
         }
         rays_at_pos
     }

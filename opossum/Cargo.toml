@@ -85,3 +85,6 @@ vergen = { version = "8", features = [
   "gitcl",
 ] } # get git version infos compiled in binary
 
+[[example]]
+name = "hhts"
+path = "examples/hhts/hhts.rs"
