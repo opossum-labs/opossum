@@ -40,7 +40,7 @@ use uom::si::length::{micrometer, millimeter, nanometer};
 /// Struct containing all relevant information of a ray bundle
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Rays {
-    ///vector containing rays
+    /// vector containing the individual rays
     rays: Vec<Ray>,
     // ***
     // *** only temporary before we have concept for coordinate system
@@ -59,8 +59,9 @@ impl Rays {
     ///
     /// If the given size id zero, a bundle consisting of a single ray along the optical - position (0.0,0.0,0.0) - axis is generated.
     ///
-    /// This function returns an error if
     /// # Errors
+    /// 
+    /// This function returns an error if
     ///  - the given wavelength is <= 0.0, NaN or +inf
     ///  - the given energy is <= 0.0, NaN or +inf
     ///  - the given size is < 0.0, NaN or +inf
@@ -71,7 +72,7 @@ impl Rays {
     ) -> OpmResult<Self> {
         let points = strategy.generate();
         let nr_of_rays = points.len();
-        let mut rays: Vec<Ray> = Vec::new();
+        let mut rays: Vec<Ray> = Vec::with_capacity(nr_of_rays);
         #[allow(clippy::cast_precision_loss)]
         let energy_per_ray = energy / nr_of_rays as f64;
         for point in points {
@@ -139,7 +140,6 @@ impl Rays {
                 rays.push(ray);
             }
         }
-
         Ok(Self {
             rays,
             dist_to_next_surface: Length::zero(),
@@ -149,7 +149,7 @@ impl Rays {
     /// Generate a ray cone (= point source)
     ///
     /// Generate a bundle of rays emerging from a given (x,y) point and a cone direction (as hexapolar pattern) of a given (full) cone angle.
-    /// The parameter `number_of_rings` determines the "density" of the hexapolar pattern (see corresponding function). If the cone angle is zero, a ray bundle
+    /// The parameter `number_of_rings` determines the "density" of the [`Hexapolar`] pattern (see docs there). If the cone angle is zero, a ray bundle
     /// with a single ray along the optical axis at the given position is created.
     ///
     /// # Errors
