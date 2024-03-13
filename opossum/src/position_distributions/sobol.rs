@@ -54,7 +54,7 @@ impl SobolDist {
 
 impl PositionDistribution for SobolDist {
     fn generate(&self) -> Vec<nalgebra::Point3<Length>> {
-        let mut points: Vec<Point3<Length>> = Vec::new();
+        let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_points);
         let params = JoeKuoD6::minimal();
         let seq = Sobol::<f64>::new(2, &params);
         for point in seq.take(self.nr_of_points) {

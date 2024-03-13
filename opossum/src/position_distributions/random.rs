@@ -52,7 +52,7 @@ impl Random {
 }
 impl PositionDistribution for Random {
     fn generate(&self) -> Vec<nalgebra::Point3<Length>> {
-        let mut points: Vec<Point3<Length>> = Vec::new();
+        let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_points);
         let mut rng = rand::thread_rng();
         for _ in 0..self.nr_of_points {
             let point_x = self.side_length_x * rng.gen_range(-1.0..1.0);
