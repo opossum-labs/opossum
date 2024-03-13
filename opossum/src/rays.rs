@@ -60,7 +60,7 @@ impl Rays {
     /// If the given size id zero, a bundle consisting of a single ray along the optical - position (0.0,0.0,0.0) - axis is generated.
     ///
     /// # Errors
-    /// 
+    ///
     /// This function returns an error if
     ///  - the given wavelength is <= 0.0, NaN or +inf
     ///  - the given energy is <= 0.0, NaN or +inf
