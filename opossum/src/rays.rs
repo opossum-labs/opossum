@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Module for handling ray bundles
+//! Module for handling bundles of [`Ray`]s
 use crate::aperture::Aperture;
 use crate::energy_distributions::EnergyDistribution;
 use crate::error::{OpmResult, OpossumError};

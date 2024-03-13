@@ -16,7 +16,7 @@ use petgraph::{algo::toposort, Direction};
 use serde_derive::Serialize;
 use std::collections::HashMap;
 
-/// Mappin of group internal ports to externally visible ports.
+/// Mapping of group internal ports to externally visible ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
 impl From<PortMap> for Proptype {
     fn from(value: PortMap) -> Self {

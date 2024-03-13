@@ -1,4 +1,4 @@
-/// Rectangluar, low-discrepancy quasirandom distribution
+//! Rectangluar, low-discrepancy quasirandom distribution
 use super::PositionDistribution;
 use crate::error::{OpmResult, OpossumError};
 use nalgebra::{point, Point3};
@@ -6,6 +6,9 @@ use num::Zero;
 use sobol::{params::JoeKuoD6, Sobol};
 use uom::si::f64::Length;
 
+/// Rectangluar, low-discrepancy quasirandom distribution
+///
+/// For further details see [here](https://en.wikipedia.org/wiki/Sobol_sequence)
 pub struct SobolDist {
     nr_of_points: usize,
     side_length_x: Length,

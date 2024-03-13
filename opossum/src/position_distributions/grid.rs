@@ -1,10 +1,12 @@
-//! Rectangular, evenly sized grid distribution
+#![warn(missing_docs)]
+//! Rectangular, evenly-sized grid distribution
 use super::PositionDistribution;
 use crate::error::{OpmResult, OpossumError};
 use nalgebra::Point3;
 use num::Zero;
 use uom::si::f64::Length;
 
+/// Rectangular, evenly-sized grid distribution
 pub struct Grid {
     nr_of_points: (usize, usize),
     side_length: (Length, Length),
@@ -73,7 +75,7 @@ impl PositionDistribution for Grid {
         } else {
             Length::zero()
         };
-        let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_points_x*nr_of_points_y);
+        let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_points_x * nr_of_points_y);
         for i_x in 0..nr_of_points_x {
             for i_y in 0..nr_of_points_y {
                 #[allow(clippy::cast_precision_loss)]

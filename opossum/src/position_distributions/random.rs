@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Rectangular, uniform random distribution
 use super::PositionDistribution;
 use crate::error::{OpmResult, OpossumError};
@@ -6,6 +7,7 @@ use num::Zero;
 use rand::Rng;
 use uom::si::f64::Length;
 
+/// Rectangular, uniform random distribution
 pub struct Random {
     nr_of_points: usize,
     side_length_x: Length,
