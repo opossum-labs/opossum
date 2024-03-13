@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+//! Ray propagation visualizer node
 use image::RgbImage;
 use serde_derive::{Deserialize, Serialize};
 
@@ -16,10 +17,9 @@ use crate::{
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-
 /// A ray-propagation monitor
 ///
-/// It generates a plot that visualizes the ray path during propagtaion through the scenery.
+/// This node generates a plot that visualizes the ray path during propagation through the scenery.
 ///
 /// ## Optical Ports
 ///   - Inputs

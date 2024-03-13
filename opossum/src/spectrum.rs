@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Module for handling optical spectra
+//! Module for creation and handling of optical spectra
 use crate::error::{OpmResult, OpossumError};
 use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable};
 use csv::ReaderBuilder;

@@ -3,9 +3,9 @@
 use crate::aperture::Aperture;
 use crate::energy_distributions::EnergyDistribution;
 use crate::error::{OpmResult, OpossumError};
-use crate::nodes::fluence_detector::FluenceData;
-use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
+use crate::nodes::FluenceData;
+use crate::nodes::{WaveFrontData, WaveFrontErrorMap};
 use crate::plottable::{
     AxLims, PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd,
 };

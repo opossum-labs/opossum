@@ -1,25 +1,23 @@
+#![warn(missing_docs)]
 //! This module contains the concrete node types (lenses, filters, etc...)
 mod beam_splitter;
 mod detector;
 mod dummy;
 mod energy_meter;
-/// fluence measurement node
-pub mod fluence_detector;
+
+mod fluence_detector;
 mod group;
 mod ideal_filter;
 mod lens;
 mod paraxial_surface;
 mod propagation;
-/// ray propagation visualizer node
-pub mod ray_propagation_detector;
+mod ray_propagation_detector;
 mod reference;
 mod source;
-
 mod source_helper;
 mod spectrometer;
 mod spot_diagram;
-/// wavefront measurement node
-pub mod wavefront;
+mod wavefront;
 
 pub use beam_splitter::BeamSplitter;
 pub use detector::Detector;
@@ -42,11 +40,11 @@ pub use energy_meter::Metertype;
 pub use spectrometer::Spectrometer;
 pub use spectrometer::SpectrometerType;
 
-pub use fluence_detector::FluenceDetector;
+pub use fluence_detector::{FluenceData, FluenceDetector};
 pub use spot_diagram::SpotDiagram;
 
 pub use ray_propagation_detector::RayPropagationVisualizer;
-pub use wavefront::{WaveFront, WaveFrontErrorMap};
+pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
 
 use crate::error::OpmResult;
 use crate::error::OpossumError;

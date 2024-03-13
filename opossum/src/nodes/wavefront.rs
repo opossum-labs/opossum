@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+//! Wavefront measurment node
 use image::{DynamicImage, ImageBuffer, RgbImage};
 use log::warn;
 use nalgebra::{DVector, DVectorSlice, MatrixXx3};
@@ -71,7 +72,7 @@ pub struct WaveFrontData {
     pub wavefront_error_maps: Vec<WaveFrontErrorMap>,
 }
 
-/// This [`WaveFrontErrorMap`] struct holds the necessary data to describe the wavefront as well as some statistical values:
+/// A struct which holds the necessary data to describe the wavefront as well as some statistical values:
 /// - `wavelength`: the wavelength that was used to calculate this wavefront map in units of a specific wavelength
 /// - `ptv`: the peak-to-valley value of the wavefront map in units of milli-lambda
 /// - `rms`: the root-mean-square value of the wavefront map in units of milli-lambda

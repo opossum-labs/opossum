@@ -579,9 +579,8 @@ mod test {
         Detector, IdealFilter, Metertype, NodeReference, ParaxialSurface, Propagation,
         RayPropagationVisualizer, Spectrometer, SpotDiagram, WaveFront,
     };
-    use crate::ray::Ray;
+    use crate::ray::{Ray, SplittingConfig};
     use crate::rays::Rays;
-    use crate::SplittingConfig;
     use log::Level;
     use nalgebra::Point3;
     use num::Zero;

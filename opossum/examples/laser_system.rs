@@ -6,7 +6,8 @@ use opossum::{
         round_collimated_ray_source, BeamSplitter, EnergyMeter, IdealFilter, NodeGroup,
         ParaxialSurface, Propagation, SpotDiagram,
     },
-    OpticScenery, SplittingConfig,
+    ray::SplittingConfig,
+    OpticScenery,
 };
 use uom::si::{
     energy::joule,

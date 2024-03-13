@@ -2,10 +2,7 @@ use std::path::Path;
 
 use opossum::{
     error::OpmResult,
-    nodes::{
-        point_ray_source, ray_propagation_detector::RayPropagationVisualizer, ParaxialSurface,
-        Propagation,
-    },
+    nodes::{point_ray_source, ParaxialSurface, Propagation, RayPropagationVisualizer},
     OpticScenery,
 };
 use petgraph::prelude::NodeIndex;

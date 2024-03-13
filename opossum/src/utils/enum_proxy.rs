@@ -1,8 +1,8 @@
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{
-    lightdata::LightData, nodes::FilterType, properties::Proptype,
-    refractive_index::RefractiveIndexType, SplittingConfig,
+    lightdata::LightData, nodes::FilterType, properties::Proptype, ray::SplittingConfig,
+    refractive_index::RefractiveIndexType,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
