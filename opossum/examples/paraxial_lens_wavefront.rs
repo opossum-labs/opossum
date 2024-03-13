@@ -3,7 +3,7 @@ use std::path::Path;
 use opossum::{
     error::OpmResult,
     nodes::{
-        create_round_collimated_ray_source, ParaxialSurface, Propagation, RayPropagationVisualizer,
+        round_collimated_ray_source, ParaxialSurface, Propagation, RayPropagationVisualizer,
         WaveFront,
     },
     OpticScenery,
@@ -17,7 +17,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Lens Ray-trace test".into())?;
     let src = scenery.add_node(
-        create_round_collimated_ray_source(
+        round_collimated_ray_source(
             Length::new::<millimeter>(5.0),
             Energy::new::<joule>(1.0),
             30,

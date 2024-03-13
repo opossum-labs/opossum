@@ -1,6 +1,6 @@
 use opossum::{
     error::OpmResult,
-    nodes::{create_point_ray_source, Propagation, WaveFront},
+    nodes::{point_ray_source, Propagation, WaveFront},
     OpticScenery,
 };
 use std::path::Path;
@@ -12,7 +12,7 @@ use uom::si::{
 };
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
-    let source = create_point_ray_source(Angle::new::<degree>(90.0), Energy::new::<joule>(1.))?;
+    let source = point_ray_source(Angle::new::<degree>(90.0), Energy::new::<joule>(1.))?;
     let i_s = scenery.add_node(source);
     let i_p1 = scenery.add_node(Propagation::new("propagation", Length::new::<meter>(0.1))?);
     let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));

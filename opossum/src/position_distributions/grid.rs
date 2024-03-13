@@ -25,12 +25,12 @@ impl Grid {
                 "at least one side length must be > zero".into(),
             ));
         }
-        if side_length.0.is_sign_negative() || !side_length.0.is_normal() {
+        if side_length.0.is_sign_negative() || !side_length.0.is_finite() {
             return Err(OpossumError::Other(
                 "side length x must be >= zero and finite".into(),
             ));
         }
-        if side_length.1.is_sign_negative() || !side_length.1.is_normal() {
+        if side_length.1.is_sign_negative() || !side_length.1.is_finite() {
             return Err(OpossumError::Other(
                 "side length x must be >= zero and finite".into(),
             ));
@@ -73,7 +73,7 @@ impl PositionDistribution for Grid {
         } else {
             Length::zero()
         };
-        let mut points: Vec<Point3<Length>> = Vec::new();
+        let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_points_x*nr_of_points_y);
         for i_x in 0..nr_of_points_x {
             for i_y in 0..nr_of_points_y {
                 #[allow(clippy::cast_precision_loss)]
@@ -95,7 +95,8 @@ mod test {
     #[test]
     fn new_wrong() {
         assert!(Grid::new((Length::zero(), Length::zero()), (1, 1)).is_err());
-
+        assert!(Grid::new((Length::zero(), Length::new::<millimeter>(1.0)), (1, 1)).is_ok());
+        assert!(Grid::new((Length::new::<millimeter>(1.0), Length::zero()), (1, 1)).is_ok());
         assert!(Grid::new(
             (
                 Length::new::<millimeter>(-0.1),

@@ -14,13 +14,12 @@ mod propagation;
 pub mod ray_propagation_detector;
 mod reference;
 mod source;
+
+mod source_helper;
 mod spectrometer;
 mod spot_diagram;
 /// wavefront measurement node
 pub mod wavefront;
-
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub use beam_splitter::BeamSplitter;
 pub use detector::Detector;
@@ -32,10 +31,10 @@ pub use lens::Lens;
 pub use paraxial_surface::ParaxialSurface;
 pub use propagation::Propagation;
 pub use reference::NodeReference;
-pub use source::create_line_collimated_ray_source;
-pub use source::create_point_ray_source;
-pub use source::create_round_collimated_ray_source;
 pub use source::Source;
+pub use source_helper::{
+    collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
+};
 
 pub use energy_meter::EnergyMeter;
 pub use energy_meter::Metertype;
@@ -49,12 +48,12 @@ pub use spot_diagram::SpotDiagram;
 pub use ray_propagation_detector::RayPropagationVisualizer;
 pub use wavefront::{WaveFront, WaveFrontErrorMap};
 
-use uuid::Uuid;
-
 use crate::error::OpmResult;
 use crate::error::OpossumError;
-
 use crate::optic_ref::OpticRef;
+use std::cell::RefCell;
+use std::rc::Rc;
+use uuid::Uuid;
 
 /// Factory function creating a new reference of an optical node of the given type.
 ///
