@@ -2,7 +2,6 @@ use std::path::Path;
 
 mod cambox_1w;
 mod cambox_2w;
-
 use cambox_1w::cambox_1w;
 use cambox_2w::cambox_2w;
 

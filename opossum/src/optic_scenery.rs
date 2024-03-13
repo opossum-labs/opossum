@@ -745,7 +745,7 @@ mod test {
         let report = scenery.report(Path::new(""));
         assert!(report.is_ok());
         let report = report.unwrap();
-        assert!(serde_json::to_string(&report).is_ok());
+        assert!(serde_yaml::to_string(&report).is_ok());
         // How shall we further parse the output?
     }
     #[test]

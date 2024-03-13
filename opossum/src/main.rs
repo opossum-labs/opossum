@@ -59,13 +59,13 @@ fn create_report_file(
     analyzer: &AnalyzerType,
 ) -> OpmResult<()> {
     let mut output =
-        create_dot_or_report_file_instance(report_directory, fname, "json", "detector report")?;
+        create_dot_or_report_file_instance(report_directory, fname, "yaml", "detector report")?;
 
     let analysis_report = scenery.report(report_directory)?;
     write!(
         output,
         "{}",
-        serde_json::to_string_pretty(&analysis_report).unwrap()
+        serde_yaml::to_string(&analysis_report).unwrap()
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let pdf_generator = ReportGenerator::new(analysis_report);

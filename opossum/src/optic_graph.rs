@@ -367,10 +367,10 @@ mod test {
     fn serialize_deserialize() {
         let mut graph = OpticGraph::default();
         graph.add_node(Dummy::default());
-        let serialized = serde_json::to_string(&graph);
+        let serialized = serde_yaml::to_string(&graph);
         assert!(serialized.is_ok());
         let serialized = serialized.unwrap();
-        let deserialized: Result<OpticGraph, serde_json::Error> = serde_json::from_str(&serialized);
+        let deserialized: Result<OpticGraph, serde_yaml::Error> = serde_yaml::from_str(&serialized);
         assert!(deserialized.is_ok());
     }
 }
