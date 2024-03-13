@@ -236,7 +236,7 @@ impl<'a> IntoIterator for &'a Properties {
 impl PdfReportable for Properties {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let mut table = TableLayout::new(vec![1, 3]);
+        let mut table = TableLayout::new(vec![1, 5]);
         for property in &self.props {
             let mut table_row = table.row();
             let property_name = genpdf::elements::Paragraph::default()
@@ -247,6 +247,7 @@ impl PdfReportable for Properties {
             table_row.push().unwrap();
         }
         layout.push(table);
+        layout.push(genpdf::elements::Break::new(1));
         Ok(layout)
     }
 }

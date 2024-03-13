@@ -418,11 +418,9 @@ impl Rays {
     pub fn get_xy_rays_pos(&self, valid_only: bool) -> MatrixXx2<f64> {
         let rays_iter = self.iter().filter(|r| !valid_only || r.valid());
         let mut rays_at_pos = MatrixXx2::from_element(self.nr_of_rays(valid_only), 0.);
-        let mut row = 0;
-        for ray in rays_iter {
+        for (row, ray) in rays_iter.enumerate() {
             rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
             rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
-            row += 1;
         }
         rays_at_pos
     }

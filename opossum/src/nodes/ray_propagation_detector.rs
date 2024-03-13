@@ -134,12 +134,7 @@ impl Optical for RayPropagationVisualizer {
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
             props
-                .create(
-                    "Ray Propagation visualization plot",
-                    "Ray plot",
-                    None,
-                    rays.clone().into(),
-                )
+                .create("Ray plot", "Ray plot", None, rays.clone().into())
                 .unwrap();
         }
         Some(NodeReport::new(

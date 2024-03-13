@@ -1,13 +1,17 @@
 use std::path::Path;
 
-use nalgebra::Point3;
-use num::Zero;
+mod cambox_1w;
+mod cambox_2w;
+
+use cambox_1w::cambox_1w;
+use cambox_2w::cambox_2w;
+
 use opossum::{
     error::OpmResult,
     lightdata::LightData,
     nodes::{
         BeamSplitter, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
-        Propagation, RayPropagationVisualizer, Source, SpotDiagram, WaveFront,
+        Propagation, RayPropagationVisualizer, Source, WaveFront,
     },
     position_distributions::Hexapolar,
     rays::Rays,
@@ -17,9 +21,8 @@ use opossum::{
     OpticScenery, SplittingConfig,
 };
 use uom::si::{
-    angle::degree,
     energy::joule,
-    f64::{Angle, Energy, Length},
+    f64::{Energy, Length},
     length::{millimeter, nanometer},
 };
 
@@ -59,32 +62,39 @@ fn main() -> OpmResult<()> {
     )?;
 
     // collimated source
-    // let rays_1w = Rays::new_uniform_collimated(wvl_1w, energy_1w, &beam_dist_1w)?;
-    // let mut rays_2w = Rays::new_uniform_collimated(wvl_2w, energy_2w, &beam_dist_2w)?;
+    let rays_1w = Rays::new_uniform_collimated(wvl_1w, energy_1w, &beam_dist_1w)?;
+    let mut rays_2w = Rays::new_uniform_collimated(wvl_2w, energy_2w, &beam_dist_2w)?;
 
     // point source
-    let rays_1w = Rays::new_hexapolar_point_source(
-        Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(75.0),
-            Length::zero(),
-        ),
-        Angle::new::<degree>(0.183346572),
-        6,
-        wvl_1w,
-        energy_1w,
-    )?;
-    let mut rays_2w = Rays::new_hexapolar_point_source(
-        Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(75.0),
-            Length::zero(),
-        ),
-        Angle::new::<degree>(0.183346572),
-        6,
-        wvl_2w,
-        energy_2w,
-    )?;
+
+    // use nalgebra::Point3;
+    // use num::Zero;
+    // use uom::si::{
+    //     angle::degree,
+    //     f64::Angle,
+    // };
+    // let rays_1w = Rays::new_hexapolar_point_source(
+    //     Point3::new(
+    //         Length::zero(),
+    //         Length::new::<millimeter>(75.0),
+    //         Length::zero(),
+    //     ),
+    //     Angle::new::<degree>(0.183346572),
+    //     6,
+    //     wvl_1w,
+    //     energy_1w,
+    // )?;
+    // let mut rays_2w = Rays::new_hexapolar_point_source(
+    //     Point3::new(
+    //         Length::zero(),
+    //         Length::new::<millimeter>(75.0),
+    //         Length::zero(),
+    //     ),
+    //     Angle::new::<degree>(0.183346572),
+    //     6,
+    //     wvl_2w,
+    //     energy_2w,
+    // )?;
 
     let mut rays = rays_1w;
     rays.add_rays(&mut rays_2w);
@@ -92,7 +102,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
     scenery.set_description("HHT Sensor")?;
 
-    let src = scenery.add_node(Source::new("src", &LightData::Geometric(rays)));
+    let src = scenery.add_node(Source::new("Source", &LightData::Geometric(rays)));
     let d1 = scenery.add_node(Propagation::new("d1", Length::new::<millimeter>(2000.0))?);
     scenery.connect_nodes(src, "out1", d1, "front")?;
 
@@ -161,7 +171,9 @@ fn main() -> OpmResult<()> {
 
     scenery.connect_nodes(t1, "output", d6, "front")?;
 
-    // Dichroic beam splitter (1w/2w)
+    // Dichroic beam splitter + filters (1w/2w)
+
+    let mut group_bs = NodeGroup::new("Dichroic beam splitter");
 
     // ideal spectrum
     let short_pass_spectrum = generate_filter_spectrum(
@@ -176,17 +188,31 @@ fn main() -> OpmResult<()> {
     // real spectrum (Thorlabs HBSY21)
     //let hbsyx2 = SplittingConfig::Spectrum(Spectrum::from_csv("opossum/examples/hhts/HBSYx2_Reflectivity_45deg_unpol.csv")?);
 
-    let bs = scenery.add_node(BeamSplitter::new("Dichroic BS HBSY21", &short_pass)?);
-    scenery.connect_nodes(d6, "rear", bs, "input1")?;
+    let bs = group_bs.add_node(BeamSplitter::new("Dichroic BS HBSY21", &short_pass)?)?;
 
-    // 1w branch
-
-    // Long pass filter
+    // Long pass filter (1w)
     let felh1000 = FilterType::Spectrum(Spectrum::from_csv(
         "opossum/examples/hhts/FELH1000_Transmission.csv",
     )?);
-    let filter_1w = scenery.add_node(IdealFilter::new("1w Longpass filter", &felh1000)?);
-    scenery.connect_nodes(bs, "out2_trans2_refl1", filter_1w, "front")?;
+    let filter_1w = group_bs.add_node(IdealFilter::new("1w Longpass filter", &felh1000)?)?;
+    group_bs.connect_nodes(bs, "out2_trans2_refl1", filter_1w, "front")?;
+
+    // Long pass filter (2w)
+    let fesh0700 = FilterType::Spectrum(Spectrum::from_csv(
+        "opossum/examples/hhts/FESH0700_Transmission.csv",
+    )?);
+    let filter_2w = group_bs.add_node(IdealFilter::new("2w Shortpass filter", &fesh0700)?)?;
+    group_bs.connect_nodes(bs, "out1_trans1_refl2", filter_2w, "front")?;
+
+    group_bs.map_input_port(bs, "input1", "input")?;
+    group_bs.map_output_port(filter_1w, "rear", "output_1w")?;
+    group_bs.map_output_port(filter_2w, "rear", "output_2w")?;
+
+    let bs_group = scenery.add_node(group_bs);
+
+    scenery.connect_nodes(d6, "rear", bs_group, "input")?;
+
+    // 1w branch
 
     // Distance T1 -> T2 1w 637.5190 (-100.0 because of d6)
     let d_1w_7 = scenery.add_node(Propagation::new(
@@ -273,32 +299,29 @@ fn main() -> OpmResult<()> {
     group_t3_1w.map_output_port(d_1w_12, "rear", "output")?;
     let t3_1w = scenery.add_node(group_t3_1w);
 
-    scenery.connect_nodes(filter_1w, "rear", d_1w_7, "front")?;
+    scenery.connect_nodes(bs_group, "output_1w", d_1w_7, "front")?;
     scenery.connect_nodes(d_1w_7, "rear", t2_1w, "input")?;
     scenery.connect_nodes(t2_1w, "output", d_1w_10, "front")?;
     scenery.connect_nodes(d_1w_10, "rear", t3_1w, "input")?;
 
-    let det_prop = scenery.add_node(RayPropagationVisualizer::new("Ray propgation 1w"));
-    scenery.connect_nodes(t3_1w, "output", det_prop, "in1")?;
+    let mut group_det_1w = NodeGroup::new("Detectors 1w");
 
-    let det_wavefront_1w = scenery.add_node(WaveFront::new("Wavefront 1w"));
-    scenery.connect_nodes(det_prop, "out1", det_wavefront_1w, "in1")?;
-
-    let det_spot_diagram_1w = scenery.add_node(SpotDiagram::new("Spot diagram 1w"));
-    scenery.connect_nodes(det_wavefront_1w, "out1", det_spot_diagram_1w, "in1")?;
-
+    let det_prop = group_det_1w.add_node(RayPropagationVisualizer::new("Propgation"))?;
+    let det_wavefront_1w = group_det_1w.add_node(WaveFront::new("Wavefront"))?;
+    let cambox_1w = group_det_1w.add_node(cambox_1w()?)?;
     let det_energy_1w =
-        scenery.add_node(EnergyMeter::new("Energy 1w", Metertype::IdealEnergyMeter));
-    scenery.connect_nodes(det_spot_diagram_1w, "out1", det_energy_1w, "in1")?;
+        group_det_1w.add_node(EnergyMeter::new("Energy", Metertype::IdealEnergyMeter))?;
+
+    group_det_1w.connect_nodes(det_prop, "out1", det_wavefront_1w, "in1")?;
+    group_det_1w.connect_nodes(det_wavefront_1w, "out1", det_energy_1w, "in1")?;
+    group_det_1w.connect_nodes(det_energy_1w, "out1", cambox_1w, "input")?;
+
+    group_det_1w.map_input_port(det_prop, "in1", "input")?;
+
+    let det_1w = scenery.add_node(group_det_1w);
+    scenery.connect_nodes(t3_1w, "output", det_1w, "input")?;
 
     // 2w branch
-
-    // Long pass filter
-    let fesh0700 = FilterType::Spectrum(Spectrum::from_csv(
-        "opossum/examples/hhts/FESH0700_Transmission.csv",
-    )?);
-    let filter_2w = scenery.add_node(IdealFilter::new("2w Shortpass filter", &fesh0700)?);
-    scenery.connect_nodes(bs, "out1_trans1_refl2", filter_2w, "front")?;
 
     // Distance T1 -> T2 1w 637.5190 (-100.0 because of d6)
     let d_2w_7 = scenery.add_node(Propagation::new(
@@ -385,7 +408,7 @@ fn main() -> OpmResult<()> {
     group_t3_2w.map_output_port(d_2w_12, "rear", "output")?;
     let t3_2w = scenery.add_node(group_t3_2w);
 
-    scenery.connect_nodes(filter_2w, "rear", d_2w_7, "front")?;
+    scenery.connect_nodes(bs_group, "output_2w", d_2w_7, "front")?;
     scenery.connect_nodes(d_2w_7, "rear", t2_2w, "input")?;
     scenery.connect_nodes(t2_2w, "output", d_2w_10, "front")?;
     scenery.connect_nodes(d_2w_10, "rear", t3_2w, "input")?;
@@ -393,17 +416,18 @@ fn main() -> OpmResult<()> {
     // 2w detectors
     let mut group_det_2w = NodeGroup::new("Detectors 2w");
 
-    let det_prop_2w = group_det_2w.add_node(RayPropagationVisualizer::new("Ray propgation 2w"))?;
-    let det_wavefront_2w = group_det_2w.add_node(WaveFront::new("Wavefront 2w"))?;
-    let det_spot_diagram_2w = group_det_2w.add_node(SpotDiagram::new("Spot diagram 2w"))?;
+    let det_prop_2w = group_det_2w.add_node(RayPropagationVisualizer::new("Propgation"))?;
+    let det_wavefront_2w = group_det_2w.add_node(WaveFront::new("Wavefront"))?;
     let det_energy_2w =
-        group_det_2w.add_node(EnergyMeter::new("Energy 2w", Metertype::IdealEnergyMeter))?;
+        group_det_2w.add_node(EnergyMeter::new("Energy", Metertype::IdealEnergyMeter))?;
+    let cambox_2w = group_det_2w.add_node(cambox_2w()?)?;
+
     group_det_2w.connect_nodes(det_prop_2w, "out1", det_wavefront_2w, "in1")?;
-    group_det_2w.connect_nodes(det_wavefront_2w, "out1", det_spot_diagram_2w, "in1")?;
-    group_det_2w.connect_nodes(det_spot_diagram_2w, "out1", det_energy_2w, "in1")?;
+    group_det_2w.connect_nodes(det_wavefront_2w, "out1", det_energy_2w, "in1")?;
+    group_det_2w.connect_nodes(det_energy_2w, "out1", cambox_2w, "input")?;
 
     group_det_2w.map_input_port(det_prop_2w, "in1", "input")?;
-    let det_2w=scenery.add_node(group_det_2w);
+    let det_2w = scenery.add_node(group_det_2w);
 
     scenery.connect_nodes(t3_2w, "output", det_2w, "input")?;
     scenery.save_to_file(Path::new("./opossum/playground/hhts.opm"))?;
