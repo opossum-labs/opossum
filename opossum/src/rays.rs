@@ -27,6 +27,7 @@ use log::warn;
 use nalgebra::{distance, point, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
 use serde_derive::{Deserialize, Serialize};
+use std::fmt::Display;
 use std::ops::Add;
 use std::ops::Range;
 use std::path::Path;
@@ -54,7 +55,7 @@ impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis) with uniform energy distribution.
     ///
     /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
-    /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`DistributionStrategy`].
+    /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`PositionDistribution`].
     ///
     /// If the given size id zero, a bundle consisting of a single ray along the optical - position (0.0,0.0,0.0) - axis is generated.
     ///
@@ -233,7 +234,6 @@ impl Rays {
     ///
     /// This function returns an error if a single ray cannot be propery apodized (e.g. filter factor outside (0.0..=1.0)).
     pub fn apodize(&mut self, aperture: &Aperture) -> OpmResult<()> {
-        // let mut new_rays: Vec<Ray> = Vec::new();
         for ray in &mut self.rays {
             if ray.valid() {
                 let pos = point![
@@ -242,16 +242,13 @@ impl Rays {
                 ];
                 let ap_factor = aperture.apodization_factor(&pos);
                 if ap_factor > 0.0 {
-                    let _ = ray.filter_energy(&FilterType::Constant(ap_factor))?;
-                    // new_rays.push(new_ray);
-                }
-                else{
+                    ray.filter_energy(&FilterType::Constant(ap_factor))?;
+                } else {
                     ray.add_to_pos_hist(ray.position());
-                    ray.set_invalid()
+                    ray.set_invalid();
                 }
             }
         }
-        // self.rays = new_rays;
         Ok(())
     }
     /// Returns the centroid of this [`Rays`].
@@ -386,10 +383,10 @@ impl Rays {
     #[must_use]
     pub fn wavefront_error_at_pos_in_units_of_wvl(&self, wavelength: Length) -> MatrixXx3<f64> {
         let wvl = wavelength.get::<nanometer>();
-        let mut wave_front_err = MatrixXx3::from_element(self.rays.len(), 0.);
+        let mut wave_front_err = MatrixXx3::from_element(self.nr_of_rays(true), 0.);
         let mut min_radius = f64::INFINITY;
         let mut path_length_at_center = 0.;
-        for (i, ray) in self.rays.iter().enumerate() {
+        for (i, ray) in self.rays.iter().filter(|r| r.valid()).enumerate() {
             let position = Vector2::new(
                 ray.position().x.get::<millimeter>(),
                 ray.position().y.get::<millimeter>(),
@@ -416,15 +413,14 @@ impl Rays {
 
     /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx2<f64>]`.
     ///
-    /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be retruned.
+    /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be returned.
     #[must_use]
     pub fn get_xy_rays_pos(&self, valid_only: bool) -> MatrixXx2<f64> {
-        let mut rays_at_pos = MatrixXx2::from_element(self.rays.len(), 0.);
-        for (row, ray) in self.rays.iter().enumerate() {
-            if !valid_only || ray.valid() {
-                rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
-                rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
-            }
+        let rays_iter = self.iter().filter(|r| !valid_only || r.valid());
+        let mut rays_at_pos = MatrixXx2::from_element(self.nr_of_rays(valid_only), 0.);
+        for (row, ray) in rays_iter.enumerate() {
+            rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
+            rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
         }
         rays_at_pos
     }
@@ -573,6 +569,10 @@ impl Rays {
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
+    /// # Warnings
+    ///
+    /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
+    ///
     /// # Errors
     ///
     /// This function will return an error if .
@@ -581,14 +581,19 @@ impl Rays {
         surface: &dyn Surface,
         refractive_index: &RefractiveIndexType,
     ) -> OpmResult<()> {
+        let mut valid_rays_found = false;
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength());
                 ray.refract_on_surface(surface, n2)?;
+                valid_rays_found = true;
             }
         }
         self.z_position += self.dist_to_next_surface;
         self.set_dist_zero();
+        if !valid_rays_found {
+            warn!("ray bundle contains no valid rays - not propagating");
+        }
         Ok(())
     }
     /// Filter a ray bundle by a given filter.
@@ -607,7 +612,7 @@ impl Rays {
         }
         for ray in &mut self.rays {
             if (*ray).valid() {
-                let _  = ray.filter_energy(filter)?;
+                ray.filter_energy(filter)?;
             }
         }
         Ok(())
@@ -717,7 +722,10 @@ impl Rays {
     ///
     /// This function will return an error if the underlying split function for a single ray returns an error.
     pub fn split(&mut self, config: &SplittingConfig) -> OpmResult<Self> {
-        let mut split_rays = Self::default();
+        let mut split_rays = Self {
+            z_position: self.absolute_z_of_last_surface(),
+            ..Default::default()
+        };
         for ray in &mut self.rays {
             if ray.valid() {
                 let split_ray = ray.split(config)?;
@@ -729,10 +737,16 @@ impl Rays {
     /// Merge two ray bundles.
     ///
     /// This function simply adds the given rays to the existing ray bundle.
+    /// **Note**: The temporarily introduced "absolute z position" is taken from the ray bundle with the maximum position....We have
+    /// to work on that...
     pub fn merge(&mut self, rays: &Self) {
+        let max_z_position = self
+            .absolute_z_of_last_surface()
+            .max(rays.absolute_z_of_last_surface());
         for ray in &rays.rays {
             self.add_ray(ray.clone());
         }
+        self.z_position = max_z_position;
     }
     /// Get the position history of all rays in thie ray bundle
     ///
@@ -769,6 +783,14 @@ impl Rays {
     }
 }
 
+impl Display for Rays {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for ray in self {
+            let _ = writeln!(f, "{ray}");
+        }
+        write!(f, "# of rays: {:?}", self.nr_of_rays(false))
+    }
+}
 /// struct that holds the history of the ray positions that is needed for report generation
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPositionHistory {
@@ -877,7 +899,9 @@ impl Plottable for RayPositionHistory {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
-            .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?;
+            .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?
+            .set(&PlotArgs::FigSize((1600, 800)))?;
+
         Ok(())
     }
 
@@ -1381,6 +1405,7 @@ mod test {
         assert_abs_diff_eq!(rays.rays[1].direction().z, new_dir.z);
     }
     #[test]
+    #[ignore = "reenable later"]
     fn filter_energy() {
         todo!();
         // let mut rays = Rays::default();
@@ -1567,11 +1592,15 @@ mod test {
         )
         .unwrap();
         let mut rays = Rays::default();
+        let z_position = Length::new::<millimeter>(10.0);
+        rays.z_position = z_position;
         rays.add_ray(ray1.clone());
         rays.add_ray(ray2.clone());
         assert!(rays.split(&SplittingConfig::Ratio(1.1)).is_err());
         assert!(rays.split(&SplittingConfig::Ratio(-0.1)).is_err());
         let split_rays = rays.split(&SplittingConfig::Ratio(0.2)).unwrap();
+        assert_eq!(rays.absolute_z_of_last_surface(), z_position);
+        assert_eq!(split_rays.absolute_z_of_last_surface(), z_position);
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
         assert_abs_diff_eq!(
             split_rays.total_energy().get::<joule>(),

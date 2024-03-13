@@ -50,7 +50,7 @@ fn main() -> OpmResult<()> {
     // Diagnostic beam line
     let i_f = scenery.add_node(IdealFilter::new(
         "OD1 filter",
-        opossum::nodes::FilterType::Constant(0.1),
+        &opossum::nodes::FilterType::Constant(0.1),
     )?);
     scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front")?;
 

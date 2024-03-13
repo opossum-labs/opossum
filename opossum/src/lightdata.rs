@@ -7,7 +7,6 @@ use uom::si::{energy::joule, f64::Energy};
 
 use crate::error::OpmResult;
 use crate::nodes::FilterType;
-use crate::properties::Proptype;
 use crate::rays::Rays;
 use crate::spectrum::Spectrum;
 
@@ -95,14 +94,9 @@ impl DataEnergy {
 //         self.spectrum.pdf_report()
 //     }
 // }
-impl From<Option<LightData>> for Proptype {
-    fn from(value: Option<LightData>) -> Self {
-        Self::LightData(value)
-    }
-}
 #[cfg(test)]
 mod test {
-    use crate::spectrum_helper::create_visible_spec;
+    use crate::{properties::Proptype, spectrum_helper::create_visible_spec, utils::EnumProxy};
 
     use super::*;
     use assert_matches::assert_matches;
@@ -130,7 +124,9 @@ mod test {
     // }
     #[test]
     fn from() {
-        let ld = Proptype::from(Some(LightData::Fourier));
+        let ld = Proptype::from(EnumProxy::<Option<LightData>> {
+            value: Some(LightData::Fourier),
+        });
         assert_matches!(ld, Proptype::LightData(_));
     }
     // #[test]

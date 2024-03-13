@@ -58,7 +58,7 @@ impl PositionDistribution for FibonacciRectangle {
         points
     }
 }
-
+#[derive(Clone)]
 pub struct FibonacciEllipse {
     nr_of_rays: usize,
     radius_x: Length,

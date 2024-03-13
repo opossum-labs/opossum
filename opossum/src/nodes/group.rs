@@ -532,7 +532,7 @@ impl NodeGroup {
         }
     }
 
-    /// Returns the boolean which defines whether the group expands or not.
+    /// Define if a [`NodeGroup`] should be displayed expanded or not in diagram.
     ///
     /// # Errors
     /// This function returns an error if the property "expand view" can not be set

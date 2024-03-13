@@ -6,12 +6,13 @@ use nalgebra::{point, Point3};
 use num::Zero;
 use uom::si::f64::Length;
 
+#[derive(Clone)]
 pub struct Hexapolar {
     nr_of_rings: u8,
     radius: Length,
 }
 impl Hexapolar {
-    /// Create a new [`Hexaploar`] distribution generator.
+    /// Create a new [`Hexapolar`] distribution generator.
     ///
     /// If the given radius is zero and / or `nr_of_rings` is zero only the central point at (0,0) is generated.
     ///

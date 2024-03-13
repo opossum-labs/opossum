@@ -242,7 +242,7 @@ impl Optical for WaveFront {
 
                 props
                 .create(
-                    "Wavefront Data",
+                    "Map",
                     "Wavefront error in λ, rms in mλ and ptv in mλ with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                     None,
                     wf_data.into(),

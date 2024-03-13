@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling optical rays
+use std::fmt::Display;
+
 use nalgebra::{MatrixXx3, Point3, Vector3};
 use num::Zero;
 use serde_derive::{Deserialize, Serialize};
@@ -11,7 +13,6 @@ use uom::si::{
 use crate::{
     error::{OpmResult, OpossumError},
     nodes::FilterType,
-    properties::Proptype,
     spectrum::Spectrum,
     surface::Surface,
 };
@@ -23,11 +24,6 @@ pub enum SplittingConfig {
     Ratio(f64),
     /// A beam splitter with a given transmission spectrum
     Spectrum(Spectrum),
-}
-impl From<SplittingConfig> for Proptype {
-    fn from(value: SplittingConfig) -> Self {
-        Self::SplitterType(value)
-    }
 }
 impl SplittingConfig {
     /// Check validity of [`SplittingConfig`].
@@ -138,10 +134,10 @@ impl Ray {
     pub fn wavelength(&self) -> Length {
         self.wvl
     }
-    /// Adds a position to the position history of the ray. 
+    /// Adds a position to the position history of the ray.
     /// This is, for example, necessary for adding the position when the ray may be set invalid at an aperture.
-    pub fn add_to_pos_hist(&mut self, pos: Point3<Length>){
-        self.pos_hist.push(pos)
+    pub fn add_to_pos_hist(&mut self, pos: Point3<Length>) {
+        self.pos_hist.push(pos);
     }
     /// Returns the position history of this [`Ray`].
     ///
@@ -385,17 +381,24 @@ impl Ray {
         self.valid = false;
     }
 }
+impl Display for Ray {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "pos: {:?}, dir: {:?}, energy: {:?}, valid: {}, ",
+            self.pos, self.dir, self.e, self.valid
+        )
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
-        spectrum::Spectrum,
         spectrum_helper::{self, generate_filter_spectrum},
         surface::Plane,
     };
-    use approx::{abs_diff_eq, assert_abs_diff_eq};
+    use approx::assert_abs_diff_eq;
     use itertools::izip;
-    use std::path::PathBuf;
     use uom::si::{energy::joule, length::nanometer};
     #[test]
     fn new() {
@@ -958,6 +961,7 @@ mod test {
         assert_abs_diff_eq!(ray.dir[2], test_reflect[2]);
     }
     #[test]
+    #[ignore = "reenable later"]
     fn filter_energy() {
         todo!();
         // let position = Point3::new(
@@ -983,6 +987,7 @@ mod test {
         // assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
     }
     #[test]
+    #[ignore = "reenable later"]
     fn filter_spectrum() {
         todo!();
         // let position = Point3::new(

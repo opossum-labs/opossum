@@ -90,12 +90,6 @@ impl From<NodeReport> for Proptype {
         Self::NodeReport(value)
     }
 }
-
-impl PdfReportable for NodeReport {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        todo!()
-    }
-}
 /// Trait for providing information to be integrated in an PDF analysis report.
 pub trait PdfReportable {
     /// Return a `genpdf`-based PDF component to be integrated in an analysis report.
@@ -229,16 +223,16 @@ impl ReportGenerator {
     pub fn generate_pdf(&self, path: &Path, analyzer: &AnalyzerType) -> OpmResult<()> {
         let font = include_bytes!("../fonts/LiberationSans-Regular.ttf");
         let font_data_regular = FontData::new(font.to_vec(), None)
-            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+            .map_err(|_| OpossumError::Other("embedding font 'regular' failed".into()))?;
         let font = include_bytes!("../fonts/LiberationSans-Italic.ttf");
         let font_data_italic = FontData::new(font.to_vec(), None)
-            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+            .map_err(|_| OpossumError::Other("embedding font 'italic' failed".into()))?;
         let font = include_bytes!("../fonts/LiberationSans-Bold.ttf");
         let font_data_bold = FontData::new(font.to_vec(), None)
-            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+            .map_err(|_| OpossumError::Other("embedding font 'bold' failed".into()))?;
         let font = include_bytes!("../fonts/LiberationSans-BoldItalic.ttf");
         let font_data_bold_italic = FontData::new(font.to_vec(), None)
-            .map_err(|_| OpossumError::Other("embedding font failed".into()))?;
+            .map_err(|_| OpossumError::Other("embedding font 'bold italic' failed".into()))?;
         let font_family = FontFamily {
             regular: font_data_regular,
             bold: font_data_bold,
@@ -247,6 +241,7 @@ impl ReportGenerator {
         };
         let mut doc = genpdf::Document::new(font_family);
         doc.set_title("OPOSSUM Analysis report");
+        doc.set_font_size(10);
         let mut decorator = genpdf::SimplePageDecorator::new();
         decorator.set_margins(10);
         doc.set_page_decorator(decorator);

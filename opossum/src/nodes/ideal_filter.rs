@@ -10,6 +10,7 @@ use crate::refractive_index::refr_index_vaccuum;
 use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use crate::surface::Plane;
+use crate::utils::EnumProxy;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -20,11 +21,6 @@ pub enum FilterType {
     Constant(f64),
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
-}
-impl From<FilterType> for Proptype {
-    fn from(value: FilterType) -> Self {
-        Self::FilterType(value)
-    }
 }
 impl PdfReportable for FilterType {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
@@ -63,7 +59,10 @@ fn create_default_props() -> Properties {
             "filter type",
             "used filter algorithm",
             None,
-            FilterType::Constant(1.0).into(),
+            EnumProxy::<FilterType> {
+                value: FilterType::Constant(1.0),
+            }
+            .into(),
         )
         .unwrap();
     let mut ports = OpticPorts::new();
@@ -87,16 +86,22 @@ impl IdealFilter {
     ///
     /// This function will return an [`OpossumError::Other`] if the filter type is
     /// [`FilterType::Constant`] and the transmission factor is outside the interval [0.0; 1.0].
-    pub fn new(name: &str, filter_type: FilterType) -> OpmResult<Self> {
+    pub fn new(name: &str, filter_type: &FilterType) -> OpmResult<Self> {
         if let FilterType::Constant(transmission) = filter_type {
-            if !(0.0..=1.0).contains(&transmission) {
+            if !(0.0..=1.0).contains(transmission) {
                 return Err(OpossumError::Other(
                     "attenuation must be in interval [0.0; 1.0]".into(),
                 ));
             }
         }
         let mut props = create_default_props();
-        props.set("filter type", filter_type.into())?;
+        props.set(
+            "filter type",
+            EnumProxy::<FilterType> {
+                value: filter_type.clone(),
+            }
+            .into(),
+        )?;
         props.set("name", name.into())?;
         Ok(Self { props })
     }
@@ -107,7 +112,7 @@ impl IdealFilter {
     #[must_use]
     pub fn filter_type(&self) -> FilterType {
         if let Proptype::FilterType(filter_type) = self.props.get("filter type").unwrap() {
-            filter_type.clone()
+            filter_type.value.clone()
         } else {
             panic!("wrong data type")
         }
@@ -120,8 +125,13 @@ impl IdealFilter {
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
     pub fn set_transmission(&mut self, transmission: f64) -> OpmResult<()> {
         if (0.0..=1.0).contains(&transmission) {
-            self.props
-                .set("filter type", FilterType::Constant(transmission).into())?;
+            self.props.set(
+                "filter type",
+                EnumProxy::<FilterType> {
+                    value: FilterType::Constant(transmission),
+                }
+                .into(),
+            )?;
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -139,7 +149,10 @@ impl IdealFilter {
         if density >= 0.0 {
             self.props.set(
                 "filter type",
-                FilterType::Constant(f64::powf(10.0, -1.0 * density)).into(),
+                EnumProxy::<FilterType> {
+                    value: FilterType::Constant(f64::powf(10.0, -1.0 * density)),
+                }
+                .into(),
             )?;
             Ok(())
         } else {
@@ -260,9 +273,9 @@ mod test {
     }
     #[test]
     fn new() {
-        assert!(IdealFilter::new("test", FilterType::Constant(1.1)).is_err());
-        assert!(IdealFilter::new("test", FilterType::Constant(-0.1)).is_err());
-        let node = IdealFilter::new("test", FilterType::Constant(0.8)).unwrap();
+        assert!(IdealFilter::new("test", &FilterType::Constant(1.1)).is_err());
+        assert!(IdealFilter::new("test", &FilterType::Constant(-0.1)).is_err());
+        let node = IdealFilter::new("test", &FilterType::Constant(0.8)).unwrap();
         assert_eq!(node.properties().name().unwrap(), "test");
         assert_eq!(node.filter_type(), FilterType::Constant(0.8));
     }
@@ -284,7 +297,7 @@ mod test {
         assert_eq!(node.optical_density(), Some(2.0));
         let node = IdealFilter::new(
             "test",
-            FilterType::Spectrum(create_he_ne_spec(1.0).unwrap()),
+            &FilterType::Spectrum(create_he_ne_spec(1.0).unwrap()),
         )
         .unwrap();
         assert_eq!(node.optical_density(), None);
@@ -320,7 +333,7 @@ mod test {
     }
     #[test]
     fn analyze_energy_ok() {
-        let mut node = IdealFilter::new("test", FilterType::Constant(0.5)).unwrap();
+        let mut node = IdealFilter::new("test", &FilterType::Constant(0.5)).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
@@ -347,7 +360,7 @@ mod test {
     }
     #[test]
     fn analyzer_geometric_fixed() {
-        let mut node = IdealFilter::new("test", FilterType::Constant(0.3)).unwrap();
+        let mut node = IdealFilter::new("test", &FilterType::Constant(0.3)).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
             Rays::new_uniform_collimated(
@@ -385,7 +398,7 @@ mod test {
     }
     #[test]
     fn analyze_inverse() {
-        let mut node = IdealFilter::new("test", FilterType::Constant(0.5)).unwrap();
+        let mut node = IdealFilter::new("test", &FilterType::Constant(0.5)).unwrap();
         node.set_property("inverted", true.into()).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {

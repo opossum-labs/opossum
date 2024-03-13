@@ -1,25 +1,11 @@
-{
-  "type": "dummy",
-  "id": "587ee70f-6f52-4420-89f6-e1618ff4dbdb",
-  "properties": {
-    "node_type": {
-      "String": "dummy"
-    },
-    "name": {
-      "String": "test123"
-    },
-    "inverted": {
-      "Bool": false
-    },
-    "apertures": {
-      "OpticPorts": {
-        "inputs": {
-          "front": "None"
-        },
-        "outputs": {
-          "rear": "None"
-        }
-      }
-    }
-  }
-}
+type: dummy
+id: 587ee70f-6f52-4420-89f6-e1618ff4dbdb
+properties:
+  node_type: !String dummy
+  name: !String test123
+  inverted: !Bool false
+  apertures: !OpticPorts
+    inputs:
+      front: None
+    outputs:
+      rear: None

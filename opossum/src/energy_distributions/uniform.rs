@@ -12,7 +12,7 @@ pub struct UniformDist {
 }
 
 impl UniformDist {
-    /// Create a new uniform energy-distribution generator [`General2DGaussian`].
+    /// Create a new uniform energy-distribution generator [`General2DGaussian`](crate::energy_distributions::General2DGaussian).
     /// # Attributes
     /// - `total_energy`: total energy to distribute within the construction points
     /// # Errors
@@ -26,7 +26,6 @@ impl UniformDist {
                 "Energy must be greater than zero finite!".into(),
             ));
         };
-
         Ok(Self { total_energy })
     }
 }

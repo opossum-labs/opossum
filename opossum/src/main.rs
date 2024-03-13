@@ -23,7 +23,7 @@ fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
     let contents = fs::read_to_string(path).map_err(|e| {
         OpossumError::Console(format!("cannot read file {} : {}", path.display(), e))
     })?;
-    let scenery: OpticScenery = serde_json::from_str(&contents)
+    let scenery: OpticScenery = serde_yaml::from_str(&contents)
         .map_err(|e| OpossumError::OpticScenery(format!("parsing of model failed: {e}")))?;
     Ok(scenery)
 }
@@ -59,13 +59,13 @@ fn create_report_file(
     analyzer: &AnalyzerType,
 ) -> OpmResult<()> {
     let mut output =
-        create_dot_or_report_file_instance(report_directory, fname, "json", "detector report")?;
+        create_dot_or_report_file_instance(report_directory, fname, "yaml", "detector report")?;
 
     let analysis_report = scenery.report(report_directory)?;
     write!(
         output,
         "{}",
-        serde_json::to_string_pretty(&analysis_report).unwrap()
+        serde_yaml::to_string(&analysis_report).unwrap()
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let pdf_generator = ReportGenerator::new(analysis_report);
@@ -133,11 +133,11 @@ mod test {
         let node1 = scenery.node(NodeIndex::from(0)).unwrap();
         let node2 = scenery.node(NodeIndex::from(1)).unwrap();
         assert_eq!(
-            "f4da70a8-ce43-460f-9d45-64d02879db63",
+            "2ac550f7-b62c-4aa8-8f57-9931a791bc99",
             node1.uuid().to_string()
         );
         assert_eq!(
-            "4589fdd5-5cdd-4d69-8e6d-846f3bc9ad2d",
+            "710f252d-2cbd-4613-8135-291a07cd4cbd",
             node2.uuid().to_string()
         );
     }

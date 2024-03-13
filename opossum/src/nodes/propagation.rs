@@ -8,7 +8,8 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    refractive_index::refr_index_vaccuum,
+    refractive_index::{refr_index_vaccuum, RefractiveIndexType},
+    utils::EnumProxy,
 };
 use num::Zero;
 use std::collections::HashMap;
@@ -56,7 +57,10 @@ fn create_default_props() -> Properties {
             "refractive index",
             "refractive index of the medium",
             None,
-            refr_index_vaccuum().into(),
+            EnumProxy::<RefractiveIndexType> {
+                value: refr_index_vaccuum(),
+            }
+            .into(),
         )
         .unwrap();
     props.set("apertures", ports.into()).unwrap();
@@ -118,9 +122,8 @@ impl Optical for Propagation {
                             "cannot read refractive index".into(),
                         ));
                     };
-                    rays.set_refractive_index(refractive_index)?;
+                    rays.set_refractive_index(&refractive_index.value)?;
                     rays.set_dist_to_next_surface(*length_along_z);
-                    // rays.propagate_along_z(*length_along_z)?;
                     data = Some(LightData::Geometric(rays));
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
