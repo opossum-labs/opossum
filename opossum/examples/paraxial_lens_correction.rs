@@ -2,10 +2,7 @@ use std::path::Path;
 
 use opossum::{
     error::OpmResult,
-    nodes::{
-        create_point_ray_source, ray_propagation_detector::RayPropagationVisualizer,
-        ParaxialSurface, Propagation,
-    },
+    nodes::{point_ray_source, ParaxialSurface, Propagation, RayPropagationVisualizer},
     OpticScenery,
 };
 use petgraph::prelude::NodeIndex;
@@ -18,7 +15,7 @@ use uom::si::{
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Lens Ray-trace test".into())?;
-    let src: NodeIndex = scenery.add_node(create_point_ray_source(
+    let src: NodeIndex = scenery.add_node(point_ray_source(
         Angle::new::<degree>(1.0),
         Energy::new::<joule>(1.0),
     )?);

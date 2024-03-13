@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+//! fluence measurement node
 use image::{DynamicImage, ImageBuffer, RgbImage};
 use log::warn;
 use nalgebra::{DMatrix, DVector};
@@ -21,7 +22,7 @@ use std::path::{Path, PathBuf};
 
 /// A fluence monitor
 ///
-/// It simply calculates the fluence (spatial energy distribution) of an incoming ray bundle.
+/// It simply calculates the fluence (spatial energy distribution) of an incoming [`Ray`](crate::ray::Ray) bundle.
 ///
 /// ## Optical Ports
 ///   - Inputs

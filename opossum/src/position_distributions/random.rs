@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Rectangular, uniform random distribution
 use super::PositionDistribution;
 use crate::error::{OpmResult, OpossumError};
@@ -6,6 +7,7 @@ use num::Zero;
 use rand::Rng;
 use uom::si::f64::Length;
 
+/// Rectangular, uniform random distribution
 pub struct Random {
     nr_of_points: usize,
     side_length_x: Length,
@@ -52,7 +54,7 @@ impl Random {
 }
 impl PositionDistribution for Random {
     fn generate(&self) -> Vec<nalgebra::Point3<Length>> {
-        let mut points: Vec<Point3<Length>> = Vec::new();
+        let mut points: Vec<Point3<Length>> = Vec::with_capacity(self.nr_of_points);
         let mut rng = rand::thread_rng();
         for _ in 0..self.nr_of_points {
             let point_x = self.side_length_x * rng.gen_range(-1.0..1.0);

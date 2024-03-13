@@ -1,9 +1,7 @@
 use nalgebra::Point2;
 use opossum::aperture::{Aperture, CircleConfig};
 use opossum::error::OpmResult;
-use opossum::nodes::{
-    create_round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer,
-};
+use opossum::nodes::{round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer};
 use opossum::optical::Optical;
 use opossum::refractive_index::RefrIndexConst;
 use opossum::OpticScenery;
@@ -14,7 +12,7 @@ use uom::si::length::millimeter;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
-    let src = scenery.add_node(create_round_collimated_ray_source(
+    let src = scenery.add_node(round_collimated_ray_source(
         Length::new::<millimeter>(5.0),
         Energy::new::<joule>(1.0),
         10,

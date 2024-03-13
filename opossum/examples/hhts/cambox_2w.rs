@@ -1,7 +1,7 @@
 use opossum::{
     error::OpmResult,
     nodes::{BeamSplitter, NodeGroup, ParaxialSurface, Propagation, SpotDiagram},
-    SplittingConfig,
+    ray::SplittingConfig,
 };
 use uom::si::{f64::Length, length::millimeter};
 

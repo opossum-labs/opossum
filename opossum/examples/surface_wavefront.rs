@@ -1,6 +1,6 @@
 use opossum::error::OpmResult;
 use opossum::nodes::{
-    create_round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer, SpotDiagram,
+    round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer, SpotDiagram,
     WaveFront,
 };
 use opossum::refractive_index::RefrIndexConst;
@@ -12,7 +12,7 @@ use uom::si::length::millimeter;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
-    let src = scenery.add_node(create_round_collimated_ray_source(
+    let src = scenery.add_node(round_collimated_ray_source(
         Length::new::<millimeter>(5.0),
         Energy::new::<joule>(1.0),
         5,

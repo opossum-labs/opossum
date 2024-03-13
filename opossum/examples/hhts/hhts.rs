@@ -13,11 +13,12 @@ use opossum::{
         Propagation, RayPropagationVisualizer, Source, WaveFront,
     },
     position_distributions::Hexapolar,
+    ray::SplittingConfig,
     rays::Rays,
     refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
     spectrum::Spectrum,
     spectrum_helper::generate_filter_spectrum,
-    OpticScenery, SplittingConfig,
+    OpticScenery,
 };
 use uom::si::{
     energy::joule,

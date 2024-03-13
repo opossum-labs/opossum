@@ -4,9 +4,10 @@ use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, EnergyMeter, FilterType, IdealFilter, Source, Spectrometer},
+    ray::SplittingConfig,
     spectrum::Spectrum,
     spectrum_helper::create_he_ne_spec,
-    OpticScenery, SplittingConfig,
+    OpticScenery,
 };
 
 fn main() -> OpmResult<()> {

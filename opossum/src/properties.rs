@@ -5,16 +5,16 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
-        fluence_detector::FluenceData, wavefront::WaveFrontData, FilterType, Metertype, PortMap,
-        Spectrometer, SpectrometerType, SpotDiagram,
+        FilterType, FluenceData, Metertype, PortMap, Spectrometer, SpectrometerType, SpotDiagram,
+        WaveFrontData,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
+    ray::SplittingConfig,
     rays::RayPositionHistory,
     refractive_index::RefractiveIndexType,
     reporter::{NodeReport, PdfReportable},
     utils::EnumProxy,
-    SplittingConfig,
 };
 use genpdf::{elements::TableLayout, style};
 use plotters::prelude::LogScalable;
