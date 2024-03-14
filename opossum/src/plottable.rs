@@ -1107,8 +1107,17 @@ impl AxLims {
     /// If these criteria are not fulfilled, the values are changed accordingly to provide valid axlims. If for some reason, these values are still no okay, teh function returns None
     #[must_use]
     pub fn create_useful_axlims(min_in: f64, max_in: f64) -> Option<Self> {
-        let min = if min_in.is_finite() { min_in } else { 0. };
-        let max: f64 = if max_in.is_finite() { max_in } else { 0. };
+        if !min_in.is_finite() && !max_in.is_finite() {
+            return Self::new(-0.5, 0.5);
+        }
+
+        let (min, max) = if !min_in.is_finite() {
+            (max_in, max_in)
+        } else if !max_in.is_finite() {
+            (min_in, min_in)
+        } else {
+            (min_in, max_in)
+        };
 
         let (mut min, mut max) = if max < min { (max, min) } else { (min, max) };
 
@@ -1116,9 +1125,9 @@ impl AxLims {
 
         //check if minimum and maximum values are approximately equal. if so, take the max value as range
         if max.relative_eq(&min, f64::EPSILON, f64::EPSILON) {
-            ax_range = max;
-            min = max/2. ;
-            max *= 1.5;
+            ax_range = max.abs();
+            min = max - ax_range / 2.;
+            max += ax_range * 0.5;
         };
 
         //check if for some reason maximum is 0, then set it to 1, so that the axis spans at least some distance
@@ -3086,36 +3095,36 @@ mod test {
         assert_relative_eq!(axlim.max, 10.);
 
         let axlim = AxLims::create_useful_axlims(10., 10.).unwrap();
-        assert_relative_eq!(axlim.min, 0.);
-        assert_relative_eq!(axlim.max, 10.);
+        assert_relative_eq!(axlim.min, 5.);
+        assert_relative_eq!(axlim.max, 15.);
 
         let axlim = AxLims::create_useful_axlims(0., 0.).unwrap();
-        assert_relative_eq!(axlim.min, 0.);
-        assert_relative_eq!(axlim.max, 1.);
+        assert_relative_eq!(axlim.min, -0.5);
+        assert_relative_eq!(axlim.max, 0.5);
 
         let axlim = AxLims::create_useful_axlims(f64::NAN, 0.).unwrap();
-        assert_relative_eq!(axlim.min, 0.);
-        assert_relative_eq!(axlim.max, 1.);
+        assert_relative_eq!(axlim.min, -0.5);
+        assert_relative_eq!(axlim.max, 0.5);
 
         let axlim = AxLims::create_useful_axlims(f64::NAN, 10.).unwrap();
-        assert_relative_eq!(axlim.min, 0.);
-        assert_relative_eq!(axlim.max, 10.);
+        assert_relative_eq!(axlim.min, 5.);
+        assert_relative_eq!(axlim.max, 15.);
 
         let axlim = AxLims::create_useful_axlims(0., f64::NAN).unwrap();
-        assert_relative_eq!(axlim.min, 0.);
-        assert_relative_eq!(axlim.max, 1.);
+        assert_relative_eq!(axlim.min, -0.5);
+        assert_relative_eq!(axlim.max, 0.5);
 
         let axlim = AxLims::create_useful_axlims(-10., f64::NAN).unwrap();
-        assert_relative_eq!(axlim.min, -10.);
-        assert_relative_eq!(axlim.max, 0.);
+        assert_relative_eq!(axlim.min, -15.);
+        assert_relative_eq!(axlim.max, -5.);
 
         let axlim = AxLims::create_useful_axlims(10., -10.).unwrap();
         assert_relative_eq!(axlim.min, -10.);
         assert_relative_eq!(axlim.max, 10.);
 
         let axlim = AxLims::create_useful_axlims(10., f64::NAN).unwrap();
-        assert_relative_eq!(axlim.min, 0.);
-        assert_relative_eq!(axlim.max, 10.);
+        assert_relative_eq!(axlim.min, 5.);
+        assert_relative_eq!(axlim.max, 15.);
     }
     #[test]
     fn get_ax_val_distance_if_equidistant_test() {
