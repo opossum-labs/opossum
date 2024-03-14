@@ -1117,13 +1117,14 @@ impl AxLims {
         //check if minimum and maximum values are approximately equal. if so, take the max value as range
         if max.relative_eq(&min, f64::EPSILON, f64::EPSILON) {
             ax_range = max;
-            min = 0.;
+            min = max/2. ;
+            max *= 1.5;
         };
 
         //check if for some reason maximum is 0, then set it to 1, so that the axis spans at least some distance
         if ax_range < f64::EPSILON {
-            max = 1.;
-            min = 0.;
+            max = 0.5;
+            min = -0.5;
         };
 
         Self::new(min, max)
