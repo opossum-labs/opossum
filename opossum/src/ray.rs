@@ -400,7 +400,7 @@ mod test {
         spectrum_helper::{self, generate_filter_spectrum},
         surface::Plane,
     };
-    use approx::assert_abs_diff_eq;
+    use approx::{abs_diff_eq, assert_abs_diff_eq};
     use itertools::izip;
     use uom::si::{
         energy::joule,

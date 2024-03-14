@@ -3,8 +3,8 @@ use std::path::Path;
 use opossum::{
     error::OpmResult,
     nodes::{
-        create_point_ray_source, ray_propagation_visualizer::RayPropagationVisualizer,
-        ParaxialSurface, Propagation,
+        point_ray_source, ray_propagation_visualizer::RayPropagationVisualizer, ParaxialSurface,
+        Propagation,
     },
     OpticScenery,
 };

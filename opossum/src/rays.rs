@@ -3,10 +3,10 @@
 use crate::aperture::Aperture;
 use crate::energy_distributions::EnergyDistribution;
 use crate::error::{OpmResult, OpossumError};
-use crate::nodes::fluence_detector::FluenceData;
 use crate::nodes::ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum};
-use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
+use crate::nodes::FluenceData;
+use crate::nodes::{WaveFrontData, WaveFrontErrorMap};
 use crate::plottable::AxLims;
 use crate::position_distributions::{Hexapolar, PositionDistribution};
 use crate::properties::Proptype;
@@ -912,8 +912,6 @@ impl Display for Rays {
         write!(f, "# of rays: {:?}", self.nr_of_rays(false))
     }
 }
-
-
 
 impl From<Vec<Ray>> for Rays {
     fn from(value: Vec<Ray>) -> Self {

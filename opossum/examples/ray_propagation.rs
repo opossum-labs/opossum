@@ -1,9 +1,7 @@
 use nalgebra::Point2;
 use opossum::aperture::{Aperture, CircleConfig};
 use opossum::error::OpmResult;
-use opossum::nodes::{
-    create_round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer,
-};
+use opossum::nodes::{round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer};
 use opossum::optical::Optical;
 use opossum::refractive_index::RefrIndexConst;
 use opossum::OpticScenery;

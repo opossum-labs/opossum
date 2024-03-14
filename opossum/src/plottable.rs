@@ -2102,10 +2102,10 @@ pub enum PlotArgs {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use approx::assert_relative_eq;
     use log::Level;
     use tempfile::NamedTempFile;
-    use super::*;
     #[test]
     fn add_plot_series() {
         let mut plt = Plot::try_from(&PlotParameters::default()).unwrap();

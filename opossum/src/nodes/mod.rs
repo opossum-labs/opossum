@@ -45,7 +45,7 @@ pub use fluence_detector::{FluenceData, FluenceDetector};
 pub use spot_diagram::SpotDiagram;
 
 pub use ray_propagation_visualizer::RayPropagationVisualizer;
-pub use wavefront::{WaveFront, WaveFrontErrorMap};
+pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
 
 use uuid::Uuid;
 
@@ -54,7 +54,6 @@ use crate::error::OpossumError;
 use crate::optic_ref::OpticRef;
 use std::cell::RefCell;
 use std::rc::Rc;
-use uuid::Uuid;
 
 /// Factory function creating a new reference of an optical node of the given type.
 ///
