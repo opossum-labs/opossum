@@ -33,7 +33,7 @@ fn main() -> OpmResult<()> {
     let energy_1w = Energy::new::<joule>(100.0);
     let energy_2w = Energy::new::<joule>(50.0);
 
-    let beam_dist_1w = Hexapolar::new(Length::new::<millimeter>(76.05493), 6)?;
+    let beam_dist_1w = Hexapolar::new(Length::new::<millimeter>(76.05493), 0)?;
     let beam_dist_2w = beam_dist_1w.clone();
 
     let refr_index_hk9l = RefrIndexSellmeier1::new(
