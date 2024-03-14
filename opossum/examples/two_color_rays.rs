@@ -1,30 +1,41 @@
 use std::path::Path;
 
-use opossum::{error::OpmResult, lightdata::LightData, nodes::{Lens, Propagation, RayPropagationVisualizer, Source, SpotDiagram, WaveFront}, position_distributions::Hexapolar, rays::Rays, refractive_index::RefrIndexConst, OpticScenery};
-use uom::si::{energy::joule, f64::{Energy, Length}, length::{millimeter, nanometer}};
+use opossum::{
+    error::OpmResult,
+    lightdata::LightData,
+    nodes::{Lens, Propagation, RayPropagationVisualizer, Source, SpotDiagram},
+    position_distributions::Hexapolar,
+    rays::Rays,
+    refractive_index::RefrIndexConst,
+    OpticScenery,
+};
+use uom::si::{
+    energy::joule,
+    f64::{Energy, Length},
+    length::{millimeter, nanometer},
+};
 
-fn main() -> OpmResult<()>{
-
-
+fn main() -> OpmResult<()> {
     let mut rays_1w = Rays::new_uniform_collimated(
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
-        &Hexapolar::new(
-            Length::new::<millimeter>(2.),
-            1,
-        )?,
+        &Hexapolar::new(Length::new::<millimeter>(2.), 2)?,
     )?;
 
     let mut rays_2w = Rays::new_uniform_collimated(
         Length::new::<nanometer>(527.),
         Energy::new::<joule>(1.),
-        &Hexapolar::new(
-            Length::new::<millimeter>(1.3),
-            1,
-        )?,
+        &Hexapolar::new(Length::new::<millimeter>(1.3), 2)?,
+    )?;
+
+    let mut rays_3w = Rays::new_uniform_collimated(
+        Length::new::<nanometer>(1053. / 3.),
+        Energy::new::<joule>(1.),
+        &Hexapolar::new(Length::new::<millimeter>(0.5), 2)?,
     )?;
 
     rays_1w.add_rays(&mut rays_2w);
+    rays_1w.add_rays(&mut rays_3w);
 
     let mut scenery = OpticScenery::new();
     let light = LightData::Geometric(rays_1w);

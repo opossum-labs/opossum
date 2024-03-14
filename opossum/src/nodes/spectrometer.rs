@@ -7,7 +7,7 @@ use uom::si::length::nanometer;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::plottable::{ PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd};
+use crate::plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::refractive_index::refr_index_vaccuum;
 use crate::reporter::{NodeReport, PdfReportable};

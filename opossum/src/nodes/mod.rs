@@ -11,7 +11,7 @@ mod lens;
 mod paraxial_surface;
 mod propagation;
 /// ray propagation visualizer node
-pub mod ray_propagation_detector;
+pub mod ray_propagation_visualizer;
 mod reference;
 mod source;
 mod spectrometer;
@@ -46,7 +46,7 @@ pub use spectrometer::SpectrometerType;
 pub use fluence_detector::FluenceDetector;
 pub use spot_diagram::SpotDiagram;
 
-pub use ray_propagation_detector::RayPropagationVisualizer;
+pub use ray_propagation_visualizer::RayPropagationVisualizer;
 pub use wavefront::{WaveFront, WaveFrontErrorMap};
 
 use uuid::Uuid;

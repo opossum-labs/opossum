@@ -4,35 +4,30 @@ use crate::aperture::Aperture;
 use crate::energy_distributions::EnergyDistribution;
 use crate::error::{OpmResult, OpossumError};
 use crate::nodes::fluence_detector::FluenceData;
+use crate::nodes::ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum};
 use crate::nodes::wavefront::{WaveFrontData, WaveFrontErrorMap};
 use crate::nodes::FilterType;
-use crate::plottable::{
-    AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd
-};
+use crate::plottable::AxLims;
 use crate::position_distributions::{Hexapolar, PositionDistribution};
 use crate::properties::Proptype;
 use crate::ray::{Ray, SplittingConfig};
 use crate::refractive_index::RefractiveIndexType;
-use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use crate::surface::Surface;
-use crate::utils::filter_data::get_unique_values;
+use crate::utils::filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values};
 use crate::utils::griddata::{
-    calc_closed_poly_area, create_linspace_axes, create_voronoi_cells, interpolate_3d_triangulated_scatter_data, linspace, VoronoiedData
+    calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
+    interpolate_3d_triangulated_scatter_data, VoronoiedData,
 };
-use approx::{relative_eq, relative_ne};
-use image::{DynamicImage, ImageBuffer};
+use approx::relative_eq;
 use itertools::izip;
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::{distance, point, ComplexField, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
+use nalgebra::{distance, point, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
-use plotters::style::RGBAColor;
-use rayon::vec;
 use serde_derive::{Deserialize, Serialize};
 use std::ops::Add;
 use std::ops::Range;
-use std::path::Path;
 use uom::num_traits::Zero;
 use uom::si::angle::degree;
 use uom::si::energy::joule;
@@ -219,7 +214,10 @@ impl Rays {
     /// The given switch determines wehther all [`Ray`]s or only `valid` [`Ray`]s will be counted.
     #[must_use]
     pub fn nr_of_rays(&self, valid_only: bool) -> usize {
-        self.rays.iter().filter(|r| r.valid() || !valid_only).count()
+        self.rays
+            .iter()
+            .filter(|r| r.valid() || !valid_only)
+            .count()
     }
     /// Returns the iterator of this [`Rays`].
     pub fn iter(&self) -> std::slice::Iter<'_, Ray> {
@@ -246,12 +244,11 @@ impl Rays {
                 ];
                 let ap_factor = aperture.apodization_factor(&pos);
                 if ap_factor > 0.0 {
-                    let _ = ray.filter_energy(&FilterType::Constant(ap_factor))?;
+                    ray.filter_energy(&FilterType::Constant(ap_factor))?;
                     // new_rays.push(new_ray);
-                }
-                else{
+                } else {
                     ray.add_to_pos_hist(ray.position());
-                    ray.set_invalid()
+                    ray.set_invalid();
                 }
             }
         }
@@ -259,17 +256,24 @@ impl Rays {
         Ok(())
     }
     /// Finds all unique wavelengths in this raybundle and returns them in a vector
-    pub fn get_unique_wavelengths(&self, valid_only: bool) -> Vec<Length>{
-
+    #[must_use]
+    pub fn get_unique_wavelengths(&self, valid_only: bool) -> Vec<Length> {
         //get all wavelengths of the rays converted to nm
-        let wvls = self.rays.iter().filter_map(|r|  (r.valid() || !valid_only).then(|| r.wavelength().get::<nanometer>())).collect::<Vec<f64>>();
-        
+        let wvls = self
+            .rays
+            .iter()
+            .filter(|&r| (r.valid() || !valid_only))
+            .map(|r| r.wavelength().get::<nanometer>())
+            .collect::<Vec<f64>>();
+
         //get unique wavelengths
-        let unique_wvls = get_unique_values(wvls.as_slice());
+        let unique_wvls = get_unique_finite_values(wvls.as_slice());
 
         //return as Vec<Length>
-        unique_wvls.iter().map(|w| Length::new::<nanometer>(*w)).collect::<Vec<Length>>()
-        
+        unique_wvls
+            .iter()
+            .map(|w| Length::new::<nanometer>(*w))
+            .collect::<Vec<Length>>()
     }
     /// Returns the centroid of this [`Rays`].
     ///
@@ -437,10 +441,14 @@ impl Rays {
     #[must_use]
     pub fn get_xy_rays_pos(&self, valid_only: bool) -> MatrixXx2<f64> {
         let mut rays_at_pos = MatrixXx2::from_element(self.nr_of_rays(valid_only), 0.);
-        for (row, ray) in self.rays.iter().filter(|r| !valid_only || r.valid()).enumerate() {
+        for (row, ray) in self
+            .rays
+            .iter()
+            .filter(|r| !valid_only || r.valid())
+            .enumerate()
+        {
             rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
             rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
-
         }
         rays_at_pos
     }
@@ -623,7 +631,7 @@ impl Rays {
         }
         for ray in &mut self.rays {
             if (*ray).valid() {
-                let _  = ray.filter_energy(filter)?;
+                ray.filter_energy(filter)?;
             }
         }
         Ok(())
@@ -756,49 +764,75 @@ impl Rays {
     /// - `wavelength_bin_size`: size of the wavelength binning
     ///
     /// If there is only one wavelength, the same ray bundle is returned
-    pub fn split_ray_bundle_by_wavelength(&self, wavelength_bin_size: Length, valid_only: bool) -> OpmResult<(Vec<Self>, Vec<Length>)>{
-        let mut unique_wavelengths =  self.get_unique_wavelengths(valid_only);
-        
-        if unique_wavelengths.len() == 1{
+    /// # Errors
+    /// This function errors if the minimum wavelength of the unique wavelengths can not be calculated. Normally, this cannot happen, since the wavlengths of a ray are finite from begin with.
+    pub fn split_ray_bundle_by_wavelength(
+        &self,
+        wavelength_bin_size: Length,
+        valid_only: bool,
+    ) -> OpmResult<(Vec<Self>, Vec<Length>)> {
+        let unique_wavelengths = self.get_unique_wavelengths(valid_only);
+        let num_split_bundles = unique_wavelengths.len();
+        if num_split_bundles == 1 {
             Ok((vec![self.clone()], unique_wavelengths))
-        }
-        else{
-            unique_wavelengths.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        } else {
+            //sort wavelengths
+            //get "start" wavelength: smallest wavelength reduced by half a bin size
+            let (start_wvl_f64, start_wvl) = if let Some((min, _)) = get_min_max_filter_nonfinite(
+                unique_wavelengths
+                    .iter()
+                    .map(uom::si::f64::Length::get::<nanometer>)
+                    .collect::<Vec<f64>>()
+                    .as_slice(),
+            ) {
+                Ok((
+                    min - wavelength_bin_size.get::<nanometer>() / 2.,
+                    Length::new::<nanometer>(min),
+                ))
+            } else {
+                Err(OpossumError::Other(
+                    "Wavelength of ray is not finite! Cannot split ray bundle by wavelengths!"
+                        .into(),
+                ))
+            }?;
+
+            //for calculation, get bin size in units instehat of length quantity
             let bin_size: f64 = wavelength_bin_size.get::<nanometer>();
-            let start_wvl = (unique_wavelengths[0]-wavelength_bin_size/2.).get::<nanometer>();
 
-            let mut ray_bundles = Vec::<Rays>::new();
-            let mut ray_center_wavelength = Vec::<Length>::new();
+            //initialize vectors
+            let mut ray_bundles = Vec::<Self>::with_capacity(num_split_bundles);
+            let mut ray_center_wavelength = Vec::<Length>::with_capacity(num_split_bundles);
 
-            for ray in &self.rays{
+            //loop over all rays and sort them into a new ray bundle according to their wavelengths
+            for ray in self.rays.iter().filter(|r| r.valid() || !valid_only) {
                 let r_wvl = ray.wavelength().get::<nanometer>();
-                let insertion_index = ((r_wvl-start_wvl)/bin_size).floor();
-                if ray_bundles.is_empty(){
+                let insertion_index = ((r_wvl - start_wvl_f64) / bin_size).floor();
+                if ray_bundles.is_empty() {
                     ray_bundles.push(Self::from(vec![ray.clone()]));
-                    ray_center_wavelength.push(unique_wavelengths[0] + insertion_index*wavelength_bin_size);
-                }
-                else{
+                    ray_center_wavelength.push(start_wvl + insertion_index * wavelength_bin_size);
+                } else {
                     let len_bundles = ray_bundles.len();
-                    for (i, bundle) in ray_bundles.clone().iter().enumerate(){
+                    for (i, bundle) in ray_bundles.clone().iter().enumerate() {
                         let bundle_wvl = bundle.rays[0].wavelength().get::<nanometer>();
-                        let insertion_index_bundle = ((bundle_wvl-start_wvl)/bin_size).floor();
-                        if  relative_eq!(insertion_index_bundle, insertion_index){
+                        let insertion_index_bundle =
+                            ((bundle_wvl - start_wvl_f64) / bin_size).floor();
+                        if relative_eq!(insertion_index_bundle, insertion_index) {
                             ray_bundles[i].add_ray(ray.clone());
                             break;
-                        }
-                        else if insertion_index < insertion_index_bundle{
+                        } else if insertion_index < insertion_index_bundle {
                             ray_bundles.insert(i, Self::from(vec![ray.clone()]));
-                            ray_center_wavelength.insert(i, unique_wavelengths[0] + insertion_index*wavelength_bin_size);
+                            ray_center_wavelength
+                                .insert(i, start_wvl + insertion_index * wavelength_bin_size);
                             break;
-                        }
-                        else if i == len_bundles-1{
+                        } else if i == len_bundles - 1 {
                             ray_bundles.push(Self::from(vec![ray.clone()]));
-                            ray_center_wavelength.push(unique_wavelengths[0] + insertion_index*wavelength_bin_size);
+                            ray_center_wavelength
+                                .push(start_wvl + insertion_index * wavelength_bin_size);
                         }
                     }
                 }
             }
-            
+
             Ok((ray_bundles, ray_center_wavelength))
         }
     }
@@ -807,20 +841,29 @@ impl Rays {
     ///
     /// # Returns
     /// This method returns a vector of N-row x 3 column matrices that contain the position history of all the rays
-    #[must_use]
+    /// # Errors
+    /// This function errors when the splitting of the rays by their wavelengths fails. For more info see `split_ray_bundle_by_wavelength`
     pub fn get_rays_position_history(&self) -> OpmResult<RayPositionHistories> {
-        let (rays_by_wavelength, wavelengths) = self.split_ray_bundle_by_wavelength(Length::new::<nanometer>(1.), false)?;
+        let (rays_by_wavelength, wavelengths) =
+            self.split_ray_bundle_by_wavelength(Length::new::<nanometer>(1.), false)?;
 
         let mut ray_pos_hists = Vec::<RayPositionHistorySpectrum>::with_capacity(wavelengths.len());
-        for (ray_bundle, wvl) in izip!(rays_by_wavelength, wavelengths){
-            let mut rays_pos_history = Vec::<MatrixXx3<Length>>::with_capacity(ray_bundle.rays.len());
+        for (ray_bundle, wvl) in izip!(rays_by_wavelength, wavelengths) {
+            let mut rays_pos_history =
+                Vec::<MatrixXx3<Length>>::with_capacity(ray_bundle.rays.len());
             for ray in &ray_bundle {
                 rays_pos_history.push(ray.position_history());
             }
-            ray_pos_hists.push(RayPositionHistorySpectrum::new(rays_pos_history, wvl, Length::new::<nanometer>(1.))?);
+            ray_pos_hists.push(RayPositionHistorySpectrum::new(
+                rays_pos_history,
+                wvl,
+                Length::new::<nanometer>(1.),
+            )?);
         }
-        
-        Ok(RayPositionHistories{ rays_pos_history: ray_pos_hists })
+
+        Ok(RayPositionHistories {
+            rays_pos_history: ray_pos_hists,
+        })
     }
     /// Returns the dist to next surface of this [`Rays`].
     ///
@@ -845,136 +888,6 @@ impl Rays {
     }
 }
 
-/// struct that holds the history of the rays' positions for rays of a specific wavelength
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RayPositionHistorySpectrum{
-    history: Vec<MatrixXx3<Length>>,
-    center_wavelength: Length,
-    wavelength_bin_size: Length,
-
-}
-impl RayPositionHistorySpectrum{
-    ///creates a new [`RayPositionHistorySpectrum`] struct.
-    /// # Attributes
-    /// - `history`: position history of the ray bundle
-    /// - `center_wavelength`: wavelength of this ray bundle
-    /// - `wavelength_bin_size`: wavelength resolution of this ray bundle. 
-    /// All rays positions in this struct correspond to rays with a wavelength in the bin:
-    /// [`center_wavelength` - wavelength_bin_size/2; `center_wavelength` + wavelength_bin_size/2)
-    #[must_use]
-    pub fn new(history: Vec<MatrixXx3<Length>>, center_wavelength: Length, wavelength_bin_size: Length) -> OpmResult<Self>{
-        if !center_wavelength.is_normal() || center_wavelength.is_sign_negative(){
-            return Err(OpossumError::Other("center wavelength must be finite, non-zero and non-negative!".into()));
-        }
-        if !wavelength_bin_size.is_normal() || wavelength_bin_size.is_sign_negative(){
-            return Err(OpossumError::Other("wavelength bin size must be finite, non-zero and non-negative!".into()));
-        }
-        Ok(Self { history, center_wavelength, wavelength_bin_size })
-    }
-
-    /// Returns the ray-position history stored in this [`RayPositionHistorySpectrum`] struct.
-    #[must_use]
-    pub const fn get_history(&self) -> &Vec<MatrixXx3<Length>>{
-        &self.history
-    }
-    /// Returns the center wavelength of the rays whose position histories are stored in this [`RayPositionHistorySpectrum`] struct.
-    #[must_use]
-    pub const fn get_center_wavelength(&self) -> &Length{
-        &self.center_wavelength
-    }
-    /// Returns the wavelength bin size in which all the rays of this [`RayPositionHistorySpectrum`] struct are inside.
-    #[must_use]
-    pub const fn get_wavelength_bin_size(&self) -> &Length{
-        &self.wavelength_bin_size
-    }
-
-    /// Projects a set of 3d vectors onto a plane
-    /// # Attributes
-    /// `plane_normal_vec`: normal vector of the plane to project onto
-    ///
-    /// # Errors
-    /// This function errors if the length of the plane normal vector is zero
-    /// # Returns
-    /// This function returns a set of 2d vectors in the defined plane projected to a view that is perpendicular to this plane.
-    pub fn project_to_plane(
-        &self,
-        plane_normal_vec: Vector3<f64>,
-    ) -> OpmResult<Vec<MatrixXx2<Length>>> {
-        let vec_norm = plane_normal_vec.norm();
-
-        if vec_norm < f64::EPSILON {
-            return Err(OpossumError::Other(
-                "The plane normal vector must have a non-zero length!".into(),
-            ));
-        }
-
-        let normed_normal_vec = plane_normal_vec / vec_norm;
-
-        //define an axis on the plane.
-        //Do this by projection of one of the main coordinate axes onto that plane
-        //Beforehand check, if these axes are not parallel to the normal vec
-        let (co_ax_1, co_ax_2) =
-            if plane_normal_vec.cross(&Vector3::new(1., 0., 0.)).norm() < f64::EPSILON {
-                //parallel to the x-axis
-                (Vector3::new(0., 0., 1.), Vector3::new(0., 1., 0.))
-            } else if plane_normal_vec.cross(&Vector3::new(0., 1., 0.)).norm() < f64::EPSILON {
-                (Vector3::new(0., 0., 1.), Vector3::new(1., 0., 0.))
-            } else if plane_normal_vec.cross(&Vector3::new(0., 0., 1.)).norm() < f64::EPSILON {
-                (Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.))
-            } else {
-                //arbitrarily project x-axis onto that plane
-                let x_vec = Vector3::new(1., 0., 0.);
-                let mut proj_x = x_vec - x_vec.dot(&normed_normal_vec) * plane_normal_vec;
-                proj_x /= proj_x.norm();
-
-                //second axis defined by cross product of x-axis projection and plane normal, which yields another vector that is perpendicular to both others
-                (proj_x, proj_x.cross(&normed_normal_vec))
-            };
-
-        let mut rays_pos_projection =
-            Vec::<MatrixXx2<Length>>::with_capacity(self.history.len());
-        for ray_pos in &self.history {
-            let mut projected_ray_pos = MatrixXx2::<Length>::zeros(ray_pos.column(0).len());
-            for (row, pos) in ray_pos.row_iter().enumerate() {
-                // let pos_t = Vector3::from_vec(pos.transpose().iter().map(|p| p.get::<millimeter>()).collect::<Vec<f64>>());
-                let pos_t = Vector3::from_vec(pos.iter().map(|p| p.get::<millimeter>()).collect::<Vec<f64>>());
-                let proj_pos = pos_t - pos_t.dot(&normed_normal_vec) * plane_normal_vec;
-
-                projected_ray_pos[(row, 0)] = Length::new::<millimeter>(proj_pos.dot(&co_ax_1));
-                projected_ray_pos[(row, 1)] = Length::new::<millimeter>(proj_pos.dot(&co_ax_2));
-            }
-            rays_pos_projection.push(projected_ray_pos);
-        }
-        Ok(rays_pos_projection)
-    }
-}
-/// struct that holds the history of the ray positions that is needed for report generation
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RayPositionHistories {
-    /// vector of ray positions for each raybundle at a specifc sptracl position
-    pub rays_pos_history: Vec<RayPositionHistorySpectrum>,
-}
-
-impl RayPositionHistories{
-    pub fn get_center_wavelengths(&self) -> Vec<Length>{
-        self.rays_pos_history.iter().map(|r| *r.get_center_wavelength()).collect::<Vec<Length>>()
-    }
-}
-
-impl PdfReportable for RayPositionHistories {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), (1000, 1000), PltBackEnd::Buf)?;
-        layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
-                img.unwrap_or_else(ImageBuffer::default),
-            ))
-            .map_err(|e| format!("adding of image failed: {e}"))?,
-        );
-        Ok(layout)
-    }
-}
-
 impl From<Vec<Ray>> for Rays {
     fn from(value: Vec<Ray>) -> Self {
         Self {
@@ -982,6 +895,14 @@ impl From<Vec<Ray>> for Rays {
             dist_to_next_surface: Length::zero(),
             z_position: Length::zero(),
         }
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Rays {
+    type IntoIter = std::slice::IterMut<'a, Ray>;
+    type Item = &'a mut Ray;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
     }
 }
 
@@ -1000,63 +921,13 @@ impl<'a> IntoIterator for &'a Rays {
     }
 }
 
-impl Plottable for RayPositionHistories {
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
-            .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?;
-        Ok(())
-    }
-
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::MultiLine2D(plt_params.clone())
-    }
-
-    fn get_plot_series(&self, _plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
-        if self.rays_pos_history.is_empty() {
-            Ok(None)
-        } else {
-            let num_series = self.rays_pos_history.len();
-            let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
-            
-            let mut wavelengths = self.get_center_wavelengths().iter().map(|wvl| wvl.get::<nanometer>()).collect::<Vec<f64>>();
-            wavelengths.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
-            let color_grad = colorous::TURBO;
-
-            let wvl_range = if num_series == 1{
-                1.
-            }
-            else{
-                wavelengths[num_series-1]*2. - wavelengths[0]*2.
-            };
-
-            for ray_pos_hist in &self.rays_pos_history{
-                let wvl = ray_pos_hist.get_center_wavelength().get::<nanometer>();
-                let grad_val = 0.42+(wvl-wavelengths[0])/wvl_range;
-                let rgbcolor = color_grad.eval_continuous(grad_val);
-                let projected_positions = ray_pos_hist.project_to_plane(Vector3::new(1., 0., 0.))?;
-                let mut proj_pos_mm = Vec::<MatrixXx2<f64>>::with_capacity(projected_positions.len());
-                for ray_pos in projected_positions.iter(){
-                    proj_pos_mm.push(MatrixXx2::from_vec(ray_pos.iter().map(|x| x.get::<millimeter>()).collect::<Vec<f64>>()));
-                }
-
-                let plt_data = PlotData::MultiDim2(proj_pos_mm);
-                let series_label = format!("{wvl:.1} nm");
-                plt_series.push(PlotSeries::new(&plt_data, RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.), Some(series_label)));
-            }
-
-            Ok(Some(plt_series))
-        }
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
         aperture::CircleConfig,
         energy_distributions::General2DGaussian,
-        position_distributions::{FibonacciRectangle, Hexapolar, Random},
+        position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         ray::SplittingConfig,
         refractive_index::RefrIndexConst,
     };
@@ -1069,6 +940,238 @@ mod test {
         energy::joule,
         length::{centimeter, nanometer},
     };
+    #[test]
+    fn split_ray_bundle_by_wavelength_test() {
+        let mut rays_1w = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1053.),
+            Energy::new::<joule>(1.),
+            &FibonacciEllipse::new(
+                Length::new::<millimeter>(2.),
+                Length::new::<millimeter>(2.),
+                5,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        let mut rays_2w = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(527.),
+            Energy::new::<joule>(1.),
+            &FibonacciEllipse::new(
+                Length::new::<millimeter>(1.3),
+                Length::new::<millimeter>(1.3),
+                10,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        let mut rays_3w = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1053. / 3.),
+            Energy::new::<joule>(1.),
+            &FibonacciEllipse::new(
+                Length::new::<millimeter>(0.5),
+                Length::new::<millimeter>(0.5),
+                15,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        rays_1w.add_rays(&mut rays_2w);
+        rays_1w.add_rays(&mut rays_3w);
+
+        let mut ray_bundle = rays_1w;
+
+        let (split_bundles, wavelengths) = ray_bundle
+            .split_ray_bundle_by_wavelength(Length::new::<nanometer>(1.), true)
+            .unwrap();
+
+        assert_eq!(wavelengths.len(), 3);
+        assert!(relative_eq!(
+            wavelengths[0].get::<nanometer>(),
+            1053. / 3.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            wavelengths[1].get::<nanometer>(),
+            527.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            wavelengths[2].get::<nanometer>(),
+            1053.,
+            max_relative = 2. * f64::EPSILON
+        ));
+
+        assert_eq!(split_bundles[0].rays.len(), 15);
+        assert_eq!(split_bundles[1].rays.len(), 10);
+        assert_eq!(split_bundles[2].rays.len(), 5);
+
+        ray_bundle.rays[0].set_invalid();
+        ray_bundle.rays[5].set_invalid();
+        ray_bundle.rays[20].set_invalid();
+
+        let (split_bundles, wavelengths) = ray_bundle
+            .split_ray_bundle_by_wavelength(Length::new::<nanometer>(1.), true)
+            .unwrap();
+
+        assert_eq!(wavelengths.len(), 3);
+        assert!(relative_eq!(
+            wavelengths[0].get::<nanometer>(),
+            1053. / 3.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            wavelengths[1].get::<nanometer>(),
+            527.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            wavelengths[2].get::<nanometer>(),
+            1053.,
+            max_relative = 2. * f64::EPSILON
+        ));
+
+        assert_eq!(split_bundles[0].rays.len(), 14);
+        assert_eq!(split_bundles[1].rays.len(), 9);
+        assert_eq!(split_bundles[2].rays.len(), 4);
+
+        let (split_bundles, wavelengths) = ray_bundle
+            .split_ray_bundle_by_wavelength(Length::new::<nanometer>(400.), true)
+            .unwrap();
+
+        assert_eq!(wavelengths.len(), 2);
+        assert!(relative_eq!(
+            wavelengths[0].get::<nanometer>(),
+            1053. / 3.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            wavelengths[1].get::<nanometer>(),
+            1151.,
+            max_relative = 2. * f64::EPSILON
+        ));
+
+        assert_eq!(split_bundles[0].rays.len(), 23);
+        assert_eq!(split_bundles[1].rays.len(), 4);
+
+        let (split_bundles, wavelengths) = ray_bundle
+            .split_ray_bundle_by_wavelength(Length::new::<nanometer>(400.), false)
+            .unwrap();
+
+        assert_eq!(wavelengths.len(), 2);
+        assert!(relative_eq!(
+            wavelengths[0].get::<nanometer>(),
+            1053. / 3.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            wavelengths[1].get::<nanometer>(),
+            1151.,
+            max_relative = 2. * f64::EPSILON
+        ));
+
+        assert_eq!(split_bundles[0].rays.len(), 25);
+        assert_eq!(split_bundles[1].rays.len(), 5);
+    }
+    #[test]
+    fn get_unique_wavelengths() {
+        let mut rays_1w = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1053.),
+            Energy::new::<joule>(1.),
+            &FibonacciEllipse::new(
+                Length::new::<millimeter>(2.),
+                Length::new::<millimeter>(2.),
+                5,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        let mut rays_2w = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(527.),
+            Energy::new::<joule>(1.),
+            &FibonacciEllipse::new(
+                Length::new::<millimeter>(1.3),
+                Length::new::<millimeter>(1.3),
+                10,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        let mut rays_3w = Rays::new_uniform_collimated(
+            Length::new::<nanometer>(1053. / 3.),
+            Energy::new::<joule>(1.),
+            &FibonacciEllipse::new(
+                Length::new::<millimeter>(0.5),
+                Length::new::<millimeter>(0.5),
+                15,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        rays_1w.add_rays(&mut rays_2w);
+        rays_1w.add_rays(&mut rays_3w);
+
+        let unique = rays_1w.get_unique_wavelengths(true);
+        assert_eq!(unique.len(), 3);
+        assert!(relative_eq!(
+            unique[2].get::<nanometer>(),
+            351.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            unique[1].get::<nanometer>(),
+            527.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            unique[0].get::<nanometer>(),
+            1053.,
+            max_relative = 2. * f64::EPSILON
+        ));
+
+        rays_1w.rays[0].set_invalid();
+        rays_1w.rays[1].set_invalid();
+        rays_1w.rays[2].set_invalid();
+        rays_1w.rays[3].set_invalid();
+        rays_1w.rays[4].set_invalid();
+
+        let unique = rays_1w.get_unique_wavelengths(true);
+        assert_eq!(unique.len(), 2);
+        assert!(relative_eq!(
+            unique[0].get::<nanometer>(),
+            527.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            unique[1].get::<nanometer>(),
+            351.,
+            max_relative = 2. * f64::EPSILON
+        ));
+
+        let unique = rays_1w.get_unique_wavelengths(false);
+        assert_eq!(unique.len(), 3);
+        assert!(relative_eq!(
+            unique[2].get::<nanometer>(),
+            351.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            unique[1].get::<nanometer>(),
+            527.,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert!(relative_eq!(
+            unique[0].get::<nanometer>(),
+            1053.,
+            max_relative = 2. * f64::EPSILON
+        ));
+    }
+
     #[test]
     fn default() {
         let rays = Rays::default();
@@ -1537,29 +1640,30 @@ mod test {
     }
     #[test]
     fn filter_energy() {
-        todo!();
-        // let mut rays = Rays::default();
-        // assert!(rays.filter_energy(&FilterType::Constant(0.5)).is_ok());
-        // assert!(rays.filter_energy(&FilterType::Constant(-0.1)).is_err());
-        // assert!(rays.filter_energy(&FilterType::Constant(1.1)).is_err());
-        // let ray = Ray::new_collimated(
-        //     Point3::new(
-        //         Length::zero(),
-        //         Length::new::<millimeter>(1.0),
-        //         Length::zero(),
-        //     ),
-        //     Length::new::<nanometer>(1054.0),
-        //     Energy::new::<joule>(1.0),
-        // )
-        // .unwrap();
-        // rays.add_ray(ray.clone());
-        // let new_ray = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
-        // rays.filter_energy(&FilterType::Constant(0.3)).unwrap();
-        // assert_eq!(rays.rays[0].position(), new_ray.position());
-        // assert_eq!(rays.rays[0].direction(), new_ray.direction());
-        // assert_eq!(rays.rays[0].wavelength(), new_ray.wavelength());
-        // assert_eq!(rays.rays[0].energy(), new_ray.energy());
-        // assert_eq!(rays.rays.len(), 1);
+        let mut rays = Rays::default();
+        assert!(rays.filter_energy(&FilterType::Constant(0.5)).is_ok());
+        let mut rays = Rays::default();
+        assert!(rays.filter_energy(&FilterType::Constant(-0.1)).is_err());
+        let mut rays = Rays::default();
+        assert!(rays.filter_energy(&FilterType::Constant(1.1)).is_err());
+        let mut ray = Ray::new_collimated(
+            Point3::new(
+                Length::zero(),
+                Length::new::<millimeter>(1.0),
+                Length::zero(),
+            ),
+            Length::new::<nanometer>(1054.0),
+            Energy::new::<joule>(1.0),
+        )
+        .unwrap();
+        rays.add_ray(ray.clone());
+        let _ = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        rays.filter_energy(&FilterType::Constant(0.3)).unwrap();
+        assert_eq!(rays.rays[0].position(), ray.position());
+        assert_eq!(rays.rays[0].direction(), ray.direction());
+        assert_eq!(rays.rays[0].wavelength(), ray.wavelength());
+        assert_eq!(rays.rays[0].energy(), ray.energy());
+        assert_eq!(rays.rays.len(), 1);
     }
     #[test]
     fn invalidate_by_threshold() {
@@ -1771,48 +1875,16 @@ mod test {
         ])];
 
         let pos_hist = rays.get_rays_position_history().unwrap();
-        for (ray_pos, ray_pos_calc) in izip!(pos_hist_comp.iter(), pos_hist.rays_pos_history[0].get_history().iter())
-        {
+        for (ray_pos, ray_pos_calc) in izip!(
+            pos_hist_comp.iter(),
+            pos_hist.rays_pos_history[0].get_history().iter()
+        ) {
             for (row, row_calc) in izip!(ray_pos.row_iter(), ray_pos_calc.row_iter()) {
                 assert_eq!(row[0], row_calc[0].get::<millimeter>());
                 assert_eq!(row[1], row_calc[1].get::<millimeter>());
                 assert_eq!(row[2], row_calc[2].get::<millimeter>());
             }
         }
-    }
-    #[test]
-    fn project_to_plane() {
-        todo!()
-        // let pos_hist = RayPositionHistory {
-        //     rays_pos_history: vec![
-        //         MatrixXx3::from_vec(vec![1., 0., 0.]),
-        //         MatrixXx3::from_vec(vec![0., 1., 0.]),
-        //         MatrixXx3::from_vec(vec![0., 0., 1.]),
-        //     ],
-        // };
-        // let projected_rays = pos_hist.project_to_plane(Vector3::new(1., 0., 0.)).unwrap();
-        // assert_eq!(projected_rays[0][(0, 0)], 0.);
-        // assert_eq!(projected_rays[0][(0, 1)], 0.);
-        // assert_eq!(projected_rays[1][(0, 0)], 0.);
-        // assert_eq!(projected_rays[1][(0, 1)], 1.);
-        // assert_eq!(projected_rays[2][(0, 0)], 1.);
-        // assert_eq!(projected_rays[2][(0, 1)], 0.);
-
-        // let projected_rays = pos_hist.project_to_plane(Vector3::new(0., 1., 0.)).unwrap();
-        // assert_eq!(projected_rays[0][(0, 0)], 0.);
-        // assert_eq!(projected_rays[0][(0, 1)], 1.);
-        // assert_eq!(projected_rays[1][(0, 0)], 0.);
-        // assert_eq!(projected_rays[1][(0, 1)], 0.);
-        // assert_eq!(projected_rays[2][(0, 0)], 1.);
-        // assert_eq!(projected_rays[2][(0, 1)], 0.);
-
-        // let projected_rays = pos_hist.project_to_plane(Vector3::new(0., 0., 1.)).unwrap();
-        // assert_eq!(projected_rays[0][(0, 0)], 1.);
-        // assert_eq!(projected_rays[0][(0, 1)], 0.);
-        // assert_eq!(projected_rays[1][(0, 0)], 0.);
-        // assert_eq!(projected_rays[1][(0, 1)], 1.);
-        // assert_eq!(projected_rays[2][(0, 0)], 0.);
-        // assert_eq!(projected_rays[2][(0, 1)], 0.);
     }
     #[test]
     fn get_wavefront_data_in_units_of_wvl() {

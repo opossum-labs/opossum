@@ -1,7 +1,7 @@
 use opossum::{
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
-    position_distributions::{FibonacciEllipse, FibonacciRectangle},
+    position_distributions::FibonacciRectangle,
     rays::Rays,
 };
 use plotters::style::RGBAColor;
@@ -45,8 +45,13 @@ fn main() -> OpmResult<()> {
     println!("{}", fluence_data.get_peak_fluence());
     println!("{}", fluence_data.get_average_fluence());
     let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
-    let plt_dat = PlotData::ColorMesh(fl_x, fl_y, fl_d);
-    let plt_series = PlotSeries::new(&plt_dat, RGBAColor(0,0,0,0.), None);
+    let plt_dat = PlotData::ColorMesh {
+        x_dat_n: fl_x,
+        y_dat_m: fl_y,
+        z_dat_nxm: fl_d,
+    };
+
+    let plt_series = PlotSeries::new(&plt_dat, RGBAColor(0, 0, 0, 0.), None);
     let plt_type = PlotType::ColorMesh(plt_params);
     let _ = plt_type.plot(&vec![plt_series]);
 

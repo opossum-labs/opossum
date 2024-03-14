@@ -474,9 +474,13 @@ impl Plottable for Spectrum {
         }
         match plt_type {
             PlotType::Line2D(_) | PlotType::Scatter2D(_) => {
-                let plt_series = PlotSeries::new(&PlotData::Dim2(spec_mat), RGBAColor(255,0,0,1.), None);
+                let plt_series = PlotSeries::new(
+                    &PlotData::Dim2 { xy_data: spec_mat },
+                    RGBAColor(255, 0, 0, 1.),
+                    None,
+                );
                 Ok(Some(vec![plt_series]))
-            },
+            }
             _ => Ok(None),
         }
     }

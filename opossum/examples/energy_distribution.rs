@@ -43,9 +43,13 @@ fn main() -> OpmResult<()> {
         .unwrap()
         .set(&PlotArgs::FigSize((1000, 800)))
         .unwrap();
-    let plt_dat = PlotData::ColorMesh(fl_x, fl_y, fl_d);
+    let plt_dat = PlotData::ColorMesh {
+        x_dat_n: fl_x,
+        y_dat_m: fl_y,
+        z_dat_nxm: fl_d,
+    };
     let plt_type = PlotType::ColorMesh(plt_params);
-    let plt_series = PlotSeries::new(&plt_dat, RGBAColor(0,0,0,0.), None);
+    let plt_series = PlotSeries::new(&plt_dat, RGBAColor(0, 0, 0, 0.), None);
 
     let _ = plt_type.plot(&vec![plt_series]);
 
