@@ -109,6 +109,7 @@ impl PlotType {
         params.check_backend_file_ext_compatibility()?;
         let path = params.get_fpath()?;
         let mut plot = Plot::new(plt_series, params);
+        plot.add_margin_to_figure_size(self);
 
         match params.get_backend()? {
             PltBackEnd::BMP => {
@@ -528,8 +529,9 @@ impl PlotType {
                 z_dat_nxm,
             } = plt_series_vec[0].get_plot_series_data()
             {
+                let split_pixel = plt.img_size.0-170;
                 //split root for main plot and colorbar
-                let (main_root, cbar_root) = root.split_horizontally(830);
+                let (main_root, cbar_root) = root.split_horizontally(split_pixel);
 
                 //colorbar. first because otherwise the xlabel of the main plot is cropped
                 let mut chart = Self::create_2d_plot_chart(
@@ -626,7 +628,7 @@ impl PlotType {
         x_ax: bool,
     ) -> ChartContext<'a, T, Cartesian2d<RangedCoordf64, RangedCoordf64>> {
         let mut chart_builder = ChartBuilder::on(root);
-        chart_builder.margin(10).margin_top(40);
+        chart_builder.margin(30).margin_top(40);
 
         if y_ax {
             let pixel_margin = Self::calc_pixel_margin(y_bounds);
@@ -645,7 +647,44 @@ impl PlotType {
             .build_cartesian_2d(x_bounds.min..x_bounds.max, y_bounds.min..y_bounds.max)
             .unwrap();
 
-        let mut mesh: MeshStyle<'_, '_, RangedCoordf64, RangedCoordf64, T> = chart.configure_mesh();
+        let mut mesh = chart.configure_mesh();
+    //     mesh.x_label_formatter(&|v| {
+    //             if v.abs() < 1e-3 || v.abs() >1e5{
+    //                 format!("{v:e}")
+    //             }
+    //             else{
+    //                 let log_val = v.abs().log10().floor().to_i32().unwrap();
+    //                 match log_val{
+    //                     -3 => format!("{v:.3}"),
+    //                     -2 => format!("{v:.3}"),
+    //                     -1 => format!("{v:.3}"),
+    //                     0 => format!("{v:.2}"),
+    //                     1 => format!("{v:.1}"),
+    //                     2 => format!("{v:.0}"),
+    //                     _ => format!("{v}")
+    //                 }
+                    
+    //             }
+    //     }
+    //     ).y_label_formatter(&|v| {
+    //         if v.abs() < 1e-3 || v.abs() >1e5{
+    //             format!("{v:e}")
+    //         }
+    //         else{
+    //             let log_val = v.abs().log10().floor().to_i32().unwrap();
+    //             match log_val{
+    //                 -3 => format!("{v:.3}"),
+    //                 -2 => format!("{v:.3}"),
+    //                 -1 => format!("{v:.3}"),
+    //                 0 => format!("{v:.2}"),
+    //                 1 => format!("{v:.1}"),
+    //                 2 => format!("{v:.0}"),
+    //                 _ => format!("{v}")
+    //             }
+                
+    //         }
+    // }
+    // );
 
         Self::set_or_disable_axis_desc([x_ax, y_ax], label_desc, &mut mesh);
 
@@ -674,7 +713,7 @@ impl PlotType {
         }
     }
 
-    fn calc_pixel_margin(bounds: AxLims) -> i32 {
+    fn calc_pixel_margin(bounds: AxLims) -> u32 {
         //absolutely ugly "automation" of margin. not done nicely and not accurate, works only for sans serif with 30 pt
         let mut digits_max =
             bounds.max.abs().log10().abs().floor() + 2. + f64::from(bounds.max.is_sign_negative());
@@ -687,9 +726,9 @@ impl PlotType {
             digits_min = 4.;
         }
         let digits = if digits_max >= digits_min {
-            digits_max.to_i32()
+            digits_max.to_u32()
         } else {
-            digits_min.to_i32()
+            digits_min.to_u32()
         }
         .unwrap();
 
@@ -1988,8 +2027,39 @@ impl Plot {
     pub fn new(plt_series: &Vec<PlotSeries>, plt_params: &PlotParameters) -> Self {
         let mut plot = Self::try_from(plt_params).unwrap();
         plot.add_plot_series(plt_series, true);
-
+        
         plot
+    }
+
+    fn add_margin_to_figure_size(&mut self, plt_type: &PlotType){
+        let mut height_add: u32 = 65+70;
+        let mut width_add: u32 = 0;
+
+        let mut add_left = 30;
+        let mut add_right = 30;
+        let pixel_margin = PlotType::calc_pixel_margin(self.bounds.y.unwrap_or_else(|| AxLims{min: -0.5, max: 0.5}));
+
+        if LabelPos::Right == self.label[1].label_pos  {
+            add_right += 21 + pixel_margin;
+            if pixel_margin < 72{
+                add_right = 82 - pixel_margin;
+            }
+        } 
+        if LabelPos::Left == self.label[1].label_pos {
+            add_left += 21 + pixel_margin;
+            if pixel_margin < 72{
+                add_left = 82 - pixel_margin;
+            }
+        } 
+
+        width_add += add_right+add_left;
+
+        if let PlotType::ColorMesh(_) = plt_type{
+            width_add += 170;
+        }
+
+        self.img_size.0 += width_add;
+        self.img_size.1 += height_add;
     }
 
     /// Adds another [`PlotSeries`] to the [`Plot`] struct
