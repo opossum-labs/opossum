@@ -13,7 +13,7 @@ use crate::{
     plottable::AxLims,
 };
 
-use super::filter_data::filter_nan_infinite;
+use super::filter_data::{filter_nan_infinite, get_min_max_filter_nonfinite};
 
 #[derive(Clone, Debug)]
 pub struct VoronoiedData {
@@ -32,14 +32,12 @@ impl VoronoiedData {
         xy_coordinates: &MatrixXx2<f64>,
         z_data_opt: Option<DVector<f64>>,
     ) -> OpmResult<Self> {
-        let x_bounds = AxLims::new(
-            xy_coordinates.column(0).min(),
-            xy_coordinates.column(0).max(),
-        )?;
-        let y_bounds = AxLims::new(
-            xy_coordinates.column(1).min(),
-            xy_coordinates.column(1).max(),
-        )?;
+        let x_bounds = AxLims::try_from(get_min_max_filter_nonfinite(
+            xy_coordinates.column(0).into(),
+        ))?;
+        let y_bounds = AxLims::try_from(get_min_max_filter_nonfinite(
+            xy_coordinates.column(1).into(),
+        ))?;
 
         let voronoi_diagram = create_voronoi_cells(xy_coordinates, &x_bounds, &y_bounds)?;
 
@@ -134,8 +132,8 @@ pub fn interpolate_3d_scatter_data(
     x_interp: &DVector<f64>,
     y_interp: &DVector<f64>,
 ) -> OpmResult<(DMatrix<f64>, DMatrix<f64>)> {
-    let x_interp_filtered = filter_nan_infinite(x_interp.as_slice());
-    let y_interp_filtered = filter_nan_infinite(y_interp.as_slice());
+    let x_interp_filtered = DVector::from_vec(filter_nan_infinite(x_interp.as_slice()));
+    let y_interp_filtered = DVector::from_vec(filter_nan_infinite(y_interp.as_slice()));
     if x_interp_filtered.len() < 2 || y_interp_filtered.len() < 2 {
         return Err(OpossumError::Other(
             "Length of interpolation ranges must be larger than 1 to define the interpolation bounds".into(),
@@ -147,8 +145,14 @@ pub fn interpolate_3d_scatter_data(
             "Number of scattered data points must be at least 3 to define a triangle, which is necessary to interpolate!".into(),
         ));
     }
-    let x_bounds = AxLims::new(x_interp_filtered.min(), x_interp_filtered.max())?;
-    let y_bounds = AxLims::new(y_interp_filtered.min(), y_interp_filtered.max())?;
+    let x_bounds =
+        AxLims::new(x_interp_filtered.min(), x_interp_filtered.max()).ok_or_else(|| {
+            OpossumError::Other("Can not voronoi the data with Axlimits of None!".into())
+        })?;
+    let y_bounds =
+        AxLims::new(y_interp_filtered.min(), y_interp_filtered.max()).ok_or_else(|| {
+            OpossumError::Other("Can not voronoi the data with Axlimits of None!".into())
+        })?;
     let voronoi_data = create_valued_voronoi_cells(scattered_data, &x_bounds, &y_bounds)?;
 
     interpolate_3d_triangulated_scatter_data(&voronoi_data, &x_interp_filtered, &y_interp_filtered)
@@ -238,13 +242,14 @@ pub fn create_linspace_axes(
     data: DVectorSlice<'_, f64>,
     num_axes_points: f64,
 ) -> OpmResult<(DVector<f64>, AxLims)> {
-    let filtered_data = filter_nan_infinite(data.as_slice());
+    let filtered_data = DVector::from_vec(filter_nan_infinite(data.as_slice()));
     if filtered_data.len() < 2 {
         return Err(OpossumError::Other(
             "Length of input data after filtering out non-finite values is below 2! Creating a linearly-spaced array from 1 value is not possible!".into(),
         ));
     }
-    let ax_lim = AxLims::new(filtered_data.min(), filtered_data.max())?;
+    let ax_lim = AxLims::new(filtered_data.min(), filtered_data.max())
+        .ok_or_else(|| OpossumError::Other("Cannot create linspace from axlims of None!".into()))?;
     if num_axes_points < 1. {
         Err(OpossumError::Other(
             "The number of points to create linearly-spaced vector must be more than 1!".into(),

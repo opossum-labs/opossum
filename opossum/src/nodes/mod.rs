@@ -11,7 +11,8 @@ mod ideal_filter;
 mod lens;
 mod paraxial_surface;
 mod propagation;
-mod ray_propagation_detector;
+/// ray propagation visualizer node
+pub mod ray_propagation_visualizer;
 mod reference;
 mod source;
 mod source_helper;
@@ -43,15 +44,16 @@ pub use spectrometer::SpectrometerType;
 pub use fluence_detector::{FluenceData, FluenceDetector};
 pub use spot_diagram::SpotDiagram;
 
-pub use ray_propagation_detector::RayPropagationVisualizer;
+pub use ray_propagation_visualizer::RayPropagationVisualizer;
 pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
+
+use uuid::Uuid;
 
 use crate::error::OpmResult;
 use crate::error::OpossumError;
 use crate::optic_ref::OpticRef;
 use std::cell::RefCell;
 use std::rc::Rc;
-use uuid::Uuid;
 
 /// Factory function creating a new reference of an optical node of the given type.
 ///

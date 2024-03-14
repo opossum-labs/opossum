@@ -5,13 +5,12 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
-        FilterType, FluenceData, Metertype, PortMap, Spectrometer, SpectrometerType, SpotDiagram,
-        WaveFrontData,
+        ray_propagation_visualizer::RayPositionHistories, FilterType, FluenceData, Metertype,
+        PortMap, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     ray::SplittingConfig,
-    rays::RayPositionHistory,
     refractive_index::RefractiveIndexType,
     reporter::{NodeReport, PdfReportable},
     utils::EnumProxy,
@@ -488,7 +487,7 @@ pub enum Proptype {
     /// This property stores the wavefront Information [`WaveFrontData`]
     WaveFrontStats(WaveFrontData),
     /// This property stores the ray position history of all [`Rays`](crate::rays::Rays) during propagation through the optic scenery
-    RayPositionHistory(RayPositionHistory),
+    RayPositionHistory(RayPositionHistories),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
     /// a geometrical length

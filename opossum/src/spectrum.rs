@@ -1,11 +1,12 @@
 #![warn(missing_docs)]
 //! Module for creation and handling of optical spectra
 use crate::error::{OpmResult, OpossumError};
-use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable};
+use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable};
 use csv::ReaderBuilder;
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::MatrixXx2;
+use plotters::style::RGBAColor;
 use serde_derive::{Deserialize, Serialize};
 use std::f64::consts::PI;
 use std::fmt::{Debug, Display};
@@ -464,7 +465,7 @@ impl Spectrum {
 }
 
 impl Plottable for Spectrum {
-    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = self.data.clone();
         let mut spec_mat = MatrixXx2::zeros(data.len());
         for (i, s) in data.iter().enumerate() {
@@ -472,7 +473,14 @@ impl Plottable for Spectrum {
             spec_mat[(i, 1)] = s.1;
         }
         match plt_type {
-            PlotType::Line2D(_) | PlotType::Scatter2D(_) => Ok(Some(PlotData::Dim2(spec_mat))),
+            PlotType::Line2D(_) | PlotType::Scatter2D(_) => {
+                let plt_series = PlotSeries::new(
+                    &PlotData::Dim2 { xy_data: spec_mat },
+                    RGBAColor(255, 0, 0, 1.),
+                    None,
+                );
+                Ok(Some(vec![plt_series]))
+            }
             _ => Ok(None),
         }
     }

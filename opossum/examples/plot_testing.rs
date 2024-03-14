@@ -1,9 +1,10 @@
 use opossum::{
     error::OpmResult,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotType},
+    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     position_distributions::FibonacciRectangle,
     rays::Rays,
 };
+use plotters::style::RGBAColor;
 use uom::si::{
     energy::{joule, Energy},
     f64::Length,
@@ -44,9 +45,15 @@ fn main() -> OpmResult<()> {
     println!("{}", fluence_data.get_peak_fluence());
     println!("{}", fluence_data.get_average_fluence());
     let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
-    let plt_dat = PlotData::ColorMesh(fl_x, fl_y, fl_d);
+    let plt_dat = PlotData::ColorMesh {
+        x_dat_n: fl_x,
+        y_dat_m: fl_y,
+        z_dat_nxm: fl_d,
+    };
+
+    let plt_series = PlotSeries::new(&plt_dat, RGBAColor(0, 0, 0, 0.), None);
     let plt_type = PlotType::ColorMesh(plt_params);
-    let _ = plt_type.plot(&plt_dat);
+    let _ = plt_type.plot(&vec![plt_series]);
 
     let mut plt_params = PlotParameters::default();
     plt_params
@@ -56,9 +63,9 @@ fn main() -> OpmResult<()> {
         .unwrap()
         .set(&PlotArgs::FigSize((1000, 850)))
         .unwrap();
-    let plt_dat = PlotData::Dim2(rays.get_xy_rays_pos(true));
-    let plt_type = PlotType::Scatter2D(plt_params);
-    let _ = plt_type.plot(&plt_dat);
+    // let plt_dat = PlotData::Dim2(rays.get_xy_rays_pos(true));
+    // let plt_type = PlotType::Scatter2D(plt_params);
+    // let _ = plt_type.plot(&plt_dat);
 
     Ok(())
 }

@@ -3,12 +3,15 @@
 use image::{DynamicImage, ImageBuffer, RgbImage};
 use log::warn;
 use nalgebra::{DMatrix, DVector};
+use plotters::style::RGBAColor;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
+use crate::plottable::{
+    PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
+};
 use crate::properties::{Properties, Proptype};
 use crate::refractive_index::refr_index_vaccuum;
 use crate::reporter::{NodeReport, PdfReportable};
@@ -260,13 +263,17 @@ impl Plottable for FluenceData {
         PlotType::ColorMesh(plt_params.clone())
     }
 
-    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
         match plt_type {
-            PlotType::ColorMesh(_) => Ok(Some(PlotData::ColorMesh(
-                self.x_data.clone(),
-                self.y_data.clone(),
-                self.interp_distribution.clone(),
-            ))),
+            PlotType::ColorMesh(_) => {
+                let plt_data = PlotData::ColorMesh {
+                    x_dat_n: self.x_data.clone(),
+                    y_dat_m: self.y_data.clone(),
+                    z_dat_nxm: self.interp_distribution.clone(),
+                };
+                let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
+                Ok(Some(vec![plt_series]))
+            }
             // PlotType::ColorVoronoi(_) => Ok(Some(PlotData::ColorVoronoi())),
             _ => Ok(None),
         }

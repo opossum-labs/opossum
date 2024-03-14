@@ -1,33 +1,27 @@
 #![warn(missing_docs)]
 //! Trait for adding the possibility to generate a (x/y) plot of an element.
-use crate::error::OpmResult;
-use crate::error::OpossumError;
-use crate::utils::filter_data::filter_nan_infinite;
-use crate::utils::griddata::linspace;
-use approx::abs_diff_ne;
-use approx::RelativeEq;
+use crate::error::{OpmResult, OpossumError};
+use crate::utils::griddata::create_valued_voronoi_cells;
+use crate::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace};
+use approx::{abs_diff_ne, RelativeEq};
 use colorous::Gradient;
-use delaunator::{triangulate, Point};
 use image::RgbImage;
 use itertools::{iproduct, izip};
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3};
 use num::ToPrimitive;
-use plotters::chart::MeshStyle;
 use plotters::{
     backend::DrawingBackend,
     backend::PixelFormat,
-    chart::{ChartBuilder, ChartContext, LabelAreaPosition},
+    chart::{ChartBuilder, ChartContext, LabelAreaPosition, MeshStyle, SeriesLabelPosition},
     coord::{cartesian::Cartesian2d, ranged3d::Cartesian3d, types::RangedCoordf64, Shift},
-    element::{Circle, Polygon, Rectangle},
+    element::{Circle, PathElement, Polygon, Rectangle},
     prelude::{BitMapBackend, DrawingArea, IntoDrawingArea, SVGBackend},
     series::LineSeries,
-    style::WHITE,
-    style::{IntoFont, RGBAColor, ShapeStyle},
+    style::{Color, IntoFont, RGBAColor, ShapeStyle, BLACK, WHITE},
 };
-use std::path::PathBuf;
-use std::{collections::HashMap, env::current_dir, f64::consts::PI, path::Path};
+use std::{collections::HashMap, env::current_dir, f64::consts::PI, path::Path, path::PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -47,11 +41,6 @@ pub enum PlotType {
     MultiLine3D(PlotParameters),
     ///2D color plot of gridded data with color representing the amplitude over an x-y grid
     ColorMesh(PlotParameters),
-
-    // ///2D color plot of ungridded data with color representing the amplitude over an x-y grid
-    // ColorScatter(PlotParameters),
-    /// 2D, triangulated color plot of ungridded data with color representing the amplitude over an x-y grid
-    ColorTriangulated(PlotParameters),
     /// 3D surface plot of ungridded data
     TriangulatedSurface(PlotParameters),
 }
@@ -61,7 +50,6 @@ impl PlotType {
             Self::ColorMesh(p)
             | Self::Scatter2D(p)
             | Self::Line2D(p)
-            | Self::ColorTriangulated(p)
             | Self::MultiLine3D(p)
             | Self::MultiLine2D(p)
             | Self::TriangulatedSurface(p) => p,
@@ -72,30 +60,22 @@ impl PlotType {
             Self::ColorMesh(p)
             | Self::Scatter2D(p)
             | Self::Line2D(p)
-            | Self::ColorTriangulated(p)
             | Self::MultiLine3D(p)
             | Self::MultiLine2D(p)
             | Self::TriangulatedSurface(p) => p,
         }
     }
-    fn create_plot<B: DrawingBackend>(
-        &self,
-        backend: &DrawingArea<B, Shift>,
-        plot: &mut Plot,
-    ) -> OpmResult<()> {
-        plot.define_axes_bounds()?;
-
+    fn create_plot<B: DrawingBackend>(&self, backend: &DrawingArea<B, Shift>, plot: &mut Plot) {
+        plot.define_axes_bounds();
+        let _ = backend.fill(&WHITE);
         match self {
             Self::ColorMesh(_) => Self::plot_color_mesh(plot, backend),
             Self::TriangulatedSurface(_) => Self::plot_triangulated_surface(plot, backend),
-            Self::ColorTriangulated(_) => Self::plot_color_triangulated(plot, backend),
             Self::Scatter2D(_) => Self::plot_2d_scatter(plot, backend),
             Self::Line2D(_) => Self::plot_2d_line(plot, backend),
             Self::MultiLine3D(_) => Self::plot_3d_multi_line(plot, backend),
             Self::MultiLine2D(_) => Self::plot_2d_multi_line(plot, backend),
         };
-
-        Ok(())
     }
 
     ///This method sets a plot argument ([`PlotArgs`]) to [`PlotParameters`] which is stored in this [`PlotType`]
@@ -114,7 +94,7 @@ impl PlotType {
 
     /// This method creates a plot
     /// # Attributes
-    /// - `plt_data`: plot data. See [`PlotData`]
+    /// - `plt_series`: vector of plot series. See [`PlotSeries`]
     /// # Returns
     /// This method returns an [`OpmResult<Option<RgbImage>>`]. It is None if a new file (such as svg, png, bmp or jpg) is created. It is Some(RgbImage) if the image is written to a buffer
     /// # Errors
@@ -124,21 +104,21 @@ impl PlotType {
     /// - the plotting backend can not be extracted
     /// - the plot can not be created inside the `create_plot()` method
     /// - the image buffer is too small
-    pub fn plot(&self, plt_data: &PlotData) -> OpmResult<Option<RgbImage>> {
+    pub fn plot(&self, plt_series: &Vec<PlotSeries>) -> OpmResult<Option<RgbImage>> {
         let params = self.get_plot_params();
         params.check_backend_file_ext_compatibility()?;
         let path = params.get_fpath()?;
-        let mut plot = Plot::new(plt_data, params);
+        let mut plot = Plot::new(plt_series, params);
 
         match params.get_backend()? {
             PltBackEnd::BMP => {
                 let backend = BitMapBackend::new(&path, plot.img_size).into_drawing_area();
-                let _ = self.create_plot(&backend, &mut plot);
+                self.create_plot(&backend, &mut plot);
                 Ok(None)
             }
             PltBackEnd::SVG => {
                 let backend = SVGBackend::new(&path, plot.img_size).into_drawing_area();
-                let _ = self.create_plot(&backend, &mut plot);
+                self.create_plot(&backend, &mut plot);
                 Ok(None)
             }
             PltBackEnd::Buf => {
@@ -150,7 +130,7 @@ impl PlotType {
                 {
                     let backend = BitMapBackend::with_buffer(&mut image_buffer, plot.img_size)
                         .into_drawing_area();
-                    let _ = self.create_plot(&backend, &mut plot);
+                    self.create_plot(&backend, &mut plot);
                 }
                 let img = RgbImage::from_raw(plot.img_size.0, plot.img_size.1, image_buffer)
                     .ok_or_else(|| OpossumError::Other("image buffer size too small".into()))?;
@@ -159,18 +139,25 @@ impl PlotType {
         }
     }
 
-    fn draw_line_2d<T: DrawingBackend>(
-        chart: &mut ChartContext<'_, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
+    fn draw_line_2d<'a, 'b, T: DrawingBackend + 'a + 'b>(
+        chart: &'a mut ChartContext<'b, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
         x: &DVectorSlice<'_, f64>,
         y: &DVectorSlice<'_, f64>,
-        line_color: &RGBAColor,
+        line_color: RGBAColor,
+        label: Option<String>,
     ) {
-        chart
+        let series_anno = chart
             .draw_series(LineSeries::new(
                 izip!(x, y).map(|xy| (*xy.0, *xy.1)),
                 line_color,
             ))
             .unwrap();
+
+        if let Some(l) = label {
+            series_anno
+                .label(&l)
+                .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], line_color));
+        }
     }
 
     fn draw_line_3d<T: DrawingBackend>(
@@ -182,61 +169,45 @@ impl PlotType {
         x: &DVectorSlice<'_, f64>,
         y: &DVectorSlice<'_, f64>,
         z: &DVectorSlice<'_, f64>,
-        line_color: &RGBAColor,
+        line_color: RGBAColor,
+        label: Option<String>,
     ) {
-        chart
+        let series_anno = chart
             .draw_series(LineSeries::new(
                 izip!(x, y, z).map(|xyz| (*xyz.0, *xyz.1, *xyz.2)),
                 line_color,
             ))
             .unwrap();
+
+        if let Some(l) = label {
+            series_anno
+                .label(&l)
+                .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], line_color));
+        }
     }
 
-    fn draw_points<T: DrawingBackend>(
-        chart: &mut ChartContext<'_, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
+    fn draw_points<'a, 'b, T: DrawingBackend + 'a + 'b>(
+        chart: &'a mut ChartContext<'b, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
         x: &DVectorSlice<'_, f64>,
         y: &DVectorSlice<'_, f64>,
-        marker_color: &RGBAColor,
+        marker_color: RGBAColor,
+        label: Option<String>,
     ) {
-        chart
+        let series_anno = chart
             .draw_series(izip!(x, y).map(|x| {
                 Circle::new(
                     (*x.0, *x.1),
-                    5,
+                    3,
                     Into::<ShapeStyle>::into(marker_color).filled(),
                 )
             }))
             .unwrap();
-    }
 
-    fn draw_color_triangles<T: DrawingBackend>(
-        chart: &mut ChartContext<'_, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
-        triangle_index: &MatrixXx3<usize>,
-        x: &DVectorSlice<'_, f64>,
-        y: &DVectorSlice<'_, f64>,
-        c: &DVectorSlice<'_, f64>,
-        cmap: &Gradient,
-        cbounds: AxLims,
-    ) {
-        let z_min = cbounds.min;
-        let z_max: f64 = cbounds.max - z_min; //z.max();
-
-        let series = izip!(triangle_index.row_iter(), c).map(|(idx, c)| {
-            Polygon::new(
-                vec![
-                    (x[idx[0]], y[idx[0]]),
-                    (x[idx[1]], y[idx[1]]),
-                    (x[idx[2]], y[idx[2]]),
-                ],
-                {
-                    let cor = cmap.eval_continuous((c - z_min) / z_max);
-                    let color = RGBAColor(cor.r, cor.g, cor.b, 1.);
-                    Into::<ShapeStyle>::into(color).filled()
-                },
-            )
-        });
-
-        chart.draw_series(series).unwrap();
+        if let Some(l) = label {
+            series_anno.label(&l).legend(move |(x, y)| {
+                Circle::new((x, y), 3, Into::<ShapeStyle>::into(marker_color).filled())
+            });
+        }
     }
 
     fn draw_triangle_surf<T: DrawingBackend>(
@@ -289,7 +260,9 @@ impl PlotType {
                 dist = 0.5;
             }
         } else {
-            warn!("Warning! The points on this axis are not equistant! This may distort the plot!");
+            warn!(
+                "Warning! The points on this axis are not equidistant!\n This may distort the plot!"
+            );
         };
         dist
     }
@@ -329,8 +302,40 @@ impl PlotType {
         chart.draw_series(series).unwrap();
     }
 
+    fn config_series_label_2d<'a, 'b, T: DrawingBackend + 'a + 'b>(
+        chart: &'a mut ChartContext<'b, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
+    ) {
+        chart
+            .configure_series_labels()
+            .position(SeriesLabelPosition::UpperLeft)
+            .legend_area_size(50)
+            .background_style(BLACK.mix(0.05))
+            .border_style(BLACK)
+            .label_font(("Calibri", 30).into_font())
+            .draw()
+            .unwrap();
+    }
+
+    fn config_series_label_3d<'a, 'b, T: DrawingBackend + 'a + 'b>(
+        chart: &'a mut ChartContext<
+            'b,
+            T,
+            Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>,
+        >,
+    ) {
+        chart
+            .configure_series_labels()
+            .position(SeriesLabelPosition::UpperLeft)
+            .legend_area_size(50)
+            .background_style(BLACK.mix(0.05))
+            .border_style(BLACK)
+            .label_font(("Calibri", 30).into_font())
+            .draw()
+            .unwrap();
+    }
+
     fn plot_2d_line<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
-        if let Some(PlotData::Dim2(dat)) = &plt.data {
+        if let Some(plt_series_vec) = plt.get_plot_series_vec() {
             let mut chart = Self::create_2d_plot_chart(
                 root,
                 plt.bounds.x.unwrap(),
@@ -339,16 +344,33 @@ impl PlotType {
                 true,
                 true,
             );
-            Self::draw_line_2d(&mut chart, &dat.column(0), &dat.column(1), &plt.color);
-        }
 
+            let mut label_flag = false;
+            for plt_series in plt_series_vec {
+                if let PlotData::Dim2 { xy_data } = plt_series.get_plot_series_data() {
+                    Self::draw_line_2d(
+                        &mut chart,
+                        &xy_data.column(0),
+                        &xy_data.column(1),
+                        *plt_series.get_series_color(),
+                        plt_series.get_series_label(),
+                    );
+                    label_flag |= plt_series.get_series_label().is_some();
+                } else {
+                    warn!("Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!");
+                }
+            }
+            if label_flag {
+                Self::config_series_label_2d(&mut chart);
+            }
+        } else {
+            warn!("No plot series defined! Cannot create plot!!");
+        }
         root.present().unwrap();
     }
 
     fn plot_2d_scatter<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
-        if let Some(PlotData::Dim2(dat)) = plt.get_data() {
-            _ = root.fill(&WHITE);
-
+        if let Some(plt_series_vec) = plt.get_plot_series_vec() {
             let mut chart = Self::create_2d_plot_chart(
                 root,
                 plt.bounds.x.unwrap(),
@@ -358,70 +380,35 @@ impl PlotType {
                 true,
             );
 
-            Self::draw_points(&mut chart, &dat.column(0), &dat.column(1), &plt.color);
+            let mut label_flag = false;
+            for plt_series in plt_series_vec {
+                if let PlotData::Dim2 { xy_data } = plt_series.get_plot_series_data() {
+                    Self::draw_points(
+                        &mut chart,
+                        &xy_data.column(0),
+                        &xy_data.column(1),
+                        *plt_series.get_series_color(),
+                        plt_series.get_series_label(),
+                    );
+                    label_flag |= plt_series.get_series_label().is_some();
+                } else {
+                    warn!("Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!");
+                }
+            }
+
+            if label_flag {
+                Self::config_series_label_2d(&mut chart);
+            }
+        } else {
+            warn!("No plot series defined! Cannot create plot!!");
         }
 
         root.present().unwrap();
     }
 
-    fn plot_color_triangulated<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
-        if let Some(PlotData::ColorTriangulated(triangle_index, color, dat)) = plt.get_data() {
-            _ = root.fill(&WHITE);
-
-            let (main_root, cbar_root) = root.split_horizontally(830);
-
-            //colorbar. first because otherwise the xlabel of the main plot is cropped
-            let mut chart = Self::create_2d_plot_chart(
-                &cbar_root,
-                AxLims { min: 0., max: 1. },
-                plt.bounds.z.unwrap(),
-                &[
-                    LabelDescription::new("", plt.label[0].label_pos),
-                    plt.cbar.label.clone(),
-                ],
-                true,
-                false,
-            );
-
-            let c_dat =
-                linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap();
-            let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
-            let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
-            Self::draw_2d_colormesh(
-                &mut chart,
-                &xxx,
-                &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap(),
-                &d_mat,
-                &plt.cbar.cmap,
-                plt.bounds.z.unwrap(),
-            );
-
-            //main plot
-            let mut chart = Self::create_2d_plot_chart(
-                &main_root,
-                plt.bounds.x.unwrap(),
-                plt.bounds.y.unwrap(),
-                &plt.label,
-                true,
-                true,
-            );
-            Self::draw_color_triangles(
-                &mut chart,
-                triangle_index,
-                &dat.column(0),
-                &dat.column(1),
-                &color.column(0),
-                &plt.cbar.cmap,
-                plt.bounds.z.unwrap(),
-            );
-        }
-    }
-
     fn plot_2d_multi_line<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
-        if let Some(PlotData::MultiDim2(dat)) = plt.get_data() {
-            _ = root.fill(&WHITE);
-            //main plot
-            //currently there is no support for axes labels in 3d plots
+        if let Some(plt_series_vec) = plt.get_plot_series_vec() {
+            let mut label_flag = false;
             let mut chart = Self::create_2d_plot_chart(
                 root,
                 plt.bounds.x.unwrap(),
@@ -430,99 +417,170 @@ impl PlotType {
                 true,
                 true,
             );
+            for plt_series in plt_series_vec {
+                if let PlotData::MultiDim2 { vec_of_xy_data } = plt_series.get_plot_series_data() {
+                    //main plot
+                    //currently there is no support for axes labels in 3d plots
+                    let color = plt_series.get_series_color();
 
-            for line_dat in dat {
-                Self::draw_line_2d(
-                    &mut chart,
-                    &line_dat.column(0),
-                    &line_dat.column(1),
-                    &RGBAColor(255, 0, 0, 1.0),
-                );
+                    for (i, line_dat) in vec_of_xy_data.iter().enumerate() {
+                        let label = if i == 0 {
+                            label_flag |= plt_series.get_series_label().is_some();
+                            plt_series.get_series_label()
+                        } else {
+                            None
+                        };
+
+                        Self::draw_line_2d(
+                            &mut chart,
+                            &line_dat.column(0),
+                            &line_dat.column(1),
+                            *color,
+                            label,
+                        );
+                    }
+                } else {
+                    warn!("Wrong PlotData stored for this plot type! Must use MultiDim2! Not all series will be plotted!");
+                }
             }
+            if label_flag {
+                Self::config_series_label_2d(&mut chart);
+            }
+        } else {
+            warn!("No plot series defined! Cannot create plot!");
         }
     }
 
     fn plot_3d_multi_line<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
-        if let Some(PlotData::MultiDim3(dat)) = plt.get_data() {
-            _ = root.fill(&WHITE);
-            //main plot
-            //currently there is no support for axes labels in 3d plots
+        if let Some(plt_series_vec) = plt.get_plot_series_vec() {
+            let mut label_flag = false;
             let mut chart = Self::create_3d_plot_chart(root, plt);
 
-            for line_dat in dat {
-                Self::draw_line_3d(
-                    &mut chart,
-                    &line_dat.column(0),
-                    &line_dat.column(1),
-                    &line_dat.column(2),
-                    &RGBAColor(255, 0, 0, 0.3),
-                );
+            for plt_series in plt_series_vec {
+                if let PlotData::MultiDim3 { vec_of_xyz_data } = plt_series.get_plot_series_data() {
+                    //main plot
+                    //currently there is no support for axes labels in 3d plots
+                    for (i, line_dat) in vec_of_xyz_data.iter().enumerate() {
+                        let label = if i == 0 {
+                            label_flag |= plt_series.get_series_label().is_some();
+                            plt_series.get_series_label()
+                        } else {
+                            None
+                        };
+
+                        Self::draw_line_3d(
+                            &mut chart,
+                            &line_dat.column(0),
+                            &line_dat.column(1),
+                            &line_dat.column(2),
+                            RGBAColor(255, 0, 0, 0.3),
+                            label,
+                        );
+                    }
+                } else {
+                    warn!("Wrong PlotData stored for this plot type! Must use MultiDim3! Not all series will be plotted!");
+                }
             }
+            if label_flag {
+                Self::config_series_label_3d(&mut chart);
+            }
+        } else {
+            warn!("No plot series defined! Cannot create plot!");
         }
     }
 
     fn plot_triangulated_surface<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
-        if let Some(PlotData::TriangulatedSurface(triangle_index, dat)) = plt.get_data() {
-            _ = root.fill(&WHITE);
+        if let Some(plt_series_vec) = plt.get_plot_series_vec() {
+            if plt_series_vec.len() > 1 {
+                warn!("For this type of plot only one series can be plotted at a time. Only the first series will be used!");
+            }
+            if let PlotData::TriangulatedSurface {
+                triangle_idx,
+                xyz_dat,
+            } = plt_series_vec[0].get_plot_series_data()
+            {
+                //main plot
+                //currently there is no support for axes labels in 3d plots
+                let mut chart = Self::create_3d_plot_chart(root, plt);
 
-            //main plot
-            //currently there is no support for axes labels in 3d plots
-            let mut chart = Self::create_3d_plot_chart(root, plt);
-
-            Self::draw_triangle_surf(
-                &mut chart,
-                triangle_index,
-                &dat.column(0),
-                &dat.column(2),
-                &dat.column(1),
-            );
+                Self::draw_triangle_surf(
+                    &mut chart,
+                    triangle_idx,
+                    &xyz_dat.column(0),
+                    &xyz_dat.column(2),
+                    &xyz_dat.column(1),
+                );
+            } else {
+                warn!("Wrong PlotData stored for this plot type! Must use TriangulatedSurface! Not all series will be plotted!");
+            }
+        } else {
+            warn!("No plot series defined! Cannot create plot!");
         }
     }
     fn plot_color_mesh<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
-        if let Some(PlotData::ColorMesh(x, y, dat)) = plt.get_data() {
-            _ = root.fill(&WHITE);
-            //split root for main plot and colorbar
-            let (main_root, cbar_root) = root.split_horizontally(830);
+        if let Some(plt_series_vec) = plt.get_plot_series_vec() {
+            if plt_series_vec.len() > 1 {
+                warn!("For this type of plot only one series can be plotted at a time. Only the first series will be used!");
+            }
+            if let PlotData::ColorMesh {
+                x_dat_n,
+                y_dat_m,
+                z_dat_nxm,
+            } = plt_series_vec[0].get_plot_series_data()
+            {
+                //split root for main plot and colorbar
+                let (main_root, cbar_root) = root.split_horizontally(830);
 
-            //colorbar. first because otherwise the xlabel of the main plot is cropped
-            let mut chart = Self::create_2d_plot_chart(
-                &cbar_root,
-                AxLims { min: 0., max: 1. },
-                plt.bounds.z.unwrap(),
-                &[
-                    LabelDescription::new("", plt.label[0].label_pos),
-                    plt.cbar.label.clone(),
-                ],
-                true,
-                false,
-            );
+                //colorbar. first because otherwise the xlabel of the main plot is cropped
+                let mut chart = Self::create_2d_plot_chart(
+                    &cbar_root,
+                    AxLims { min: 0., max: 1. },
+                    plt.bounds.z.unwrap(),
+                    &[
+                        LabelDescription::new("", plt.label[0].label_pos),
+                        plt.cbar.label.clone(),
+                    ],
+                    true,
+                    false,
+                );
 
-            let c_dat =
-                linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap();
-            let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
-            let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
-            Self::draw_2d_colormesh(
-                &mut chart,
-                &xxx,
-                &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap(),
-                &d_mat,
-                &plt.cbar.cmap,
-                plt.bounds.z.unwrap(),
-            );
+                let c_dat =
+                    linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap();
+                let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
+                let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
+                Self::draw_2d_colormesh(
+                    &mut chart,
+                    &xxx,
+                    &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap(),
+                    &d_mat,
+                    &plt.cbar.cmap,
+                    plt.bounds.z.unwrap(),
+                );
 
-            //main plot
-            let mut chart = Self::create_2d_plot_chart(
-                &main_root,
-                plt.bounds.x.unwrap(),
-                plt.bounds.y.unwrap(),
-                &plt.label,
-                true,
-                true,
-            );
+                //main plot
+                let mut chart = Self::create_2d_plot_chart(
+                    &main_root,
+                    plt.bounds.x.unwrap(),
+                    plt.bounds.y.unwrap(),
+                    &plt.label,
+                    true,
+                    true,
+                );
 
-            Self::draw_2d_colormesh(&mut chart, x, y, dat, &plt.cbar.cmap, plt.bounds.z.unwrap());
+                Self::draw_2d_colormesh(
+                    &mut chart,
+                    x_dat_n,
+                    y_dat_m,
+                    z_dat_nxm,
+                    &plt.cbar.cmap,
+                    plt.bounds.z.unwrap(),
+                );
+            } else {
+                warn!("Wrong PlotData stored for this plot type! Must use ColorMesh! Not all series will be plotted!");
+            }
+        } else {
+            warn!("No plot series defined! Cannot create plot!");
         }
-
         root.present().unwrap();
     }
 
@@ -530,8 +588,6 @@ impl PlotType {
         root: &'a DrawingArea<T, Shift>,
         plot: &Plot,
     ) -> ChartContext<'a, T, Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>> {
-        root.fill(&WHITE).unwrap();
-
         //plotters axes are defined with z going upwards. therefore, I change this
         let x_bounds = plot.bounds.x.unwrap();
         let y_bounds = plot.bounds.y.unwrap();
@@ -569,8 +625,6 @@ impl PlotType {
         y_ax: bool,
         x_ax: bool,
     ) -> ChartContext<'a, T, Cartesian2d<RangedCoordf64, RangedCoordf64>> {
-        root.fill(&WHITE).unwrap();
-
         let mut chart_builder = ChartBuilder::on(root);
         chart_builder.margin(10).margin_top(40);
 
@@ -646,120 +700,293 @@ impl PlotType {
 #[derive(Debug, Clone)]
 ///Enum to define the type of plot that should be created
 pub enum PlotData {
-    ///Pairwise 2D data (e.g. x, y data) for scatter2D, Line2D. Data Structure as Matrix with N rows and two columns (x,y)
-    Dim2(MatrixXx2<f64>),
-    ///Triplet 3D data (e.g. x, y, z data) for scatter3D, Line3D or colorscatter. Data Structure as Matrix with N rows and three columns (x,y,z)
-    Dim3(MatrixXx3<f64>),
-    ///Vector of pairwise 2D data (e.g. x, y data) for MultiLine2D. Data Structure as Vector filled with Matrices with N rows and two columns (x,y)
-    MultiDim2(Vec<MatrixXx2<f64>>),
-    ///Vector of triplet 3D data (e.g. x, y, z data) for MultiLine3D. Data Structure as Vector filled with Matrices with N rows and three columns (x,y,z)
-    MultiDim3(Vec<MatrixXx3<f64>>),
+    ///[`PlotData`] for [`PlotType::Scatter2D`] & [`PlotType::Line2D`]
+    Dim2 {
+        /// Pairwise 2D data (e.g. x, y data), structured as Matrix with N rows and two columns (x,y)
+        xy_data: MatrixXx2<f64>,
+    },
+    ///[`PlotData`] for [`PlotType::Scatter3D`] & [`PlotType::Line3D`]
+    Dim3 {
+        ///Triplet 3D data (e.g. x, y, z data), structured as Matrix with N rows and three columns (x,y,z)
+        xyz_data: MatrixXx3<f64>,
+    },
+    ///[`PlotData`] for [`PlotType::MultiLine2D`]
+    MultiDim2 {
+        /// Vector of pairwise 2D data (e.g. x, y data), structured as Vector filled with Matrices with N rows and two columns (x,y)
+        vec_of_xy_data: Vec<MatrixXx2<f64>>,
+    },
+    ///[`PlotData`] for [`PlotType::MultiLine3D`]
+    MultiDim3 {
+        ///Vector of triplet 3D data (e.g. x, y, z data), structured as Vector filled with Matrices with N rows and three columns (x,y,z)
+        vec_of_xyz_data: Vec<MatrixXx3<f64>>,
+    },
+    /// [`PlotData`] for [`PlotType::ColorMesh`]
     /// Data to create a 2d colormesh plot. Vector with N entries for x, Vector with M entries for y and a Matrix with NxM entries for the colordata
-    ColorMesh(DVector<f64>, DVector<f64>, DMatrix<f64>), // ColorScatter(DVector<f64>, DVector<f64>, DMatrix<f64>)
-    /// Data to create a 2d triangulated color plot.
-    /// - Matrix with 3 columns and N rows that is filled with the indices that correspond to the data points that ave been triangulated
-    /// - Vector with N rows which holds the average color value of the triangle
-    /// - Matrix with 3 columns and N rows that hold the x,y,z data
-    ColorTriangulated(MatrixXx3<usize>, DVector<f64>, MatrixXx3<f64>),
-    /// Data to create a 3d triangulated surface plot.
-    /// - Matrix with 3 columns and N rows that is filled with the indices that correspond to the data points that ave been triangulated
-    /// - Matrix with 3 columns and N rows that hold the x,y,z data
-    TriangulatedSurface(MatrixXx3<usize>, MatrixXx3<f64>),
+    ColorMesh {
+        /// xdata: Vector with N entries
+        x_dat_n: DVector<f64>,
+        /// ydata: Vector with M entries
+        y_dat_m: DVector<f64>,
+        /// zdata: Matrix with NxM entries for the color
+        z_dat_nxm: DMatrix<f64>,
+    },
+    /// [`PlotData`] for [`PlotType::TriangulatedSurface`]
+    TriangulatedSurface {
+        ///Matrix with 3 columns and N rows that is filled with the indices that correspond to the data points that ave been triangulated
+        triangle_idx: MatrixXx3<usize>,
+        /// - Matrix with 3 columns and N rows that hold the x,y,z data
+        xyz_dat: MatrixXx3<f64>,
+    },
 }
 
 impl PlotData {
-    /// This method gets the actual maximum and minimum data values of an axis
-    /// # Attributes
-    /// - `ax_vals`: dynamically sized vector slice of the data vector on this axis
-    /// # Returns
-    /// This method returns the maximum and minimum data values on this axis in form of an [`AxLims`] struct
-    #[must_use]
-    pub fn get_min_max_data_values(&self, ax_vals: &DVectorSlice<'_, f64>) -> AxLims {
-        let filtered_ax_vals = filter_nan_infinite(ax_vals.into());
-        AxLims {
-            min: filtered_ax_vals.min(),
-            max: filtered_ax_vals.max(),
+    /// Creates a new [`PlotData::Dim2`] enum variant
+    ///
+    /// # Errors
+    /// This function will return an error if the length of the input matrix is zero
+    pub fn new_dim2(xy_data: MatrixXx2<f64>) -> OpmResult<Self> {
+        if xy_data.is_empty() {
+            Err(OpossumError::Other(
+                "No data provided! Cannot create PlotData::Dim2!".into(),
+            ))
+        } else {
+            Ok(Self::Dim2 { xy_data })
+        }
+    }
+    /// Creates a new [`PlotData::Dim3`] enum variant
+    ///
+    /// # Errors
+    /// This function will return an error if the length of the input matrix is zero
+    pub fn new_dim3(xyz_data: MatrixXx3<f64>) -> OpmResult<Self> {
+        if xyz_data.is_empty() {
+            Err(OpossumError::Other(
+                "No data provided! Cannot create PlotData::Dim3!".into(),
+            ))
+        } else {
+            Ok(Self::Dim3 { xyz_data })
         }
     }
 
+    /// Creates a new [`PlotData::MultiDim2`] enum variant
+    ///
+    /// # Errors
+    /// This function will return an error if the length of the input vector is zero
+    pub fn new_multi_dim2(vec_of_xy_data: Vec<MatrixXx2<f64>>) -> OpmResult<Self> {
+        if vec_of_xy_data.is_empty() {
+            Err(OpossumError::Other(
+                "No data provided! Cannot create `PlotData::MultiDim2`!".into(),
+            ))
+        } else {
+            Ok(Self::MultiDim2 { vec_of_xy_data })
+        }
+    }
+    /// Creates a new [`PlotData::MultiDim3`] enum variant
+    ///
+    /// # Errors
+    /// This function will return an error if the length of the input vector is zero
+    pub fn new_multi_dim3(vec_of_xyz_data: Vec<MatrixXx3<f64>>) -> OpmResult<Self> {
+        if vec_of_xyz_data.is_empty() {
+            Err(OpossumError::Other(
+                "No data provided! Cannot create `PlotData::MultiDim3`!".into(),
+            ))
+        } else {
+            Ok(Self::MultiDim3 { vec_of_xyz_data })
+        }
+    }
+
+    /// Creates a new [`PlotData::ColorMesh`] enum variant
+    ///
+    /// # Errors
+    /// This function will return an error if
+    /// - the length of x data: `x_dat_n` is zero
+    /// - the length of y data: `y_dat_m` is zero
+    /// - the length of z data: `z_dat_nxm` is zero
+    /// - the shape of the data sets does not match
+    pub fn new_colormesh(
+        x_dat_n: DVector<f64>,
+        y_dat_m: DVector<f64>,
+        z_dat_nxm: DMatrix<f64>,
+    ) -> OpmResult<Self> {
+        if x_dat_n.is_empty() {
+            return Err(OpossumError::Other(
+                "No x-data provided! Cannot create `PlotData::Colormesh`!".into(),
+            ));
+        }
+        if y_dat_m.is_empty() {
+            return Err(OpossumError::Other(
+                "No y-data provided! Cannot create `PlotData::Colormesh`!".into(),
+            ));
+        }
+        if z_dat_nxm.is_empty() {
+            return Err(OpossumError::Other(
+                "No z-data provided! Cannot create `PlotData::Colormesh`!".into(),
+            ));
+        }
+        if x_dat_n.len() != z_dat_nxm.shape().1 || y_dat_m.len() != z_dat_nxm.shape().0 {
+            return Err(OpossumError::Other(
+                "shape of x, y and z does not match! z must be x.len() columns and y.len() rows!"
+                    .into(),
+            ));
+        }
+        Ok(Self::ColorMesh {
+            x_dat_n,
+            y_dat_m,
+            z_dat_nxm,
+        })
+    }
+
+    /// Creates a new [`PlotData::TriangulatedSurface`] enum variant
+    ///
+    /// # Errors
+    /// This function will return an error if
+    /// - the length of xyz data: `xyz_dat` is zero
+    /// - no axis bounds for x or y can be determined
+    pub fn new_triangulatedsurface(xyz_dat: &MatrixXx3<f64>) -> OpmResult<Self> {
+        if xyz_dat.is_empty() {
+            return Err(OpossumError::Other(
+                "No z-data provided! Cannot create `PlotData::TriangulatedSurface`!".into(),
+            ));
+        }
+
+        let min_max_x = get_min_max_filter_nonfinite(
+            xyz_dat
+            .column(0)
+            .as_slice())
+            .ok_or_else(|| OpossumError::Other("Axes bounds could not be determined! Cannot create `PlotData::TriangulatedSurface`!"        .into()))?;
+        let min_max_y = get_min_max_filter_nonfinite(
+            xyz_dat
+            .column(1)
+            .as_slice())
+            .ok_or_else(|| OpossumError::Other("Axes bounds could not be determined! Cannot create `PlotData::TriangulatedSurface`!"        .into()))?;
+
+        let voronoi = create_valued_voronoi_cells(
+            xyz_dat,
+            &AxLims::new(min_max_x.0, min_max_x.1).ok_or_else(|| OpossumError::Other(
+                    "Cannot voronoi data with None-valued axis limits! Cannot create `PlotData::TriangulatedSurface`!"
+                        .into()
+                ))?,
+            &AxLims::new(min_max_y.0, min_max_y.1).ok_or_else(|| OpossumError::Other(
+                    "Cannot voronoi data with None-valued axis limits! Cannot create `PlotData::TriangulatedSurface`!"
+                        .into()
+                ))?,
+        )?;
+        let z_data = voronoi.get_z_data().as_ref().map_or_else(
+            || {
+                Err(OpossumError::Other(
+                    "Could not extract z data from voronoi diagram! Cannot create `PlotData::TriangulatedSurface`!"
+                        .into(),
+                ))
+            },
+            |z_data| Ok(DVector::from(z_data.column(0))),
+        )?;
+        // let (x, y): (Vec<f64>, Vec<f64>) = voronoi.get_voronoi_diagram().sites.iter().cloned().map(|p| (p.x, p.y)).unzip();
+        let triangles = voronoi.get_voronoi_diagram().delaunay.triangles.clone();
+        let mut filtered_triangles = Vec::<usize>::with_capacity(triangles.len());
+        let triangle_idx = Matrix3xX::from_vec(triangles).transpose();
+        let len_dat = xyz_dat.shape().0;
+        for row in triangle_idx.row_iter() {
+            if row[0] < len_dat && row[1] < len_dat && row[2] < len_dat {
+                filtered_triangles.push(row[0]);
+                filtered_triangles.push(row[1]);
+                filtered_triangles.push(row[2]);
+            }
+        }
+        let triangle_idx_filtered = Matrix3xX::from_vec(filtered_triangles).transpose();
+        let xyz_dat = MatrixXx3::from_columns(&[
+            xyz_dat.column(0),
+            xyz_dat.column(1),
+            z_data.rows(0, len_dat),
+        ]);
+
+        Ok(Self::TriangulatedSurface {
+            triangle_idx: triangle_idx_filtered,
+            xyz_dat,
+        })
+    }
+}
+
+impl PlotData {
     /// Gets the minimum and maximum values of all axes
     /// # Returns
-    /// This method returns a vector of axes limits [`Vec<AxLims>`]
+    /// This method returns a vector of tuples [`Vec<Option<(f64, f64)>>`], where the tuple contains (min, max) if these values could be determined and None if not
     #[must_use]
-    pub fn get_axes_min_max_ranges(&self) -> Vec<AxLims> {
+    pub fn get_axes_min_max_values(&self) -> Vec<Option<(f64, f64)>> {
         match self {
-            Self::Dim2(dat) => vec![
-                self.get_min_max_data_values(&dat.column(0)),
-                self.get_min_max_data_values(&dat.column(1)),
+            Self::Dim2 { xy_data } => vec![
+                get_min_max_filter_nonfinite(xy_data.column(0).into()),
+                get_min_max_filter_nonfinite(xy_data.column(1).into()),
             ],
-            Self::Dim3(dat)
-            | Self::ColorTriangulated(_, _, dat)
-            | Self::TriangulatedSurface(_, dat) => vec![
-                self.get_min_max_data_values(&dat.column(0)),
-                self.get_min_max_data_values(&dat.column(1)),
-                self.get_min_max_data_values(&dat.column(2)),
+            Self::Dim3 { xyz_data: xyz_dat } | Self::TriangulatedSurface { xyz_dat, .. } => vec![
+                get_min_max_filter_nonfinite(xyz_dat.column(0).into()),
+                get_min_max_filter_nonfinite(xyz_dat.column(1).into()),
+                get_min_max_filter_nonfinite(xyz_dat.column(2).into()),
             ],
-            Self::ColorMesh(x, y, z) => {
-                let z_flat = DVector::from_vec(z.into_iter().copied().collect::<Vec<f64>>());
+            Self::ColorMesh {
+                x_dat_n,
+                y_dat_m,
+                z_dat_nxm,
+            } => {
+                let z_flat =
+                    DVector::from_vec(z_dat_nxm.into_iter().copied().collect::<Vec<f64>>());
                 vec![
-                    self.get_min_max_data_values(&DVectorSlice::from(x)),
-                    self.get_min_max_data_values(&DVectorSlice::from(y)),
-                    self.get_min_max_data_values(&z_flat.column(0)),
+                    get_min_max_filter_nonfinite(DVectorSlice::from(x_dat_n).into()),
+                    get_min_max_filter_nonfinite(DVectorSlice::from(y_dat_m).into()),
+                    get_min_max_filter_nonfinite(z_flat.column(0).into()),
                 ]
             }
-            Self::MultiDim3(dat) => {
-                let num_cols = dat[0].row(0).len();
-                let mut min_max = MatrixXx3::zeros(dat.len() * 2);
-                for (row, d) in dat.iter().enumerate() {
+            Self::MultiDim3 { vec_of_xyz_data } => {
+                let num_cols = vec_of_xyz_data[0].row(0).len();
+                let mut max = vec![f64::NEG_INFINITY; num_cols];
+                let mut min = vec![f64::INFINITY; num_cols];
+                for d in vec_of_xyz_data {
                     for col in 0..num_cols {
-                        let axlim = self.get_min_max_data_values(&d.column(col));
-                        min_max[(2 * row, col)] = axlim.min;
-                        min_max[(2 * row + 1, col)] = axlim.max;
+                        if let Some((ax_min, ax_max)) =
+                            get_min_max_filter_nonfinite(d.column(col).into())
+                        {
+                            min[col] = min[col].min(ax_min);
+                            max[col] = max[col].max(ax_max);
+                        }
                     }
                 }
 
-                let mut ax_lim_vec = Vec::<AxLims>::new();
+                let mut ax_lim_vec = Vec::<Option<(f64, f64)>>::with_capacity(num_cols);
                 for col in 0..num_cols {
-                    ax_lim_vec.push(self.get_min_max_data_values(&min_max.column(col)));
+                    if !min[col].is_finite() || !max[col].is_finite() {
+                        ax_lim_vec.push(None);
+                    } else {
+                        ax_lim_vec.push(Some((min[col], max[col])));
+                    }
                 }
                 ax_lim_vec
             }
 
-            Self::MultiDim2(dat) => {
-                let num_cols = dat[0].row(0).len();
-                let mut min_max = MatrixXx2::zeros(dat.len() * 2);
-                for (row, d) in dat.iter().enumerate() {
+            Self::MultiDim2 { vec_of_xy_data } => {
+                let num_cols = vec_of_xy_data[0].row(0).len();
+                let mut max = vec![f64::NEG_INFINITY; num_cols];
+                let mut min = vec![f64::INFINITY; num_cols];
+                for d in vec_of_xy_data {
                     for col in 0..num_cols {
-                        let axlim = self.get_min_max_data_values(&d.column(col));
-                        min_max[(2 * row, col)] = axlim.min;
-                        min_max[(2 * row + 1, col)] = axlim.max;
+                        if let Some((ax_min, ax_max)) =
+                            get_min_max_filter_nonfinite(d.column(col).into())
+                        {
+                            min[col] = min[col].min(ax_min);
+                            max[col] = max[col].max(ax_max);
+                        }
                     }
                 }
 
-                let mut ax_lim_vec = Vec::<AxLims>::new();
+                let mut ax_lim_vec = Vec::<Option<(f64, f64)>>::with_capacity(num_cols);
                 for col in 0..num_cols {
-                    ax_lim_vec.push(self.get_min_max_data_values(&min_max.column(col)));
+                    if !min[col].is_finite() || !max[col].is_finite() {
+                        ax_lim_vec.push(None);
+                    } else {
+                        ax_lim_vec.push(Some((min[col], max[col])));
+                    }
                 }
                 ax_lim_vec
             }
         }
     }
-
-    // /// This method filters out all NaN and infinite values
-    // /// # Attributes
-    // /// - `ax_vals`: dynamically sized vector slice of the data vector on this axis
-    // /// # Returns
-    // /// This method returns an array containing only the non-NaN and finite entries of the passed vector
-    // #[must_use]
-    // pub fn filter_nan_infinite(ax_vals: &DVectorSlice<'_, f64>) -> MatrixXx1<f64> {
-    //     MatrixXx1::from(
-    //         ax_vals
-    //             .iter()
-    //             .copied()
-    //             .filter(|x| x.is_finite())
-    //             .collect::<Vec<f64>>(),
-    //     )
-    // }
 
     /// Defines the plot-axes bounds of this [`PlotData`].
     /// # Attributes
@@ -769,20 +996,30 @@ impl PlotData {
     /// # Panics
     /// This function panics if the `expand_lims` function fails. As this only happens for a non-normal number this cannnot happen here.
     #[must_use]
-    fn define_data_based_axes_bounds(&self, expand_flag: bool) -> Vec<AxLims> {
-        let mut ax_lims = self.get_axes_min_max_ranges();
-
+    fn define_data_based_axes_bounds(&self, expand_flag: bool) -> PlotBounds {
+        let ax_min_max_vals = self.get_axes_min_max_values();
+        let mut axlims = Vec::<Option<AxLims>>::with_capacity(ax_min_max_vals.len());
         //check if the limits are useful for visualization
-        for axlim in &mut ax_lims {
-            axlim.make_plot_axlims_useful();
+        for min_max_vals_opt in &ax_min_max_vals {
+            if let Some((min, max)) = min_max_vals_opt {
+                axlims.push(AxLims::create_useful_axlims(*min, *max));
+            } else {
+                axlims.push(AxLims::new(0., 1.));
+            }
         }
 
         if expand_flag {
-            for ax_lim in &mut ax_lims {
-                ax_lim.expand_lims(0.1).unwrap();
+            for axlim in axlims.iter_mut().flatten() {
+                axlim.expand_lims(0.1).unwrap();
             }
         };
-        ax_lims
+
+        let mut axlim_opt = [None; 3];
+        for (i, lim) in axlims.iter().enumerate() {
+            axlim_opt[i] = *lim;
+        }
+
+        PlotBounds::new(axlim_opt[0], axlim_opt[1], axlim_opt[2])
     }
 }
 
@@ -795,22 +1032,41 @@ pub struct AxLims {
     pub max: f64,
 }
 
+impl TryFrom<Option<(f64, f64)>> for AxLims {
+    type Error = OpossumError;
+
+    fn try_from(value: Option<(f64, f64)>) -> OpmResult<Self> {
+        if let Some((min, max)) = value {
+            Self::new(min, max).map_or_else(
+                || {
+                    Err(OpossumError::Other(format!(
+                        "Cannot create AxLim from values (min:{min}, max:{max})"
+                    )))
+                },
+                Ok,
+            )
+        } else {
+            Err(OpossumError::Other("Cannot create AxLim from None".into()))
+        }
+    }
+}
+
 impl AxLims {
     ///Creates a new [`AxLims`] struct
     /// # Attributes
     /// -`min`: minimum value of the ax limit
     /// -`max`: maximum value of the ax limit
     ///
-    /// # Errors
-    /// This function errors if the chosen minimum or maximum valus is NaN or infinite
-    pub fn new(min: f64, max: f64) -> OpmResult<Self> {
+    /// # Returns
+    /// This function retuns Some([`AxLims`]) or None if the chosen minimum or maximum valus is NaN or infinite
+    #[must_use]
+    pub fn new(min: f64, max: f64) -> Option<Self> {
         let axlim = Self { min, max };
         if axlim.check_validity() {
-            Ok(axlim)
+            Some(axlim)
         } else {
-            Err(OpossumError::Other(
-                "Invalid ax limit! Must be finite, not NaN, not equal and min must be smaller than max!".into(),
-            ))
+            warn!("Invalid ax limit! Must be finite, not NaN, not equal and min must be smaller than max! AxLimit is set to None!");
+            None
         }
     }
 
@@ -842,41 +1098,72 @@ impl AxLims {
         }
     }
 
-    /// This function checks if the prrovided axis limits are useful in terms of visualization.
-    /// If min and max are approximately equal, the range ist set to the maximum value and the minimum value is set to 0
-    /// if the maximum is zero AND approximately equal to the minimum, then it is set to 1 and the minimum to zero to avoid awkward ax scalings
+    /// This function creates an [`AxLims`] struct from the provided `min` and `max` values
     /// # Attributes
-    /// - `axlims`: provided axes limits [`AxLims`]
-    /// #  Returns
-    /// This function returns an [`AxLims`]
-    pub fn make_plot_axlims_useful(&mut self) {
-        let mut ax_range = self.max - self.min;
+    /// - `min`: minimum value for the ax limit
+    /// - `max`: maximum value for the ax limit
+    /// # Returns
+    /// If the minimum and maximum value are chosen such that min < max and both finite, the function returns Some([`AxLims`]) with these limits
+    /// If these criteria are not fulfilled, the values are changed accordingly to provide valid axlims. If for some reason, these values are still no okay, teh function returns None
+    #[must_use]
+    pub fn create_useful_axlims(min_in: f64, max_in: f64) -> Option<Self> {
+        let min = if min_in.is_finite() { min_in } else { 0. };
+        let max: f64 = if max_in.is_finite() { max_in } else { 0. };
+
+        let (mut min, mut max) = if max < min { (max, min) } else { (min, max) };
+
+        let mut ax_range = max - min;
 
         //check if minimum and maximum values are approximately equal. if so, take the max value as range
-        if self.max.relative_eq(&self.min, f64::EPSILON, f64::EPSILON) {
-            ax_range = self.max;
-            self.min = 0.;
+        if max.relative_eq(&min, f64::EPSILON, f64::EPSILON) {
+            ax_range = max;
+            min = 0.;
         };
 
         //check if for some reason maximum is 0, then set it to 1, so that the axis spans at least some distance
         if ax_range < f64::EPSILON {
-            self.max = 1.;
-            self.min = 0.;
+            max = 1.;
+            min = 0.;
         };
+
+        Self::new(min, max)
+    }
+
+    /// Joins the minimum and maximum values of this [`AxLims`] struct with another [`AxLims`] struct, such that the maximum and minimum of both structs are used
+    /// # Attributes
+    /// - `ax_lim`: [`AxLims`] struct to integrate
+    pub fn join(&mut self, ax_lim: Self) {
+        if self.min > ax_lim.min {
+            self.min = ax_lim.min;
+        }
+
+        if self.max < ax_lim.max {
+            self.max = ax_lim.max;
+        }
+    }
+
+    /// Joins the minimum and maximum values of this [`AxLims`] struct with an [`AxLims`] struct Option, such that the maximum and minimum of both structs are used
+    /// Convenience function to join plotbounds
+    /// # Attributes
+    /// - `ax_lim_opt`: [`AxLims`] struct Option to join
+    pub fn join_opt(&mut self, ax_lim_opt: Option<Self>) {
+        if let Some(ax_lim) = ax_lim_opt {
+            self.join(ax_lim);
+        }
     }
 }
 
 /// Trait for adding the possibility to generate a (x/y) plot of an element.
 pub trait Plottable {
-    /// This method must be implemented in order to retrieve the plot data.
+    /// This method must be implemented in order to retrieve the plot data, plot color and data label.
     /// As the plot data may differ, the implementation must be done for each kind of plot type [`PlotType`]
     /// # Attributes
     /// - `plt_type`: plot type to be used. See [`PlotType`]
     /// # Returns
-    /// This method returns an [`OpmResult<Option<PlotData>>`]. Whether Some(PlotData) or None is returned depends on the individual implementation
+    /// This method returns an [`OpmResult<Option<PlotSeries>>`]. Whether Some(PlotData) or None is returned depends on the individual implementation
     /// # Errors
     /// Whether an error is thrown depends on the individual implementation of the method
-    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>>;
+    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>>;
 
     /// This method handles the plot creation for a specific data type or node type
     /// # Attributes
@@ -907,9 +1194,9 @@ pub trait Plottable {
 
         let plt_type = self.get_plot_type(&plt_params);
 
-        let plt_data_opt = self.get_plot_data(&plt_type)?;
+        let plt_series_opt = self.get_plot_series(&plt_type)?;
 
-        plt_data_opt.map_or(Ok(None), |plt_dat| plt_type.plot(&plt_dat))
+        plt_series_opt.map_or(Ok(None), |plt_series| plt_type.plot(&plt_series))
     }
 
     /// This method must be implemented in order to create a plot.
@@ -925,114 +1212,6 @@ pub trait Plottable {
     /// # Returns
     /// This method returns the [`PlotType`] of this [`Plot`]
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType;
-
-    /// This method triangulates [`PlotData`] of the variant Dim3,
-    /// # Attributes
-    /// - `plt_dat`: plot data
-    /// # Returns
-    /// This method returns [`Option<PlotData>`]. It is None if the [`PlotData`] Variant is not Dim3
-    fn triangulate_plot_data(&self, plt_dat: &PlotData, plt_type: &PlotType) -> Option<PlotData> {
-        if let PlotData::Dim3(dat) = plt_dat {
-            let points: Vec<Point> = dat
-                .row_iter()
-                .map(|c| Point { x: c[0], y: c[1] })
-                .collect::<Vec<Point>>();
-            let tri_index_mat = Matrix3xX::from_vec(triangulate(&points).triangles).transpose();
-
-            if let PlotType::ColorTriangulated(_) = plt_type {
-                let mut triangle_centroid_z = DVector::<f64>::zeros(tri_index_mat.column(0).len());
-
-                for (c, t) in izip!(tri_index_mat.row_iter(), triangle_centroid_z.iter_mut()) {
-                    *t = (dat[(c[0], 2)] + dat[(c[1], 2)] + dat[(c[2], 2)]) / 3.;
-                }
-                Some(PlotData::ColorTriangulated(
-                    tri_index_mat,
-                    triangle_centroid_z,
-                    dat.clone(),
-                ))
-            } else {
-                Some(PlotData::TriangulatedSurface(tri_index_mat, dat.clone()))
-            }
-        } else {
-            None
-        }
-    }
-
-    /// This method bins 2d scatter data to a regularly gridded mesh
-    /// # Attributes
-    /// - `plt_dat`: plot data
-    /// # Returns
-    /// This method returns [`Option<PlotData>`]. It is None if the [`PlotData`] Variant is not Dim3
-    fn bin_2d_scatter_data(&self, plt_dat: &PlotData) -> Option<PlotData> {
-        if let PlotData::Dim3(dat) = plt_dat {
-            let ax_lims = plt_dat.get_axes_min_max_ranges();
-            let mut x_ax_lims = ax_lims[0];
-            let mut y_ax_lims = ax_lims[1];
-
-            let num_entries = dat.column(0).len();
-            let mut num = f64::sqrt((num_entries / 2).to_f64().unwrap()).floor();
-
-            if (num % 2.).relative_eq(&0., f64::EPSILON, f64::EPSILON) {
-                num += 1.;
-            }
-
-            let xbin = (x_ax_lims.max - x_ax_lims.min) / (num - 1.0);
-            let ybin = (y_ax_lims.max - y_ax_lims.min) / (num - 1.0);
-
-            let x = linspace(x_ax_lims.min - xbin / 2., x_ax_lims.max + xbin / 2., num).unwrap();
-            let y = linspace(y_ax_lims.min - ybin / 2., y_ax_lims.max + ybin / 2., num).unwrap();
-
-            let xbin = x[1] - x[0];
-            let ybin = y[1] - y[0];
-            x_ax_lims.min = x.min();
-            y_ax_lims.min = y.min();
-
-            let mut zz = DMatrix::<f64>::zeros(x.len(), y.len());
-            // xx.clone() * 0.;
-            let mut zz_counter = DMatrix::<f64>::zeros(x.len(), y.len()); //xx.clone() * 0.;
-
-            for row in dat.row_iter() {
-                let x_index = ((row[(0, 0)] - x_ax_lims.min + xbin / 2.) / xbin).to_usize();
-                let y_index = ((row[(0, 1)] - y_ax_lims.min + ybin / 2.) / ybin).to_usize();
-                if x_index.is_some() && y_index.is_some() {
-                    let x_index = x_index.unwrap();
-                    let y_index = y_index.unwrap();
-                    zz[(y_index, x_index)] += row[(0, 2)];
-                    zz_counter[(y_index, x_index)] += 1.;
-                }
-            }
-            for (z, z_count) in izip!(zz.iter_mut(), zz_counter.iter()) {
-                if *z_count > 0.5 {
-                    *z /= *z_count;
-                }
-            }
-
-            Some(PlotData::ColorMesh(x, y, zz))
-        } else {
-            None
-        }
-    }
-
-    /// This method bins or triangulates a set of [`PlotData`]
-    /// # Attributes
-    /// - `plt_type`: [`PlotType`] of the plot
-    /// - `plt_data`: [`PlotData`] of the plot
-    ///
-    /// # Returns
-    /// This method returns a Some([`PlotData`]) for the `ColorMesh`, `ColorTriangulated` and `TriangulatedSurface` [`PlotType`] variants. It Returns None for all other variants
-    fn bin_or_triangulate_data(
-        &self,
-        plt_type: &PlotType,
-        plt_data: &PlotData,
-    ) -> Option<PlotData> {
-        match plt_type {
-            PlotType::ColorMesh(_) => self.bin_2d_scatter_data(plt_data),
-            PlotType::TriangulatedSurface(_) | PlotType::ColorTriangulated(_) => {
-                self.triangulate_plot_data(plt_data, plt_type)
-            }
-            _ => None,
-        }
-    }
 }
 
 ///Enum to describe which type of plotting backend should be used
@@ -1052,6 +1231,7 @@ pub enum PltBackEnd {
 pub struct CGradient {
     gradient: Gradient,
 }
+
 impl CGradient {
     /// Returns the gradient of this [`CGradient`].
     #[must_use]
@@ -1167,6 +1347,7 @@ impl ColorBar {
 }
 
 impl Default for ColorBar {
+    /// Creates a new [`ColorBar`] struct with default values
     #[must_use]
     fn default() -> Self {
         Self {
@@ -1178,11 +1359,58 @@ impl Default for ColorBar {
 
 /// Struct to hold the plot boundaries of the plot in the x, y, z axes.
 /// The values may also be None. Then, reasonable boundaries are chosen automatically
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct PlotBounds {
     x: Option<AxLims>,
     y: Option<AxLims>,
     z: Option<AxLims>,
+}
+
+impl PlotBounds {
+    /// Creates a new [`PlotBounds`] struct
+    #[must_use]
+    pub const fn new(x: Option<AxLims>, y: Option<AxLims>, z: Option<AxLims>) -> Self {
+        Self { x, y, z }
+    }
+
+    /// Joins another [`PlotBounds`] struct into the existing one by setting the corresponding minimum or maximum values of the axis to the new max or new min
+    /// # Attributes
+    /// - `plot_bounds`: [`PlotBounds`] struct to integrate
+    pub fn join(&mut self, plot_bounds: &Self) {
+        if let Some(x_bounds) = &mut self.x {
+            x_bounds.join_opt(plot_bounds.x);
+        } else {
+            self.x = plot_bounds.x;
+        }
+        if let Some(y_bounds) = &mut self.y {
+            y_bounds.join_opt(plot_bounds.y);
+        } else {
+            self.y = plot_bounds.y;
+        }
+        if let Some(z_bounds) = &mut self.z {
+            z_bounds.join_opt(plot_bounds.z);
+        } else {
+            self.z = plot_bounds.z;
+        }
+    }
+
+    /// Returns the x boundary values of these [`PlotBounds`]
+    #[must_use]
+    pub const fn get_x_bounds(&self) -> Option<AxLims> {
+        self.x
+    }
+
+    /// Returns the y boundary values of these [`PlotBounds`]
+    #[must_use]
+    pub const fn get_y_bounds(&self) -> Option<AxLims> {
+        self.y
+    }
+
+    /// Returns the z boundary values of these [`PlotBounds`]
+    #[must_use]
+    pub const fn get_z_bounds(&self) -> Option<AxLims> {
+        self.z
+    }
 }
 
 /// Holds all necessary plot parameters in a Hashmap that contains a String-key and an [`PlotArgs`] argument.
@@ -1244,9 +1472,6 @@ impl Default for PlotParameters {
                 PlotArgs::ZLim(_) => plt_params.set(&PlotArgs::ZLim(None)).unwrap(),
                 PlotArgs::CMap(_) => plt_params
                     .set(&PlotArgs::CMap(CGradient::default()))
-                    .unwrap(),
-                PlotArgs::Color(_) => plt_params
-                    .set(&PlotArgs::Color(RGBAColor(255, 0, 0, 1.)))
                     .unwrap(),
                 PlotArgs::FName(_) => {
                     let (_, fname) = Self::create_unused_filename_dir();
@@ -1361,19 +1586,6 @@ impl PlotParameters {
             Ok(*x_label_pos)
         } else {
             Err(OpossumError::Other("xlabelpos argument not found!".into()))
-        }
-    }
-
-    ///This method gets the [`RGBAColor`] which is stored in the [`PlotParameters`]
-    /// # Returns
-    /// This method returns an [`OpmResult<RGBAColor>`] containing the color information
-    /// # Errors
-    /// This method throws an error if the argument is not found
-    pub fn get_color(&self) -> OpmResult<RGBAColor> {
-        if let Some(PlotArgs::Color(c)) = self.params.get("color") {
-            Ok(*c)
-        } else {
-            Err(OpossumError::Other("color argument not found!".into()))
         }
     }
 
@@ -1580,7 +1792,6 @@ impl PlotParameters {
             PlotArgs::YLabel(_) => "ylabel".to_owned(),
             PlotArgs::XLabelPos(_) => "xlabelpos".to_owned(),
             PlotArgs::YLabelPos(_) => "ylabelpos".to_owned(),
-            PlotArgs::Color(_) => "color".to_owned(),
             PlotArgs::CMap(_) => "cmap".to_owned(),
             PlotArgs::XLim(_) => "xlim".to_owned(),
             PlotArgs::YLim(_) => "ylim".to_owned(),
@@ -1664,7 +1875,6 @@ impl PlotParameters {
             PlotArgs::YLabel(_) => self.params.insert("ylabel".to_owned(), plt_arg.clone()),
             PlotArgs::XLabelPos(_) => self.params.insert("xlabelpos".to_owned(), plt_arg.clone()),
             PlotArgs::YLabelPos(_) => self.params.insert("ylabelpos".to_owned(), plt_arg.clone()),
-            PlotArgs::Color(_) => self.params.insert("color".to_owned(), plt_arg.clone()),
             PlotArgs::CMap(_) => self.params.insert("cmap".to_owned(), plt_arg.clone()),
             PlotArgs::XLim(_) => self.params.insert("xlim".to_owned(), plt_arg.clone()),
             PlotArgs::YLim(_) => self.params.insert("ylim".to_owned(), plt_arg.clone()),
@@ -1681,66 +1891,144 @@ impl PlotParameters {
     }
 }
 
+/// Struct that holds all necessary attributes to describe a plot series
+#[derive(Clone)]
+pub struct PlotSeries {
+    data: PlotData,
+    color: RGBAColor,
+    series_label: Option<String>,
+}
+
+impl PlotSeries {
+    #[must_use]
+    /// creates a new [`PlotSeries`]
+    /// # Attributes
+    /// - `data`: reference to a [`PlotData`] enum variant
+    /// - `color`: [`RGBAColor`] of the series
+    /// - `series_label`: optional label of this [`PlotSeries`]. Will be shown in a legend, if provided
+    /// # Returns
+    /// This function returns a [`PlotSeries`] struct
+    pub fn new(data: &PlotData, color: RGBAColor, series_label: Option<String>) -> Self {
+        Self {
+            data: data.clone(),
+            color,
+            series_label,
+        }
+    }
+
+    /// Sets the color of this [`PlotSeries`]
+    pub fn set_series_color(&mut self, color: RGBAColor) {
+        self.color = color;
+    }
+    /// gets the color of this [`PlotSeries`]
+    #[must_use]
+    pub const fn get_series_color(&self) -> &RGBAColor {
+        &self.color
+    }
+
+    /// Sets the series label of this [`PlotSeries`]
+    pub fn set_series_label(&mut self, label: String) {
+        self.series_label = Some(label);
+    }
+    /// gets the series label of this [`PlotSeries`]
+    #[must_use]
+    pub fn get_series_label(&self) -> Option<String> {
+        self.series_label.clone()
+    }
+
+    /// Sets the data of this [`PlotSeries`]
+    pub fn set_plot_series_data(&mut self, data: &PlotData) {
+        self.data = data.clone();
+    }
+    /// gets the data of this [`PlotSeries`]
+    #[must_use]
+    pub const fn get_plot_series_data(&self) -> &PlotData {
+        &self.data
+    }
+
+    /// defines the axis bouns of this [`PlotSeries`].
+    /// Basically just wraps the same function for the plot data
+    #[must_use]
+    pub fn define_data_based_axes_bounds(&self, expand_flag: bool) -> PlotBounds {
+        self.get_plot_series_data()
+            .define_data_based_axes_bounds(expand_flag)
+    }
+}
+
 /// Struct that holds all necessary attributes to create a plot, such as [`PlotData`], [`PlotBounds`] etc
 #[derive(Clone)]
 pub struct Plot {
     label: [LabelDescription; 2],
     cbar: ColorBar,
-    color: RGBAColor,
-    data: Option<PlotData>,
     bounds: PlotBounds,
     img_size: (u32, u32),
+    plot_series: Option<Vec<PlotSeries>>,
 }
 
 impl Plot {
     /// creates a new [`Plot`]
     /// # Attributes
-    /// - reference to a [`PlotData`]
-    /// - reference to [`PlotParameters`]
+    /// - `plt_series`: reference to a [`PlotSeries`]
+    /// - `plt_params`: reference to [`PlotParameters`]
     /// # Returns
     /// This function returns a [`Plot`] struct
     /// # Panics
     /// This method panics if the [`Plot`] can not be created from [`PlotParameters`]
     #[must_use]
-    pub fn new(plt_data: &PlotData, plt_params: &PlotParameters) -> Self {
+    pub fn new(plt_series: &Vec<PlotSeries>, plt_params: &PlotParameters) -> Self {
         let mut plot = Self::try_from(plt_params).unwrap();
-        plot.set_data(plt_data.clone());
+        plot.add_plot_series(plt_series, true);
 
         plot
     }
 
-    /// Sets the [`PlotData`] of this [`Plot`]
-    pub fn set_data(&mut self, data: PlotData) {
-        self.data = Some(data);
+    /// Adds another [`PlotSeries`] to the [`Plot`] struct
+    /// # Attributes
+    /// - `plt_series_vec`: Vector of [`PlotSeries`] structs that should be added
+    /// - `define_bounds`: flag to define if the plot boundaries should be updated according to the new plots series data. true to re-evaluate, false otherwise
+    pub fn add_plot_series(&mut self, plt_series_vec: &Vec<PlotSeries>, join_bounds: bool) {
+        if let Some(stored_plt_series) = &mut self.plot_series {
+            for plt_series in plt_series_vec {
+                stored_plt_series.push(plt_series.clone());
+            }
+        } else {
+            self.plot_series = Some(plt_series_vec.clone());
+        }
+
+        if join_bounds {
+            let bounds = &mut self.bounds;
+            for plt_series in plt_series_vec {
+                bounds.join(&plt_series.define_data_based_axes_bounds(false));
+            }
+        }
     }
 
-    /// Returns a reference to the [`PlotData`] of this [`Plot`]
+    /// Returns a reference to the vector of [`PlotSeries`] of this [`Plot`]
     #[must_use]
-    pub const fn get_data(&self) -> Option<&PlotData> {
-        self.data.as_ref()
+    pub const fn get_plot_series_vec(&self) -> Option<&Vec<PlotSeries>> {
+        self.plot_series.as_ref()
     }
 
     /// Defines the axes bounds of this [`Plot`] if the limit is not already defined by the initial [`PlotParameters`].
     ///
     /// # Errors
-    /// - if the [`PlotData`] variant is not defined
-    /// - if the [`PlotData`] is None
-    pub fn define_axes_bounds(&mut self) -> OpmResult<()> {
-        if let Some(dat) = &self.data {
-            let axes_limits = dat.define_data_based_axes_bounds(false);
-
-            if self.bounds.x.is_none() {
-                self.bounds.x = Some(axes_limits[0]);
+    /// - if `define_data_based_axes_bounds` fails
+    ///
+    /// # Warns
+    /// - if `plot_series` is empty
+    /// - if `self.plot_series` is None
+    pub fn define_axes_bounds(&mut self) {
+        if let Some(plot_series) = &self.plot_series {
+            if plot_series.is_empty() {
+                warn!("No plot series defined! Cannot define axes bounds!");
+            } else {
+                for plt_series in plot_series {
+                    self.bounds
+                        .join(&plt_series.define_data_based_axes_bounds(false));
+                }
             }
-            if self.bounds.y.is_none() {
-                self.bounds.y = Some(axes_limits[1]);
-            }
-            if axes_limits.len() == 3 && self.bounds.z.is_none() {
-                self.bounds.z = Some(axes_limits[2]);
-            }
-            Ok(())
         } else {
-            Err(OpossumError::Other("No plot data defined!".into()))
+            warn!("No plot series defined! Cannot define axes bounds!");
         }
     }
 }
@@ -1751,7 +2039,6 @@ impl TryFrom<&PlotParameters> for Plot {
         let cmap_gradient = plt_params.get_cmap()?;
         let cbar_label_str = plt_params.get_cbar_label()?;
         let cbar_label_pos = plt_params.get_cbar_label_pos()?;
-        let color = plt_params.get_color()?;
         let fig_size = plt_params.get_figsize()?;
         let x_lim = plt_params.get_xlim()?;
         let y_lim = plt_params.get_ylim()?;
@@ -1770,20 +2057,13 @@ impl TryFrom<&PlotParameters> for Plot {
             label: cbarlabel,
         };
 
-        let plt_info = Self {
+        Ok(Self {
             label: [x_label, y_label],
             cbar,
-            color,
-            data: None,
-            bounds: PlotBounds {
-                x: x_lim,
-                y: y_lim,
-                z: z_lim,
-            },
+            plot_series: None,
+            bounds: PlotBounds::new(x_lim, y_lim, z_lim),
             img_size: fig_size,
-        };
-
-        Ok(plt_info)
+        })
     }
 }
 
@@ -1798,8 +2078,6 @@ pub enum PlotArgs {
     XLabelPos(LabelPos),
     ///Position of the y label. Holds a [`LabelPos`] enum
     YLabelPos(LabelPos),
-    ///Color of the Data Points. Holds an [`RGBAColor`] as defined in plotters
-    Color(RGBAColor),
     ///Colormap of the Data Points. Holds a [`CGradient`] struct
     CMap(CGradient),
     ///Label of the colorbar. Holds a String
@@ -1824,9 +2102,244 @@ pub enum PlotArgs {
 
 #[cfg(test)]
 mod test {
-    use tempfile::NamedTempFile;
-
     use super::*;
+    use approx::assert_relative_eq;
+    use log::Level;
+    use tempfile::NamedTempFile;
+    #[test]
+    fn add_plot_series() {
+        let mut plt = Plot::try_from(&PlotParameters::default()).unwrap();
+        let data1 = &PlotData::Dim2 {
+            xy_data: MatrixXx2::from_vec(vec![0., 1., 2., 3., 4., 5.]),
+        };
+        let data2 = &PlotData::Dim2 {
+            xy_data: MatrixXx2::from_vec(vec![4., 5., 6., -10., 8., 10.]),
+        };
+        let data3 = &PlotData::Dim2 {
+            xy_data: MatrixXx2::from_vec(vec![4., 5., 6., -1., 8., 9.]),
+        };
+        let plt_series1 = PlotSeries::new(
+            data1,
+            RGBAColor(255, 0, 0, 1.),
+            Some("series_label1".to_owned()),
+        );
+        let plt_series2 = PlotSeries::new(data2, RGBAColor(0, 255, 0, 1.), None);
+        let plt_series3 = PlotSeries::new(data3, RGBAColor(0, 0, 255, 1.), None);
+
+        plt.add_plot_series(&vec![plt_series1], true);
+
+        let x_bounds = plt.bounds.get_x_bounds().unwrap();
+        let y_bounds = plt.bounds.get_y_bounds().unwrap();
+        let z_bounds = plt.bounds.get_z_bounds();
+
+        assert_relative_eq!(x_bounds.min, 0.);
+        assert_relative_eq!(x_bounds.max, 2.);
+        assert_relative_eq!(y_bounds.min, 3.);
+        assert_relative_eq!(y_bounds.max, 5.);
+
+        assert!(z_bounds.is_none());
+
+        let plt_series_vec = plt.get_plot_series_vec();
+        assert!(plt_series_vec.is_some());
+
+        let plt_series_vec = plt_series_vec.unwrap();
+        if let PlotData::Dim2 { xy_data } = &plt_series_vec[0].data {
+            let datx = DVector::from_vec(vec![0., 1., 2.]);
+            assert_relative_eq!(xy_data.column(0), DVectorSlice::from(datx.as_slice()));
+            let daty = DVector::from_vec(vec![3., 4., 5.]);
+            assert_relative_eq!(xy_data.column(1), DVectorSlice::from(daty.as_slice()));
+        }
+
+        assert_eq!(
+            RGBAColor(255, 0, 0, 1.),
+            *plt_series_vec[0].get_series_color()
+        );
+        assert_eq!(
+            "series_label1".to_owned(),
+            plt_series_vec[0].get_series_label().unwrap()
+        );
+
+        plt.add_plot_series(&vec![plt_series2], false);
+        let x_bounds = plt.bounds.get_x_bounds().unwrap();
+        let y_bounds = plt.bounds.get_y_bounds().unwrap();
+
+        assert_relative_eq!(x_bounds.min, 0.);
+        assert_relative_eq!(x_bounds.max, 2.);
+        assert_relative_eq!(y_bounds.min, 3.);
+        assert_relative_eq!(y_bounds.max, 5.);
+
+        plt.add_plot_series(&vec![plt_series3], true);
+        let x_bounds = plt.bounds.get_x_bounds().unwrap();
+        let y_bounds = plt.bounds.get_y_bounds().unwrap();
+
+        assert_relative_eq!(x_bounds.min, 0.);
+        assert_relative_eq!(x_bounds.max, 6.);
+        assert_relative_eq!(y_bounds.min, -1.);
+        assert_relative_eq!(y_bounds.max, 9.);
+
+        let plt_series_vec = plt.get_plot_series_vec().unwrap();
+
+        assert_eq!(
+            RGBAColor(0, 255, 0, 1.),
+            *plt_series_vec[1].get_series_color()
+        );
+        assert!(plt_series_vec[1].get_series_label().is_none());
+
+        assert_eq!(
+            RGBAColor(0, 0, 255, 1.),
+            *plt_series_vec[2].get_series_color()
+        );
+        assert!(plt_series_vec[2].get_series_label().is_none());
+    }
+    #[test]
+    fn join_axlims() {
+        let mut axlim1 = AxLims::new(0., 1.).unwrap();
+        let axlim2 = AxLims::new(-1., 2.).unwrap();
+        axlim1.join(axlim2);
+        assert_relative_eq!(axlim1.min, -1.);
+        assert_relative_eq!(axlim1.max, 2.);
+
+        let mut axlim1 = AxLims::new(0., 1.).unwrap();
+        let axlim2 = AxLims::new(0., 2.).unwrap();
+        axlim1.join(axlim2);
+        assert_relative_eq!(axlim1.min, 0.);
+        assert_relative_eq!(axlim1.max, 2.);
+
+        let mut axlim1 = AxLims::new(0., 1.).unwrap();
+        let axlim2 = AxLims::new(-10., 1.).unwrap();
+        axlim1.join(axlim2);
+        assert_relative_eq!(axlim1.min, -10.);
+        assert_relative_eq!(axlim1.max, 1.);
+    }
+    #[test]
+    fn join_opt_axlims() {
+        let mut axlim1 = AxLims::new(0., 1.).unwrap();
+        let axlim2 = AxLims::new(-1., 2.);
+        axlim1.join_opt(axlim2);
+        assert_relative_eq!(axlim1.min, -1.);
+        assert_relative_eq!(axlim1.max, 2.);
+
+        let mut axlim1 = AxLims::new(0., 1.).unwrap();
+        let axlim2 = AxLims::new(0., 2.);
+        axlim1.join_opt(axlim2);
+        assert_relative_eq!(axlim1.min, 0.);
+        assert_relative_eq!(axlim1.max, 2.);
+
+        let mut axlim1 = AxLims::new(0., 1.).unwrap();
+        let axlim2 = AxLims::new(-10., 1.);
+        axlim1.join_opt(axlim2);
+        assert_relative_eq!(axlim1.min, -10.);
+        assert_relative_eq!(axlim1.max, 1.);
+    }
+    #[test]
+    fn get_x_bounds() {
+        assert_eq!(PlotBounds::new(None, None, None).get_x_bounds(), None);
+        let x = PlotBounds::new(AxLims::new(0., 1.), None, None).get_x_bounds();
+        assert!(x.is_some());
+        assert_relative_eq!(x.unwrap().min, 0.);
+        assert_relative_eq!(x.unwrap().max, 1.);
+    }
+    #[test]
+    fn get_y_bounds() {
+        assert_eq!(PlotBounds::new(None, None, None).get_y_bounds(), None);
+        let y = PlotBounds::new(None, AxLims::new(0., 1.), None).get_y_bounds();
+        assert!(y.is_some());
+        assert_relative_eq!(y.unwrap().min, 0.);
+        assert_relative_eq!(y.unwrap().max, 1.);
+    }
+    #[test]
+    fn get_z_bounds() {
+        assert_eq!(PlotBounds::new(None, None, None).get_z_bounds(), None);
+        let z = PlotBounds::new(None, None, AxLims::new(0., 1.)).get_z_bounds();
+        assert!(z.is_some());
+        assert_relative_eq!(z.unwrap().min, 0.);
+        assert_relative_eq!(z.unwrap().max, 1.);
+    }
+    #[test]
+    fn new_plotbounds() {
+        let _ = PlotBounds::new(None, None, None);
+        let _ = PlotBounds::new(AxLims::new(0., 1.), None, None);
+        let _ = PlotBounds::new(AxLims::new(0., f64::NEG_INFINITY), None, None);
+        let _ = PlotBounds::new(AxLims::new(0., f64::INFINITY), None, None);
+        let _ = PlotBounds::new(AxLims::new(0., f64::NAN), None, None);
+
+        let _ = PlotBounds::new(None, AxLims::new(0., 1.), None);
+        let _ = PlotBounds::new(None, AxLims::new(0., f64::NEG_INFINITY), None);
+        let _ = PlotBounds::new(None, AxLims::new(0., f64::INFINITY), None);
+        let _ = PlotBounds::new(None, AxLims::new(0., f64::NAN), None);
+
+        let _ = PlotBounds::new(None, None, AxLims::new(0., 1.));
+        let _ = PlotBounds::new(None, None, AxLims::new(0., f64::NEG_INFINITY));
+        let _ = PlotBounds::new(None, None, AxLims::new(0., f64::INFINITY));
+        let _ = PlotBounds::new(None, None, AxLims::new(0., f64::NAN));
+    }
+
+    #[test]
+    fn default_plot_bounds() {
+        let plt_bounds = PlotBounds::default();
+        assert!(plt_bounds.x.is_none());
+        assert!(plt_bounds.y.is_none());
+        assert!(plt_bounds.z.is_none());
+    }
+    #[test]
+    fn join_plot_bounds_none() {
+        let mut plt_bounds = PlotBounds::new(
+            Some(AxLims::new(0., 1.).unwrap()),
+            Some(AxLims::new(0., 1.).unwrap()),
+            Some(AxLims::new(0., 1.).unwrap()),
+        );
+        let plt_bounds_default = PlotBounds::default();
+        plt_bounds.join(&plt_bounds_default);
+
+        assert_relative_eq!(plt_bounds.x.unwrap().min, 0.);
+        assert_relative_eq!(plt_bounds.x.unwrap().max, 1.);
+        assert_relative_eq!(plt_bounds.y.unwrap().min, 0.);
+        assert_relative_eq!(plt_bounds.y.unwrap().max, 1.);
+        assert_relative_eq!(plt_bounds.z.unwrap().min, 0.);
+        assert_relative_eq!(plt_bounds.z.unwrap().max, 1.);
+    }
+    #[test]
+    fn join_plot_bounds_larger_bounds() {
+        let mut plt_bounds1 = PlotBounds::new(
+            Some(AxLims::new(0., 1.).unwrap()),
+            Some(AxLims::new(0., 1.).unwrap()),
+            Some(AxLims::new(0., 1.).unwrap()),
+        );
+        let plt_bounds2 = PlotBounds::new(
+            Some(AxLims::new(-1., 2.).unwrap()),
+            Some(AxLims::new(-1., 2.).unwrap()),
+            Some(AxLims::new(-1., 2.).unwrap()),
+        );
+        plt_bounds1.join(&plt_bounds2);
+
+        assert_relative_eq!(plt_bounds1.x.unwrap().min, -1.);
+        assert_relative_eq!(plt_bounds1.x.unwrap().max, 2.);
+        assert_relative_eq!(plt_bounds1.y.unwrap().min, -1.);
+        assert_relative_eq!(plt_bounds1.y.unwrap().max, 2.);
+        assert_relative_eq!(plt_bounds1.z.unwrap().min, -1.);
+        assert_relative_eq!(plt_bounds1.z.unwrap().max, 2.);
+    }
+    #[test]
+    fn join_plot_bounds_smaller_bounds() {
+        let mut plt_bounds1 = PlotBounds::new(
+            Some(AxLims::new(0., 1.).unwrap()),
+            Some(AxLims::new(0., 1.).unwrap()),
+            Some(AxLims::new(0., 1.).unwrap()),
+        );
+        let plt_bounds2 = PlotBounds::new(
+            Some(AxLims::new(0.5, 2.).unwrap()),
+            Some(AxLims::new(0.5, 2.).unwrap()),
+            Some(AxLims::new(0.5, 2.).unwrap()),
+        );
+        plt_bounds1.join(&plt_bounds2);
+
+        assert_relative_eq!(plt_bounds1.x.unwrap().min, 0.);
+        assert_relative_eq!(plt_bounds1.x.unwrap().max, 2.);
+        assert_relative_eq!(plt_bounds1.y.unwrap().min, 0.);
+        assert_relative_eq!(plt_bounds1.y.unwrap().max, 2.);
+        assert_relative_eq!(plt_bounds1.z.unwrap().min, 0.);
+        assert_relative_eq!(plt_bounds1.z.unwrap().max, 2.);
+    }
     #[test]
     fn empty_plot_params() {
         let plt_params = PlotParameters::empty();
@@ -1841,7 +2354,6 @@ mod test {
         assert_eq!(plt_params.get_xlim().is_err(), true);
         assert_eq!(plt_params.get_ylim().is_err(), true);
         assert_eq!(plt_params.get_zlim().is_err(), true);
-        assert_eq!(plt_params.get_color().is_err(), true);
         assert_eq!(plt_params.get_fdir().is_err(), true);
         assert_eq!(plt_params.get_fname().is_err(), true);
         assert_eq!(plt_params.get_cmap().is_err(), true);
@@ -1860,7 +2372,6 @@ mod test {
         assert_eq!(plt_params.get_xlim().unwrap(), None);
         assert_eq!(plt_params.get_ylim().unwrap(), None);
         assert_eq!(plt_params.get_zlim().unwrap(), None);
-        assert_eq!(plt_params.get_color().unwrap(), RGBAColor(255, 0, 0, 1.));
         assert_eq!(
             format!("{:?}", plt_params.get_cmap().unwrap().get_gradient()),
             "Gradient(Turbo)".to_owned()
@@ -1985,18 +2496,6 @@ mod test {
         plt_params.set(&PlotArgs::ZLim(None)).unwrap();
         assert_eq!(plt_params.get_zlim().unwrap(), None);
     }
-
-    #[test]
-    fn plot_params_color() {
-        let mut plt_params = PlotParameters::default();
-        plt_params
-            .set(&PlotArgs::Color(RGBAColor(255, 233, 211, 0.5)))
-            .unwrap();
-        assert_eq!(
-            plt_params.get_color().unwrap(),
-            RGBAColor(255, 233, 211, 0.5)
-        );
-    }
     #[test]
     fn plot_params_fdir() {
         let mut plt_params = PlotParameters::default();
@@ -2028,9 +2527,6 @@ mod test {
     #[test]
     fn get_plot_params() {
         let plt_params = PlotParameters::default();
-        let mut plt_type = PlotType::ColorTriangulated(plt_params.clone());
-        let _ = plt_type.get_plot_params();
-        let _ = plt_type.get_plot_params_mut();
 
         let mut plt_type = PlotType::ColorMesh(plt_params.clone());
         let _ = plt_type.get_plot_params();
@@ -2047,7 +2543,7 @@ mod test {
     #[test]
     fn plt_type_set_get_plot_param() {
         let plt_params = PlotParameters::default();
-        let mut plt_type = PlotType::ColorTriangulated(plt_params);
+        let mut plt_type = PlotType::ColorMesh(plt_params);
 
         let _ = plt_type.set_plot_param(&PlotArgs::Backend(PltBackEnd::Buf));
 
@@ -2074,7 +2570,7 @@ mod test {
             plot.label[1].label_pos,
             plt_params.get_y_label_pos().unwrap()
         );
-        assert!(plot.data.is_none());
+        assert!(plot.plot_series.is_none());
         assert_eq!(
             format!("{:?}", plot.cbar.cmap),
             format!("{:?}", plt_params.get_cmap().unwrap().get_gradient())
@@ -2276,116 +2772,243 @@ mod test {
         let plt_params = PlotParameters::default();
         let x = linspace(0., 2., 3.).unwrap();
         let y = linspace(3., 5., 3.).unwrap();
-        let plt_dat_dim2 = PlotData::Dim2(MatrixXx2::from_columns(&[x, y]));
+        let plt_series_dim2 = PlotSeries::new(
+            &PlotData::new_dim2(MatrixXx2::from_columns(&[x, y])).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
 
-        let plot = Plot::new(&plt_dat_dim2, &plt_params);
-        assert!(plot.get_data().is_some());
+        let plot = Plot::new(&vec![plt_series_dim2], &plt_params);
+        assert!(plot.get_plot_series_vec().is_some());
 
-        if let PlotData::Dim2(xy) = plot.get_data().unwrap() {
-            assert!((xy[(0, 0)] - 0.).abs() < f64::EPSILON);
-            assert!((xy[(0, 1)] - 3.).abs() < f64::EPSILON);
+        if let Some(vec) = plot.get_plot_series_vec() {
+            if let PlotData::Dim2 { xy_data } = vec[0].get_plot_series_data() {
+                assert!((xy_data[(0, 0)] - 0.).abs() < f64::EPSILON);
+                assert!((xy_data[(0, 1)] - 3.).abs() < f64::EPSILON)
+            }
         }
     }
     #[test]
-    fn set_get_plot_data() {
-        let plt_params = PlotParameters::default();
-        let mut plot = Plot::try_from(&plt_params).unwrap();
-
+    fn get_series_labels_test() {
+        //define test data
         let x = linspace(0., 2., 3.).unwrap();
-        let y = linspace(3., 5., 3.).unwrap();
-        let plt_dat_dim2 = PlotData::Dim2(MatrixXx2::from_columns(&[x, y]));
+        let y = DVector::from_vec(vec![2., 0., 1.7]);
+        let z = linspace(2., 4., 3.).unwrap();
+        let z_mat = x.clone() * y.clone().transpose();
 
-        assert!(plot.get_data().is_none());
-        plot.set_data(plt_dat_dim2);
+        let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
+        let dat_3d = MatrixXx3::from_columns(&[x.clone(), y.clone(), z.clone()]);
 
-        if let PlotData::Dim2(xy) = plot.get_data().unwrap() {
-            assert!((xy[(0, 0)] - 0.).abs() < f64::EPSILON);
-            assert!((xy[(0, 1)] - 3.).abs() < f64::EPSILON);
-        }
+        //define PlotSeries
+        let plt_series_dim2 = PlotSeries::new(
+            &PlotData::new_dim2(dat_2d).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            Some("dim2".to_owned()),
+        );
+        let plt_series_dim3 = PlotSeries::new(
+            &PlotData::new_dim3(dat_3d.clone()).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            Some("dim3".to_owned()),
+        );
+        let plt_series_colormesh = PlotSeries::new(
+            &PlotData::new_colormesh(x.clone(), y.clone(), z_mat.clone()).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            Some("colormesh".to_owned()),
+        );
+        let plt_series_surf_triangle = PlotSeries::new(
+            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            Some("tri_surf".to_owned()),
+        );
+
+        assert_eq!(
+            plt_series_dim2.get_series_label().unwrap(),
+            "dim2".to_owned()
+        );
+        assert_eq!(
+            plt_series_dim3.get_series_label().unwrap(),
+            "dim3".to_owned()
+        );
+        assert_eq!(
+            plt_series_colormesh.get_series_label().unwrap(),
+            "colormesh".to_owned()
+        );
+        assert_eq!(
+            plt_series_surf_triangle.get_series_label().unwrap(),
+            "tri_surf".to_owned()
+        );
+    }
+    #[test]
+    fn get_axes_min_max_values_test() {
+        let x = linspace(0., 2., 3.).unwrap();
+        let y = DVector::from_vec(vec![2., 0., 1.7]);
+        let z = linspace(2., 4., 3.).unwrap();
+        let z_mat = x.clone() * y.clone().transpose();
+
+        let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
+        let dat_3d = MatrixXx3::from_columns(&[x.clone(), y.clone(), z.clone()]);
+
+        let plt_dat_dim2 = PlotData::new_dim2(dat_2d).unwrap();
+        let min_max = plt_dat_dim2.get_axes_min_max_values();
+        assert_relative_eq!(min_max[0].unwrap().0, 0.0);
+        assert_relative_eq!(min_max[0].unwrap().1, 2.0);
+        assert_relative_eq!(min_max[1].unwrap().0, 0.0);
+        assert_relative_eq!(min_max[1].unwrap().1, 2.0);
+        assert_eq!(min_max.len(), 2);
+
+        let plt_dat_dim3 = PlotData::new_dim3(dat_3d.clone()).unwrap();
+        let min_max = plt_dat_dim3.get_axes_min_max_values();
+        assert_relative_eq!(min_max[0].unwrap().0, 0.0);
+        assert_relative_eq!(min_max[0].unwrap().1, 2.0);
+        assert_relative_eq!(min_max[1].unwrap().0, 0.0);
+        assert_relative_eq!(min_max[1].unwrap().1, 2.0);
+        assert_relative_eq!(min_max[2].unwrap().0, 2.);
+        assert_relative_eq!(min_max[2].unwrap().1, 4.);
+
+        let plt_dat_colormesh =
+            PlotData::new_colormesh(x.clone(), y.clone(), z_mat.clone()).unwrap();
+        let min_max: Vec<Option<(f64, f64)>> = plt_dat_colormesh.get_axes_min_max_values();
+        assert_relative_eq!(min_max[0].unwrap().0, 0.0);
+        assert_relative_eq!(min_max[0].unwrap().1, 2.0);
+        assert_relative_eq!(min_max[1].unwrap().0, 0.0);
+        assert_relative_eq!(min_max[1].unwrap().1, 2.0);
+        assert_relative_eq!(min_max[2].unwrap().0, -0.0);
+        assert_relative_eq!(min_max[2].unwrap().1, 4.0);
+
+        let plt_dat_surf_triangle = PlotData::new_triangulatedsurface(&dat_3d).unwrap();
+        let min_max: Vec<Option<(f64, f64)>> = plt_dat_surf_triangle.get_axes_min_max_values();
+        assert_relative_eq!(min_max[0].unwrap().0, 0.0);
+        assert_relative_eq!(min_max[0].unwrap().1, 2.0);
+        assert_relative_eq!(min_max[1].unwrap().0, 0.0);
+        assert_relative_eq!(min_max[1].unwrap().1, 2.0);
+        assert_relative_eq!(min_max[2].unwrap().0, 2.);
+        assert_relative_eq!(min_max[2].unwrap().1, 4.);
     }
     #[test]
     fn define_data_based_axes_bounds_test() {
-        let x = linspace(0., 1., 2.).unwrap().transpose();
-        let dat_2d = MatrixXx2::from_columns(&[x.clone().transpose(), x.transpose()]);
-        let plt_dat_dim2 = PlotData::Dim2(dat_2d);
+        let x = linspace(0., 2., 3.).unwrap();
+        let y = DVector::from_vec(vec![2., 0., 1.7]);
+        let z = linspace(2., 4., 3.).unwrap();
+        let z_mat = x.clone() * y.clone().transpose();
 
+        let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
+        let dat_3d = MatrixXx3::from_columns(&[x.clone(), y.clone(), z.clone()]);
+
+        let plt_dat_dim2 = PlotData::new_dim2(dat_2d).unwrap();
         let axlims = plt_dat_dim2.define_data_based_axes_bounds(true);
-        assert!((axlims[0].min + 0.1).abs() < f64::EPSILON);
-        assert!((axlims[0].max - 1.1).abs() < f64::EPSILON);
-        assert!((axlims[1].min + 0.1).abs() < f64::EPSILON);
-        assert!((axlims[1].max - 1.1).abs() < f64::EPSILON);
+        assert_relative_eq!(axlims.x.unwrap().min, -0.2);
+        assert_relative_eq!(axlims.x.unwrap().max, 2.2);
+        assert_relative_eq!(axlims.y.unwrap().min, -0.2);
+        assert_relative_eq!(axlims.y.unwrap().max, 2.2);
+        assert!(axlims.z.is_none());
+
+        let plt_dat_dim3 = PlotData::new_dim3(dat_3d.clone()).unwrap();
+        let axlims = plt_dat_dim3.define_data_based_axes_bounds(true);
+        assert_relative_eq!(axlims.x.unwrap().min, -0.2);
+        assert_relative_eq!(axlims.x.unwrap().max, 2.2);
+        assert_relative_eq!(axlims.y.unwrap().min, -0.2);
+        assert_relative_eq!(axlims.y.unwrap().max, 2.2);
+        assert_relative_eq!(axlims.z.unwrap().min, 1.8);
+        assert_relative_eq!(axlims.z.unwrap().max, 4.2);
+
+        let plt_dat_colormesh =
+            PlotData::new_colormesh(x.clone(), y.clone(), z_mat.clone()).unwrap();
+        let axlims = plt_dat_colormesh.define_data_based_axes_bounds(true);
+        assert_relative_eq!(axlims.x.unwrap().min, -0.2);
+        assert_relative_eq!(axlims.x.unwrap().max, 2.2);
+        assert_relative_eq!(axlims.y.unwrap().min, -0.2);
+        assert_relative_eq!(axlims.y.unwrap().max, 2.2);
+        assert_relative_eq!(axlims.z.unwrap().min, -0.4);
+        assert_relative_eq!(axlims.z.unwrap().max, 4.4);
+
+        let plt_dat_tri_surf = PlotData::new_triangulatedsurface(&dat_3d).unwrap();
+        let axlims = plt_dat_tri_surf.define_data_based_axes_bounds(true);
+        assert_relative_eq!(axlims.x.unwrap().min, -0.2);
+        assert_relative_eq!(axlims.x.unwrap().max, 2.2);
+        assert_relative_eq!(axlims.y.unwrap().min, -0.2);
+        assert_relative_eq!(axlims.y.unwrap().max, 2.2);
+        assert_relative_eq!(axlims.z.unwrap().min, 1.8);
+        assert_relative_eq!(axlims.z.unwrap().max, 4.2);
     }
     #[test]
     fn define_plot_axes_bounds() {
         //define test data
-        let x = linspace(-2., -1., 2.).unwrap();
-        let y = linspace(2., 3., 2.).unwrap();
-        let z = linspace(4., 5., 2.).unwrap();
+        let x = linspace(0., 2., 3.).unwrap();
+        let y = DVector::from_vec(vec![2., 0., 1.7]);
+        let z = linspace(2., 4., 3.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
-        let dummmy_triangles: Vec<usize> = vec![1, 2, 3, 4, 5, 6];
+
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
         let dat_3d = MatrixXx3::from_columns(&[x.clone(), y.clone(), z.clone()]);
 
-        //define PlotData
-        let plt_dat_dim2 = PlotData::Dim2(dat_2d);
-        let plt_dat_dim3 = PlotData::Dim3(dat_3d.clone());
-        let plt_dat_colormesh = PlotData::ColorMesh(x.clone(), y.clone(), z_mat.clone());
-        let plt_dat_colortriangulated = PlotData::ColorTriangulated(
-            MatrixXx3::from_vec(dummmy_triangles.clone()),
-            y.clone(),
-            dat_3d.clone(),
+        //define PlotSeries
+        let plt_series_dim2 = PlotSeries::new(
+            &PlotData::new_dim2(dat_2d).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
         );
-        let plt_dat_surf_triangle = PlotData::TriangulatedSurface(
-            MatrixXx3::from_vec(dummmy_triangles.clone()),
-            dat_3d.clone(),
+        let plt_series_dim3 = PlotSeries::new(
+            &PlotData::new_dim3(dat_3d.clone()).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
+        let plt_series_colormesh = PlotSeries::new(
+            &PlotData::new_colormesh(x.clone(), y.clone(), z_mat.clone()).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
+        let plt_series_surf_triangle = PlotSeries::new(
+            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
         );
 
         let mut plot = Plot::try_from(&PlotParameters::default()).unwrap();
-        assert!(plot.define_axes_bounds().is_err());
+        testing_logger::setup();
+        plot.define_axes_bounds();
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "No plot series defined! Cannot define axes bounds!"
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
 
-        let mut plot = Plot::new(&plt_dat_dim2, &PlotParameters::default());
+        let mut plot = Plot::new(&vec![plt_series_dim2], &PlotParameters::default());
         let _ = plot.define_axes_bounds();
-        assert!((plot.bounds.x.unwrap().min + 2.).abs() < f64::EPSILON);
-        assert!((plot.bounds.x.unwrap().max + 1.).abs() < f64::EPSILON);
-        assert!((plot.bounds.y.unwrap().min - 2.).abs() < f64::EPSILON);
-        assert!((plot.bounds.y.unwrap().max - 3.).abs() < f64::EPSILON);
+        assert_relative_eq!(plot.bounds.x.unwrap().min, 0.);
+        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.);
+        assert_relative_eq!(plot.bounds.y.unwrap().min, 0.);
+        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.);
         assert!(plot.bounds.z.is_none());
 
-        let mut plot = Plot::new(&plt_dat_dim3, &PlotParameters::default());
+        let mut plot = Plot::new(&vec![plt_series_dim3], &PlotParameters::default());
         let _ = plot.define_axes_bounds();
-        assert!((plot.bounds.x.unwrap().min + 2.).abs() < f64::EPSILON);
-        assert!((plot.bounds.x.unwrap().max + 1.).abs() < f64::EPSILON);
-        assert!((plot.bounds.y.unwrap().min - 2.).abs() < f64::EPSILON);
-        assert!((plot.bounds.y.unwrap().max - 3.).abs() < f64::EPSILON);
-        assert!((plot.bounds.z.unwrap().min - 4.).abs() < f64::EPSILON);
-        assert!((plot.bounds.z.unwrap().max - 5.).abs() < f64::EPSILON);
+        assert_relative_eq!(plot.bounds.x.unwrap().min, 0.);
+        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.);
+        assert_relative_eq!(plot.bounds.y.unwrap().min, 0.);
+        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.);
+        assert_relative_eq!(plot.bounds.z.unwrap().min, 2.);
+        assert_relative_eq!(plot.bounds.z.unwrap().max, 4.);
 
-        let mut plot = Plot::new(&plt_dat_colormesh, &PlotParameters::default());
+        let mut plot = Plot::new(&vec![plt_series_colormesh], &PlotParameters::default());
         let _ = plot.define_axes_bounds();
-        assert!((plot.bounds.x.unwrap().min + 2.).abs() < f64::EPSILON);
-        assert!((plot.bounds.x.unwrap().max + 1.).abs() < f64::EPSILON);
-        assert!((plot.bounds.y.unwrap().min - 2.).abs() < f64::EPSILON);
-        assert!((plot.bounds.y.unwrap().max - 3.).abs() < f64::EPSILON);
-        assert!((plot.bounds.z.unwrap().min + 6.).abs() < f64::EPSILON);
-        assert!((plot.bounds.z.unwrap().max + 2.).abs() < f64::EPSILON);
+        assert_relative_eq!(plot.bounds.x.unwrap().min, 0.);
+        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.);
+        assert_relative_eq!(plot.bounds.y.unwrap().min, 0.);
+        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.);
+        assert_relative_eq!(plot.bounds.z.unwrap().min, 0.);
+        assert_relative_eq!(plot.bounds.z.unwrap().max, 4.);
 
-        let mut plot = Plot::new(&plt_dat_colortriangulated, &PlotParameters::default());
+        let mut plot = Plot::new(&vec![plt_series_surf_triangle], &PlotParameters::default());
         let _ = plot.define_axes_bounds();
-        assert!((plot.bounds.x.unwrap().min + 2.).abs() < f64::EPSILON);
-        assert!((plot.bounds.x.unwrap().max + 1.).abs() < f64::EPSILON);
-        assert!((plot.bounds.y.unwrap().min - 2.).abs() < f64::EPSILON);
-        assert!((plot.bounds.y.unwrap().max - 3.).abs() < f64::EPSILON);
-        assert!((plot.bounds.z.unwrap().min - 4.).abs() < f64::EPSILON);
-        assert!((plot.bounds.z.unwrap().max - 5.).abs() < f64::EPSILON);
-
-        let mut plot = Plot::new(&plt_dat_surf_triangle, &PlotParameters::default());
-        let _ = plot.define_axes_bounds();
-        assert!((plot.bounds.x.unwrap().min + 2.).abs() < f64::EPSILON);
-        assert!((plot.bounds.x.unwrap().max + 1.).abs() < f64::EPSILON);
-        assert!((plot.bounds.y.unwrap().min - 2.).abs() < f64::EPSILON);
-        assert!((plot.bounds.y.unwrap().max - 3.).abs() < f64::EPSILON);
-        assert!((plot.bounds.z.unwrap().min - 4.).abs() < f64::EPSILON);
-        assert!((plot.bounds.z.unwrap().max - 5.).abs() < f64::EPSILON);
+        assert_relative_eq!(plot.bounds.x.unwrap().min, 0.);
+        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.);
+        assert_relative_eq!(plot.bounds.y.unwrap().min, 0.);
+        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.);
+        assert_relative_eq!(plot.bounds.z.unwrap().min, 2.);
+        assert_relative_eq!(plot.bounds.z.unwrap().max, 4.);
     }
     #[test]
     fn colorbar_new() {
@@ -2437,8 +3060,8 @@ mod test {
     }
     #[test]
     fn axlim_new() {
-        assert!(AxLims::new(-10., 10.).is_ok());
-        assert!(AxLims::new(0., f64::NAN).is_err());
+        assert!(AxLims::new(-10., 10.).is_some());
+        assert!(AxLims::new(0., f64::NAN).is_none());
 
         assert!((AxLims::new(-10., 10.).unwrap().min + 10.).abs() < f64::EPSILON);
         assert!((AxLims::new(-10., 10.).unwrap().max - 10.).abs() < f64::EPSILON);
@@ -2456,20 +3079,42 @@ mod test {
         assert!(axlim.expand_lims(0.).is_err());
     }
     #[test]
-    fn make_plot_axlims_useful_test() {
-        let mut axlim = AxLims { min: 0., max: 10. };
-        axlim.make_plot_axlims_useful();
-        assert!((axlim.max - 10.).abs() < f64::EPSILON);
+    fn create_useful_axlims_test() {
+        let axlim = AxLims::create_useful_axlims(0., 10.).unwrap();
+        assert_relative_eq!(axlim.min, 0.);
+        assert_relative_eq!(axlim.max, 10.);
 
-        let mut axlim = AxLims { min: 10., max: 10. };
-        axlim.make_plot_axlims_useful();
-        assert!((axlim.max - 10.).abs() < f64::EPSILON);
-        assert!(axlim.min.abs() < f64::EPSILON);
+        let axlim = AxLims::create_useful_axlims(10., 10.).unwrap();
+        assert_relative_eq!(axlim.min, 0.);
+        assert_relative_eq!(axlim.max, 10.);
 
-        let mut axlim = AxLims { min: 0., max: 0. };
-        axlim.make_plot_axlims_useful();
-        assert!((axlim.max - 1.).abs() < f64::EPSILON);
-        assert!(axlim.min.abs() < f64::EPSILON);
+        let axlim = AxLims::create_useful_axlims(0., 0.).unwrap();
+        assert_relative_eq!(axlim.min, 0.);
+        assert_relative_eq!(axlim.max, 1.);
+
+        let axlim = AxLims::create_useful_axlims(f64::NAN, 0.).unwrap();
+        assert_relative_eq!(axlim.min, 0.);
+        assert_relative_eq!(axlim.max, 1.);
+
+        let axlim = AxLims::create_useful_axlims(f64::NAN, 10.).unwrap();
+        assert_relative_eq!(axlim.min, 0.);
+        assert_relative_eq!(axlim.max, 10.);
+
+        let axlim = AxLims::create_useful_axlims(0., f64::NAN).unwrap();
+        assert_relative_eq!(axlim.min, 0.);
+        assert_relative_eq!(axlim.max, 1.);
+
+        let axlim = AxLims::create_useful_axlims(-10., f64::NAN).unwrap();
+        assert_relative_eq!(axlim.min, -10.);
+        assert_relative_eq!(axlim.max, 0.);
+
+        let axlim = AxLims::create_useful_axlims(10., -10.).unwrap();
+        assert_relative_eq!(axlim.min, -10.);
+        assert_relative_eq!(axlim.max, 10.);
+
+        let axlim = AxLims::create_useful_axlims(10., f64::NAN).unwrap();
+        assert_relative_eq!(axlim.min, 0.);
+        assert_relative_eq!(axlim.max, 10.);
     }
     #[test]
     fn get_ax_val_distance_if_equidistant_test() {
@@ -2510,65 +3155,67 @@ mod test {
     #[test]
     fn create_plots_png_test() {
         //define test data
-        let x = linspace(-2., -1., 3.).unwrap();
-        let y = linspace(2., 3., 3.).unwrap();
-        let z = linspace(4., 5., 3.).unwrap();
+        let x = DVector::from_vec(vec![0., -3., 20., 15.]);
+        let y = DVector::from_vec(vec![10., -13., 25., 5.]);
+        let z = linspace(4., 5., 4.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
         let dat_3d = MatrixXx3::from_columns(&[x.clone(), y.clone(), z.clone()]);
 
-        let points: Vec<Point> = dat_3d
-            .row_iter()
-            .map(|c| Point { x: c[0], y: c[1] })
-            .collect::<Vec<Point>>();
-
-        let trianglulation = triangulate(&points);
-        let triangles = trianglulation.triangles;
-        let dummmy_triangles = Matrix3xX::from_vec(triangles).transpose();
-
         //define PlotData
-        let plt_dat_dim2 = PlotData::Dim2(dat_2d);
-        let plt_dat_colormesh = PlotData::ColorMesh(x.clone(), y.clone(), z_mat.clone());
-        let plt_dat_colortriangulated =
-            PlotData::ColorTriangulated(dummmy_triangles.clone(), y.clone(), dat_3d.clone());
-        let plt_dat_surf_triangle = PlotData::TriangulatedSurface(dummmy_triangles, dat_3d.clone());
+        let plt_series_dim2 = PlotSeries::new(
+            &PlotData::new_dim2(dat_2d).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
+        let plt_series_colormesh = PlotSeries::new(
+            &PlotData::new_colormesh(x.clone(), y.clone(), z_mat.clone()).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
+        let plt_series_surf_triangle = PlotSeries::new(
+            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
 
         let mut plt_params = PlotParameters::default();
         let path = NamedTempFile::new().unwrap();
         let _ = plt_params.set(&PlotArgs::FDir(path.path().parent().unwrap().into()));
-        let _ = PlotType::Line2D(plt_params.clone()).plot(&plt_dat_dim2);
-        let _ = PlotType::ColorMesh(plt_params.clone()).plot(&plt_dat_colormesh);
-        let _ = PlotType::ColorTriangulated(plt_params.clone()).plot(&plt_dat_colortriangulated);
-        let _ = PlotType::Scatter2D(plt_params.clone()).plot(&plt_dat_dim2);
-        let _ = PlotType::TriangulatedSurface(plt_params.clone()).plot(&plt_dat_surf_triangle);
+        let _ = PlotType::Line2D(plt_params.clone()).plot(&vec![plt_series_dim2.clone()]);
+        let _ = PlotType::ColorMesh(plt_params.clone()).plot(&vec![plt_series_colormesh]);
+        let _ = PlotType::Scatter2D(plt_params.clone()).plot(&vec![plt_series_dim2]);
+        let _ =
+            PlotType::TriangulatedSurface(plt_params.clone()).plot(&vec![plt_series_surf_triangle]);
     }
     #[test]
     fn create_plots_svg_test() {
         //define test data
-        let x = linspace(-2., -1., 3.).unwrap();
-        let y = linspace(2., 3., 3.).unwrap();
-        let z = linspace(4., 5., 3.).unwrap();
+        let x = DVector::from_vec(vec![0., -3., 20., 15.]);
+        let y = DVector::from_vec(vec![10., -13., 25., 5.]);
+        let z = linspace(4., 5., 4.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
         let dat_3d = MatrixXx3::from_columns(&[x.clone(), y.clone(), z.clone()]);
 
-        let points: Vec<Point> = dat_3d
-            .row_iter()
-            .map(|c| Point { x: c[0], y: c[1] })
-            .collect::<Vec<Point>>();
-
-        let trianglulation = triangulate(&points);
-        let triangles = trianglulation.triangles;
-        let dummmy_triangles = Matrix3xX::from_vec(triangles).transpose();
-
         //define PlotData
-        let plt_dat_dim2 = PlotData::Dim2(dat_2d);
-        let plt_dat_colormesh = PlotData::ColorMesh(x.clone(), y.clone(), z_mat.clone());
-        let plt_dat_colortriangulated =
-            PlotData::ColorTriangulated(dummmy_triangles.clone(), y.clone(), dat_3d.clone());
-        let plt_dat_surf_triangle = PlotData::TriangulatedSurface(dummmy_triangles, dat_3d.clone());
+        let plt_series_dim2 = PlotSeries::new(
+            &PlotData::new_dim2(dat_2d).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
+        let plt_series_colormesh = PlotSeries::new(
+            &PlotData::new_colormesh(x.clone(), y.clone(), z_mat.clone()).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
+        let plt_series_surf_triangle = PlotSeries::new(
+            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
 
         let mut plt_params = PlotParameters::default();
         let path = NamedTempFile::new().unwrap();
@@ -2578,38 +3225,43 @@ mod test {
             .set(&PlotArgs::Backend(PltBackEnd::SVG))
             .unwrap()
             .set(&PlotArgs::FName("test.svg".into()));
-        let _ = PlotType::Line2D(plt_params.clone()).plot(&plt_dat_dim2);
-        let _ = PlotType::ColorMesh(plt_params.clone()).plot(&plt_dat_colormesh);
-        let _ = PlotType::ColorTriangulated(plt_params.clone()).plot(&plt_dat_colortriangulated);
-        let _ = PlotType::Scatter2D(plt_params.clone()).plot(&plt_dat_dim2);
-        let _ = PlotType::TriangulatedSurface(plt_params.clone()).plot(&plt_dat_surf_triangle);
+        let _ = PlotType::Line2D(plt_params.clone()).plot(&vec![plt_series_dim2.clone()]);
+        let _ = PlotType::ColorMesh(plt_params.clone()).plot(&vec![plt_series_colormesh]);
+        let _ = PlotType::Scatter2D(plt_params.clone()).plot(&vec![plt_series_dim2]);
+        let _ =
+            PlotType::TriangulatedSurface(plt_params.clone()).plot(&vec![plt_series_surf_triangle]);
     }
     #[test]
     fn create_plots_buffer_test() {
         //define test data
-        let x = linspace(-2., -1., 3.).unwrap();
-        let y = linspace(2., 3., 3.).unwrap();
-        let z = linspace(4., 5., 3.).unwrap();
+        let x = DVector::from_vec(vec![0., -3., 20., 15.]);
+        let y = DVector::from_vec(vec![10., -13., 25., 5.]);
+        let z = linspace(4., 5., 4.).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
         let dat_3d = MatrixXx3::from_columns(&[x.clone(), y.clone(), z.clone()]);
 
-        let points: Vec<Point> = dat_3d
-            .row_iter()
-            .map(|c| Point { x: c[0], y: c[1] })
-            .collect::<Vec<Point>>();
-
-        let trianglulation = triangulate(&points);
-        let triangles = trianglulation.triangles;
-        let dummmy_triangles = Matrix3xX::from_vec(triangles).transpose();
-
         //define PlotData
-        let plt_dat_dim2 = PlotData::Dim2(dat_2d);
-        let plt_dat_colormesh = PlotData::ColorMesh(x.clone(), y.clone(), z_mat.clone());
-        let plt_dat_colortriangulated =
-            PlotData::ColorTriangulated(dummmy_triangles.clone(), y.clone(), dat_3d.clone());
-        let plt_dat_surf_triangle = PlotData::TriangulatedSurface(dummmy_triangles, dat_3d.clone());
+        let plt_series_dim2 = PlotSeries::new(
+            &PlotData::Dim2 { xy_data: dat_2d },
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
+        let plt_series_colormesh = PlotSeries::new(
+            &PlotData::ColorMesh {
+                x_dat_n: x.clone(),
+                y_dat_m: y.clone(),
+                z_dat_nxm: z_mat.clone(),
+            },
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
+        let plt_series_surf_triangle = PlotSeries::new(
+            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            RGBAColor(0, 0, 0, 1.),
+            None,
+        );
 
         let mut plt_params = PlotParameters::default();
         let path = NamedTempFile::new().unwrap();
@@ -2617,10 +3269,10 @@ mod test {
             .set(&PlotArgs::FDir(path.path().parent().unwrap().into()))
             .unwrap()
             .set(&PlotArgs::Backend(PltBackEnd::Buf));
-        let _ = PlotType::Line2D(plt_params.clone()).plot(&plt_dat_dim2);
-        let _ = PlotType::ColorMesh(plt_params.clone()).plot(&plt_dat_colormesh);
-        let _ = PlotType::ColorTriangulated(plt_params.clone()).plot(&plt_dat_colortriangulated);
-        let _ = PlotType::Scatter2D(plt_params.clone()).plot(&plt_dat_dim2);
-        let _ = PlotType::TriangulatedSurface(plt_params.clone()).plot(&plt_dat_surf_triangle);
+        let _ = PlotType::Line2D(plt_params.clone()).plot(&vec![plt_series_dim2.clone()]);
+        let _ = PlotType::ColorMesh(plt_params.clone()).plot(&vec![plt_series_colormesh]);
+        let _ = PlotType::Scatter2D(plt_params.clone()).plot(&vec![plt_series_dim2]);
+        let _ =
+            PlotType::TriangulatedSurface(plt_params.clone()).plot(&vec![plt_series_surf_triangle]);
     }
 }

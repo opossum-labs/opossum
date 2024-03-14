@@ -7,7 +7,7 @@ use uom::si::length::nanometer;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotType, Plottable, PltBackEnd};
+use crate::plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd};
 use crate::properties::{Properties, Proptype};
 use crate::refractive_index::refr_index_vaccuum;
 use crate::reporter::{NodeReport, PdfReportable};
@@ -282,13 +282,13 @@ impl Plottable for Spectrometer {
         PlotType::Line2D(plt_params.clone())
     }
 
-    fn get_plot_data(&self, plt_type: &PlotType) -> OpmResult<Option<PlotData>> {
+    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = &self.light_data;
         match data {
             Some(LightData::Geometric(rays)) => rays
                 .to_spectrum(&Length::new::<nanometer>(0.2))?
-                .get_plot_data(plt_type),
-            Some(LightData::Energy(e)) => e.spectrum.get_plot_data(plt_type),
+                .get_plot_series(plt_type),
+            Some(LightData::Energy(e)) => e.spectrum.get_plot_series(plt_type),
             _ => Ok(None),
         }
     }
