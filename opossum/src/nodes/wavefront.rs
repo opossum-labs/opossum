@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! Wavefront measurment node
-use image::{DynamicImage, ImageBuffer, RgbImage};
+use image::{DynamicImage, RgbImage};
 use log::warn;
 use nalgebra::{DVector, DVectorSlice, MatrixXx3};
 use plotters::style::RGBAColor;
@@ -207,7 +207,12 @@ impl Optical for WaveFront {
             ));
             if let Some(wf_data) = wf_data_opt {
                 //todo! for all wavelengths
-                wf_data.wavefront_error_maps[0].to_plot(&file_path, (1000, 850), PltBackEnd::BMP)
+                Ok(wf_data.wavefront_error_maps[0]
+                    .to_plot(&file_path, (1000, 850), PltBackEnd::BMP)
+                    .unwrap_or_else(|e| {
+                        warn!("Could not export plot: {e}",);
+                        None
+                    }))
             } else {
                 warn!("Wavefront diagram: no wavefront data for export available",);
                 Ok(None)
@@ -276,11 +281,15 @@ impl PdfReportable for WaveFrontData {
             self.wavefront_error_maps[0].rms
         )));
         //todo! for all wavefronts!
-        let img =
-            self.wavefront_error_maps[0].to_plot(Path::new(""), (1000, 850), PltBackEnd::Buf)?;
+        let img = self.wavefront_error_maps[0]
+            .to_plot(Path::new(""), (1000, 850), PltBackEnd::Buf)
+            .unwrap_or_else(|e| {
+                warn!("Could not create plot for pdf creation: {e}",);
+                None
+            });
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
-                img.unwrap_or_else(ImageBuffer::default),
+                img.unwrap_or_default(),
             ))
             .map_err(|e| format!("adding of image failed: {e}"))?,
         );
@@ -346,7 +355,6 @@ impl Plottable for WaveFrontErrorMap {
         };
         let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
         Ok(Some(vec![plt_series]))
-        // Ok(self.bin_or_triangulate_data(plt_type, &plt_data))
     }
 }
 
