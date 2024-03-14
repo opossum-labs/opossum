@@ -1406,7 +1406,6 @@ dependencies = [
  "rprompt",
  "serde",
  "serde_derive",
- "serde_json",
  "serde_yaml",
  "sobol",
  "strum",

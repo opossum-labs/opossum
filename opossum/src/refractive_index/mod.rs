@@ -7,10 +7,7 @@ pub mod refr_index_sellmeier1;
 
 pub use refr_index_const::refr_index_vaccuum;
 pub use refr_index_const::RefrIndexConst;
-
 pub use refr_index_sellmeier1::RefrIndexSellmeier1;
-
-use crate::properties::Proptype;
 
 use self::refr_index_schott::RefrIndexSchott;
 
@@ -34,11 +31,6 @@ impl RefractiveIndexType {
     }
 }
 
-impl From<RefractiveIndexType> for Proptype {
-    fn from(value: RefractiveIndexType) -> Self {
-        Self::RefractiveIndex(value)
-    }
-}
 pub trait RefractiveIndex {
     fn get_refractive_index(&self, wavelength: Length) -> f64;
     fn to_enum(&self) -> RefractiveIndexType;

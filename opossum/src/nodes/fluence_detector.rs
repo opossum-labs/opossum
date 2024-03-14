@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+//! fluence measurement node
 use image::{DynamicImage, ImageBuffer, RgbImage};
 use log::warn;
 use nalgebra::{DMatrix, DVector};
@@ -24,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 /// A fluence monitor
 ///
-/// It simply calculates the fluence (spatial energy distribution) of an incoming ray bundle.
+/// It simply calculates the fluence (spatial energy distribution) of an incoming [`Ray`](crate::ray::Ray) bundle.
 ///
 /// ## Optical Ports
 ///   - Inputs
@@ -231,11 +232,11 @@ impl PdfReportable for FluenceData {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
         layout.push(genpdf::elements::Paragraph::new(format!(
-            "Peak fluence: {:.1} W/cm²",
+            "Peak fluence: {:.1} J/cm²",
             self.peak
         )));
         layout.push(genpdf::elements::Paragraph::new(format!(
-            "Average fluence: {:.1} W/cm²",
+            "Average fluence: {:.1} J/cm²",
             self.average
         )));
         let img = self.to_plot(Path::new(""), (1000, 800), PltBackEnd::Buf)?;

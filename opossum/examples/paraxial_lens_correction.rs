@@ -18,7 +18,7 @@ use uom::si::{
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Lens Ray-trace test".into())?;
-    let src: NodeIndex = scenery.add_node(create_point_ray_source(
+    let src: NodeIndex = scenery.add_node(point_ray_source(
         Angle::new::<degree>(1.0),
         Energy::new::<joule>(1.0),
     )?);

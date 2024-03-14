@@ -71,6 +71,11 @@ impl NodeReference {
             props,
         }
     }
+    /// Assign a reference to another optical node.
+    ///
+    /// This functions allows for setting the optical node this [`NodeReference`] refers to. Normally, the [`OpticRef`] is given during the
+    /// construction of a [`NodeReference`] using it's `new` function. This function allows for setting / changing after construction (e.g.
+    /// during deserialization).
     pub fn assign_reference(&mut self, node: &OpticRef) {
         self.reference = Some(Rc::downgrade(&node.optical_ref));
     }

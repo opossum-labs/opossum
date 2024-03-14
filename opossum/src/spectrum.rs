@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Module for handling optical spectra
+//! Module for creation and handling of optical spectra
 use crate::error::{OpmResult, OpossumError};
 use crate::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable};
 use csv::ReaderBuilder;
@@ -260,7 +260,7 @@ impl Spectrum {
     /// Returns the center wavelength of this [`Spectrum`].
     ///
     /// This function calculates the first moment of the spectral distribution.
-    /// The calculated value represents the average wavelength and is thereofre returned as the "center wavelength" of this [`Spectrum`].
+    /// The calculated value represents the average wavelength and is therefore returned as the "center wavelength" of this [`Spectrum`].
     #[must_use]
     pub fn center_wavelength(&self) -> Length {
         let spec_int_vec = self

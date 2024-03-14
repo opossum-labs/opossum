@@ -1,9 +1,9 @@
-use opossum::error::OpmResult;
-use opossum::optical::Optical;
-use opossum::SplittingConfig;
 use opossum::{
+    error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, EnergyMeter, Source},
+    optical::Optical,
+    ray::SplittingConfig,
     spectrum_helper::create_he_ne_spec,
     OpticScenery,
 };

@@ -5,75 +5,12 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    position_distributions::{Grid, Hexapolar},
     properties::{Properties, Proptype},
-    rays::Rays,
+    utils::EnumProxy,
 };
-use nalgebra::Point3;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use uom::num_traits::Zero;
-use uom::si::{
-    f64::{Angle, Energy, Length},
-    length::nanometer,
-};
-/// Generate a source node with a collinated beam.
-///
-/// This is a convenience functions, which generates a light source containing a hexapolar, collinear ray bundle at 1053 nm and a given energy.
-///
-/// # Errors
-/// This functions returns an error if
-///  - the given energy is < 0.0, Nan, or +inf.
-pub fn create_round_collimated_ray_source(
-    radius: Length,
-    energy: Energy,
-    nr_of_rings: u8,
-) -> OpmResult<Source> {
-    let rays = Rays::new_uniform_collimated(
-        Length::new::<nanometer>(1000.0),
-        energy,
-        &Hexapolar::new(radius, nr_of_rings)?,
-    )?;
-    let light = LightData::Geometric(rays);
-    Ok(Source::new("collimated ray source", &light))
-}
-/// Create [`Source`] containing a line of rays along the y axis.
-///
-/// # Errors
-///
-/// This function will return an error if .
-pub fn create_line_collimated_ray_source(
-    size_y: Length,
-    energy: Energy,
-    nr_of_points_y: usize,
-) -> OpmResult<Source> {
-    let rays = Rays::new_uniform_collimated(
-        Length::new::<nanometer>(1000.0),
-        energy,
-        &Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?,
-    )?;
-    let light = LightData::Geometric(rays);
-    Ok(Source::new("collimated ray source", &light))
-}
-/// Generate a node representing a points source on the optical axis with a given cone angle.
-///
-/// This is a convenience functions, which generates a light source containing a hexapolar, cone shaped ray bundle at 1053 nm and a given energy.
-/// If the cone angle is zero, a ray bundle with a single ray along the optical axis - position (0.0,0.0,0.0) - is created.
-/// # Errors
-/// This functions returns an error if
-///  - the given energy is < 0.0, Nan, or +inf.
-///  - the given angle is < 0.0 degrees or >= 180.0 degrees.
-pub fn create_point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> {
-    let rays = Rays::new_hexapolar_point_source(
-        Point3::new(Length::zero(), Length::zero(), Length::zero()),
-        cone_angle,
-        3,
-        Length::new::<nanometer>(1000.0),
-        energy,
-    )?;
-    let light = LightData::Geometric(rays);
-    Ok(Source::new("point ray source", &light))
-}
+
 /// A general light source
 ///
 /// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an [`OpticScenery`](crate::OpticScenery).
@@ -95,7 +32,12 @@ pub struct Source {
 fn create_default_props() -> Properties {
     let mut props = Properties::new("source", "light source");
     props
-        .create("light data", "data of the emitted light", None, None.into())
+        .create(
+            "light data",
+            "data of the emitted light",
+            None,
+            EnumProxy::<Option<LightData>> { value: None }.into(),
+        )
         .unwrap();
     let mut ports = OpticPorts::new();
     ports.create_output("out1").unwrap();
@@ -133,7 +75,13 @@ impl Source {
         let mut props = create_default_props();
         props.set("name", name.into()).unwrap();
         props
-            .set_unchecked("light data", Some(light.clone()).into())
+            .set_unchecked(
+                "light data",
+                EnumProxy::<Option<LightData>> {
+                    value: Some(light.clone()),
+                }
+                .into(),
+            )
             .unwrap();
         Self { props }
     }
@@ -146,8 +94,13 @@ impl Source {
     /// # Errors
     /// This function returns an error if the property "light data" can not be set
     pub fn set_light_data(&mut self, light_data: &LightData) -> OpmResult<()> {
-        self.props
-            .set("light data", Some(light_data.clone()).into())?;
+        self.props.set(
+            "light data",
+            EnumProxy::<Option<LightData>> {
+                value: Some(light_data.clone()),
+            }
+            .into(),
+        )?;
         Ok(())
     }
 }
@@ -156,7 +109,7 @@ impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let light_prop = self.props.get("light data").unwrap();
         let data = if let Proptype::LightData(data) = &light_prop {
-            data
+            &data.value
         } else {
             &None
         };
@@ -173,8 +126,11 @@ impl Optical for Source {
         _analyzer_type: &crate::analyzer::AnalyzerType,
     ) -> OpmResult<LightResult> {
         let light_prop = self.props.get("light data").unwrap();
-        if let Proptype::LightData(Some(data)) = &light_prop {
-            Ok(HashMap::from([("out1".into(), Some(data.clone()))]))
+        if let Proptype::LightData(data) = &light_prop {
+            data.value.as_ref().map_or_else(
+                || Err(OpossumError::Analysis("no light data defined".into())),
+                |data| Ok(HashMap::from([("out1".into(), Some(data.clone()))])),
+            )
         } else {
             Err(OpossumError::Analysis("no light data defined".into()))
         }
@@ -216,110 +172,15 @@ mod test {
     use crate::{
         analyzer::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
     };
-    use approx::assert_abs_diff_eq;
     use assert_matches::assert_matches;
-    use uom::si::{angle::degree, energy::joule, length::millimeter};
-    #[test]
-    fn test_create_collimated_ray_source() {
-        assert!(create_round_collimated_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(-0.1),
-            3
-        )
-        .is_err());
-        assert!(create_round_collimated_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(f64::NAN),
-            3
-        )
-        .is_err());
-        assert!(create_round_collimated_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(f64::INFINITY),
-            3
-        )
-        .is_err());
-        assert!(create_round_collimated_ray_source(
-            Length::new::<millimeter>(-0.1),
-            Energy::new::<joule>(1.0),
-            3
-        )
-        .is_err());
-        let src = create_round_collimated_ray_source(Length::zero(), Energy::new::<joule>(1.0), 3)
-            .unwrap();
-        if let Proptype::LightData(light_data) = src.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = light_data {
-                assert_eq!(rays.nr_of_rays(true), 1);
-                assert_abs_diff_eq!(
-                    rays.total_energy().get::<joule>(),
-                    1.0,
-                    epsilon = 10.0 * f64::EPSILON
-                );
-            } else {
-                panic!("no LightData::Geometric found")
-            }
-        } else {
-            panic!("property light data has wrong type");
-        }
-        let src = create_round_collimated_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(1.0),
-            3,
-        )
-        .unwrap();
-        if let Proptype::LightData(Some(LightData::Geometric(rays))) =
-            src.properties().get("light data").unwrap()
-        {
-            assert_abs_diff_eq!(
-                rays.total_energy().get::<joule>(),
-                1.0,
-                epsilon = 10.0 * f64::EPSILON
-            );
-            assert_eq!(rays.nr_of_rays(true), 37);
-        } else {
-            panic!("error unpacking data");
-        }
-    }
-    #[test]
-    fn test_create_point_ray_source() {
-        assert!(create_point_ray_source(Angle::new::<degree>(-0.1), Energy::zero()).is_err());
-        assert!(create_point_ray_source(Angle::new::<degree>(180.0), Energy::zero()).is_err());
-        assert!(create_point_ray_source(Angle::new::<degree>(190.0), Energy::zero()).is_err());
-        let src = create_point_ray_source(Angle::zero(), Energy::new::<joule>(1.0)).unwrap();
-        if let Ok(Proptype::LightData(Some(LightData::Geometric(rays)))) =
-            src.properties().get("light data")
-        {
-            assert_abs_diff_eq!(
-                rays.total_energy().get::<joule>(),
-                1.0,
-                epsilon = 10.0 * f64::EPSILON
-            );
-            assert_eq!(rays.nr_of_rays(true), 1);
-        } else {
-            panic!("cannot unpack light data property");
-        }
-        let src =
-            create_point_ray_source(Angle::new::<degree>(1.0), Energy::new::<joule>(1.0)).unwrap();
-        if let Ok(Proptype::LightData(Some(LightData::Geometric(rays)))) =
-            src.properties().get("light data")
-        {
-            assert_abs_diff_eq!(
-                rays.total_energy().get::<joule>(),
-                1.0,
-                epsilon = 10.0 * f64::EPSILON
-            );
-            assert_eq!(rays.nr_of_rays(true), 37);
-        } else {
-            panic!("cannot unpack light data property");
-        }
-    }
+
     #[test]
     fn default() {
         let node = Source::default();
         assert_eq!(node.properties().name().unwrap(), "source");
         assert_eq!(node.properties().node_type().unwrap(), "light source");
         if let Ok(Proptype::LightData(light_data)) = node.properties().get("light data") {
-            assert_eq!(light_data, &None);
+            assert_eq!(light_data.value, None);
         } else {
             panic!("cannot unpack light data property");
         };
@@ -349,11 +210,11 @@ mod test {
     fn test_set_light_data() {
         let mut src = Source::default();
         if let Ok(Proptype::LightData(light_data)) = src.properties().get("light data") {
-            assert_eq!(light_data, &None);
+            assert_eq!(light_data.value, None);
         }
         src.set_light_data(&LightData::Fourier).unwrap();
         if let Ok(Proptype::LightData(light_data)) = src.properties().get("light data") {
-            assert_matches!(light_data.clone().unwrap(), LightData::Fourier);
+            assert_matches!(light_data.value.clone().unwrap(), LightData::Fourier);
         }
     }
     #[test]

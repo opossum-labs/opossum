@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Circular and square, fibbonacci distribution
 use std::f64::consts::PI;
 
@@ -8,6 +9,9 @@ use nalgebra::{point, Point3};
 use num::{ToPrimitive, Zero};
 use uom::si::f64::Length;
 
+/// Rectangular Fibonacci distribution
+///
+/// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
 pub struct FibonacciRectangle {
     nr_of_rays: usize,
     side_length_x: Length,
@@ -59,6 +63,10 @@ impl PositionDistribution for FibonacciRectangle {
     }
 }
 
+/// Rectangular Fibbonacci distribution
+///
+/// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
+#[derive(Clone)]
 pub struct FibonacciEllipse {
     nr_of_rays: usize,
     radius_x: Length,
@@ -73,7 +81,7 @@ impl FibonacciEllipse {
     ///
     /// This function will return an error if
     ///  - the given `side_length_x` or `side_length_y` is negative or not finite, or both are zero.
-    ///     ///  - the given `nr_of_rays` is zero.
+    ///  - the given `nr_of_rays` is zero.
 
     pub fn new(radius_x: Length, radius_y: Length, nr_of_rays: usize) -> OpmResult<Self> {
         if radius_x.is_sign_negative()

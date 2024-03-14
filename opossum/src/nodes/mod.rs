@@ -1,10 +1,11 @@
+#![warn(missing_docs)]
 //! This module contains the concrete node types (lenses, filters, etc...)
 mod beam_splitter;
 mod detector;
 mod dummy;
 mod energy_meter;
-/// fluence measurement node
-pub mod fluence_detector;
+
+mod fluence_detector;
 mod group;
 mod ideal_filter;
 mod lens;
@@ -14,13 +15,10 @@ mod propagation;
 pub mod ray_propagation_visualizer;
 mod reference;
 mod source;
+mod source_helper;
 mod spectrometer;
 mod spot_diagram;
-/// wavefront measurement node
-pub mod wavefront;
-
-use std::cell::RefCell;
-use std::rc::Rc;
+mod wavefront;
 
 pub use beam_splitter::BeamSplitter;
 pub use detector::Detector;
@@ -32,10 +30,10 @@ pub use lens::Lens;
 pub use paraxial_surface::ParaxialSurface;
 pub use propagation::Propagation;
 pub use reference::NodeReference;
-pub use source::create_line_collimated_ray_source;
-pub use source::create_point_ray_source;
-pub use source::create_round_collimated_ray_source;
 pub use source::Source;
+pub use source_helper::{
+    collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
+};
 
 pub use energy_meter::EnergyMeter;
 pub use energy_meter::Metertype;
@@ -43,7 +41,7 @@ pub use energy_meter::Metertype;
 pub use spectrometer::Spectrometer;
 pub use spectrometer::SpectrometerType;
 
-pub use fluence_detector::FluenceDetector;
+pub use fluence_detector::{FluenceData, FluenceDetector};
 pub use spot_diagram::SpotDiagram;
 
 pub use ray_propagation_visualizer::RayPropagationVisualizer;
@@ -53,8 +51,10 @@ use uuid::Uuid;
 
 use crate::error::OpmResult;
 use crate::error::OpossumError;
-
 use crate::optic_ref::OpticRef;
+use std::cell::RefCell;
+use std::rc::Rc;
+use uuid::Uuid;
 
 /// Factory function creating a new reference of an optical node of the given type.
 ///

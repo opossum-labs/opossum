@@ -3,10 +3,11 @@ use std::path::Path;
 use opossum::{
     error::OpmResult,
     nodes::{
-        create_round_collimated_ray_source, BeamSplitter, EnergyMeter, IdealFilter, NodeGroup,
+        round_collimated_ray_source, BeamSplitter, EnergyMeter, IdealFilter, NodeGroup,
         ParaxialSurface, Propagation, SpotDiagram,
     },
-    OpticScenery, SplittingConfig,
+    ray::SplittingConfig,
+    OpticScenery,
 };
 use uom::si::{
     energy::joule,
@@ -19,7 +20,7 @@ fn main() -> OpmResult<()> {
     scenery.set_description("laser system")?;
 
     // Main beam line
-    let i_src = scenery.add_node(create_round_collimated_ray_source(
+    let i_src = scenery.add_node(round_collimated_ray_source(
         Length::new::<millimeter>(1.0),
         Energy::new::<joule>(1.0),
         3,
@@ -50,7 +51,7 @@ fn main() -> OpmResult<()> {
     // Diagnostic beam line
     let i_f = scenery.add_node(IdealFilter::new(
         "OD1 filter",
-        opossum::nodes::FilterType::Constant(0.1),
+        &opossum::nodes::FilterType::Constant(0.1),
     )?);
     scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front")?;
 

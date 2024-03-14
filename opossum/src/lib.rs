@@ -13,35 +13,36 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
 )]
 #![cfg_attr(feature = "cargo-clippy", allow(clippy::module_name_repetitions))]
 
+mod light;
+mod optic_graph;
+mod optic_scenery;
+
 pub mod analyzer;
 pub mod aperture;
+pub mod console;
 pub mod dottable;
+pub mod energy_distributions;
 pub mod error;
-mod light;
 pub mod lightdata;
 pub mod nodes;
 pub mod optic_ports;
-mod optic_scenery;
+pub mod optic_ref;
 pub mod optical;
 pub mod plottable;
-pub mod properties;
-pub mod spectrum;
-pub mod spectrum_helper;
-use chrono::DateTime;
-pub use optic_scenery::OpticScenery;
-pub mod console;
-pub mod energy_distributions;
-mod optic_graph;
-pub mod optic_ref;
 pub mod position_distributions;
+pub mod properties;
 pub mod ray;
 pub mod rays;
-pub use ray::SplittingConfig;
 pub mod refractive_index;
 pub mod reporter;
+pub mod spectrum;
+pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
 
+pub use optic_scenery::OpticScenery;
+
+use chrono::DateTime;
 /// Return the version information of the currently built OPOSSUM executable.
 ///
 /// This function returs a `String` which contains the current Git tag/hash combination as well as

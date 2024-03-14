@@ -5,9 +5,10 @@ use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source},
+    ray::SplittingConfig,
     spectrum::Spectrum,
     spectrum_helper::{create_he_ne_spec, create_nd_glass_spec},
-    OpticScenery, SplittingConfig,
+    OpticScenery,
 };
 
 fn main() -> OpmResult<()> {
@@ -30,7 +31,7 @@ fn main() -> OpmResult<()> {
     let filter_spectrum = Spectrum::from_csv("./opossum/NE03B.csv")?;
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
-        FilterType::Spectrum(filter_spectrum),
+        &FilterType::Spectrum(filter_spectrum),
     )?);
     let i_d1 = scenery.add_node(Detector::default()); // Detector 1
 

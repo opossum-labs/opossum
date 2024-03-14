@@ -1,6 +1,6 @@
 use opossum::error::OpmResult;
 use opossum::nodes::{
-    create_round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer, WaveFront,
+    round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer, WaveFront,
 };
 use opossum::refractive_index::RefrIndexConst;
 use opossum::OpticScenery;
@@ -13,7 +13,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Lens Ray-trace test".into())?;
 
-    let src = scenery.add_node(create_round_collimated_ray_source(
+    let src = scenery.add_node(round_collimated_ray_source(
         Length::new::<millimeter>(5.0),
         Energy::new::<joule>(1.0),
         10,

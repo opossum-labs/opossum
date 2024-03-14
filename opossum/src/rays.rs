@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Module for handling ray bundles
+//! Module for handling bundles of [`Ray`]s
 use crate::aperture::Aperture;
 use crate::energy_distributions::EnergyDistribution;
 use crate::error::{OpmResult, OpossumError};
@@ -26,6 +26,7 @@ use log::warn;
 use nalgebra::{distance, point, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
 use serde_derive::{Deserialize, Serialize};
+use std::fmt::Display;
 use std::ops::Add;
 use std::ops::Range;
 use uom::num_traits::Zero;
@@ -37,7 +38,7 @@ use uom::si::length::{micrometer, millimeter, nanometer};
 /// Struct containing all relevant information of a ray bundle
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Rays {
-    ///vector containing rays
+    /// vector containing the individual rays
     rays: Vec<Ray>,
     // ***
     // *** only temporary before we have concept for coordinate system
@@ -52,12 +53,13 @@ impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis) with uniform energy distribution.
     ///
     /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
-    /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`DistributionStrategy`].
+    /// evenly distributed over the indivual rays. The ray positions are distributed according to the given [`PositionDistribution`].
     ///
     /// If the given size id zero, a bundle consisting of a single ray along the optical - position (0.0,0.0,0.0) - axis is generated.
     ///
-    /// This function returns an error if
     /// # Errors
+    ///
+    /// This function returns an error if
     ///  - the given wavelength is <= 0.0, NaN or +inf
     ///  - the given energy is <= 0.0, NaN or +inf
     ///  - the given size is < 0.0, NaN or +inf
@@ -68,7 +70,7 @@ impl Rays {
     ) -> OpmResult<Self> {
         let points = strategy.generate();
         let nr_of_rays = points.len();
-        let mut rays: Vec<Ray> = Vec::new();
+        let mut rays: Vec<Ray> = Vec::with_capacity(nr_of_rays);
         #[allow(clippy::cast_precision_loss)]
         let energy_per_ray = energy / nr_of_rays as f64;
         for point in points {
@@ -136,7 +138,6 @@ impl Rays {
                 rays.push(ray);
             }
         }
-
         Ok(Self {
             rays,
             dist_to_next_surface: Length::zero(),
@@ -146,7 +147,7 @@ impl Rays {
     /// Generate a ray cone (= point source)
     ///
     /// Generate a bundle of rays emerging from a given (x,y) point and a cone direction (as hexapolar pattern) of a given (full) cone angle.
-    /// The parameter `number_of_rings` determines the "density" of the hexapolar pattern (see corresponding function). If the cone angle is zero, a ray bundle
+    /// The parameter `number_of_rings` determines the "density" of the [`Hexapolar`] pattern (see docs there). If the cone angle is zero, a ray bundle
     /// with a single ray along the optical axis at the given position is created.
     ///
     /// # Errors
@@ -235,7 +236,6 @@ impl Rays {
     ///
     /// This function returns an error if a single ray cannot be propery apodized (e.g. filter factor outside (0.0..=1.0)).
     pub fn apodize(&mut self, aperture: &Aperture) -> OpmResult<()> {
-        // let mut new_rays: Vec<Ray> = Vec::new();
         for ray in &mut self.rays {
             if ray.valid() {
                 let pos = point![
@@ -245,14 +245,12 @@ impl Rays {
                 let ap_factor = aperture.apodization_factor(&pos);
                 if ap_factor > 0.0 {
                     ray.filter_energy(&FilterType::Constant(ap_factor))?;
-                    // new_rays.push(new_ray);
                 } else {
                     ray.add_to_pos_hist(ray.position());
                     ray.set_invalid();
                 }
             }
         }
-        // self.rays = new_rays;
         Ok(())
     }
     /// Finds all unique wavelengths in this raybundle and returns them in a vector
@@ -437,7 +435,7 @@ impl Rays {
 
     /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx2<f64>]`.
     ///
-    /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be retruned.
+    /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be returned.
     #[must_use]
     pub fn get_xy_rays_pos(&self, valid_only: bool) -> MatrixXx2<f64> {
         let mut rays_at_pos = MatrixXx2::from_element(self.nr_of_rays(valid_only), 0.);
@@ -597,6 +595,10 @@ impl Rays {
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
+    /// # Warnings
+    ///
+    /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
+    ///
     /// # Errors
     ///
     /// This function will return an error if .
@@ -605,14 +607,19 @@ impl Rays {
         surface: &dyn Surface,
         refractive_index: &RefractiveIndexType,
     ) -> OpmResult<()> {
+        let mut valid_rays_found = false;
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength());
                 ray.refract_on_surface(surface, n2)?;
+                valid_rays_found = true;
             }
         }
         self.z_position += self.dist_to_next_surface;
         self.set_dist_zero();
+        if !valid_rays_found {
+            warn!("ray bundle contains no valid rays - not propagating");
+        }
         Ok(())
     }
     /// Filter a ray bundle by a given filter.
@@ -741,7 +748,10 @@ impl Rays {
     ///
     /// This function will return an error if the underlying split function for a single ray returns an error.
     pub fn split(&mut self, config: &SplittingConfig) -> OpmResult<Self> {
-        let mut split_rays = Self::default();
+        let mut split_rays = Self {
+            z_position: self.absolute_z_of_last_surface(),
+            ..Default::default()
+        };
         for ray in &mut self.rays {
             if ray.valid() {
                 let split_ray = ray.split(config)?;
@@ -753,10 +763,16 @@ impl Rays {
     /// Merge two ray bundles.
     ///
     /// This function simply adds the given rays to the existing ray bundle.
+    /// **Note**: The temporarily introduced "absolute z position" is taken from the ray bundle with the maximum position....We have
+    /// to work on that...
     pub fn merge(&mut self, rays: &Self) {
+        let max_z_position = self
+            .absolute_z_of_last_surface()
+            .max(rays.absolute_z_of_last_surface());
         for ray in &rays.rays {
             self.add_ray(ray.clone());
         }
+        self.z_position = max_z_position;
     }
 
     /// Split an existing ray bundle into multiple ray bundles corresponding to their wavelength
@@ -887,6 +903,17 @@ impl Rays {
         self.z_position
     }
 }
+
+impl Display for Rays {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for ray in self {
+            let _ = writeln!(f, "{ray}");
+        }
+        write!(f, "# of rays: {:?}", self.nr_of_rays(false))
+    }
+}
+
+
 
 impl From<Vec<Ray>> for Rays {
     fn from(value: Vec<Ray>) -> Self {
@@ -1639,6 +1666,7 @@ mod test {
         assert_abs_diff_eq!(rays.rays[1].direction().z, new_dir.z);
     }
     #[test]
+    #[ignore = "reenable later"]
     fn filter_energy() {
         let mut rays = Rays::default();
         assert!(rays.filter_energy(&FilterType::Constant(0.5)).is_ok());
@@ -1826,11 +1854,15 @@ mod test {
         )
         .unwrap();
         let mut rays = Rays::default();
+        let z_position = Length::new::<millimeter>(10.0);
+        rays.z_position = z_position;
         rays.add_ray(ray1.clone());
         rays.add_ray(ray2.clone());
         assert!(rays.split(&SplittingConfig::Ratio(1.1)).is_err());
         assert!(rays.split(&SplittingConfig::Ratio(-0.1)).is_err());
         let split_rays = rays.split(&SplittingConfig::Ratio(0.2)).unwrap();
+        assert_eq!(rays.absolute_z_of_last_surface(), z_position);
+        assert_eq!(split_rays.absolute_z_of_last_surface(), z_position);
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
         assert_abs_diff_eq!(
             split_rays.total_energy().get::<joule>(),

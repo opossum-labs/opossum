@@ -2,7 +2,7 @@ use std::path::Path;
 
 use opossum::{
     error::OpmResult,
-    nodes::{create_round_collimated_ray_source, ParaxialSurface, Propagation, SpotDiagram},
+    nodes::{round_collimated_ray_source, ParaxialSurface, Propagation, SpotDiagram},
     OpticScenery,
 };
 use uom::si::{
@@ -13,7 +13,7 @@ use uom::si::{
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
-    let i_src = scenery.add_node(create_round_collimated_ray_source(
+    let i_src = scenery.add_node(round_collimated_ray_source(
         Length::new::<millimeter>(10.0),
         Energy::new::<joule>(1.0),
         3,

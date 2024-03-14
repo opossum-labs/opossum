@@ -16,7 +16,7 @@ use petgraph::{algo::toposort, Direction};
 use serde_derive::Serialize;
 use std::collections::HashMap;
 
-/// Mappin of group internal ports to externally visible ports.
+/// Mapping of group internal [`OpticPorts`] to externally visible ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
 impl From<PortMap> for Proptype {
     fn from(value: PortMap) -> Self {
@@ -532,7 +532,7 @@ impl NodeGroup {
         }
     }
 
-    /// Returns the boolean which defines whether the group expands or not.
+    /// Define if a [`NodeGroup`] should be displayed expanded or not in diagram.
     ///
     /// # Errors
     /// This function returns an error if the property "expand view" can not be set
@@ -780,8 +780,8 @@ mod test {
         lightdata::DataEnergy,
         nodes::{BeamSplitter, Detector, Dummy, Source},
         optical::Optical,
+        ray::SplittingConfig,
         spectrum_helper::create_he_ne_spec,
-        SplittingConfig,
     };
     use approx::assert_abs_diff_eq;
     #[test]

@@ -360,7 +360,8 @@ impl OpticScenery {
     ///
     /// This function will return an error if the file path cannot be created or it cannot write into the file (e.g. no space).
     pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
-        let serialized = serde_json::to_string_pretty(&self).map_err(|e| {
+        // let serialized = serde_json::to_string_pretty(&self).map_err(|e| {
+        let serialized = serde_yaml::to_string(&self).map_err(|e| {
             OpossumError::OpticScenery(format!("deserialization of OpticScenery failed: {e}"))
         })?;
         let mut output = File::create(path).map_err(|e| {
@@ -578,9 +579,8 @@ mod test {
         Detector, IdealFilter, Metertype, NodeReference, ParaxialSurface, Propagation,
         RayPropagationVisualizer, Spectrometer, SpotDiagram, WaveFront,
     };
-    use crate::ray::Ray;
+    use crate::ray::{Ray, SplittingConfig};
     use crate::rays::Rays;
-    use crate::SplittingConfig;
     use log::Level;
     use nalgebra::Point3;
     use num::Zero;
@@ -744,7 +744,7 @@ mod test {
         let report = scenery.report(Path::new(""));
         assert!(report.is_ok());
         let report = report.unwrap();
-        assert!(serde_json::to_string(&report).is_ok());
+        assert!(serde_yaml::to_string(&report).is_ok());
         // How shall we further parse the output?
     }
     #[test]
