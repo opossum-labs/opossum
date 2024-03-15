@@ -34,6 +34,7 @@ test_windows:
   tags:
     - windows
   script:
+    - cargo clippy -- --version
     - cargo xtask ci
   rules:
     - if: '$CI_COMMIT_REF_PROTECTED == "true"'
