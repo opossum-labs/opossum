@@ -162,9 +162,8 @@ impl Optical for Source {
                     return Err(OpossumError::Properties(
                         "Cannot change the inversion status of a source node!".into(),
                     ));
-                } else {
-                    return Ok(());
                 }
+                return Ok(());
             };
         };
         self.props.set(name, prop)
