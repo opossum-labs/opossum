@@ -3,13 +3,14 @@
 use crate::error::{OpmResult, OpossumError};
 use crate::utils::griddata::create_valued_voronoi_cells;
 use crate::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace};
-use approx::{abs_diff_ne, RelativeEq};
+use approx::{abs_diff_ne, assert_relative_ne, relative_ne, RelativeEq};
 use colorous::Gradient;
 use image::RgbImage;
 use itertools::{iproduct, izip};
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3};
+use num::iter::Range;
 use num::ToPrimitive;
 use plotters::{
     backend::DrawingBackend,
@@ -619,6 +620,21 @@ impl PlotType {
         chart
     }
 
+    fn tick_formatter(range: core::ops::Range<f64>) -> impl Fn(&f64) -> String {
+        let log_val =  range.end.abs().max(range.start.abs()).log10().floor().to_i32().unwrap();
+    
+        move |v: &_|{
+            match log_val{
+                -3 => format!("{v:.3}"),
+                -2 => format!("{v:.3}"),
+                -1 => format!("{v:.2}"),
+                0 => format!("{v:.2}"),
+                1 => format!("{v:.1}"),
+                2 => format!("{v:.0}"),
+                _ => format!("{v}")
+        } }
+    }
+
     fn create_2d_plot_chart<'a, T: DrawingBackend>(
         root: &'a DrawingArea<T, Shift>,
         x_bounds: AxLims,
@@ -628,7 +644,7 @@ impl PlotType {
         x_ax: bool,
     ) -> ChartContext<'a, T, Cartesian2d<RangedCoordf64, RangedCoordf64>> {
         let mut chart_builder = ChartBuilder::on(root);
-        chart_builder.margin(30).margin_top(40);
+        chart_builder.margin(30).margin_top(40).margin_left(10);
 
         if y_ax {
             let pixel_margin = Self::calc_pixel_margin(y_bounds);
@@ -647,44 +663,14 @@ impl PlotType {
             .build_cartesian_2d(x_bounds.min..x_bounds.max, y_bounds.min..y_bounds.max)
             .unwrap();
 
+
+        let x_format = Self::tick_formatter(chart.x_range());
+        let y_format = Self::tick_formatter(chart.y_range());
         let mut mesh = chart.configure_mesh();
-    //     mesh.x_label_formatter(&|v| {
-    //             if v.abs() < 1e-3 || v.abs() >1e5{
-    //                 format!("{v:e}")
-    //             }
-    //             else{
-    //                 let log_val = v.abs().log10().floor().to_i32().unwrap();
-    //                 match log_val{
-    //                     -3 => format!("{v:.3}"),
-    //                     -2 => format!("{v:.3}"),
-    //                     -1 => format!("{v:.3}"),
-    //                     0 => format!("{v:.2}"),
-    //                     1 => format!("{v:.1}"),
-    //                     2 => format!("{v:.0}"),
-    //                     _ => format!("{v}")
-    //                 }
-                    
-    //             }
-    //     }
-    //     ).y_label_formatter(&|v| {
-    //         if v.abs() < 1e-3 || v.abs() >1e5{
-    //             format!("{v:e}")
-    //         }
-    //         else{
-    //             let log_val = v.abs().log10().floor().to_i32().unwrap();
-    //             match log_val{
-    //                 -3 => format!("{v:.3}"),
-    //                 -2 => format!("{v:.3}"),
-    //                 -1 => format!("{v:.3}"),
-    //                 0 => format!("{v:.2}"),
-    //                 1 => format!("{v:.1}"),
-    //                 2 => format!("{v:.0}"),
-    //                 _ => format!("{v}")
-    //             }
-                
-    //         }
-    // }
-    // );
+        mesh.x_labels(5).y_labels(5);
+
+        mesh.x_label_formatter(&x_format )
+        .y_label_formatter(&y_format  );
 
         Self::set_or_disable_axis_desc([x_ax, y_ax], label_desc, &mut mesh);
 
@@ -714,23 +700,51 @@ impl PlotType {
     }
 
     fn calc_pixel_margin(bounds: AxLims) -> u32 {
-        //absolutely ugly "automation" of margin. not done nicely and not accurate, works only for sans serif with 30 pt
-        let mut digits_max =
-            bounds.max.abs().log10().abs().floor() + 2. + f64::from(bounds.max.is_sign_negative());
-        if digits_max.is_infinite() {
-            digits_max = 4.;
+        let log_val_max = if relative_ne!(bounds.max.abs(), 0.){
+            bounds.max.abs().log10().floor().to_i32().unwrap()
         }
-        let mut digits_min =
-            bounds.min.abs().log10().abs().floor() + 2. + f64::from(bounds.min.is_sign_negative());
-        if digits_min.is_infinite() {
-            digits_min = 4.;
+        else{
+            -1
+        };
+        let log_val_min = if relative_ne!(bounds.min.abs(), 0.){
+            bounds.min.abs().log10().floor().to_i32().unwrap()
         }
-        let digits = if digits_max >= digits_min {
-            digits_max.to_u32()
-        } else {
-            digits_min.to_u32()
-        }
-        .unwrap();
+        else{
+            -1
+        };
+
+        let mut digits_min =  match log_val_min{
+            -3 | -2 => 5,
+            _ => 4,
+        };
+        let mut digits_max =  match log_val_max{
+            -3 | -2 => 5,
+            _ => 4,
+        };
+
+        digits_min += i32::from(bounds.min.is_sign_negative());
+        digits_max += i32::from(bounds.max.is_sign_negative());
+
+
+        let digits = digits_max.max(digits_min).to_u32().unwrap();
+
+        // //absolutely ugly "automation" of margin. not done nicely and not accurate, works only for sans serif with 30 pt
+        // let mut digits_max =
+        //     bounds.max.abs().log10().abs().floor() + 2. + f64::from(bounds.max.is_sign_negative());
+        // if digits_max.is_infinite() {
+        //     digits_max = 4.;
+        // }
+        // let mut digits_min =
+        //     bounds.min.abs().log10().abs().floor() + 2. + f64::from(bounds.min.is_sign_negative());
+        // if digits_min.is_infinite() {
+        //     digits_min = 4.;
+        // }
+        // let digits = if digits_max >= digits_min {
+        //     digits_max.to_u32()
+        // } else {
+        //     digits_min.to_u32()
+        // }
+        // .unwrap();
 
         digits * 13 + 20
     }
@@ -1243,7 +1257,14 @@ pub trait Plottable {
 
         let plt_type = self.get_plot_type(&plt_params);
 
-        let plt_series_opt = self.get_plot_series(&plt_type)?;
+        let mut plt_series_opt = self.get_plot_series(&plt_type)?;
+
+        // let max = 
+        // for plt_series in plt_series_opt.iter_mut().flatten(){
+        //     if let PlotData::ColorMesh { x_dat_n, y_dat_m, z_dat_nxm } = &mut plt_series.get_plot_series_data(){
+        //         z_dat_nxm.
+        //     }
+        // }
 
         plt_series_opt.map_or(Ok(None), |plt_series| plt_type.plot(&plt_series))
     }
@@ -2035,7 +2056,7 @@ impl Plot {
         let mut height_add: u32 = 65+70;
         let mut width_add: u32 = 0;
 
-        let mut add_left = 30;
+        let mut add_left = 10;
         let mut add_right = 30;
         let pixel_margin = PlotType::calc_pixel_margin(self.bounds.y.unwrap_or_else(|| AxLims{min: -0.5, max: 0.5}));
 
@@ -3222,13 +3243,59 @@ mod test {
     }
     #[test]
     fn calc_pixel_margin_test() {
-        let axlims = AxLims::new(0., 1.).unwrap();
+
+        let axlims = AxLims::new(1e-4, 2e-4).unwrap();
         assert!(PlotType::calc_pixel_margin(axlims) == 72);
 
-        let axlims = AxLims::new(-100., 1.).unwrap();
+        let axlims = AxLims::new(-2e-4, -1e-4).unwrap();
         assert!(PlotType::calc_pixel_margin(axlims) == 85);
 
-        let axlims = AxLims::new(-10., 1000.).unwrap();
+        let axlims = AxLims::new(1e-3, 2e-3).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 85);
+
+        let axlims = AxLims::new(-2e-3, -1e-3).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 98);
+
+        let axlims = AxLims::new(1e-2, 2e-2).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 85);
+
+        let axlims = AxLims::new(-2e-2, -1e-2).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 98);
+
+        let axlims = AxLims::new(1e-1, 2e-1).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 72);
+
+        let axlims = AxLims::new(-2e-1, -1e-1).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 85);
+
+        let axlims = AxLims::new(1e-0, 2e-0).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 72);
+
+        let axlims = AxLims::new(-2e-0, -1e-0).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 85);
+
+        let axlims = AxLims::new(1e1, 2e1).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 72);
+
+        let axlims = AxLims::new(-2e1, -1e1).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 85);
+
+        let axlims = AxLims::new(1e2, 2e2).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 72);
+
+        let axlims = AxLims::new(-2e2, -1e2).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 85);
+
+        let axlims = AxLims::new(1e3, 2e3).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 72);
+
+        let axlims = AxLims::new(-2e3, -1e3).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 85);
+
+        let axlims = AxLims::new(1e4, 2e4).unwrap();
+        assert!(PlotType::calc_pixel_margin(axlims) == 72);
+
+        let axlims = AxLims::new(-2e4, -1e4).unwrap();
         assert!(PlotType::calc_pixel_margin(axlims) == 85);
     }
 

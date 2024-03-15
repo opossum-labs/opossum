@@ -255,7 +255,7 @@ impl Plottable for FluenceData {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm".into()))?
             .set(&PlotArgs::YLabel("distance in mm".into()))?
-            .set(&PlotArgs::CBarLabel("fluence in W/cm²".into()))?;
+            .set(&PlotArgs::CBarLabel("fluence in J/cm²".into()))?;
         Ok(())
     }
 
@@ -274,7 +274,6 @@ impl Plottable for FluenceData {
                 let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
                 Ok(Some(vec![plt_series]))
             }
-            // PlotType::ColorVoronoi(_) => Ok(Some(PlotData::ColorVoronoi())),
             _ => Ok(None),
         }
     }
