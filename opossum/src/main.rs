@@ -77,7 +77,7 @@ fn create_report_file(
 
 fn main() -> OpmResult<()> {
     // by default, log everything from level `info` and up.
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
     //parse CLI arguments
     let opossum_args = Args::try_from(PartialArgs::parse())?;
 

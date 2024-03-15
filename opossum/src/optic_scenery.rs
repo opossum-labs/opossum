@@ -27,7 +27,6 @@ use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
-use uom::si::f64::Energy;
 
 /// Overall optical model and additional metadata.
 ///
@@ -248,14 +247,12 @@ impl OpticScenery {
             if neighbors.count() == 0 {
                 warn!("stale (completely unconnected) node {node_name} found. Skipping.");
             } else {
-                let mut incoming_edges: HashMap<String, Option<LightData>> =
-                    self.incoming_edges(idx);
+                let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
                 // paranoia: check if all incoming ports are really input ports of the node to be analyzed
                 let input_ports = node.optical_ref.borrow().ports().input_names();
                 if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
                     warn!("input light data contains port which is not an input port of the node {node_name}. Data will be discarded.");
                 }
-                incoming_edges = apodize_incoming_light(incoming_edges, node)?;
                 //
                 let node_type = node
                     .optical_ref
@@ -263,7 +260,7 @@ impl OpticScenery {
                     .properties()
                     .node_type()?
                     .to_owned();
-                let mut outgoing_edges = node
+                let outgoing_edges = node
                     .optical_ref
                     .borrow_mut()
                     .analyze(incoming_edges, analyzer_type)
@@ -272,10 +269,6 @@ impl OpticScenery {
                             "analysis of node {node_name} <{node_type}> failed: {e}"
                         ))
                     })?;
-                outgoing_edges = apodize_outgoing_light(outgoing_edges, node)?;
-                if let AnalyzerType::RayTrace(config) = analyzer_type {
-                    threshold_by_energy(&mut outgoing_edges, config.min_energy_per_ray())?;
-                }
                 for outgoing_edge in outgoing_edges {
                     self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
                 }
@@ -360,7 +353,6 @@ impl OpticScenery {
     ///
     /// This function will return an error if the file path cannot be created or it cannot write into the file (e.g. no space).
     pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
-        // let serialized = serde_json::to_string_pretty(&self).map_err(|e| {
         let serialized = serde_yaml::to_string(&self).map_err(|e| {
             OpossumError::OpticScenery(format!("deserialization of OpticScenery failed: {e}"))
         })?;
@@ -380,67 +372,6 @@ impl OpticScenery {
         })?;
         Ok(())
     }
-}
-fn apodize_incoming_light(
-    incoming_edges: HashMap<String, Option<LightData>>,
-    node: &OpticRef,
-) -> OpmResult<HashMap<String, Option<LightData>>> {
-    let mut apodized_edges: HashMap<String, Option<LightData>> = HashMap::new();
-    let ports = node.optical_ref.borrow().ports();
-    let input_ports = ports.inputs();
-    for edge in incoming_edges {
-        if let Some(LightData::Geometric(rays)) = edge.1 {
-            if let Some(aperture) = input_ports.get(&edge.0) {
-                let mut apodized_rays = rays.clone();
-                apodized_rays.apodize(aperture)?;
-                apodized_edges.insert(edge.0, Some(LightData::Geometric(apodized_rays)));
-            } else {
-                return Err(OpossumError::OpticScenery(format!(
-                    "input port {} not found",
-                    edge.0
-                )));
-            }
-        } else {
-            apodized_edges.insert(edge.0, edge.1);
-        }
-    }
-    Ok(apodized_edges)
-}
-fn apodize_outgoing_light(
-    outgoing_edges: HashMap<String, Option<LightData>>,
-    node: &OpticRef,
-) -> OpmResult<HashMap<String, Option<LightData>>> {
-    let mut apodized_edges: HashMap<String, Option<LightData>> = HashMap::new();
-    let ports = node.optical_ref.borrow().ports();
-    let outgoing_ports = ports.outputs();
-    for edge in outgoing_edges {
-        if let Some(LightData::Geometric(rays)) = edge.1 {
-            if let Some(aperture) = outgoing_ports.get(&edge.0) {
-                let mut apodized_rays = rays.clone();
-                apodized_rays.apodize(aperture)?;
-                apodized_edges.insert(edge.0, Some(LightData::Geometric(apodized_rays)));
-            } else {
-                return Err(OpossumError::OpticScenery(format!(
-                    "input port {} not found",
-                    edge.0
-                )));
-            }
-        } else {
-            apodized_edges.insert(edge.0, edge.1);
-        }
-    }
-    Ok(apodized_edges)
-}
-fn threshold_by_energy(
-    outgoing_edges: &mut LightResult,
-    energy_threshold: Energy,
-) -> OpmResult<()> {
-    for light_data in &mut *outgoing_edges {
-        if let Some(LightData::Geometric(rays)) = light_data.1 {
-            rays.invalidate_by_threshold_energy(energy_threshold)?;
-        }
-    }
-    Ok(())
 }
 
 impl Serialize for OpticScenery {
@@ -588,7 +519,7 @@ mod test {
     use std::{fs::File, io::Read};
     use testing_logger;
     use uom::si::energy::joule;
-    use uom::si::f64::Length;
+    use uom::si::f64::{Energy, Length};
     use uom::si::length::nanometer;
 
     fn get_file_content(f_path: &str) -> String {

@@ -1,8 +1,11 @@
+use nalgebra::Point2;
+use opossum::aperture::{Aperture, CircleConfig};
 use opossum::error::OpmResult;
 use opossum::nodes::{
     round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer, SpotDiagram,
     WaveFront,
 };
+use opossum::optical::Optical;
 use opossum::refractive_index::RefrIndexConst;
 use opossum::OpticScenery;
 use std::path::Path;
@@ -29,13 +32,16 @@ fn main() -> OpmResult<()> {
         "s2",
         Length::new::<millimeter>(197.22992),
     )?);
-    let l2 = scenery.add_node(Lens::new(
+    let mut lens = Lens::new(
         "l1",
         Length::new::<millimeter>(200.0),
         Length::new::<millimeter>(-200.0),
         Length::new::<millimeter>(10.0),
         &RefrIndexConst::new(2.0).unwrap(),
-    )?);
+    )?;
+    let circle = CircleConfig::new(3.0, Point2::new(0.0, 0.0))?;
+    lens.set_output_aperture("rear", &Aperture::BinaryCircle(circle))?;
+    let l2 = scenery.add_node(lens);
     let s3 = scenery.add_node(Propagation::new("s3", Length::new::<millimeter>(30.0))?);
     let det = scenery.add_node(RayPropagationVisualizer::default());
     let wf = scenery.add_node(WaveFront::default());

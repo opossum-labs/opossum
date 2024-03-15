@@ -67,9 +67,12 @@ impl RefractiveIndex for RefrIndexSchott {
 }
 #[cfg(test)]
 mod test {
+    use approx::assert_relative_eq;
+    use uom::si::{f64::Length, length::nanometer};
+
     use super::*;
     #[test]
-    fn new() {
+    fn new_wrong() {
         assert!(RefrIndexSchott::new(1.0, 1.0, 1.0, 1.0, 1.0, f64::NAN).is_err());
         assert!(RefrIndexSchott::new(1.0, 1.0, 1.0, 1.0, 1.0, f64::INFINITY).is_err());
 
@@ -87,5 +90,37 @@ mod test {
 
         assert!(RefrIndexSchott::new(f64::NAN, 1.0, 1.0, 1.0, 1.0, 1.0).is_err());
         assert!(RefrIndexSchott::new(f64::INFINITY, 1.0, 1.0, 1.0, 1.0, 1.0).is_err());
+    }
+    #[test]
+    fn new() {
+        let r = RefrIndexSchott::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0).unwrap();
+        assert_eq!(r.a0, 1.0);
+        assert_eq!(r.a1, 2.0);
+        assert_eq!(r.a2, 3.0);
+        assert_eq!(r.a3, 4.0);
+        assert_eq!(r.a4, 5.0);
+        assert_eq!(r.a5, 6.0);
+    }
+    #[test]
+    fn get_refractive_index() {
+        let i = RefrIndexSchott::new(
+            3.26760058E+000,
+            -2.05384566E-002,
+            3.51507672E-002,
+            7.70151348E-003,
+            -9.08139817E-004,
+            7.52649555E-005,
+        )
+        .unwrap();
+        assert_relative_eq!(
+            i.get_refractive_index(Length::new::<nanometer>(1054.0)),
+            1.8116,
+            max_relative = 0.0001
+        );
+    }
+    #[test]
+    fn get_enum() {
+        let i = RefrIndexSchott::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0).unwrap();
+        assert!(matches!(i.to_enum(), RefractiveIndexType::Schott(_)));
     }
 }

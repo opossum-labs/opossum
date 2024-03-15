@@ -43,6 +43,8 @@ impl From<PortMap> for Proptype {
 ///   - `graph`
 ///   - `input port map`
 ///   - `output port map`
+///
+/// **Note**: The group node does currently ignore all [`Aperture`] definitions on its publicly mapped input and output ports.
 pub struct NodeGroup {
     #[serde(skip)]
     g: OpticGraph,
@@ -683,6 +685,10 @@ impl NodeGroup {
 impl Optical for NodeGroup {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
+        let Proptype::OpticPorts(ports_to_be_set) = self.properties().get("apertures").unwrap()
+        else {
+            panic!("failed to set global input and exit apertures");
+        };
         for p in &self.input_port_map() {
             ports.create_input(p.0).unwrap();
         }
@@ -692,6 +698,7 @@ impl Optical for NodeGroup {
         if self.properties().inverted().unwrap() {
             ports.set_inverted(true);
         }
+        ports.set_apertures(ports_to_be_set.clone()).unwrap();
         ports
     }
     fn analyze(

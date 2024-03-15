@@ -65,9 +65,12 @@ impl RefractiveIndex for RefrIndexSellmeier1 {
 }
 #[cfg(test)]
 mod test {
+    use approx::assert_relative_eq;
+    use uom::si::{f64::Length, length::nanometer};
+
     use super::*;
     #[test]
-    fn new() {
+    fn new_wrong() {
         assert!(RefrIndexSellmeier1::new(1.0, 1.0, 1.0, 1.0, 1.0, -1.0).is_err());
         assert!(RefrIndexSellmeier1::new(1.0, 1.0, 1.0, 1.0, 1.0, f64::NAN).is_err());
         assert!(RefrIndexSellmeier1::new(1.0, 1.0, 1.0, 1.0, 1.0, f64::INFINITY).is_err());
@@ -79,5 +82,37 @@ mod test {
         assert!(RefrIndexSellmeier1::new(1.0, 1.0, 1.0, -1.0, 1.0, 1.0).is_err());
         assert!(RefrIndexSellmeier1::new(1.0, 1.0, 1.0, f64::NAN, 1.0, 1.0).is_err());
         assert!(RefrIndexSellmeier1::new(1.0, 1.0, 1.0, f64::INFINITY, 1.0, 1.0).is_err());
+    }
+    #[test]
+    fn new() {
+        let r = RefrIndexSellmeier1::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0).unwrap();
+        assert_eq!(r.k1, 1.0);
+        assert_eq!(r.k2, 2.0);
+        assert_eq!(r.k3, 3.0);
+        assert_eq!(r.l1, 4.0);
+        assert_eq!(r.l2, 5.0);
+        assert_eq!(r.l3, 6.0);
+    }
+    #[test]
+    fn get_refractive_index() {
+        let i = RefrIndexSellmeier1::new(
+            6.14555251E-1,
+            6.56775017E-1,
+            1.02699346E+0,
+            1.45987884E-2,
+            2.87769588E-3,
+            1.07653051E+2,
+        )
+        .unwrap();
+        assert_relative_eq!(
+            i.get_refractive_index(Length::new::<nanometer>(1054.0)),
+            1.5068,
+            max_relative = 0.0001
+        );
+    }
+    #[test]
+    fn get_enum() {
+        let r = RefrIndexSellmeier1::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0).unwrap();
+        assert!(matches!(r.to_enum(), RefractiveIndexType::Sellmeier1(_)));
     }
 }

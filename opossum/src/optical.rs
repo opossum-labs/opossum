@@ -46,7 +46,7 @@ pub trait Optical: Dottable {
     /// # Errors
     ///
     /// This function will return an error if the port name does not exist.
-    fn set_input_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
+    fn set_input_aperture(&mut self, port_name: &str, aperture: &Aperture) -> OpmResult<()> {
         let mut ports = self.ports();
         if ports.inputs().contains_key(port_name) {
             ports.set_input_aperture(port_name, aperture)?;
@@ -63,7 +63,7 @@ pub trait Optical: Dottable {
     /// # Errors
     ///
     /// This function will return an error if the port name does not exist.
-    fn set_output_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
+    fn set_output_aperture(&mut self, port_name: &str, aperture: &Aperture) -> OpmResult<()> {
         let mut ports = self.ports();
         if ports.outputs().contains_key(port_name) {
             ports.set_output_aperture(port_name, aperture)?;
@@ -172,8 +172,14 @@ pub trait Optical: Dottable {
                     "apertures" => {
                         let mut ports = self.ports();
                         if let Proptype::OpticPorts(ports_to_be_set) = prop.1.prop().clone() {
-                            ports.set_apertures(ports_to_be_set)?;
-                            self.set_property("apertures", ports.into())?;
+                            if self.properties().node_type().unwrap() == "group" {
+                                // apertures cannot be set here for groups since no port mapping is defined yet.
+                                // this will be done later dynamically in group:ports() function.
+                                self.set_property("apertures", ports_to_be_set.into())?;
+                            } else {
+                                ports.set_apertures(ports_to_be_set)?;
+                                self.set_property("apertures", ports.into())?;
+                            }
                         }
                     }
                     _ => self.set_property(prop.0, prop.1.prop().clone())?,

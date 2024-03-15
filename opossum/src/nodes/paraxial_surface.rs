@@ -105,6 +105,22 @@ impl Optical for ParaxialSurface {
                     let plane = Plane::new(z_position)?;
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     rays.refract_paraxial(focal_length)?;
+                    if let Some(aperture) = self.ports().input_aperture("front") {
+                        rays.apodize(aperture)?;
+                        if let AnalyzerType::RayTrace(config) = analyzer_type {
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        }
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    };
+                    if let Some(aperture) = self.ports().output_aperture("rear") {
+                        rays.apodize(aperture)?;
+                        if let AnalyzerType::RayTrace(config) = analyzer_type {
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        }
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    };
                     data = Some(LightData::Geometric(rays));
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
@@ -193,17 +209,17 @@ mod test {
     fn set_input_aperture() {
         let mut node = ParaxialSurface::default();
         let aperture = Aperture::default();
-        assert!(node.set_input_aperture("front", aperture.clone()).is_ok());
-        assert!(node.set_input_aperture("rear", aperture.clone()).is_err());
-        assert!(node.set_input_aperture("no port", aperture).is_err());
+        assert!(node.set_input_aperture("front", &aperture).is_ok());
+        assert!(node.set_input_aperture("rear", &aperture).is_err());
+        assert!(node.set_input_aperture("no port", &aperture).is_err());
     }
     #[test]
     fn set_output_aperture() {
         let mut node = ParaxialSurface::default();
         let aperture = Aperture::default();
-        assert!(node.set_output_aperture("rear", aperture.clone()).is_ok());
-        assert!(node.set_output_aperture("front", aperture.clone()).is_err());
-        assert!(node.set_output_aperture("no port", aperture).is_err());
+        assert!(node.set_output_aperture("rear", &aperture).is_ok());
+        assert!(node.set_output_aperture("front", &aperture).is_err());
+        assert!(node.set_output_aperture("no port", &aperture).is_err());
     }
     // #[test]
     // #[ignore]

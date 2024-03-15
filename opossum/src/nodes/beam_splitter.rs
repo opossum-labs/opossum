@@ -174,6 +174,7 @@ impl BeamSplitter {
         &mut self,
         in1: Option<&LightData>,
         in2: Option<&LightData>,
+        analyzer_type: &AnalyzerType,
     ) -> OpmResult<(Option<LightData>, Option<LightData>)> {
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
@@ -191,12 +192,20 @@ impl BeamSplitter {
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     let plane = Plane::new(z_position)?;
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    if let Some(aperture) = self.ports().input_aperture("input1") {
+                        rays.apodize(aperture)?;
+                        if let AnalyzerType::RayTrace(config) = analyzer_type {
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        }
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    };
                     let split_rays = rays.split(&splitting_config.value)?;
                     (rays, split_rays)
                 }
                 _ => {
                     return Err(OpossumError::Analysis(
-                        "expected Rays value at input port".into(),
+                        "expected Rays value at `input1` port".into(),
                     ))
                 }
             }
@@ -211,12 +220,20 @@ impl BeamSplitter {
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     let plane = Plane::new(z_position)?;
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    if let Some(aperture) = self.ports().input_aperture("input2") {
+                        rays.apodize(aperture)?;
+                        if let AnalyzerType::RayTrace(config) = analyzer_type {
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        }
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    };
                     let split_rays = rays.split(&splitting_config.value)?;
                     (rays, split_rays)
                 }
                 _ => {
                     return Err(OpossumError::Analysis(
-                        "expected Rays value at input port".into(),
+                        "expected Rays value at `input2` port".into(),
                     ))
                 }
             }
@@ -225,6 +242,22 @@ impl BeamSplitter {
         };
         in_ray1.merge(&split2);
         in_ray2.merge(&split1);
+        if let Some(aperture) = self.ports().output_aperture("out1_trans1_refl2") {
+            in_ray1.apodize(aperture)?;
+            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                in_ray1.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            }
+        } else {
+            return Err(OpossumError::OpticPort("ouput aperture not found".into()));
+        };
+        if let Some(aperture) = self.ports().output_aperture("out2_trans2_refl1") {
+            in_ray2.apodize(aperture)?;
+            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                in_ray2.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            }
+        } else {
+            return Err(OpossumError::OpticPort("ouput aperture not found".into()));
+        };
         Ok((
             Some(LightData::Geometric(in_ray1)),
             Some(LightData::Geometric(in_ray2)),
@@ -275,7 +308,7 @@ impl Optical for BeamSplitter {
         };
         let (out1_data, out2_data) = match analyzer_type {
             AnalyzerType::Energy => self.analyze_energy(in1, in2)?,
-            AnalyzerType::RayTrace(_) => self.analyze_raytrace(in1, in2)?,
+            AnalyzerType::RayTrace(_) => self.analyze_raytrace(in1, in2, analyzer_type)?,
         };
         if self.properties().inverted()? {
             Ok(HashMap::from([

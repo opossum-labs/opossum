@@ -184,7 +184,7 @@ impl Optical for IdealFilter {
     fn analyze(
         &mut self,
         incoming_data: crate::optical::LightResult,
-        analyzer_type: &crate::analyzer::AnalyzerType,
+        analyzer_type: &AnalyzerType,
     ) -> OpmResult<crate::optical::LightResult> {
         let (mut src, mut target) = ("front", "rear");
         if self.properties().inverted()? {
@@ -216,6 +216,22 @@ impl Optical for IdealFilter {
                     let plane = Plane::new(z_position)?;
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     rays.filter_energy(&self.filter_type())?;
+                    if let Some(aperture) = self.ports().input_aperture("front") {
+                        rays.apodize(aperture)?;
+                        if let AnalyzerType::RayTrace(config) = analyzer_type {
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        }
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    };
+                    if let Some(aperture) = self.ports().output_aperture("rear") {
+                        rays.apodize(aperture)?;
+                        if let AnalyzerType::RayTrace(config) = analyzer_type {
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        }
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    };
                     let light_data = Some(LightData::Geometric(rays));
                     return Ok(HashMap::from([(target.into(), light_data)]));
                 }

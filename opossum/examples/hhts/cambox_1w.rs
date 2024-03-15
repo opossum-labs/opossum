@@ -1,11 +1,17 @@
+use nalgebra::Point2;
 use opossum::{
+    aperture::{Aperture, RectangleConfig},
     error::OpmResult,
     nodes::{BeamSplitter, NodeGroup, ParaxialSurface, Propagation, SpotDiagram},
+    optical::Optical,
     ray::SplittingConfig,
 };
 use uom::si::{f64::Length, length::millimeter};
 
 pub fn cambox_1w() -> OpmResult<NodeGroup> {
+    let config = RectangleConfig::new(11.33, 7.13, Point2::new(0.0, 0.0))?;
+    let cam_aperture = Aperture::BinaryRectangle(config);
+
     let mut cb = NodeGroup::new("CamBox 1w");
 
     let d1 = cb.add_node(Propagation::new("d1", Length::new::<millimeter>(35.0))?)?;
@@ -22,7 +28,9 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
         Length::new::<millimeter>(100.0),
     )?)?;
     let ff_d3 = cb.add_node(Propagation::new("ff_d3", Length::new::<millimeter>(100.0))?)?;
-    let ff_cam = cb.add_node(SpotDiagram::new("FF cam"))?;
+    let mut node = SpotDiagram::new("FF cam");
+    node.set_input_aperture("in1", &cam_aperture)?;
+    let ff_cam = cb.add_node(node)?;
 
     cb.connect_nodes(bs1, "out1_trans1_refl2", ff_d1, "front")?;
     cb.connect_nodes(ff_d1, "rear", bs_ff, "input1")?;
@@ -45,7 +53,9 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let nf_d3 = cb.add_node(Propagation::new("nf_d1", Length::new::<millimeter>(50.0))?)?;
     let nf_bs = cb.add_node(BeamSplitter::new("nf bs", &SplittingConfig::Ratio(0.5))?)?;
     let nf_d4 = cb.add_node(Propagation::new("nf_d4", Length::new::<millimeter>(130.0))?)?;
-    let nf_cam = cb.add_node(SpotDiagram::new("NF cam"))?;
+    let mut node = SpotDiagram::new("NF cam");
+    node.set_input_aperture("in1", &cam_aperture)?;
+    let nf_cam = cb.add_node(node)?;
 
     cb.connect_nodes(bs1, "out2_trans2_refl1", nf_d1, "front")?;
     cb.connect_nodes(nf_d1, "rear", nf_lens1, "front")?;

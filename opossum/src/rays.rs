@@ -608,15 +608,21 @@ impl Rays {
         refractive_index: &RefractiveIndexType,
     ) -> OpmResult<()> {
         let mut valid_rays_found = false;
+        let mut rays_missed = false;
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength());
-                ray.refract_on_surface(surface, n2)?;
+                if ray.refract_on_surface(surface, n2)?.is_none() {
+                    rays_missed = true;
+                };
                 valid_rays_found = true;
             }
         }
         self.z_position += self.dist_to_next_surface;
         self.set_dist_zero();
+        if rays_missed {
+            warn!("rays missed a surface");
+        }
         if !valid_rays_found {
             warn!("ray bundle contains no valid rays - not propagating");
         }
@@ -756,6 +762,8 @@ impl Rays {
             if ray.valid() {
                 let split_ray = ray.split(config)?;
                 split_rays.add_ray(split_ray);
+            } else {
+                split_rays.add_ray(ray.clone());
             }
         }
         Ok(split_rays)

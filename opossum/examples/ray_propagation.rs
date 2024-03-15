@@ -38,7 +38,7 @@ fn main() -> OpmResult<()> {
     )?;
     let _ = lens2.set_input_aperture(
         "front",
-        Aperture::BinaryCircle(CircleConfig::new(3., Point2::new(0., 0.)).unwrap()),
+        &Aperture::BinaryCircle(CircleConfig::new(3., Point2::new(0., 0.)).unwrap()),
     );
     let l2 = scenery.add_node(lens2);
     let s3 = scenery.add_node(Propagation::new("s3", Length::new::<millimeter>(30.0))?);

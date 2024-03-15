@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
-use crate::error::OpmResult;
+use crate::analyzer::AnalyzerType;
+use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::properties::{Properties, Proptype};
 use crate::refractive_index::refr_index_vaccuum;
@@ -73,7 +74,7 @@ impl Optical for Detector {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
-        _analyzer_type: &crate::analyzer::AnalyzerType,
+        analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
         let (inport, outport) = if self.properties().inverted()? {
             ("out1", "in1")
@@ -86,6 +87,22 @@ impl Optical for Detector {
             let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
             let plane = Plane::new(z_position)?;
             rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+            if let Some(aperture) = self.ports().input_aperture("in1") {
+                rays.apodize(aperture)?;
+                if let AnalyzerType::RayTrace(config) = analyzer_type {
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                }
+            } else {
+                return Err(OpossumError::OpticPort("input aperture not found".into()));
+            };
+            if let Some(aperture) = self.ports().output_aperture("out1") {
+                rays.apodize(aperture)?;
+                if let AnalyzerType::RayTrace(config) = analyzer_type {
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                }
+            } else {
+                return Err(OpossumError::OpticPort("input aperture not found".into()));
+            };
             self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(HashMap::from([(
                 outport.into(),
