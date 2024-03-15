@@ -172,6 +172,14 @@ impl Optical for Lens {
                             &index_model.value,
                         )?;
                     };
+                    if let Some(aperture) = self.ports().input_aperture("front") {
+                        rays.apodize(aperture)?;
+                        if let AnalyzerType::RayTrace(config) = analyzer_type {
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        }
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    };
                     let Ok(Proptype::Length(center_thickness)) = self.props.get("center thickness")
                     else {
                         return Err(OpossumError::Analysis(
@@ -190,6 +198,14 @@ impl Optical for Lens {
                         rays.refract_on_surface(&Plane::new(next_z_pos)?, index_1_0)?;
                     } else {
                         rays.refract_on_surface(&Sphere::new(next_z_pos, *rear_roc)?, index_1_0)?;
+                    };
+                    if let Some(aperture) = self.ports().output_aperture("rear") {
+                        rays.apodize(aperture)?;
+                        if let AnalyzerType::RayTrace(config) = analyzer_type {
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        }
+                    } else {
+                        return Err(OpossumError::OpticPort("ouput aperture not found".into()));
                     };
                     Ok(HashMap::from([(
                         "rear".into(),

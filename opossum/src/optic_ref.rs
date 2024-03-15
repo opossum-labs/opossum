@@ -1,12 +1,11 @@
 #![warn(missing_docs)]
 //! Module for storing references to optical nodes.
-use std::{cell::RefCell, rc::Rc};
-
 use serde::{
     de::{self, MapAccess, SeqAccess, Visitor},
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
+use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
 
 use crate::{nodes::create_node_ref, optical::Optical, properties::Properties};

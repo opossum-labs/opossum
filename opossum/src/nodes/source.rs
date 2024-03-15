@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use crate::{
+    analyzer::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -123,16 +124,29 @@ impl Optical for Source {
     fn analyze(
         &mut self,
         _incoming_edges: LightResult,
-        _analyzer_type: &crate::analyzer::AnalyzerType,
+        analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let light_prop = self.props.get("light data").unwrap();
-        if let Proptype::LightData(data) = &light_prop {
-            data.value.as_ref().map_or_else(
-                || Err(OpossumError::Analysis("no light data defined".into())),
-                |data| Ok(HashMap::from([("out1".into(), Some(data.clone()))])),
-            )
+        if let Ok(Proptype::LightData(data)) = self.props.get("light data") {
+            let Some(mut data) = data.value.clone() else {
+                return Err(OpossumError::Analysis(
+                    "source has empty light data defined".into(),
+                ));
+            };
+            if let LightData::Geometric(rays) = &mut data {
+                if let Some(aperture) = self.ports().output_aperture("out1") {
+                    rays.apodize(aperture)?;
+                    if let AnalyzerType::RayTrace(config) = analyzer_type {
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                } else {
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                };
+            }
+            Ok(HashMap::from([("out1".into(), Some(data))]))
         } else {
-            Err(OpossumError::Analysis("no light data defined".into()))
+            Err(OpossumError::Analysis(
+                "source has no light data defined".into(),
+            ))
         }
     }
     fn properties(&self) -> &Properties {
@@ -143,21 +157,17 @@ impl Optical for Source {
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         if name == "inverted" {
-            let inverted = if let Proptype::Bool(inverted) = prop {
-                inverted
-            } else {
-                false
+            if let Proptype::Bool(inverted) = prop {
+                if inverted {
+                    return Err(OpossumError::Properties(
+                        "Cannot change the inversion status of a source node!".into(),
+                    ));
+                } else {
+                    return Ok(());
+                }
             };
-            if inverted {
-                Err(OpossumError::Properties(
-                    "Cannot change the inversion status of a source node!".into(),
-                ))
-            } else {
-                Ok(())
-            }
-        } else {
-            self.props.set(name, prop)
-        }
+        };
+        self.props.set(name, prop)
     }
 }
 
@@ -199,6 +209,7 @@ mod test {
         let mut node = Source::default();
         assert!(node.set_property("inverted", false.into()).is_ok());
         assert!(node.set_property("inverted", true.into()).is_err());
+        assert!(node.set_property("name", "blah".into()).is_ok());
     }
     #[test]
     fn ports() {

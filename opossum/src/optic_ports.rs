@@ -13,7 +13,7 @@
 //! let mut ports=OpticPorts::new();
 //! ports.create_input("my input").unwrap();
 //! let circle_config = CircleConfig::new(1.5, Point2::new(1.0, 1.0)).unwrap();
-//! ports.set_input_aperture("my input", Aperture::BinaryCircle(circle_config)).unwrap();
+//! ports.set_input_aperture("my input", &Aperture::BinaryCircle(circle_config)).unwrap();
 //! ```
 use crate::{
     aperture::Aperture,
@@ -125,9 +125,10 @@ impl OpticPorts {
     /// # Errors
     ///
     /// This function will return an error if the port name does not exist.
-    pub fn set_input_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
+    pub fn set_input_aperture(&mut self, port_name: &str, aperture: &Aperture) -> OpmResult<()> {
         if self.inputs.contains_key(port_name) {
-            self.inputs.insert(port_name.to_owned(), aperture);
+            self.inputs
+                .insert(port_name.to_owned(), (*aperture).clone());
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -142,9 +143,10 @@ impl OpticPorts {
     /// # Errors
     ///
     /// This function will return an error if the port name does not exist.
-    pub fn set_output_aperture(&mut self, port_name: &str, aperture: Aperture) -> OpmResult<()> {
+    pub fn set_output_aperture(&mut self, port_name: &str, aperture: &Aperture) -> OpmResult<()> {
         if self.outputs.contains_key(port_name) {
-            self.outputs.insert(port_name.to_owned(), aperture);
+            self.outputs
+                .insert(port_name.to_owned(), (*aperture).clone());
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -161,12 +163,26 @@ impl OpticPorts {
     /// This function will return an error if the port names in `set_ports` are not found.
     pub fn set_apertures(&mut self, set_ports: Self) -> OpmResult<()> {
         for set_port in set_ports.inputs {
-            self.set_input_aperture(&set_port.0, set_port.1)?;
+            self.set_input_aperture(&set_port.0, &set_port.1)?;
         }
         for set_port in set_ports.outputs {
-            self.set_output_aperture(&set_port.0, set_port.1)?;
+            self.set_output_aperture(&set_port.0, &set_port.1)?;
         }
         Ok(())
+    }
+    /// Get the [`Aperture`] of the given input port.
+    ///
+    /// This function returns `None` if the given port name was not found.
+    #[must_use]
+    pub fn input_aperture(&self, port_name: &str) -> Option<&Aperture> {
+        self.inputs.get(port_name)
+    }
+    /// Get the [`Aperture`] of the given ouput port.
+    ///
+    /// This function returns `None` if the given port name was not found.
+    #[must_use]
+    pub fn output_aperture(&self, port_name: &str) -> Option<&Aperture> {
+        self.outputs.get(port_name)
     }
     /// Mark the [`OpticPorts`] as `inverted`.
     ///

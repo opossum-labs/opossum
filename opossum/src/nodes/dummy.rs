@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
-use crate::error::OpmResult;
+use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
@@ -64,7 +64,7 @@ impl Optical for Dummy {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
-        _analyzer_type: &AnalyzerType,
+        analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
         let (inport, outport) = if self.properties().inverted()? {
             ("rear", "front")
@@ -77,6 +77,22 @@ impl Optical for Dummy {
             let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
             let plane = Plane::new(z_position)?;
             rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+            if let Some(aperture) = self.ports().input_aperture("front") {
+                rays.apodize(aperture)?;
+                if let AnalyzerType::RayTrace(config) = analyzer_type {
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                }
+            } else {
+                return Err(OpossumError::OpticPort("input aperture not found".into()));
+            };
+            if let Some(aperture) = self.ports().output_aperture("rear") {
+                rays.apodize(aperture)?;
+                if let AnalyzerType::RayTrace(config) = analyzer_type {
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                }
+            } else {
+                return Err(OpossumError::OpticPort("input aperture not found".into()));
+            };
             Ok(HashMap::from([(
                 outport.into(),
                 Some(LightData::Geometric(rays)),
@@ -151,17 +167,17 @@ mod test {
     fn set_input_aperture() {
         let mut node = Dummy::default();
         let aperture = Aperture::default();
-        assert!(node.set_input_aperture("front", aperture.clone()).is_ok());
-        assert!(node.set_input_aperture("rear", aperture.clone()).is_err());
-        assert!(node.set_input_aperture("no port", aperture).is_err());
+        assert!(node.set_input_aperture("front", &aperture).is_ok());
+        assert!(node.set_input_aperture("rear", &aperture).is_err());
+        assert!(node.set_input_aperture("no port", &aperture).is_err());
     }
     #[test]
     fn set_output_aperture() {
         let mut node = Dummy::default();
         let aperture = Aperture::default();
-        assert!(node.set_output_aperture("rear", aperture.clone()).is_ok());
-        assert!(node.set_output_aperture("front", aperture.clone()).is_err());
-        assert!(node.set_output_aperture("no port", aperture).is_err());
+        assert!(node.set_output_aperture("rear", &aperture).is_ok());
+        assert!(node.set_output_aperture("front", &aperture).is_err());
+        assert!(node.set_output_aperture("no port", &aperture).is_err());
     }
     // #[test]
     // #[ignore]

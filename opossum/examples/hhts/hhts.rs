@@ -5,13 +5,16 @@ mod cambox_2w;
 use cambox_1w::cambox_1w;
 use cambox_2w::cambox_2w;
 
+use nalgebra::Point2;
 use opossum::{
+    aperture::{Aperture, CircleConfig},
     error::OpmResult,
     lightdata::LightData,
     nodes::{
         BeamSplitter, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
         Propagation, RayPropagationVisualizer, Source, WaveFront,
     },
+    optical::Optical,
     position_distributions::Hexapolar,
     ray::SplittingConfig,
     rays::Rays,
@@ -33,7 +36,7 @@ fn main() -> OpmResult<()> {
     let energy_1w = Energy::new::<joule>(100.0);
     let energy_2w = Energy::new::<joule>(50.0);
 
-    let beam_dist_1w = Hexapolar::new(Length::new::<millimeter>(76.05493), 0)?;
+    let beam_dist_1w = Hexapolar::new(Length::new::<millimeter>(76.05493), 10)?;
     let beam_dist_2w = beam_dist_1w.clone();
 
     let refr_index_hk9l = RefrIndexSellmeier1::new(
@@ -60,6 +63,12 @@ fn main() -> OpmResult<()> {
         1.18524273E-002,
         1.13671100E+002,
     )?;
+
+    // apertures
+    let circle_config = CircleConfig::new(25.4, Point2::new(0.0, 0.0))?;
+    let a_2inch = Aperture::BinaryCircle(circle_config);
+    let circle_config = CircleConfig::new(12.7, Point2::new(0.0, 0.0))?;
+    let a_1inch = Aperture::BinaryCircle(circle_config);
 
     // collimated source
     let rays_1w = Rays::new_uniform_collimated(wvl_1w, energy_1w, &beam_dist_1w)?;
@@ -127,13 +136,16 @@ fn main() -> OpmResult<()> {
         "d3",
         Length::new::<millimeter>(937.23608),
     )?)?;
-    let t1_l2a = group_t1.add_node(Lens::new(
+    let mut node = Lens::new(
         "T1 L2a",
         Length::new::<millimeter>(-88.51496),
         Length::new::<millimeter>(f64::INFINITY),
         Length::new::<millimeter>(5.77736),
         &refr_index_hzf52,
-    )?)?;
+    )?;
+    node.set_input_aperture("front", &a_2inch)?;
+    node.set_output_aperture("rear", &a_2inch)?;
+    let t1_l2a = group_t1.add_node(node)?;
     let d4 = group_t1.add_node(Propagation::new("d4", Length::new::<millimeter>(8.85423))?)?;
     let t1_l2b = group_t1.add_node(Lens::new(
         "T1 L2b",
@@ -162,6 +174,7 @@ fn main() -> OpmResult<()> {
 
     group_t1.map_input_port(t1_l1a, "front", "input")?;
     group_t1.map_output_port(t1_l2c, "rear", "output")?;
+
     group_t1.expand_view(false)?;
     let t1 = scenery.add_node(group_t1);
 
@@ -194,14 +207,18 @@ fn main() -> OpmResult<()> {
     let felh1000 = FilterType::Spectrum(Spectrum::from_csv(
         "opossum/examples/hhts/FELH1000_Transmission.csv",
     )?);
-    let filter_1w = group_bs.add_node(IdealFilter::new("1w Longpass filter", &felh1000)?)?;
+    let mut node = IdealFilter::new("1w Longpass filter", &felh1000)?;
+    node.set_input_aperture("front", &a_1inch)?;
+    let filter_1w = group_bs.add_node(node)?;
     group_bs.connect_nodes(bs, "out2_trans2_refl1", filter_1w, "front")?;
 
     // Long pass filter (2w)
     let fesh0700 = FilterType::Spectrum(Spectrum::from_csv(
         "opossum/examples/hhts/FESH0700_Transmission.csv",
     )?);
-    let filter_2w = group_bs.add_node(IdealFilter::new("2w Shortpass filter", &fesh0700)?)?;
+    let mut node = IdealFilter::new("2w Shortpass filter", &fesh0700)?;
+    node.set_input_aperture("front", &a_1inch)?;
+    let filter_2w = group_bs.add_node(node)?;
     group_bs.connect_nodes(bs, "out1_trans1_refl2", filter_2w, "front")?;
 
     group_bs.map_input_port(bs, "input1", "input")?;
@@ -306,7 +323,7 @@ fn main() -> OpmResult<()> {
 
     let mut group_det_1w = NodeGroup::new("Detectors 1w");
 
-    let det_prop = group_det_1w.add_node(RayPropagationVisualizer::new("Propgation"))?;
+    let det_prop = group_det_1w.add_node(RayPropagationVisualizer::new("Propagation"))?;
     let det_wavefront_1w = group_det_1w.add_node(WaveFront::new("Wavefront"))?;
     let cambox_1w = group_det_1w.add_node(cambox_1w()?)?;
     let det_energy_1w =
@@ -416,7 +433,7 @@ fn main() -> OpmResult<()> {
     // 2w detectors
     let mut group_det_2w = NodeGroup::new("Detectors 2w");
 
-    let det_prop_2w = group_det_2w.add_node(RayPropagationVisualizer::new("Propgation"))?;
+    let det_prop_2w = group_det_2w.add_node(RayPropagationVisualizer::new("Propagation"))?;
     let det_wavefront_2w = group_det_2w.add_node(WaveFront::new("Wavefront"))?;
     let det_energy_2w =
         group_det_2w.add_node(EnergyMeter::new("Energy", Metertype::IdealEnergyMeter))?;

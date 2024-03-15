@@ -190,7 +190,7 @@ impl Ray {
     /// This function also respects the refractive index stored in the ray while calculating the optical path length.
     ///
     /// # Errors
-    /// This functions retruns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
+    /// This functions returns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
     pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
         if self.dir[2].abs() < f64::EPSILON {
             return Err(OpossumError::Other(

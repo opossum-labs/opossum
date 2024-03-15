@@ -123,7 +123,8 @@ impl Optical for Propagation {
                         ));
                     };
                     rays.set_refractive_index(&refractive_index.value)?;
-                    rays.set_dist_to_next_surface(*length_along_z);
+                    let previous_dist_to_next_surface = rays.dist_to_next_surface();
+                    rays.set_dist_to_next_surface(previous_dist_to_next_surface + *length_along_z);
                     data = Some(LightData::Geometric(rays));
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
@@ -207,17 +208,17 @@ mod test {
     fn set_input_aperture() {
         let mut node = Propagation::default();
         let aperture = Aperture::default();
-        assert!(node.set_input_aperture("front", aperture.clone()).is_ok());
-        assert!(node.set_input_aperture("rear", aperture.clone()).is_err());
-        assert!(node.set_input_aperture("no port", aperture).is_err());
+        assert!(node.set_input_aperture("front", &aperture).is_ok());
+        assert!(node.set_input_aperture("rear", &aperture).is_err());
+        assert!(node.set_input_aperture("no port", &aperture).is_err());
     }
     #[test]
     fn set_output_aperture() {
         let mut node = Propagation::default();
         let aperture = Aperture::default();
-        assert!(node.set_output_aperture("rear", aperture.clone()).is_ok());
-        assert!(node.set_output_aperture("front", aperture.clone()).is_err());
-        assert!(node.set_output_aperture("no port", aperture).is_err());
+        assert!(node.set_output_aperture("rear", &aperture).is_ok());
+        assert!(node.set_output_aperture("front", &aperture).is_err());
+        assert!(node.set_output_aperture("no port", &aperture).is_err());
     }
     // #[test]
     // #[ignore]
