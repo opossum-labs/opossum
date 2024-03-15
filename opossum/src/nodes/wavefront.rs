@@ -314,7 +314,8 @@ impl Plottable for WaveFrontErrorMap {
         plt_params
             .set(&PlotArgs::XLabel("x distance in mm".into()))?
             .set(&PlotArgs::YLabel("y distance in mm".into()))?
-            .set(&PlotArgs::CBarLabel("wavefront error in λ".into()))?;
+            .set(&PlotArgs::CBarLabel("wavefront error in λ".into()))?
+            .set(&&PlotArgs::ExpandBounds(false))?;
         Ok(())
     }
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {

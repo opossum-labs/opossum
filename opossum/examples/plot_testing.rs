@@ -29,7 +29,7 @@ fn main() -> OpmResult<()> {
         .unwrap()
         .set(&PlotArgs::FDir("./opossum/playground/".into()))
         .unwrap()
-        .set(&PlotArgs::FigSize((800, 1000)))
+        .set(&PlotArgs::FigSize((1000, 1000)))
         .unwrap();
 
     let pltdat = rays.get_xy_rays_pos(true);
@@ -44,13 +44,15 @@ fn main() -> OpmResult<()> {
     // // rays.propagate_along_z()?;
     // // rays.refract_paraxial(Length::new::<millimeter>(20.))?;
     // // rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
-    // // rays.propagate_along_z()?;
+    // // rays.propagate_along_z()?;p
 
     let mut plt_params = PlotParameters::default();
     plt_params
         .set(&PlotArgs::FName("ray_fluence_test_random.png".into()))
         .unwrap()
         .set(&PlotArgs::FDir("./opossum/playground/".into()))
+        .unwrap()
+        .set(&PlotArgs::ExpandBounds(false))
         .unwrap()
         .set(&PlotArgs::FigSize((800, 800)))
         .unwrap();

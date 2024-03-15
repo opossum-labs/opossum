@@ -4,7 +4,7 @@ use opossum::{
     error::OpmResult,
     lightdata::LightData,
     nodes::{Lens, Propagation, RayPropagationVisualizer, Source, SpotDiagram},
-    position_distributions::Hexapolar,
+    position_distributions::{FibonacciEllipse, Hexapolar},
     rays::Rays,
     refractive_index::RefrIndexConst,
     OpticScenery,
@@ -19,19 +19,19 @@ fn main() -> OpmResult<()> {
     let mut rays_1w = Rays::new_uniform_collimated(
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
-        &Hexapolar::new(Length::new::<millimeter>(2.), 2)?,
+        &FibonacciEllipse::new(Length::new::<millimeter>(2.), Length::new::<millimeter>(4.), 100)?,
     )?;
 
     let mut rays_2w = Rays::new_uniform_collimated(
         Length::new::<nanometer>(527.),
         Energy::new::<joule>(1.),
-        &Hexapolar::new(Length::new::<millimeter>(1.3), 2)?,
+        &Hexapolar::new(Length::new::<millimeter>(5.3), 4)?,
     )?;
 
     let mut rays_3w = Rays::new_uniform_collimated(
         Length::new::<nanometer>(1053. / 3.),
         Energy::new::<joule>(1.),
-        &Hexapolar::new(Length::new::<millimeter>(0.5), 2)?,
+        &Hexapolar::new(Length::new::<millimeter>(0.5), 4)?,
     )?;
 
     rays_1w.add_rays(&mut rays_2w);

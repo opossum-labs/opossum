@@ -198,7 +198,6 @@ impl Plottable for SpotDiagram {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm".into()))?
             .set(&PlotArgs::YLabel("distance in mm".into()))?;
-
         Ok(())
     }
 

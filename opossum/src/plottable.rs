@@ -1063,7 +1063,7 @@ impl PlotData {
 
         if expand_flag {
             for axlim in axlims.iter_mut().flatten() {
-                axlim.expand_lims(0.1).unwrap();
+                axlim.expand_lim_range_by_factor(1.1);
             }
         };
 
@@ -1132,22 +1132,19 @@ impl AxLims {
             && self.max > self.min
     }
 
-    /// Shifts the minimum and the maximum to lower and higher values respectively.
-    /// The extend of the shift is expressed as a relative ratio of the full range
+    /// Shifts the minimum and the maximum to lower and higher values, respectively.
+    /// The range expands by the `expansion_factor`, therefore, each limit is shifted by `range` * (`expansion_ratio`-1.)/2.
     /// # Attributes
     /// -`ratio`: relative extension of the range. must be positive, non-zero, not NAN and finite
     /// # Errors
     /// This function errors if the expansion ration is neither positive nor normal
-    pub fn expand_lims(&mut self, expansion_ratio: f64) -> OpmResult<()> {
-        if expansion_ratio.is_normal() && expansion_ratio.is_sign_positive() {
+    pub fn expand_lim_range_by_factor(&mut self, expansion_factor: f64)  {
+        if expansion_factor.is_normal() && expansion_factor.is_sign_positive() {
             let range = self.max - self.min;
-            self.max += range * expansion_ratio;
-            self.min -= range * expansion_ratio;
-            Ok(())
+            self.max += range * (expansion_factor-1.)/2.;
+            self.min -= range * (expansion_factor-1.)/2.;
         } else {
-            Err(OpossumError::Other(
-                "Expansion ratio must be normal and positive!".into(),
-            ))
+            warn!("Cannot expand ax limits! Expansion factor must be normal and positive!");
         }
     }
 
@@ -1433,8 +1430,7 @@ impl Default for ColorBar {
 pub struct PlotBounds {
     x: Option<AxLims>,
     y: Option<AxLims>,
-    z: Option<AxLims>,
-}
+    z: Option<AxLims>,}
 
 impl PlotBounds {
     /// Creates a new [`PlotBounds`] struct
@@ -1470,16 +1466,34 @@ impl PlotBounds {
         self.x
     }
 
+    /// Returns the x boundary range of these [`PlotBounds`]
+    #[must_use]
+    pub fn get_x_range(&self) -> Option<f64> {
+        self.x.map_or(None, |x| Some(x.max-x.min))
+    }
+
     /// Returns the y boundary values of these [`PlotBounds`]
     #[must_use]
     pub const fn get_y_bounds(&self) -> Option<AxLims> {
         self.y
     }
 
+    /// Returns the y boundary range of these [`PlotBounds`]
+    #[must_use]
+    pub fn get_y_range(&self) -> Option<f64> {
+        self.y.map_or(None, |y| Some(y.max-y.min))
+    }
+
     /// Returns the z boundary values of these [`PlotBounds`]
     #[must_use]
     pub const fn get_z_bounds(&self) -> Option<AxLims> {
         self.z
+    }
+
+    /// Returns the z boundary range of these [`PlotBounds`]
+    #[must_use]
+    pub fn get_z_range(&self) -> Option<f64> {
+        self.z.map_or(None, |z| Some(z.max-z.min))
     }
 }
 
@@ -1502,6 +1516,7 @@ impl Default for PlotParameters {
     /// - `PlotArgs::XLim`: `None`
     /// - `PlotArgs::YLim`: `None`
     /// - `PlotArgs::ZLim`: `None`
+    /// - `PlotArgs::AxisEqual`: `true`
     /// - `PlotArgs::CMap`: `colorous::TURBO`
     /// - `PlotArgs::Color`: `RGBAColor(255, 0, 0, 1.)`
     /// - `PlotArgs::FDir`: `current directory`
@@ -1540,6 +1555,8 @@ impl Default for PlotParameters {
                 PlotArgs::XLim(_) => plt_params.set(&PlotArgs::XLim(None)).unwrap(),
                 PlotArgs::YLim(_) => plt_params.set(&PlotArgs::YLim(None)).unwrap(),
                 PlotArgs::ZLim(_) => plt_params.set(&PlotArgs::ZLim(None)).unwrap(),
+                PlotArgs::AxisEqual(_) => plt_params.set(&PlotArgs::AxisEqual(true)).unwrap(),
+                PlotArgs::ExpandBounds(_) => plt_params.set(&PlotArgs::ExpandBounds(true)).unwrap(),
                 PlotArgs::CMap(_) => plt_params
                     .set(&PlotArgs::CMap(CGradient::default()))
                     .unwrap(),
@@ -1792,6 +1809,32 @@ impl PlotParameters {
         }
     }
 
+    ///This method gets the flag which defines whether the plot axis should have the same range
+    /// # Returns
+    /// This method returns an [`OpmResult<bool>`] with the min and max of the z values as f64
+    /// # Errors
+    /// This method throws an error if the argument is not found
+    pub fn get_axis_equal_flag(&self) -> OpmResult<bool> {
+        if let Some(PlotArgs::AxisEqual(equal)) = self.params.get("axisequal") {
+            Ok(*equal)
+        } else {
+            Err(OpossumError::Other("axisequal argument not found!".into()))
+        }
+    }
+
+    ///This method gets the flag which defines whether the plot axis should expand, such that the values do not lie on the boundary
+    /// # Returns
+    /// This method returns an [`OpmResult<bool>`] with the min and max of the z values as f64
+    /// # Errors
+    /// This method throws an error if the argument is not found
+    pub fn get_expand_bounds_flag(&self) -> OpmResult<bool> {
+        if let Some(PlotArgs::ExpandBounds(expand)) = self.params.get("expandbounds") {
+            Ok(*expand)
+        } else {
+            Err(OpossumError::Other("expandbounds argument not found!".into()))
+        }
+    }
+
     ///This method gets the figure size which is stored in the [`PlotParameters`]
     /// # Returns
     /// This method returns an [`OpmResult<(u32, u32)>`] with the width and height in number of pixels as u32
@@ -1866,6 +1909,8 @@ impl PlotParameters {
             PlotArgs::XLim(_) => "xlim".to_owned(),
             PlotArgs::YLim(_) => "ylim".to_owned(),
             PlotArgs::ZLim(_) => "zlim".to_owned(),
+            PlotArgs::AxisEqual(_) => "axisequal".to_owned(),
+            PlotArgs::ExpandBounds(_) => "expandbounds".to_owned(),
             PlotArgs::FigSize(_) => "figsize".to_owned(),
             PlotArgs::CBarLabelPos(_) => "cbarlabelpos".to_owned(),
             PlotArgs::CBarLabel(_) => "cbarlabel".to_owned(),
@@ -1949,6 +1994,8 @@ impl PlotParameters {
             PlotArgs::XLim(_) => self.params.insert("xlim".to_owned(), plt_arg.clone()),
             PlotArgs::YLim(_) => self.params.insert("ylim".to_owned(), plt_arg.clone()),
             PlotArgs::ZLim(_) => self.params.insert("zlim".to_owned(), plt_arg.clone()),
+            PlotArgs::AxisEqual(_) => self.params.insert("axisequal".to_owned(), plt_arg.clone()),
+            PlotArgs::ExpandBounds(_) => self.params.insert("expandbounds".to_owned(), plt_arg.clone()),
             PlotArgs::FigSize(_) => self.params.insert("figsize".to_owned(), plt_arg.clone()),
             PlotArgs::CBarLabelPos(_) => self
                 .params
@@ -2031,6 +2078,8 @@ pub struct Plot {
     label: [LabelDescription; 2],
     cbar: ColorBar,
     bounds: PlotBounds,
+    ax_equal: bool,
+    expand_bounds: bool,
     img_size: (u32, u32),
     plot_series: Option<Vec<PlotSeries>>,
 }
@@ -2099,8 +2148,12 @@ impl Plot {
         if join_bounds {
             let bounds = &mut self.bounds;
             for plt_series in plt_series_vec {
-                bounds.join(&plt_series.define_data_based_axes_bounds(false));
+                bounds.join(&plt_series.define_data_based_axes_bounds(self.expand_bounds));
             }
+        }
+
+        if self.ax_equal{
+            self.set_xy_axes_ranges_equal()
         }
     }
 
@@ -2110,6 +2163,35 @@ impl Plot {
         self.plot_series.as_ref()
     }
 
+    fn set_xy_axes_ranges_equal(&mut self){
+        let x_range = self.bounds.get_x_range();
+        let y_range = self.bounds.get_y_range();
+        if let (Some(x_range), Some(y_range)) = (x_range, y_range){
+            if x_range > y_range{
+                if let Some(y_bound) = &mut self.bounds.y{
+                    y_bound.expand_lim_range_by_factor(x_range/y_range);
+                }
+                else{
+                    warn!("Cannot set axes to equal with, since y boundary is None!");
+                }
+            }
+            else{
+                if let Some(x_bound) = &mut self.bounds.x{
+                    x_bound.expand_lim_range_by_factor(y_range/x_range);
+                }
+                else{
+                    warn!("Cannot set axes to equal with, since x boundary is None!");
+                }
+            }
+        }
+        else if x_range.is_some(){
+            self.bounds.y = self.bounds.x;
+        }
+        else if y_range.is_some(){
+            self.bounds.x = self.bounds.y;
+
+        }
+    }
     /// Defines the axes bounds of this [`Plot`] if the limit is not already defined by the initial [`PlotParameters`].
     ///
     /// # Errors
@@ -2125,7 +2207,10 @@ impl Plot {
             } else {
                 for plt_series in plot_series {
                     self.bounds
-                        .join(&plt_series.define_data_based_axes_bounds(false));
+                        .join(&plt_series.define_data_based_axes_bounds(self.expand_bounds));
+                }
+                if self.ax_equal{
+                    self.set_xy_axes_ranges_equal();
                 }
             }
         } else {
@@ -2144,6 +2229,8 @@ impl TryFrom<&PlotParameters> for Plot {
         let x_lim = plt_params.get_xlim()?;
         let y_lim = plt_params.get_ylim()?;
         let z_lim = plt_params.get_zlim()?;
+        let ax_equal = plt_params.get_axis_equal_flag()?;
+        let expand_bounds = plt_params.get_expand_bounds_flag()?;
         let x_label_str = plt_params.get_x_label()?;
         let y_label_str = plt_params.get_y_label()?;
         let x_label_pos = plt_params.get_x_label_pos()?;
@@ -2161,9 +2248,11 @@ impl TryFrom<&PlotParameters> for Plot {
         Ok(Self {
             label: [x_label, y_label],
             cbar,
-            plot_series: None,
             bounds: PlotBounds::new(x_lim, y_lim, z_lim),
+            ax_equal,
+            expand_bounds,
             img_size: fig_size,
+            plot_series: None,
         })
     }
 }
@@ -2191,6 +2280,10 @@ pub enum PlotArgs {
     YLim(Option<AxLims>),
     ///Boundaries of the z axis. If not defined, the inserted plot data will be used to get a reasonable boundary. Holds an [`Option<AxLims>`]
     ZLim(Option<AxLims>),
+    ///defines wheter the axis bounds should be equal or not
+    AxisEqual(bool),
+    ///defines wheter the axis bounds should expand or not
+    ExpandBounds(bool),
     ///Figure size in pixels. Holds an `(usize, usize)` tuple
     FigSize((u32, u32)),
     ///Path to the save directory of the image. Only necessary if the data is not written into a buffer. Holds a String
@@ -2355,6 +2448,27 @@ mod test {
         assert!(z.is_some());
         assert_relative_eq!(z.unwrap().min, 0.);
         assert_relative_eq!(z.unwrap().max, 1.);
+    }
+    #[test]
+    fn get_x_range(){
+        assert_eq!(PlotBounds::new(None, None, None).get_x_range(), None);
+        let x = PlotBounds::new(AxLims::new(0., 1.), None, None).get_x_range();
+        assert!(x.is_some());
+        assert_relative_eq!(x.unwrap(), 1.);
+    }
+    #[test]
+    fn get_y_range(){
+        assert_eq!(PlotBounds::new(None, None, None).get_y_range(), None);
+        let y = PlotBounds::new(None, AxLims::new(0., 1.), None).get_y_range();
+        assert!(y.is_some());
+        assert_relative_eq!(y.unwrap(), 1.);
+    }
+    #[test]
+    fn get_z_range(){
+        assert_eq!(PlotBounds::new(None, None, None).get_z_range(), None);
+        let z = PlotBounds::new(None, None, AxLims::new(0., 1.)).get_z_range();
+        assert!(z.is_some());
+        assert_relative_eq!(z.unwrap(), 1.);
     }
     #[test]
     fn new_plotbounds() {
@@ -3170,14 +3284,29 @@ mod test {
     #[test]
     fn axlim_expand() {
         let mut axlim = AxLims::new(-10., 10.).unwrap();
-        let _ = axlim.expand_lims(0.1);
+        let _ = axlim.expand_lim_range_by_factor(1.2);
 
         assert!((axlim.min + 12.).abs() < f64::EPSILON);
         assert!((axlim.max - 12.).abs() < f64::EPSILON);
-        assert!(axlim.expand_lims(-1.).is_err());
-        assert!(axlim.expand_lims(f64::NAN).is_err());
-        assert!(axlim.expand_lims(f64::INFINITY).is_err());
-        assert!(axlim.expand_lims(0.).is_err());
+
+        testing_logger::setup();
+        axlim.expand_lim_range_by_factor(-1.);
+        axlim.expand_lim_range_by_factor(f64::NAN);
+        axlim.expand_lim_range_by_factor(f64::INFINITY);
+        axlim.expand_lim_range_by_factor(0.);
+
+        let warning = "Cannot expand ax limits! Expansion ratio must be normal and positive!";
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 4);
+            assert_eq!(                captured_logs[0].body,                warning            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+            assert_eq!(                captured_logs[1].body,                warning            );
+            assert_eq!(captured_logs[1].level, Level::Warn);
+            assert_eq!(                captured_logs[2].body,                warning            );
+            assert_eq!(captured_logs[2].level, Level::Warn);
+            assert_eq!(                captured_logs[3].body,                warning            );
+            assert_eq!(captured_logs[3].level, Level::Warn);
+        });
     }
     #[test]
     fn create_useful_axlims_test() {

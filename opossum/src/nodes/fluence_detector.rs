@@ -255,7 +255,9 @@ impl Plottable for FluenceData {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm".into()))?
             .set(&PlotArgs::YLabel("distance in mm".into()))?
-            .set(&PlotArgs::CBarLabel("fluence in J/cm²".into()))?;
+            .set(&PlotArgs::CBarLabel("fluence in J/cm²".into()))?
+            .set(&PlotArgs::ExpandBounds(false))?;
+
         Ok(())
     }
 

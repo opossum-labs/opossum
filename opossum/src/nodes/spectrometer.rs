@@ -274,7 +274,9 @@ impl Plottable for Spectrometer {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
             .set(&PlotArgs::XLabel("wavelength in nm".into()))?
-            .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?;
+            .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?
+            .set(&PlotArgs::AxisEqual(false))?;
+
         Ok(())
     }
 
