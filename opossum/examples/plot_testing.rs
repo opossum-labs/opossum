@@ -1,26 +1,21 @@
-use std::process::exit;
-
 use opossum::{
     error::OpmResult,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
-    position_distributions::{FibonacciRectangle, Hexapolar},
+    position_distributions::Hexapolar,
     rays::Rays,
 };
 use plotters::style::RGBAColor;
 use uom::si::{
     energy::{joule, Energy},
     f64::Length,
-    length::{meter, millimeter, nanometer},
+    length::{millimeter, nanometer},
 };
 
 fn main() -> OpmResult<()> {
     let rays = Rays::new_uniform_collimated(
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
-        &Hexapolar::new(
-            Length::new::<millimeter>(1.),
-            20,
-        )?,
+        &Hexapolar::new(Length::new::<millimeter>(1.), 20)?,
     )?;
 
     let mut plt_params = PlotParameters::default();
@@ -29,11 +24,15 @@ fn main() -> OpmResult<()> {
         .unwrap()
         .set(&PlotArgs::FDir("./opossum/playground/".into()))
         .unwrap()
-        .set(&PlotArgs::FigSize((1000, 1000)))
+        .set(&PlotArgs::PlotSize((1000, 1000)))
         .unwrap();
 
     let pltdat = rays.get_xy_rays_pos(true);
-    let plt_series = PlotSeries::new(&PlotData::new_dim2(pltdat).unwrap(), RGBAColor(255, 0, 0, 1.), None);
+    let plt_series = PlotSeries::new(
+        &PlotData::new_dim2(pltdat).unwrap(),
+        RGBAColor(255, 0, 0, 1.),
+        None,
+    );
     let plt_type = PlotType::Line2D(plt_params);
     let _ = plt_type.plot(&vec![plt_series]);
 
@@ -54,7 +53,7 @@ fn main() -> OpmResult<()> {
         .unwrap()
         .set(&PlotArgs::ExpandBounds(false))
         .unwrap()
-        .set(&PlotArgs::FigSize((800, 800)))
+        .set(&PlotArgs::PlotSize((800, 800)))
         .unwrap();
     // let start: Instant = Instant::now();
     let fluence_data = rays.calc_fluence_at_position()?;
@@ -79,7 +78,7 @@ fn main() -> OpmResult<()> {
         .unwrap()
         .set(&PlotArgs::FDir("./opossum/playground/".into()))
         .unwrap()
-        .set(&PlotArgs::FigSize((1000, 850)))
+        .set(&PlotArgs::PlotSize((1000, 850)))
         .unwrap();
     // let plt_dat = PlotData::Dim2(rays.get_xy_rays_pos(true));
     // let plt_type = PlotType::Scatter2D(plt_params);

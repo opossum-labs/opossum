@@ -321,8 +321,9 @@ impl Plottable for RayPositionHistories {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
             .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?
+            .set(&PlotArgs::PlotSize((1400, 800)))?
             .set(&PlotArgs::AxisEqual(false))?;
-    Ok(())
+        Ok(())
     }
 
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {

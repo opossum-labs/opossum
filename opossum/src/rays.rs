@@ -1664,7 +1664,6 @@ mod test {
         assert_abs_diff_eq!(rays.rays[1].direction().z, new_dir.z);
     }
     #[test]
-    #[ignore = "reenable later"]
     fn filter_energy() {
         let mut rays = Rays::default();
         assert!(rays.filter_energy(&FilterType::Constant(0.5)).is_ok());

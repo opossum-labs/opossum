@@ -967,7 +967,6 @@ mod test {
         assert_abs_diff_eq!(ray.dir[2], test_reflect[2]);
     }
     #[test]
-    #[ignore = "reenable later"]
     fn filter_energy() {
         let position = Point3::new(
             Length::zero(),
@@ -994,7 +993,6 @@ mod test {
         assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
     }
     #[test]
-    #[ignore = "reenable later"]
     fn filter_spectrum() {
         let position = Point3::new(
             Length::zero(),

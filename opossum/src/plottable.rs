@@ -3,14 +3,13 @@
 use crate::error::{OpmResult, OpossumError};
 use crate::utils::griddata::create_valued_voronoi_cells;
 use crate::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace};
-use approx::{abs_diff_ne, assert_relative_ne, relative_ne, RelativeEq};
+use approx::{abs_diff_ne, relative_ne, RelativeEq};
 use colorous::Gradient;
 use image::RgbImage;
 use itertools::{iproduct, izip};
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3};
-use num::iter::Range;
 use num::ToPrimitive;
 use plotters::{
     backend::DrawingBackend,
@@ -114,27 +113,27 @@ impl PlotType {
 
         match params.get_backend()? {
             PltBackEnd::BMP => {
-                let backend = BitMapBackend::new(&path, plot.img_size).into_drawing_area();
+                let backend = BitMapBackend::new(&path, plot.fig_size).into_drawing_area();
                 self.create_plot(&backend, &mut plot);
                 Ok(None)
             }
             PltBackEnd::SVG => {
-                let backend = SVGBackend::new(&path, plot.img_size).into_drawing_area();
+                let backend = SVGBackend::new(&path, plot.fig_size).into_drawing_area();
                 self.create_plot(&backend, &mut plot);
                 Ok(None)
             }
             PltBackEnd::Buf => {
                 let mut image_buffer = vec![
                     0;
-                    (plot.img_size.0 * plot.img_size.1) as usize
+                    (plot.fig_size.0 * plot.fig_size.1) as usize
                         * plotters::backend::RGBPixel::PIXEL_SIZE
                 ];
                 {
-                    let backend = BitMapBackend::with_buffer(&mut image_buffer, plot.img_size)
+                    let backend = BitMapBackend::with_buffer(&mut image_buffer, plot.fig_size)
                         .into_drawing_area();
                     self.create_plot(&backend, &mut plot);
                 }
-                let img = RgbImage::from_raw(plot.img_size.0, plot.img_size.1, image_buffer)
+                let img = RgbImage::from_raw(plot.fig_size.0, plot.fig_size.1, image_buffer)
                     .ok_or_else(|| OpossumError::Other("image buffer size too small".into()))?;
                 Ok(Some(img))
             }
@@ -530,7 +529,7 @@ impl PlotType {
                 z_dat_nxm,
             } = plt_series_vec[0].get_plot_series_data()
             {
-                let split_pixel = plt.img_size.0-170;
+                let split_pixel = plt.fig_size.0 - 170;
                 //split root for main plot and colorbar
                 let (main_root, cbar_root) = root.split_horizontally(split_pixel);
 
@@ -621,18 +620,22 @@ impl PlotType {
     }
 
     fn tick_formatter(range: core::ops::Range<f64>) -> impl Fn(&f64) -> String {
-        let log_val =  range.end.abs().max(range.start.abs()).log10().floor().to_i32().unwrap();
-    
-        move |v: &_|{
-            match log_val{
-                -3 => format!("{v:.3}"),
-                -2 => format!("{v:.3}"),
-                -1 => format!("{v:.2}"),
-                0 => format!("{v:.2}"),
-                1 => format!("{v:.1}"),
-                2 => format!("{v:.0}"),
-                _ => format!("{v}")
-        } }
+        let log_val = range
+            .end
+            .abs()
+            .max(range.start.abs())
+            .log10()
+            .floor()
+            .to_i32()
+            .unwrap();
+
+        move |v: &_| match log_val {
+            -3 | -2 => format!("{v:.3}"),
+            -1 | 0 => format!("{v:.2}"),
+            1 => format!("{v:.1}"),
+            2 => format!("{v:.0}"),
+            _ => format!("{v}"),
+        }
     }
 
     fn create_2d_plot_chart<'a, T: DrawingBackend>(
@@ -663,14 +666,13 @@ impl PlotType {
             .build_cartesian_2d(x_bounds.min..x_bounds.max, y_bounds.min..y_bounds.max)
             .unwrap();
 
-
         let x_format = Self::tick_formatter(chart.x_range());
         let y_format = Self::tick_formatter(chart.y_range());
         let mut mesh = chart.configure_mesh();
         mesh.x_labels(5).y_labels(5);
 
-        mesh.x_label_formatter(&x_format )
-        .y_label_formatter(&y_format  );
+        mesh.x_label_formatter(&x_format)
+            .y_label_formatter(&y_format);
 
         Self::set_or_disable_axis_desc([x_ax, y_ax], label_desc, &mut mesh);
 
@@ -700,31 +702,28 @@ impl PlotType {
     }
 
     fn calc_pixel_margin(bounds: AxLims) -> u32 {
-        let log_val_max = if relative_ne!(bounds.max.abs(), 0.){
+        let log_val_max = if relative_ne!(bounds.max.abs(), 0.) {
             bounds.max.abs().log10().floor().to_i32().unwrap()
-        }
-        else{
+        } else {
             -1
         };
-        let log_val_min = if relative_ne!(bounds.min.abs(), 0.){
+        let log_val_min = if relative_ne!(bounds.min.abs(), 0.) {
             bounds.min.abs().log10().floor().to_i32().unwrap()
-        }
-        else{
+        } else {
             -1
         };
 
-        let mut digits_min =  match log_val_min{
+        let mut digits_min = match log_val_min {
             -3 | -2 => 5,
             _ => 4,
         };
-        let mut digits_max =  match log_val_max{
+        let mut digits_max = match log_val_max {
             -3 | -2 => 5,
             _ => 4,
         };
 
         digits_min += i32::from(bounds.min.is_sign_negative());
         digits_max += i32::from(bounds.max.is_sign_negative());
-
 
         let digits = digits_max.max(digits_min).to_u32().unwrap();
 
@@ -1138,11 +1137,11 @@ impl AxLims {
     /// -`ratio`: relative extension of the range. must be positive, non-zero, not NAN and finite
     /// # Errors
     /// This function errors if the expansion ration is neither positive nor normal
-    pub fn expand_lim_range_by_factor(&mut self, expansion_factor: f64)  {
+    pub fn expand_lim_range_by_factor(&mut self, expansion_factor: f64) {
         if expansion_factor.is_normal() && expansion_factor.is_sign_positive() {
             let range = self.max - self.min;
-            self.max += range * (expansion_factor-1.)/2.;
-            self.min -= range * (expansion_factor-1.)/2.;
+            self.max += range * (expansion_factor - 1.) / 2.;
+            self.min -= range * (expansion_factor - 1.) / 2.;
         } else {
             warn!("Cannot expand ax limits! Expansion factor must be normal and positive!");
         }
@@ -1235,33 +1234,26 @@ pub trait Plottable {
     fn to_plot(
         &self,
         f_path: &Path,
-        img_size: (u32, u32),
+        plot_size: (u32, u32),
         backend: PltBackEnd,
     ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
-        match backend {
-            PltBackEnd::Buf => plt_params.set(&PlotArgs::FigSize(img_size))?,
-            _ => plt_params
+        if backend == PltBackEnd::BMP || backend == PltBackEnd::SVG {
+            plt_params
                 .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
                 ))?
                 .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
-                .set(&PlotArgs::FigSize(img_size))?,
+                .set(&PlotArgs::PlotSize(plot_size))?;
         };
+
         plt_params.set(&PlotArgs::Backend(backend))?;
 
         let _ = self.add_plot_specific_params(&mut plt_params);
 
         let plt_type = self.get_plot_type(&plt_params);
 
-        let mut plt_series_opt = self.get_plot_series(&plt_type)?;
-
-        // let max = 
-        // for plt_series in plt_series_opt.iter_mut().flatten(){
-        //     if let PlotData::ColorMesh { x_dat_n, y_dat_m, z_dat_nxm } = &mut plt_series.get_plot_series_data(){
-        //         z_dat_nxm.
-        //     }
-        // }
+        let plt_series_opt = self.get_plot_series(&plt_type)?;
 
         plt_series_opt.map_or(Ok(None), |plt_series| plt_type.plot(&plt_series))
     }
@@ -1430,7 +1422,8 @@ impl Default for ColorBar {
 pub struct PlotBounds {
     x: Option<AxLims>,
     y: Option<AxLims>,
-    z: Option<AxLims>,}
+    z: Option<AxLims>,
+}
 
 impl PlotBounds {
     /// Creates a new [`PlotBounds`] struct
@@ -1469,7 +1462,7 @@ impl PlotBounds {
     /// Returns the x boundary range of these [`PlotBounds`]
     #[must_use]
     pub fn get_x_range(&self) -> Option<f64> {
-        self.x.map_or(None, |x| Some(x.max-x.min))
+        self.x.map(|x| x.max - x.min)
     }
 
     /// Returns the y boundary values of these [`PlotBounds`]
@@ -1481,7 +1474,7 @@ impl PlotBounds {
     /// Returns the y boundary range of these [`PlotBounds`]
     #[must_use]
     pub fn get_y_range(&self) -> Option<f64> {
-        self.y.map_or(None, |y| Some(y.max-y.min))
+        self.y.map(|y| y.max - y.min)
     }
 
     /// Returns the z boundary values of these [`PlotBounds`]
@@ -1493,7 +1486,7 @@ impl PlotBounds {
     /// Returns the z boundary range of these [`PlotBounds`]
     #[must_use]
     pub fn get_z_range(&self) -> Option<f64> {
-        self.z.map_or(None, |z| Some(z.max-z.min))
+        self.z.map(|z| z.max - z.min)
     }
 }
 
@@ -1517,11 +1510,12 @@ impl Default for PlotParameters {
     /// - `PlotArgs::YLim`: `None`
     /// - `PlotArgs::ZLim`: `None`
     /// - `PlotArgs::AxisEqual`: `true`
+    /// - `PlotArgs::ExpandBounds`: `true`
     /// - `PlotArgs::CMap`: `colorous::TURBO`
     /// - `PlotArgs::Color`: `RGBAColor(255, 0, 0, 1.)`
     /// - `PlotArgs::FDir`: `current directory`
     /// - `PlotArgs::FName`: `opossum_default_plot_{i}.png`. Here, i is chosen such that no file is overwritten, but a new file is generated
-    /// - `PlotArgs::FigSize`: `(1000, 850)`
+    /// - `PlotArgs::PlotSize`: `(800, 800)`
     /// # Returns
     /// This method returns a new [`PlotParameters`] struct
     /// # Panics
@@ -1565,7 +1559,7 @@ impl Default for PlotParameters {
 
                     plt_params.set(&PlotArgs::FName(fname)).unwrap()
                 }
-                PlotArgs::FigSize(_) => plt_params.set(&PlotArgs::FigSize((1000, 850))).unwrap(),
+                PlotArgs::PlotSize(_) => plt_params.set(&PlotArgs::PlotSize((800, 800))).unwrap(),
                 PlotArgs::FDir(_) => {
                     let (current_dir, _) = Self::create_unused_filename_dir();
 
@@ -1831,20 +1825,22 @@ impl PlotParameters {
         if let Some(PlotArgs::ExpandBounds(expand)) = self.params.get("expandbounds") {
             Ok(*expand)
         } else {
-            Err(OpossumError::Other("expandbounds argument not found!".into()))
+            Err(OpossumError::Other(
+                "expandbounds argument not found!".into(),
+            ))
         }
     }
 
-    ///This method gets the figure size which is stored in the [`PlotParameters`]
+    ///This method gets the image size which is stored in the [`PlotParameters`]
     /// # Returns
-    /// This method returns an [`OpmResult<(u32, u32)>`] with the width and height in number of pixels as u32
+    /// This method returns an [`OpmResult<(u32, u32)>`] with the width and height in number of pixels as u32 of the actual plot area
     /// # Errors
     /// This method throws an error if the argument is not found
-    pub fn get_figsize(&self) -> OpmResult<(u32, u32)> {
-        if let Some(PlotArgs::FigSize(figsize)) = self.params.get("figsize") {
-            Ok(*figsize)
+    pub fn get_plotsize(&self) -> OpmResult<(u32, u32)> {
+        if let Some(PlotArgs::PlotSize(plotsize)) = self.params.get("plotsize") {
+            Ok(*plotsize)
         } else {
-            Err(OpossumError::Other("figsize argument not found!".into()))
+            Err(OpossumError::Other("plotsize argument not found!".into()))
         }
     }
 
@@ -1874,7 +1870,7 @@ impl PlotParameters {
             PlotArgs::XLim(lim_opt) | PlotArgs::YLim(lim_opt) | PlotArgs::ZLim(lim_opt) => {
                 Self::check_ax_lim_validity(lim_opt)
             }
-            PlotArgs::FigSize(figsize) => !(figsize.0 == 0 || figsize.1 == 0),
+            PlotArgs::PlotSize(plotsize) => !(plotsize.0 == 0 || plotsize.1 == 0),
             PlotArgs::FDir(fdir) => Path::new(fdir).exists(),
             PlotArgs::FName(fname) => {
                 Self::check_file_ext_validity(fname, vec!["jpg", "png", "bmp", "svg"])
@@ -1911,7 +1907,7 @@ impl PlotParameters {
             PlotArgs::ZLim(_) => "zlim".to_owned(),
             PlotArgs::AxisEqual(_) => "axisequal".to_owned(),
             PlotArgs::ExpandBounds(_) => "expandbounds".to_owned(),
-            PlotArgs::FigSize(_) => "figsize".to_owned(),
+            PlotArgs::PlotSize(_) => "plotsize".to_owned(),
             PlotArgs::CBarLabelPos(_) => "cbarlabelpos".to_owned(),
             PlotArgs::CBarLabel(_) => "cbarlabel".to_owned(),
             PlotArgs::FDir(_) => "fdir".to_owned(),
@@ -1995,8 +1991,10 @@ impl PlotParameters {
             PlotArgs::YLim(_) => self.params.insert("ylim".to_owned(), plt_arg.clone()),
             PlotArgs::ZLim(_) => self.params.insert("zlim".to_owned(), plt_arg.clone()),
             PlotArgs::AxisEqual(_) => self.params.insert("axisequal".to_owned(), plt_arg.clone()),
-            PlotArgs::ExpandBounds(_) => self.params.insert("expandbounds".to_owned(), plt_arg.clone()),
-            PlotArgs::FigSize(_) => self.params.insert("figsize".to_owned(), plt_arg.clone()),
+            PlotArgs::ExpandBounds(_) => self
+                .params
+                .insert("expandbounds".to_owned(), plt_arg.clone()),
+            PlotArgs::PlotSize(_) => self.params.insert("plotsize".to_owned(), plt_arg.clone()),
             PlotArgs::CBarLabelPos(_) => self
                 .params
                 .insert("cbarlabelpos".to_owned(), plt_arg.clone()),
@@ -2080,7 +2078,8 @@ pub struct Plot {
     bounds: PlotBounds,
     ax_equal: bool,
     expand_bounds: bool,
-    img_size: (u32, u32),
+    plot_size: (u32, u32),
+    fig_size: (u32, u32),
     plot_series: Option<Vec<PlotSeries>>,
 }
 
@@ -2097,39 +2096,42 @@ impl Plot {
     pub fn new(plt_series: &Vec<PlotSeries>, plt_params: &PlotParameters) -> Self {
         let mut plot = Self::try_from(plt_params).unwrap();
         plot.add_plot_series(plt_series, true);
-        
+
         plot
     }
 
-    fn add_margin_to_figure_size(&mut self, plt_type: &PlotType){
-        let mut height_add: u32 = 65+70;
+    fn add_margin_to_figure_size(&mut self, plt_type: &PlotType) {
+        let height_add: u32 = 65 + 70;
         let mut width_add: u32 = 0;
 
         let mut add_left = 10;
         let mut add_right = 30;
-        let pixel_margin = PlotType::calc_pixel_margin(self.bounds.y.unwrap_or_else(|| AxLims{min: -0.5, max: 0.5}));
+        let pixel_margin = PlotType::calc_pixel_margin(self.bounds.y.unwrap_or_else(|| AxLims {
+            min: -0.5,
+            max: 0.5,
+        }));
 
-        if LabelPos::Right == self.label[1].label_pos  {
+        if LabelPos::Right == self.label[1].label_pos {
             add_right += 21 + pixel_margin;
-            if pixel_margin < 72{
+            if pixel_margin < 72 {
                 add_right = 82 - pixel_margin;
             }
-        } 
+        }
         if LabelPos::Left == self.label[1].label_pos {
             add_left += 21 + pixel_margin;
-            if pixel_margin < 72{
+            if pixel_margin < 72 {
                 add_left = 82 - pixel_margin;
             }
-        } 
+        }
 
-        width_add += add_right+add_left;
+        width_add += add_right + add_left;
 
-        if let PlotType::ColorMesh(_) = plt_type{
+        if let PlotType::ColorMesh(_) = plt_type {
             width_add += 170;
         }
 
-        self.img_size.0 += width_add;
-        self.img_size.1 += height_add;
+        self.fig_size.0 += width_add;
+        self.fig_size.1 += height_add;
     }
 
     /// Adds another [`PlotSeries`] to the [`Plot`] struct
@@ -2151,10 +2153,6 @@ impl Plot {
                 bounds.join(&plt_series.define_data_based_axes_bounds(self.expand_bounds));
             }
         }
-
-        if self.ax_equal{
-            self.set_xy_axes_ranges_equal()
-        }
     }
 
     /// Returns a reference to the vector of [`PlotSeries`] of this [`Plot`]
@@ -2163,33 +2161,29 @@ impl Plot {
         self.plot_series.as_ref()
     }
 
-    fn set_xy_axes_ranges_equal(&mut self){
+    fn set_xy_axes_ranges_equal(&mut self) {
+        let (plot_width, plot_height) = self.plot_size;
+        let plot_ratio_w_h = plot_width.to_f64().unwrap() / plot_height.to_f64().unwrap();
+
         let x_range = self.bounds.get_x_range();
         let y_range = self.bounds.get_y_range();
-        if let (Some(x_range), Some(y_range)) = (x_range, y_range){
-            if x_range > y_range{
-                if let Some(y_bound) = &mut self.bounds.y{
-                    y_bound.expand_lim_range_by_factor(x_range/y_range);
-                }
-                else{
-                    warn!("Cannot set axes to equal with, since y boundary is None!");
-                }
+        if let (Some(x_range), Some(y_range), Some(x_bounds), Some(y_bounds)) =
+            (x_range, y_range, &mut self.bounds.x, &mut self.bounds.y)
+        {
+            if x_range > y_range {
+                y_bounds.expand_lim_range_by_factor(x_range / y_range);
+            } else {
+                x_bounds.expand_lim_range_by_factor(y_range / x_range);
             }
-            else{
-                if let Some(x_bound) = &mut self.bounds.x{
-                    x_bound.expand_lim_range_by_factor(y_range/x_range);
-                }
-                else{
-                    warn!("Cannot set axes to equal with, since x boundary is None!");
-                }
+            if plot_width > plot_height {
+                x_bounds.expand_lim_range_by_factor(plot_ratio_w_h);
+            } else {
+                y_bounds.expand_lim_range_by_factor(1. / plot_ratio_w_h);
             }
-        }
-        else if x_range.is_some(){
+        } else if x_range.is_some() {
             self.bounds.y = self.bounds.x;
-        }
-        else if y_range.is_some(){
+        } else if y_range.is_some() {
             self.bounds.x = self.bounds.y;
-
         }
     }
     /// Defines the axes bounds of this [`Plot`] if the limit is not already defined by the initial [`PlotParameters`].
@@ -2209,7 +2203,7 @@ impl Plot {
                     self.bounds
                         .join(&plt_series.define_data_based_axes_bounds(self.expand_bounds));
                 }
-                if self.ax_equal{
+                if self.ax_equal {
                     self.set_xy_axes_ranges_equal();
                 }
             }
@@ -2225,7 +2219,7 @@ impl TryFrom<&PlotParameters> for Plot {
         let cmap_gradient = plt_params.get_cmap()?;
         let cbar_label_str = plt_params.get_cbar_label()?;
         let cbar_label_pos = plt_params.get_cbar_label_pos()?;
-        let fig_size = plt_params.get_figsize()?;
+        let plot_size = plt_params.get_plotsize()?;
         let x_lim = plt_params.get_xlim()?;
         let y_lim = plt_params.get_ylim()?;
         let z_lim = plt_params.get_zlim()?;
@@ -2251,7 +2245,8 @@ impl TryFrom<&PlotParameters> for Plot {
             bounds: PlotBounds::new(x_lim, y_lim, z_lim),
             ax_equal,
             expand_bounds,
-            img_size: fig_size,
+            plot_size,
+            fig_size: plot_size,
             plot_series: None,
         })
     }
@@ -2284,8 +2279,8 @@ pub enum PlotArgs {
     AxisEqual(bool),
     ///defines wheter the axis bounds should expand or not
     ExpandBounds(bool),
-    ///Figure size in pixels. Holds an `(usize, usize)` tuple
-    FigSize((u32, u32)),
+    ///image size in pixels. Holds an `(usize, usize)` tuple
+    PlotSize((u32, u32)),
     ///Path to the save directory of the image. Only necessary if the data is not written into a buffer. Holds a String
     FDir(PathBuf),
     ///Name of the file to be written. Holds a String
@@ -2297,7 +2292,7 @@ pub enum PlotArgs {
 #[cfg(test)]
 mod test {
     use super::*;
-    use approx::assert_relative_eq;
+    use approx::{assert_relative_eq, relative_eq};
     use log::Level;
     use tempfile::NamedTempFile;
     #[test]
@@ -2326,10 +2321,10 @@ mod test {
         let y_bounds = plt.bounds.get_y_bounds().unwrap();
         let z_bounds = plt.bounds.get_z_bounds();
 
-        assert_relative_eq!(x_bounds.min, 0.);
-        assert_relative_eq!(x_bounds.max, 2.);
-        assert_relative_eq!(y_bounds.min, 3.);
-        assert_relative_eq!(y_bounds.max, 5.);
+        assert_relative_eq!(x_bounds.min, -0.1);
+        assert_relative_eq!(x_bounds.max, 2.1);
+        assert_relative_eq!(y_bounds.min, 2.9);
+        assert_relative_eq!(y_bounds.max, 5.1);
 
         assert!(z_bounds.is_none());
 
@@ -2357,19 +2352,23 @@ mod test {
         let x_bounds = plt.bounds.get_x_bounds().unwrap();
         let y_bounds = plt.bounds.get_y_bounds().unwrap();
 
-        assert_relative_eq!(x_bounds.min, 0.);
-        assert_relative_eq!(x_bounds.max, 2.);
-        assert_relative_eq!(y_bounds.min, 3.);
-        assert_relative_eq!(y_bounds.max, 5.);
+        assert_relative_eq!(x_bounds.min, -0.1);
+        assert_relative_eq!(x_bounds.max, 2.1);
+        assert_relative_eq!(y_bounds.min, 2.9);
+        assert_relative_eq!(y_bounds.max, 5.1);
 
         plt.add_plot_series(&vec![plt_series3], true);
         let x_bounds = plt.bounds.get_x_bounds().unwrap();
         let y_bounds = plt.bounds.get_y_bounds().unwrap();
 
-        assert_relative_eq!(x_bounds.min, 0.);
-        assert_relative_eq!(x_bounds.max, 6.);
-        assert_relative_eq!(y_bounds.min, -1.);
-        assert_relative_eq!(y_bounds.max, 9.);
+        assert_relative_eq!(x_bounds.min, -0.1);
+        assert_relative_eq!(x_bounds.max, 6.1);
+        assert!(relative_eq!(
+            y_bounds.min,
+            -1.5,
+            max_relative = 2. * f64::EPSILON
+        ));
+        assert_relative_eq!(y_bounds.max, 9.5);
 
         let plt_series_vec = plt.get_plot_series_vec().unwrap();
 
@@ -2450,21 +2449,21 @@ mod test {
         assert_relative_eq!(z.unwrap().max, 1.);
     }
     #[test]
-    fn get_x_range(){
+    fn get_x_range() {
         assert_eq!(PlotBounds::new(None, None, None).get_x_range(), None);
         let x = PlotBounds::new(AxLims::new(0., 1.), None, None).get_x_range();
         assert!(x.is_some());
         assert_relative_eq!(x.unwrap(), 1.);
     }
     #[test]
-    fn get_y_range(){
+    fn get_y_range() {
         assert_eq!(PlotBounds::new(None, None, None).get_y_range(), None);
         let y = PlotBounds::new(None, AxLims::new(0., 1.), None).get_y_range();
         assert!(y.is_some());
         assert_relative_eq!(y.unwrap(), 1.);
     }
     #[test]
-    fn get_z_range(){
+    fn get_z_range() {
         assert_eq!(PlotBounds::new(None, None, None).get_z_range(), None);
         let z = PlotBounds::new(None, None, AxLims::new(0., 1.)).get_z_range();
         assert!(z.is_some());
@@ -2572,7 +2571,7 @@ mod test {
         assert_eq!(plt_params.get_fdir().is_err(), true);
         assert_eq!(plt_params.get_fname().is_err(), true);
         assert_eq!(plt_params.get_cmap().is_err(), true);
-        assert_eq!(plt_params.get_figsize().is_err(), true);
+        assert_eq!(plt_params.get_plotsize().is_err(), true);
     }
     #[test]
     fn default_plot_params() {
@@ -2596,7 +2595,7 @@ mod test {
             plt_params.get_fname().unwrap(),
             format!("opossum_default_plot_0.png")
         );
-        assert_eq!(plt_params.get_figsize().unwrap(), (1000, 850));
+        assert_eq!(plt_params.get_plotsize().unwrap(), (800, 800));
     }
     #[test]
     fn new_plot_params() {
@@ -2795,7 +2794,7 @@ mod test {
             plot.cbar.label.label_pos,
             plt_params.get_cbar_label_pos().unwrap()
         );
-        assert_eq!(plot.img_size, plt_params.get_figsize().unwrap());
+        assert_eq!(plot.plot_size, plt_params.get_plotsize().unwrap());
     }
     #[test]
     fn check_ax_lim_validity_valid() {
@@ -2912,20 +2911,20 @@ mod test {
         )));
     }
     #[test]
-    fn check_plot_arg_validity_figsize() {
+    fn check_plot_arg_validity_plotsize() {
         //already covered in other test, as here only a function is called which is already tested
         assert!(!PlotParameters::check_plot_arg_validity(
-            &PlotArgs::FigSize((0, 0))
+            &PlotArgs::PlotSize((0, 0))
         ));
         assert!(!PlotParameters::check_plot_arg_validity(
-            &PlotArgs::FigSize((0, 1))
+            &PlotArgs::PlotSize((0, 1))
         ));
         assert!(!PlotParameters::check_plot_arg_validity(
-            &PlotArgs::FigSize((1, 0))
+            &PlotArgs::PlotSize((1, 0))
         ));
-        assert!(PlotParameters::check_plot_arg_validity(&PlotArgs::FigSize(
-            (1, 1)
-        )));
+        assert!(PlotParameters::check_plot_arg_validity(
+            &PlotArgs::PlotSize((1, 1))
+        ));
     }
     #[test]
     fn check_plot_arg_validity_fname() {
@@ -3111,39 +3110,39 @@ mod test {
 
         let plt_dat_dim2 = PlotData::new_dim2(dat_2d).unwrap();
         let axlims = plt_dat_dim2.define_data_based_axes_bounds(true);
-        assert_relative_eq!(axlims.x.unwrap().min, -0.2);
-        assert_relative_eq!(axlims.x.unwrap().max, 2.2);
-        assert_relative_eq!(axlims.y.unwrap().min, -0.2);
-        assert_relative_eq!(axlims.y.unwrap().max, 2.2);
+        assert_relative_eq!(axlims.x.unwrap().min, -0.1);
+        assert_relative_eq!(axlims.x.unwrap().max, 2.1);
+        assert_relative_eq!(axlims.y.unwrap().min, -0.1);
+        assert_relative_eq!(axlims.y.unwrap().max, 2.1);
         assert!(axlims.z.is_none());
 
         let plt_dat_dim3 = PlotData::new_dim3(dat_3d.clone()).unwrap();
         let axlims = plt_dat_dim3.define_data_based_axes_bounds(true);
-        assert_relative_eq!(axlims.x.unwrap().min, -0.2);
-        assert_relative_eq!(axlims.x.unwrap().max, 2.2);
-        assert_relative_eq!(axlims.y.unwrap().min, -0.2);
-        assert_relative_eq!(axlims.y.unwrap().max, 2.2);
-        assert_relative_eq!(axlims.z.unwrap().min, 1.8);
-        assert_relative_eq!(axlims.z.unwrap().max, 4.2);
+        assert_relative_eq!(axlims.x.unwrap().min, -0.1);
+        assert_relative_eq!(axlims.x.unwrap().max, 2.1);
+        assert_relative_eq!(axlims.y.unwrap().min, -0.1);
+        assert_relative_eq!(axlims.y.unwrap().max, 2.1);
+        assert_relative_eq!(axlims.z.unwrap().min, 1.9);
+        assert_relative_eq!(axlims.z.unwrap().max, 4.1);
 
         let plt_dat_colormesh =
             PlotData::new_colormesh(x.clone(), y.clone(), z_mat.clone()).unwrap();
         let axlims = plt_dat_colormesh.define_data_based_axes_bounds(true);
-        assert_relative_eq!(axlims.x.unwrap().min, -0.2);
-        assert_relative_eq!(axlims.x.unwrap().max, 2.2);
-        assert_relative_eq!(axlims.y.unwrap().min, -0.2);
-        assert_relative_eq!(axlims.y.unwrap().max, 2.2);
-        assert_relative_eq!(axlims.z.unwrap().min, -0.4);
-        assert_relative_eq!(axlims.z.unwrap().max, 4.4);
+        assert_relative_eq!(axlims.x.unwrap().min, -0.1);
+        assert_relative_eq!(axlims.x.unwrap().max, 2.1);
+        assert_relative_eq!(axlims.y.unwrap().min, -0.1);
+        assert_relative_eq!(axlims.y.unwrap().max, 2.1);
+        assert_relative_eq!(axlims.z.unwrap().min, -0.2);
+        assert_relative_eq!(axlims.z.unwrap().max, 4.2);
 
         let plt_dat_tri_surf = PlotData::new_triangulatedsurface(&dat_3d).unwrap();
         let axlims = plt_dat_tri_surf.define_data_based_axes_bounds(true);
-        assert_relative_eq!(axlims.x.unwrap().min, -0.2);
-        assert_relative_eq!(axlims.x.unwrap().max, 2.2);
-        assert_relative_eq!(axlims.y.unwrap().min, -0.2);
-        assert_relative_eq!(axlims.y.unwrap().max, 2.2);
-        assert_relative_eq!(axlims.z.unwrap().min, 1.8);
-        assert_relative_eq!(axlims.z.unwrap().max, 4.2);
+        assert_relative_eq!(axlims.x.unwrap().min, -0.1);
+        assert_relative_eq!(axlims.x.unwrap().max, 2.1);
+        assert_relative_eq!(axlims.y.unwrap().min, -0.1);
+        assert_relative_eq!(axlims.y.unwrap().max, 2.1);
+        assert_relative_eq!(axlims.z.unwrap().min, 1.9);
+        assert_relative_eq!(axlims.z.unwrap().max, 4.1);
     }
     #[test]
     fn define_plot_axes_bounds() {
@@ -3192,38 +3191,38 @@ mod test {
 
         let mut plot = Plot::new(&vec![plt_series_dim2], &PlotParameters::default());
         let _ = plot.define_axes_bounds();
-        assert_relative_eq!(plot.bounds.x.unwrap().min, 0.);
-        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.);
-        assert_relative_eq!(plot.bounds.y.unwrap().min, 0.);
-        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.);
+        assert_relative_eq!(plot.bounds.x.unwrap().min, -0.1);
+        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.1);
+        assert_relative_eq!(plot.bounds.y.unwrap().min, -0.1);
+        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.1);
         assert!(plot.bounds.z.is_none());
 
         let mut plot = Plot::new(&vec![plt_series_dim3], &PlotParameters::default());
         let _ = plot.define_axes_bounds();
-        assert_relative_eq!(plot.bounds.x.unwrap().min, 0.);
-        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.);
-        assert_relative_eq!(plot.bounds.y.unwrap().min, 0.);
-        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.);
-        assert_relative_eq!(plot.bounds.z.unwrap().min, 2.);
-        assert_relative_eq!(plot.bounds.z.unwrap().max, 4.);
+        assert_relative_eq!(plot.bounds.x.unwrap().min, -0.1);
+        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.1);
+        assert_relative_eq!(plot.bounds.y.unwrap().min, -0.1);
+        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.1);
+        assert_relative_eq!(plot.bounds.z.unwrap().min, 1.9);
+        assert_relative_eq!(plot.bounds.z.unwrap().max, 4.1);
 
         let mut plot = Plot::new(&vec![plt_series_colormesh], &PlotParameters::default());
         let _ = plot.define_axes_bounds();
-        assert_relative_eq!(plot.bounds.x.unwrap().min, 0.);
-        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.);
-        assert_relative_eq!(plot.bounds.y.unwrap().min, 0.);
-        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.);
-        assert_relative_eq!(plot.bounds.z.unwrap().min, 0.);
-        assert_relative_eq!(plot.bounds.z.unwrap().max, 4.);
+        assert_relative_eq!(plot.bounds.x.unwrap().min, -0.1);
+        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.1);
+        assert_relative_eq!(plot.bounds.y.unwrap().min, -0.1);
+        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.1);
+        assert_relative_eq!(plot.bounds.z.unwrap().min, -0.2);
+        assert_relative_eq!(plot.bounds.z.unwrap().max, 4.2);
 
         let mut plot = Plot::new(&vec![plt_series_surf_triangle], &PlotParameters::default());
         let _ = plot.define_axes_bounds();
-        assert_relative_eq!(plot.bounds.x.unwrap().min, 0.);
-        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.);
-        assert_relative_eq!(plot.bounds.y.unwrap().min, 0.);
-        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.);
-        assert_relative_eq!(plot.bounds.z.unwrap().min, 2.);
-        assert_relative_eq!(plot.bounds.z.unwrap().max, 4.);
+        assert_relative_eq!(plot.bounds.x.unwrap().min, -0.1);
+        assert_relative_eq!(plot.bounds.x.unwrap().max, 2.1);
+        assert_relative_eq!(plot.bounds.y.unwrap().min, -0.1);
+        assert_relative_eq!(plot.bounds.y.unwrap().max, 2.1);
+        assert_relative_eq!(plot.bounds.z.unwrap().min, 1.9);
+        assert_relative_eq!(plot.bounds.z.unwrap().max, 4.1);
     }
     #[test]
     fn colorbar_new() {
@@ -3295,16 +3294,16 @@ mod test {
         axlim.expand_lim_range_by_factor(f64::INFINITY);
         axlim.expand_lim_range_by_factor(0.);
 
-        let warning = "Cannot expand ax limits! Expansion ratio must be normal and positive!";
+        let warning = "Cannot expand ax limits! Expansion factor must be normal and positive!";
         testing_logger::validate(|captured_logs| {
             assert_eq!(captured_logs.len(), 4);
-            assert_eq!(                captured_logs[0].body,                warning            );
+            assert_eq!(captured_logs[0].body, warning);
             assert_eq!(captured_logs[0].level, Level::Warn);
-            assert_eq!(                captured_logs[1].body,                warning            );
+            assert_eq!(captured_logs[1].body, warning);
             assert_eq!(captured_logs[1].level, Level::Warn);
-            assert_eq!(                captured_logs[2].body,                warning            );
+            assert_eq!(captured_logs[2].body, warning);
             assert_eq!(captured_logs[2].level, Level::Warn);
-            assert_eq!(                captured_logs[3].body,                warning            );
+            assert_eq!(captured_logs[3].body, warning);
             assert_eq!(captured_logs[3].level, Level::Warn);
         });
     }
@@ -3372,7 +3371,6 @@ mod test {
     }
     #[test]
     fn calc_pixel_margin_test() {
-
         let axlims = AxLims::new(1e-4, 2e-4).unwrap();
         assert!(PlotType::calc_pixel_margin(axlims) == 72);
 

@@ -275,6 +275,7 @@ impl Plottable for Spectrometer {
         plt_params
             .set(&PlotArgs::XLabel("wavelength in nm".into()))?
             .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?
+            .set(&PlotArgs::PlotSize((800, 800)))?
             .set(&PlotArgs::AxisEqual(false))?;
 
         Ok(())

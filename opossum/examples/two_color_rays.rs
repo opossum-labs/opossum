@@ -19,7 +19,11 @@ fn main() -> OpmResult<()> {
     let mut rays_1w = Rays::new_uniform_collimated(
         Length::new::<nanometer>(1053.),
         Energy::new::<joule>(1.),
-        &FibonacciEllipse::new(Length::new::<millimeter>(2.), Length::new::<millimeter>(4.), 100)?,
+        &FibonacciEllipse::new(
+            Length::new::<millimeter>(2.),
+            Length::new::<millimeter>(4.),
+            100,
+        )?,
     )?;
 
     let mut rays_2w = Rays::new_uniform_collimated(
