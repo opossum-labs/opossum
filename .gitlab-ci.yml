@@ -1,13 +1,13 @@
-default:
+# default:
   # Official language image. Look for the different tagged releases at:
   # https://hub.docker.com/r/library/rust/tags/
-  image: "rust:latest"
+  # image: "rust:latest"
 
 before_script:
    # avoid /n -> /r/n conversion on windows
    - git config --global core.autocrlf false
-#  - apt-get update -yqq
-#  - apt-get install -yqq --no-install-recommends build-essential
+   #  - apt-get update -yqq
+   #  - apt-get install -yqq --no-install-recommends build-essential
 
 stages:
   - test
