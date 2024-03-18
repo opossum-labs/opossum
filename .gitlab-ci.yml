@@ -46,7 +46,7 @@ build-windows:
   tags:
     - windows
   script:
-    - cargo dist build --verbose info
+    - cargo dist build --verbose debug
   dependencies:
     - test_windows
   rules:
