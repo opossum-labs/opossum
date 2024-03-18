@@ -391,7 +391,7 @@ impl Plottable for WaveFrontErrorMap {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::analyzer::{RayTraceConfig, RayTracingMode};
+    use crate::analyzer::RayTraceConfig;
     use crate::position_distributions::Hexapolar;
     use crate::{
         analyzer::AnalyzerType, lightdata::DataEnergy, ray::Ray, rays::Rays,
@@ -422,13 +422,13 @@ mod test {
     }
 
     #[test]
-    fn new_empty_wf_error_map(){
+    fn new_empty_wf_error_map() {
         let wf_dat = MatrixXx3::from_vec(Vec::<f64>::new());
         assert!(WaveFrontErrorMap::new(&wf_dat, Length::new::<nanometer>(1000.)).is_err());
     }
 
     #[test]
-    fn calc_wf_stats_empty_wf_error_map(){
+    fn calc_wf_stats_empty_wf_error_map() {
         let wf_dat = DVector::from_vec(Vec::<f64>::new());
         assert!(WaveFrontErrorMap::calc_wavefront_statistics(&wf_dat).is_err());
     }
