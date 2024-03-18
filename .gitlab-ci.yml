@@ -34,7 +34,6 @@ test_windows:
   tags:
     - windows
   script:
-    - (get-command cargo-clippy.exe).Path
     - cargo-clippy --version
     - (get-command rustc.exe).Path
     - rustc --version
