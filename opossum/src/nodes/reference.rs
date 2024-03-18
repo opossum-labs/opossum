@@ -26,7 +26,7 @@ use crate::properties::{Properties, Proptype};
 ///   - `name`
 ///   - `inverted`
 ///
-/// **Note**: Since this node only refers to another optical node it does not handle 
+/// **Note**: Since this node only refers to another optical node it does not handle
 /// (ignores) any [`Aperture`](crate::aperture::Aperture) definitions on its ports.
 pub struct NodeReference {
     reference: Option<Weak<RefCell<dyn Optical>>>,
