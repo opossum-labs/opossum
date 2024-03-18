@@ -36,7 +36,6 @@ test_windows:
   script:
     - (get-command cargo-clippy.exe).Path
     - cargo-clippy --version
-    - cargo clippy -- --version
     - (get-command rustc.exe).Path
     - rustc --version
     - cargo xtask ci
