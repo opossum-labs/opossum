@@ -322,7 +322,7 @@ impl RayPositionHistories {
 impl PdfReportable for RayPositionHistories {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), (1000, 1000), PltBackEnd::Buf)?;
+        let img = self.to_plot(Path::new(""), (1600, 800), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),
@@ -337,7 +337,9 @@ impl Plottable for RayPositionHistories {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
-            .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?;
+            .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?
+            .set(&PlotArgs::PlotSize((1400, 800)))?
+            .set(&PlotArgs::AxisEqual(false))?;
         Ok(())
     }
 

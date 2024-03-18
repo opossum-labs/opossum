@@ -134,7 +134,7 @@ impl Optical for FluenceDetector {
                     warn!("Fluence Detector diagram: no fluence data for export available",);
                     Ok(None)
                 },
-                |fluence_data| fluence_data.to_plot(&file_path, (800, 800), PltBackEnd::BMP),
+                |fluence_data| fluence_data.to_plot(&file_path, (1000, 500), PltBackEnd::BMP),
             )
             // data.export(&file_path)
         } else {
@@ -256,7 +256,7 @@ impl PdfReportable for FluenceData {
             "Average fluence: {:.1} J/cm²",
             self.average
         )));
-        let img = self.to_plot(Path::new(""), (1000, 800), PltBackEnd::Buf)?;
+        let img = self.to_plot(Path::new(""), (1000, 1000), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),
@@ -272,7 +272,10 @@ impl Plottable for FluenceData {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm".into()))?
             .set(&PlotArgs::YLabel("distance in mm".into()))?
-            .set(&PlotArgs::CBarLabel("fluence in W/cm²".into()))?;
+            .set(&PlotArgs::CBarLabel("fluence in J/cm²".into()))?
+            .set(&PlotArgs::PlotSize((800, 800)))?
+            .set(&PlotArgs::ExpandBounds(false))?;
+
         Ok(())
     }
 
@@ -291,7 +294,6 @@ impl Plottable for FluenceData {
                 let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
                 Ok(Some(vec![plt_series]))
             }
-            // PlotType::ColorVoronoi(_) => Ok(Some(PlotData::ColorVoronoi())),
             _ => Ok(None),
         }
     }

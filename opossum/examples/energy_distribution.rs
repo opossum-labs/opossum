@@ -41,7 +41,7 @@ fn main() -> OpmResult<()> {
         .unwrap()
         .set(&PlotArgs::FDir("./opossum/playground/".into()))
         .unwrap()
-        .set(&PlotArgs::FigSize((1000, 800)))
+        .set(&PlotArgs::PlotSize((1000, 800)))
         .unwrap();
     let plt_dat = PlotData::ColorMesh {
         x_dat_n: fl_x,
