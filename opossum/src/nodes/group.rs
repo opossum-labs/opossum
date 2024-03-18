@@ -15,6 +15,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::{algo::toposort, Direction};
 use serde_derive::Serialize;
 use std::collections::HashMap;
+use std::path::Path;
 
 /// Mapping of group internal [`OpticPorts`] to externally visible ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
@@ -745,6 +746,18 @@ impl Optical for NodeGroup {
     }
     fn is_detector(&self) -> bool {
         self.g.contains_detector()
+    }
+
+    fn export_data(&self, report_dir: &Path) -> OpmResult<Option<image::RgbImage>> {
+        let detector_nodes = self
+            .g
+            .0
+            .node_weights()
+            .filter(|node| node.optical_ref.borrow().is_detector());
+        for node in detector_nodes {
+            node.optical_ref.borrow().export_data(report_dir)?;
+        }
+        Ok(None)
     }
 }
 
