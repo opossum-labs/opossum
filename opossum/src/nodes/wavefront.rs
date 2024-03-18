@@ -266,10 +266,30 @@ impl Optical for WaveFront {
 
                 props
                 .create(
-                    "Map",
-                    "Wavefront error in λ, rms in mλ and ptv in mλ with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
+                    "Wavefront Map",
+                    "Wavefront error mapwith respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                     None,
-                    wf_data.into(),
+                    wf_data.clone().into(),
+                )
+                .unwrap();
+
+                //todo for all error maps at every wavelength!
+                props
+                .create(
+                    "Wavefront PtV",
+                    "Wavefront Peak-to-Valley value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
+                    None,
+                    wf_data.wavefront_error_maps[0].ptv.into(),
+                )
+                .unwrap();
+
+                //todo for all error maps at every wavelength!
+                props
+                .create(
+                    "Wavefront RMS",
+                    "Wavefront root mean square value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
+                    None,
+                    wf_data.wavefront_error_maps[0].rms.into(),
                 )
                 .unwrap();
             }
@@ -289,14 +309,6 @@ impl PdfReportable for WaveFrontData {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
 
-        layout.push(genpdf::elements::Paragraph::new(format!(
-            "ptv: {:.4} λ",
-            self.wavefront_error_maps[0].ptv
-        )));
-        layout.push(genpdf::elements::Paragraph::new(format!(
-            "rms: {:.4} λ",
-            self.wavefront_error_maps[0].rms
-        )));
         //todo! for all wavefronts!
         let img = self.wavefront_error_maps[0]
             .to_plot(Path::new(""), (1000, 500), PltBackEnd::Buf)
@@ -379,10 +391,19 @@ impl Plottable for WaveFrontErrorMap {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{ray::Ray, rays::Rays};
+    use crate::analyzer::RayTraceConfig;
+    use crate::position_distributions::Hexapolar;
+    use crate::{
+        analyzer::AnalyzerType, lightdata::DataEnergy, ray::Ray, rays::Rays,
+        spectrum_helper::create_he_ne_spec,
+    };
     use approx::assert_abs_diff_eq;
     use nalgebra::Point3;
+    use tempfile::NamedTempFile;
+    use uom::num_traits::Zero;
+    use uom::si::length::millimeter;
     use uom::si::{energy::joule, f64::Energy};
+    use uom::si::{f64::Length, length::nanometer};
     #[test]
     fn calc_wavefront_statistics() {
         let wvl = Length::new::<nanometer>(1000.);
@@ -398,5 +419,157 @@ mod test {
         let wvf_map = WaveFrontErrorMap::new(&wavefront_error, wvl).unwrap();
         assert_eq!(wvf_map.ptv, 1.0);
         assert_abs_diff_eq!(wvf_map.rms, 0.5);
+    }
+
+    #[test]
+    fn new_empty_wf_error_map() {
+        let wf_dat = MatrixXx3::from_vec(Vec::<f64>::new());
+        assert!(WaveFrontErrorMap::new(&wf_dat, Length::new::<nanometer>(1000.)).is_err());
+    }
+
+    #[test]
+    fn calc_wf_stats_empty_wf_error_map() {
+        let wf_dat = DVector::from_vec(Vec::<f64>::new());
+        assert!(WaveFrontErrorMap::calc_wavefront_statistics(&wf_dat).is_err());
+    }
+
+    #[test]
+    fn default() {
+        let node = WaveFront::default();
+        assert!(node.light_data.is_none());
+        assert_eq!(node.properties().name().unwrap(), "Wavefront monitor");
+        assert_eq!(node.properties().node_type().unwrap(), "Wavefront monitor");
+        assert_eq!(node.is_detector(), true);
+        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.node_color(), "lightbrown");
+        assert!(node.as_group().is_err());
+    }
+    #[test]
+    fn new() {
+        let meter = WaveFront::new("test");
+        assert_eq!(meter.properties().name().unwrap(), "test");
+        assert!(meter.light_data.is_none());
+    }
+    #[test]
+    fn ports() {
+        let meter = WaveFront::default();
+        assert_eq!(meter.ports().input_names(), vec!["in1"]);
+        assert_eq!(meter.ports().output_names(), vec!["out1"]);
+    }
+    #[test]
+    fn ports_inverted() {
+        let mut meter = WaveFront::default();
+        meter.set_property("inverted", true.into()).unwrap();
+        assert_eq!(meter.ports().input_names(), vec!["out1"]);
+        assert_eq!(meter.ports().output_names(), vec!["in1"]);
+    }
+    #[test]
+    fn inverted() {
+        let mut node = WaveFront::default();
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.properties().inverted().unwrap(), true)
+    }
+    #[test]
+    fn analyze_ok() {
+        let mut node = WaveFront::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+                &Hexapolar::new(Length::new::<millimeter>(1.), 1).unwrap(),
+            )
+            .unwrap(),
+        );
+        input.insert("in1".into(), Some(input_light.clone()));
+        let output = node.analyze(input.clone(), &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = node.analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()));
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("out1"));
+        assert_eq!(output.len(), 1);
+        let output = output.get("out1").unwrap();
+        assert!(output.is_some());
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut node = WaveFront::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("wrong".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        let output = output.get("out1").unwrap();
+        assert!(output.is_none());
+    }
+    #[test]
+    fn analyze_inverse() {
+        let mut node = WaveFront::default();
+        node.set_property("inverted", true.into()).unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("out1".into(), Some(input_light.clone()));
+
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("in1"));
+        assert_eq!(output.len(), 1);
+        let output = output.get("in1").unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output, input_light);
+    }
+    #[test]
+    fn export_data() {
+        let mut wf = WaveFront::default();
+        assert!(wf.export_data(Path::new("")).is_ok());
+        assert!(wf.export_data(Path::new("")).unwrap().is_none());
+        wf.light_data = Some(LightData::Geometric(Rays::default()));
+        let path = NamedTempFile::new().unwrap();
+        assert!(wf.export_data(path.path().parent().unwrap()).is_ok());
+        assert!(wf
+            .export_data(path.path().parent().unwrap())
+            .unwrap()
+            .is_none());
+        wf.light_data = Some(LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+                &Hexapolar::new(Length::zero(), 1).unwrap(),
+            )
+            .unwrap(),
+        ));
+        assert!(wf.export_data(path.path().parent().unwrap()).is_ok());
+    }
+    #[test]
+    fn report() {
+        let mut wf = WaveFront::default();
+        assert!(wf.report().is_none());
+        wf.light_data = Some(LightData::Geometric(Rays::default()));
+        assert!(wf.report().is_some());
+        wf.light_data = Some(LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+                &Hexapolar::new(Length::new::<millimeter>(1.), 1).unwrap(),
+            )
+            .unwrap(),
+        ));
+        let node_report = wf.report().unwrap();
+        assert_eq!(node_report.detector_type(), "Wavefront monitor");
+        assert_eq!(node_report.name(), "Wavefront monitor");
+        assert!(node_report.properties().contains("Wavefront Map"));
+        assert!(node_report.properties().contains("Wavefront RMS"));
+        assert!(node_report.properties().contains("Wavefront PtV"));
+        let node_props = node_report.properties();
+        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
+        assert_eq!(nr_of_props, 3);
     }
 }

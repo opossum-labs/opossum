@@ -270,6 +270,7 @@ mod test {
         analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
+    use tempfile::NamedTempFile;
     use uom::num_traits::Zero;
     use uom::si::{
         energy::{joule, Energy},
@@ -364,15 +365,23 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(output, input_light);
     }
-    // #[test]
-    // fn export_data() {
-    //     let mut sd = SpotDiagram::default();
-    //     assert!(sd.export_data(Path::new("")).is_err());
-    //     sd.light_data = Some(LightData::Geometric(Rays::default()));
-    //     let tmp_dir = tempdir().unwrap();
-    //     assert!(sd.export_data(tmp_dir.path()).is_ok());
-    //     tmp_dir.close().unwrap();
-    // }
+    #[test]
+    fn export_data() {
+        let mut sd = SpotDiagram::default();
+        assert!(sd.export_data(Path::new("")).is_err());
+        sd.light_data = Some(LightData::Geometric(Rays::default()));
+        let path = NamedTempFile::new().unwrap();
+        assert!(sd.export_data(path.path().parent().unwrap()).is_err());
+        sd.light_data = Some(LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+                &Hexapolar::new(Length::zero(), 1).unwrap(),
+            )
+            .unwrap(),
+        ));
+        assert!(sd.export_data(path.path().parent().unwrap()).is_ok());
+    }
     #[test]
     fn report() {
         let mut sd = SpotDiagram::default();

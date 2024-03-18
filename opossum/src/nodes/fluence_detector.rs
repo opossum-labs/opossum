@@ -163,7 +163,25 @@ impl Optical for FluenceDetector {
                         "Fluence",
                         "2D spatial energy distribution",
                         None,
-                        fluence_data.into(),
+                        fluence_data.clone().into(),
+                    )
+                    .unwrap();
+
+                props
+                    .create(
+                        "Peak Fluence",
+                        "Peak fluence of the distribution",
+                        None,
+                        fluence_data.peak.into(),
+                    )
+                    .unwrap();
+
+                props
+                    .create(
+                        "Average Fluence",
+                        "Average Fluence of the distribution",
+                        None,
+                        fluence_data.average.into(),
                     )
                     .unwrap();
             }
@@ -248,14 +266,14 @@ impl FluenceData {
 impl PdfReportable for FluenceData {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        layout.push(genpdf::elements::Paragraph::new(format!(
-            "Peak fluence: {:.1} J/cm²",
-            self.peak
-        )));
-        layout.push(genpdf::elements::Paragraph::new(format!(
-            "Average fluence: {:.1} J/cm²",
-            self.average
-        )));
+        // layout.push(genpdf::elements::Paragraph::new(format!(
+        //     "Peak fluence: {:.1} J/cm²",
+        //     self.peak
+        // )));
+        // layout.push(genpdf::elements::Paragraph::new(format!(
+        //     "Average fluence: {:.1} J/cm²",
+        //     self.average
+        // )));
         let img = self.to_plot(Path::new(""), (1000, 1000), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
@@ -296,5 +314,158 @@ impl Plottable for FluenceData {
             }
             _ => Ok(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::position_distributions::Hexapolar;
+    use crate::{
+        analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays,
+        spectrum_helper::create_he_ne_spec,
+    };
+    use tempfile::NamedTempFile;
+    use uom::num_traits::Zero;
+    use uom::si::length::millimeter;
+    use uom::si::{
+        energy::{joule, Energy},
+        f64::Length,
+        length::nanometer,
+    };
+    #[test]
+    fn default() {
+        let node = FluenceDetector::default();
+        assert!(node.light_data.is_none());
+        assert_eq!(node.properties().name().unwrap(), "fluence detector");
+        assert_eq!(node.properties().node_type().unwrap(), "fluence detector");
+        assert_eq!(node.is_detector(), true);
+        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.node_color(), "lightpurple");
+        assert!(node.as_group().is_err());
+    }
+    #[test]
+    fn new() {
+        let meter = FluenceDetector::new("test");
+        assert_eq!(meter.properties().name().unwrap(), "test");
+        assert!(meter.light_data.is_none());
+    }
+    #[test]
+    fn ports() {
+        let meter = FluenceDetector::default();
+        assert_eq!(meter.ports().input_names(), vec!["in1"]);
+        assert_eq!(meter.ports().output_names(), vec!["out1"]);
+    }
+    #[test]
+    fn ports_inverted() {
+        let mut meter = FluenceDetector::default();
+        meter.set_property("inverted", true.into()).unwrap();
+        assert_eq!(meter.ports().input_names(), vec!["out1"]);
+        assert_eq!(meter.ports().output_names(), vec!["in1"]);
+    }
+    #[test]
+    fn inverted() {
+        let mut node = FluenceDetector::default();
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.properties().inverted().unwrap(), true)
+    }
+    #[test]
+    fn analyze_ok() {
+        let mut node = FluenceDetector::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("in1".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("out1"));
+        assert_eq!(output.len(), 1);
+        let output = output.get("out1").unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output, input_light);
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut node = FluenceDetector::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("wrong".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        let output = output.get("out1").unwrap();
+        assert!(output.is_none());
+    }
+    #[test]
+    fn analyze_inverse() {
+        let mut node = FluenceDetector::default();
+        node.set_property("inverted", true.into()).unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("out1".into(), Some(input_light.clone()));
+
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("in1"));
+        assert_eq!(output.len(), 1);
+        let output = output.get("in1").unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output, input_light);
+    }
+    #[test]
+    fn export_data() {
+        let mut fd = FluenceDetector::default();
+        assert!(fd.export_data(Path::new("")).is_err());
+        fd.light_data = Some(LightData::Geometric(Rays::default()));
+        let path = NamedTempFile::new().unwrap();
+        assert!(fd.export_data(path.path().parent().unwrap()).is_ok());
+        assert!(fd
+            .export_data(path.path().parent().unwrap())
+            .unwrap()
+            .is_none());
+        fd.light_data = Some(LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+                &Hexapolar::new(Length::zero(), 1).unwrap(),
+            )
+            .unwrap(),
+        ));
+        assert!(fd.export_data(path.path().parent().unwrap()).is_ok());
+    }
+    #[test]
+    fn report() {
+        let mut fd = FluenceDetector::default();
+        let node_report = fd.report().unwrap();
+        assert_eq!(node_report.detector_type(), "fluence detector");
+        assert_eq!(node_report.name(), "fluence detector");
+        let node_props = node_report.properties();
+        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
+        assert_eq!(nr_of_props, 0);
+        fd.light_data = Some(LightData::Geometric(Rays::default()));
+        let node_report = fd.report().unwrap();
+        assert!(!node_report.properties().contains("Fluence"));
+        fd.light_data = Some(LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+                &Hexapolar::new(Length::new::<millimeter>(1.), 1).unwrap(),
+            )
+            .unwrap(),
+        ));
+        let node_report = fd.report().unwrap();
+        assert!(node_report.properties().contains("Fluence"));
+        let node_props = node_report.properties();
+        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
+        assert_eq!(nr_of_props, 3);
     }
 }

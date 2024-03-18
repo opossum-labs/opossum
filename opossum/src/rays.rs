@@ -799,6 +799,10 @@ impl Rays {
         let num_split_bundles = unique_wavelengths.len();
         if num_split_bundles == 1 {
             Ok((vec![self.clone()], unique_wavelengths))
+        } else if num_split_bundles == 0 {
+            Err(OpossumError::Other(
+                "No rays in this bundle! Cannot split ray bundle by wavelengths!".into(),
+            ))
         } else {
             //sort wavelengths
             //get "start" wavelength: smallest wavelength reduced by half a bin size

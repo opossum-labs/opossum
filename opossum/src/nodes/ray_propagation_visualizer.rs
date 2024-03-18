@@ -407,7 +407,154 @@ mod test {
     use approx::assert_relative_eq;
 
     use super::*;
+    use crate::position_distributions::Hexapolar;
+    use crate::{
+        analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays,
+        spectrum_helper::create_he_ne_spec,
+    };
+    use tempfile::NamedTempFile;
+    use uom::num_traits::Zero;
+    use uom::si::length::millimeter;
+    use uom::si::{
+        energy::{joule, Energy},
+        f64::Length,
+        length::nanometer,
+    };
+    #[test]
+    fn default() {
+        let node = RayPropagationVisualizer::default();
+        assert!(node.light_data.is_none());
+        assert_eq!(node.properties().name().unwrap(), "ray propagation");
+        assert_eq!(node.properties().node_type().unwrap(), "ray propagation");
+        assert_eq!(node.is_detector(), true);
+        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.node_color(), "darkgreen");
+        assert!(node.as_group().is_err());
+    }
+    #[test]
+    fn new() {
+        let meter = RayPropagationVisualizer::new("test");
+        assert_eq!(meter.properties().name().unwrap(), "test");
+        assert!(meter.light_data.is_none());
+    }
+    #[test]
+    fn ports() {
+        let meter = RayPropagationVisualizer::default();
+        assert_eq!(meter.ports().input_names(), vec!["in1"]);
+        assert_eq!(meter.ports().output_names(), vec!["out1"]);
+    }
+    #[test]
+    fn ports_inverted() {
+        let mut meter = RayPropagationVisualizer::default();
+        meter.set_property("inverted", true.into()).unwrap();
+        assert_eq!(meter.ports().input_names(), vec!["out1"]);
+        assert_eq!(meter.ports().output_names(), vec!["in1"]);
+    }
+    #[test]
+    fn inverted() {
+        let mut node = RayPropagationVisualizer::default();
+        node.set_property("inverted", true.into()).unwrap();
+        assert_eq!(node.properties().inverted().unwrap(), true)
+    }
+    #[test]
+    fn analyze_ok() {
+        let mut node = RayPropagationVisualizer::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("in1".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("out1"));
+        assert_eq!(output.len(), 1);
+        let output = output.get("out1").unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output, input_light);
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut node = RayPropagationVisualizer::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("wrong".into(), Some(input_light.clone()));
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        let output = output.get("out1").unwrap();
+        assert!(output.is_none());
+    }
+    #[test]
+    fn analyze_inverse() {
+        let mut node = RayPropagationVisualizer::default();
+        node.set_property("inverted", true.into()).unwrap();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("out1".into(), Some(input_light.clone()));
 
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("in1"));
+        assert_eq!(output.len(), 1);
+        let output = output.get("in1").unwrap();
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output, input_light);
+    }
+    #[test]
+    fn export_data() {
+        let mut rpv = RayPropagationVisualizer::default();
+        assert!(rpv.export_data(Path::new("")).is_err());
+        rpv.light_data = Some(LightData::Geometric(Rays::default()));
+        let path = NamedTempFile::new().unwrap();
+        assert!(rpv.export_data(path.path().parent().unwrap()).is_err());
+        rpv.light_data = Some(LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+                &Hexapolar::new(Length::zero(), 1).unwrap(),
+            )
+            .unwrap(),
+        ));
+        assert!(rpv.export_data(path.path().parent().unwrap()).is_ok());
+    }
+    #[test]
+    fn report() {
+        let mut fd = RayPropagationVisualizer::default();
+        let node_report = fd.report().unwrap();
+        assert_eq!(node_report.detector_type(), "ray propagation");
+        assert_eq!(node_report.name(), "ray propagation");
+        let node_props = node_report.properties();
+        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
+        assert_eq!(nr_of_props, 0);
+        fd.light_data = Some(LightData::Geometric(Rays::default()));
+        let node_report = fd.report().unwrap();
+        assert!(!node_report
+            .properties()
+            .contains("Ray Propagation visualization plot"));
+        fd.light_data = Some(LightData::Geometric(
+            Rays::new_uniform_collimated(
+                Length::new::<nanometer>(1053.0),
+                Energy::new::<joule>(1.0),
+                &Hexapolar::new(Length::new::<millimeter>(1.), 1).unwrap(),
+            )
+            .unwrap(),
+        ));
+        let node_report = fd.report().unwrap();
+        assert!(node_report
+            .properties()
+            .contains("Ray Propagation visualization plot"));
+        let node_props = node_report.properties();
+        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
+        assert_eq!(nr_of_props, 1);
+    }
     #[test]
     fn new_ray_pos_hist_spec() {
         let h = vec![
