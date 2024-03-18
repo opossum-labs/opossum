@@ -13,6 +13,7 @@ use uom::si::f64::Length;
 use uom::si::length::meter;
 
 #[derive(Debug)]
+/// A spherical surface with its origin on the optical axis.
 pub struct Sphere {
     z: Length,
     radius: Length,

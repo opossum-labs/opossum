@@ -9,6 +9,7 @@ use nalgebra::{Point3, Vector3};
 use uom::si::{f64::Length, length::meter};
 
 #[derive(Debug)]
+/// An infinitely large flat surface with its normal collinear to the optical axis.
 pub struct Plane {
     z: Length,
 }

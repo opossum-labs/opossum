@@ -1,17 +1,20 @@
+#![warn(missing_docs)]
 //! Module for handling optical surfaces
 
 mod plane;
 mod sphere;
-
-use std::fmt::Debug;
-
 pub use plane::Plane;
 pub use sphere::Sphere;
+
+use std::fmt::Debug;
 use uom::si::f64::Length;
-
-use crate::ray::Ray;
 use nalgebra::{Point3, Vector3};
+use crate::ray::Ray;
 
+/// Trait for handling optical surfaces.
+/// 
+/// An optical surface such as [`Plane`] or [`Sphere`] has to implement this trait in order to be used by the 
+/// `ray.refract_on_surface` function.
 pub trait Surface {
     /// Calculate intersection point and its normal vector of a [`Ray`] with a [`Surface`]
     ///

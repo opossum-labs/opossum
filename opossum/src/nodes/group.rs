@@ -44,7 +44,8 @@ impl From<PortMap> for Proptype {
 ///   - `input port map`
 ///   - `output port map`
 ///
-/// **Note**: The group node does currently ignore all [`Aperture`] definitions on its publicly mapped input and output ports.
+/// **Note**: The group node does currently ignore all [`Aperture`](crate::aperture::Aperture) definitions on its publicly 
+/// mapped input and output ports.
 pub struct NodeGroup {
     #[serde(skip)]
     g: OpticGraph,
