@@ -35,7 +35,6 @@ test_windows:
     - windows
   script:
     - cargo-clippy --version
-    - (get-command rustc.exe).Path
     - rustc --version
     - cargo xtask ci
   rules:
