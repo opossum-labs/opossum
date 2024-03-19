@@ -32,7 +32,7 @@ stages:
 test_windows:
   stage: test
   tags:
-    - opossum windows
+    - opossum user windows
   script:
     - cargo-clippy --version
     - rustc --version
@@ -44,7 +44,7 @@ test_windows:
 build-windows:
   stage: build
   tags:
-    - opossum windows
+    - opossum user windows
   script:
     - cargo dist build --verbose debug
   dependencies:
@@ -73,7 +73,7 @@ build-windows:
 build-doc:
   stage: build
   tags:
-    - opossum windows
+    - opossum user windows
   script:
     - cargo doc --no-deps --features doc-images
   dependencies:
