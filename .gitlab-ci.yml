@@ -55,9 +55,9 @@ build-windows:
     untracked: false
     when: on_success
     paths: 
-      - distrib/*.msi
-      - distrib/*.zip
-      - distrib/*.tar.gz
+      - target/distrib/*.msi
+      - target/distrib/*.zip
+      - target/distrib/*.tar.gz
 
 # Build the main application for linux
 #build-linux:
