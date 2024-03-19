@@ -73,7 +73,7 @@ build-windows:
 build-doc:
   stage: build
   tags:
-    - opossum user windows
+    - windows
   script:
     - cargo doc --no-deps --features doc-images
   dependencies:
