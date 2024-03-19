@@ -40,6 +40,15 @@ test_windows:
   rules:
     - if: '$CI_COMMIT_REF_PROTECTED == "true"'
 
+# test on linux
+test_linux:
+  stage: test
+  tags:
+    - linux
+  script:
+    - pwd
+  rules:
+    - if: '$CI_COMMIT_REF_PROTECTED == "true"'  
 # Build the main application
 build-windows:
   stage: build
