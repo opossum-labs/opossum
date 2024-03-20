@@ -372,13 +372,11 @@ mod test {
         let exp = sd.export_data(Path::new(""));
         assert!(exp.is_ok());
         assert!(exp.unwrap().is_none());
-
         let warning = "spot diagram: no light data for export available. Cannot create plot!";
         testing_logger::validate(|captured_logs| {
             assert_eq!(captured_logs.len(), 1);
             assert_eq!(captured_logs[0].body, warning);
         });
-
         sd.light_data = Some(LightData::Geometric(Rays::default()));
         let path = NamedTempFile::new().unwrap();
         assert!(sd.export_data(path.path().parent().unwrap()).is_err());
