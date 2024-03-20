@@ -198,7 +198,7 @@ impl Optical for Spectrometer {
                 "spectrum_{}.svg",
                 self.properties().name()?
             )));
-            self.to_plot(&file_path, (1200, 800), PltBackEnd::SVG)
+            self.to_plot(&file_path, PltBackEnd::SVG)
             // self.to_svg_plot(&file_path, (1200,800))
             // data.export(&file_path)
         } else {
@@ -276,7 +276,7 @@ impl Dottable for Spectrometer {
 impl PdfReportable for Spectrometer {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), (1200, 800), PltBackEnd::Buf)?;
+        let img = self.to_plot(Path::new(""), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),
@@ -292,7 +292,7 @@ impl Plottable for Spectrometer {
         plt_params
             .set(&PlotArgs::XLabel("wavelength in nm".into()))?
             .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?
-            .set(&PlotArgs::PlotSize((800, 800)))?
+            .set(&PlotArgs::PlotSize((1200, 800)))?
             .set(&PlotArgs::AxisEqual(false))?;
 
         Ok(())

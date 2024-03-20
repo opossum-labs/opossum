@@ -131,7 +131,7 @@ impl Optical for RayPropagationVisualizer {
                     "ray_propagation_{}.svg",
                     self.properties().name()?
                 )));
-                ray_prop_data.to_plot(&file_path, (800, 800), PltBackEnd::SVG)
+                ray_prop_data.to_plot(&file_path, PltBackEnd::SVG)
                 // data.export(&file_path)
             } else {
                 Err(OpossumError::Other(
@@ -322,7 +322,7 @@ impl RayPositionHistories {
 impl PdfReportable for RayPositionHistories {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), (1600, 800), PltBackEnd::Buf)?;
+        let img = self.to_plot(Path::new(""), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),

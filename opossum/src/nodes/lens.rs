@@ -247,7 +247,7 @@ mod test {
         assert_eq!(node.properties().node_type().unwrap(), "lens");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
-        assert_eq!(node.node_color(), "blue");
+        assert_eq!(node.node_color(), "aqua");
         assert!(node.as_group().is_err());
         let Ok(Proptype::Length(roc)) = node.props.get("front curvature") else {
             panic!()

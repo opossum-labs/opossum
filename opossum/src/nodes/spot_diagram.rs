@@ -128,7 +128,7 @@ impl Optical for SpotDiagram {
                 "spot_diagram_{}.svg",
                 self.properties().name()?
             )));
-            self.to_plot(&file_path, (800, 800), PltBackEnd::SVG)
+            self.to_plot(&file_path, PltBackEnd::SVG)
         } else {
             warn!("spot diagram: no light data for export available. Cannot create plot!");
             Ok(None)
@@ -198,7 +198,7 @@ impl From<SpotDiagram> for Proptype {
 impl PdfReportable for SpotDiagram {
     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
         let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), (800, 800), PltBackEnd::Buf)?;
+        let img = self.to_plot(Path::new(""), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),

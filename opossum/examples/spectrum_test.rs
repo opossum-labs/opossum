@@ -39,21 +39,18 @@ fn main() -> OpmResult<()> {
     s.sub(&s3);
     s.to_plot(
         Path::new("./opossum/playground/spectrum.svg"),
-        (1000, 800),
         PltBackEnd::SVG,
     )?;
 
     let s4 = Spectrum::from_csv("./opossum/playground/NE03B.csv")?;
     s4.to_plot(
         Path::new("./opossum/playground/ne03b_raw.svg"),
-        (1000, 800),
         PltBackEnd::SVG,
     )?;
     let mut s5 = create_visible_spec();
     s5.resample(&s4);
     s5.to_plot(
         Path::new("./opossum/playground/ne03b.svg"),
-        (1000, 800),
         PltBackEnd::SVG,
     )?;
     Ok(())

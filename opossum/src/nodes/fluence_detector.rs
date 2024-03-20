@@ -134,7 +134,7 @@ impl Optical for FluenceDetector {
                     warn!("Fluence Detector diagram: no fluence data for export available",);
                     Ok(None)
                 },
-                |fluence_data| fluence_data.to_plot(&file_path, (1000, 500), PltBackEnd::BMP),
+                |fluence_data| fluence_data.to_plot(&file_path, PltBackEnd::BMP),
             )
             // data.export(&file_path)
         } else {
@@ -274,7 +274,7 @@ impl PdfReportable for FluenceData {
         //     "Average fluence: {:.1} J/cm²",
         //     self.average
         // )));
-        let img = self.to_plot(Path::new(""), (1000, 1000), PltBackEnd::Buf)?;
+        let img = self.to_plot(Path::new(""), PltBackEnd::Buf)?;
         layout.push(
             genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
                 img.unwrap_or_else(ImageBuffer::default),
