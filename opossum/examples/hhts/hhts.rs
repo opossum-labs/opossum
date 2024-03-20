@@ -28,6 +28,7 @@ use uom::si::{
     f64::{Energy, Length},
     length::{millimeter, nanometer},
 };
+use uom::num_traits::Zero;
 
 fn main() -> OpmResult<()> {
     let wvl_1w = Length::new::<nanometer>(1054.0);
@@ -65,9 +66,9 @@ fn main() -> OpmResult<()> {
     )?;
 
     // apertures
-    let circle_config = CircleConfig::new(25.4, Point2::new(0.0, 0.0))?;
+    let circle_config = CircleConfig::new(Length::new::<millimeter>(25.4), Point2::new(Length::zero(), Length::zero()))?;
     let a_2inch = Aperture::BinaryCircle(circle_config);
-    let circle_config = CircleConfig::new(12.7, Point2::new(0.0, 0.0))?;
+    let circle_config = CircleConfig::new(Length::new::<millimeter>(12.7), Point2::new(Length::zero(), Length::zero()))?;
     let a_1inch = Aperture::BinaryCircle(circle_config);
 
     // collimated source

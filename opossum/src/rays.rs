@@ -238,11 +238,7 @@ impl Rays {
     pub fn apodize(&mut self, aperture: &Aperture) -> OpmResult<()> {
         for ray in &mut self.rays {
             if ray.valid() {
-                let pos = point![
-                    ray.position().x.get::<millimeter>(),
-                    ray.position().y.get::<millimeter>()
-                ];
-                let ap_factor = aperture.apodization_factor(&pos);
+                let ap_factor = aperture.apodization_factor(&ray.position().xy());
                 if ap_factor > 0.0 {
                     ray.filter_energy(&FilterType::Constant(ap_factor))?;
                 } else {
@@ -1772,10 +1768,11 @@ mod test {
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
-        let circle_config = CircleConfig::new(0.5, Point2::new(0.0, 0.0)).unwrap();
-        let aperture = Aperture::BinaryCircle(circle_config);
-        rays.apodize(&aperture).unwrap();
-        assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
+        todo!();
+        // let circle_config = CircleConfig::new(0.5, Point2::new(0.0, 0.0)).unwrap();
+        // let aperture = Aperture::BinaryCircle(circle_config);
+        // rays.apodize(&aperture).unwrap();
+        // assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
     }
     #[test]
     fn wavelength_range() {

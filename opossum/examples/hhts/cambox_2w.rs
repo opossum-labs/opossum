@@ -7,9 +7,10 @@ use opossum::{
     ray::SplittingConfig,
 };
 use uom::si::{f64::Length, length::millimeter};
+use uom::num_traits::Zero;
 
 pub fn cambox_2w() -> OpmResult<NodeGroup> {
-    let config = RectangleConfig::new(11.33, 7.13, Point2::new(0.0, 0.0))?;
+    let config = RectangleConfig::new(Length::new::<millimeter>(11.33), Length::new::<millimeter>(7.13), Point2::new(Length::zero(), Length::zero()))?;
     let cam_aperture = Aperture::BinaryRectangle(config);
 
     let mut cb = NodeGroup::new("CamBox 2w");

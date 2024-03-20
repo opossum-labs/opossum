@@ -19,7 +19,7 @@ fn main() -> OpmResult<()> {
     scenery.set_description("Raysource demo")?;
     let mut source =
         round_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(1.0), 3)?;
-    let aperture = Aperture::BinaryCircle(CircleConfig::new(1.0, point![0.5, 0.5])?);
+    let aperture = Aperture::BinaryCircle(CircleConfig::new(Length::new::<millimeter>(1.0), point![Length::new::<millimeter>(0.5), Length::new::<millimeter>(0.5)])?);
     let mut ports = source.ports();
     ports.set_output_aperture("out1", &aperture)?;
     source.set_property("apertures", ports.into())?;
