@@ -240,6 +240,13 @@ pub enum PropCondition {
 #[cfg(test)]
 mod test {
     use super::*;
+    use assert_matches::assert_matches;
+    use uom::si::length::nanometer;
+    #[test]
+    fn from_string() {
+        assert_matches!(Proptype::from(String::new()), Proptype::String(_));
+        assert_matches!(Proptype::from(""), Proptype::String(_));
+    }
     #[test]
     fn format_value() {
         assert_eq!(format_value_with_prefix(0.0), "   0.000 ");
@@ -254,5 +261,32 @@ mod test {
         assert_eq!(format_value_with_prefix(f64::INFINITY), "     inf ");
         assert_eq!(format_value_with_prefix(f64::NEG_INFINITY), "    -inf ");
         assert_eq!(format_value_with_prefix(f64::NAN), "     nan ");
+
+        // Note < EPSISLON are coerced to zero...
+        assert_eq!(format_value_with_prefix(0.5e-21), "   0.000 ");
+        assert_eq!(format_value_with_prefix(0.5e-18), "   0.000 ");
+
+        
+        assert_eq!(format_value_with_prefix(1.0e-15), "   1.000 f");
+        assert_eq!(format_value_with_prefix(1.0e-12), "   1.000 p");
+        assert_eq!(format_value_with_prefix(1.0e-9), "   1.000 n");
+
+        assert_eq!(format_value_with_prefix(1.0e12), "   1.000 T");
+        assert_eq!(format_value_with_prefix(1.0e15), "   1.000 P");
+        assert_eq!(format_value_with_prefix(1.0e18), "   1.000 E");
+        assert_eq!(format_value_with_prefix(1.0e21), "   1.000 Z");
+        assert_eq!(format_value_with_prefix(1.0e24), "   1.000 ?");
+    }
+    #[test]
+    fn format_quantity() {
+        assert_eq!(super::format_quantity(meter, Length::new::<nanometer>(1053.12345)),"   1.053 μm");
+
+        // Note: format_quantity does not (yet) check if unit and dimension are compatible:
+        assert_eq!(super::format_quantity(joule, Length::new::<nanometer>(1053.12345)),"   1.053 μJ");
+    }
+    #[test]
+    fn pdf_report_string() {
+        let p=Proptype::String("test".into());
+        assert!(p.pdf_report().is_ok());
     }
 }

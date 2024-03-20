@@ -18,6 +18,7 @@ targets = ["x86_64-pc-windows-msvc"]
 [profile.dist]
 inherits = "release"
 lto = "thin"
+strip = true
 
 [profile.release]
-strip = true
+# strip = true
