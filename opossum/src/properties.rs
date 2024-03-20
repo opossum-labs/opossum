@@ -20,7 +20,7 @@ use plotters::prelude::LogScalable;
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::{collections::BTreeMap, mem};
-use uom::{num::Float, si::length::nanometer};
+use uom::num::Float;
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
@@ -493,7 +493,7 @@ pub enum Proptype {
     /// Fluence in Units of J/cm²
     Fluence(f64),
     /// Unit of Wavelength
-    WfLambda(f64, Length), 
+    WfLambda(f64, Length),
     /// a geometrical length
     Length(Length),
     /// an energy value
@@ -567,10 +567,15 @@ impl PdfReportable for Proptype {
             Self::WaveFrontStats(value) => l.push(value.pdf_report()?),
             Self::FluenceDetector(value) => l.push(value.pdf_report()?),
             Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
-            Self::Fluence(value) => l.push(genpdf::elements::Paragraph::new(format!("{}J/cm²", format_value_with_prefix(*value)))),
-            Self::WfLambda(value, wvl) => l.push(genpdf::elements::Paragraph::new(format!("{}λ, (λ = {})", format_value_with_prefix(
-                *value,
-            ), format_quantity(meter, *wvl)))),
+            Self::Fluence(value) => l.push(genpdf::elements::Paragraph::new(format!(
+                "{}J/cm²",
+                format_value_with_prefix(*value)
+            ))),
+            Self::WfLambda(value, wvl) => l.push(genpdf::elements::Paragraph::new(format!(
+                "{}λ, (λ = {})",
+                format_value_with_prefix(*value,),
+                format_quantity(meter, *wvl)
+            ))),
             Self::Length(value) => l.push(genpdf::elements::Paragraph::new(format_quantity(
                 meter, *value,
             ))),
@@ -696,7 +701,7 @@ mod test {
         assert_eq!(format_value_with_prefix(1234567890.12345), "   1.235 G");
         assert_eq!(format_value_with_prefix(-1234567890.12345), "  -1.235 G");
         assert_eq!(format_value_with_prefix(0.12345), " 123.450 m");
-        assert_eq!(format_value_with_prefix(-0.0000012345), "  -1.235 u");
+        assert_eq!(format_value_with_prefix(-0.0000012345), "  -1.235 μ");
         assert_eq!(format_value_with_prefix(f64::INFINITY), "     inf ");
         assert_eq!(format_value_with_prefix(f64::NEG_INFINITY), "    -inf ");
         assert_eq!(format_value_with_prefix(f64::NAN), "     nan ");
