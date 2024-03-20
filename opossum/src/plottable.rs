@@ -1234,7 +1234,6 @@ pub trait Plottable {
     fn to_plot(
         &self,
         f_path: &Path,
-        plot_size: (u32, u32),
         backend: PltBackEnd,
     ) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
@@ -1243,8 +1242,7 @@ pub trait Plottable {
                 .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
                 ))?
-                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?
-                .set(&PlotArgs::PlotSize(plot_size))?;
+                .set(&PlotArgs::FDir(f_path.parent().unwrap().into()))?;
         };
 
         plt_params.set(&PlotArgs::Backend(backend))?;

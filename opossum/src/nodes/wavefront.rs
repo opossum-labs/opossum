@@ -225,7 +225,7 @@ impl Optical for WaveFront {
             if let Some(wf_data) = wf_data_opt {
                 //todo! for all wavelengths
                 Ok(wf_data.wavefront_error_maps[0]
-                    .to_plot(&file_path, (500, 1000), PltBackEnd::BMP)
+                    .to_plot(&file_path, PltBackEnd::BMP)
                     .unwrap_or_else(|e| {
                         warn!("Could not export plot: {e}",);
                         None
@@ -311,7 +311,7 @@ impl PdfReportable for WaveFrontData {
 
         //todo! for all wavefronts!
         let img = self.wavefront_error_maps[0]
-            .to_plot(Path::new(""), (1000, 500), PltBackEnd::Buf)
+            .to_plot(Path::new(""), PltBackEnd::Buf)
             .unwrap_or_else(|e| {
                 warn!("Could not create plot for pdf creation: {e}",);
                 None
