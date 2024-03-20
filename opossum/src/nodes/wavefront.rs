@@ -279,7 +279,7 @@ impl Optical for WaveFront {
                     "Wavefront PtV",
                     "Wavefront Peak-to-Valley value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                     None,
-                    wf_data.wavefront_error_maps[0].ptv.into(),
+                    Proptype::WfLambda(wf_data.wavefront_error_maps[0].ptv, wf_data.wavefront_error_maps[0].wavelength),
                 )
                 .unwrap();
 
@@ -289,7 +289,7 @@ impl Optical for WaveFront {
                     "Wavefront RMS",
                     "Wavefront root mean square value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                     None,
-                    wf_data.wavefront_error_maps[0].rms.into(),
+                    Proptype::WfLambda(wf_data.wavefront_error_maps[0].rms, wf_data.wavefront_error_maps[0].wavelength),
                 )
                 .unwrap();
             }

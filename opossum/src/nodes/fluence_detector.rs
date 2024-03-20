@@ -172,7 +172,7 @@ impl Optical for FluenceDetector {
                         "Peak Fluence",
                         "Peak fluence of the distribution",
                         None,
-                        fluence_data.peak.into(),
+                        Proptype::Fluence(fluence_data.peak),
                     )
                     .unwrap();
 
@@ -181,7 +181,7 @@ impl Optical for FluenceDetector {
                         "Average Fluence",
                         "Average Fluence of the distribution",
                         None,
-                        fluence_data.average.into(),
+                        Proptype::Fluence(fluence_data.average),
                     )
                     .unwrap();
             }
