@@ -46,7 +46,9 @@ test_linux:
   tags:
     - linux
   script:
-    - pwd
+    - cargo-clippy --version
+    - rustc --version
+    - cargo xtask ci
   rules:
     - if: '$CI_COMMIT_REF_PROTECTED == "true"'  
 # Build the main application
