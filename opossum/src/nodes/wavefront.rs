@@ -441,7 +441,7 @@ mod test {
         assert_eq!(node.properties().node_type().unwrap(), "Wavefront monitor");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted().unwrap(), false);
-        assert_eq!(node.node_color(), "lightbrown");
+        assert_eq!(node.node_color(), "goldenrod1");
         assert!(node.as_group().is_err());
     }
     #[test]
