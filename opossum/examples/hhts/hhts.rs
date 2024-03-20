@@ -23,12 +23,12 @@ use opossum::{
     spectrum_helper::generate_filter_spectrum,
     OpticScenery,
 };
+use uom::num_traits::Zero;
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
     length::{millimeter, nanometer},
 };
-use uom::num_traits::Zero;
 
 fn main() -> OpmResult<()> {
     let wvl_1w = Length::new::<nanometer>(1054.0);
@@ -66,9 +66,15 @@ fn main() -> OpmResult<()> {
     )?;
 
     // apertures
-    let circle_config = CircleConfig::new(Length::new::<millimeter>(25.4), Point2::new(Length::zero(), Length::zero()))?;
+    let circle_config = CircleConfig::new(
+        Length::new::<millimeter>(25.4),
+        Point2::new(Length::zero(), Length::zero()),
+    )?;
     let a_2inch = Aperture::BinaryCircle(circle_config);
-    let circle_config = CircleConfig::new(Length::new::<millimeter>(12.7), Point2::new(Length::zero(), Length::zero()))?;
+    let circle_config = CircleConfig::new(
+        Length::new::<millimeter>(12.7),
+        Point2::new(Length::zero(), Length::zero()),
+    )?;
     let a_1inch = Aperture::BinaryCircle(circle_config);
 
     // collimated source

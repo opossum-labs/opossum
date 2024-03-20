@@ -6,10 +6,10 @@ use opossum::optical::Optical;
 use opossum::refractive_index::RefrIndexConst;
 use opossum::OpticScenery;
 use std::path::Path;
+use uom::num_traits::Zero;
 use uom::si::energy::joule;
 use uom::si::f64::{Energy, Length};
 use uom::si::length::millimeter;
-use uom::num_traits::Zero;
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     let src = scenery.add_node(round_collimated_ray_source(
@@ -38,7 +38,13 @@ fn main() -> OpmResult<()> {
     )?;
     let _ = lens2.set_input_aperture(
         "front",
-        &Aperture::BinaryCircle(CircleConfig::new(Length::new::<millimeter>(3.), Point2::new(Length::zero(), Length::zero())).unwrap()),
+        &Aperture::BinaryCircle(
+            CircleConfig::new(
+                Length::new::<millimeter>(3.),
+                Point2::new(Length::zero(), Length::zero()),
+            )
+            .unwrap(),
+        ),
     );
     let l2 = scenery.add_node(lens2);
     let s3 = scenery.add_node(Propagation::new("s3", Length::new::<millimeter>(30.0))?);

@@ -41,12 +41,6 @@ use ncollide2d::{
 use serde_derive::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter, ratio::ratio};
 
-
-macro_rules! meter {
-    ($val:expr) => {
-        Length::new::<meter>($val)
-    };
-}
 /// The apodization type of an [`Aperture`].
 ///
 /// Each aperture can act as a "hole" or "obstruction"
@@ -144,7 +138,10 @@ impl Apodize for CircleConfig {
     }
     fn apodize(&self, point: &Point2<Length>) -> f64 {
         let ball = Ball::new(self.radius.get::<meter>());
-        let translation = Isometry2::translation(self.center.coords[0].get::<meter>(), self.center.coords[1].get::<meter>());
+        let translation = Isometry2::translation(
+            self.center.coords[0].get::<meter>(),
+            self.center.coords[1].get::<meter>(),
+        );
         let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
         let mut transmission = if ball.contains_point(&translation, &point_meter) {
             1.0
@@ -199,9 +196,15 @@ impl Apodize for RectangleConfig {
     }
     fn apodize(&self, point: &Point2<Length>) -> f64 {
         let rectangle = Cuboid {
-            half_extents: Vector2::new(self.width.get::<meter>() / 2.0, self.height.get::<meter>() / 2.0),
+            half_extents: Vector2::new(
+                self.width.get::<meter>() / 2.0,
+                self.height.get::<meter>() / 2.0,
+            ),
         };
-        let translation = Isometry2::translation(self.center.coords[0].get::<meter>(), self.center.coords[1].get::<meter>());
+        let translation = Isometry2::translation(
+            self.center.coords[0].get::<meter>(),
+            self.center.coords[1].get::<meter>(),
+        );
         let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
         let mut transmission = if rectangle.contains_point(&translation, &point_meter) {
             1.0
@@ -217,7 +220,7 @@ impl Apodize for RectangleConfig {
 /// Configuration of a polygonal aperture defined by a given set of points.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolygonConfig {
-    points: Vec<Point2<f64>>,
+    points: Vec<Point2<Length>>,
     aperture_type: ApertureType,
 }
 impl PolygonConfig {
@@ -229,7 +232,7 @@ impl PolygonConfig {
     /// # Errors
     ///
     /// This function will return an error if the number of points is less than three, so that no polygon can be created.
-    pub fn new(points: Vec<Point2<f64>>) -> OpmResult<Self> {
+    pub fn new(points: Vec<Point2<Length>>) -> OpmResult<Self> {
         if points.len() < 3 {
             return Err(OpossumError::Other("less than 3 points given".into()));
         }
@@ -244,7 +247,13 @@ impl Apodize for PolygonConfig {
         self.aperture_type = aperture_type;
     }
     fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let polygon = Polyline::new(self.points.clone(), None);
+        let polygon = Polyline::new(
+            self.points
+                .iter()
+                .map(|p| Point2::new(p.x.get::<meter>(), p.y.get::<meter>()))
+                .collect::<Vec<Point2<f64>>>(),
+            None,
+        );
         let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
         let mut transmission = if polygon.contains_point(&Isometry2::identity(), &point_meter) {
             1.0
@@ -299,8 +308,10 @@ impl Apodize for GaussianConfig {
         let x = point.coords[0];
         let y = point.coords[1];
         let mut transmission = (-0.5
-            * (((x - x_c) / self.sigma.0).get::<ratio>().powi(2)
-                + ((y - y_c) / self.sigma.1).get::<ratio>().powi(2)))
+            * (((x - x_c) / self.sigma.0).get::<ratio>().mul_add(
+                ((x - x_c) / self.sigma.0).get::<ratio>(),
+                ((y - y_c) / self.sigma.1).get::<ratio>().powi(2),
+            )))
         .exp();
         if matches!(self.aperture_type, ApertureType::Obstruction) {
             transmission = 1.0 - transmission;
@@ -346,181 +357,205 @@ impl Apodize for StackConfig {
 #[cfg(test)]
 mod test {
     use approx::assert_relative_eq;
+    use nalgebra::Point3;
 
     use super::*;
+    use crate::meter;
     #[test]
-    fn macro_meter(){
-        let meter1 = Length::new::<meter>(2.);
-        let meter2 = meter!(2.);
+    fn macro_meter() {
+        let meter1 = Length::new::<meter>(1.);
+        let meter2 = meter!(1.);
+        assert_relative_eq!(meter1.value, meter2.value);
 
+        let meterp12 = Point2::new(Length::new::<meter>(1.), Length::new::<meter>(2.));
+        let meterp22 = meter!(1., 2.);
+        assert_relative_eq!(meterp12.x.value, meterp22.x.value);
+        assert_relative_eq!(meterp12.y.value, meterp22.y.value);
+
+        let meterp13 = Point3::new(
+            Length::new::<meter>(1.),
+            Length::new::<meter>(2.),
+            Length::new::<meter>(3.),
+        );
+        let meterp23 = meter!(1., 2., 3.);
+        assert_relative_eq!(meterp13.x.value, meterp23.x.value);
+        assert_relative_eq!(meterp13.y.value, meterp23.y.value);
+        assert_relative_eq!(meterp13.z.value, meterp23.z.value);
+
+        let meterp14 = vec![
+            Length::new::<meter>(1.),
+            Length::new::<meter>(2.),
+            Length::new::<meter>(3.),
+            Length::new::<meter>(4.),
+        ];
+        let meterp24 = meter!(1., 2., 3., 4.);
+        assert_relative_eq!(meterp14[0].value, meterp24[0].value);
+        assert_relative_eq!(meterp14[1].value, meterp24[1].value);
+        assert_relative_eq!(meterp14[2].value, meterp24[2].value);
+        assert_relative_eq!(meterp14[3].value, meterp24[3].value);
     }
     #[test]
-    fn ratio_test(){
+    fn ratio_test() {
         let x = Length::new::<meter>(1.);
         let xs = Length::new::<meter>(2.);
 
-        assert_relative_eq!(x.get::<meter>()/xs.get::<meter>(), (x/xs).get::<ratio>());
+        assert_relative_eq!(
+            x.get::<meter>() / xs.get::<meter>(),
+            (x / xs).get::<ratio>()
+        );
     }
     #[test]
     fn default() {
         assert!(matches!(Aperture::default(), Aperture::None));
     }
-    // #[test]
-    // fn circle_config() {
-    //     let center = Point2::new(0.0, 0.0);
-    //     assert!(CircleConfig::new(1.0, center).is_ok());
-    //     assert!(CircleConfig::new(0.0, center).is_err());
-    //     assert!(CircleConfig::new(-1.0, center).is_err());
-    //     assert!(CircleConfig::new(f64::NAN, center).is_err());
-    //     assert!(CircleConfig::new(f64::INFINITY, center).is_err());
-    // }
-    // #[test]
-    // fn rectangle_config() {
-    //     let p = Point2::new(0.0, 0.0);
-    //     assert!(RectangleConfig::new(2.0, 1.0, p).is_ok());
-    //     assert!(RectangleConfig::new(0.0, 1.0, p).is_err());
-    //     assert!(RectangleConfig::new(-1.0, 1.0, p).is_err());
-    //     assert!(RectangleConfig::new(f64::NAN, 1.0, p).is_err());
-    //     assert!(RectangleConfig::new(f64::INFINITY, 1.0, p).is_err());
-    //     assert!(RectangleConfig::new(1.0, 0.0, p).is_err());
-    //     assert!(RectangleConfig::new(1.0, -1.0, p).is_err());
-    //     assert!(RectangleConfig::new(1.0, f64::NAN, p).is_err());
-    //     assert!(RectangleConfig::new(1.0, f64::INFINITY, p).is_err());
-    //     let p = Point2::new(f64::NAN, 0.0);
-    //     assert!(RectangleConfig::new(2.0, 1.0, p).is_err());
-    //     let p = Point2::new(f64::INFINITY, 0.0);
-    //     assert!(RectangleConfig::new(2.0, 1.0, p).is_err());
-    // }
-    // #[test]
-    // fn polygon_config() {
-    //     let ok_points = vec![
-    //         Point2::new(0.0, 0.0),
-    //         Point2::new(2.0, 0.0),
-    //         Point2::new(1.0, 1.0),
-    //     ];
-    //     assert!(PolygonConfig::new(ok_points).is_ok());
-    //     let too_little_points = vec![Point2::new(0.0, 0.0), Point2::new(2.0, 0.0)];
-    //     assert!(PolygonConfig::new(too_little_points).is_err());
-    // }
-    // #[test]
-    // fn gaussian_config() {
-    //     let p = Point2::new(0.0, 0.0);
-    //     assert!(RectangleConfig::new(2.0, 1.0, p).is_ok());
-    //     assert!(GaussianConfig::new((1.0, 1.0), p).is_ok());
-    //     assert!(GaussianConfig::new((0.0, 1.0), p).is_err());
-    //     assert!(GaussianConfig::new((-1.0, 1.0), p).is_err());
-    //     assert!(GaussianConfig::new((1.0, 0.0), p).is_err());
-    //     assert!(GaussianConfig::new((1.0, -1.0), p).is_err());
-    //     assert!(GaussianConfig::new((f64::NAN, 1.0), p).is_err());
-    //     assert!(GaussianConfig::new((f64::INFINITY, 1.0), p).is_err());
-    //     assert!(GaussianConfig::new((1.0, f64::NAN), p).is_err());
-    //     assert!(GaussianConfig::new((1.0, f64::INFINITY), p).is_err());
-    //     let p = Point2::new(f64::NAN, 0.0);
-    //     assert!(GaussianConfig::new((1.0, 1.0), p).is_err());
-    //     let p = Point2::new(f64::INFINITY, 0.0);
-    //     assert!(GaussianConfig::new((1.0, 1.0), p).is_err());
-    // }
-    // #[test]
-    // fn binary_circle() {
-    //     let c = CircleConfig::new(1.0, Point2::new(1.0, 1.0)).unwrap();
-    //     let ap = Aperture::BinaryCircle(c);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 0.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 2.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(2.0, 1.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(0.0, 1.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(0.0, 0.0)), 0.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(2.0, 2.0)), 0.0);
-    //     let mut c = CircleConfig::new(1.0, Point2::new(1.0, 1.0)).unwrap();
-    //     c.set_aperture_type(ApertureType::Obstruction);
-    //     let ap = Aperture::BinaryCircle(c);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 0.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(0.0, 0.0)), 1.0);
-    // }
-    // #[test]
-    // fn binary_rectangle() {
-    //     let r = RectangleConfig::new(1.0, 2.0, Point2::new(1.0, 1.0)).unwrap();
-    //     let ap = Aperture::BinaryRectangle(r);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.5, 1.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.5, 2.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(0.5, 2.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(0.5, 0.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(0.0, 0.0)), 0.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 2.1)), 0.0);
-    //     let mut r = RectangleConfig::new(1.0, 2.0, Point2::new(1.0, 1.0)).unwrap();
-    //     r.set_aperture_type(ApertureType::Obstruction);
-    //     let ap = Aperture::BinaryRectangle(r);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 0.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(0.0, 0.0)), 1.0);
-    // }
-    // #[test]
-    // fn binary_polygon() {
-    //     let poly = PolygonConfig::new(vec![
-    //         Point2::new(0.0, 0.0),
-    //         Point2::new(1.0, 0.5),
-    //         Point2::new(2.0, 0.0),
-    //         Point2::new(1.0, 1.0),
-    //     ])
-    //     .unwrap();
-    //     let ap = Aperture::BinaryPolygon(poly);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(0.0, 0.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(2.0, 0.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 1.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 0.0)), 0.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(2.0, 1.0)), 0.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(0.0, 1.0)), 0.0);
-    //     let mut poly = PolygonConfig::new(vec![
-    //         Point2::new(0.0, 0.0),
-    //         Point2::new(2.0, 0.0),
-    //         Point2::new(1.0, 1.0),
-    //     ])
-    //     .unwrap();
-    //     poly.set_aperture_type(ApertureType::Obstruction);
-    //     let ap = Aperture::BinaryPolygon(poly);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(0.0, 0.0)), 0.0);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(2.0, 1.0)), 1.0);
-    // }
-    // #[test]
-    // fn gaussian() {
-    //     let g = GaussianConfig::new((1.0, 1.0), Point2::new(1.0, 1.0)).unwrap();
-    //     let ap = Aperture::Gaussian(g);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 1.0);
-    //     assert_eq!(
-    //         ap.apodization_factor(&Point2::new(0.0, 0.0)),
-    //         1.0 / 1.0_f64.exp()
-    //     );
-    //     let mut g = GaussianConfig::new((1.0, 1.0), Point2::new(1.0, 1.0)).unwrap();
-    //     g.set_aperture_type(ApertureType::Obstruction);
-    //     let ap = Aperture::Gaussian(g);
-    //     assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 0.0);
-    //     assert_eq!(
-    //         ap.apodization_factor(&Point2::new(0.0, 0.0)),
-    //         1.0 - 1.0 / 1.0_f64.exp()
-    //     );
-    // }
-    // #[test]
-    // fn stack() {
-    //     let r = RectangleConfig::new(1.0, 1.0, Point2::new(0.5, 0.5)).unwrap();
-    //     let r_ap = Aperture::BinaryRectangle(r);
-    //     let c = CircleConfig::new(1.0, Point2::new(0.0, 0.0)).unwrap();
-    //     let c_ap = Aperture::BinaryCircle(c);
-    //     let s = StackConfig::new(vec![r_ap, c_ap]);
-    //     let s_ap = Aperture::Stack(s);
-    //     assert_eq!(s_ap.apodization_factor(&Point2::new(0.0, 0.0)), 1.0);
-    //     assert_eq!(s_ap.apodization_factor(&Point2::new(1.0, 0.0)), 1.0);
-    //     assert_eq!(s_ap.apodization_factor(&Point2::new(0.0, 1.0)), 1.0);
-    //     assert_eq!(s_ap.apodization_factor(&Point2::new(1.0, 1.0)), 0.0);
-    //     assert_eq!(s_ap.apodization_factor(&Point2::new(-1.0, 0.0)), 0.0);
-    //     assert_eq!(s_ap.apodization_factor(&Point2::new(0.0, -1.0)), 0.0);
-    //     let r = RectangleConfig::new(1.0, 1.0, Point2::new(0.5, 0.5)).unwrap();
-    //     let r_ap = Aperture::BinaryRectangle(r);
-    //     let c = CircleConfig::new(1.0, Point2::new(0.0, 0.0)).unwrap();
-    //     let c_ap = Aperture::BinaryCircle(c);
-    //     let mut s = StackConfig::new(vec![r_ap, c_ap]);
-    //     s.set_aperture_type(ApertureType::Obstruction);
-    //     let s_ap = Aperture::Stack(s);
-    //     assert_eq!(s_ap.apodization_factor(&Point2::new(0.0, 0.0)), 0.0);
-    //     assert_eq!(s_ap.apodization_factor(&Point2::new(1.0, 1.0)), 1.0);
-    // }
+    #[test]
+    fn circle_config() {
+        let center = meter!(0.0, 0.0);
+        assert!(CircleConfig::new(meter!(1.0), center).is_ok());
+        assert!(CircleConfig::new(meter!(0.0), center).is_err());
+        assert!(CircleConfig::new(meter!(-1.0), center).is_err());
+        assert!(CircleConfig::new(meter!(f64::NAN), center).is_err());
+        assert!(CircleConfig::new(meter!(f64::INFINITY), center).is_err());
+    }
+    #[test]
+    fn rectangle_config() {
+        let p = meter!(0.0, 0.0);
+        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_ok());
+        assert!(RectangleConfig::new(meter!(0.0), meter!(1.0), p).is_err());
+        assert!(RectangleConfig::new(meter!(-1.0), meter!(1.0), p).is_err());
+        assert!(RectangleConfig::new(meter!(f64::NAN), meter!(1.0), p).is_err());
+        assert!(RectangleConfig::new(meter!(f64::INFINITY), meter!(1.0), p).is_err());
+        assert!(RectangleConfig::new(meter!(1.0), meter!(0.0), p).is_err());
+        assert!(RectangleConfig::new(meter!(1.0), meter!(-1.0), p).is_err());
+        assert!(RectangleConfig::new(meter!(1.0), meter!(f64::NAN), p).is_err());
+        assert!(RectangleConfig::new(meter!(1.0), meter!(f64::INFINITY), p).is_err());
+        let p = meter!(f64::NAN, 0.0);
+        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_err());
+        let p = meter!(f64::INFINITY, 0.0);
+        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_err());
+    }
+    #[test]
+    fn polygon_config() {
+        let ok_points = vec![meter!(0.0, 0.0), meter!(2.0, 0.0), meter!(1.0, 1.0)];
+        assert!(PolygonConfig::new(ok_points).is_ok());
+        let too_little_points = vec![meter!(0.0, 0.0), meter!(2.0, 0.0)];
+        assert!(PolygonConfig::new(too_little_points).is_err());
+    }
+    #[test]
+    fn gaussian_config() {
+        let p = meter!(0.0, 0.0);
+        assert!(RectangleConfig::new(meter!(2.0), meter!(1.0), p).is_ok());
+        assert!(GaussianConfig::new((meter!(1.0), meter!(1.0)), p).is_ok());
+        assert!(GaussianConfig::new((meter!(0.0), meter!(1.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(-1.0), meter!(1.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(1.0), meter!(0.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(1.0), meter!(-1.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(f64::NAN), meter!(1.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(f64::INFINITY), meter!(1.0)), p).is_err());
+        assert!(GaussianConfig::new((meter!(1.0), meter!(f64::NAN)), p).is_err());
+        assert!(GaussianConfig::new((meter!(1.0), meter!(f64::INFINITY)), p).is_err());
+        let p = meter!(f64::NAN, 0.0);
+        assert!(GaussianConfig::new((meter!(1.0), meter!(1.0)), p).is_err());
+        let p = meter!(f64::INFINITY, 0.0);
+        assert!(GaussianConfig::new((meter!(1.0), meter!(1.0)), p).is_err());
+    }
+    #[test]
+    fn binary_circle() {
+        let c = CircleConfig::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
+        let ap = Aperture::BinaryCircle(c);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 0.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 2.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(2.0, 1.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(0.0, 1.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 0.0);
+        assert_eq!(ap.apodization_factor(&meter!(2.0, 2.0)), 0.0);
+        let mut c = CircleConfig::new(meter!(1.0), meter!(1.0, 1.0)).unwrap();
+        c.set_aperture_type(ApertureType::Obstruction);
+        let ap = Aperture::BinaryCircle(c);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
+        assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 1.0);
+    }
+    #[test]
+    fn binary_rectangle() {
+        let r = RectangleConfig::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
+        let ap = Aperture::BinaryRectangle(r);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(1.5, 1.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(1.5, 2.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(0.5, 2.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(0.5, 0.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 0.0);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 2.1)), 0.0);
+        let mut r = RectangleConfig::new(meter!(1.0), meter!(2.0), meter!(1.0, 1.0)).unwrap();
+        r.set_aperture_type(ApertureType::Obstruction);
+        let ap = Aperture::BinaryRectangle(r);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
+        assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 1.0);
+    }
+    #[test]
+    fn binary_polygon() {
+        let poly = PolygonConfig::new(vec![
+            meter!(0.0, 0.0),
+            meter!(1.0, 0.5),
+            meter!(2.0, 0.0),
+            meter!(1.0, 1.0),
+        ])
+        .unwrap();
+        let ap = Aperture::BinaryPolygon(poly);
+        assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(2.0, 0.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 0.0)), 0.0);
+        assert_eq!(ap.apodization_factor(&meter!(2.0, 1.0)), 0.0);
+        assert_eq!(ap.apodization_factor(&meter!(0.0, 1.0)), 0.0);
+        let mut poly =
+            PolygonConfig::new(vec![meter!(0.0, 0.0), meter!(2.0, 0.0), meter!(1.0, 1.0)]).unwrap();
+        poly.set_aperture_type(ApertureType::Obstruction);
+        let ap = Aperture::BinaryPolygon(poly);
+        assert_eq!(ap.apodization_factor(&meter!(0.0, 0.0)), 0.0);
+        assert_eq!(ap.apodization_factor(&meter!(2.0, 1.0)), 1.0);
+    }
+    #[test]
+    fn gaussian() {
+        let g = GaussianConfig::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
+        let ap = Aperture::Gaussian(g);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
+        assert_eq!(
+            ap.apodization_factor(&meter!(0.0, 0.0)),
+            1.0 / 1.0_f64.exp()
+        );
+        let mut g = GaussianConfig::new((meter!(1.0), meter!(1.0)), meter!(1.0, 1.0)).unwrap();
+        g.set_aperture_type(ApertureType::Obstruction);
+        let ap = Aperture::Gaussian(g);
+        assert_eq!(ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
+        assert_eq!(
+            ap.apodization_factor(&meter!(0.0, 0.0)),
+            1.0 - 1.0 / 1.0_f64.exp()
+        );
+    }
+    #[test]
+    fn stack() {
+        let r = RectangleConfig::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5)).unwrap();
+        let r_ap = Aperture::BinaryRectangle(r);
+        let c = CircleConfig::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
+        let c_ap = Aperture::BinaryCircle(c);
+        let s = StackConfig::new(vec![r_ap, c_ap]);
+        let s_ap = Aperture::Stack(s);
+        assert_eq!(s_ap.apodization_factor(&meter!(0.0, 0.0)), 1.0);
+        assert_eq!(s_ap.apodization_factor(&meter!(1.0, 0.0)), 1.0);
+        assert_eq!(s_ap.apodization_factor(&meter!(0.0, 1.0)), 1.0);
+        assert_eq!(s_ap.apodization_factor(&meter!(1.0, 1.0)), 0.0);
+        assert_eq!(s_ap.apodization_factor(&meter!(-1.0, 0.0)), 0.0);
+        assert_eq!(s_ap.apodization_factor(&meter!(0.0, -1.0)), 0.0);
+        let r = RectangleConfig::new(meter!(1.0), meter!(1.0), meter!(0.5, 0.5)).unwrap();
+        let r_ap = Aperture::BinaryRectangle(r);
+        let c = CircleConfig::new(meter!(1.0), meter!(0.0, 0.0)).unwrap();
+        let c_ap = Aperture::BinaryCircle(c);
+        let mut s = StackConfig::new(vec![r_ap, c_ap]);
+        s.set_aperture_type(ApertureType::Obstruction);
+        let s_ap = Aperture::Stack(s);
+        assert_eq!(s_ap.apodization_factor(&meter!(0.0, 0.0)), 0.0);
+        assert_eq!(s_ap.apodization_factor(&meter!(1.0, 1.0)), 1.0);
+    }
 }

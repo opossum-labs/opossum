@@ -23,7 +23,7 @@ use approx::relative_eq;
 use itertools::izip;
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::{distance, point, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
+use nalgebra::{distance, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -960,6 +960,7 @@ mod test {
     use crate::{
         aperture::CircleConfig,
         energy_distributions::General2DGaussian,
+        joule, meter,
         position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         ray::SplittingConfig,
         refractive_index::RefrIndexConst,
@@ -973,6 +974,7 @@ mod test {
         energy::joule,
         length::{centimeter, nanometer},
     };
+
     #[test]
     fn split_ray_bundle_by_wavelength_test() {
         let mut rays_1w = Rays::new_uniform_collimated(
@@ -1767,12 +1769,11 @@ mod test {
         .unwrap();
         rays.add_ray(ray0);
         rays.add_ray(ray1);
-        assert_eq!(rays.total_energy(), Energy::new::<joule>(2.0));
-        todo!();
-        // let circle_config = CircleConfig::new(0.5, Point2::new(0.0, 0.0)).unwrap();
-        // let aperture = Aperture::BinaryCircle(circle_config);
-        // rays.apodize(&aperture).unwrap();
-        // assert_eq!(rays.total_energy(), Energy::new::<joule>(1.0));
+        assert_eq!(rays.total_energy(), joule!(2.0));
+        let circle_config = CircleConfig::new(meter!(0.5), meter!(0.0, 0.0)).unwrap();
+        let aperture = Aperture::BinaryCircle(circle_config);
+        rays.apodize(&aperture).unwrap();
+        assert_eq!(rays.total_energy(), joule!(2.0));
     }
     #[test]
     fn wavelength_range() {

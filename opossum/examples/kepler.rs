@@ -24,7 +24,10 @@ fn main() -> OpmResult<()> {
     )?);
     let i_sd1 = scenery.add_node(Propagation::new("50mm", Length::new::<millimeter>(50.0))?);
     let mut lens1 = ParaxialSurface::new("100 mm lens", Length::new::<millimeter>(100.0))?;
-    let circle = CircleConfig::new(Length::new::<millimeter>(9.9), Point2::new(Length::zero(), Length::zero()))?;
+    let circle = CircleConfig::new(
+        Length::new::<millimeter>(9.9),
+        Point2::new(Length::zero(), Length::zero()),
+    )?;
     lens1.set_input_aperture("front", &Aperture::BinaryCircle(circle))?;
     let i_pl1 = scenery.add_node(lens1);
     let i_pr1 = scenery.add_node(Propagation::new(
@@ -33,7 +36,10 @@ fn main() -> OpmResult<()> {
     )?);
     let i_pr2 = scenery.add_node(Propagation::new("50 mm", Length::new::<millimeter>(50.0))?);
     let mut lens2 = ParaxialSurface::new("50 mm lens", Length::new::<millimeter>(50.0))?;
-    let circle = CircleConfig::new(Length::new::<millimeter>(3.5), Point2::new(Length::zero(), Length::zero()))?;
+    let circle = CircleConfig::new(
+        Length::new::<millimeter>(3.5),
+        Point2::new(Length::zero(), Length::zero()),
+    )?;
     lens2.set_input_aperture("front", &Aperture::BinaryCircle(circle))?;
     let i_pl2 = scenery.add_node(lens2);
     let i_pr3 = scenery.add_node(Propagation::new("50 mm", Length::new::<millimeter>(50.0))?);

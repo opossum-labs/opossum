@@ -6,11 +6,15 @@ use opossum::{
     optical::Optical,
     ray::SplittingConfig,
 };
-use uom::si::{f64::Length, length::millimeter};
 use uom::num_traits::Zero;
+use uom::si::{f64::Length, length::millimeter};
 
 pub fn cambox_1w() -> OpmResult<NodeGroup> {
-    let config = RectangleConfig::new(Length::new::<millimeter>(11.33), Length::new::<millimeter>(7.13), Point2::new(Length::zero(), Length::zero()))?;
+    let config = RectangleConfig::new(
+        Length::new::<millimeter>(11.33),
+        Length::new::<millimeter>(7.13),
+        Point2::new(Length::zero(), Length::zero()),
+    )?;
     let cam_aperture = Aperture::BinaryRectangle(config);
 
     let mut cb = NodeGroup::new("CamBox 1w");
