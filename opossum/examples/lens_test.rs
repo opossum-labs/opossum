@@ -18,28 +18,28 @@ fn main() -> OpmResult<()> {
         Energy::new::<joule>(1.0),
         10,
     )?);
-    let s1 = scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(30.0))?);
+    let s1 = scenery.add_node(Propagation::new("Dist 1", Length::new::<millimeter>(30.0))?);
     let l1 = scenery.add_node(Lens::new(
-        "l1",
+        "Lens 1",
         Length::new::<millimeter>(205.55),
         Length::new::<millimeter>(-205.55),
         Length::new::<millimeter>(2.79),
         &RefrIndexConst::new(1.5068).unwrap(),
     )?);
     let s2 = scenery.add_node(Propagation::new(
-        "s2",
+        "Dist 2",
         Length::new::<millimeter>(404.44560),
     )?);
     let l2 = scenery.add_node(Lens::new(
-        "l2",
+        "Lens 2",
         Length::new::<millimeter>(205.55),
         Length::new::<millimeter>(-205.55),
         Length::new::<millimeter>(2.79),
         &RefrIndexConst::new(1.5068).unwrap(),
     )?);
-    let s3 = scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(50.0))?);
-    let det = scenery.add_node(RayPropagationVisualizer::default());
-    let wf = scenery.add_node(WaveFront::default());
+    let s3 = scenery.add_node(Propagation::new("Dist 3", Length::new::<millimeter>(50.0))?);
+    let det = scenery.add_node(RayPropagationVisualizer::new("Ray plot"));
+    let wf = scenery.add_node(WaveFront::new("Wavefront"));
     scenery.connect_nodes(src, "out1", s1, "front")?;
     scenery.connect_nodes(s1, "rear", l1, "front")?;
     scenery.connect_nodes(l1, "rear", s2, "front")?;

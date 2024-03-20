@@ -334,7 +334,7 @@ impl From<WaveFrontData> for Proptype {
 
 impl Dottable for WaveFront {
     fn node_color(&self) -> &str {
-        "lightbrown"
+        "goldenrod1"
     }
 }
 

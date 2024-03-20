@@ -229,7 +229,7 @@ impl Optical for Lens {
 
 impl Dottable for Lens {
     fn node_color(&self) -> &str {
-        "blue"
+        "aqua"
     }
 }
 #[cfg(test)]
