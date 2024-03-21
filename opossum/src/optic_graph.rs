@@ -245,7 +245,11 @@ impl<'de> Deserialize<'de> for OpticGraph {
                             } else {
                                 Uuid::nil()
                             };
-                        let reference_node = g.node(uuid).unwrap();
+                        let Some(reference_node) = g.node(uuid) else {
+                            return Err(de::Error::custom(
+                                "reference node found, which does not reference anything",
+                            ));
+                        };
                         let ref_name = format!(
                             "ref ({})",
                             reference_node
