@@ -5,9 +5,8 @@ use opossum::{
     },
     ray::SplittingConfig,
     spectrum::Spectrum,
+    millimeter
 };
-use uom::si::{f64::Length, length::millimeter};
-
 pub fn hhts_input() -> OpmResult<NodeGroup> {
     let dichroic_mirror = SplittingConfig::Spectrum(Spectrum::from_csv(
         "opossum/examples/hhts/MM15_Transmission.csv",
@@ -19,19 +18,19 @@ pub fn hhts_input() -> OpmResult<NodeGroup> {
         "opossum/examples/hhts/HHTS_T1_PM_Transmission.csv",
     )?);
     let mut group = NodeGroup::new("HHTS Input");
-    let d1 = group.add_node(Propagation::new("d1", Length::new::<millimeter>(500.0))?)?;
+    let d1 = group.add_node(Propagation::new("d1", millimeter!(500.0))?)?;
     let mm15 = group.add_node(BeamSplitter::new("MM15", &dichroic_mirror)?)?;
-    let d2 = group.add_node(Propagation::new("d2", Length::new::<millimeter>(200.0))?)?;
+    let d2 = group.add_node(Propagation::new("d2", millimeter!(200.0))?)?;
     let window = group.add_node(IdealFilter::new("window", &window_filter)?)?;
-    let d3 = group.add_node(Propagation::new("d3", Length::new::<millimeter>(200.0))?)?;
+    let d3 = group.add_node(Propagation::new("d3", millimeter!(200.0))?)?;
     let hhts_t1_cm = group.add_node(BeamSplitter::new("HHTS_T1_CM", &dichroic_mirror)?)?;
 
-    let d4 = group.add_node(Propagation::new("d4", Length::new::<millimeter>(100.0))?)?;
+    let d4 = group.add_node(Propagation::new("d4", millimeter!(100.0))?)?;
     let beam_dump = group.add_node(EnergyMeter::new("Beamdump", Metertype::IdealEnergyMeter))?;
 
-    let d5 = group.add_node(Propagation::new("d5", Length::new::<millimeter>(1000.0))?)?;
+    let d5 = group.add_node(Propagation::new("d5", millimeter!(1000.0))?)?;
     let hhts_t1_pm = group.add_node(BeamSplitter::new("HHTS_T1_PM", &double_mirror)?)?;
-    let d6 = group.add_node(Propagation::new("d6", Length::new::<millimeter>(100.0))?)?;
+    let d6 = group.add_node(Propagation::new("d6", millimeter!(100.0))?)?;
 
     group.connect_nodes(d1, "rear", mm15, "input1")?;
     group.connect_nodes(mm15, "out1_trans1_refl2", d2, "front")?;
