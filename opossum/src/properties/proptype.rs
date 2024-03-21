@@ -266,7 +266,6 @@ mod test {
         assert_eq!(format_value_with_prefix(0.5e-21), "   0.000 ");
         assert_eq!(format_value_with_prefix(0.5e-18), "   0.000 ");
 
-        
         assert_eq!(format_value_with_prefix(1.0e-15), "   1.000 f");
         assert_eq!(format_value_with_prefix(1.0e-12), "   1.000 p");
         assert_eq!(format_value_with_prefix(1.0e-9), "   1.000 n");
@@ -279,14 +278,20 @@ mod test {
     }
     #[test]
     fn format_quantity() {
-        assert_eq!(super::format_quantity(meter, Length::new::<nanometer>(1053.12345)),"   1.053 μm");
+        assert_eq!(
+            super::format_quantity(meter, Length::new::<nanometer>(1053.12345)),
+            "   1.053 μm"
+        );
 
         // Note: format_quantity does not (yet) check if unit and dimension are compatible:
-        assert_eq!(super::format_quantity(joule, Length::new::<nanometer>(1053.12345)),"   1.053 μJ");
+        assert_eq!(
+            super::format_quantity(joule, Length::new::<nanometer>(1053.12345)),
+            "   1.053 μJ"
+        );
     }
     #[test]
     fn pdf_report_string() {
-        let p=Proptype::String("test".into());
+        let p = Proptype::String("test".into());
         assert!(p.pdf_report().is_ok());
     }
 }

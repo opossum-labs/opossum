@@ -49,9 +49,6 @@ fn main() -> OpmResult<()> {
     )?;
     let mut s5 = create_visible_spec();
     s5.resample(&s4);
-    s5.to_plot(
-        Path::new("./opossum/playground/ne03b.svg"),
-        PltBackEnd::SVG,
-    )?;
+    s5.to_plot(Path::new("./opossum/playground/ne03b.svg"), PltBackEnd::SVG)?;
     Ok(())
 }
