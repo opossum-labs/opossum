@@ -5,10 +5,7 @@ use std::fmt::Display;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
-use crate::error::OpmResult;
-use crate::nodes::FilterType;
-use crate::rays::Rays;
-use crate::spectrum::Spectrum;
+use crate::{error::OpmResult, joule, nodes::FilterType, rays::Rays, spectrum::Spectrum};
 
 /// Data structure defining the light properties. The actuals data type used depends on the
 /// [`AnalyzerType`](crate::analyzer::AnalyzerType). For example, an energy analysis ([`LightData::Energy`]) only
@@ -53,11 +50,7 @@ impl Display for LightData {
         match self {
             Self::Energy(e) => {
                 let ef = Energy::format_args(joule, Abbreviation);
-                write!(
-                    f,
-                    "Energy: {}",
-                    ef.with(Energy::new::<joule>(e.spectrum.total_energy()))
-                )
+                write!(f, "Energy: {}", ef.with(joule!(e.spectrum.total_energy())))
             }
             _ => write!(f, "No display defined for this type of LightData"),
         }

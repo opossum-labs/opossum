@@ -7,11 +7,14 @@ use cambox_1w::cambox_1w;
 use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
-use nalgebra::Point2;
 use opossum::{
     aperture::{Aperture, CircleConfig},
     error::OpmResult,
+    joule,
     lightdata::LightData,
+    // degree,
+    millimeter,
+    nanometer,
     nodes::{
         BeamSplitter, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
         Propagation, RayPropagationVisualizer, Source, WaveFront,
@@ -25,20 +28,15 @@ use opossum::{
     spectrum_helper::generate_filter_spectrum,
     OpticScenery,
 };
-use uom::si::{
-    energy::joule,
-    f64::{Energy, Length},
-    length::{millimeter, nanometer},
-};
 
 fn main() -> OpmResult<()> {
-    let wvl_1w = Length::new::<nanometer>(1054.0);
+    let wvl_1w = nanometer!(1054.0);
     let wvl_2w = wvl_1w / 2.0;
 
-    let energy_1w = Energy::new::<joule>(100.0);
-    let energy_2w = Energy::new::<joule>(50.0);
+    let energy_1w = joule!(100.0);
+    let energy_2w = joule!(50.0);
 
-    let beam_dist_1w = Hexapolar::new(Length::new::<millimeter>(76.05493), 10)?;
+    let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
     let beam_dist_2w = beam_dist_1w.clone();
 
     let refr_index_hk9l = RefrIndexSellmeier1::new(
@@ -67,9 +65,9 @@ fn main() -> OpmResult<()> {
     )?;
 
     // apertures
-    let circle_config = CircleConfig::new(25.4, Point2::new(0.0, 0.0))?;
+    let circle_config = CircleConfig::new(millimeter!(25.4), millimeter!(0., 0.))?;
     let a_2inch = Aperture::BinaryCircle(circle_config);
-    let circle_config = CircleConfig::new(12.7, Point2::new(0.0, 0.0))?;
+    let circle_config = CircleConfig::new(millimeter!(12.7), millimeter!(0., 0.))?;
     let a_1inch = Aperture::BinaryCircle(circle_config);
 
     // collimated source
@@ -78,30 +76,24 @@ fn main() -> OpmResult<()> {
 
     // point source
 
-    // use nalgebra::Point3;
-    // use num::Zero;
-    // use uom::si::{
-    //     angle::degree,
-    //     f64::Angle,
-    // };
     // let rays_1w = Rays::new_hexapolar_point_source(
-    //     Point3::new(
-    //         Length::zero(),
-    //         Length::new::<millimeter>(75.0),
-    //         Length::zero(),
+    //     millimeter!(
+    //         0.,
+    //         75.0,
+    //         0.,
     //     ),
-    //     Angle::new::<degree>(0.183346572),
+    //     degree!(0.183346572),
     //     6,
     //     wvl_1w,
     //     energy_1w,
     // )?;
     // let mut rays_2w = Rays::new_hexapolar_point_source(
-    //     Point3::new(
-    //         Length::zero(),
-    //         Length::new::<millimeter>(75.0),
-    //         Length::zero(),
+    //     millimeter!(
+    //         0.,
+    //         75.0,
+    //         0.,
     //     ),
-    //     Angle::new::<degree>(0.183346572),
+    //     degree!(0.183346572),
     //     6,
     //     wvl_2w,
     //     energy_2w,
@@ -121,47 +113,44 @@ fn main() -> OpmResult<()> {
     let mut group_t1 = NodeGroup::new("T1");
     let t1_l1a = group_t1.add_node(Lens::new(
         "T1 L1a",
-        Length::new::<millimeter>(518.34008),
-        Length::new::<millimeter>(-847.40402),
-        Length::new::<millimeter>(30.0),
+        millimeter!(518.34008),
+        millimeter!(-847.40402),
+        millimeter!(30.0),
         &refr_index_hk9l,
     )?)?;
-    let d2 = group_t1.add_node(Propagation::new("d2", Length::new::<millimeter>(10.0))?)?;
+    let d2 = group_t1.add_node(Propagation::new("d2", millimeter!(10.0))?)?;
     let t1_l1b = group_t1.add_node(Lens::new(
         "T1 L1b",
-        Length::new::<millimeter>(-788.45031),
-        Length::new::<millimeter>(-2551.88619),
-        Length::new::<millimeter>(21.66602),
+        millimeter!(-788.45031),
+        millimeter!(-2551.88619),
+        millimeter!(21.66602),
         &refr_index_hzf52,
     )?)?;
-    let d3 = group_t1.add_node(Propagation::new(
-        "d3",
-        Length::new::<millimeter>(937.23608),
-    )?)?;
+    let d3 = group_t1.add_node(Propagation::new("d3", millimeter!(937.23608))?)?;
     let mut node = Lens::new(
         "T1 L2a",
-        Length::new::<millimeter>(-88.51496),
-        Length::new::<millimeter>(f64::INFINITY),
-        Length::new::<millimeter>(5.77736),
+        millimeter!(-88.51496),
+        millimeter!(f64::INFINITY),
+        millimeter!(5.77736),
         &refr_index_hzf52,
     )?;
     node.set_input_aperture("front", &a_2inch)?;
     node.set_output_aperture("rear", &a_2inch)?;
     let t1_l2a = group_t1.add_node(node)?;
-    let d4 = group_t1.add_node(Propagation::new("d4", Length::new::<millimeter>(8.85423))?)?;
+    let d4 = group_t1.add_node(Propagation::new("d4", millimeter!(8.85423))?)?;
     let t1_l2b = group_t1.add_node(Lens::new(
         "T1 L2b",
-        Length::new::<millimeter>(76.76954),
-        Length::new::<millimeter>(-118.59590),
-        Length::new::<millimeter>(14.0),
+        millimeter!(76.76954),
+        millimeter!(-118.59590),
+        millimeter!(14.0),
         &refr_index_hzf52,
     )?)?;
-    let d5 = group_t1.add_node(Propagation::new("d5", Length::new::<millimeter>(14.78269))?)?;
+    let d5 = group_t1.add_node(Propagation::new("d5", millimeter!(14.78269))?)?;
     let t1_l2c = group_t1.add_node(Lens::new(
         "T1 L2c",
-        Length::new::<millimeter>(-63.45837),
-        Length::new::<millimeter>(66.33014),
-        Length::new::<millimeter>(7.68327),
+        millimeter!(-63.45837),
+        millimeter!(66.33014),
+        millimeter!(7.68327),
         &refr_index_hzf2,
     )?)?;
 
@@ -182,7 +171,7 @@ fn main() -> OpmResult<()> {
 
     scenery.connect_nodes(input_group, "output", t1, "input")?;
 
-    let d6 = scenery.add_node(Propagation::new("d6", Length::new::<millimeter>(100.0))?);
+    let d6 = scenery.add_node(Propagation::new("d6", millimeter!(100.0))?);
 
     scenery.connect_nodes(t1, "output", d6, "front")?;
 
@@ -192,10 +181,10 @@ fn main() -> OpmResult<()> {
 
     // ideal spectrum
     let short_pass_spectrum = generate_filter_spectrum(
-        Length::new::<nanometer>(400.0)..Length::new::<nanometer>(2000.0),
-        Length::new::<nanometer>(1.0),
+        nanometer!(400.0)..nanometer!(2000.0),
+        nanometer!(1.0),
         &opossum::spectrum_helper::FilterType::ShortPassStep {
-            cut_off: Length::new::<nanometer>(700.0),
+            cut_off: nanometer!(700.0),
         },
     )?;
     let short_pass = SplittingConfig::Spectrum(short_pass_spectrum);
@@ -234,40 +223,31 @@ fn main() -> OpmResult<()> {
     // 1w branch
 
     // Distance T1 -> T2 1w 637.5190 (-100.0 because of d6)
-    let d_1w_7 = scenery.add_node(Propagation::new(
-        "1w d7",
-        Length::new::<millimeter>(537.5190),
-    )?);
+    let d_1w_7 = scenery.add_node(Propagation::new("1w d7", millimeter!(537.5190))?);
 
     // T2_1w
     let mut group_t2_1w = NodeGroup::new("T2 1w");
     let t2_1w_in = group_t2_1w.add_node(Lens::new(
         "T2 1w In",
-        Length::new::<millimeter>(405.38435),
-        Length::new::<millimeter>(-702.52114),
-        Length::new::<millimeter>(9.5),
+        millimeter!(405.38435),
+        millimeter!(-702.52114),
+        millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
-    let d_1w_8 = group_t2_1w.add_node(Propagation::new(
-        "1w d8",
-        Length::new::<millimeter>(442.29480),
-    )?)?;
+    let d_1w_8 = group_t2_1w.add_node(Propagation::new("1w d8", millimeter!(442.29480))?)?;
     let t2_1w_field = group_t2_1w.add_node(Lens::new(
         "T2 1w Field",
-        Length::new::<millimeter>(179.59020),
-        Length::new::<millimeter>(f64::INFINITY),
-        Length::new::<millimeter>(9.5),
+        millimeter!(179.59020),
+        millimeter!(f64::INFINITY),
+        millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
-    let d_1w_9 = group_t2_1w.add_node(Propagation::new(
-        "1w d9",
-        Length::new::<millimeter>(429.20520),
-    )?)?;
+    let d_1w_9 = group_t2_1w.add_node(Propagation::new("1w d9", millimeter!(429.20520))?)?;
     let t2_1w_exit = group_t2_1w.add_node(Lens::new(
         "T2 1w Exit",
-        Length::new::<millimeter>(f64::INFINITY),
-        Length::new::<millimeter>(-202.81235),
-        Length::new::<millimeter>(9.5),
+        millimeter!(f64::INFINITY),
+        millimeter!(-202.81235),
+        millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
 
@@ -280,36 +260,27 @@ fn main() -> OpmResult<()> {
     group_t2_1w.map_output_port(t2_1w_exit, "rear", "output")?;
     let t2_1w = scenery.add_node(group_t2_1w);
 
-    let d_1w_10 = scenery.add_node(Propagation::new(
-        "1w d10",
-        Length::new::<millimeter>(664.58900),
-    )?);
+    let d_1w_10 = scenery.add_node(Propagation::new("1w d10", millimeter!(664.58900))?);
 
     // T3_1w
     let mut group_t3_1w = NodeGroup::new("T3 1w");
 
     let t3_1w_input = group_t3_1w.add_node(Lens::new(
         "T3 1w Input",
-        Length::new::<millimeter>(f64::INFINITY),
-        Length::new::<millimeter>(-417.35031),
-        Length::new::<millimeter>(9.5),
+        millimeter!(f64::INFINITY),
+        millimeter!(-417.35031),
+        millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
-    let d_1w_11 = group_t3_1w.add_node(Propagation::new(
-        "1w d11",
-        Length::new::<millimeter>(1181.0000),
-    )?)?;
+    let d_1w_11 = group_t3_1w.add_node(Propagation::new("1w d11", millimeter!(1181.0000))?)?;
     let t3_1w_exit = group_t3_1w.add_node(Lens::new(
         "T3 1w Exit",
-        Length::new::<millimeter>(156.35054),
-        Length::new::<millimeter>(f64::INFINITY),
-        Length::new::<millimeter>(9.5),
+        millimeter!(156.35054),
+        millimeter!(f64::INFINITY),
+        millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
-    let d_1w_12 = group_t3_1w.add_node(Propagation::new(
-        "1w d12",
-        Length::new::<millimeter>(279.86873),
-    )?)?;
+    let d_1w_12 = group_t3_1w.add_node(Propagation::new("1w d12", millimeter!(279.86873))?)?;
     group_t3_1w.connect_nodes(t3_1w_input, "rear", d_1w_11, "front")?;
     group_t3_1w.connect_nodes(d_1w_11, "rear", t3_1w_exit, "front")?;
     group_t3_1w.connect_nodes(t3_1w_exit, "rear", d_1w_12, "front")?;
@@ -343,41 +314,32 @@ fn main() -> OpmResult<()> {
     // 2w branch
 
     // Distance T1 -> T2 1w 637.5190 (-100.0 because of d6)
-    let d_2w_7 = scenery.add_node(Propagation::new(
-        "2w d7",
-        Length::new::<millimeter>(474.589),
-    )?);
+    let d_2w_7 = scenery.add_node(Propagation::new("2w d7", millimeter!(474.589))?);
 
     // T2_2w
     let mut group_t2_2w = NodeGroup::new("T2 2w");
 
     let t2_2w_in = group_t2_2w.add_node(Lens::new(
         "T2 2w In",
-        Length::new::<millimeter>(536.5733),
-        Length::new::<millimeter>(-677.68238),
-        Length::new::<millimeter>(9.5),
+        millimeter!(536.5733),
+        millimeter!(-677.68238),
+        millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
-    let d_2w_8 = group_t2_2w.add_node(Propagation::new(
-        "2w d8",
-        Length::new::<millimeter>(409.38829),
-    )?)?;
+    let d_2w_8 = group_t2_2w.add_node(Propagation::new("2w d8", millimeter!(409.38829))?)?;
     let t2_2w_field = group_t2_2w.add_node(Lens::new(
         "T2 2w Field",
-        Length::new::<millimeter>(208.48421),
-        Length::new::<millimeter>(f64::INFINITY),
-        Length::new::<millimeter>(9.5),
+        millimeter!(208.48421),
+        millimeter!(f64::INFINITY),
+        millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
-    let d_2w_9 = group_t2_2w.add_node(Propagation::new(
-        "2w d9",
-        Length::new::<millimeter>(512.11171),
-    )?)?;
+    let d_2w_9 = group_t2_2w.add_node(Propagation::new("2w d9", millimeter!(512.11171))?)?;
     let t2_2w_exit = group_t2_2w.add_node(Lens::new(
         "T2 2w Exit",
-        Length::new::<millimeter>(-767.51217),
-        Length::new::<millimeter>(-178.98988),
-        Length::new::<millimeter>(9.5),
+        millimeter!(-767.51217),
+        millimeter!(-178.98988),
+        millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
     group_t2_2w.connect_nodes(t2_2w_in, "rear", d_2w_8, "front")?;
@@ -389,36 +351,27 @@ fn main() -> OpmResult<()> {
     group_t2_2w.map_output_port(t2_2w_exit, "rear", "output")?;
     let t2_2w = scenery.add_node(group_t2_2w);
 
-    let d_2w_10 = scenery.add_node(Propagation::new(
-        "2w d10",
-        Length::new::<millimeter>(622.09000),
-    )?);
+    let d_2w_10 = scenery.add_node(Propagation::new("2w d10", millimeter!(622.09000))?);
 
     // T3_2w
     let mut group_t3_2w = NodeGroup::new("T3 2w");
 
     let t3_2w_input = group_t3_2w.add_node(Lens::new(
         "T3 2w Input",
-        Length::new::<millimeter>(932.92634),
-        Length::new::<millimeter>(-724.14405),
-        Length::new::<millimeter>(9.5),
+        millimeter!(932.92634),
+        millimeter!(-724.14405),
+        millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
-    let d_2w_11 = group_t3_2w.add_node(Propagation::new(
-        "2w d11",
-        Length::new::<millimeter>(1181.0000),
-    )?)?;
+    let d_2w_11 = group_t3_2w.add_node(Propagation::new("2w d11", millimeter!(1181.0000))?)?;
     let t3_2w_exit = group_t3_2w.add_node(Lens::new(
         "T3 2w Exit",
-        Length::new::<millimeter>(161.31174),
-        Length::new::<millimeter>(-1069.52277),
-        Length::new::<millimeter>(9.5),
+        millimeter!(161.31174),
+        millimeter!(-1069.52277),
+        millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
-    let d_2w_12 = group_t3_2w.add_node(Propagation::new(
-        "2w d12",
-        Length::new::<millimeter>(250.35850),
-    )?)?;
+    let d_2w_12 = group_t3_2w.add_node(Propagation::new("2w d12", millimeter!(250.35850))?)?;
     group_t3_2w.connect_nodes(t3_2w_input, "rear", d_2w_11, "front")?;
     group_t3_2w.connect_nodes(d_2w_11, "rear", t3_2w_exit, "front")?;
     group_t3_2w.connect_nodes(t3_2w_exit, "rear", d_2w_12, "front")?;

@@ -322,17 +322,12 @@ mod test {
     use super::*;
     use crate::position_distributions::Hexapolar;
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays,
+        analyzer::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
     use tempfile::NamedTempFile;
     use uom::num_traits::Zero;
-    use uom::si::length::millimeter;
-    use uom::si::{
-        energy::{joule, Energy},
-        f64::Length,
-        length::nanometer,
-    };
+    use uom::si::f64::Length;
     #[test]
     fn default() {
         let node = FluenceDetector::default();
@@ -434,8 +429,8 @@ mod test {
             .is_none());
         fd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
+                nanometer!(1053.0),
+                joule!(1.0),
                 &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
@@ -456,9 +451,9 @@ mod test {
         assert!(!node_report.properties().contains("Fluence"));
         fd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
-                &Hexapolar::new(Length::new::<millimeter>(1.), 1).unwrap(),
+                nanometer!(1053.0),
+                joule!(1.0),
+                &Hexapolar::new(millimeter!(1.), 1).unwrap(),
             )
             .unwrap(),
         ));

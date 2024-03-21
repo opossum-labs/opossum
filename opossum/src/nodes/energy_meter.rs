@@ -1,20 +1,20 @@
 #![warn(missing_docs)]
-use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
-use crate::lightdata::LightData;
-use crate::properties::{Properties, Proptype};
-use crate::refractive_index::refr_index_vaccuum;
-use crate::reporter::{NodeReport, PdfReportable};
-use crate::surface::Plane;
 use crate::{
+    analyzer::AnalyzerType,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    joule,
+    lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
+    properties::{Properties, Proptype},
+    refractive_index::refr_index_vaccuum,
+    reporter::{NodeReport, PdfReportable},
+    surface::Plane,
 };
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use uom::si::energy::joule;
 use uom::si::f64::Energy;
 
 #[non_exhaustive]
@@ -184,7 +184,7 @@ impl Optical for EnergyMeter {
         let mut energy: Option<Energy> = None;
         if let Some(light_data) = &self.light_data {
             energy = match light_data {
-                LightData::Energy(e) => Some(Energy::new::<joule>(e.spectrum.total_energy())),
+                LightData::Energy(e) => Some(joule!(e.spectrum.total_energy())),
                 LightData::Geometric(r) => Some(r.total_energy()),
                 LightData::Fourier => None,
             };
@@ -346,7 +346,7 @@ mod test {
         meter.analyze(input, &AnalyzerType::Energy).unwrap();
         let report = meter.report().unwrap();
         if let Ok(Proptype::Energy(e)) = report.properties().get("Energy") {
-            assert_eq!(e, &Energy::new::<joule>(1.0));
+            assert_eq!(e, &joule!(1.0));
         } else {
             panic!("could not read Energy property");
         }

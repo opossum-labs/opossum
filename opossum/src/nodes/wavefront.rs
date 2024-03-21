@@ -6,24 +6,25 @@ use nalgebra::{DVector, DVectorSlice, MatrixXx3};
 use plotters::style::RGBAColor;
 use serde_derive::{Deserialize, Serialize};
 use uom::si::f64::Length;
-use uom::si::length::nanometer;
 
-use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
-use crate::lightdata::LightData;
-use crate::plottable::{
-    AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
-};
-use crate::properties::{Properties, Proptype};
-use crate::refractive_index::refr_index_vaccuum;
-use crate::reporter::{NodeReport, PdfReportable};
-use crate::surface::Plane;
-use crate::utils::griddata::{create_linspace_axes, interpolate_3d_scatter_data};
 use crate::{
+    analyzer::AnalyzerType,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    lightdata::LightData,
+    nanometer,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
+    plottable::{
+        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
+    },
+    properties::{Properties, Proptype},
+    refractive_index::refr_index_vaccuum,
+    reporter::{NodeReport, PdfReportable},
+    surface::Plane,
+    utils::griddata::{create_linspace_axes, interpolate_3d_scatter_data},
 };
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -214,7 +215,7 @@ impl Optical for WaveFront {
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(LightData::Geometric(rays)) = &self.light_data {
             let wf_data_opt = rays
-                .get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(1.))
+                .get_wavefront_data_in_units_of_wvl(true, nanometer!(1.))
                 .ok();
 
             let mut file_path = PathBuf::from(report_dir);
@@ -252,8 +253,7 @@ impl Optical for WaveFront {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
-            let wf_data_opt =
-                rays.get_wavefront_data_in_units_of_wvl(true, Length::new::<nanometer>(1.));
+            let wf_data_opt = rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(1.));
 
             if wf_data_opt.is_ok()
                 && !wf_data_opt
@@ -391,23 +391,20 @@ impl Plottable for WaveFrontErrorMap {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::analyzer::RayTraceConfig;
-    use crate::position_distributions::Hexapolar;
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, ray::Ray, rays::Rays,
+        analyzer::AnalyzerType, analyzer::RayTraceConfig, joule, lightdata::DataEnergy, millimeter,
+        nanometer, position_distributions::Hexapolar, ray::Ray, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Point3;
     use tempfile::NamedTempFile;
     use uom::num_traits::Zero;
-    use uom::si::length::millimeter;
-    use uom::si::{energy::joule, f64::Energy};
-    use uom::si::{f64::Length, length::nanometer};
+    use uom::si::f64::Length;
     #[test]
     fn calc_wavefront_statistics() {
-        let wvl = Length::new::<nanometer>(1000.);
-        let en = Energy::new::<joule>(1.);
+        let wvl = nanometer!(1000.);
+        let en = joule!(1.);
 
         let mut rays = Rays::default();
         let ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
@@ -424,7 +421,7 @@ mod test {
     #[test]
     fn new_empty_wf_error_map() {
         let wf_dat = MatrixXx3::from_vec(Vec::<f64>::new());
-        assert!(WaveFrontErrorMap::new(&wf_dat, Length::new::<nanometer>(1000.)).is_err());
+        assert!(WaveFrontErrorMap::new(&wf_dat, nanometer!(1000.)).is_err());
     }
 
     #[test]
@@ -475,9 +472,9 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
-                &Hexapolar::new(Length::new::<millimeter>(1.), 1).unwrap(),
+                nanometer!(1053.0),
+                joule!(1.0),
+                &Hexapolar::new(millimeter!(1.), 1).unwrap(),
             )
             .unwrap(),
         );
@@ -540,8 +537,8 @@ mod test {
             .is_none());
         wf.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
+                nanometer!(1053.0),
+                joule!(1.0),
                 &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
@@ -556,9 +553,9 @@ mod test {
         assert!(wf.report().is_some());
         wf.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
-                &Hexapolar::new(Length::new::<millimeter>(1.), 1).unwrap(),
+                nanometer!(1053.0),
+                joule!(1.0),
+                &Hexapolar::new(millimeter!(1.), 1).unwrap(),
             )
             .unwrap(),
         ));

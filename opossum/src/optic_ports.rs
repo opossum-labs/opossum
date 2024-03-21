@@ -8,11 +8,12 @@
 //! ```rust
 //! use opossum::optic_ports::OpticPorts;
 //! use nalgebra::Point2;
-//! use opossum::aperture::{CircleConfig, Aperture};
+//! use opossum::{millimeter, aperture::{CircleConfig, Aperture}};
+//! use uom::si::{f64::Length, length::millimeter};
 //!
 //! let mut ports=OpticPorts::new();
 //! ports.create_input("my input").unwrap();
-//! let circle_config = CircleConfig::new(1.5, Point2::new(1.0, 1.0)).unwrap();
+//! let circle_config = CircleConfig::new(millimeter!(1.5), millimeter!(1.0, 1.0)).unwrap();
 //! ports.set_input_aperture("my input", &Aperture::BinaryCircle(circle_config)).unwrap();
 //! ```
 use crate::{

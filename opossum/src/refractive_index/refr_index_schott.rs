@@ -67,10 +67,9 @@ impl RefractiveIndex for RefrIndexSchott {
 }
 #[cfg(test)]
 mod test {
-    use approx::assert_relative_eq;
-    use uom::si::{f64::Length, length::nanometer};
-
     use super::*;
+    use crate::nanometer;
+    use approx::assert_relative_eq;
     #[test]
     fn new_wrong() {
         assert!(RefrIndexSchott::new(1.0, 1.0, 1.0, 1.0, 1.0, f64::NAN).is_err());
@@ -113,7 +112,7 @@ mod test {
         )
         .unwrap();
         assert_relative_eq!(
-            i.get_refractive_index(Length::new::<nanometer>(1054.0)),
+            i.get_refractive_index(nanometer!(1054.0)),
             1.8116,
             max_relative = 0.0001
         );

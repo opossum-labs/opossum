@@ -4,24 +4,23 @@ use itertools::izip;
 use log::warn;
 use plotters::style::RGBAColor;
 use serde_derive::{Deserialize, Serialize};
-use uom::si::f64::Length;
 use uom::si::length::nanometer;
 
-use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
-use crate::lightdata::LightData;
-use crate::plottable::{
-    PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
-};
-use crate::properties::{Properties, Proptype};
-use crate::refractive_index::refr_index_vaccuum;
-use crate::reporter::{NodeReport, PdfReportable};
-use crate::surface::Plane;
 use crate::{
+    analyzer::AnalyzerType,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    lightdata::LightData,
+    nanometer,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
+    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
+    properties::{Properties, Proptype},
+    refractive_index::refr_index_vaccuum,
+    reporter::{NodeReport, PdfReportable},
+    surface::Plane,
 };
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -227,7 +226,7 @@ impl Plottable for SpotDiagram {
         match data {
             Some(LightData::Geometric(rays)) => {
                 let (split_rays_bundles, wavelengths) =
-                    rays.split_ray_bundle_by_wavelength(Length::new::<nanometer>(1.), true)?;
+                    rays.split_ray_bundle_by_wavelength(nanometer!(1.), true)?;
                 let num_series = split_rays_bundles.len();
                 let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
 
@@ -267,16 +266,12 @@ mod test {
     use super::*;
     use crate::position_distributions::Hexapolar;
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays,
+        analyzer::AnalyzerType, joule, lightdata::DataEnergy, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
     use tempfile::NamedTempFile;
     use uom::num_traits::Zero;
-    use uom::si::{
-        energy::{joule, Energy},
-        f64::Length,
-        length::nanometer,
-    };
+    use uom::si::f64::Length;
     #[test]
     fn default() {
         let node = SpotDiagram::default();
@@ -382,8 +377,8 @@ mod test {
         assert!(sd.export_data(path.path().parent().unwrap()).is_err());
         sd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
+                nanometer!(1053.0),
+                joule!(1.0),
                 &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
@@ -404,8 +399,8 @@ mod test {
         assert!(node_report.properties().contains("Spot diagram"));
         sd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
+                nanometer!(1053.0),
+                joule!(1.0),
                 &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),

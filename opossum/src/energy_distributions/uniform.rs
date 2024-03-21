@@ -44,13 +44,14 @@ impl EnergyDistribution for UniformDist {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::joule;
     #[test]
     fn new_uniform_energy() {
-        assert!(UniformDist::new(Energy::new::<joule>(0.)).is_err());
-        assert!(UniformDist::new(Energy::new::<joule>(f64::NAN)).is_err());
-        assert!(UniformDist::new(Energy::new::<joule>(f64::INFINITY)).is_err());
-        assert!(UniformDist::new(Energy::new::<joule>(f64::NEG_INFINITY)).is_err());
-        assert!(UniformDist::new(Energy::new::<joule>(-1.)).is_err());
-        assert!(UniformDist::new(Energy::new::<joule>(1.)).is_ok());
+        assert!(UniformDist::new(joule!(0.)).is_err());
+        assert!(UniformDist::new(joule!(f64::NAN)).is_err());
+        assert!(UniformDist::new(joule!(f64::INFINITY)).is_err());
+        assert!(UniformDist::new(joule!(f64::NEG_INFINITY)).is_err());
+        assert!(UniformDist::new(joule!(-1.)).is_err());
+        assert!(UniformDist::new(joule!(1.)).is_ok());
     }
 }

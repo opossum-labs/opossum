@@ -1,21 +1,17 @@
 use opossum::{
     error::OpmResult,
+    joule, millimeter, nanometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     position_distributions::Hexapolar,
     rays::Rays,
 };
 use plotters::style::RGBAColor;
-use uom::si::{
-    energy::{joule, Energy},
-    f64::Length,
-    length::{millimeter, nanometer},
-};
 
 fn main() -> OpmResult<()> {
     let rays = Rays::new_uniform_collimated(
-        Length::new::<nanometer>(1053.),
-        Energy::new::<joule>(1.),
-        &Hexapolar::new(Length::new::<millimeter>(1.), 20)?,
+        nanometer!(1053.),
+        joule!(1.),
+        &Hexapolar::new(millimeter!(1.), 20)?,
     )?;
 
     let mut plt_params = PlotParameters::default();
@@ -36,13 +32,13 @@ fn main() -> OpmResult<()> {
     let plt_type = PlotType::Line2D(plt_params);
     let _ = plt_type.plot(&vec![plt_series]);
 
-    // // rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+    // // rays.set_dist_to_next_surface(millimeter!(10.));
     // // rays.propagate_along_z()?;
-    // // rays.refract_paraxial(Length::new::<millimeter>(10.))?;
-    // // rays.set_dist_to_next_surface(Length::new::<millimeter>(30.));
+    // // rays.refract_paraxial(millimeter!(10.))?;
+    // // rays.set_dist_to_next_surface(millimeter!(30.));
     // // rays.propagate_along_z()?;
-    // // rays.refract_paraxial(Length::new::<millimeter>(20.))?;
-    // // rays.set_dist_to_next_surface(Length::new::<millimeter>(10.));
+    // // rays.refract_paraxial(millimeter!(20.))?;
+    // // rays.set_dist_to_next_surface(millimeter!(10.));
     // // rays.propagate_along_z()?;p
 
     let mut plt_params = PlotParameters::default();

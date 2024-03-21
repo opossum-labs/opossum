@@ -123,131 +123,41 @@ impl PositionDistribution for FibonacciEllipse {
 
 #[cfg(test)]
 mod test {
-    use uom::si::length::millimeter;
-
     use super::*;
+    use crate::millimeter;
     #[test]
     fn new_rect_wrong() {
-        assert!(FibonacciRectangle::new(
-            Length::new::<millimeter>(-0.1),
-            Length::new::<millimeter>(0.1),
-            1
-        )
-        .is_err());
-        assert!(FibonacciRectangle::new(
-            Length::new::<millimeter>(0.1),
-            Length::new::<millimeter>(-0.1),
-            1
-        )
-        .is_err());
-        assert!(FibonacciRectangle::new(
-            Length::new::<millimeter>(f64::NAN),
-            Length::new::<millimeter>(0.1),
-            1
-        )
-        .is_err());
-        assert!(FibonacciRectangle::new(
-            Length::new::<millimeter>(f64::INFINITY),
-            Length::new::<millimeter>(0.1),
-            1
-        )
-        .is_err());
-        assert!(FibonacciRectangle::new(
-            Length::new::<millimeter>(f64::NEG_INFINITY),
-            Length::new::<millimeter>(0.1),
-            1
-        )
-        .is_err());
-        assert!(FibonacciRectangle::new(
-            Length::new::<millimeter>(0.1),
-            Length::new::<millimeter>(f64::NAN),
-            1
-        )
-        .is_err());
-        assert!(FibonacciRectangle::new(
-            Length::new::<millimeter>(0.1),
-            Length::new::<millimeter>(f64::INFINITY),
-            1
-        )
-        .is_err());
-        assert!(FibonacciRectangle::new(
-            Length::new::<millimeter>(0.1),
-            Length::new::<millimeter>(f64::NEG_INFINITY),
-            1
-        )
-        .is_err());
-        assert!(FibonacciRectangle::new(
-            Length::new::<millimeter>(0.0),
-            Length::new::<millimeter>(0.0),
-            1
-        )
-        .is_err());
+        assert!(FibonacciRectangle::new(millimeter!(-0.1), millimeter!(0.1), 1).is_err());
+        assert!(FibonacciRectangle::new(millimeter!(0.1), millimeter!(-0.1), 1).is_err());
+        assert!(FibonacciRectangle::new(millimeter!(f64::NAN), millimeter!(0.1), 1).is_err());
+        assert!(FibonacciRectangle::new(millimeter!(f64::INFINITY), millimeter!(0.1), 1).is_err());
         assert!(
-            FibonacciRectangle::new(Length::zero(), Length::new::<millimeter>(1.0), 0).is_err()
+            FibonacciRectangle::new(millimeter!(f64::NEG_INFINITY), millimeter!(0.1), 1).is_err()
         );
+        assert!(FibonacciRectangle::new(millimeter!(0.1), millimeter!(f64::NAN), 1).is_err());
+        assert!(FibonacciRectangle::new(millimeter!(0.1), millimeter!(f64::INFINITY), 1).is_err());
+        assert!(
+            FibonacciRectangle::new(millimeter!(0.1), millimeter!(f64::NEG_INFINITY), 1).is_err()
+        );
+        assert!(FibonacciRectangle::new(millimeter!(0.0), millimeter!(0.0), 1).is_err());
+        assert!(FibonacciRectangle::new(Length::zero(), millimeter!(1.0), 0).is_err());
     }
     #[test]
     fn new_ellipse_wrong() {
-        assert!(FibonacciEllipse::new(
-            Length::new::<millimeter>(-0.1),
-            Length::new::<millimeter>(0.1),
-            1
-        )
-        .is_err());
-        assert!(FibonacciEllipse::new(
-            Length::new::<millimeter>(0.1),
-            Length::new::<millimeter>(-0.1),
-            1
-        )
-        .is_err());
-        assert!(FibonacciEllipse::new(
-            Length::new::<millimeter>(f64::NAN),
-            Length::new::<millimeter>(0.1),
-            1
-        )
-        .is_err());
-        assert!(FibonacciEllipse::new(
-            Length::new::<millimeter>(f64::INFINITY),
-            Length::new::<millimeter>(0.1),
-            1
-        )
-        .is_err());
-        assert!(FibonacciEllipse::new(
-            Length::new::<millimeter>(f64::NEG_INFINITY),
-            Length::new::<millimeter>(0.1),
-            1
-        )
-        .is_err());
-        assert!(FibonacciEllipse::new(
-            Length::new::<millimeter>(0.1),
-            Length::new::<millimeter>(f64::NAN),
-            1
-        )
-        .is_err());
-        assert!(FibonacciEllipse::new(
-            Length::new::<millimeter>(0.1),
-            Length::new::<millimeter>(f64::INFINITY),
-            1
-        )
-        .is_err());
-        assert!(FibonacciEllipse::new(
-            Length::new::<millimeter>(0.1),
-            Length::new::<millimeter>(f64::NEG_INFINITY),
-            1
-        )
-        .is_err());
-        assert!(FibonacciEllipse::new(
-            Length::new::<millimeter>(0.),
-            Length::new::<millimeter>(0.0),
-            1
-        )
-        .is_err());
-        assert!(FibonacciEllipse::new(
-            Length::new::<millimeter>(0.1),
-            Length::new::<millimeter>(0.0),
-            0
-        )
-        .is_err());
+        assert!(FibonacciEllipse::new(millimeter!(-0.1), millimeter!(0.1), 1).is_err());
+        assert!(FibonacciEllipse::new(millimeter!(0.1), millimeter!(-0.1), 1).is_err());
+        assert!(FibonacciEllipse::new(millimeter!(f64::NAN), millimeter!(0.1), 1).is_err());
+        assert!(FibonacciEllipse::new(millimeter!(f64::INFINITY), millimeter!(0.1), 1).is_err());
+        assert!(
+            FibonacciEllipse::new(millimeter!(f64::NEG_INFINITY), millimeter!(0.1), 1).is_err()
+        );
+        assert!(FibonacciEllipse::new(millimeter!(0.1), millimeter!(f64::NAN), 1).is_err());
+        assert!(FibonacciEllipse::new(millimeter!(0.1), millimeter!(f64::INFINITY), 1).is_err());
+        assert!(
+            FibonacciEllipse::new(millimeter!(0.1), millimeter!(f64::NEG_INFINITY), 1).is_err()
+        );
+        assert!(FibonacciEllipse::new(millimeter!(0.), millimeter!(0.0), 1).is_err());
+        assert!(FibonacciEllipse::new(millimeter!(0.1), millimeter!(0.0), 0).is_err());
     }
     #[test]
     fn generate_one_rect() {
@@ -259,36 +169,16 @@ mod test {
     }
     #[test]
     fn generate_rect() {
-        let g = FibonacciEllipse::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(1.0),
-            7,
-        )
-        .unwrap();
+        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 7).unwrap();
         assert_eq!(g.generate().len(), 7);
-        let g = FibonacciEllipse::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(1.0),
-            19,
-        )
-        .unwrap();
+        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 19).unwrap();
         assert_eq!(g.generate().len(), 19);
     }
     #[test]
     fn generate_ellipse() {
-        let g = FibonacciEllipse::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(1.0),
-            7,
-        )
-        .unwrap();
+        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 7).unwrap();
         assert_eq!(g.generate().len(), 7);
-        let g = FibonacciEllipse::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(1.0),
-            19,
-        )
-        .unwrap();
+        let g = FibonacciEllipse::new(millimeter!(1.0), millimeter!(1.0), 19).unwrap();
         assert_eq!(g.generate().len(), 19);
     }
 }

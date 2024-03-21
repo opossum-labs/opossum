@@ -5,13 +5,11 @@ use std::fmt::Display;
 use nalgebra::{MatrixXx3, Point3, Vector3};
 use num::Zero;
 use serde_derive::{Deserialize, Serialize};
-use uom::si::{
-    f64::{Energy, Length},
-    length::meter,
-};
+use uom::si::f64::{Energy, Length};
 
 use crate::{
     error::{OpmResult, OpossumError},
+    meter,
     nodes::FilterType,
     spectrum::Spectrum,
     surface::Surface,
@@ -232,7 +230,7 @@ impl Ray {
             .value
             .mul_add(self.pos.x.value, self.pos.y.value * self.pos.y.value);
         let f_square = (focal_length * focal_length).value;
-        self.path_length -= Length::new::<meter>((r_square + f_square).sqrt()) - focal_length.abs();
+        self.path_length -= meter!((r_square + f_square).sqrt()) - focal_length.abs();
         Ok(())
     }
     /// Refract the [`Ray`] on a given [`Surface`] using Snellius' law.
@@ -273,7 +271,7 @@ impl Ray {
             let pos_in_m = self.pos.map(|c| c.value);
             let intersection_in_m = intersection_point.map(|c| c.value);
             self.path_length +=
-                self.refractive_index * Length::new::<meter>((pos_in_m - intersection_in_m).norm());
+                self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
             self.pos_hist.push(self.pos);
             self.pos = intersection_point;
             // check, if total reflection
@@ -397,25 +395,19 @@ mod test {
 
     use super::*;
     use crate::{
+        joule, millimeter, nanometer,
         spectrum_helper::{self, generate_filter_spectrum},
         surface::Plane,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq};
     use itertools::izip;
-    use uom::si::{
-        energy::joule,
-        length::{millimeter, nanometer},
-    };
+    use uom::si::{energy::joule, length::millimeter};
     #[test]
     fn new() {
-        let pos = Point3::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(2.0),
-            Length::new::<millimeter>(3.0),
-        );
+        let pos = millimeter!(1.0, 2.0, 3.0);
         let dir = Vector3::new(0.0, 0.0, 2.0);
-        let e = Energy::new::<joule>(1.0);
-        let wvl = Length::new::<nanometer>(1053.0);
+        let e = joule!(1.0);
+        let wvl = nanometer!(1053.0);
         let ray = Ray::new(pos, dir, wvl, e);
         assert!(ray.is_ok());
         let ray = ray.unwrap();
@@ -430,25 +422,21 @@ mod test {
         assert_eq!(ray.refractive_index, 1.0);
         assert_eq!(ray.pos_hist.len(), 0);
         assert_eq!(ray.valid, true);
-        assert!(Ray::new(pos, dir, Length::new::<nanometer>(0.0), e).is_err());
-        assert!(Ray::new(pos, dir, Length::new::<nanometer>(-10.0), e).is_err());
-        assert!(Ray::new(pos, dir, Length::new::<nanometer>(f64::NAN), e).is_err());
-        assert!(Ray::new(pos, dir, Length::new::<nanometer>(f64::INFINITY), e).is_err());
-        assert!(Ray::new(pos, dir, Length::new::<nanometer>(f64::NEG_INFINITY), e).is_err());
-        assert!(Ray::new(pos, dir, wvl, Energy::new::<joule>(-0.1)).is_err());
-        assert!(Ray::new(pos, dir, wvl, Energy::new::<joule>(f64::NAN)).is_err());
-        assert!(Ray::new(pos, dir, wvl, Energy::new::<joule>(f64::INFINITY)).is_err());
+        assert!(Ray::new(pos, dir, nanometer!(0.0), e).is_err());
+        assert!(Ray::new(pos, dir, nanometer!(-10.0), e).is_err());
+        assert!(Ray::new(pos, dir, nanometer!(f64::NAN), e).is_err());
+        assert!(Ray::new(pos, dir, nanometer!(f64::INFINITY), e).is_err());
+        assert!(Ray::new(pos, dir, nanometer!(f64::NEG_INFINITY), e).is_err());
+        assert!(Ray::new(pos, dir, wvl, joule!(-0.1)).is_err());
+        assert!(Ray::new(pos, dir, wvl, joule!(f64::NAN)).is_err());
+        assert!(Ray::new(pos, dir, wvl, joule!(f64::INFINITY)).is_err());
         assert!(Ray::new(pos, Vector3::zero(), wvl, e).is_err());
     }
     #[test]
     fn new_collimated() {
-        let pos = Point3::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(2.0),
-            Length::new::<millimeter>(0.0),
-        );
-        let wvl = Length::new::<nanometer>(1053.0);
-        let e = Energy::new::<joule>(1.0);
+        let pos = millimeter!(1.0, 2.0, 0.0);
+        let wvl = nanometer!(1053.0);
+        let e = joule!(1.0);
         let ray = Ray::new_collimated(pos, wvl, e);
         assert!(ray.is_ok());
         let ray = ray.unwrap();
@@ -459,26 +447,22 @@ mod test {
         assert_eq!(ray.path_length, Length::zero());
         assert_eq!(ray.pos_hist.len(), 0);
         assert_eq!(ray.valid, true);
-        assert!(Ray::new_collimated(pos, Length::new::<nanometer>(0.0), e).is_err());
-        assert!(Ray::new_collimated(pos, Length::new::<nanometer>(-10.0), e).is_err());
-        assert!(Ray::new_collimated(pos, Length::new::<nanometer>(f64::NAN), e).is_err());
-        assert!(Ray::new_collimated(pos, Length::new::<nanometer>(f64::INFINITY), e).is_err());
-        assert!(Ray::new_collimated(pos, Length::new::<nanometer>(f64::NEG_INFINITY), e).is_err());
-        assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(0.0)).is_ok());
-        assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(-0.1)).is_err());
-        assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(f64::NAN)).is_err());
-        assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(f64::INFINITY)).is_err());
-        assert!(Ray::new_collimated(pos, wvl, Energy::new::<joule>(f64::NEG_INFINITY)).is_err());
+        assert!(Ray::new_collimated(pos, nanometer!(0.0), e).is_err());
+        assert!(Ray::new_collimated(pos, nanometer!(-10.0), e).is_err());
+        assert!(Ray::new_collimated(pos, nanometer!(f64::NAN), e).is_err());
+        assert!(Ray::new_collimated(pos, nanometer!(f64::INFINITY), e).is_err());
+        assert!(Ray::new_collimated(pos, nanometer!(f64::NEG_INFINITY), e).is_err());
+        assert!(Ray::new_collimated(pos, wvl, joule!(0.0)).is_ok());
+        assert!(Ray::new_collimated(pos, wvl, joule!(-0.1)).is_err());
+        assert!(Ray::new_collimated(pos, wvl, joule!(f64::NAN)).is_err());
+        assert!(Ray::new_collimated(pos, wvl, joule!(f64::INFINITY)).is_err());
+        assert!(Ray::new_collimated(pos, wvl, joule!(f64::NEG_INFINITY)).is_err());
     }
     #[test]
     fn valid() {
-        let pos = Point3::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(2.0),
-            Length::new::<millimeter>(0.0),
-        );
-        let wvl = Length::new::<nanometer>(1053.0);
-        let e = Energy::new::<joule>(1.0);
+        let pos = millimeter!(1.0, 2.0, 0.0);
+        let wvl = nanometer!(1053.0);
+        let e = joule!(1.0);
         let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
         assert_eq!(ray.valid(), true);
         ray.valid = false;
@@ -486,42 +470,26 @@ mod test {
     }
     #[test]
     fn set_valid() {
-        let pos = Point3::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(2.0),
-            Length::new::<millimeter>(0.0),
-        );
-        let wvl = Length::new::<nanometer>(1053.0);
-        let e = Energy::new::<joule>(1.0);
+        let pos = millimeter!(1.0, 2.0, 0.0);
+        let wvl = nanometer!(1053.0);
+        let e = joule!(1.0);
         let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
         ray.set_invalid();
         assert_eq!(ray.valid(), false);
     }
     #[test]
     fn refractive_index() {
-        let wvl = Length::new::<nanometer>(1053.0);
-        let energy = Energy::new::<joule>(1.0);
-        let mut ray = Ray::new(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Vector3::z(),
-            wvl,
-            energy,
-        )
-        .unwrap();
+        let wvl = nanometer!(1053.0);
+        let energy = joule!(1.0);
+        let mut ray = Ray::new(millimeter!(0., 0., 0.), Vector3::z(), wvl, energy).unwrap();
         ray.refractive_index = 2.0;
         assert_eq!(ray.refractive_index(), 2.0);
     }
     #[test]
     fn set_refractive_index() {
-        let wvl = Length::new::<nanometer>(1053.0);
-        let energy = Energy::new::<joule>(1.0);
-        let mut ray = Ray::new(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Vector3::z(),
-            wvl,
-            energy,
-        )
-        .unwrap();
+        let wvl = nanometer!(1053.0);
+        let energy = joule!(1.0);
+        let mut ray = Ray::new(millimeter!(0., 0., 0.), Vector3::z(), wvl, energy).unwrap();
         assert!(ray.set_refractive_index(f64::NAN).is_err());
         assert!(ray.set_refractive_index(f64::INFINITY).is_err());
         assert!(ray.set_refractive_index(0.99).is_err());
@@ -531,204 +499,93 @@ mod test {
     }
     #[test]
     fn propagate_along_z() {
-        let wvl = Length::new::<nanometer>(1053.0);
-        let energy = Energy::new::<joule>(1.0);
-        let mut ray = Ray::new(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Vector3::z(),
-            wvl,
-            energy,
-        )
-        .unwrap();
-        assert!(ray
-            .propagate_along_z(Length::new::<millimeter>(1.0))
-            .is_ok());
+        let wvl = nanometer!(1053.0);
+        let energy = joule!(1.0);
+        let mut ray = Ray::new(millimeter!(0., 0., 0.), Vector3::z(), wvl, energy).unwrap();
+        assert!(ray.propagate_along_z(millimeter!(1.0)).is_ok());
+        assert_eq!(ray.pos_hist, vec![millimeter!(0., 0., 0.)]);
+        ray.propagate_along_z(millimeter!(1.0)).unwrap();
         assert_eq!(
             ray.pos_hist,
-            vec![Point3::new(Length::zero(), Length::zero(), Length::zero())]
-        );
-        ray.propagate_along_z(Length::new::<millimeter>(1.0))
-            .unwrap();
-        assert_eq!(
-            ray.pos_hist,
-            vec![
-                Point3::new(Length::zero(), Length::zero(), Length::zero()),
-                Point3::new(
-                    Length::zero(),
-                    Length::zero(),
-                    Length::new::<millimeter>(1.0)
-                )
-            ]
+            vec![millimeter!(0., 0., 0.), millimeter!(0., 0., 1.0)]
         );
         assert_eq!(ray.wavelength(), wvl);
         assert_eq!(ray.energy(), energy);
         assert_eq!(ray.dir, Vector3::z());
-        assert_eq!(
-            ray.position(),
-            Point3::new(
-                Length::zero(),
-                Length::zero(),
-                Length::new::<millimeter>(2.0)
-            )
-        );
-        assert_eq!(ray.path_length(), Length::new::<millimeter>(2.0));
-        ray.propagate_along_z(Length::new::<millimeter>(2.0))
-            .unwrap();
+        assert_eq!(ray.position(), millimeter!(0., 0., 2.0));
+        assert_eq!(ray.path_length(), millimeter!(2.0));
+        ray.propagate_along_z(millimeter!(2.0)).unwrap();
 
-        assert_eq!(
-            ray.position(),
-            Point3::new(
-                Length::zero(),
-                Length::zero(),
-                Length::new::<millimeter>(4.0)
-            )
-        );
+        assert_eq!(ray.position(), millimeter!(0., 0., 4.0));
         assert_eq!(
             ray.pos_hist,
             vec![
-                Point3::new(Length::zero(), Length::zero(), Length::zero()),
-                Point3::new(
-                    Length::zero(),
-                    Length::zero(),
-                    Length::new::<millimeter>(1.0)
-                ),
-                Point3::new(
-                    Length::zero(),
-                    Length::zero(),
-                    Length::new::<millimeter>(2.0)
-                )
+                millimeter!(0., 0., 0.),
+                millimeter!(0., 0., 1.0),
+                millimeter!(0., 0., 2.0)
             ]
         );
-        ray.propagate_along_z(Length::new::<millimeter>(-5.0))
-            .unwrap();
+        ray.propagate_along_z(millimeter!(-5.0)).unwrap();
 
-        assert_eq!(
-            ray.position(),
-            Point3::new(
-                Length::zero(),
-                Length::zero(),
-                Length::new::<millimeter>(-1.0)
-            )
-        );
+        assert_eq!(ray.position(), millimeter!(0., 0., -1.0));
         assert_eq!(
             ray.pos_hist,
             vec![
-                Point3::new(Length::zero(), Length::zero(), Length::zero()),
-                Point3::new(
-                    Length::zero(),
-                    Length::zero(),
-                    Length::new::<millimeter>(1.0)
-                ),
-                Point3::new(
-                    Length::zero(),
-                    Length::zero(),
-                    Length::new::<millimeter>(2.0)
-                ),
-                Point3::new(
-                    Length::zero(),
-                    Length::zero(),
-                    Length::new::<millimeter>(4.0)
-                )
+                millimeter!(0., 0., 0.),
+                millimeter!(0., 0., 1.0),
+                millimeter!(0., 0., 2.0),
+                millimeter!(0., 0., 4.0)
             ]
         );
         let mut ray = Ray::new(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            millimeter!(0., 0., 0.),
             Vector3::new(0.0, 1.0, 1.0),
             wvl,
             energy,
         )
         .unwrap();
-        let _ = ray.propagate_along_z(Length::new::<millimeter>(1.0));
-        assert_eq!(
-            ray.position(),
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(1.0)
-            )
-        );
-        let _ = ray.propagate_along_z(Length::new::<millimeter>(2.0));
+        let _ = ray.propagate_along_z(millimeter!(1.0));
+        assert_eq!(ray.position(), millimeter!(0., 1., 1.));
+        let _ = ray.propagate_along_z(millimeter!(2.0));
 
-        assert_eq!(
-            ray.position(),
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(3.0),
-                Length::new::<millimeter>(3.0)
-            )
-        );
-        let mut ray = Ray::new(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Vector3::y(),
-            wvl,
-            energy,
-        )
-        .unwrap();
-        assert!(ray
-            .propagate_along_z(Length::new::<millimeter>(1.0))
-            .is_err());
+        assert_eq!(ray.position(), millimeter!(0., 3., 3.));
+        let mut ray = Ray::new(millimeter!(0., 0., 0.), Vector3::y(), wvl, energy).unwrap();
+        assert!(ray.propagate_along_z(millimeter!(1.0)).is_err());
     }
     #[test]
     fn propagate_along_z_refractive_index() {
-        let wvl = Length::new::<nanometer>(1053.0);
-        let energy = Energy::new::<joule>(1.0);
-        let mut ray = Ray::new(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Vector3::z(),
-            wvl,
-            energy,
-        )
-        .unwrap();
+        let wvl = nanometer!(1053.0);
+        let energy = joule!(1.0);
+        let mut ray = Ray::new(millimeter!(0., 0., 0.), Vector3::z(), wvl, energy).unwrap();
         ray.set_refractive_index(2.0).unwrap();
-        ray.propagate_along_z(Length::new::<millimeter>(1.0))
-            .unwrap();
+        ray.propagate_along_z(millimeter!(1.0)).unwrap();
         assert_eq!(ray.wavelength(), wvl);
         assert_eq!(ray.energy(), energy);
         assert_eq!(ray.dir, Vector3::z());
-        assert_eq!(
-            ray.position(),
-            Point3::new(
-                Length::zero(),
-                Length::zero(),
-                Length::new::<millimeter>(1.0)
-            )
-        );
-        assert_eq!(ray.path_length(), Length::new::<millimeter>(2.0));
+        assert_eq!(ray.position(), millimeter!(0., 0., 1.));
+        assert_eq!(ray.path_length(), millimeter!(2.0));
     }
     #[test]
     fn refract_paraxial_wrong_params() {
-        let wvl = Length::new::<nanometer>(1053.0);
-        let e = Energy::new::<joule>(1.0);
-        let mut ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            wvl,
-            e,
-        )
-        .unwrap();
+        let wvl = nanometer!(1053.0);
+        let e = joule!(1.0);
+        let mut ray = Ray::new_collimated(millimeter!(0., 0., 0.), wvl, e).unwrap();
+        assert!(ray.refract_paraxial(millimeter!(0.0)).is_err());
+        assert!(ray.refract_paraxial(millimeter!(f64::NAN)).is_err());
+        assert!(ray.refract_paraxial(millimeter!(f64::INFINITY)).is_err());
         assert!(ray
-            .refract_paraxial(Length::new::<millimeter>(0.0))
-            .is_err());
-        assert!(ray
-            .refract_paraxial(Length::new::<millimeter>(f64::NAN))
-            .is_err());
-        assert!(ray
-            .refract_paraxial(Length::new::<millimeter>(f64::INFINITY))
-            .is_err());
-        assert!(ray
-            .refract_paraxial(Length::new::<millimeter>(f64::NEG_INFINITY))
+            .refract_paraxial(millimeter!(f64::NEG_INFINITY))
             .is_err());
     }
     #[test]
     fn refract_paraxial_on_axis() {
-        let wvl = Length::new::<nanometer>(1053.0);
-        let e = Energy::new::<joule>(1.0);
+        let wvl = nanometer!(1053.0);
+        let e = joule!(1.0);
         let pos: Point3<Length> = Point3::origin();
         let ray = Ray::new_collimated(pos, wvl, e).unwrap();
         let ray_dir = ray.dir;
         let mut refracted_ray = ray.clone();
-        refracted_ray
-            .refract_paraxial(Length::new::<millimeter>(100.0))
-            .unwrap();
+        refracted_ray.refract_paraxial(millimeter!(100.0)).unwrap();
         assert_eq!(refracted_ray.pos, pos);
         assert_eq!(refracted_ray.dir, ray.dir);
         assert_eq!(refracted_ray.e, e);
@@ -736,9 +593,7 @@ mod test {
         assert_eq!(refracted_ray.path_length, Length::zero());
 
         let mut refracted_ray = ray.clone();
-        refracted_ray
-            .refract_paraxial(Length::new::<millimeter>(-100.0))
-            .unwrap();
+        refracted_ray.refract_paraxial(millimeter!(-100.0)).unwrap();
         assert_eq!(refracted_ray.pos, pos);
         assert_eq!(refracted_ray.dir, ray_dir);
         assert_eq!(refracted_ray.e, e);
@@ -747,17 +602,12 @@ mod test {
     }
     #[test]
     fn refract_paraxial_collimated() {
-        let wvl = Length::new::<nanometer>(1053.0);
-        let e = Energy::new::<joule>(1.0);
-        let pos = Point3::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(2.0),
-            Length::new::<millimeter>(0.0),
-        );
+        let wvl = nanometer!(1053.0);
+        let e = joule!(1.0);
+        let pos = millimeter!(1., 2., 0.);
 
         let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
-        ray.refract_paraxial(Length::new::<millimeter>(100.0))
-            .unwrap();
+        ray.refract_paraxial(millimeter!(100.0)).unwrap();
         assert_eq!(ray.pos, pos);
         let test_ray_dir = Vector3::new(-1.0, -2.0, 100.0) / 100.0;
         assert_abs_diff_eq!(ray.dir.x, test_ray_dir.x);
@@ -765,122 +615,80 @@ mod test {
         assert_abs_diff_eq!(ray.dir.z, test_ray_dir.z);
 
         let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
-        ray.refract_paraxial(Length::new::<millimeter>(-100.0))
-            .unwrap();
+        ray.refract_paraxial(millimeter!(-100.0)).unwrap();
         assert_eq!(ray.pos, pos);
         let test_ray_dir = Vector3::new(1.0, 2.0, 100.0) / 100.0;
         assert_abs_diff_eq!(ray.dir.x, test_ray_dir.x);
         assert_abs_diff_eq!(ray.dir.y, test_ray_dir.y);
         assert_abs_diff_eq!(ray.dir.z, test_ray_dir.z);
 
-        let pos = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(10.0),
-            Length::zero(),
-        );
+        let pos = millimeter!(0., 10., 0.);
         let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
-        ray.refract_paraxial(Length::new::<millimeter>(10.0))
-            .unwrap();
+        ray.refract_paraxial(millimeter!(10.0)).unwrap();
         assert_abs_diff_eq!(
             ray.path_length.get::<millimeter>(),
             -1.0 * (f64::sqrt(200.0) - 10.0),
             epsilon = 10.0 * f64::EPSILON
         );
-        let pos = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(100.0),
-            Length::zero(),
-        );
+        let pos = millimeter!(0., 100., 0.);
         let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
-        ray.refract_paraxial(Length::new::<millimeter>(100.0))
-            .unwrap();
+        ray.refract_paraxial(millimeter!(100.0)).unwrap();
         assert_eq!(ray.pos, pos);
         let test_ray_dir = Vector3::new(0.0, -100.0, 100.0) / 100.0;
         assert_abs_diff_eq!(ray.dir, test_ray_dir);
     }
     #[test]
     fn refract_paraxial_recollimate() {
-        let wvl = Length::new::<nanometer>(1053.0);
-        let e = Energy::new::<joule>(1.0);
-        let pos = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(100.0),
-            Length::new::<millimeter>(100.0),
-        );
+        let wvl = nanometer!(1053.0);
+        let e = joule!(1.0);
+        let pos = millimeter!(0., 100., 100.);
         let dir = Vector3::new(0.0, 1.0, 1.0);
         let mut ray = Ray::new(pos, dir, wvl, e).unwrap();
 
-        ray.refract_paraxial(Length::new::<millimeter>(100.0))
-            .unwrap();
+        ray.refract_paraxial(millimeter!(100.0)).unwrap();
         assert_eq!(ray.pos, pos);
         assert_eq!(ray.dir, Vector3::z());
 
         let dir = Vector3::new(0.0, -1.0, 1.0);
         let mut ray = Ray::new(pos, dir, wvl, e).unwrap();
-        ray.refract_paraxial(Length::new::<millimeter>(-100.0))
-            .unwrap();
+        ray.refract_paraxial(millimeter!(-100.0)).unwrap();
         assert_eq!(ray.pos, pos);
         assert_eq!(ray.dir, Vector3::z());
     }
     #[test]
     fn refract_on_plane_collimated() {
         let position = Point3::origin();
-        let wvl = Length::new::<nanometer>(1054.0);
-        let e = Energy::new::<joule>(1.0);
+        let wvl = nanometer!(1054.0);
+        let e = joule!(1.0);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
-        let plane_z_pos = Length::new::<millimeter>(10.0);
+        let plane_z_pos = millimeter!(10.0);
         let s = Plane::new(plane_z_pos).unwrap();
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
         ray.refract_on_surface(&s, 1.5).unwrap();
-        assert_eq!(
-            ray.pos,
-            Point3::new(
-                Length::zero(),
-                Length::zero(),
-                Length::new::<millimeter>(10.0)
-            )
-        );
+        assert_eq!(ray.pos, millimeter!(0., 0., 10.));
         assert_eq!(ray.refractive_index, 1.5);
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.pos_hist, vec![Point3::origin()]);
         assert_eq!(ray.path_length(), plane_z_pos);
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(1.0),
-            Length::zero(),
-        );
+        let position = millimeter!(0., 1., 0.);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
-        assert_eq!(
-            ray.pos,
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(10.0)
-            )
-        );
+        assert_eq!(ray.pos, millimeter!(0., 1., 10.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.path_length, plane_z_pos);
     }
     #[test]
     fn refract_on_surface_non_intersecting() {
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(0.0),
-            Length::zero(),
-        );
+        let position = millimeter!(0., 0., 0.);
         let direction = Vector3::new(0.0, 0.0, -1.0);
-        let wvl = Length::new::<nanometer>(1054.0);
-        let e = Energy::new::<joule>(1.0);
+        let wvl = nanometer!(1054.0);
+        let e = joule!(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let s = Plane::new(millimeter!(10.0)).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
-        assert_eq!(
-            ray.pos,
-            Point3::new(Length::zero(), Length::zero(), Length::zero())
-        );
+        assert_eq!(ray.pos, millimeter!(0., 0., 0.));
         assert_eq!(ray.dir, direction);
         assert_eq!(ray.refractive_index, 1.0);
         assert_eq!(ray.path_length, Length::zero());
@@ -889,78 +697,46 @@ mod test {
     fn refract_on_plane_non_collimated() {
         let position = Point3::origin();
         let direction = Vector3::new(0.0, 1.0, 1.0);
-        let wvl = Length::new::<nanometer>(1054.0);
-        let e = Energy::new::<joule>(1.0);
+        let wvl = nanometer!(1054.0);
+        let e = joule!(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        let plane_z_pos = Length::new::<millimeter>(10.0);
+        let plane_z_pos = millimeter!(10.0);
         let s = Plane::new(plane_z_pos).unwrap();
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
         ray.refract_on_surface(&s, 1.0).unwrap();
-        assert_eq!(
-            ray.pos,
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(10.0),
-                Length::new::<millimeter>(10.0)
-            )
-        );
+        assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
         assert_abs_diff_eq!(ray.dir[2], direction.normalize()[2]);
         assert_abs_diff_eq!(ray.path_length.value, 2.0_f64.sqrt() * plane_z_pos.value);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
-        assert_eq!(
-            ray.pos,
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(10.0),
-                Length::new::<millimeter>(10.0)
-            )
-        );
+        assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], 0.4714045207910317);
         assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
         let direction = Vector3::new(1.0, 0.0, 1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
-        assert_eq!(
-            ray.pos,
-            Point3::new(
-                Length::new::<millimeter>(10.0),
-                Length::zero(),
-                Length::new::<millimeter>(10.0)
-            )
-        );
+        assert_eq!(ray.pos, millimeter!(10., 0., 10.));
         assert_eq!(ray.dir[0], 0.4714045207910317);
         assert_abs_diff_eq!(ray.dir[1], 0.0);
         assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
     }
     #[test]
     fn refract_on_surface_total_reflection() {
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(0.0),
-            Length::zero(),
-        );
+        let position = millimeter!(0., 0., 0.);
         let direction = Vector3::new(0.0, 2.0, 1.0);
-        let wvl = Length::new::<nanometer>(1054.0);
-        let e = Energy::new::<joule>(1.0);
+        let wvl = nanometer!(1054.0);
+        let e = joule!(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.set_refractive_index(1.5).unwrap();
-        let s = Plane::new(Length::new::<millimeter>(10.0)).unwrap();
+        let s = Plane::new(millimeter!(10.0)).unwrap();
         let reflected = ray.refract_on_surface(&s, 1.0).unwrap();
         assert!(reflected.is_none());
-        assert_eq!(
-            ray.pos,
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(20.0),
-                Length::new::<millimeter>(10.0)
-            )
-        );
+        assert_eq!(ray.pos, millimeter!(0., 20., 10.));
         let test_reflect = Vector3::new(0.0, 2.0, -1.0).normalize();
         assert_abs_diff_eq!(ray.dir[0], test_reflect[0]);
         assert_abs_diff_eq!(ray.dir[1], test_reflect[1]);
@@ -968,39 +744,24 @@ mod test {
     }
     #[test]
     fn filter_energy() {
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(1.0),
-            Length::zero(),
-        );
-        let wvl = Length::new::<nanometer>(1054.0);
-        let mut ray = Ray::new_collimated(position, wvl, Energy::new::<joule>(1.0)).unwrap();
+        let position = millimeter!(0., 1., 0.);
+        let wvl = nanometer!(1054.0);
+        let mut ray = Ray::new_collimated(position, wvl, joule!(1.0)).unwrap();
         let _ = ray.filter_energy(&FilterType::Constant(0.3)).unwrap();
-        assert_eq!(
-            ray.pos,
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(1.0),
-                Length::zero()
-            )
-        );
+        assert_eq!(ray.pos, millimeter!(0., 1., 0.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.wvl, wvl);
-        assert_eq!(ray.e, Energy::new::<joule>(0.3));
-        let mut ray = Ray::new_collimated(position, wvl, Energy::new::<joule>(1.0)).unwrap();
+        assert_eq!(ray.e, joule!(0.3));
+        let mut ray = Ray::new_collimated(position, wvl, joule!(1.0)).unwrap();
         assert!(ray.filter_energy(&FilterType::Constant(-0.1)).is_err());
-        let mut ray = Ray::new_collimated(position, wvl, Energy::new::<joule>(1.0)).unwrap();
+        let mut ray = Ray::new_collimated(position, wvl, joule!(1.0)).unwrap();
         assert!(ray.filter_energy(&FilterType::Constant(1.1)).is_err());
     }
     #[test]
     fn filter_spectrum() {
-        let position = Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(1.0),
-            Length::zero(),
-        );
-        let e_1j = Energy::new::<joule>(1.0);
-        let mut ray = Ray::new_collimated(position, Length::new::<nanometer>(502.0), e_1j).unwrap();
+        let position = millimeter!(0., 1., 0.);
+        let e_1j = joule!(1.0);
+        let mut ray = Ray::new_collimated(position, nanometer!(502.0), e_1j).unwrap();
         let mut spec_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         spec_path.push("files_for_testing/spectrum/test_filter.csv");
         let s = Spectrum::from_csv(spec_path.to_str().unwrap()).unwrap();
@@ -1012,88 +773,68 @@ mod test {
         assert_eq!(ray.wvl, ray.wvl);
         assert_eq!(ray.path_length, ray.path_length);
         assert_eq!(ray.pos_hist, ray.pos_hist);
-        let mut ray = Ray::new_collimated(position, Length::new::<nanometer>(500.0), e_1j).unwrap();
+        let mut ray = Ray::new_collimated(position, nanometer!(500.0), e_1j).unwrap();
         let _ = ray.filter_energy(&filter).unwrap();
-        assert_eq!(ray.energy(), Energy::new::<joule>(0.0));
-        let mut ray = Ray::new_collimated(position, Length::new::<nanometer>(501.5), e_1j).unwrap();
+        assert_eq!(ray.energy(), joule!(0.0));
+        let mut ray = Ray::new_collimated(position, nanometer!(501.5), e_1j).unwrap();
         let _ = ray.filter_energy(&filter).unwrap();
         assert!(abs_diff_eq!(
             ray.energy().get::<joule>(),
             0.5,
             epsilon = 300.0 * f64::EPSILON
         ));
-        let mut ray = Ray::new_collimated(position, Length::new::<nanometer>(506.0), e_1j).unwrap();
+        let mut ray = Ray::new_collimated(position, nanometer!(506.0), e_1j).unwrap();
         assert!(ray.filter_energy(&filter).is_err());
     }
     #[test]
     fn split_by_ratio() {
-        let mut ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1054.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let mut ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1054.0), joule!(1.0)).unwrap();
         assert!(ray.split(&SplittingConfig::Ratio(1.1)).is_err());
         assert!(ray.split(&SplittingConfig::Ratio(-0.1)).is_err());
         let split_ray = ray.split(&SplittingConfig::Ratio(0.1)).unwrap();
-        assert_eq!(ray.energy(), Energy::new::<joule>(0.1));
-        assert_eq!(split_ray.energy(), Energy::new::<joule>(0.9));
+        assert_eq!(ray.energy(), joule!(0.1));
+        assert_eq!(split_ray.energy(), joule!(0.9));
         assert_eq!(ray.position(), split_ray.position());
         assert_eq!(ray.dir, split_ray.dir);
         assert_eq!(ray.wavelength(), split_ray.wavelength());
     }
     #[test]
     fn split_by_spectrum() {
-        let mut ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1000.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let mut ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1000.0), joule!(1.0)).unwrap();
         let spectrum = generate_filter_spectrum(
-            Length::new::<nanometer>(500.0)..Length::new::<nanometer>(1500.0),
-            Length::new::<nanometer>(1.0),
+            nanometer!(500.0)..nanometer!(1500.0),
+            nanometer!(1.0),
             &spectrum_helper::FilterType::ShortPassStep {
-                cut_off: Length::new::<nanometer>(1000.0),
+                cut_off: nanometer!(1000.0),
             },
         )
         .unwrap();
         let splitting_config = SplittingConfig::Spectrum(spectrum);
         let split_ray = ray.split(&splitting_config).unwrap();
-        assert_eq!(ray.energy(), Energy::new::<joule>(0.0));
-        assert_eq!(split_ray.energy(), Energy::new::<joule>(1.0));
-        let mut ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1001.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        assert_eq!(ray.energy(), joule!(0.0));
+        assert_eq!(split_ray.energy(), joule!(1.0));
+        let mut ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1001.0), joule!(1.0)).unwrap();
         let split_ray = ray.split(&splitting_config).unwrap();
         assert_eq!(ray.energy(), Energy::zero());
-        assert_eq!(split_ray.energy(), Energy::new::<joule>(1.0));
-        let mut ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(999.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        assert_eq!(split_ray.energy(), joule!(1.0));
+        let mut ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(999.0), joule!(1.0)).unwrap();
         let split_ray = ray.split(&&splitting_config).unwrap();
-        assert_eq!(ray.energy(), Energy::new::<joule>(1.0));
+        assert_eq!(ray.energy(), joule!(1.0));
         assert_eq!(split_ray.energy(), Energy::zero());
     }
     #[test]
     fn split_by_spectrum_fail() {
-        let mut ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1501.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let mut ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1501.0), joule!(1.0)).unwrap();
         let spectrum = generate_filter_spectrum(
-            Length::new::<nanometer>(500.0)..Length::new::<nanometer>(1500.0),
-            Length::new::<nanometer>(1.0),
+            nanometer!(500.0)..nanometer!(1500.0),
+            nanometer!(1.0),
             &spectrum_helper::FilterType::ShortPassStep {
-                cut_off: Length::new::<nanometer>(1000.0),
+                cut_off: nanometer!(1000.0),
             },
         )
         .unwrap();
@@ -1102,20 +843,20 @@ mod test {
     #[test]
     fn position_history_in_mm_test() {
         let mut ray = Ray::new(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
+            millimeter!(0., 0., 0.),
             Vector3::new(0., 1., 2.),
-            Length::new::<nanometer>(1053.),
-            Energy::new::<joule>(1.),
+            nanometer!(1053.),
+            joule!(1.),
         )
         .unwrap();
 
-        let _ = ray.propagate_along_z(Length::new::<millimeter>(1.));
-        let _ = ray.propagate_along_z(Length::new::<millimeter>(2.));
+        let _ = ray.propagate_along_z(millimeter!(1.));
+        let _ = ray.propagate_along_z(millimeter!(2.));
 
         let pos_hist_comp = MatrixXx3::from_vec(
             vec![0., 0., 0., 0., 0.5, 1.5, 0., 1., 3.]
                 .iter()
-                .map(|x| Length::new::<millimeter>(*x))
+                .map(|x| millimeter!(*x))
                 .collect::<Vec<Length>>(),
         );
 

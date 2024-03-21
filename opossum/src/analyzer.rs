@@ -6,9 +6,12 @@
 //! and / or exported as a PDF report.
 use std::fmt::Display;
 use strum::EnumIter;
-use uom::si::{energy::picojoule, f64::Energy};
+use uom::si::f64::Energy;
 
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    picojoule,
+};
 
 /// Type of analysis to be performed.
 #[non_exhaustive]
@@ -86,7 +89,7 @@ impl Default for RayTraceConfig {
     fn default() -> Self {
         Self {
             mode: RayTracingMode::default(),
-            min_energy_per_ray: Energy::new::<picojoule>(1.0),
+            min_energy_per_ray: picojoule!(1.0),
         }
     }
 }
