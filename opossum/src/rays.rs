@@ -289,6 +289,27 @@ impl Rays {
         );
         Some(Point3::new(c.0 / len, c.1 / len, c.2 / len))
     }
+    /// Returns the energy-weighted centroid of this [`Rays`].
+    ///
+    /// This functions returns the energy-weighted centroid of the positions (`valid` [`Ray`]s only) of this ray bundle. The
+    /// function returns `None` if [`Rays`] is empty.
+    #[must_use]
+    pub fn energy_centroid(&self) -> Option<Point3<Length>> {
+        #[allow(clippy::cast_precision_loss)]
+        let len = self.nr_of_rays(true);
+        if len == 0 {
+            return None;
+        }
+        let c = self.rays.iter().filter(|r| r.valid()).fold(
+            (Length::zero(), Length::zero(), Length::zero(), 0.),
+            |c, r| {
+                let pos = r.position();
+                let energy = r.energy().get::<joule>();
+                (c.0 + pos.x*energy, c.1 + pos.y*energy, c.2 + pos.z*energy, c.3+energy)
+            },
+        );
+        Some(Point3::new(c.0 / c.3, c.1 / c.3, c.2 / c.3))
+    }
     /// Returns the geometric beam radius [`Rays`].
     ///
     /// This function calculates the maximum distance of a ray bundle (`valid` [`Ray`]s only ) from its centroid.
@@ -1828,5 +1849,45 @@ mod test {
             0.01,
             0.01
         ));
+    }
+
+    #[test]
+    fn energy_centroid_test(){
+        let rays = Rays::from(vec![
+            Ray::new(millimeter!(-1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(1.)).unwrap(),
+            Ray::new(millimeter!(1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(1.)).unwrap()
+            ]);
+        let centroid = rays.energy_centroid();
+        assert!(centroid.is_some());
+        assert_relative_eq!(centroid.unwrap().x.get::<millimeter>(), 0.);
+        assert_relative_eq!(centroid.unwrap().y.get::<millimeter>(), 0.);
+        assert_relative_eq!(centroid.unwrap().z.get::<millimeter>(), 0.);
+
+        let rays = Rays::from(vec![
+            Ray::new(millimeter!(-1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(1.)).unwrap(),
+            Ray::new(millimeter!(1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(0.5)).unwrap()
+            ]);
+        let centroid = rays.energy_centroid();
+        assert!(centroid.is_some());
+        assert_relative_eq!(centroid.unwrap().x.get::<millimeter>(), -1./3.);
+        assert_relative_eq!(centroid.unwrap().y.get::<millimeter>(), 0.);
+        assert_relative_eq!(centroid.unwrap().z.get::<millimeter>(), 0.);
+
+        let mut rays = Rays::from(vec![
+            Ray::new(millimeter!(-1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(1.)).unwrap(),
+            Ray::new(millimeter!(1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(0.5)).unwrap()
+            ]);
+
+        rays.rays[1].set_invalid();
+        let centroid = rays.energy_centroid();
+        assert!(centroid.is_some());
+        assert_relative_eq!(centroid.unwrap().x.get::<millimeter>(), -1.);
+        assert_relative_eq!(centroid.unwrap().y.get::<millimeter>(), 0.);
+        assert_relative_eq!(centroid.unwrap().z.get::<millimeter>(), 0.);
+
+        let rays = Rays::default();
+        let centroid = rays.energy_centroid();
+        assert!(centroid.is_none());
+
     }
 }
