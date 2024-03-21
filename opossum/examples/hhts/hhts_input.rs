@@ -1,11 +1,11 @@
 use opossum::{
     error::OpmResult,
+    millimeter,
     nodes::{
         BeamSplitter, EnergyMeter, FilterType, IdealFilter, Metertype, NodeGroup, Propagation,
     },
     ray::SplittingConfig,
     spectrum::Spectrum,
-    millimeter
 };
 pub fn hhts_input() -> OpmResult<NodeGroup> {
     let dichroic_mirror = SplittingConfig::Spectrum(Spectrum::from_csv(

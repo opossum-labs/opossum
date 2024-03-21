@@ -1247,7 +1247,13 @@ pub trait Plottable {
 
         let plt_type = self.get_plot_type(&plt_params);
 
-        let plt_series_opt = self.get_plot_series(&plt_type)?;
+        let mut plt_series_opt = self.get_plot_series(&plt_type)?;
+
+        if let Some(plt_series) = &mut plt_series_opt {
+            if plt_series.len() == 1 {
+                plt_series[0].color = RGBAColor(255, 0, 0, 0.8);
+            }
+        }
 
         plt_series_opt.map_or(Ok(None), |plt_series| plt_type.plot(&plt_series))
     }
