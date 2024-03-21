@@ -1231,11 +1231,7 @@ pub trait Plottable {
     /// - `backend`: used backend to create the plot. See [`PltBackEnd`]
     /// # Errors
     /// Whether an error is thrown depends on the individual implementation of the method
-    fn to_plot(
-        &self,
-        f_path: &Path,
-        backend: PltBackEnd,
-    ) -> OpmResult<Option<RgbImage>> {
+    fn to_plot(&self, f_path: &Path, backend: PltBackEnd) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
         if backend == PltBackEnd::BMP || backend == PltBackEnd::SVG {
             plt_params
