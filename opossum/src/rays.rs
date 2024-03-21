@@ -960,7 +960,7 @@ mod test {
     use crate::{
         aperture::CircleConfig,
         energy_distributions::General2DGaussian,
-        joule, meter,
+        joule, millimeter,
         position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         ray::SplittingConfig,
         refractive_index::RefrIndexConst,
@@ -1770,10 +1770,10 @@ mod test {
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         assert_eq!(rays.total_energy(), joule!(2.0));
-        let circle_config = CircleConfig::new(meter!(0.5), meter!(0.0, 0.0)).unwrap();
+        let circle_config = CircleConfig::new(millimeter!(0.5), millimeter!(0.0, 0.0)).unwrap();
         let aperture = Aperture::BinaryCircle(circle_config);
         rays.apodize(&aperture).unwrap();
-        assert_eq!(rays.total_energy(), joule!(2.0));
+        assert_eq!(rays.total_energy(), joule!(1.0));
     }
     #[test]
     fn wavelength_range() {

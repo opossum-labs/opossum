@@ -10,24 +10,26 @@
 //! [`apodization_factor`](Aperture::apodization_factor()) is used.
 //! ```rust
 //! use nalgebra::Point2;
-//! use opossum::aperture::{Aperture, ApertureType, CircleConfig};
+//! use opossum::{millimeter, aperture::{Aperture, ApertureType, CircleConfig}};
+//! use uom::si::{f64::Length, length::millimeter};
 //!
-//! let c = CircleConfig::new(1.0, Point2::new(1.0, 1.0)).unwrap();
+//! let c = CircleConfig::new(millimeter!(1.0), millimeter!(1.0, 1.0)).unwrap();
 //! let ap = Aperture::BinaryCircle(c);
-//! assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 1.0);
-//! assert_eq!(ap.apodization_factor(&Point2::new(0.0, 0.0)), 0.0);
+//! assert_eq!(ap.apodization_factor(&millimeter!(1.0,1.0)), 1.0);
+//! assert_eq!(ap.apodization_factor(&millimeter!(0.0,0.0)), 0.0);
 //! ```
 //! Furthermore, each aperture can act as a "hole" or as an "obstruction". By default,
 //! all configurations are created as "holes".
 //! ```rust
 //! use nalgebra::Point2;
-//! use opossum::aperture::{Aperture, ApertureType, Apodize, CircleConfig};
+//! use opossum::{millimeter, aperture::{Aperture, ApertureType, CircleConfig, Apodize}};
+//! use uom::si::{f64::Length, length::millimeter};
 //!
-//! let mut c = CircleConfig::new(1.0, Point2::new(1.0, 1.0)).unwrap();
+//! let mut c = CircleConfig::new(millimeter!(1.0), millimeter!(1.0, 1.0)).unwrap();
 //! c.set_aperture_type(ApertureType::Obstruction);
 //! let ap = Aperture::BinaryCircle(c);
-//! assert_eq!(ap.apodization_factor(&Point2::new(1.0, 1.0)), 0.0);
-//! assert_eq!(ap.apodization_factor(&Point2::new(0.0, 0.0)), 1.0);
+//! assert_eq!(ap.apodization_factor(&millimeter!(1.0, 1.0)), 0.0);
+//! assert_eq!(ap.apodization_factor(&millimeter!(0.0, 0.0)), 1.0);
 //! ```
 use crate::{
     error::{OpmResult, OpossumError},

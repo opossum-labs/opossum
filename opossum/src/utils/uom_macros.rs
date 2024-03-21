@@ -123,7 +123,10 @@ macro_rules! kilojoule {
 #[macro_export]
 macro_rules! joule {
     ($( $x:expr ),*) =>{
-        $crate::uom_unit_creator![joule, Energy, $( $x ),*]
+        {
+            use uom::si::energy::joule as j;
+            $crate::uom_unit_creator![j, Energy, $( $x ),*]
+        }
     };
 }
 ///macro to create an energy in millijoule
