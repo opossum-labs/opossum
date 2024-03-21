@@ -2,15 +2,16 @@
 //!
 //! This module implements a spherical surface with a given radius of curvature and a given z position on the optical axis.
 use super::Surface;
-use crate::error::OpmResult;
-use crate::error::OpossumError;
 use crate::ray::Ray;
+use crate::{
+    error::{OpmResult, OpossumError},
+    meter,
+};
 use nalgebra::Point3;
 use nalgebra::Vector3;
 use roots::find_roots_quadratic;
 use roots::Roots;
 use uom::si::f64::Length;
-use uom::si::length::meter;
 
 #[derive(Debug)]
 /// A spherical surface with its origin on the optical axis.
@@ -99,10 +100,10 @@ impl Surface for Sphere {
             normal_vector *= -1.0;
         }
         Some((
-            Point3::new(
-                Length::new::<meter>(intersection_point.x),
-                Length::new::<meter>(intersection_point.y),
-                Length::new::<meter>(intersection_point.z),
+            meter!(
+                intersection_point.x,
+                intersection_point.y,
+                intersection_point.z
             ),
             normal_vector,
         ))
@@ -111,69 +112,33 @@ impl Surface for Sphere {
 
 #[cfg(test)]
 mod test {
+    use crate::{joule, millimeter, nanometer};
     use approx::assert_abs_diff_eq;
     use num::Zero;
-    use uom::si::{
-        energy::joule,
-        f64::{Energy, Length},
-        length::millimeter,
-        length::nanometer,
-    };
+    use uom::si::f64::Length;
 
     use super::*;
     #[test]
     fn new() {
-        let s = Sphere::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(2.0),
-        )
-        .unwrap();
-        assert_eq!(s.z, Length::new::<millimeter>(3.0));
-        assert_eq!(s.radius, Length::new::<millimeter>(2.0));
-        assert!(Sphere::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(0.0)
-        )
-        .is_err());
-        assert!(Sphere::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(f64::NAN)
-        )
-        .is_err());
-        assert!(Sphere::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(f64::INFINITY)
-        )
-        .is_err());
-        assert!(Sphere::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(f64::NEG_INFINITY)
-        )
-        .is_err());
-        let s = Sphere::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(-2.0),
-        )
-        .unwrap();
-        assert_eq!(s.z, Length::new::<millimeter>(-1.0));
-        assert_eq!(s.radius, Length::new::<millimeter>(-2.0));
+        let s = Sphere::new(millimeter!(1.0), millimeter!(2.0)).unwrap();
+        assert_eq!(s.z, millimeter!(3.0));
+        assert_eq!(s.radius, millimeter!(2.0));
+        assert!(Sphere::new(millimeter!(1.0), millimeter!(0.0)).is_err());
+        assert!(Sphere::new(millimeter!(1.0), millimeter!(f64::NAN)).is_err());
+        assert!(Sphere::new(millimeter!(1.0), millimeter!(f64::INFINITY)).is_err());
+        assert!(Sphere::new(millimeter!(1.0), millimeter!(f64::NEG_INFINITY)).is_err());
+        let s = Sphere::new(millimeter!(1.0), millimeter!(-2.0)).unwrap();
+        assert_eq!(s.z, millimeter!(-1.0));
+        assert_eq!(s.radius, millimeter!(-2.0));
     }
     #[test]
     fn intersect_positive_on_axis() {
-        let s = Sphere::new(
-            Length::new::<millimeter>(10.0),
-            Length::new::<millimeter>(1.0),
-        )
-        .unwrap();
+        let s = Sphere::new(millimeter!(10.0), millimeter!(1.0)).unwrap();
         let ray = Ray::new(
-            Point3::new(
-                Length::new::<millimeter>(0.0),
-                Length::new::<millimeter>(0.0),
-                Length::new::<millimeter>(0.0),
-            ),
+            millimeter!(0.0, 0.0, 0.0),
             Vector3::new(0.0, 0.0, 1.0),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
+            nanometer!(1053.0),
+            joule!(1.0),
         )
         .unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
@@ -187,102 +152,47 @@ mod test {
     #[test]
     fn intersect_positive_on_axis_behind() {
         let ray = Ray::new(
-            Point3::new(
-                Length::new::<millimeter>(0.0),
-                Length::new::<millimeter>(0.0),
-                Length::new::<millimeter>(0.0),
-            ),
+            millimeter!(0.0, 0.0, 0.0),
             Vector3::new(0.0, 0.0, 1.0),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
+            nanometer!(1053.0),
+            joule!(1.0),
         )
         .unwrap();
-        let s = Sphere::new(
-            Length::new::<millimeter>(-10.0),
-            Length::new::<millimeter>(1.0),
-        )
-        .unwrap();
+        let s = Sphere::new(millimeter!(-10.0), millimeter!(1.0)).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
-        let s = Sphere::new(
-            Length::new::<millimeter>(-10.0),
-            Length::new::<millimeter>(-1.0),
-        )
-        .unwrap();
+        let s = Sphere::new(millimeter!(-10.0), millimeter!(-1.0)).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
     fn intersect_positive_collinear_no_intersect() {
         let ray = Ray::new(
-            Point3::new(
-                Length::new::<millimeter>(0.0),
-                Length::new::<millimeter>(1.1),
-                Length::new::<millimeter>(0.0),
-            ),
+            millimeter!(0.0, 1.1, 0.0),
             Vector3::new(0.0, 0.0, 1.0),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
+            nanometer!(1053.0),
+            joule!(1.0),
         )
         .unwrap();
-        let s = Sphere::new(
-            Length::new::<millimeter>(10.0),
-            Length::new::<millimeter>(1.0),
-        )
-        .unwrap();
+        let s = Sphere::new(millimeter!(10.0), millimeter!(1.0)).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
         let ray = Ray::new(
-            Point3::new(
-                Length::new::<millimeter>(0.0),
-                Length::new::<millimeter>(-1.1),
-                Length::new::<millimeter>(0.0),
-            ),
+            millimeter!(0.0, -1.1, 0.0),
             Vector3::new(0.0, 0.0, 1.0),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
+            nanometer!(1053.0),
+            joule!(1.0),
         )
         .unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
     fn intersect_positive_collinear_touch() {
-        let wvl = Length::new::<nanometer>(1053.0);
-        let ray = Ray::new(
-            Point3::new(
-                Length::new::<millimeter>(0.0),
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(0.0),
-            ),
-            Vector3::z(),
-            wvl,
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
-        let s = Sphere::new(
-            Length::new::<millimeter>(10.0),
-            Length::new::<millimeter>(1.0),
-        )
-        .unwrap();
+        let wvl = nanometer!(1053.0);
+        let ray = Ray::new(millimeter!(0.0, 1.0, 0.0), Vector3::z(), wvl, joule!(1.0)).unwrap();
+        let s = Sphere::new(millimeter!(10.0), millimeter!(1.0)).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
-            Some((
-                Point3::new(
-                    Length::new::<millimeter>(0.0),
-                    Length::new::<millimeter>(1.0),
-                    Length::new::<millimeter>(11.0)
-                ),
-                Vector3::y()
-            ))
+            Some((millimeter!(0.0, 1.0, 11.0), Vector3::y()))
         );
-        let ray = Ray::new(
-            Point3::new(
-                Length::new::<millimeter>(0.0),
-                Length::new::<millimeter>(-1.0),
-                Length::new::<millimeter>(-1.0),
-            ),
-            Vector3::z(),
-            wvl,
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray = Ray::new(millimeter!(0.0, -1.0, -1.0), Vector3::z(), wvl, joule!(1.0)).unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
         assert_eq!(intersection_point.x, Length::zero());
         assert_abs_diff_eq!(intersection_point.y.value, -0.001);
@@ -297,20 +207,12 @@ mod test {
     }
     #[test]
     fn intersect_negative_on_axis() {
-        let s = Sphere::new(
-            Length::new::<millimeter>(10.0),
-            Length::new::<millimeter>(-1.0),
-        )
-        .unwrap();
+        let s = Sphere::new(millimeter!(10.0), millimeter!(-1.0)).unwrap();
         let ray = Ray::new(
-            Point3::new(
-                Length::new::<millimeter>(0.0),
-                Length::new::<millimeter>(0.0),
-                Length::new::<millimeter>(0.0),
-            ),
+            millimeter!(0.0, 0.0, 0.0),
             Vector3::new(0.0, 0.0, 1.0),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
+            nanometer!(1053.0),
+            joule!(1.0),
         )
         .unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();

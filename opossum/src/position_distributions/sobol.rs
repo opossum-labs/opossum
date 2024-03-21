@@ -71,62 +71,22 @@ impl PositionDistribution for SobolDist {
 #[cfg(test)]
 mod test {
     use super::*;
-    use uom::si::length::millimeter;
+    use crate::millimeter;
     #[test]
     fn new_wrong() {
         assert!(SobolDist::new(Length::zero(), Length::zero(), 1).is_err());
-        assert!(SobolDist::new(
-            Length::new::<millimeter>(-0.1),
-            Length::new::<millimeter>(1.0),
-            1
-        )
-        .is_err());
-        assert!(SobolDist::new(
-            Length::new::<millimeter>(f64::NAN),
-            Length::new::<millimeter>(1.0),
-            1
-        )
-        .is_err());
-        assert!(SobolDist::new(
-            Length::new::<millimeter>(f64::INFINITY),
-            Length::new::<millimeter>(1.0),
-            1
-        )
-        .is_err());
+        assert!(SobolDist::new(millimeter!(-0.1), millimeter!(1.0), 1).is_err());
+        assert!(SobolDist::new(millimeter!(f64::NAN), millimeter!(1.0), 1).is_err());
+        assert!(SobolDist::new(millimeter!(f64::INFINITY), millimeter!(1.0), 1).is_err());
 
-        assert!(SobolDist::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(-0.1),
-            1
-        )
-        .is_err());
-        assert!(SobolDist::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(f64::NAN),
-            1
-        )
-        .is_err());
-        assert!(SobolDist::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(f64::INFINITY),
-            1
-        )
-        .is_err());
-        assert!(SobolDist::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(1.0),
-            0
-        )
-        .is_err());
+        assert!(SobolDist::new(millimeter!(1.0), millimeter!(-0.1), 1).is_err());
+        assert!(SobolDist::new(millimeter!(1.0), millimeter!(f64::NAN), 1).is_err());
+        assert!(SobolDist::new(millimeter!(1.0), millimeter!(f64::INFINITY), 1).is_err());
+        assert!(SobolDist::new(millimeter!(1.0), millimeter!(1.0), 0).is_err());
     }
     #[test]
     fn generate() {
-        let strategy = SobolDist::new(
-            Length::new::<millimeter>(1.0),
-            Length::new::<millimeter>(1.0),
-            10,
-        )
-        .unwrap();
+        let strategy = SobolDist::new(millimeter!(1.0), millimeter!(1.0), 10).unwrap();
         assert_eq!(strategy.generate().len(), 10);
     }
 }

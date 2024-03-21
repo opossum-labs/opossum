@@ -110,99 +110,98 @@ impl EnergyDistribution for General2DGaussian {
 
 #[cfg(test)]
 mod test {
-    use uom::si::angle::radian;
-
     use super::*;
+    use crate::{joule, radian};
     #[test]
     fn new_gaussian_sigma() {
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(0., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(f64::NAN, 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(f64::INFINITY, 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(f64::NEG_INFINITY, 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(-1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
 
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 0.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., f64::NAN),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., f64::INFINITY),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., f64::NEG_INFINITY),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., -1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
@@ -210,56 +209,56 @@ mod test {
     #[test]
     fn new_gaussian_power() {
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             0.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_ok());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             -1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_ok());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             0.5,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_ok());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             f64::NAN,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             f64::INFINITY,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             f64::NEG_INFINITY,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
@@ -267,56 +266,56 @@ mod test {
     #[test]
     fn new_gaussian_energy() {
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(f64::NAN),
+            joule!(f64::NAN),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(f64::INFINITY),
+            joule!(f64::INFINITY),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(f64::NEG_INFINITY),
+            joule!(f64::NEG_INFINITY),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(-1.),
+            joule!(-1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(0.),
+            joule!(0.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_ok());
@@ -324,74 +323,74 @@ mod test {
     #[test]
     fn new_gaussian_mean() {
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(f64::NAN, 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(f64::INFINITY, 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(f64::NEG_INFINITY, 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(-10., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_ok());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., f64::NAN),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., f64::INFINITY),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., f64::NEG_INFINITY),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., -10.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(0.),
+            radian!(0.),
             true
         )
         .is_ok());
@@ -400,38 +399,38 @@ mod test {
     #[test]
     fn new_gaussian_angle() {
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(f64::NAN,),
+            radian!(f64::NAN),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(f64::INFINITY,),
+            radian!(f64::INFINITY),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(f64::NEG_INFINITY),
+            radian!(f64::NEG_INFINITY),
             true
         )
         .is_err());
         assert!(General2DGaussian::new(
-            Energy::new::<joule>(1.),
+            joule!(1.),
             Point2::new(0., 0.),
             Point2::new(1., 1.),
             1.,
-            Angle::new::<radian>(-10.),
+            radian!(-10.),
             true
         )
         .is_ok());

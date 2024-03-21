@@ -358,48 +358,14 @@ impl Apodize for StackConfig {
 
 #[cfg(test)]
 mod test {
-    use approx::assert_relative_eq;
-    use nalgebra::Point3;
-
     use super::*;
     use crate::meter;
-    #[test]
-    fn macro_meter() {
-        let meter1 = Length::new::<meter>(1.);
-        let meter2 = meter!(1.);
-        assert_relative_eq!(meter1.value, meter2.value);
+    use approx::assert_relative_eq;
 
-        let meterp12 = Point2::new(Length::new::<meter>(1.), Length::new::<meter>(2.));
-        let meterp22 = meter!(1., 2.);
-        assert_relative_eq!(meterp12.x.value, meterp22.x.value);
-        assert_relative_eq!(meterp12.y.value, meterp22.y.value);
-
-        let meterp13 = Point3::new(
-            Length::new::<meter>(1.),
-            Length::new::<meter>(2.),
-            Length::new::<meter>(3.),
-        );
-        let meterp23 = meter!(1., 2., 3.);
-        assert_relative_eq!(meterp13.x.value, meterp23.x.value);
-        assert_relative_eq!(meterp13.y.value, meterp23.y.value);
-        assert_relative_eq!(meterp13.z.value, meterp23.z.value);
-
-        let meterp14 = vec![
-            Length::new::<meter>(1.),
-            Length::new::<meter>(2.),
-            Length::new::<meter>(3.),
-            Length::new::<meter>(4.),
-        ];
-        let meterp24 = meter!(1., 2., 3., 4.);
-        assert_relative_eq!(meterp14[0].value, meterp24[0].value);
-        assert_relative_eq!(meterp14[1].value, meterp24[1].value);
-        assert_relative_eq!(meterp14[2].value, meterp24[2].value);
-        assert_relative_eq!(meterp14[3].value, meterp24[3].value);
-    }
     #[test]
     fn ratio_test() {
-        let x = Length::new::<meter>(1.);
-        let xs = Length::new::<meter>(2.);
+        let x = meter!(1.);
+        let xs = meter!(2.);
 
         assert_relative_eq!(
             x.get::<meter>() / xs.get::<meter>(),

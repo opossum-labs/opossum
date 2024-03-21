@@ -2,17 +2,13 @@ use std::path::Path;
 
 use opossum::{
     error::OpmResult,
+    joule, millimeter,
     nodes::{
         round_collimated_ray_source, BeamSplitter, EnergyMeter, IdealFilter, NodeGroup,
         ParaxialSurface, Propagation, SpotDiagram,
     },
     ray::SplittingConfig,
     OpticScenery,
-};
-use uom::si::{
-    energy::joule,
-    f64::{Energy, Length},
-    length::millimeter,
 };
 
 fn main() -> OpmResult<()> {
@@ -21,19 +17,13 @@ fn main() -> OpmResult<()> {
 
     // Main beam line
     let i_src = scenery.add_node(round_collimated_ray_source(
-        Length::new::<millimeter>(1.0),
-        Energy::new::<joule>(1.0),
+        millimeter!(1.0),
+        joule!(1.0),
         3,
     )?);
-    let i_l1 = scenery.add_node(ParaxialSurface::new(
-        "f=100",
-        Length::new::<millimeter>(100.0),
-    )?);
-    let i_p1 = scenery.add_node(Propagation::new("l=300", Length::new::<millimeter>(300.0))?);
-    let i_l2 = scenery.add_node(ParaxialSurface::new(
-        "f=200",
-        Length::new::<millimeter>(200.0),
-    )?);
+    let i_l1 = scenery.add_node(ParaxialSurface::new("f=100", millimeter!(100.0))?);
+    let i_p1 = scenery.add_node(Propagation::new("l=300", millimeter!(300.0))?);
+    let i_l2 = scenery.add_node(ParaxialSurface::new("f=200", millimeter!(200.0))?);
     let i_bs = scenery.add_node(BeamSplitter::new("1% BS", &SplittingConfig::Ratio(0.99))?);
     let i_e1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
@@ -59,11 +49,8 @@ fn main() -> OpmResult<()> {
     let mut cam_box = NodeGroup::new("CamBox");
 
     let i_cb_bs = cam_box.add_node(BeamSplitter::new("50/50 BS", &SplittingConfig::Ratio(0.5))?)?;
-    let i_cb_l = cam_box.add_node(ParaxialSurface::new(
-        "FF lens",
-        Length::new::<millimeter>(100.0),
-    )?)?;
-    let i_cb_p = cam_box.add_node(Propagation::new("l=100", Length::new::<millimeter>(100.0))?)?;
+    let i_cb_l = cam_box.add_node(ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
+    let i_cb_p = cam_box.add_node(Propagation::new("l=100", millimeter!(100.0))?)?;
     let i_cb_sd1 = cam_box.add_node(SpotDiagram::new("Nearfield"))?;
     let i_cb_sd2 = cam_box.add_node(SpotDiagram::new("Farfield"))?;
     let i_cb_e = cam_box.add_node(EnergyMeter::new(

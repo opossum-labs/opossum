@@ -4,17 +4,19 @@ use std::fs::File;
 use std::io::{Cursor, Write};
 use std::path::Path;
 
-use crate::analyzer::AnalyzerType;
-use crate::error::{OpmResult, OpossumError};
-use crate::get_version;
-use crate::light::Light;
-use crate::lightdata::LightData;
-use crate::nodes::NodeGroup;
-use crate::optic_graph::OpticGraph;
-use crate::optic_ref::OpticRef;
-use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Proptype};
-use crate::reporter::{AnalysisReport, PdfReportable};
+use crate::{
+    analyzer::AnalyzerType,
+    error::{OpmResult, OpossumError},
+    get_version,
+    light::Light,
+    lightdata::LightData,
+    nodes::NodeGroup,
+    optic_graph::OpticGraph,
+    optic_ref::OpticRef,
+    optical::{LightResult, Optical},
+    properties::{Properties, Proptype},
+    reporter::{AnalysisReport, PdfReportable},
+};
 use chrono::Local;
 use genpdf::Alignment;
 use image::io::Reader;
@@ -503,24 +505,28 @@ impl PdfReportable for OpticScenery {
 }
 #[cfg(test)]
 mod test {
-    use super::super::nodes::{BeamSplitter, Dummy, EnergyMeter, Source};
-    use super::*;
-    use crate::analyzer::RayTraceConfig;
-    use crate::nodes::{
-        Detector, IdealFilter, Metertype, NodeReference, ParaxialSurface, Propagation,
-        RayPropagationVisualizer, Spectrometer, SpotDiagram, WaveFront,
+
+    use crate::{
+        analyzer::{AnalyzerType, RayTraceConfig},
+        joule,
+        lightdata::LightData,
+        millimeter, nanometer,
+        nodes::{
+            BeamSplitter, Detector, Dummy, EnergyMeter, IdealFilter, Metertype, NodeGroup,
+            NodeReference, ParaxialSurface, Propagation, RayPropagationVisualizer, Source,
+            Spectrometer, SpotDiagram, WaveFront,
+        },
+        optical::Optical,
+        properties::Proptype,
+        ray::{Ray, SplittingConfig},
+        rays::Rays,
+        OpticScenery,
     };
-    use crate::ray::{Ray, SplittingConfig};
-    use crate::rays::Rays;
     use log::Level;
-    use nalgebra::Point3;
-    use num::Zero;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::{fs::File, io::Read};
+    use tempfile::NamedTempFile;
     use testing_logger;
-    use uom::si::energy::joule;
-    use uom::si::f64::{Energy, Length};
-    use uom::si::length::nanometer;
 
     fn get_file_content(f_path: &str) -> String {
         let file_content = &mut "".to_owned();
@@ -741,29 +747,17 @@ mod test {
     fn analyze_energy_threshold() {
         let mut rays = Rays::default();
         rays.add_ray(
-            Ray::new_collimated(
-                Point3::new(Length::zero(), Length::zero(), Length::zero()),
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
-            )
-            .unwrap(),
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap(),
         );
         rays.add_ray(
-            Ray::new_collimated(
-                Point3::new(Length::zero(), Length::zero(), Length::zero()),
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(0.1),
-            )
-            .unwrap(),
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.1)).unwrap(),
         );
         let mut scenery = OpticScenery::new();
         let i_s = scenery.add_node(Source::new("src", &LightData::Geometric(rays)));
         let i_e = scenery.add_node(EnergyMeter::default());
         scenery.connect_nodes(i_s, "out1", i_e, "in1").unwrap();
         let mut raytrace_config = RayTraceConfig::default();
-        raytrace_config
-            .set_min_energy_per_ray(Energy::new::<joule>(0.5))
-            .unwrap();
+        raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();
         scenery
             .analyze(&AnalyzerType::RayTrace(raytrace_config))
             .unwrap();
@@ -775,7 +769,7 @@ mod test {
             .report()
             .unwrap();
         if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {
-            assert_eq!(*e, Energy::new::<joule>(1.0));
+            assert_eq!(*e, joule!(1.0));
         } else {
             assert!(false)
         }

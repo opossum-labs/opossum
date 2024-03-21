@@ -4,15 +4,13 @@ use super::Source;
 use crate::{
     error::OpmResult,
     lightdata::LightData,
+    nanometer,
     position_distributions::{Grid, Hexapolar},
     rays::Rays,
 };
 use nalgebra::Point3;
 use num::Zero;
-use uom::si::{
-    f64::{Angle, Energy, Length},
-    length::nanometer,
-};
+use uom::si::f64::{Angle, Energy, Length};
 
 /// Create a collimated ray [`Source`].
 ///
@@ -30,7 +28,7 @@ pub fn round_collimated_ray_source(
     nr_of_rings: u8,
 ) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
-        Length::new::<nanometer>(1000.0),
+        nanometer!(1000.0),
         energy,
         &Hexapolar::new(radius, nr_of_rings)?,
     )?;
@@ -54,7 +52,7 @@ pub fn collimated_line_ray_source(
     nr_of_points_y: usize,
 ) -> OpmResult<Source> {
     let rays = Rays::new_uniform_collimated(
-        Length::new::<nanometer>(1000.0),
+        nanometer!(1000.0),
         energy,
         &Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?,
     )?;
@@ -77,7 +75,7 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
         Point3::origin(),
         cone_angle,
         3,
-        Length::new::<nanometer>(1000.0),
+        nanometer!(1000.0),
         energy,
     )?;
     let light = LightData::Geometric(rays);
@@ -86,37 +84,16 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{optical::Optical, properties::Proptype, ray::Ray};
+    use crate::{degree, joule, millimeter, optical::Optical, properties::Proptype, ray::Ray};
     use approx::assert_abs_diff_eq;
-    use uom::si::{angle::degree, energy::joule, length::millimeter};
+    use uom::si::energy::joule;
     #[test]
     fn test_round_collimated_ray_source() {
-        assert!(round_collimated_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(-0.1),
-            3
-        )
-        .is_err());
-        assert!(round_collimated_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(f64::NAN),
-            3
-        )
-        .is_err());
-        assert!(round_collimated_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(f64::INFINITY),
-            3
-        )
-        .is_err());
-        assert!(round_collimated_ray_source(
-            Length::new::<millimeter>(-0.1),
-            Energy::new::<joule>(1.0),
-            3
-        )
-        .is_err());
-        let src =
-            round_collimated_ray_source(Length::zero(), Energy::new::<joule>(1.0), 3).unwrap();
+        assert!(round_collimated_ray_source(millimeter!(1.0), joule!(-0.1), 3).is_err());
+        assert!(round_collimated_ray_source(millimeter!(1.0), joule!(f64::NAN), 3).is_err());
+        assert!(round_collimated_ray_source(millimeter!(1.0), joule!(f64::INFINITY), 3).is_err());
+        assert!(round_collimated_ray_source(millimeter!(-0.1), joule!(1.0), 3).is_err());
+        let src = round_collimated_ray_source(Length::zero(), joule!(1.0), 3).unwrap();
         if let Proptype::LightData(light_data) = src.properties().get("light data").unwrap() {
             if let Some(LightData::Geometric(rays)) = &light_data.value {
                 assert_eq!(rays.nr_of_rays(true), 1);
@@ -131,12 +108,7 @@ mod test {
         } else {
             panic!("property light data has wrong type");
         }
-        let src = round_collimated_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(1.0),
-            3,
-        )
-        .unwrap();
+        let src = round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 3).unwrap();
         if let Proptype::LightData(data) = src.properties().get("light data").unwrap() {
             if let Some(LightData::Geometric(rays)) = &data.value {
                 assert_abs_diff_eq!(
@@ -154,10 +126,10 @@ mod test {
     }
     #[test]
     fn test_point_ray_source() {
-        assert!(point_ray_source(Angle::new::<degree>(-0.1), Energy::zero()).is_err());
-        assert!(point_ray_source(Angle::new::<degree>(180.0), Energy::zero()).is_err());
-        assert!(point_ray_source(Angle::new::<degree>(190.0), Energy::zero()).is_err());
-        let src = point_ray_source(Angle::zero(), Energy::new::<joule>(1.0)).unwrap();
+        assert!(point_ray_source(degree!(-0.1), Energy::zero()).is_err());
+        assert!(point_ray_source(degree!(180.0), Energy::zero()).is_err());
+        assert!(point_ray_source(degree!(190.0), Energy::zero()).is_err());
+        let src = point_ray_source(Angle::zero(), joule!(1.0)).unwrap();
         if let Proptype::LightData(data) = src.properties().get("light data").unwrap() {
             if let Some(LightData::Geometric(rays)) = &data.value {
                 assert_abs_diff_eq!(
@@ -172,7 +144,7 @@ mod test {
         } else {
             panic!("cannot unpack light data property");
         }
-        let src = point_ray_source(Angle::new::<degree>(1.0), Energy::new::<joule>(1.0)).unwrap();
+        let src = point_ray_source(degree!(1.0), joule!(1.0)).unwrap();
         if let Proptype::LightData(data) = src.properties().get("light data").unwrap() {
             if let Some(LightData::Geometric(rays)) = &data.value {
                 assert_abs_diff_eq!(
@@ -188,57 +160,17 @@ mod test {
     }
     #[test]
     fn test_collimated_line_source() {
-        assert!(collimated_line_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(-0.1),
-            1
-        )
-        .is_err());
-        assert!(collimated_line_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(f64::NAN),
-            1
-        )
-        .is_err());
-        assert!(collimated_line_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(f64::INFINITY),
-            1
-        )
-        .is_err());
-        assert!(collimated_line_ray_source(Length::zero(), Energy::new::<joule>(1.0), 1).is_err());
-        assert!(collimated_line_ray_source(
-            Length::new::<millimeter>(-0.1),
-            Energy::new::<joule>(1.0),
-            1
-        )
-        .is_err());
-        assert!(collimated_line_ray_source(
-            Length::new::<millimeter>(f64::NAN),
-            Energy::new::<joule>(1.0),
-            1
-        )
-        .is_err());
-        assert!(collimated_line_ray_source(
-            Length::new::<millimeter>(f64::INFINITY),
-            Energy::new::<joule>(1.0),
-            1
-        )
-        .is_err());
+        assert!(collimated_line_ray_source(millimeter!(1.0), joule!(-0.1), 1).is_err());
+        assert!(collimated_line_ray_source(millimeter!(1.0), joule!(f64::NAN), 1).is_err());
+        assert!(collimated_line_ray_source(millimeter!(1.0), joule!(f64::INFINITY), 1).is_err());
+        assert!(collimated_line_ray_source(Length::zero(), joule!(1.0), 1).is_err());
+        assert!(collimated_line_ray_source(millimeter!(-0.1), joule!(1.0), 1).is_err());
+        assert!(collimated_line_ray_source(millimeter!(f64::NAN), joule!(1.0), 1).is_err());
+        assert!(collimated_line_ray_source(millimeter!(f64::INFINITY), joule!(1.0), 1).is_err());
 
-        assert!(collimated_line_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(1.0),
-            0
-        )
-        .is_err());
+        assert!(collimated_line_ray_source(millimeter!(1.0), joule!(1.0), 0).is_err());
 
-        let s = collimated_line_ray_source(
-            Length::new::<millimeter>(1.0),
-            Energy::new::<joule>(1.0),
-            2,
-        )
-        .unwrap();
+        let s = collimated_line_ray_source(millimeter!(1.0), joule!(1.0), 2).unwrap();
         if let Proptype::LightData(data) = s.properties().get("light data").unwrap() {
             if let Some(LightData::Geometric(rays)) = &data.value {
                 assert_abs_diff_eq!(
@@ -248,22 +180,8 @@ mod test {
                 );
                 assert_eq!(rays.nr_of_rays(true), 2);
                 let ray = rays.iter().collect::<Vec<&Ray>>();
-                assert_eq!(
-                    ray[0].position(),
-                    Point3::new(
-                        Length::zero(),
-                        Length::new::<millimeter>(-0.5),
-                        Length::zero()
-                    )
-                );
-                assert_eq!(
-                    ray[1].position(),
-                    Point3::new(
-                        Length::zero(),
-                        Length::new::<millimeter>(0.5),
-                        Length::zero()
-                    )
-                );
+                assert_eq!(ray[0].position(), millimeter!(0., -0.5, 0.));
+                assert_eq!(ray[1].position(), millimeter!(0., 0.5, 0.));
             } else {
                 panic!("cannot unpack light data property");
             }

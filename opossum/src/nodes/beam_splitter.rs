@@ -338,15 +338,12 @@ impl Dottable for BeamSplitter {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{analyzer::RayTraceConfig, ray::Ray, spectrum_helper::create_he_ne_spec};
-    use approx::{assert_abs_diff_eq, AbsDiffEq};
-    use nalgebra::Point3;
-    use uom::num_traits::Zero;
-    use uom::si::{
-        energy::joule,
-        f64::{Energy, Length},
-        length::nanometer,
+    use crate::{
+        analyzer::RayTraceConfig, joule, millimeter, nanometer, ray::Ray,
+        spectrum_helper::create_he_ne_spec,
     };
+    use approx::{assert_abs_diff_eq, AbsDiffEq};
+    use uom::si::energy::joule;
     #[test]
     fn default() {
         let node = BeamSplitter::default();
@@ -500,12 +497,8 @@ mod test {
         let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
-        let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
         rays.add_ray(ray);
         input.insert("input1".into(), Some(LightData::Geometric(rays)));
         let output = node
@@ -531,21 +524,13 @@ mod test {
         let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
-        let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(1.0),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
         rays.add_ray(ray);
         input.insert("input1".into(), Some(LightData::Geometric(rays)));
         let mut rays = Rays::default();
-        let ray = Ray::new_collimated(
-            Point3::new(Length::zero(), Length::zero(), Length::zero()),
-            Length::new::<nanometer>(1053.0),
-            Energy::new::<joule>(0.5),
-        )
-        .unwrap();
+        let ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.5)).unwrap();
         rays.add_ray(ray);
         input.insert("input2".into(), Some(LightData::Geometric(rays)));
         let output = node

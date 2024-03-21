@@ -1,43 +1,38 @@
-use opossum::error::OpmResult;
-use opossum::nodes::{
-    round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer, WaveFront,
+use opossum::{
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer, WaveFront},
+    refractive_index::RefrIndexConst,
+    OpticScenery,
 };
-use opossum::refractive_index::RefrIndexConst;
-use opossum::OpticScenery;
 use std::path::Path;
-use uom::si::energy::joule;
-use uom::si::f64::{Energy, Length};
-use uom::si::length::millimeter;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Lens Ray-trace test".into())?;
 
     let src = scenery.add_node(round_collimated_ray_source(
-        Length::new::<millimeter>(5.0),
-        Energy::new::<joule>(1.0),
+        millimeter!(5.0),
+        joule!(1.0),
         10,
     )?);
-    let s1 = scenery.add_node(Propagation::new("Dist 1", Length::new::<millimeter>(30.0))?);
+    let s1 = scenery.add_node(Propagation::new("Dist 1", millimeter!(30.0))?);
     let l1 = scenery.add_node(Lens::new(
         "Lens 1",
-        Length::new::<millimeter>(205.55),
-        Length::new::<millimeter>(-205.55),
-        Length::new::<millimeter>(2.79),
+        millimeter!(205.55),
+        millimeter!(-205.55),
+        millimeter!(2.79),
         &RefrIndexConst::new(1.5068).unwrap(),
     )?);
-    let s2 = scenery.add_node(Propagation::new(
-        "Dist 2",
-        Length::new::<millimeter>(404.44560),
-    )?);
+    let s2 = scenery.add_node(Propagation::new("Dist 2", millimeter!(404.44560))?);
     let l2 = scenery.add_node(Lens::new(
         "Lens 2",
-        Length::new::<millimeter>(205.55),
-        Length::new::<millimeter>(-205.55),
-        Length::new::<millimeter>(2.79),
+        millimeter!(205.55),
+        millimeter!(-205.55),
+        millimeter!(2.79),
         &RefrIndexConst::new(1.5068).unwrap(),
     )?);
-    let s3 = scenery.add_node(Propagation::new("Dist 3", Length::new::<millimeter>(50.0))?);
+    let s3 = scenery.add_node(Propagation::new("Dist 3", millimeter!(50.0))?);
     let det = scenery.add_node(RayPropagationVisualizer::new("Ray plot"));
     let wf = scenery.add_node(WaveFront::new("Wavefront"));
     scenery.connect_nodes(src, "out1", s1, "front")?;

@@ -1,15 +1,15 @@
 #![warn(missing_docs)]
 //! helper functions for easier generation of spectra
 
-use crate::error::OpossumError;
-use crate::{error::OpmResult, spectrum::Spectrum};
+use crate::{
+    error::{OpmResult, OpossumError},
+    nanometer,
+    spectrum::Spectrum,
+};
 use log::warn;
 use num::Zero;
 use std::ops::Range;
-use uom::si::{
-    f64::Length,
-    length::{micrometer, nanometer},
-};
+use uom::si::{f64::Length, length::micrometer};
 
 /// Helper function for generating a visible spectrum.
 ///
@@ -20,11 +20,7 @@ use uom::si::{
 /// This function might theoretically panic if the internal implementation of spectrum creation changes.
 #[must_use]
 pub fn create_visible_spec() -> Spectrum {
-    Spectrum::new(
-        Length::new::<nanometer>(380.0)..Length::new::<nanometer>(750.0),
-        Length::new::<nanometer>(0.1),
-    )
-    .unwrap()
+    Spectrum::new(nanometer!(380.0)..nanometer!(750.0), nanometer!(0.1)).unwrap()
 }
 /// Helper function for generating a near infrared spectrum.
 ///
@@ -35,11 +31,7 @@ pub fn create_visible_spec() -> Spectrum {
 /// This function might theoretically panic if the internal implementation of spectrum creation changes.
 #[must_use]
 pub fn create_nir_spec() -> Spectrum {
-    Spectrum::new(
-        Length::new::<nanometer>(800.0)..Length::new::<nanometer>(2500.0),
-        Length::new::<nanometer>(0.1),
-    )
-    .unwrap()
+    Spectrum::new(nanometer!(800.0)..nanometer!(2500.0), nanometer!(0.1)).unwrap()
 }
 /// Helper function for generating a spectrum of a narrow-band Helium-Neon laser.
 ///
@@ -51,7 +43,7 @@ pub fn create_nir_spec() -> Spectrum {
 /// This functions returns an [`OpossumError`] if the given energy is negative.
 pub fn create_he_ne_spec(energy: f64) -> OpmResult<Spectrum> {
     let mut s = create_visible_spec();
-    s.add_single_peak(Length::new::<nanometer>(632.816), energy)?;
+    s.add_single_peak(nanometer!(632.816), energy)?;
     Ok(s)
 }
 /// Helper function for generating a spectrum of a narrow-band Nd:glass laser.
@@ -64,11 +56,7 @@ pub fn create_he_ne_spec(energy: f64) -> OpmResult<Spectrum> {
 /// This functions returns an [`OpossumError`] if the given energy is negative.
 pub fn create_nd_glass_spec(energy: f64) -> OpmResult<Spectrum> {
     let mut s = create_nir_spec();
-    s.add_lorentzian_peak(
-        Length::new::<nanometer>(1054.0),
-        Length::new::<nanometer>(0.5),
-        energy,
-    )?;
+    s.add_lorentzian_peak(nanometer!(1054.0), nanometer!(0.5), energy)?;
     Ok(s)
 }
 
@@ -208,6 +196,7 @@ pub fn generate_filter_spectrum(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::micrometer;
     use log::Level;
     use num::Zero;
     use testing_logger;
@@ -216,10 +205,10 @@ mod test {
     fn test_short_pass_filter() {
         testing_logger::setup();
         assert!(generate_filter_spectrum(
-            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
-            Length::new::<micrometer>(1.0),
+            micrometer!(1.0)..micrometer!(5.0),
+            micrometer!(1.0),
             &FilterType::ShortPassStep {
-                cut_off: Length::new::<micrometer>(7.0)
+                cut_off: micrometer!(7.0)
             }
         )
         .is_ok());
@@ -233,27 +222,27 @@ mod test {
         });
 
         let s = generate_filter_spectrum(
-            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
-            Length::new::<micrometer>(1.0),
+            micrometer!(1.0)..micrometer!(5.0),
+            micrometer!(1.0),
             &FilterType::ShortPassStep {
-                cut_off: Length::new::<micrometer>(3.0),
+                cut_off: micrometer!(3.0),
             },
         )
         .unwrap();
-        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(2.0)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(3.0)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(4.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(1.0)).unwrap(), 1.0);
+        assert_eq!(s.get_value(&micrometer!(2.0)).unwrap(), 1.0);
+        assert_eq!(s.get_value(&micrometer!(3.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(4.0)).unwrap(), 0.0);
     }
 
     #[test]
     fn test_long_pass_filter() {
         testing_logger::setup();
         assert!(generate_filter_spectrum(
-            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
-            Length::new::<micrometer>(1.0),
+            micrometer!(1.0)..micrometer!(5.0),
+            micrometer!(1.0),
             &FilterType::LongPassStep {
-                cut_off: Length::new::<micrometer>(7.0)
+                cut_off: micrometer!(7.0)
             }
         )
         .is_ok());
@@ -266,27 +255,27 @@ mod test {
             assert_eq!(captured_logs[0].level, Level::Warn);
         });
         let s = generate_filter_spectrum(
-            Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0),
-            Length::new::<micrometer>(1.0),
+            micrometer!(1.0)..micrometer!(5.0),
+            micrometer!(1.0),
             &FilterType::LongPassStep {
-                cut_off: Length::new::<micrometer>(3.0),
+                cut_off: micrometer!(3.0),
             },
         )
         .unwrap();
-        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(2.0)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(3.0)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(4.0)).unwrap(), 1.0);
+        assert_eq!(s.get_value(&micrometer!(1.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(2.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(3.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(4.0)).unwrap(), 1.0);
     }
     #[test]
     fn test_short_pass_smooth_filter() {
-        let range = Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0);
-        let resolution = Length::new::<micrometer>(0.5);
+        let range = micrometer!(1.0)..micrometer!(5.0);
+        let resolution = micrometer!(0.5);
         assert!(generate_filter_spectrum(
             range.clone(),
             resolution,
             &FilterType::ShortPassSmooth {
-                cut_off: Length::new::<micrometer>(3.0),
+                cut_off: micrometer!(3.0),
                 width: Length::zero()
             }
         )
@@ -295,8 +284,8 @@ mod test {
             range.clone(),
             resolution,
             &FilterType::ShortPassSmooth {
-                cut_off: Length::new::<micrometer>(3.0),
-                width: Length::new::<micrometer>(-1.0)
+                cut_off: micrometer!(3.0),
+                width: micrometer!(-1.0)
             }
         )
         .is_err());
@@ -304,27 +293,27 @@ mod test {
             range,
             resolution,
             &FilterType::ShortPassSmooth {
-                cut_off: Length::new::<micrometer>(3.0),
-                width: Length::new::<micrometer>(1.0),
+                cut_off: micrometer!(3.0),
+                width: micrometer!(1.0),
             },
         )
         .unwrap();
-        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(2.0)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(2.5)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(3.0)).unwrap(), 0.5);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(3.5)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(4.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(1.0)).unwrap(), 1.0);
+        assert_eq!(s.get_value(&micrometer!(2.0)).unwrap(), 1.0);
+        assert_eq!(s.get_value(&micrometer!(2.5)).unwrap(), 1.0);
+        assert_eq!(s.get_value(&micrometer!(3.0)).unwrap(), 0.5);
+        assert_eq!(s.get_value(&micrometer!(3.5)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(4.0)).unwrap(), 0.0);
     }
     #[test]
     fn test_long_pass_smooth_filter() {
-        let range = Length::new::<micrometer>(1.0)..Length::new::<micrometer>(5.0);
-        let resolution = Length::new::<micrometer>(0.5);
+        let range = micrometer!(1.0)..micrometer!(5.0);
+        let resolution = micrometer!(0.5);
         assert!(generate_filter_spectrum(
             range.clone(),
             resolution,
             &FilterType::LongPassSmooth {
-                cut_off: Length::new::<micrometer>(3.0),
+                cut_off: micrometer!(3.0),
                 width: Length::zero()
             }
         )
@@ -333,8 +322,8 @@ mod test {
             range.clone(),
             resolution,
             &FilterType::LongPassSmooth {
-                cut_off: Length::new::<micrometer>(3.0),
-                width: Length::new::<micrometer>(-1.0)
+                cut_off: micrometer!(3.0),
+                width: micrometer!(-1.0)
             }
         )
         .is_err());
@@ -342,16 +331,16 @@ mod test {
             range,
             resolution,
             &FilterType::LongPassSmooth {
-                cut_off: Length::new::<micrometer>(3.0),
-                width: Length::new::<micrometer>(1.0),
+                cut_off: micrometer!(3.0),
+                width: micrometer!(1.0),
             },
         )
         .unwrap();
-        assert_eq!(s.get_value(&Length::new::<micrometer>(1.0)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(2.0)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(2.5)).unwrap(), 0.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(3.0)).unwrap(), 0.5);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(3.5)).unwrap(), 1.0);
-        assert_eq!(s.get_value(&Length::new::<micrometer>(4.0)).unwrap(), 1.0);
+        assert_eq!(s.get_value(&micrometer!(1.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(2.0)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(2.5)).unwrap(), 0.0);
+        assert_eq!(s.get_value(&micrometer!(3.0)).unwrap(), 0.5);
+        assert_eq!(s.get_value(&micrometer!(3.5)).unwrap(), 1.0);
+        assert_eq!(s.get_value(&micrometer!(4.0)).unwrap(), 1.0);
     }
 }

@@ -6,22 +6,22 @@ use serde_derive::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::{millimeter, nanometer};
 
-use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
-use crate::lightdata::LightData;
-use crate::plottable::{
-    PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
-};
-use crate::properties::{Properties, Proptype};
-use crate::rays::Rays;
-use crate::refractive_index::refr_index_vaccuum;
-use crate::reporter::{NodeReport, PdfReportable};
-use crate::surface::Plane;
 use crate::{
+    analyzer::AnalyzerType,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    lightdata::LightData,
+    millimeter,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
+    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
+    properties::{Properties, Proptype},
+    rays::Rays,
+    refractive_index::refr_index_vaccuum,
+    reporter::{NodeReport, PdfReportable},
+    surface::Plane,
 };
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -292,8 +292,8 @@ impl RayPositionHistorySpectrum {
                 );
                 let proj_pos = pos_t - pos_t.dot(&normed_normal_vec) * plane_normal_vec;
 
-                projected_ray_pos[(row, 0)] = Length::new::<millimeter>(proj_pos.dot(&co_ax_1));
-                projected_ray_pos[(row, 1)] = Length::new::<millimeter>(proj_pos.dot(&co_ax_2));
+                projected_ray_pos[(row, 0)] = millimeter!(proj_pos.dot(&co_ax_1));
+                projected_ray_pos[(row, 1)] = millimeter!(proj_pos.dot(&co_ax_2));
             }
             rays_pos_projection.push(projected_ray_pos);
         }
@@ -409,17 +409,13 @@ mod test {
     use super::*;
     use crate::position_distributions::Hexapolar;
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, rays::Rays,
+        analyzer::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
     use tempfile::NamedTempFile;
     use uom::num_traits::Zero;
     use uom::si::length::millimeter;
-    use uom::si::{
-        energy::{joule, Energy},
-        f64::Length,
-        length::nanometer,
-    };
+    use uom::si::{f64::Length, length::nanometer};
     #[test]
     fn default() {
         let node = RayPropagationVisualizer::default();
@@ -517,8 +513,8 @@ mod test {
         assert!(rpv.export_data(path.path().parent().unwrap()).is_err());
         rpv.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
+                nanometer!(1053.0),
+                joule!(1.0),
                 &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
@@ -541,9 +537,9 @@ mod test {
             .contains("Ray Propagation visualization plot"));
         fd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
-                &Hexapolar::new(Length::new::<millimeter>(1.), 1).unwrap(),
+                nanometer!(1053.0),
+                joule!(1.0),
+                &Hexapolar::new(millimeter!(1.), 1).unwrap(),
             )
             .unwrap(),
         ));
@@ -558,77 +554,53 @@ mod test {
     #[test]
     fn new_ray_pos_hist_spec() {
         let h = vec![
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(1.),
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(0.),
-            ]),
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(1.),
-                Length::new::<millimeter>(0.),
-            ]),
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(1.),
-            ]),
+            MatrixXx3::from_vec(vec![millimeter!(1.), millimeter!(0.), millimeter!(0.)]),
+            MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(1.), millimeter!(0.)]),
+            MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(0.), millimeter!(1.)]),
         ];
-        let wb = Length::new::<nanometer>(1.);
-        let w = Length::new::<nanometer>(1053.);
+        let wb = nanometer!(1.);
+        let w = nanometer!(1053.);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_ok());
 
-        let wb = Length::new::<nanometer>(0.);
+        let wb = nanometer!(0.);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
 
-        let wb = Length::new::<nanometer>(-1.);
+        let wb = nanometer!(-1.);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
 
-        let wb = Length::new::<nanometer>(f64::NAN);
+        let wb = nanometer!(f64::NAN);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
 
-        let wb = Length::new::<nanometer>(f64::INFINITY);
+        let wb = nanometer!(f64::INFINITY);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
 
-        let wb = Length::new::<nanometer>(f64::NEG_INFINITY);
+        let wb = nanometer!(f64::NEG_INFINITY);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
 
-        let w = Length::new::<nanometer>(0.);
+        let w = nanometer!(0.);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
 
-        let w = Length::new::<nanometer>(-1.);
+        let w = nanometer!(-1.);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
 
-        let w = Length::new::<nanometer>(f64::NAN);
+        let w = nanometer!(f64::NAN);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
 
-        let w = Length::new::<nanometer>(f64::INFINITY);
+        let w = nanometer!(f64::INFINITY);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
 
-        let w = Length::new::<nanometer>(f64::NEG_INFINITY);
+        let w = nanometer!(f64::NEG_INFINITY);
         assert!(RayPositionHistorySpectrum::new(h.clone(), w, wb).is_err());
     }
     #[test]
     fn ray_pos_hist_spec_get_history() {
         let history = vec![
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(1.),
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(0.),
-            ]),
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(1.),
-                Length::new::<millimeter>(0.),
-            ]),
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(1.),
-            ]),
+            MatrixXx3::from_vec(vec![millimeter!(1.), millimeter!(0.), millimeter!(0.)]),
+            MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(1.), millimeter!(0.)]),
+            MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(0.), millimeter!(1.)]),
         ];
-        let wavelength_bin_size = Length::new::<nanometer>(1.);
-        let wavelength = Length::new::<nanometer>(1053.);
+        let wavelength_bin_size = nanometer!(1.);
+        let wavelength = nanometer!(1053.);
         let pos_hist =
             RayPositionHistorySpectrum::new(history.clone(), wavelength, wavelength_bin_size)
                 .unwrap();
@@ -674,24 +646,12 @@ mod test {
     #[test]
     fn ray_pos_hist_spec_get_wavelength() {
         let history = vec![
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(1.),
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(0.),
-            ]),
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(1.),
-                Length::new::<millimeter>(0.),
-            ]),
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(1.),
-            ]),
+            MatrixXx3::from_vec(vec![millimeter!(1.), millimeter!(0.), millimeter!(0.)]),
+            MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(1.), millimeter!(0.)]),
+            MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(0.), millimeter!(1.)]),
         ];
-        let wavelength_bin_size = Length::new::<nanometer>(1.);
-        let wavelength = Length::new::<nanometer>(1053.);
+        let wavelength_bin_size = nanometer!(1.);
+        let wavelength = nanometer!(1053.);
         let pos_hist = RayPositionHistorySpectrum {
             history,
             center_wavelength: wavelength,
@@ -706,26 +666,14 @@ mod test {
     #[test]
     fn ray_pos_hist_spec_get_bin_size() {
         let history = vec![
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(1.),
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(0.),
-            ]),
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(1.),
-                Length::new::<millimeter>(0.),
-            ]),
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(1.),
-            ]),
+            MatrixXx3::from_vec(vec![millimeter!(1.), millimeter!(0.), millimeter!(0.)]),
+            MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(1.), millimeter!(0.)]),
+            MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(0.), millimeter!(1.)]),
         ];
-        let wavelength_bin_size = Length::new::<nanometer>(1.);
+        let wavelength_bin_size = nanometer!(1.);
         let pos_hist = RayPositionHistorySpectrum {
             history,
-            center_wavelength: Length::new::<nanometer>(1053.),
+            center_wavelength: nanometer!(1053.),
             wavelength_bin_size,
         };
 
@@ -737,27 +685,15 @@ mod test {
     #[test]
     fn project_to_plane() {
         let history = vec![
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(1.),
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(0.),
-            ]),
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(1.),
-                Length::new::<millimeter>(0.),
-            ]),
-            MatrixXx3::from_vec(vec![
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(0.),
-                Length::new::<millimeter>(1.),
-            ]),
+            MatrixXx3::from_vec(vec![millimeter!(1.), millimeter!(0.), millimeter!(0.)]),
+            MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(1.), millimeter!(0.)]),
+            MatrixXx3::from_vec(vec![millimeter!(0.), millimeter!(0.), millimeter!(1.)]),
         ];
 
         let pos_hist = RayPositionHistorySpectrum {
             history,
-            center_wavelength: Length::new::<nanometer>(1053.),
-            wavelength_bin_size: Length::new::<nanometer>(1.),
+            center_wavelength: nanometer!(1053.),
+            wavelength_bin_size: nanometer!(1.),
         };
 
         let projected_rays = pos_hist.project_to_plane(Vector3::new(1., 0., 0.)).unwrap();

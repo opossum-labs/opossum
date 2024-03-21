@@ -93,167 +93,45 @@ impl PositionDistribution for Grid {
 #[cfg(test)]
 mod test {
     use super::*;
-    use uom::si::length::millimeter;
+    use crate::millimeter;
     #[test]
     fn new_wrong() {
         assert!(Grid::new((Length::zero(), Length::zero()), (1, 1)).is_err());
-        assert!(Grid::new((Length::zero(), Length::new::<millimeter>(1.0)), (1, 1)).is_ok());
-        assert!(Grid::new((Length::new::<millimeter>(1.0), Length::zero()), (1, 1)).is_ok());
-        assert!(Grid::new(
-            (
-                Length::new::<millimeter>(-0.1),
-                Length::new::<millimeter>(1.0)
-            ),
-            (1, 1)
-        )
-        .is_err());
-        assert!(Grid::new(
-            (
-                Length::new::<millimeter>(f64::NAN),
-                Length::new::<millimeter>(1.0)
-            ),
-            (1, 1)
-        )
-        .is_err());
-        assert!(Grid::new(
-            (
-                Length::new::<millimeter>(f64::INFINITY),
-                Length::new::<millimeter>(1.0)
-            ),
-            (1, 1)
-        )
-        .is_err());
+        assert!(Grid::new((Length::zero(), millimeter!(1.0)), (1, 1)).is_ok());
+        assert!(Grid::new((millimeter!(1.0), Length::zero()), (1, 1)).is_ok());
+        assert!(Grid::new((millimeter!(-0.1), millimeter!(1.0)), (1, 1)).is_err());
+        assert!(Grid::new((millimeter!(f64::NAN), millimeter!(1.0)), (1, 1)).is_err());
+        assert!(Grid::new((millimeter!(f64::INFINITY), millimeter!(1.0)), (1, 1)).is_err());
 
-        assert!(Grid::new(
-            (
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(-0.1)
-            ),
-            (1, 1)
-        )
-        .is_err());
-        assert!(Grid::new(
-            (
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(f64::NAN)
-            ),
-            (1, 1)
-        )
-        .is_err());
-        assert!(Grid::new(
-            (
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(f64::INFINITY)
-            ),
-            (1, 1)
-        )
-        .is_err());
-        assert!(Grid::new(
-            (
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(1.0)
-            ),
-            (0, 1)
-        )
-        .is_err());
-        assert!(Grid::new(
-            (
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(1.0)
-            ),
-            (1, 0)
-        )
-        .is_err());
+        assert!(Grid::new((millimeter!(1.0), millimeter!(-0.1)), (1, 1)).is_err());
+        assert!(Grid::new((millimeter!(1.0), millimeter!(f64::NAN)), (1, 1)).is_err());
+        assert!(Grid::new((millimeter!(1.0), millimeter!(f64::INFINITY)), (1, 1)).is_err());
+        assert!(Grid::new((millimeter!(1.0), millimeter!(1.0)), (0, 1)).is_err());
+        assert!(Grid::new((millimeter!(1.0), millimeter!(1.0)), (1, 0)).is_err());
     }
     #[test]
     fn generate_symmetric() {
-        let strategy = Grid::new(
-            (
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(1.0),
-            ),
-            (2, 2),
-        )
-        .unwrap();
+        let strategy = Grid::new((millimeter!(1.0), millimeter!(1.0)), (2, 2)).unwrap();
         let points = strategy.generate();
         assert_eq!(points.len(), 4);
-        assert_eq!(
-            points[0],
-            Point3::new(
-                Length::new::<millimeter>(-0.5),
-                Length::new::<millimeter>(-0.5),
-                Length::zero()
-            )
-        );
-        assert_eq!(
-            points[1],
-            Point3::new(
-                Length::new::<millimeter>(-0.5),
-                Length::new::<millimeter>(0.5),
-                Length::zero()
-            )
-        );
-        assert_eq!(
-            points[2],
-            Point3::new(
-                Length::new::<millimeter>(0.5),
-                Length::new::<millimeter>(-0.5),
-                Length::zero()
-            )
-        );
-        assert_eq!(
-            points[3],
-            Point3::new(
-                Length::new::<millimeter>(0.5),
-                Length::new::<millimeter>(0.5),
-                Length::zero()
-            )
-        );
+        assert_eq!(points[0], millimeter!(-0.5, -0.5, 0.));
+        assert_eq!(points[1], millimeter!(-0.5, 0.5, 0.));
+        assert_eq!(points[2], millimeter!(0.5, -0.5, 0.));
+        assert_eq!(points[3], millimeter!(0.5, 0.5, 0.));
     }
     #[test]
     fn generate_size_one() {
-        let strategy = Grid::new(
-            (
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(1.0),
-            ),
-            (1, 1),
-        )
-        .unwrap();
+        let strategy = Grid::new((millimeter!(1.0), millimeter!(1.0)), (1, 1)).unwrap();
         let points = strategy.generate();
         assert_eq!(points.len(), 1);
-        assert_eq!(
-            points[0],
-            Point3::new(Length::zero(), Length::zero(), Length::zero())
-        );
+        assert_eq!(points[0], millimeter!(0., 0., 0.));
     }
     #[test]
     fn generate_asymmetric() {
-        let strategy = Grid::new(
-            (
-                Length::new::<millimeter>(1.0),
-                Length::new::<millimeter>(1.0),
-            ),
-            (1, 2),
-        )
-        .unwrap();
+        let strategy = Grid::new((millimeter!(1.0), millimeter!(1.0)), (1, 2)).unwrap();
         let points = strategy.generate();
         assert_eq!(points.len(), 2);
-        assert_eq!(
-            points[0],
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(-0.5),
-                Length::zero()
-            )
-        );
-        assert_eq!(
-            points[1],
-            Point3::new(
-                Length::zero(),
-                Length::new::<millimeter>(0.5),
-                Length::zero()
-            )
-        );
+        assert_eq!(points[0], millimeter!(0., -0.5, 0.));
+        assert_eq!(points[1], millimeter!(0., 0.5, 0.));
     }
 }

@@ -1,20 +1,17 @@
 use opossum::{
+    degree,
     error::OpmResult,
+    joule, meter,
     nodes::{point_ray_source, Propagation, WaveFront},
     OpticScenery,
 };
 use std::path::Path;
-use uom::si::{
-    angle::degree,
-    energy::joule,
-    f64::{Angle, Energy, Length},
-    length::meter,
-};
+
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
-    let source = point_ray_source(Angle::new::<degree>(90.0), Energy::new::<joule>(1.))?;
+    let source = point_ray_source(degree!(90.0), joule!(1.))?;
     let i_s = scenery.add_node(source);
-    let i_p1 = scenery.add_node(Propagation::new("propagation", Length::new::<meter>(0.1))?);
+    let i_p1 = scenery.add_node(Propagation::new("propagation", meter!(0.1))?);
     let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));
 
     scenery.connect_nodes(i_s, "out1", i_p1, "front")?;

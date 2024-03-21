@@ -151,9 +151,8 @@ impl Dottable for Propagation {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::aperture::Aperture;
+    use crate::{aperture::Aperture, millimeter};
     use assert_matches::assert_matches;
-    use uom::si::length::millimeter;
     #[test]
     fn default() {
         let node = Propagation::default();
@@ -174,8 +173,8 @@ mod test {
     }
     #[test]
     fn new() {
-        assert!(Propagation::new("Test", Length::new::<millimeter>(f64::INFINITY)).is_err());
-        let node = Propagation::new("Test", Length::new::<millimeter>(1.0)).unwrap();
+        assert!(Propagation::new("Test", millimeter!(f64::INFINITY)).is_err());
+        let node = Propagation::new("Test", millimeter!(1.0)).unwrap();
         assert_eq!(node.properties().name().unwrap(), "Test");
         if let Ok(Proptype::F64(dist)) = node.properties().get("distance") {
             assert_eq!(dist, &1.0);

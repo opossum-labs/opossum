@@ -6,13 +6,11 @@
 //! ## Example
 //!
 //! ```rust
-//! use opossum::position_distributions::{PositionDistribution, Random};
-//! use uom::si::f64::Length;
-//! use uom::si::length::millimeter;
+//! use opossum::{millimeter, position_distributions::{PositionDistribution, Random}};
 //!
 //! let grid=Random::new(
-//!   Length::new::<millimeter>(1.0),
-//!   Length::new::<millimeter>(2.0),
+//!   millimeter!(1.0),
+//!   millimeter!(2.0),
 //!   10).unwrap();
 //! let points=grid.generate();
 //! assert_eq!(points.len(), 10);

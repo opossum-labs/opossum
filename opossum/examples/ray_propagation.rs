@@ -1,53 +1,42 @@
-use nalgebra::Point2;
-use opossum::aperture::{Aperture, CircleConfig};
-use opossum::error::OpmResult;
-use opossum::nodes::{round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer};
-use opossum::optical::Optical;
-use opossum::refractive_index::RefrIndexConst;
-use opossum::OpticScenery;
+use opossum::{
+    aperture::{Aperture, CircleConfig},
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{round_collimated_ray_source, Lens, Propagation, RayPropagationVisualizer},
+    optical::Optical,
+    refractive_index::RefrIndexConst,
+    OpticScenery,
+};
 use std::path::Path;
-use uom::num_traits::Zero;
-use uom::si::energy::joule;
-use uom::si::f64::{Energy, Length};
-use uom::si::length::millimeter;
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     let src = scenery.add_node(round_collimated_ray_source(
-        Length::new::<millimeter>(5.0),
-        Energy::new::<joule>(1.0),
+        millimeter!(5.0),
+        joule!(1.0),
         10,
     )?);
-    let s1 = scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(30.0))?);
+    let s1 = scenery.add_node(Propagation::new("s1", millimeter!(30.0))?);
     let l1 = scenery.add_node(Lens::new(
         "l1",
-        Length::new::<millimeter>(200.0),
-        Length::new::<millimeter>(-200.0),
-        Length::new::<millimeter>(10.0),
+        millimeter!(200.0),
+        millimeter!(-200.0),
+        millimeter!(10.0),
         &RefrIndexConst::new(2.0).unwrap(),
     )?);
-    let s2 = scenery.add_node(Propagation::new(
-        "s2",
-        Length::new::<millimeter>(197.22992),
-    )?);
+    let s2 = scenery.add_node(Propagation::new("s2", millimeter!(197.22992))?);
     let mut lens2 = Lens::new(
         "l2",
-        Length::new::<millimeter>(200.0),
-        Length::new::<millimeter>(-200.0),
-        Length::new::<millimeter>(10.0),
+        millimeter!(200.0),
+        millimeter!(-200.0),
+        millimeter!(10.0),
         &RefrIndexConst::new(2.0).unwrap(),
     )?;
     let _ = lens2.set_input_aperture(
         "front",
-        &Aperture::BinaryCircle(
-            CircleConfig::new(
-                Length::new::<millimeter>(3.),
-                Point2::new(Length::zero(), Length::zero()),
-            )
-            .unwrap(),
-        ),
+        &Aperture::BinaryCircle(CircleConfig::new(millimeter!(3.), millimeter!(0., 0.)).unwrap()),
     );
     let l2 = scenery.add_node(lens2);
-    let s3 = scenery.add_node(Propagation::new("s3", Length::new::<millimeter>(30.0))?);
+    let s3 = scenery.add_node(Propagation::new("s3", millimeter!(30.0))?);
     let det = scenery.add_node(RayPropagationVisualizer::default());
     scenery.connect_nodes(src, "out1", s1, "front")?;
     scenery.connect_nodes(s1, "rear", l1, "front")?;

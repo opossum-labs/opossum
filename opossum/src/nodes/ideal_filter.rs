@@ -260,15 +260,13 @@ impl Dottable for IdealFilter {
 #[cfg(test)]
 mod test {
     use approx::assert_abs_diff_eq;
-    use uom::si::{
-        energy::joule,
-        f64::{Energy, Length},
-        length::{millimeter, nanometer},
-    };
+    use uom::si::energy::joule;
 
     use crate::{
         analyzer::{AnalyzerType, RayTraceConfig},
+        joule,
         lightdata::DataEnergy,
+        millimeter, nanometer,
         optical::LightResult,
         position_distributions::Hexapolar,
         rays::Rays,
@@ -380,9 +378,9 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1054.0),
-                Energy::new::<joule>(1.0),
-                &Hexapolar::new(Length::new::<millimeter>(5.0), 1).unwrap(),
+                nanometer!(1054.0),
+                joule!(1.0),
+                &Hexapolar::new(millimeter!(5.0), 1).unwrap(),
             )
             .unwrap(),
         );

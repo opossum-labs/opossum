@@ -2,40 +2,33 @@ use std::path::Path;
 
 use opossum::{
     error::OpmResult,
+    joule,
     lightdata::LightData,
+    millimeter, nanometer,
     nodes::{Lens, Propagation, RayPropagationVisualizer, Source, SpotDiagram},
     position_distributions::{FibonacciEllipse, Hexapolar},
     rays::Rays,
     refractive_index::RefrIndexConst,
     OpticScenery,
 };
-use uom::si::{
-    energy::joule,
-    f64::{Energy, Length},
-    length::{millimeter, nanometer},
-};
 
 fn main() -> OpmResult<()> {
     let mut rays_1w = Rays::new_uniform_collimated(
-        Length::new::<nanometer>(1053.),
-        Energy::new::<joule>(1.),
-        &FibonacciEllipse::new(
-            Length::new::<millimeter>(2.),
-            Length::new::<millimeter>(4.),
-            100,
-        )?,
+        nanometer!(1053.),
+        joule!(1.),
+        &FibonacciEllipse::new(millimeter!(2.), millimeter!(4.), 100)?,
     )?;
 
     let mut rays_2w = Rays::new_uniform_collimated(
-        Length::new::<nanometer>(527.),
-        Energy::new::<joule>(1.),
-        &Hexapolar::new(Length::new::<millimeter>(5.3), 4)?,
+        nanometer!(527.),
+        joule!(1.),
+        &Hexapolar::new(millimeter!(5.3), 4)?,
     )?;
 
     let mut rays_3w = Rays::new_uniform_collimated(
-        Length::new::<nanometer>(1053. / 3.),
-        Energy::new::<joule>(1.),
-        &Hexapolar::new(Length::new::<millimeter>(0.5), 4)?,
+        nanometer!(1053. / 3.),
+        joule!(1.),
+        &Hexapolar::new(millimeter!(0.5), 4)?,
     )?;
 
     rays_1w.add_rays(&mut rays_2w);
@@ -44,26 +37,23 @@ fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     let light = LightData::Geometric(rays_1w);
     let src = scenery.add_node(Source::new("collimated ray source", &light));
-    let s1 = scenery.add_node(Propagation::new("s1", Length::new::<millimeter>(30.0))?);
+    let s1 = scenery.add_node(Propagation::new("s1", millimeter!(30.0))?);
     let l1 = scenery.add_node(Lens::new(
         "l1",
-        Length::new::<millimeter>(200.0),
-        Length::new::<millimeter>(-200.0),
-        Length::new::<millimeter>(10.0),
+        millimeter!(200.0),
+        millimeter!(-200.0),
+        millimeter!(10.0),
         &RefrIndexConst::new(2.0).unwrap(),
     )?);
-    let s2 = scenery.add_node(Propagation::new(
-        "s2",
-        Length::new::<millimeter>(197.22992),
-    )?);
+    let s2 = scenery.add_node(Propagation::new("s2", millimeter!(197.22992))?);
     let l2 = scenery.add_node(Lens::new(
         "l1",
-        Length::new::<millimeter>(200.0),
-        Length::new::<millimeter>(-200.0),
-        Length::new::<millimeter>(10.0),
+        millimeter!(200.0),
+        millimeter!(-200.0),
+        millimeter!(10.0),
         &RefrIndexConst::new(2.0).unwrap(),
     )?);
-    let s3 = scenery.add_node(Propagation::new("s3", Length::new::<millimeter>(30.0))?);
+    let s3 = scenery.add_node(Propagation::new("s3", millimeter!(30.0))?);
     let det = scenery.add_node(RayPropagationVisualizer::default());
     // let wf = scenery.add_node(WaveFront::default());
     let sd = scenery.add_node(SpotDiagram::default());

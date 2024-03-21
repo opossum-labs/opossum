@@ -2,36 +2,21 @@ use std::path::Path;
 
 use opossum::{
     error::OpmResult,
+    joule, millimeter,
     nodes::{
         round_collimated_ray_source, ParaxialSurface, Propagation, RayPropagationVisualizer,
         WaveFront,
     },
     OpticScenery,
 };
-use uom::si::{
-    energy::joule,
-    f64::{Energy, Length},
-    length::millimeter,
-};
+
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Lens Ray-trace test".into())?;
-    let src = scenery.add_node(
-        round_collimated_ray_source(
-            Length::new::<millimeter>(5.0),
-            Energy::new::<joule>(1.0),
-            30,
-        )
-        .unwrap(),
-    );
-    let lens = scenery.add_node(ParaxialSurface::new(
-        "f=100 mm",
-        Length::new::<millimeter>(100.0),
-    )?);
-    let dist = scenery.add_node(Propagation::new(
-        "d=50 mm",
-        Length::new::<millimeter>(90.0),
-    )?);
+    let src =
+        scenery.add_node(round_collimated_ray_source(millimeter!(5.0), joule!(1.0), 30).unwrap());
+    let lens = scenery.add_node(ParaxialSurface::new("f=100 mm", millimeter!(100.0))?);
+    let dist = scenery.add_node(Propagation::new("d=50 mm", millimeter!(90.0))?);
     let wf = scenery.add_node(WaveFront::default());
     let det = scenery.add_node(RayPropagationVisualizer::default());
     scenery.connect_nodes(src, "out1", lens, "front")?;

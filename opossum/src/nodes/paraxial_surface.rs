@@ -7,6 +7,7 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
+    millimeter,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
@@ -96,7 +97,7 @@ impl Optical for ParaxialSurface {
                 if let Some(LightData::Geometric(mut rays)) = data {
                     let focal_length =
                         if let Ok(Proptype::F64(length)) = self.props.get("focal length") {
-                            Length::new::<millimeter>(*length)
+                            millimeter!(*length)
                         } else {
                             return Err(OpossumError::Analysis("cannot read focal length".into()));
                         };
@@ -147,7 +148,7 @@ impl Dottable for ParaxialSurface {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::aperture::Aperture;
+    use crate::{aperture::Aperture, millimeter};
     use assert_matches::assert_matches;
     #[test]
     fn default() {
@@ -169,18 +170,16 @@ mod test {
     }
     #[test]
     fn new() {
-        let node = ParaxialSurface::new("Test", Length::new::<millimeter>(1.0)).unwrap();
+        let node = ParaxialSurface::new("Test", millimeter!(1.0)).unwrap();
         assert_eq!(node.properties().name().unwrap(), "Test");
         if let Ok(Proptype::F64(dist)) = node.properties().get("focal length") {
             assert_eq!(dist, &1.0);
         }
-        assert!(ParaxialSurface::new("Test", Length::new::<millimeter>(-1.0)).is_ok());
-        assert!(ParaxialSurface::new("Test", Length::new::<millimeter>(0.0)).is_err());
-        assert!(ParaxialSurface::new("Test", Length::new::<millimeter>(f64::NAN)).is_err());
-        assert!(ParaxialSurface::new("Test", Length::new::<millimeter>(f64::INFINITY)).is_err());
-        assert!(
-            ParaxialSurface::new("Test", Length::new::<millimeter>(f64::NEG_INFINITY)).is_err()
-        );
+        assert!(ParaxialSurface::new("Test", millimeter!(-1.0)).is_ok());
+        assert!(ParaxialSurface::new("Test", millimeter!(0.0)).is_err());
+        assert!(ParaxialSurface::new("Test", millimeter!(f64::NAN)).is_err());
+        assert!(ParaxialSurface::new("Test", millimeter!(f64::INFINITY)).is_err());
+        assert!(ParaxialSurface::new("Test", millimeter!(f64::NEG_INFINITY)).is_err());
     }
     #[test]
     fn name_property() {

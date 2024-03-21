@@ -65,8 +65,8 @@ impl RefractiveIndex for RefrIndexSellmeier1 {
 }
 #[cfg(test)]
 mod test {
+    use crate::nanometer;
     use approx::assert_relative_eq;
-    use uom::si::{f64::Length, length::nanometer};
 
     use super::*;
     #[test]
@@ -105,7 +105,7 @@ mod test {
         )
         .unwrap();
         assert_relative_eq!(
-            i.get_refractive_index(Length::new::<nanometer>(1054.0)),
+            i.get_refractive_index(nanometer!(1054.0)),
             1.5068,
             max_relative = 0.0001
         );

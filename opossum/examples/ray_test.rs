@@ -1,14 +1,5 @@
-use nalgebra::Point3;
-use opossum::ray::Ray;
-use uom::num_traits::Zero;
-use uom::si::energy::joule;
-use uom::si::length::nanometer;
-use uom::si::{
-    f64::{Energy, Length},
-    length::millimeter,
-};
-
 use opossum::error::OpmResult;
+use opossum::{joule, millimeter, nanometer, ray::Ray};
 
 #[derive(Debug)]
 struct SRay {
@@ -33,17 +24,9 @@ impl SRay {
     }
 }
 fn main() -> OpmResult<()> {
-    let mut ray = Ray::new_collimated(
-        Point3::new(
-            Length::zero(),
-            Length::new::<millimeter>(10.0),
-            Length::zero(),
-        ),
-        Length::new::<nanometer>(1053.0),
-        Energy::new::<joule>(1.0),
-    )?;
+    let mut ray = Ray::new_collimated(millimeter!(0., 10., 0.), nanometer!(1053.0), joule!(1.0))?;
     println!("{:?}", ray);
-    let length = Length::new::<millimeter>(50.0);
+    let length = millimeter!(50.0);
     let _ = ray.refract_paraxial(length)?;
     let _ = ray.propagate_along_z(length)?;
     println!("{:?}", ray);

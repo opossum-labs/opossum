@@ -1,31 +1,19 @@
-use std::path::Path;
-
-use nalgebra::point;
 use opossum::{
     aperture::{Aperture, CircleConfig},
     error::OpmResult,
+    joule, millimeter,
     nodes::{round_collimated_ray_source, Dummy, EnergyMeter, SpotDiagram},
     optical::Optical,
     OpticScenery,
 };
-use uom::si::{
-    energy::joule,
-    f64::{Energy, Length},
-    length::millimeter,
-};
+use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Raysource demo")?;
-    let mut source =
-        round_collimated_ray_source(Length::new::<millimeter>(1.0), Energy::new::<joule>(1.0), 3)?;
-    let aperture = Aperture::BinaryCircle(CircleConfig::new(
-        Length::new::<millimeter>(1.0),
-        point![
-            Length::new::<millimeter>(0.5),
-            Length::new::<millimeter>(0.5)
-        ],
-    )?);
+    let mut source = round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 3)?;
+    let aperture =
+        Aperture::BinaryCircle(CircleConfig::new(millimeter!(1.0), millimeter![0.5, 0.5])?);
     let mut ports = source.ports();
     ports.set_output_aperture("out1", &aperture)?;
     source.set_property("apertures", ports.into())?;

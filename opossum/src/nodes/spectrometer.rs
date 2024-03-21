@@ -1,22 +1,23 @@
 #![warn(missing_docs)]
 use image::{DynamicImage, ImageBuffer, RgbImage};
 use serde_derive::{Deserialize, Serialize};
-use uom::si::f64::Length;
 use uom::si::length::nanometer;
 
-use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
-use crate::lightdata::LightData;
-use crate::plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd};
-use crate::properties::{Properties, Proptype};
-use crate::refractive_index::refr_index_vaccuum;
-use crate::reporter::{NodeReport, PdfReportable};
-use crate::surface::Plane;
 use crate::{
+    analyzer::AnalyzerType,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    lightdata::LightData,
+    nanometer,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
+    plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
+    properties::{Properties, Proptype},
+    refractive_index::refr_index_vaccuum,
+    reporter::{NodeReport, PdfReportable},
+    surface::Plane,
 };
+
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
@@ -222,7 +223,7 @@ impl Optical for Spectrometer {
         if let Some(light_data) = data {
             let spectrum = match light_data {
                 LightData::Energy(e) => Some(e.spectrum.clone()),
-                LightData::Geometric(r) => r.to_spectrum(&Length::new::<nanometer>(0.2)).ok(),
+                LightData::Geometric(r) => r.to_spectrum(&nanometer!(0.2)).ok(),
                 LightData::Fourier => None,
             };
             if spectrum.is_some() {
@@ -306,7 +307,7 @@ impl Plottable for Spectrometer {
         let data = &self.light_data;
         match data {
             Some(LightData::Geometric(rays)) => rays
-                .to_spectrum(&Length::new::<nanometer>(0.2))?
+                .to_spectrum(&nanometer!(0.2))?
                 .get_plot_series(plt_type),
             Some(LightData::Energy(e)) => e.spectrum.get_plot_series(plt_type),
             _ => Ok(None),
@@ -319,15 +320,15 @@ mod test {
     use super::*;
     use crate::{
         analyzer::AnalyzerType,
+        joule,
         lightdata::DataEnergy,
         position_distributions::Hexapolar,
         rays::Rays,
         spectrum_helper::{create_he_ne_spec, create_visible_spec},
     };
-    use uom::{
-        num_traits::Zero,
-        si::{energy::joule, f64::Energy},
-    };
+    use num::Zero;
+    use uom::si::f64::Length;
+
     #[test]
     fn debug() {
         let mut node = Spectrometer::default();
@@ -465,8 +466,8 @@ mod test {
         assert_eq!(nr_of_props, 0);
         sd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
-                Length::new::<nanometer>(1053.0),
-                Energy::new::<joule>(1.0),
+                nanometer!(1053.0),
+                joule!(1.0),
                 &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),

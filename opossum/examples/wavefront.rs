@@ -1,5 +1,6 @@
 use opossum::{
     error::OpmResult,
+    joule, meter,
     nodes::{
         round_collimated_ray_source, FluenceDetector, ParaxialSurface, Propagation,
         RayPropagationVisualizer, Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
@@ -7,24 +8,19 @@ use opossum::{
     OpticScenery,
 };
 use std::path::Path;
-use uom::si::{
-    energy::joule,
-    f64::{Energy, Length},
-    length::meter,
-};
+
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
     scenery.set_description("Wavefont Demo")?;
-    let source =
-        round_collimated_ray_source(Length::new::<meter>(5e-3), Energy::new::<joule>(1.), 15)?;
+    let source = round_collimated_ray_source(meter!(5e-3), joule!(1.), 15)?;
     let i_s = scenery.add_node(source);
-    let i_p1 = scenery.add_node(Propagation::new("propagation", Length::new::<meter>(0.1))?);
+    let i_p1 = scenery.add_node(Propagation::new("propagation", meter!(0.1))?);
     let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));
-    let i_l = scenery.add_node(ParaxialSurface::new("lens", Length::new::<meter>(0.1))?);
-    let i_p2 = scenery.add_node(Propagation::new("propagation", Length::new::<meter>(0.2))?);
+    let i_l = scenery.add_node(ParaxialSurface::new("lens", meter!(0.1))?);
+    let i_p2 = scenery.add_node(Propagation::new("propagation", meter!(0.2))?);
     let i_wf2: petgraph::prelude::NodeIndex = scenery.add_node(WaveFront::new("wf_monitor 2"));
     let i_sp: petgraph::prelude::NodeIndex = scenery.add_node(SpotDiagram::new("spot 3"));
-    let i_l2 = scenery.add_node(ParaxialSurface::new("lens", Length::new::<meter>(0.1))?);
+    let i_l2 = scenery.add_node(ParaxialSurface::new("lens", meter!(0.1))?);
     let i_wf3: petgraph::prelude::NodeIndex = scenery.add_node(WaveFront::new("wf_mon3"));
     let i_r1: petgraph::prelude::NodeIndex =
         scenery.add_node(RayPropagationVisualizer::new("ray_mon1"));
