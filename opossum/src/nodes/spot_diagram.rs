@@ -149,13 +149,23 @@ impl Optical for SpotDiagram {
             props
                 .create("Spot diagram", "2D spot diagram", None, self.clone().into())
                 .unwrap();
-            if let Some(c) = rays.centroid() {
+            if let Some(c) = rays.energy_weighted_centroid() {
                 props
-                    .create("centroid x", "x position of centroid", None, c.x.into())
+                    .create(
+                        "centroid x",
+                        "x position of energy-weighted centroid",
+                        None,
+                        c.x.into(),
+                    )
                     .unwrap();
 
                 props
-                    .create("centroid y", "y position of centroid", None, c.y.into())
+                    .create(
+                        "centroid y",
+                        "y position of energy-weightedcentroid",
+                        None,
+                        c.y.into(),
+                    )
                     .unwrap();
             }
             if let Some(radius) = rays.beam_radius_geo() {
@@ -168,9 +178,14 @@ impl Optical for SpotDiagram {
                     )
                     .unwrap();
             }
-            if let Some(radius) = rays.beam_radius_rms() {
+            if let Some(radius) = rays.energy_weighted_beam_radius_rms() {
                 props
-                    .create("rms beam radius", "rms beam radius", None, radius.into())
+                    .create(
+                        "rms beam radius",
+                        "energy-weighted rms beam radius",
+                        None,
+                        radius.into(),
+                    )
                     .unwrap();
             }
         }
