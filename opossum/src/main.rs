@@ -60,7 +60,6 @@ fn create_report_file(
 ) -> OpmResult<()> {
     let mut output =
         create_dot_or_report_file_instance(report_directory, fname, "yaml", "detector report")?;
-
     let analysis_report = scenery.report(report_directory)?;
     write!(
         output,
@@ -75,7 +74,7 @@ fn create_report_file(
     Ok(())
 }
 
-fn main() -> OpmResult<()> {
+fn opossum() -> OpmResult<()> {
     // by default, log everything from level `info` and up.
     env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
     //parse CLI arguments
@@ -97,11 +96,7 @@ fn main() -> OpmResult<()> {
     )?;
     //analyze the scenery
     info!("Analyzing...");
-    if let Err(e) = scenery.analyze(&opossum_args.analyzer) {
-        error!("Analysis error: {e}");
-        return Ok(());
-    }
-    //create the report file
+    scenery.analyze(&opossum_args.analyzer)?;
     create_report_file(
         &opossum_args.report_directory,
         "report",
@@ -110,6 +105,14 @@ fn main() -> OpmResult<()> {
     )
 }
 
+/// OPOSSUM main function
+///
+/// This function is only a wrapper for the `opossum()` function and does general erro handling.
+fn main() {
+    if let Err(e) = opossum() {
+        error!("{e}");
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
