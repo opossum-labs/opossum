@@ -2,8 +2,10 @@ use std::path::Path;
 
 mod cambox_1w;
 mod cambox_2w;
+mod hhts_input;
 use cambox_1w::cambox_1w;
 use cambox_2w::cambox_2w;
+use hhts_input::hhts_input;
 
 use opossum::{
     aperture::{Aperture, CircleConfig},
@@ -104,8 +106,8 @@ fn main() -> OpmResult<()> {
     scenery.set_description("HHT Sensor")?;
 
     let src = scenery.add_node(Source::new("Source", &LightData::Geometric(rays)));
-    let d1 = scenery.add_node(Propagation::new("d1", millimeter!(2000.0))?);
-    scenery.connect_nodes(src, "out1", d1, "front")?;
+    let input_group = scenery.add_node(hhts_input()?);
+    scenery.connect_nodes(src, "out1", input_group, "input")?;
 
     // T1
     let mut group_t1 = NodeGroup::new("T1");
@@ -167,7 +169,7 @@ fn main() -> OpmResult<()> {
     group_t1.expand_view(false)?;
     let t1 = scenery.add_node(group_t1);
 
-    scenery.connect_nodes(d1, "rear", t1, "input")?;
+    scenery.connect_nodes(input_group, "output", t1, "input")?;
 
     let d6 = scenery.add_node(Propagation::new("d6", millimeter!(100.0))?);
 

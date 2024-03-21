@@ -10,6 +10,7 @@ use crate::optical::LightResult;
 use crate::properties::{Properties, Proptype};
 use crate::reporter::NodeReport;
 use crate::{optic_ports::OpticPorts, optical::Optical};
+use log::warn;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::{algo::toposort, Direction};
@@ -414,6 +415,14 @@ impl NodeGroup {
             }
         } // else outgoing edge not connected -> data dropped
     }
+    fn is_group_src_node(&self, idx: NodeIndex) -> bool {
+        let group_srcs = self.g.0.externals(Direction::Incoming);
+        group_srcs.into_iter().any(|gs| gs == idx)
+    }
+    fn is_group_sink_node(&self, idx: NodeIndex) -> bool {
+        let group_sinks = self.g.0.externals(Direction::Outgoing);
+        group_sinks.into_iter().any(|gs| gs == idx)
+    }
     fn analyze_group(
         &mut self,
         incoming_data: &LightResult,
@@ -424,13 +433,21 @@ impl NodeGroup {
             self.invert_graph()?;
         }
         let g_clone = self.g.0.clone();
-        let mut group_srcs = g_clone.externals(Direction::Incoming);
+        let props = self.properties().clone();
+        let group_name = props.name()?;
+        if !&self.g.is_single_tree() {
+            warn!(
+                "Group {} contains unconnected sub-trees. Analysis might not be complete.",
+                group_name
+            );
+        }
         let mut light_result = LightResult::default();
         let sorted = toposort(&self.g.0, None)
             .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
         for idx in sorted {
+            let node = g_clone.node_weight(idx).unwrap();
             // Check if node is group src node
-            let incoming_edges = if group_srcs.any(|gs| gs == idx) {
+            let incoming_edges = if self.is_group_src_node(idx) {
                 // get from incoming_data
                 let portmap = if is_inverted {
                     self.output_port_map()
@@ -447,29 +464,35 @@ impl NodeGroup {
             } else {
                 self.incoming_edges(idx)
             };
-            let node = g_clone.node_weight(idx).unwrap();
-            let outgoing_edges: HashMap<String, Option<LightData>> = node
-                .optical_ref
-                .borrow_mut()
-                .analyze(incoming_edges, analyzer_type)?;
-            let mut group_sinks = g_clone.externals(Direction::Outgoing);
-            // Check if node is group sink node
-            if group_sinks.any(|gs| gs == idx) {
-                let portmap = if is_inverted {
-                    self.input_port_map()
-                } else {
-                    self.output_port_map()
-                };
-                let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
-                for port in assigned_ports {
-                    light_result.insert(
-                        port.0.clone(),
-                        outgoing_edges.get(&port.1 .1).unwrap().clone(),
-                    );
+            let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
+            let neighbors = self.g.0.neighbors_undirected(idx);
+            if neighbors.count() == 0 {
+                if !self.input_port_map().iter().any(|p| p.1 .0 == idx) {
+                    warn!("Group {group_name} contains stale (completely unconnected) node {node_name}. Skipping.");
                 }
             } else {
-                for outgoing_edge in outgoing_edges {
-                    self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                let outgoing_edges: HashMap<String, Option<LightData>> = node
+                    .optical_ref
+                    .borrow_mut()
+                    .analyze(incoming_edges, analyzer_type)?;
+                // Check if node is group sink node
+                if self.is_group_sink_node(idx) {
+                    let portmap = if is_inverted {
+                        self.input_port_map()
+                    } else {
+                        self.output_port_map()
+                    };
+                    let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
+                    for port in assigned_ports {
+                        light_result.insert(
+                            port.0.clone(),
+                            outgoing_edges.get(&port.1 .1).unwrap().clone(),
+                        );
+                    }
+                } else {
+                    for outgoing_edge in outgoing_edges {
+                        self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                    }
                 }
             }
         }
@@ -805,6 +828,7 @@ mod test {
         spectrum_helper::create_he_ne_spec,
     };
     use approx::assert_abs_diff_eq;
+    use log::Level;
     #[test]
     fn default() {
         let node = NodeGroup::default();
@@ -1071,6 +1095,53 @@ mod test {
         input.insert("wrong".into(), Some(input_light.clone()));
         let output = group.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_err());
+    }
+    #[test]
+    fn analyze_subtree_warning() {
+        testing_logger::setup();
+        let mut group = NodeGroup::default();
+        let d1 = group.add_node(Dummy::default()).unwrap();
+        let d2 = group.add_node(Dummy::default()).unwrap();
+        let d3 = group.add_node(Dummy::default()).unwrap();
+        let d4 = group.add_node(Dummy::default()).unwrap();
+        group.connect_nodes(d1, "rear", d2, "front").unwrap();
+        group.connect_nodes(d3, "rear", d4, "front").unwrap();
+        group.map_input_port(d1, "front", "input").unwrap();
+        let input = LightResult::default();
+        let output = group.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "Group group contains unconnected sub-trees. Analysis might not be complete."
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
+    }
+    #[test]
+    fn analyze_stale_node() {
+        testing_logger::setup();
+        let mut group = NodeGroup::default();
+        let d1 = group.add_node(Dummy::default()).unwrap();
+        let _ = group.add_node(Dummy::new("stale node")).unwrap();
+        group.map_input_port(d1, "front", "input").unwrap();
+        let input = LightResult::default();
+        let output = group.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 2);
+            assert_eq!(
+                captured_logs[0].body,
+                "Group group contains unconnected sub-trees. Analysis might not be complete."
+            );
+            assert_eq!(
+                captured_logs[1].body,
+                "Group group contains stale (completely unconnected) node stale node. Skipping."
+            );
+
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
     }
     #[test]
     fn analyze_inverse() {
