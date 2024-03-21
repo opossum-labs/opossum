@@ -36,10 +36,10 @@ use serde_derive::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::ops::Add;
 use std::ops::Range;
-use uom::{num_traits::Zero, si::f64::Area};
 use uom::si::energy::joule;
 use uom::si::f64::{Angle, Energy, Length};
 use uom::si::length::{micrometer, millimeter, nanometer};
+use uom::{num_traits::Zero, si::f64::Area};
 
 /// Struct containing all relevant information of a ray bundle
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
@@ -305,7 +305,12 @@ impl Rays {
             |c, r| {
                 let pos = r.position();
                 let energy = r.energy().get::<joule>();
-                (c.0 + pos.x*energy, c.1 + pos.y*energy, c.2 + pos.z*energy, c.3+energy)
+                (
+                    c.0 + pos.x * energy,
+                    c.1 + pos.y * energy,
+                    c.2 + pos.z * energy,
+                    c.3 + energy,
+                )
             },
         );
         Some(Point3::new(c.0 / c.3, c.1 / c.3, c.2 / c.3))
@@ -367,8 +372,9 @@ impl Rays {
         self.energy_weighted_centroid().map(|c| {
             let mut sum_dist_sq = Area::zero();
             for ray in self.rays.iter().filter(|r| r.valid()) {
-                let dist = ((c.x - ray.position().x)*(c.x - ray.position().x) + (c.y - ray.position().y)*(c.y - ray.position().y));
-                sum_dist_sq += dist*ray.energy().get::<joule>();
+                let dist = (c.x - ray.position().x) * (c.x - ray.position().x)
+                    + (c.y - ray.position().y) * (c.y - ray.position().y);
+                sum_dist_sq += dist * ray.energy().get::<joule>();
             }
             sum_dist_sq /= self.total_energy().get::<joule>();
             sum_dist_sq.sqrt()
@@ -1869,11 +1875,23 @@ mod test {
     }
 
     #[test]
-    fn energy_centroid_test(){
+    fn energy_centroid_test() {
         let rays = Rays::from(vec![
-            Ray::new(millimeter!(-1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(1.)).unwrap(),
-            Ray::new(millimeter!(1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(1.)).unwrap()
-            ]);
+            Ray::new(
+                millimeter!(-1., 0., 0.),
+                Vector3::new(0., 0., 1.),
+                nanometer!(1054.),
+                joule!(1.),
+            )
+            .unwrap(),
+            Ray::new(
+                millimeter!(1., 0., 0.),
+                Vector3::new(0., 0., 1.),
+                nanometer!(1054.),
+                joule!(1.),
+            )
+            .unwrap(),
+        ]);
         let centroid = rays.energy_weighted_centroid();
         assert!(centroid.is_some());
         assert_relative_eq!(centroid.unwrap().x.get::<millimeter>(), 0.);
@@ -1881,19 +1899,43 @@ mod test {
         assert_relative_eq!(centroid.unwrap().z.get::<millimeter>(), 0.);
 
         let rays = Rays::from(vec![
-            Ray::new(millimeter!(-1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(1.)).unwrap(),
-            Ray::new(millimeter!(1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(0.5)).unwrap()
-            ]);
+            Ray::new(
+                millimeter!(-1., 0., 0.),
+                Vector3::new(0., 0., 1.),
+                nanometer!(1054.),
+                joule!(1.),
+            )
+            .unwrap(),
+            Ray::new(
+                millimeter!(1., 0., 0.),
+                Vector3::new(0., 0., 1.),
+                nanometer!(1054.),
+                joule!(0.5),
+            )
+            .unwrap(),
+        ]);
         let centroid = rays.energy_weighted_centroid();
         assert!(centroid.is_some());
-        assert_relative_eq!(centroid.unwrap().x.get::<millimeter>(), -1./3.);
+        assert_relative_eq!(centroid.unwrap().x.get::<millimeter>(), -1. / 3.);
         assert_relative_eq!(centroid.unwrap().y.get::<millimeter>(), 0.);
         assert_relative_eq!(centroid.unwrap().z.get::<millimeter>(), 0.);
 
         let mut rays = Rays::from(vec![
-            Ray::new(millimeter!(-1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(1.)).unwrap(),
-            Ray::new(millimeter!(1.,0.,0.), Vector3::new(0.,0.,1.), nanometer!(1054.), joule!(0.5)).unwrap()
-            ]);
+            Ray::new(
+                millimeter!(-1., 0., 0.),
+                Vector3::new(0., 0., 1.),
+                nanometer!(1054.),
+                joule!(1.),
+            )
+            .unwrap(),
+            Ray::new(
+                millimeter!(1., 0., 0.),
+                Vector3::new(0., 0., 1.),
+                nanometer!(1054.),
+                joule!(0.5),
+            )
+            .unwrap(),
+        ]);
 
         rays.rays[1].set_invalid();
         let centroid = rays.energy_weighted_centroid();
@@ -1905,6 +1947,5 @@ mod test {
         let rays = Rays::default();
         let centroid = rays.energy_weighted_centroid();
         assert!(centroid.is_none());
-
     }
 }
