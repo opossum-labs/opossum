@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 //! Module handling the export of an [`OpticScenery`](crate::optic_scenery::OpticScenery) into the Graphviz `.dot` format.
+use num::ToPrimitive;
+
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 
@@ -39,7 +41,7 @@ pub trait Dottable {
     ///
     /// # Returns
     /// Returns the String that describes the table cell of the ports.
-    fn create_port_cell_str(&self, port_name: &str, input_flag: bool, port_index: usize) -> String {
+    fn create_port_cell_str(&self, port_name: &str, input_flag: bool, port_index: usize, cell_size: usize) -> String {
         // inputs marked as green, outputs as blue
         let color_str = if input_flag {
             "\"lightgreen\""
@@ -53,7 +55,7 @@ pub trait Dottable {
             "Output port"
         };
         format!(
-            "<TD HEIGHT=\"16\" WIDTH=\"16\" PORT=\"{port_name}\" BORDER=\"1\" BGCOLOR={color_str} HREF=\"\" TOOLTIP=\"{in_out_str} {port_index}: {port_name}\">{port_index}</TD>\n"
+            "<TD WIDTH=\"16\" HEIGHT=\"16\" FIXEDSIZE=\"TRUE\" PORT=\"{port_name}\" BORDER=\"1\" BGCOLOR={color_str} HREF=\"\" TOOLTIP=\"{in_out_str} {port_index}: {port_name}\">{port_index}</TD>\n"
         )
     }
     /// Defines the displayed color of the node
@@ -120,6 +122,7 @@ pub trait Dottable {
         ports_count: (&mut usize, &mut usize),
         ax_nums: (usize, usize),
         node_name: &str,
+        rankdir: &str
     ) -> String {
         let mut dot_str = String::new();
         let max_port_num = if ports.0.len() <= ports.1.len() {
@@ -131,18 +134,44 @@ pub trait Dottable {
         let port_0_count = ports_count.0;
         let port_1_count = ports_count.1;
 
-        let (node_cell_size, num_cells, row_col_span, port_0_start, port_1_start) =
-            if max_port_num > 1 {
-                (
-                    16 * (max_port_num * 2 + 1),
-                    (max_port_num + 1) * 2 + 1,
-                    max_port_num * 2 + 1,
-                    max_port_num - ports.0.len() + 2,
-                    max_port_num - ports.1.len() + 2,
-                )
-            } else {
-                (80, 7, 5, 3, 3)
+        let node_name_chars = node_name.len().to_f64().unwrap();
+        let (cell_size, node_cell_size, num_cells, row_col_span, port_0_start, port_1_start) ={
+            let (num_cells, col_span) = if max_port_num > 1{
+                ((max_port_num + 1) * 2 + 1, max_port_num * 2 + 1)
+            }
+            else{
+                (7, 5)
             };
+            let mut single_cell_size = if 16 * (max_port_num * 2 + 1) > (node_name_chars*6.1).ceil().to_usize().unwrap(){
+                (16 * (max_port_num * 2 + 1)+20)/num_cells
+            }
+            else{
+                ((node_name_chars*6.1).ceil().to_usize().unwrap()+20)/num_cells
+            };
+            if single_cell_size < 80/(num_cells-2){
+                single_cell_size = 80/(num_cells-2);
+            }
+            let input_start = if num_cells > 7 || ports.0.len() > 1{
+                max_port_num - ports.0.len() + 2
+            }
+            else{
+                3
+            };
+            let output_start = if num_cells > 7 || ports.1.len() > 1{
+                max_port_num - ports.1.len() + 2
+            }
+            else{
+                3
+            };
+            (
+                single_cell_size,
+                single_cell_size*(num_cells-2),
+                num_cells,
+                col_span,
+                input_start,
+                output_start,
+            )
+        };
 
         if port_0_count < &mut ports.0.len()
             && ax_nums.0 >= port_0_start
@@ -153,6 +182,7 @@ pub trait Dottable {
                 &ports.0[*port_0_count],
                 true,
                 *port_0_count + 1,
+                cell_size
             ));
             *port_0_count += 1;
         } else if port_1_count < &mut ports.1.len()
@@ -164,18 +194,42 @@ pub trait Dottable {
                 &ports.1[*port_1_count],
                 false,
                 *port_1_count + 1,
+                cell_size
             ));
             *port_1_count += 1;
         } else if ax_nums.0 == 1 && ax_nums.1 == 1 {
-            dot_str.push_str(&format!(  "<TD ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"10\" STYLE=\"ROUNDED\">{}</TD>\n", 
+            dot_str.push_str(&format!(  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>\n", 
                                                 row_col_span,
                                                 row_col_span,
                                                 self.node_color(),
                                                 node_cell_size,
                                                 node_cell_size,
                                                 node_name));
-        } else {
-            dot_str.push_str("<TD ALIGN=\"CENTER\" HEIGHT=\"16\" WIDTH=\"16\"> </TD>\n");
+        } 
+        else if (ax_nums.0== 0 || ax_nums.0 == num_cells-1) && (ax_nums.1 == 1 || ax_nums.1 == num_cells-2){
+            let size = (node_cell_size - (num_cells-4)*16)/2;
+            if rankdir == "LR"{
+                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>\n"));
+                
+            }
+            else{
+                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"16\"> </TD>\n"));
+
+            }
+        }
+        else if (ax_nums.1== 0 || ax_nums.1 == num_cells-1) && (ax_nums.0 == 1 || ax_nums.0 == num_cells-2){
+            let size = (node_cell_size - (num_cells-4)*16)/2;
+            if rankdir == "LR"{
+                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>\n"));
+                
+            }
+            else{
+                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"{size}\" HEIGHT=\"16\"> </TD>\n"));
+
+            }
+        }
+        else {
+            dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"16\"> </TD>\n"));
         };
 
         dot_str
@@ -238,6 +292,7 @@ pub trait Dottable {
                         (&mut in_port_count, &mut out_port_count),
                         (row_num, col_num),
                         node_name,
+                        rankdir
                     ));
                 } else if rankdir != "LR"
                     && !(row_num > 1
@@ -255,6 +310,7 @@ pub trait Dottable {
                         (&mut in_port_count, &mut out_port_count),
                         (col_num, row_num),
                         node_name,
+                        rankdir
                     ));
                 };
             }
