@@ -1744,11 +1744,11 @@ impl PlotParameters {
     /// This method throws an error if the argument is not found
     /// # Panics
     /// This method panics if the path cannot be casted to a str
-    pub fn get_fpath(&self) -> OpmResult<String> {
+    pub fn get_fpath(&self) -> OpmResult<PathBuf> {
         let fdir = self.get_fdir()?;
         let fname = self.get_fname()?;
 
-        Ok(fdir.join(fname).to_str().unwrap().to_owned())
+        Ok(fdir.join(fname))
     }
 
     ///This method gets the file directory which is stored in the [`PlotParameters`]
@@ -2728,15 +2728,17 @@ mod test {
         assert_eq!(plt_params.get_fname().unwrap(), "test_name.png".to_owned());
     }
     #[test]
-    fn plot_params_fpathh() {
+    fn plot_params_fpath() {
         let mut plt_params = PlotParameters::default();
         plt_params
             .set(&PlotArgs::FName("test_name.png".to_owned()))
             .unwrap();
-        assert!(plt_params
-            .get_fpath()
+        let path = plt_params
+            .get_fdir()
             .unwrap()
-            .ends_with("opossum\\opossum\\test_name.png"));
+            .join(plt_params.get_fname().unwrap());
+
+        assert_eq!(plt_params.get_fpath().unwrap(), path);
     }
     #[test]
     fn get_plot_params() {
