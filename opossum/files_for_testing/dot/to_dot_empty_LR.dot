@@ -5,8 +5,8 @@ digraph {
 	compound = true;
 	rankdir = "LR";
 	label="Test"
-	fontname="Helvetica"
-	node [fontname="Helvetica" fontsize = 10]
-	edge [fontname="Helvetica"]
+	fontname="Consolas"
+	node [fontname="Consolas" fontsize = 8]
+	edge [fontname="Consolas"]
 
 }

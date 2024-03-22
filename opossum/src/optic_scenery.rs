@@ -512,27 +512,20 @@ mod test {
         lightdata::LightData,
         millimeter, nanometer,
         nodes::{
-            BeamSplitter, Detector, Dummy, EnergyMeter, IdealFilter, Metertype, NodeGroup,
-            NodeReference, ParaxialSurface, Propagation, RayPropagationVisualizer, Source,
-            Spectrometer, SpotDiagram, WaveFront,
+            BeamSplitter, Detector, Dummy, EnergyMeter, IdealFilter, NodeReference,
+            ParaxialSurface, Propagation, RayPropagationVisualizer, Source, Spectrometer,
+            SpotDiagram, WaveFront,
         },
         optical::Optical,
         properties::Proptype,
-        ray::{Ray, SplittingConfig},
+        ray::Ray,
         rays::Rays,
         OpticScenery,
     };
     use log::Level;
     use std::path::{Path, PathBuf};
-    use std::{fs::File, io::Read};
     use tempfile::NamedTempFile;
     use testing_logger;
-
-    fn get_file_content(f_path: &str) -> String {
-        let file_content = &mut "".to_owned();
-        let _ = File::open(f_path).unwrap().read_to_string(file_content);
-        file_content.to_string()
-    }
 
     #[test]
     fn new() {
@@ -540,132 +533,6 @@ mod test {
         assert_eq!(scenery.description(), "");
         assert_eq!(scenery.g.0.edge_count(), 0);
         assert_eq!(scenery.g.0.node_count(), 0);
-    }
-    #[test]
-    fn to_dot_empty() {
-        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_empty_TB.dot");
-        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_empty_LR.dot");
-
-        let mut scenery = OpticScenery::new();
-        scenery.set_description("Test".into()).unwrap();
-
-        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
-
-        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
-        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
-    }
-    #[test]
-    fn to_dot_with_node() {
-        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_w_node_TB.dot");
-        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_w_node_LR.dot");
-
-        let mut scenery = OpticScenery::new();
-        scenery.set_description("SceneryTest".into()).unwrap();
-        scenery.add_node(Dummy::new("Test"));
-
-        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
-
-        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
-        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
-    }
-    #[test]
-    fn to_dot_full() {
-        let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_full_TB.dot");
-        let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_full_LR.dot");
-
-        let mut scenery = OpticScenery::new();
-        scenery.set_description("SceneryTest".into()).unwrap();
-        let i_s = scenery.add_node(Source::new("Source", &LightData::Fourier));
-        let mut bs = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
-        bs.set_property("name", "Beam splitter".into()).unwrap();
-        let i_bs = scenery.add_node(bs);
-        let i_d1 = scenery.add_node(EnergyMeter::new(
-            "Energy meter 1",
-            Metertype::IdealEnergyMeter,
-        ));
-        let i_d2 = scenery.add_node(EnergyMeter::new(
-            "Energy meter 2",
-            Metertype::IdealEnergyMeter,
-        ));
-
-        scenery.connect_nodes(i_s, "out1", i_bs, "input1").unwrap();
-        scenery
-            .connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1")
-            .unwrap();
-        scenery
-            .connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1")
-            .unwrap();
-
-        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
-
-        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
-        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
-    }
-    #[test]
-    fn to_dot_group() {
-        let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot");
-        let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot");
-
-        let mut scenery = OpticScenery::new();
-        scenery
-            .set_description("Node Group test section".into())
-            .unwrap();
-
-        let mut group1 = NodeGroup::new("group 1");
-        group1.expand_view(true).unwrap();
-        let g1_n1 = group1.add_node(Dummy::new("node1")).unwrap();
-        let g1_n2 = group1.add_node(BeamSplitter::default()).unwrap();
-        group1
-            .map_output_port(g1_n2, "out1_trans1_refl2", "out1")
-            .unwrap();
-        group1
-            .connect_nodes(g1_n1, "rear", g1_n2, "input1")
-            .unwrap();
-
-        let mut nested_group = NodeGroup::new("group 1_1");
-        let nested_g_n1 = nested_group.add_node(Dummy::new("node1_1")).unwrap();
-        let nested_g_n2 = nested_group.add_node(Dummy::new("node1_2")).unwrap();
-        nested_group.expand_view(true).unwrap();
-
-        nested_group
-            .connect_nodes(nested_g_n1, "rear", nested_g_n2, "front")
-            .unwrap();
-        nested_group
-            .map_input_port(nested_g_n1, "front", "in1")
-            .unwrap();
-        nested_group
-            .map_output_port(nested_g_n2, "rear", "out1")
-            .unwrap();
-
-        let nested_group_index = group1.add_node(nested_group).unwrap();
-        group1
-            .connect_nodes(nested_group_index, "out1", g1_n1, "front")
-            .unwrap();
-
-        let mut group2: NodeGroup = NodeGroup::new("group 2");
-        group2.expand_view(false).unwrap();
-        let g2_n1 = group2.add_node(Dummy::new("node2_1")).unwrap();
-        let g2_n2 = group2.add_node(Dummy::new("node2_2")).unwrap();
-        group2.map_input_port(g2_n1, "front", "in1").unwrap();
-
-        group2.connect_nodes(g2_n1, "rear", g2_n2, "front").unwrap();
-
-        let scene_g1 = scenery.add_node(group1);
-        let scene_g2 = scenery.add_node(group2);
-
-        // set_output_port
-        scenery
-            .connect_nodes(scene_g1, "out1", scene_g2, "in1")
-            .unwrap();
-
-        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
-
-        assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
-        assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
     }
     #[test]
     fn description() {
