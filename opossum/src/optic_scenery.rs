@@ -199,9 +199,9 @@ impl OpticScenery {
         dot_string.push_str("\tcompound = true;\n");
         dot_string.push_str(&format!("\trankdir = \"{rankdir}\";\n"));
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description()));
-        dot_string.push_str("\tfontname=\"Helvetica\"\n");
-        dot_string.push_str("\tnode [fontname=\"Helvetica\" fontsize = 10]\n");
-        dot_string.push_str("\tedge [fontname=\"Helvetica\"]\n\n");
+        dot_string.push_str("\tfontname=\"Consolas\"\n");
+        dot_string.push_str("\tnode [fontname=\"Consolas\" fontsize = 8]\n");
+        dot_string.push_str("\tedge [fontname=\"Consolas\"]\n\n");
         dot_string
     }
     fn create_node_edge_str(

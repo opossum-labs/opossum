@@ -623,7 +623,7 @@ impl NodeGroup {
             format!("{}_i{}", &parent_identifier, node_index)
         };
         let mut dot_string = format!(
-            "  subgraph {parent_identifier} {{\n\tlabel=\"{name}{inv_string}\"\n\tfontsize=15\n\tcluster=true\n\t"
+            "  subgraph {parent_identifier} {{\n\tlabel=\"{name}{inv_string}\"\n\tfontsize=8\n\tcluster=true\n\t"
         );
 
         for node_idx in self.g.0.node_indices() {
