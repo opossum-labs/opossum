@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use approx::{abs_diff_eq, abs_diff_ne, relative_eq};
 use kahan::KahanSum;
 use log::warn;

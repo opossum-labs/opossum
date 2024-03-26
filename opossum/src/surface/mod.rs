@@ -3,6 +3,7 @@
 
 mod plane;
 mod sphere;
+pub mod cylinder;
 pub use plane::Plane;
 pub use sphere::Sphere;
 

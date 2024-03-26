@@ -1,5 +1,5 @@
+#![warn(missing_docs)]
 //!distribution functions which can be applied, for example, for disitributing energies in rays
-
 use nalgebra::Point2;
 use uom::si::{angle::radian, f64::Angle};
 

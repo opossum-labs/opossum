@@ -3,12 +3,15 @@
 //! This module implements a spherical surface with a given radius of curvature and a given z position on the optical axis.
 use super::Surface;
 use crate::ray::Ray;
+use crate::signed_distance_function::SDF;
+use crate::utils::geom_transformation::Isometry;
 use crate::{
     error::{OpmResult, OpossumError},
     meter,
 };
 use nalgebra::Point3;
 use nalgebra::Vector3;
+use num::Zero;
 use roots::find_roots_quadratic;
 use roots::Roots;
 use uom::si::f64::Length;
@@ -18,6 +21,8 @@ use uom::si::f64::Length;
 pub struct Sphere {
     z: Length,
     radius: Length,
+    pos: Point3<Length>,
+    isometry: Isometry
 }
 impl Sphere {
     /// Generate a new [`Sphere`] surface with a given z position on the optical axis and a given radius of curvature.
@@ -31,9 +36,13 @@ impl Sphere {
                 "radius of curvature must be != 0.0 and finite".into(),
             ));
         }
+        let isometry = Isometry::new(Point3::new(Length::zero(), Length::zero(), z), Point3::origin());
+
         Ok(Self {
             z: z + radius_of_curvature,
             radius: radius_of_curvature,
+            pos: Point3::new(Length::zero(), Length::zero(), z),
+            isometry
         })
     }
 }
@@ -107,6 +116,12 @@ impl Surface for Sphere {
             ),
             normal_vector,
         ))
+    }
+}
+
+impl SDF for Sphere{
+    fn eval_point(&self, p: &Point3<Length>) -> Length {
+        ((self.pos.x - p.x)*(self.pos.x - p.x) + (self.pos.y - p.y)*(self.pos.y - p.y) + (self.pos.z - p.z)*(self.pos.z - p.z)).sqrt() -  self.radius
     }
 }
 

@@ -1,5 +1,6 @@
+#![warn(missing_docs)]
 //! Module for additional uom macros that facilitate the creation of Points, vecs or single unit values
-/// helper macro
+/// helper macro to create the units
 #[macro_export]
 macro_rules! uom_unit_creator {
 

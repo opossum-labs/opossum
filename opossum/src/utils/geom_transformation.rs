@@ -1,9 +1,118 @@
 //!for all the functions, structs or trait that may be used for geometrical transformations
 #![warn(missing_docs)]
 use approx::relative_eq;
-use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
+use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Vector3};
+use uom::si::{angle::radian, f64::{Angle, Length}, length::millimeter};
 
-use crate::error::{OpmResult, OpossumError};
+use crate::{error::{OpmResult, OpossumError}, millimeter};
+
+
+/// Struct to store the isometric transofmeation matrix and its inverse
+#[derive(Debug)]
+pub struct Isometry{
+    transform: Isometry3<f64>,
+    inverse: Isometry3<f64>
+}
+impl Isometry{
+    /// Creates a new isometry which stores the rotation and translation as a transform matrix and its inverse
+    /// # Attributes
+    /// - `translation`: vector of translation for each axis as Length
+    /// - `axisangle`: vector of rotation around the respective major coordinate axis x, y & z
+    /// # Returns 
+    /// Returns a new [`Isometry`] struct
+    pub fn new(translation: Point3<Length>, axisangle: Point3<Angle>) -> Self{
+        let rot_in_radians = Vector3::from_vec(axisangle.iter().map(|x| x.get::<radian>()).collect::<Vec<f64>>());
+        let trans_in_mm = Vector3::from_vec(translation.iter().map(|x| x.get::<millimeter>()).collect::<Vec<f64>>());
+        let transform = Isometry3::new(trans_in_mm, rot_in_radians);
+        let inverse = transform.inverse();
+        Self { transform, inverse }
+    }
+
+    /// Transforms a single point by the defined isometry
+    /// # Attributes
+    /// - `p`: Point3 with Length components
+    /// # Returns 
+    /// Returns the transformed point3
+    pub fn transform_point(&self, p: &Point3<Length>) -> Point3<Length>{
+        let p_in_mm = Point3::new(
+            p.x.get::<millimeter>(),
+            p.y.get::<millimeter>(), 
+            p.z.get::<millimeter>()
+        );
+        let p_iso_trans = self.transform.transform_point(&p_in_mm);
+        millimeter!(p_iso_trans.x, p_iso_trans.y, p_iso_trans.z)    }
+
+    /// Transforms a vector of points by the defined isometry
+    /// # Attributes
+    /// - `p_vec`: Vec of Point3 with Length components
+    /// # Returns 
+    /// Returns the transformed point3s as Vec
+    pub fn transform_points(&self, p_vec: Vec<Point3<Length>>) -> Vec<Point3<Length>>{
+        p_vec.iter().map(|p| self.transform_point(&p)).collect::<Vec<Point3<Length>>>()
+    }
+
+    /// Inverse transforms a single point by the defined isometry
+    /// # Attributes
+    /// - `p`: Point3 with Length components
+    /// # Returns 
+    /// Returns the inverse-transformed point3
+    pub fn inverse_transform_point(&self, p: &Point3<Length>) -> Point3<Length>{
+        let p_in_mm = Point3::new(
+            p.x.get::<millimeter>(),
+            p.y.get::<millimeter>(), 
+            p.z.get::<millimeter>()
+        );
+        let p_iso_trans = self.inverse.transform_point(&p_in_mm);
+        millimeter!(p_iso_trans.x, p_iso_trans.y, p_iso_trans.z)
+    }
+
+    /// Inverse transforms a vector of points by the defined isometry
+    /// # Attributes
+    /// - `p_vec`: Vec of Point3 with Length components
+    /// # Returns 
+    /// Returns the inverse-transformed point3s as Vec
+    pub fn inverse_transform_points(&self, p_vec: Vec<Point3<Length>>) -> Vec<Point3<Length>>{
+        p_vec.iter().map(|p| self.inverse_transform_point(&p)).collect::<Vec<Point3<Length>>>()
+    }
+
+    /// Transforms a single vector3 by the defined isometry
+    /// # Attributes
+    /// - `v`: Vector3 dfining a direction
+    /// # Returns 
+    /// Returns the transformed vector3
+    pub fn transform_vector(&self, v: &Vector3<f64>) -> Vector3<f64>{
+        self.transform.transform_vector(v)
+    }
+
+    /// Transforms a vector of Vector3 by the defined isometry
+    /// # Attributes
+    /// - `v_vec`: Vec of Vector3
+    /// # Returns 
+    /// Returns the transformed Vector3 as Vec
+    pub fn transform_vectors(&self, v_vec: Vec<Vector3<f64>>) -> Vec<Vector3<f64>>{
+        v_vec.iter().map(|p| self.transform_vector(&p  )).collect::<Vec<Vector3<f64>>>()
+    }
+
+    /// Inverse transforms a single vector3 by the defined isometry
+    /// # Attributes
+    /// - `v`: Vector3 dfining a direction
+    /// # Returns 
+    /// Returns the inverse-transformed vector3
+    pub fn inverse_transform_vector(&self, v: &Vector3<f64>) -> Vector3<f64>{
+        self.inverse.transform_vector(v)
+    }
+
+    /// Inverse transforms a vector of Vector3 by the defined isometry
+    /// # Attributes
+    /// - `v_vec`: Vec of Vector3
+    /// # Returns 
+    /// Returns the inverse-transformed Vector3 as Vec
+    pub fn inverse_transform_vectors(&self, v_vec: Vec<Vector3<f64>>) -> Vec<Vector3<f64>>{
+        v_vec.iter().map(|p| self.inverse_transform_vector(&p  )).collect::<Vec<Vector3<f64>>>()
+    }
+}
+
+
 /// This function defines the coordinate axes on a plane.
 /// This may be useful if points are projected onto that plane and should be represented by values of two coordinate axes that span the plane
 /// If the plane normal is parallel to one of the main coordinate axes (x,y,z), the respective other axes are used.

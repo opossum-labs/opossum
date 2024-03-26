@@ -221,18 +221,34 @@ impl PlotType {
         x: &DVectorSlice<'_, f64>,
         y: &DVectorSlice<'_, f64>,
         z: &DVectorSlice<'_, f64>,
-    ) {
+        triangle_color: RGBAColor,
+    ) {        
         let series = triangle_index.row_iter().map(|idx| {
             Polygon::new(
                 vec![
                     (x[idx[0]], y[idx[0]], z[idx[0]]),
                     (x[idx[1]], y[idx[1]], z[idx[1]]),
                     (x[idx[2]], y[idx[2]], z[idx[2]]),
-                ],
-                Into::<ShapeStyle>::into(RGBAColor(0, 0, 255, 0.2)).filled(),
-            )
-        });
-        chart.draw_series(series).unwrap();
+                    ],
+                    Into::<ShapeStyle>::into(triangle_color).filled(),
+                )
+            });
+            chart.draw_series(series).unwrap();
+        // let series = triangle_index.row_iter().map(|idx| {
+        //     PathElement::new(
+        //         vec![
+        //             (x[idx[0]], y[idx[0]], z[idx[0]]),
+        //             (x[idx[1]], y[idx[1]], z[idx[1]]),
+        //             (x[idx[2]], y[idx[2]], z[idx[2]]),
+        //         ],
+        //         ShapeStyle {
+        //             color: RGBAColor(0,0,0,1.),
+        //             filled: false,
+        //             stroke_width: 1,
+        //         },
+        //     )
+        // });
+        // chart.draw_series(series).unwrap();
     }
 
     fn check_equistancy_of_mesh(ax_vals: &MatrixXx1<f64>) -> bool {
@@ -510,6 +526,7 @@ impl PlotType {
                     &xyz_dat.column(0),
                     &xyz_dat.column(2),
                     &xyz_dat.column(1),
+                    plt_series_vec[0].color
                 );
             } else {
                 warn!("Wrong PlotData stored for this plot type! Must use TriangulatedSurface! Not all series will be plotted!");
@@ -607,8 +624,8 @@ impl PlotType {
 
         chart.with_projection(
             |mut pb: plotters::coord::ranged3d::ProjectionMatrixBuilder| {
-                pb.pitch = 0. / 180. * PI;
-                pb.yaw = -90. / 180. * PI;
+                pb.pitch = 45. / 180. * PI;
+                pb.yaw = -45. / 180. * PI;
                 pb.scale = 0.7;
                 pb.into_matrix()
             },

@@ -3,17 +3,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    analyzer::AnalyzerType,
-    dottable::Dottable,
-    error::{OpmResult, OpossumError},
-    lightdata::LightData,
-    millimeter,
-    optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
-    properties::{Properties, Proptype},
-    refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{Plane, Sphere},
-    utils::EnumProxy,
+    analyzer::AnalyzerType, dottable::Dottable, error::{OpmResult, OpossumError}, lightdata::LightData, millimeter, optic_ports::OpticPorts, optical::{LightResult, Optical}, properties::{Properties, Proptype}, refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType}, signed_distance_function::SDF, surface::{Plane, Sphere}, utils::EnumProxy
 };
 use num::Zero;
 use uom::si::f64::Length;
@@ -225,6 +215,12 @@ impl Optical for Lens {
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.props.set(name, prop)
+    }
+}
+
+impl SDF for Lens{
+    fn eval_point(&self, p: &nalgebra::Point3<Length>) -> Length {
+        todo!()
     }
 }
 

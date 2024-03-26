@@ -35,6 +35,7 @@ pub mod ray;
 pub mod rays;
 pub mod refractive_index;
 pub mod reporter;
+pub mod signed_distance_function;
 pub mod spectrum;
 pub mod spectrum_helper;
 pub mod surface;
