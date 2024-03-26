@@ -1,9 +1,9 @@
 #![warn(missing_docs)]
 //! Module for handling optical surfaces
 
+pub mod cylinder;
 mod plane;
 mod sphere;
-pub mod cylinder;
 pub use plane::Plane;
 pub use sphere::Sphere;
 

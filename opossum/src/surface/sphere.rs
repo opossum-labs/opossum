@@ -2,6 +2,7 @@
 //!
 //! This module implements a spherical surface with a given radius of curvature and a given z position on the optical axis.
 use super::Surface;
+use crate::millimeter;
 use crate::ray::Ray;
 use crate::signed_distance_function::SDF;
 use crate::utils::geom_transformation::Isometry;
@@ -22,7 +23,7 @@ pub struct Sphere {
     z: Length,
     radius: Length,
     pos: Point3<Length>,
-    isometry: Isometry
+    isometry: Isometry,
 }
 impl Sphere {
     /// Generate a new [`Sphere`] surface with a given z position on the optical axis and a given radius of curvature.
@@ -36,13 +37,16 @@ impl Sphere {
                 "radius of curvature must be != 0.0 and finite".into(),
             ));
         }
-        let isometry = Isometry::new(Point3::new(Length::zero(), Length::zero(), z), Point3::origin());
+        let isometry = Isometry::new(
+            Point3::new(Length::zero(), Length::zero(), z),
+            Point3::origin(),
+        );
 
         Ok(Self {
             z: z + radius_of_curvature,
             radius: radius_of_curvature,
             pos: Point3::new(Length::zero(), Length::zero(), z),
-            isometry
+            isometry,
         })
     }
 }
@@ -119,9 +123,10 @@ impl Surface for Sphere {
     }
 }
 
-impl SDF for Sphere{
-    fn eval_point(&self, p: &Point3<Length>) -> Length {
-        ((self.pos.x - p.x)*(self.pos.x - p.x) + (self.pos.y - p.y)*(self.pos.y - p.y) + (self.pos.z - p.z)*(self.pos.z - p.z)).sqrt() -  self.radius
+impl SDF for Sphere {
+    fn sdf_eval_point(&self, p: &Point3<Length>) -> Length {
+        let p = self.isometry.inverse_transform_point(&p);
+        (p.x * p.x + p.y * p.y + p.z * p.z).sqrt() - self.radius
     }
 }
 
