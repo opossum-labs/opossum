@@ -2,7 +2,7 @@ use std::f64::consts::PI;
 
 use approx::relative_eq;
 use nalgebra::{Point3, Vector2, Vector3};
-use num::Zero;
+use num::{Float, Zero};
 use roots::find_roots_quadratic;
 use uom::si::{f64::Length, length::millimeter};
 
@@ -11,7 +11,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     millimeter, radian,
     ray::Ray,
-    signed_distance_function::SDF,
+    render::SDF,
     utils::geom_transformation::Isometry,
 };
 use roots::Roots;
@@ -40,7 +40,11 @@ impl Cylinder {
     ///
     /// # Errors
     ///
-    /// This function will return an error if the radius of curvature is 0.0 or not finite.
+    /// This function will return an error if 
+    /// - the radius of curvature is 0.0 or not finite.
+    /// - the construction direction is zero in length or is not finite
+    /// - the length is not finite
+    /// - the center position is not finite
     pub fn new(
         length: Length,
         radius: Length,
@@ -80,7 +84,7 @@ impl Cylinder {
             dir.dot(&Vector3::y()).acos() - PI / 2.,
             dir.dot(&Vector3::z()).acos()
         );
-        let isometry = Isometry::new(center_pos, Point3::origin());
+        let isometry = Isometry::new_from_view(center_pos, dir, Vector3::y());
         Ok(Self {
             length,
             radius,
@@ -148,12 +152,13 @@ impl Surface for Cylinder {
     }
 }
 
-impl SDF for Cylinder {
-    fn sdf_eval_point(&self, p: &Point3<Length>) -> Length {
-        let p = self.isometry.inverse_transform_point(&p);
+impl SDF for Cylinder 
+{
+    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+        let p = self.isometry.inverse_transform_point_f64(p);
         let d = Vector2::new((p.x * p.x + p.y * p.y).sqrt(), p.z.abs())
-            - Vector2::new(self.radius, self.length / 2.);
-        let d_max = Vector2::new(d.x.max(Length::zero()), d.y.max(Length::zero()));
-        (d.x.max(d.y)).min(Length::zero()) + (d_max.x * d_max.x + d_max.y * d_max.y).sqrt()
+            - Vector2::<f64>::new(self.radius.value, self.length.value / 2.);
+        let d_max = Vector2::new(d.x.max(0.), d.y.max(0.));
+        (d.x.max(d.y)).min(0.) + (d_max.x * d_max.x + d_max.y * d_max.y).sqrt()
     }
 }

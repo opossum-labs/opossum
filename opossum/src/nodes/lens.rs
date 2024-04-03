@@ -12,11 +12,11 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    signed_distance_function::SDF,
+    render::SDF,
     surface::{Plane, Sphere},
     utils::EnumProxy,
 };
-use num::Zero;
+use num::{Float, Zero};
 use uom::si::f64::Length;
 
 #[derive(Debug)]
@@ -167,10 +167,10 @@ impl Optical for Lens {
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     if (*front_roc).is_infinite() {
-                        rays.refract_on_surface(&Plane::new(next_z_pos)?, &index_model.value)?;
+                        rays.refract_on_surface(&Plane::new_along_z(next_z_pos)?, &index_model.value)?;
                     } else {
                         rays.refract_on_surface(
-                            &Sphere::new(next_z_pos, *front_roc)?,
+                            &Sphere::new_along_z(next_z_pos, *front_roc)?,
                             &index_model.value,
                         )?;
                     };
@@ -197,9 +197,9 @@ impl Optical for Lens {
                     rays.set_refractive_index(&index_model.value)?;
                     let index_1_0 = &RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap());
                     if (*rear_roc).is_infinite() {
-                        rays.refract_on_surface(&Plane::new(next_z_pos)?, index_1_0)?;
+                        rays.refract_on_surface(&Plane::new_along_z(next_z_pos)?, index_1_0)?;
                     } else {
-                        rays.refract_on_surface(&Sphere::new(next_z_pos, *rear_roc)?, index_1_0)?;
+                        rays.refract_on_surface(&Sphere::new_along_z(next_z_pos, *rear_roc)?, index_1_0)?;
                     };
                     if let Some(aperture) = self.ports().output_aperture("rear") {
                         rays.apodize(aperture)?;
@@ -229,8 +229,9 @@ impl Optical for Lens {
     }
 }
 
-impl SDF for Lens {
-    fn sdf_eval_point(&self, p: &nalgebra::Point3<Length>) -> Length {
+impl SDF for Lens 
+{
+    fn sdf_eval_point(&self, p: &nalgebra::Point3<f64>) -> f64 {
         todo!()
     }
 }

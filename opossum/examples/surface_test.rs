@@ -7,7 +7,7 @@ use opossum::{
 };
 
 fn main() -> OpmResult<()> {
-    let surface = Sphere::new(millimeter!(10.0), millimeter!(1.0))?; //Plane::new(10.0);
+    let surface = Sphere::new_along_z(millimeter!(10.0), millimeter!(1.0))?; //Plane::new(10.0);
     let ray = Ray::new(
         millimeter!(15.0, 0.0, 0.0),
         Vector3::new(0.0, 0.0, 1.0),

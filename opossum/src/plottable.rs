@@ -128,8 +128,8 @@ impl PlotType {
                 let mut image_buffer = vec![
                     0;
                     (plot.fig_size.0 * plot.fig_size.1) as usize
-                        * plotters::backend::RGBPixel::PIXEL_SIZE
-                ];
+                    * plotters::backend::RGBPixel::PIXEL_SIZE
+                    ];
                 {
                     let backend = BitMapBackend::with_buffer(&mut image_buffer, plot.fig_size)
                         .into_drawing_area();
@@ -227,9 +227,9 @@ impl PlotType {
         triangle_normals: &MatrixXx3<f64>,
     ) {
         let view = Vector3::new(-1.,-1.,-1.);
-        let series = izip!(triangle_index.row_iter(), triangle_normals.row_iter())
+        let series = triangle_index.row_iter()
         // .filter(|(_, n)| n.transpose().dot(&view) > 0.)
-        .map(|(idx, _)| {
+        .map(|idx| {
             Polygon::new(
                 vec![
                     (x[idx[0]], y[idx[0]], z[idx[0]]),
@@ -240,9 +240,9 @@ impl PlotType {
             )
         });
         chart.draw_series(series).unwrap();
-        let series = izip!(triangle_index.row_iter(), triangle_normals.row_iter())
+        let series = triangle_index.row_iter()
         // .filter(|(_, n)| n.transpose().dot(&view) > 0.)
-        .map(|(idx, _)| {
+        .map(|idx| {
             PathElement::new(
                 vec![
                     (x[idx[0]], y[idx[0]], z[idx[0]]),
@@ -522,7 +522,7 @@ impl PlotType {
             if let PlotData::TriangulatedSurface {
                 triangle_idx,
                 xyz_dat,
-                triangle_normals
+                triangle_face_normals: triangle_normals
             } = plt_series_vec[0].get_plot_series_data()
             {
                 //main plot
@@ -635,7 +635,9 @@ impl PlotType {
         chart.with_projection(
             |mut pb: plotters::coord::ranged3d::ProjectionMatrixBuilder| {
                 pb.pitch = 45. / 180. * PI;
-                pb.yaw = 45. / 180. * PI;
+                pb.yaw = 45. / 180. * PI;                
+                pb.pitch = 0. / 180. * PI;
+                pb.yaw = 0. / 180. * PI;
                 pb.scale = 0.7;
                 pb.into_matrix()
             },
@@ -816,7 +818,7 @@ pub enum PlotData {
         /// - Matrix with 3 columns and N rows that hold the x,y,z data
         xyz_dat: MatrixXx3<f64>,
         ///normal vectors of each triangle
-        triangle_normals: MatrixXx3<f64>,
+        triangle_face_normals: MatrixXx3<f64>,
     },
 }
 
@@ -922,12 +924,48 @@ impl PlotData {
     /// This function will return an error if
     /// - the length of xyz data: `xyz_dat` is zero
     /// - no axis bounds for x or y can be determined
-    pub fn new_triangulatedsurface(xyz_dat: &MatrixXx3<f64>) -> OpmResult<Self> {
+    pub fn new_triangulatedsurface(xyz_dat: &MatrixXx3<f64>, triangle_idx_opt: Option<&MatrixXx3<usize>>, triangle_face_normals_opt: Option<&MatrixXx3<f64>>) -> OpmResult<Self> {
         if xyz_dat.is_empty() {
             return Err(OpossumError::Other(
                 "No z-data provided! Cannot create `PlotData::TriangulatedSurface`!".into(),
             ));
         }
+        if let (Some(triangle_idx), Some(triangle_face_normals)) = (triangle_idx_opt, triangle_face_normals_opt){
+            if triangle_idx.shape().0 != triangle_face_normals.shape().0{
+                Err(OpossumError::Other("Shapes of triangle indices and face normals does not match! Cannot create `PlotData::TriangulatedSurface`!"        .into()))
+            }
+            else if triangle_idx.iter().fold(0,|arg0, idx| *idx.max(&arg0)) > xyz_dat.shape().0-1{
+                Err(OpossumError::Other("Maximum triangle index is larger than number of points! Cannot create `PlotData::TriangulatedSurface`!"        .into()))
+            }
+            else{
+                Ok(Self::TriangulatedSurface {
+                    triangle_idx: triangle_idx.clone(),
+                    xyz_dat: xyz_dat.clone(),
+                    triangle_face_normals: triangle_face_normals.clone()
+                })
+            }
+        }
+        else if let Some(triangle_idx) = triangle_idx_opt{
+            if triangle_idx.iter().fold(0,|arg0, idx| *idx.max(&arg0)) > xyz_dat.shape().0-1{
+                Err(OpossumError::Other("Maximum triangle index is larger than number of points! Cannot create `PlotData::TriangulatedSurface`!"        .into()))
+            }
+            else{
+                let triangle_face_normals = Matrix3xX::from_vec(triangle_idx.row_iter().map(|tri_idx| {
+                    let p1 = xyz_dat.row(tri_idx[0]);
+                    let p2 = xyz_dat.row(tri_idx[1]);
+                    let p3 = xyz_dat.row(tri_idx[2]);
+                    let normal = ((p2 - p1).cross(&(p3-p1))).normalize();
+                    [normal[0], normal[1], normal[2]]
+                }).flatten().collect_vec()).transpose();
+                Ok(Self::TriangulatedSurface {
+                    triangle_idx: triangle_idx.clone(),
+                    xyz_dat: xyz_dat.clone(),
+                    triangle_face_normals
+                })
+            }
+        }
+        else{
+
 
         let min_max_x = get_min_max_filter_nonfinite(
             xyz_dat
@@ -983,15 +1021,16 @@ impl PlotData {
             let p1 = xyz_dat.row(tri_idx[0]);
             let p2 = xyz_dat.row(tri_idx[1]);
             let p3 = xyz_dat.row(tri_idx[2]);
-            let normal = (p2 - p1).cross(&(p3-p1));
+            let normal = ((p2 - p1).cross(&(p3-p1))).normalize();
             [normal[0], normal[1], normal[2]]
         }).flatten().collect_vec()).transpose();
 
         Ok(Self::TriangulatedSurface {
             triangle_idx: triangle_idx_filtered,
             xyz_dat,
-            triangle_normals
+            triangle_face_normals: triangle_normals
         })
+    }
     }
 }
 
@@ -3116,7 +3155,7 @@ mod test {
             Some("colormesh".to_owned()),
         );
         let plt_series_surf_triangle = PlotSeries::new(
-            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            &PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap(),
             RGBAColor(0, 0, 0, 1.),
             Some("tri_surf".to_owned()),
         );
@@ -3175,7 +3214,7 @@ mod test {
         assert_relative_eq!(min_max[2].unwrap().0, -0.0);
         assert_relative_eq!(min_max[2].unwrap().1, 4.0);
 
-        let plt_dat_surf_triangle = PlotData::new_triangulatedsurface(&dat_3d).unwrap();
+        let plt_dat_surf_triangle = PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap();
         let min_max: Vec<Option<(f64, f64)>> = plt_dat_surf_triangle.get_axes_min_max_values();
         assert_relative_eq!(min_max[0].unwrap().0, 0.0);
         assert_relative_eq!(min_max[0].unwrap().1, 2.0);
@@ -3221,7 +3260,7 @@ mod test {
         assert_relative_eq!(axlims.z.unwrap().min, -0.2);
         assert_relative_eq!(axlims.z.unwrap().max, 4.2);
 
-        let plt_dat_tri_surf = PlotData::new_triangulatedsurface(&dat_3d).unwrap();
+        let plt_dat_tri_surf = PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap();
         let axlims = plt_dat_tri_surf.define_data_based_axes_bounds(true);
         assert_relative_eq!(axlims.x.unwrap().min, -0.1);
         assert_relative_eq!(axlims.x.unwrap().max, 2.1);
@@ -3258,7 +3297,7 @@ mod test {
             None,
         );
         let plt_series_surf_triangle = PlotSeries::new(
-            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            &PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap(),
             RGBAColor(0, 0, 0, 1.),
             None,
         );
@@ -3535,7 +3574,7 @@ mod test {
             None,
         );
         let plt_series_surf_triangle = PlotSeries::new(
-            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            &PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap(),
             RGBAColor(0, 0, 0, 1.),
             None,
         );
@@ -3572,7 +3611,7 @@ mod test {
             None,
         );
         let plt_series_surf_triangle = PlotSeries::new(
-            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            &PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap(),
             RGBAColor(0, 0, 0, 1.),
             None,
         );
@@ -3618,7 +3657,7 @@ mod test {
             None,
         );
         let plt_series_surf_triangle = PlotSeries::new(
-            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            &PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap(),
             RGBAColor(0, 0, 0, 1.),
             None,
         );
