@@ -757,7 +757,7 @@ pub enum PlotData {
         /// Pairwise 2D data (e.g. x, y data), structured as Matrix with N rows and two columns (x,y)
         xy_data: MatrixXx2<f64>,
     },
-    ///[`PlotData`] for [`PlotType::Scatter3D`] & [`PlotType::Line3D`]
+    ///[`PlotData`] for `PlotType::Scatter3D` & `PlotType::Line3D`
     Dim3 {
         ///Triplet 3D data (e.g. x, y, z data), structured as Matrix with N rows and three columns (x,y,z)
         xyz_data: MatrixXx3<f64>,

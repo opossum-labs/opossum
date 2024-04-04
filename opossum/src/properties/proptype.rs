@@ -27,7 +27,7 @@ use uuid::Uuid;
 
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
-/// The type of the [`Property`].
+/// The type of the [`Property`](crate::properties::Property).
 pub enum Proptype {
     /// A string property
     ///
