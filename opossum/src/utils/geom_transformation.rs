@@ -188,6 +188,15 @@ impl Isometry {
         self.inverse.transform_point(p)
     }
 
+    /// Inverse transforms a single point by the defined isometry
+    /// # Attributes
+    /// - `p`: Point3 with f64 components, assuming a length in meter is specified
+    /// # Returns
+    /// Returns the inverse-transformed point3
+    pub fn inverse_transform_point_mut_f64(&self, p: &Point3<f64>, p_out: &mut Point3<f64>) {
+        *p_out = self.inverse.transform_point(p);
+    }
+
     /// Inverse transforms a vector of points by the defined isometry
     /// # Attributes
     /// - `p_vec`: Vec of Point3 with Length components

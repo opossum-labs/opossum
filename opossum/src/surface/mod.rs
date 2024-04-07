@@ -7,8 +7,10 @@ mod plane;
 mod sphere;
 mod cuboid;
 mod cylinder;
+mod optical_table;
 pub use plane::Plane;
 pub use sphere::Sphere;
+pub use optical_table::OpticalTable;
 
 use crate::ray::Ray;
 use nalgebra::{Point3, Vector3};

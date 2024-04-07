@@ -2,14 +2,14 @@ use std::f64::consts::PI;
 
 use approx::relative_eq;
 use delaunator::Point;
-use nalgebra::{Point3, Vector2, Vector3};
+use nalgebra::{Point3, Vector2, Vector3, Vector4};
 use num::{Float, Zero};
 use roots::find_roots_quadratic;
 use uom::si::{f64::Length, length::millimeter};
 
 use super::Surface;
 use crate::{
-    error::{OpmResult, OpossumError}, millimeter, radian, ray::Ray, render::{Render, SDF}, utils::geom_transformation::Isometry
+    error::{OpmResult, OpossumError}, millimeter, radian, ray::Ray, render::{Color, Render, Renderable, SDF}, utils::geom_transformation::Isometry
 };
 use roots::Roots;
 
@@ -70,7 +70,6 @@ impl Cuboid {
         })
     }
 }
-impl Render for Cuboid{}
 // impl Surface for Cylinder {
 //     fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
 //         let ray_pos = Point3::new(
@@ -129,14 +128,22 @@ impl Render for Cuboid{}
 //     }
 // }
 
-impl SDF for Cuboid 
+impl Color for Cuboid{
+    fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
+        Vector3::<f64>::new(0.7,0.6,0.5)
+    }
+}
+impl Renderable<'_> for Cuboid{}
+impl Render<'_> for Cuboid{}
+
+impl SDF for Cuboid
 {
-    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
-        let p = self.isometry.inverse_transform_point_f64(p);
+    fn sdf_eval_point(&self, p: &Point3<f64>, p_out: &mut Point3<f64>) -> f64 {
+        self.isometry.inverse_transform_point_mut_f64(&p, p_out);
         let q = Vector3::new(
-            p.x.abs() - self.length.x.value/2.,
-            p.y.abs() - self.length.y.value/2.,
-            p.z.abs() - self.length.z.value/2.);
+            p_out.x.abs() - self.length.x.value/2.,
+            p_out.y.abs() - self.length.y.value/2.,
+            p_out.z.abs() - self.length.z.value/2.);
         let mut q_max = q.clone();
         q_max.iter_mut().for_each(|x:&mut f64|            *x = x.max(0.0)) ;
         (q_max.x*q_max.x + q_max.y*q_max.y + q_max.z*q_max.z).sqrt() + q.y.max(q.z).max(q.x).min(0.0)

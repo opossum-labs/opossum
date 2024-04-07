@@ -229,12 +229,14 @@ impl Optical for Lens {
     }
 }
 
-impl SDF for Lens 
-{
-    fn sdf_eval_point(&self, p: &nalgebra::Point3<f64>) -> f64 {
-        todo!()
-    }
-}
+// impl SDF for Lens 
+// {
+//     fn sdf_eval_point(&self, p: &nalgebra::Point3<f64>, p_out: &mut nalgebra::Point3<f64>) -> f64 {
+//         self.isometry.inverse_transform_point_mut_f64(&p, p_out);
+//         // (p.x * p.x + p.y * p.y + p.z * p.z).sqrt() - self.radius.value
+//         (p_out.x.mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z*p_out.z)) ).sqrt() - self.radius.value
+//     }
+// }
 
 impl Dottable for Lens {
     fn node_color(&self) -> &str {

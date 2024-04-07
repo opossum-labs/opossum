@@ -232,6 +232,50 @@ pub fn linspace(start: f64, end: f64, num: f64) -> OpmResult<DVector<f64>> {
     )
 }
 
+/// Creates a linearly spaced Vector (Matrix with1 column and `num` rows) from `start` to `end`
+/// # Attributes
+/// - `start`:  Start value of the array
+/// - `end`:    end value of the array
+/// - `num`:    number of elements
+///
+/// # Errors
+/// This function will return an error if `num` cannot be casted to usize.
+pub fn linspace_f32(start: f32, end: f32, num: f32) -> OpmResult<DVector<f32>> {
+    if !start.is_finite() || !end.is_finite() {
+        return Err(OpossumError::Other(
+            "start and end values must be finite!".into(),
+        ));
+    };
+
+    if num < 2. {
+        warn!("Using linspace with less than two elements results in an empty Vector for num=0 or a Vector with one entry being num=start");
+    }
+    num.to_usize().map_or_else(
+        || {
+            Err(OpossumError::Other(
+                "Cannot cast num value to usize!".into(),
+            ))
+        },
+        |num_usize| {
+            let mut linspace = DVector::<f32>::zeros(num_usize);
+            let mut range = KahanSum::<f32>::new_with_value(end);
+            range += -start;
+
+            let mut steps = KahanSum::<f32>::new_with_value(num);
+            steps += -1.;
+
+            let bin_size = range.sum() / steps.sum();
+
+            let mut summator: KahanSum<f32> = KahanSum::<f32>::new_with_value(start);
+            for val in linspace.iter_mut() {
+                *val = summator.sum();
+                summator += bin_size;
+            }
+            Ok(linspace)
+        },
+    )
+}
+
 /// Creates a linearly spaced Vector (Matrix with1 column and `num` rows) from `start` to `end` and an [`AxLims`] struct from data.
 /// # Attributes
 /// - `data`: data that defines the start- and end-points of the linearly spaced vector

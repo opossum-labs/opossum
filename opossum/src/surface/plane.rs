@@ -4,14 +4,14 @@
 
 use super::Surface;
 use crate::ray::Ray;
-use crate::render::{Render, SDF};
+use crate::render::{Color, Render, Renderable, SDF};
 use crate::utils::geom_transformation::Isometry;
 use crate::{
     error::{OpmResult, OpossumError},
     meter,
 };
 use approx::relative_eq;
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point3, Vector3, Vector4};
 use uom::si::f64::Length;
 
 #[derive(Debug)]
@@ -76,13 +76,20 @@ impl Surface for Plane {
         Some((intersection_point, normal_vector))
     }
 }
-impl SDF for Plane{
-    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
-        let p = self.isometry.inverse_transform_point_f64(&p);
-        p.x*self.normal.x + p.y*self.normal.y + p.z*self.normal.z + self.shift.value
+impl Color for Plane{
+    fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
+        Vector3::new(0.3,0.3,0.3)
     }
 }
-impl Render for Plane{}
+impl SDF for Plane{
+    fn sdf_eval_point(&self, p: &Point3<f64>, p_out: &mut Point3<f64>) -> f64 {
+        self.isometry.inverse_transform_point_mut_f64(&p, p_out);
+        p_out.x.mul_add(self.normal.x,  p_out.y*self.normal.y) + p_out.z.mul_add(self.normal.z , self.shift.value)
+    }
+}
+impl Render<'_> for Plane{}
+impl Renderable<'_> for Plane{}
+
 #[cfg(test)]
 mod test {
     use super::*;

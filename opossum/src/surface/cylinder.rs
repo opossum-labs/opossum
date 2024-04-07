@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use approx::relative_eq;
-use nalgebra::{Point3, Vector2, Vector3};
+use nalgebra::{Point3, Vector2, Vector3, Vector4};
 use num::{Float, Zero};
 use roots::find_roots_quadratic;
 use uom::si::{f64::Length, length::millimeter};
@@ -11,7 +11,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     millimeter, radian,
     ray::Ray,
-    render::SDF,
+    render::{Color, Render, Renderable, SDF},
     utils::geom_transformation::Isometry,
 };
 use roots::Roots;
@@ -152,13 +152,24 @@ impl Surface for Cylinder {
     }
 }
 
+impl Color for Cylinder{
+    fn get_color(&self, _p:&Point3<f64>) -> Vector3<f64> {
+        Vector3::<f64>::new(0.6,0.5,0.4)
+    }
+}
+
+impl Renderable<'_> for Cylinder{}
+impl Render<'_> for Cylinder{}
+
+
 impl SDF for Cylinder 
 {
-    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
-        let p = self.isometry.inverse_transform_point_f64(p);
-        let d = Vector2::new((p.x * p.x + p.y * p.y).sqrt(), p.z.abs())
+    fn sdf_eval_point(&self, p: &Point3<f64>, p_out: &mut Point3<f64>) -> f64 {
+        self.isometry.inverse_transform_point_mut_f64(&p, p_out);
+        let d = Vector2::new((p_out.x * p_out.x + p_out.y * p_out.y).sqrt(), p_out.z.abs())
             - Vector2::<f64>::new(self.radius.value, self.length.value / 2.);
         let d_max = Vector2::new(d.x.max(0.), d.y.max(0.));
+        // (d.x.max(d.y)).min(0.) + (d_max.x * d_max.x + d_max.y * d_max.y).sqrt()
         (d.x.max(d.y)).min(0.) + (d_max.x * d_max.x + d_max.y * d_max.y).sqrt()
     }
 }
