@@ -1,8 +1,8 @@
 #![warn(missing_docs)]
-use image::{DynamicImage, ImageBuffer, RgbImage};
+use image::RgbImage;
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
 use plotters::style::RGBAColor;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::{millimeter, nanometer};
 
@@ -18,7 +18,7 @@ use crate::{
     properties::{Properties, Proptype},
     rays::Rays,
     refractive_index::refr_index_vaccuum,
-    reporter::{NodeReport, PdfReportable},
+    reporter::NodeReport,
     surface::Plane,
 };
 
@@ -318,21 +318,6 @@ impl RayPositionHistories {
             .collect::<Vec<Length>>()
     }
 }
-
-impl PdfReportable for RayPositionHistories {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), PltBackEnd::Buf)?;
-        layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
-                img.unwrap_or_else(ImageBuffer::default),
-            ))
-            .map_err(|e| format!("adding of image failed: {e}"))?,
-        );
-        Ok(layout)
-    }
-}
-
 impl Plottable for RayPositionHistories {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params

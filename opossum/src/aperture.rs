@@ -40,7 +40,7 @@ use ncollide2d::{
     query::PointQuery,
     shape::{Ball, Cuboid, Polyline},
 };
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter, ratio::ratio};
 
 /// The apodization type of an [`Aperture`].

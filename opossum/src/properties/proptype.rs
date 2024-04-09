@@ -1,6 +1,6 @@
 use crate::{
     aperture::Aperture,
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
         ray_propagation_visualizer::RayPositionHistories, FilterType, FluenceData, Metertype,
@@ -10,12 +10,12 @@ use crate::{
     optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
-    reporter::{NodeReport, PdfReportable},
+    reporter::{HtmlNodeReport, NodeReport},
     utils::EnumProxy,
 };
-use genpdf::style;
 use num::Float;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
+use tinytemplate::TinyTemplate;
 use uom::lib::fmt::Debug;
 use uom::si::{
     energy::joule,
@@ -24,6 +24,9 @@ use uom::si::{
     Dimension, Quantity, Unit, Units,
 };
 use uuid::Uuid;
+static HTML_PROP_SIMPLE: &str = include_str!("../html/prop_simple.html");
+static HTML_PROP_IMAGE: &str = include_str!("../html/prop_image.html");
+static HTML_PROP_GROUP: &str = include_str!("../html/node_report.html");
 
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -85,6 +88,71 @@ pub enum Proptype {
     Energy(Energy),
     /// a optical refractive index model
     RefractiveIndex(EnumProxy<RefractiveIndexType>),
+}
+impl Proptype {
+    /// Generate a html representation of a Proptype.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///   - underlying html templates could not be compiled
+    ///   - a property value could not be converted to html code.
+    pub fn to_html(&self, property_name: &str) -> OpmResult<String> {
+        let mut tt = TinyTemplate::new();
+        tt.add_template("simple", HTML_PROP_SIMPLE)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        tt.add_template("image", HTML_PROP_IMAGE)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        tt.add_template("group", HTML_PROP_GROUP)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let string_value = match self {
+            Self::String(value) => tt.render("simple", &value),
+            Self::I32(value) => tt.render("simple", &format!("{value}")),
+            Self::F64(value) => tt.render("simple", &format!("{value:.6}")),
+            Self::Bool(value) => tt.render("simple", &format!("{value}")),
+            Self::SpectrometerType(value) => tt.render("simple", &value.to_string()),
+            Self::Metertype(value) => tt.render("simple", &value.to_string()),
+            Self::Spectrometer(_) => {
+                tt.render("image", &format!("spectrometer_{property_name}.svg"))
+            }
+            Self::SpotDiagram(_) => {
+                tt.render("image", &format!("spot_diagram_{property_name}.svg"))
+            }
+            Self::WaveFrontStats(_value) => {
+                tt.render("image", &format!("wavefront_diagram_{property_name}.png"))
+            }
+            Self::FluenceDetector(_value) => {
+                tt.render("image", &format!("fluence_{property_name}.png"))
+            }
+            Self::NodeReport(report) => {
+                let html_node_report = HtmlNodeReport {
+                    node: report.name().into(),
+                    node_type: report.detector_type().into(),
+                    props: report.properties().html_props(report.name()),
+                };
+                tt.render("group", &html_node_report)
+            }
+            Self::Fluence(value) => tt.render(
+                "simple",
+                &format!("{}J/cm²", format_value_with_prefix(*value)),
+            ),
+            Self::WfLambda(value, wvl) => tt.render(
+                "simple",
+                &format!(
+                    "{}λ, (λ = {})",
+                    format_value_with_prefix(*value,),
+                    format_quantity(meter, *wvl)
+                ),
+            ),
+            Self::Length(value) => tt.render("simple", &format_quantity(meter, *value)),
+            Self::Energy(value) => tt.render("simple", &format_quantity(joule, *value)),
+            Self::RayPositionHistory(_) => {
+                tt.render("image", &format!("ray_propagation_{property_name}.svg"))
+            }
+            _ => Ok("unknown property type".into()),
+        };
+        string_value.map_err(|e| OpossumError::Other(e.to_string()))
+    }
 }
 impl From<bool> for Proptype {
     fn from(value: bool) -> Self {
@@ -177,47 +245,6 @@ where
     let base_value = q.value.to_f64().unwrap();
     format!("{}{}", format_value_with_prefix(base_value), base_unit)
 }
-impl PdfReportable for Proptype {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut l = genpdf::elements::LinearLayout::vertical();
-        match self {
-            Self::String(value) => l.push(genpdf::elements::Paragraph::new(value)),
-            Self::I32(value) => l.push(genpdf::elements::Paragraph::new(format!("{value}"))),
-            Self::F64(value) => l.push(genpdf::elements::Paragraph::new(format!("{value:.6}"))),
-            Self::Bool(value) => l.push(genpdf::elements::Paragraph::new(value.to_string())),
-            Self::FilterType(value) => l.push(value.value.pdf_report()?),
-            Self::SpectrometerType(value) => l.push(value.pdf_report()?),
-            Self::Metertype(value) => l.push(value.pdf_report()?),
-            Self::Spectrometer(value) => l.push(value.pdf_report()?),
-            Self::SpotDiagram(value) => l.push(value.pdf_report()?),
-            Self::WaveFrontStats(value) => l.push(value.pdf_report()?),
-            Self::FluenceDetector(value) => l.push(value.pdf_report()?),
-            Self::NodeReport(value) => l.push(value.properties().pdf_report()?),
-            Self::Fluence(value) => l.push(genpdf::elements::Paragraph::new(format!(
-                "{}J/cm²",
-                format_value_with_prefix(*value)
-            ))),
-            Self::WfLambda(value, wvl) => l.push(genpdf::elements::Paragraph::new(format!(
-                "{}λ, (λ = {})",
-                format_value_with_prefix(*value,),
-                format_quantity(meter, *wvl)
-            ))),
-            Self::Length(value) => l.push(genpdf::elements::Paragraph::new(format_quantity(
-                meter, *value,
-            ))),
-            Self::Energy(value) => l.push(genpdf::elements::Paragraph::new(format_quantity(
-                joule, *value,
-            ))),
-            Self::RayPositionHistory(value) => l.push(value.pdf_report()?),
-
-            _ => l.push(
-                genpdf::elements::Paragraph::default()
-                    .styled_string("unknown property type", style::Effect::Italic),
-            ),
-        }
-        Ok(l)
-    }
-}
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 /// An enum defining value constraints for various [`Proptype`]s.
@@ -288,10 +315,5 @@ mod test {
             super::format_quantity(joule, Length::new::<nanometer>(1053.12345)),
             "   1.053 μJ"
         );
-    }
-    #[test]
-    fn pdf_report_string() {
-        let p = Proptype::String("test".into());
-        assert!(p.pdf_report().is_ok());
     }
 }

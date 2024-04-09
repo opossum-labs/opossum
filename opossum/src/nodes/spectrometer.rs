@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
-use image::{DynamicImage, ImageBuffer, RgbImage};
-use serde_derive::{Deserialize, Serialize};
+use image::RgbImage;
+use serde::{Deserialize, Serialize};
 use uom::si::length::nanometer;
 
 use crate::{
@@ -14,13 +14,13 @@ use crate::{
     plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
     refractive_index::refr_index_vaccuum,
-    reporter::{NodeReport, PdfReportable},
+    reporter::NodeReport,
     surface::Plane,
 };
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
+use std::{collections::HashMap, fmt::Display};
 
 #[non_exhaustive]
 #[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -32,6 +32,14 @@ pub enum SpectrometerType {
     /// Ocean Optics HR2000
     HR2000,
 }
+impl Display for SpectrometerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::HR2000 => write!(f, "Ocean Optics HR2000"),
+            Self::Ideal => write!(f, "ideal spectrometer"),
+        }
+    }
+}
 impl From<SpectrometerType> for Proptype {
     fn from(value: SpectrometerType) -> Self {
         Self::SpectrometerType(value)
@@ -41,18 +49,6 @@ impl From<SpectrometerType> for Proptype {
 impl From<Spectrometer> for Proptype {
     fn from(value: Spectrometer) -> Self {
         Self::Spectrometer(value)
-    }
-}
-
-impl PdfReportable for SpectrometerType {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let element = match self {
-            Self::Ideal => genpdf::elements::Text::new("ideal spectrometer"),
-            Self::HR2000 => genpdf::elements::Text::new("Ocean Optics HR2000"),
-        };
-        let mut l = genpdf::elements::LinearLayout::vertical();
-        l.push(element);
-        Ok(l)
     }
 }
 /// An (ideal) spectrometer
@@ -196,7 +192,7 @@ impl Optical for Spectrometer {
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if self.light_data.is_some() {
             let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                "spectrum_{}.svg",
+                "spectrometer_{}.svg",
                 self.properties().name()?
             )));
             self.to_plot(&file_path, PltBackEnd::SVG)
@@ -273,21 +269,6 @@ impl Dottable for Spectrometer {
         "lightseagreen"
     }
 }
-
-impl PdfReportable for Spectrometer {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), PltBackEnd::Buf)?;
-        layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
-                img.unwrap_or_else(ImageBuffer::default),
-            ))
-            .map_err(|e| format!("adding of image failed: {e}"))?,
-        );
-        Ok(layout)
-    }
-}
-
 impl Plottable for Spectrometer {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params

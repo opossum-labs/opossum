@@ -1,11 +1,11 @@
 digraph {
-	fontsize = 8
+	fontsize = 8;
 	compound = true;
 	rankdir = "LR";
 	label="SceneryTest"
-	fontname="Helvetica"
-	node [fontname="Helvetica" fontsize = 10]
-	edge [fontname="Helvetica"]
+	fontname="Courier"
+	node [fontname="Courier" fontsize = 10]
+	edge [fontname="Courier"]
 
 	i0 [
 		shape=plaintext

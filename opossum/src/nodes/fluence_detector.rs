@@ -1,10 +1,10 @@
 #![warn(missing_docs)]
 //! fluence measurement node
-use image::{DynamicImage, ImageBuffer, RgbImage};
+use image::RgbImage;
 use log::warn;
 use nalgebra::{DMatrix, DVector};
 use plotters::style::RGBAColor;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
@@ -15,7 +15,7 @@ use crate::plottable::{
 };
 use crate::properties::{Properties, Proptype};
 use crate::refractive_index::refr_index_vaccuum;
-use crate::reporter::{NodeReport, PdfReportable};
+use crate::reporter::NodeReport;
 use crate::surface::Plane;
 use crate::{
     optic_ports::OpticPorts,
@@ -262,29 +262,6 @@ impl FluenceData {
         )
     }
 }
-
-impl PdfReportable for FluenceData {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-        // layout.push(genpdf::elements::Paragraph::new(format!(
-        //     "Peak fluence: {:.1} J/cm²",
-        //     self.peak
-        // )));
-        // layout.push(genpdf::elements::Paragraph::new(format!(
-        //     "Average fluence: {:.1} J/cm²",
-        //     self.average
-        // )));
-        let img = self.to_plot(Path::new(""), PltBackEnd::Buf)?;
-        layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
-                img.unwrap_or_else(ImageBuffer::default),
-            ))
-            .map_err(|e| format!("adding of image failed: {e}"))?,
-        );
-        Ok(layout)
-    }
-}
-
 impl Plottable for FluenceData {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params

@@ -2,18 +2,19 @@
 pub mod property;
 pub mod proptype;
 
+use log::warn;
 pub use property::Property;
 pub use proptype::{PropCondition, Proptype};
 
 use crate::{
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,
-    reporter::PdfReportable,
 };
-use genpdf::{elements::TableLayout, style};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+
+use self::property::HtmlProperty;
 
 /// A general set of (optical) properties.
 ///
@@ -205,6 +206,26 @@ impl Properties {
     pub fn inverted(&self) -> OpmResult<bool> {
         self.get_bool("inverted")
     }
+    #[must_use]
+    pub fn html_props(&self, node_name: &str) -> Vec<HtmlProperty> {
+        let mut html_props: Vec<HtmlProperty> = Vec::new();
+        for prop in &self.props {
+            if let Ok(html_prop_value) = prop.1.prop().to_html(node_name) {
+                let html_prop = HtmlProperty {
+                    name: prop.0.to_owned(),
+                    description: prop.1.description().into(),
+                    prop_value: html_prop_value,
+                };
+                html_props.push(html_prop);
+            } else {
+                warn!(
+                    "property {} could not be ceonverted to html. Skipping",
+                    prop.0.to_owned()
+                );
+            }
+        }
+        html_props
+    }
 }
 
 impl<'a> IntoIterator for &'a Properties {
@@ -212,25 +233,6 @@ impl<'a> IntoIterator for &'a Properties {
     type Item = (&'a std::string::String, &'a Property);
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
-    }
-}
-
-impl PdfReportable for Properties {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-        let mut table = TableLayout::new(vec![1, 5]);
-        for property in &self.props {
-            let mut table_row = table.row();
-            let property_name = genpdf::elements::Paragraph::default()
-                .styled_string(format!("{}: ", property.0), style::Effect::Bold)
-                .aligned(genpdf::Alignment::Right);
-            table_row.push_element(property_name);
-            table_row.push_element(property.1.pdf_report()?);
-            table_row.push().unwrap();
-        }
-        layout.push(table);
-        layout.push(genpdf::elements::Break::new(1));
-        Ok(layout)
     }
 }
 #[cfg(test)]

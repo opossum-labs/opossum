@@ -9,12 +9,12 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     refractive_index::refr_index_vaccuum,
-    reporter::{NodeReport, PdfReportable},
+    reporter::NodeReport,
     surface::Plane,
 };
-use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Display};
 use uom::si::f64::Energy;
 
 #[non_exhaustive]
@@ -27,20 +27,17 @@ pub enum Metertype {
     /// an ideal power meter (currently not used)
     IdealPowerMeter,
 }
+impl Display for Metertype {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::IdealEnergyMeter => write!(f, "ideal energy meter"),
+            Self::IdealPowerMeter => write!(f, "ideal power meter"),
+        }
+    }
+}
 impl From<Metertype> for Proptype {
     fn from(value: Metertype) -> Self {
         Self::Metertype(value)
-    }
-}
-impl PdfReportable for Metertype {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let element = match self {
-            Self::IdealEnergyMeter => genpdf::elements::Text::new("ideal energy meter"),
-            Self::IdealPowerMeter => genpdf::elements::Text::new("ideal power meter"),
-        };
-        let mut l = genpdf::elements::LinearLayout::vertical();
-        l.push(element);
-        Ok(l)
     }
 }
 /// An (ideal) energy / power meter.
