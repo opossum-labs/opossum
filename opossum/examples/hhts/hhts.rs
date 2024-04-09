@@ -46,6 +46,7 @@ fn main() -> OpmResult<()> {
         1.45987884E-2,
         2.87769588E-3,
         1.07653051E+2,
+        nanometer!(300.0)..nanometer!(2000.0),
     )?;
     let refr_index_hzf52 = RefrIndexSchott::new(
         3.26760058E+000,
@@ -54,6 +55,7 @@ fn main() -> OpmResult<()> {
         7.70151348E-003,
         -9.08139817E-004,
         7.52649555E-005,
+        nanometer!(300.0)..nanometer!(2000.0),
     )?;
     let refr_index_hzf2 = RefrIndexSellmeier1::new(
         1.67643380E-001,
@@ -62,6 +64,7 @@ fn main() -> OpmResult<()> {
         6.05177711E-002,
         1.18524273E-002,
         1.13671100E+002,
+        nanometer!(300.0)..nanometer!(2000.0),
     )?;
 
     // apertures
