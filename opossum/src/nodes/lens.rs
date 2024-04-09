@@ -266,7 +266,10 @@ mod test {
         let Ok(Proptype::RefractiveIndex(index)) = node.props.get("refractive index") else {
             panic!()
         };
-        assert_eq!((*index).value.get_refractive_index(Length::zero()), 1.5);
+        assert_eq!(
+            (*index).value.get_refractive_index(Length::zero()).unwrap(),
+            1.5
+        );
     }
     #[test]
     fn new() {
@@ -308,7 +311,12 @@ mod test {
         else {
             panic!()
         };
-        assert_eq!((*ref_index_const).get_refractive_index(Length::zero()), 2.0);
+        assert_eq!(
+            (*ref_index_const)
+                .get_refractive_index(Length::zero())
+                .unwrap(),
+            2.0
+        );
     }
     #[test]
     fn analyze_flatflat() {

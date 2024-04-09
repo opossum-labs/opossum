@@ -1,3 +1,6 @@
+//! Trivial constant refractive index model
+//!
+//! This model simply returns a wavelength independant constant value.
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -11,11 +14,11 @@ use crate::error::OpossumError;
 /// Constant (wavelength independant) refractive index of 1.0.
 ///
 /// # Panics
-/// This function could theorectically panic.
+/// This function could only theorectically panic.
 pub fn refr_index_vaccuum() -> RefractiveIndexType {
     RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap())
 }
-
+/// Constant refractive index model
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RefrIndexConst {
     refractive_index: f64,
@@ -29,7 +32,7 @@ impl RefrIndexConst {
     pub fn new(refractive_index: f64) -> OpmResult<Self> {
         if refractive_index < 1.0 || !refractive_index.is_finite() {
             return Err(OpossumError::Other(
-                "refractive inde must be >=1.0 and finite.".into(),
+                "refractive index must be >=1.0 and finite.".into(),
             ));
         }
         Ok(Self { refractive_index })
@@ -37,8 +40,8 @@ impl RefrIndexConst {
 }
 
 impl RefractiveIndex for RefrIndexConst {
-    fn get_refractive_index(&self, _wavelength: uom::si::f64::Length) -> f64 {
-        self.refractive_index
+    fn get_refractive_index(&self, _wavelength: uom::si::f64::Length) -> OpmResult<f64> {
+        Ok(self.refractive_index)
     }
     fn to_enum(&self) -> super::RefractiveIndexType {
         RefractiveIndexType::Const(self.clone())
@@ -60,7 +63,7 @@ mod test {
     #[test]
     fn get_refractive_index() {
         let i = RefrIndexConst::new(1.5).unwrap();
-        assert_eq!(i.get_refractive_index(Length::zero()), 1.5);
+        assert_eq!(i.get_refractive_index(Length::zero()).unwrap(), 1.5);
     }
     #[test]
     fn get_enum() {
