@@ -10,7 +10,7 @@ use kahan::KahanSummator;
 use log::warn;
 use nalgebra::MatrixXx2;
 use plotters::style::RGBAColor;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::{
     f64::consts::PI,
     fmt::{Debug, Display},

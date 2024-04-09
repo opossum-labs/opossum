@@ -32,7 +32,7 @@ use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{distance, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::ops::Add;
 use std::ops::Range;

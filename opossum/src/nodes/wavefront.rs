@@ -1,10 +1,10 @@
 #![warn(missing_docs)]
 //! Wavefront measurment node
-use image::{DynamicImage, RgbImage};
+use image::RgbImage;
 use log::warn;
 use nalgebra::{DVector, DVectorSlice, MatrixXx3};
 use plotters::style::RGBAColor;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
     },
     properties::{Properties, Proptype},
     refractive_index::refr_index_vaccuum,
-    reporter::{NodeReport, PdfReportable},
+    reporter::NodeReport,
     surface::Plane,
     utils::griddata::{create_linspace_axes, interpolate_3d_scatter_data},
 };
@@ -304,28 +304,6 @@ impl Optical for WaveFront {
         }
     }
 }
-
-impl PdfReportable for WaveFrontData {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-
-        //todo! for all wavefronts!
-        let img = self.wavefront_error_maps[0]
-            .to_plot(Path::new(""), PltBackEnd::Buf)
-            .unwrap_or_else(|e| {
-                warn!("Could not create plot for pdf creation: {e}",);
-                None
-            });
-        layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
-                img.unwrap_or_default(),
-            ))
-            .map_err(|e| format!("adding of image failed: {e}"))?,
-        );
-        Ok(layout)
-    }
-}
-
 impl From<WaveFrontData> for Proptype {
     fn from(value: WaveFrontData) -> Self {
         Self::WaveFrontStats(value)

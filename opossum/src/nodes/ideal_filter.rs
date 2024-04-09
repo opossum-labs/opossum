@@ -7,11 +7,10 @@ use crate::optic_ports::OpticPorts;
 use crate::optical::Optical;
 use crate::properties::{Properties, Proptype};
 use crate::refractive_index::refr_index_vaccuum;
-use crate::reporter::PdfReportable;
 use crate::spectrum::Spectrum;
 use crate::surface::Plane;
 use crate::utils::EnumProxy;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Config data for an [`IdealFilter`].
@@ -21,20 +20,6 @@ pub enum FilterType {
     Constant(f64),
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
-}
-impl PdfReportable for FilterType {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut l = genpdf::elements::LinearLayout::vertical();
-        match self {
-            Self::Constant(value) => l.push(genpdf::elements::Text::new(format!(
-                "fixed attenuation: {value}"
-            ))),
-            Self::Spectrum(_) => {
-                l.push(genpdf::elements::Text::new("transmission spectrum"));
-            }
-        };
-        Ok(l)
-    }
 }
 #[derive(Debug)]
 /// An ideal filter with given transmission or optical density.

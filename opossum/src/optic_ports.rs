@@ -21,7 +21,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     properties::Proptype,
 };
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
 
 /// Structure defining the optical ports (input / output terminals) of an [`Optical`](crate::optical::Optical).

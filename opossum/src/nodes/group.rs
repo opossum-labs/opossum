@@ -14,7 +14,7 @@ use log::warn;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::{algo::toposort, Direction};
-use serde_derive::Serialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
 
