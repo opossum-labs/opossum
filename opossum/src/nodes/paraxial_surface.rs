@@ -15,7 +15,7 @@ use crate::{
     surface::Plane,
 };
 use uom::num_traits::Zero;
-use uom::si::{f64::Length, length::millimeter};
+use uom::si::f64::Length;
 
 use super::node_attr::NodeAttr;
 
@@ -53,7 +53,12 @@ impl Default for ParaxialSurface {
         node_attr.set_property("apertures", ports.into()).unwrap();
 
         node_attr
-            .create_property("focal length", "focal length in mm", None, 1.0.into())
+            .create_property(
+                "focal length",
+                "focal length",
+                None,
+                millimeter!(1.0).into(),
+            )
             .unwrap();
         Self { node_attr }
     }
@@ -77,7 +82,7 @@ impl ParaxialSurface {
         parsurf.node_attr.set_property("name", name.into())?;
         parsurf
             .node_attr
-            .set_property("focal length", focal_length.get::<millimeter>().into())?;
+            .set_property("focal length", focal_length.into())?;
         Ok(parsurf)
     }
 }
@@ -97,18 +102,16 @@ impl Optical for ParaxialSurface {
             AnalyzerType::Energy => (),
             AnalyzerType::RayTrace(_config) => {
                 if let Some(LightData::Geometric(mut rays)) = data {
-                    let focal_length = if let Ok(Proptype::F64(length)) =
+                    let Ok(Proptype::Length(focal_length)) =
                         self.node_attr.get_property("focal length")
-                    {
-                        millimeter!(*length)
-                    } else {
+                    else {
                         return Err(OpossumError::Analysis("cannot read focal length".into()));
                     };
                     let z_position =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     let plane = Plane::new(z_position)?;
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
-                    rays.refract_paraxial(focal_length)?;
+                    rays.refract_paraxial(*focal_length)?;
                     if let Some(aperture) = self.ports().input_aperture("front") {
                         rays.apodize(aperture)?;
                         if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -163,10 +166,10 @@ mod test {
         assert!(node.properties().get("focal length").is_ok());
         assert_matches!(
             node.properties().get("focal length").unwrap(),
-            Proptype::F64(_)
+            Proptype::Length(_)
         );
-        if let Ok(Proptype::F64(dist)) = node.properties().get("focal length") {
-            assert_eq!(dist, &1.0);
+        if let Ok(Proptype::Length(dist)) = node.properties().get("focal length") {
+            assert_eq!(*dist, millimeter!(1.0));
         }
         assert_eq!(node.node_color(), "palegreen");
         assert!(node.as_group().is_err());
