@@ -24,6 +24,8 @@ use crate::{
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use super::node_attr::NodeAttr;
+
 /// A fluence monitor
 ///
 /// It simply calculates the fluence (spatial energy distribution) of an incoming [`Ray`](crate::ray::Ray) bundle.
@@ -39,25 +41,22 @@ use std::path::{Path, PathBuf};
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct FluenceDetector {
     light_data: Option<LightData>,
-    props: Properties,
-}
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("fluence detector", "fluence detector");
-    let mut ports = OpticPorts::new();
-    ports.create_input("in1").unwrap();
-    ports.create_output("out1").unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
+    node_attr: NodeAttr,
 }
 impl Default for FluenceDetector {
     /// creates a fluence detector.
     fn default() -> Self {
+        let mut node_attr = NodeAttr::new("fluence detector", "fluence detector");
+        let mut ports = OpticPorts::new();
+        ports.create_input("in1").unwrap();
+        ports.create_output("out1").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
         Self {
             light_data: None,
-            props: create_default_props(),
+            node_attr,
         }
     }
 }
@@ -70,12 +69,9 @@ impl FluenceDetector {
     /// This function may panic if the property "name" can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
-        let mut props = create_default_props();
-        props.set("name", name.into()).unwrap();
-        Self {
-            props,
-            ..Default::default()
-        }
+        let mut fld = Self::default();
+        fld.node_attr.set_property("name", name.into()).unwrap();
+        fld
     }
 }
 
@@ -123,10 +119,8 @@ impl Optical for FluenceDetector {
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if let Some(LightData::Geometric(rays)) = &self.light_data {
-            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                "fluence_{}.png",
-                self.properties().name()?
-            )));
+            let file_path =
+                PathBuf::from(report_dir).join(Path::new(&format!("fluence_{}.png", self.name())));
 
             let fluence_data_opt = rays.calc_fluence_at_position().ok();
             fluence_data_opt.map_or_else(
@@ -146,11 +140,8 @@ impl Optical for FluenceDetector {
     fn is_detector(&self) -> bool {
         true
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
         let mut props = Properties::default();
@@ -186,11 +177,10 @@ impl Optical for FluenceDetector {
                     .unwrap();
             }
         }
-        Some(NodeReport::new(
-            self.properties().node_type().unwrap(),
-            self.properties().name().unwrap(),
-            props,
-        ))
+        Some(NodeReport::new(&self.node_type(), &self.name(), props))
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -309,8 +299,8 @@ mod test {
     fn default() {
         let node = FluenceDetector::default();
         assert!(node.light_data.is_none());
-        assert_eq!(node.properties().name().unwrap(), "fluence detector");
-        assert_eq!(node.properties().node_type().unwrap(), "fluence detector");
+        assert_eq!(node.name(), "fluence detector");
+        assert_eq!(node.node_type(), "fluence detector");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "lightpurple");
@@ -319,7 +309,7 @@ mod test {
     #[test]
     fn new() {
         let meter = FluenceDetector::new("test");
-        assert_eq!(meter.properties().name().unwrap(), "test");
+        assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
     }
     #[test]

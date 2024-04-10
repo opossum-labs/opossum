@@ -44,10 +44,7 @@ impl Serialize for OpticRef {
         S: serde::Serializer,
     {
         let mut node = serializer.serialize_struct("node", 3)?;
-        node.serialize_field(
-            "type",
-            self.optical_ref.borrow().properties().node_type().unwrap(),
-        )?;
+        node.serialize_field("type", &self.optical_ref.borrow().node_type())?;
         node.serialize_field("id", &self.uuid)?;
         node.serialize_field("properties", &self.optical_ref.borrow().properties())?;
         node.end()
@@ -219,9 +216,8 @@ mod test {
             uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb")
         );
         let optic_ref = optic_ref.optical_ref.borrow();
-        let properties = optic_ref.properties();
-        assert_eq!(properties.node_type().unwrap(), "dummy");
-        assert_eq!(properties.name().unwrap(), "test123");
+        assert_eq!(optic_ref.node_type(), "dummy");
+        assert_eq!(optic_ref.name(), "test123");
     }
     #[test]
     fn debug() {

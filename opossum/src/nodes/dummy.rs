@@ -1,11 +1,12 @@
 #![warn(missing_docs)]
+use super::node_attr::NodeAttr;
 use crate::analyzer::AnalyzerType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Proptype};
+use crate::properties::Proptype;
 use crate::refractive_index::refr_index_vaccuum;
 use crate::reporter::NodeReport;
 use crate::surface::Plane;
@@ -27,17 +28,17 @@ use std::collections::HashMap;
 ///   - `name`
 ///   - `inverted`
 pub struct Dummy {
-    props: Properties,
+    node_attr: NodeAttr,
 }
 
 impl Default for Dummy {
     fn default() -> Self {
+        let mut node_attr = NodeAttr::new("dummy", "dummy");
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        let mut props = Properties::new("dummy", "dummy");
-        props.set("apertures", ports.into()).unwrap();
-        Self { props }
+        node_attr.set_property("apertures", ports.into()).unwrap();
+        Self { node_attr }
     }
 }
 impl Dummy {
@@ -52,12 +53,9 @@ impl Dummy {
     /// - the property `apertures` can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
-        let mut ports = OpticPorts::new();
-        ports.create_input("front").unwrap();
-        ports.create_output("rear").unwrap();
-        let mut props = Properties::new(name, "dummy");
-        props.set("apertures", ports.into()).unwrap();
-        Self { props }
+        let mut dummy = Self::default();
+        dummy.node_attr.set_property("name", name.into()).unwrap();
+        dummy
     }
 }
 impl Optical for Dummy {
@@ -101,18 +99,18 @@ impl Optical for Dummy {
             Ok(HashMap::from([(outport.into(), data.clone())]))
         }
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
         Some(NodeReport::new(
-            self.properties().node_type().unwrap(),
-            self.properties().name().unwrap(),
-            self.props.clone(),
+            &self.node_type(),
+            &self.name(),
+            self.node_attr.properties().clone(),
         ))
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -129,8 +127,8 @@ mod test {
     #[test]
     fn default() {
         let node = Dummy::default();
-        assert_eq!(node.properties().name().unwrap(), "dummy");
-        assert_eq!(node.properties().node_type().unwrap(), "dummy");
+        assert_eq!(node.name(), "dummy");
+        assert_eq!(node.node_type(), "dummy");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert!(node.as_group().is_err());
@@ -138,18 +136,13 @@ mod test {
     #[test]
     fn new() {
         let node = Dummy::new("Test");
-        assert_eq!(node.properties().name().unwrap(), "Test");
+        assert_eq!(node.name(), "Test");
     }
     #[test]
     fn name_property() {
         let mut node = Dummy::default();
         node.set_property("name", "Test1".into()).unwrap();
-        assert_eq!(node.properties().name().unwrap(), "Test1")
-    }
-    #[test]
-    fn node_type_readonly() {
-        let mut node = Dummy::default();
-        assert!(node.set_property("node_type", "other".into()).is_err());
+        assert_eq!(node.name(), "Test1")
     }
     #[test]
     fn inverted() {
@@ -205,11 +198,6 @@ mod test {
     fn is_detector() {
         let node = Dummy::default();
         assert_eq!(node.is_detector(), false);
-    }
-    #[test]
-    fn node_type() {
-        let node = Dummy::default();
-        assert_eq!(node.properties().node_type().unwrap(), "dummy");
     }
     #[test]
     fn analyze_empty() {

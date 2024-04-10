@@ -7,13 +7,15 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Proptype},
+    properties::Proptype,
     refractive_index::{refr_index_vaccuum, RefractiveIndexType},
     utils::EnumProxy,
 };
 use num::Zero;
 use std::collections::HashMap;
 use uom::si::f64::Length;
+
+use super::node_attr::NodeAttr;
 /// Propagation along the optical axis (z-Axis)
 ///
 /// This node represents a free-space propagation along the optical axis (z-axis). So far,
@@ -37,40 +39,35 @@ use uom::si::f64::Length;
 ///   - `refractive index`
 #[derive(Debug, Clone)]
 pub struct Propagation {
-    props: Properties,
-}
-fn create_default_props() -> Properties {
-    let mut ports = OpticPorts::new();
-    ports.create_input("front").unwrap();
-    ports.create_output("rear").unwrap();
-    let mut props = Properties::new("propagation", "propagation");
-    props
-        .create(
-            "distance",
-            "distance along the optical axis in mm",
-            None,
-            Length::zero().into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "refractive index",
-            "refractive index of the medium",
-            None,
-            EnumProxy::<RefractiveIndexType> {
-                value: refr_index_vaccuum(),
-            }
-            .into(),
-        )
-        .unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
+    node_attr: NodeAttr,
 }
 impl Default for Propagation {
     fn default() -> Self {
-        Self {
-            props: create_default_props(),
-        }
+        let mut node_attr = NodeAttr::new("propagation", "propagation");
+        let mut ports = OpticPorts::new();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr
+            .create_property(
+                "distance",
+                "distance along the optical axis in mm",
+                None,
+                Length::zero().into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                "refractive index",
+                "refractive index of the medium",
+                None,
+                EnumProxy::<RefractiveIndexType> {
+                    value: refr_index_vaccuum(),
+                }
+                .into(),
+            )
+            .unwrap();
+        Self { node_attr }
     }
 }
 impl Propagation {
@@ -90,10 +87,12 @@ impl Propagation {
                 "propagation length must be finite".into(),
             ));
         }
-        let mut props = create_default_props();
-        props.set("name", name.into())?;
-        props.set("distance", length_along_z.into())?;
-        Ok(Self { props })
+        let mut propa = Self::default();
+        propa.node_attr.set_property("name", name.into())?;
+        propa
+            .node_attr
+            .set_property("distance", length_along_z.into())?;
+        Ok(propa)
     }
 }
 impl Optical for Propagation {
@@ -112,11 +111,13 @@ impl Optical for Propagation {
             AnalyzerType::Energy => (),
             AnalyzerType::RayTrace(_config) => {
                 if let Some(LightData::Geometric(mut rays)) = data {
-                    let Ok(Proptype::Length(length_along_z)) = self.props.get("distance") else {
+                    let Ok(Proptype::Length(length_along_z)) =
+                        self.node_attr.get_property("distance")
+                    else {
                         return Err(OpossumError::Analysis("cannot read distance".into()));
                     };
                     let Ok(Proptype::RefractiveIndex(refractive_index)) =
-                        self.props.get("refractive index")
+                        self.node_attr.get_property("refractive index")
                     else {
                         return Err(OpossumError::Analysis(
                             "cannot read refractive index".into(),
@@ -135,11 +136,11 @@ impl Optical for Propagation {
         }
         Ok(HashMap::from([(target.into(), data)]))
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -156,8 +157,8 @@ mod test {
     #[test]
     fn default() {
         let node = Propagation::default();
-        assert_eq!(node.properties().name().unwrap(), "propagation");
-        assert_eq!(node.properties().node_type().unwrap(), "propagation");
+        assert_eq!(node.name(), "propagation");
+        assert_eq!(node.node_type(), "propagation");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert!(node.properties().get("distance").is_ok());
@@ -175,7 +176,7 @@ mod test {
     fn new() {
         assert!(Propagation::new("Test", millimeter!(f64::INFINITY)).is_err());
         let node = Propagation::new("Test", millimeter!(1.0)).unwrap();
-        assert_eq!(node.properties().name().unwrap(), "Test");
+        assert_eq!(node.name(), "Test");
         if let Ok(Proptype::F64(dist)) = node.properties().get("distance") {
             assert_eq!(dist, &1.0);
         }
@@ -184,7 +185,7 @@ mod test {
     fn name_property() {
         let mut node = Propagation::default();
         node.set_property("name", "Test1".into()).unwrap();
-        assert_eq!(node.properties().name().unwrap(), "Test1")
+        assert_eq!(node.name(), "Test1")
     }
     #[test]
     fn node_type_readonly() {

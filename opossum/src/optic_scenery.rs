@@ -131,7 +131,7 @@ impl OpticScenery {
                 .0
                 .node_weight(node_idx)
                 .ok_or_else(|| OpossumError::Other("could not get node_weigth".into()))?;
-            let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
+            let node_name = node.optical_ref.borrow().name();
             let inverted = node.optical_ref.borrow().properties().inverted()?;
             let ports = node.optical_ref.borrow().ports();
             dot_string += &node.optical_ref.borrow().to_dot(
@@ -234,7 +234,7 @@ impl OpticScenery {
             format!("{}_i{}", &parent_identifier, end_node.index())
         };
 
-        if node.properties().node_type()? == "group" {
+        if node.node_type() == "group" {
             let group_node: &NodeGroup = node.as_group()?;
             Ok(group_node.get_mapped_port_str(light_port, &parent_identifier)?)
         } else {
@@ -261,7 +261,7 @@ impl OpticScenery {
                 .0
                 .node_weight(idx)
                 .ok_or_else(|| OpossumError::Analysis("getting node_weight failed".into()))?;
-            let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
+            let node_name = node.optical_ref.borrow().name();
             let neighbors = self.g.0.neighbors_undirected(idx);
             if neighbors.count() == 0 {
                 warn!("stale (completely unconnected) node {node_name} found. Skipping.");
@@ -273,12 +273,7 @@ impl OpticScenery {
                     warn!("input light data contains port which is not an input port of the node {node_name}. Data will be discarded.");
                 }
                 //
-                let node_type = node
-                    .optical_ref
-                    .borrow()
-                    .properties()
-                    .node_type()?
-                    .to_owned();
+                let node_type = node.optical_ref.borrow().node_type();
                 let outgoing_edges = node
                     .optical_ref
                     .borrow_mut()

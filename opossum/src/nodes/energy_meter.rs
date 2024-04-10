@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::{collections::HashMap, fmt::Display};
 use uom::si::f64::Energy;
 
+use super::node_attr::NodeAttr;
+
 #[non_exhaustive]
 #[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
 /// Type of the [`EnergyMeter`]. This is currently not used.
@@ -59,31 +61,26 @@ impl From<Metertype> for Proptype {
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct EnergyMeter {
     light_data: Option<LightData>,
-    props: Properties,
+    node_attr: NodeAttr,
 }
-
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("energy meter", "energy meter");
-    props
-        .create(
-            "meter type",
-            "model type of the meter",
-            None,
-            Metertype::default().into(),
-        )
-        .unwrap();
-    let mut ports = OpticPorts::new();
-    ports.create_input("in1").unwrap();
-    ports.create_output("out1").unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
-}
-
 impl Default for EnergyMeter {
     fn default() -> Self {
+        let mut node_attr = NodeAttr::new("energy meter", "energy meter");
+        node_attr
+            .create_property(
+                "meter type",
+                "model type of the meter",
+                None,
+                Metertype::default().into(),
+            )
+            .unwrap();
+        let mut ports = OpticPorts::new();
+        ports.create_input("in1").unwrap();
+        ports.create_output("out1").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
         Self {
             light_data: None,
-            props: create_default_props(),
+            node_attr,
         }
     }
 }
@@ -97,13 +94,16 @@ impl EnergyMeter {
     /// This function panics if the [`Properties`] `name` or `meter type` can not be set.
     #[must_use]
     pub fn new(name: &str, meter_type: Metertype) -> Self {
-        let mut props = create_default_props();
-        props.set("name", name.into()).unwrap();
-        props.set("meter type", meter_type.into()).unwrap();
-        Self {
-            props,
-            ..Default::default()
-        }
+        let mut energy_meter = Self::default();
+        energy_meter
+            .node_attr
+            .set_property("name", name.into())
+            .unwrap();
+        energy_meter
+            .node_attr
+            .set_property("meter type", meter_type.into())
+            .unwrap();
+        energy_meter
     }
     /// Returns the meter type of this [`EnergyMeter`].
     /// # Panics
@@ -112,7 +112,7 @@ impl EnergyMeter {
     /// - the data format is wrong.
     #[must_use]
     pub fn meter_type(&self) -> Metertype {
-        if let Ok(Proptype::Metertype(meter_type)) = self.props.get("meter type") {
+        if let Ok(Proptype::Metertype(meter_type)) = self.node_attr.get_property("meter type") {
             *meter_type
         } else {
             panic!("wrong data format")
@@ -122,7 +122,9 @@ impl EnergyMeter {
     /// # Panics
     /// This function panics if the property "meter type" can not be set.
     pub fn set_meter_type(&mut self, meter_type: Metertype) {
-        self.props.set("meter type", meter_type.into()).unwrap();
+        self.node_attr
+            .set_property("meter type", meter_type.into())
+            .unwrap();
     }
 }
 impl Optical for EnergyMeter {
@@ -171,11 +173,8 @@ impl Optical for EnergyMeter {
     fn is_detector(&self) -> bool {
         true
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
         let mut energy: Option<Energy> = None;
@@ -201,14 +200,13 @@ impl Optical for EnergyMeter {
                 "Model",
                 "type of meter",
                 None,
-                self.props.get("meter type").unwrap().clone(),
+                self.node_attr.get_property("meter type").unwrap().clone(),
             )
             .unwrap();
-        Some(NodeReport::new(
-            self.properties().node_type().unwrap(),
-            self.properties().name().unwrap(),
-            props,
-        ))
+        Some(NodeReport::new(&self.node_type(), &self.name(), props))
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -237,8 +235,8 @@ mod test {
         let node = EnergyMeter::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.meter_type(), Metertype::IdealEnergyMeter);
-        assert_eq!(node.properties().name().unwrap(), "energy meter");
-        assert_eq!(node.properties().node_type().unwrap(), "energy meter");
+        assert_eq!(node.name(), "energy meter");
+        assert_eq!(node.node_type(), "energy meter");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "whitesmoke");
@@ -249,7 +247,7 @@ mod test {
         let meter = EnergyMeter::new("test", Metertype::IdealPowerMeter);
         assert!(meter.light_data.is_none());
         assert_eq!(meter.meter_type(), Metertype::IdealPowerMeter);
-        assert_eq!(meter.properties().name().unwrap(), "test");
+        assert_eq!(meter.name(), "test");
     }
     #[test]
     fn inverted() {

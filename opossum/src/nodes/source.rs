@@ -6,11 +6,13 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Proptype},
+    properties::Proptype,
     utils::EnumProxy,
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
+
+use super::node_attr::NodeAttr;
 
 /// A general light source
 ///
@@ -28,29 +30,23 @@ use std::fmt::Debug;
 ///
 /// **Note**: This node does not have the `inverted` property since it has only one output port.
 pub struct Source {
-    props: Properties,
+    node_attr: NodeAttr,
 }
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("source", "light source");
-    props
-        .create(
-            "light data",
-            "data of the emitted light",
-            None,
-            EnumProxy::<Option<LightData>> { value: None }.into(),
-        )
-        .unwrap();
-    let mut ports = OpticPorts::new();
-    ports.create_output("out1").unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
-}
-
 impl Default for Source {
     fn default() -> Self {
-        Self {
-            props: create_default_props(),
-        }
+        let mut node_attr = NodeAttr::new("source", "light source");
+        node_attr
+            .create_property(
+                "light data",
+                "data of the emitted light",
+                None,
+                EnumProxy::<Option<LightData>> { value: None }.into(),
+            )
+            .unwrap();
+        let mut ports = OpticPorts::new();
+        ports.create_output("out1").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
+        Self { node_attr }
     }
 }
 impl Source {
@@ -73,10 +69,11 @@ impl Source {
     /// ```
     #[must_use]
     pub fn new(name: &str, light: &LightData) -> Self {
-        let mut props = create_default_props();
-        props.set("name", name.into()).unwrap();
-        props
-            .set_unchecked(
+        let mut source = Self::default();
+        source.node_attr.set_property("name", name.into()).unwrap();
+        source
+            .node_attr
+            .set_property(
                 "light data",
                 EnumProxy::<Option<LightData>> {
                     value: Some(light.clone()),
@@ -84,7 +81,7 @@ impl Source {
                 .into(),
             )
             .unwrap();
-        Self { props }
+        source
     }
 
     /// Sets the light data of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
@@ -95,7 +92,7 @@ impl Source {
     /// # Errors
     /// This function returns an error if the property "light data" can not be set
     pub fn set_light_data(&mut self, light_data: &LightData) -> OpmResult<()> {
-        self.props.set(
+        self.node_attr.set_property(
             "light data",
             EnumProxy::<Option<LightData>> {
                 value: Some(light_data.clone()),
@@ -108,7 +105,7 @@ impl Source {
 
 impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let light_prop = self.props.get("light data").unwrap();
+        let light_prop = self.node_attr.get_property("light data").unwrap();
         let data = if let Proptype::LightData(data) = &light_prop {
             &data.value
         } else {
@@ -126,7 +123,7 @@ impl Optical for Source {
         _incoming_edges: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        if let Ok(Proptype::LightData(data)) = self.props.get("light data") {
+        if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {
             let Some(mut data) = data.value.clone() else {
                 return Err(OpossumError::Analysis(
                     "source has empty light data defined".into(),
@@ -149,9 +146,6 @@ impl Optical for Source {
             ))
         }
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn is_source(&self) -> bool {
         true
     }
@@ -166,7 +160,10 @@ impl Optical for Source {
                 return Ok(());
             };
         };
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -186,8 +183,8 @@ mod test {
     #[test]
     fn default() {
         let node = Source::default();
-        assert_eq!(node.properties().name().unwrap(), "source");
-        assert_eq!(node.properties().node_type().unwrap(), "light source");
+        assert_eq!(node.name(), "source");
+        assert_eq!(node.node_type(), "light source");
         if let Ok(Proptype::LightData(light_data)) = node.properties().get("light data") {
             assert_eq!(light_data.value, None);
         } else {
@@ -201,7 +198,7 @@ mod test {
     #[test]
     fn new() {
         let source = Source::new("test", &LightData::Fourier);
-        assert_eq!(source.properties().name().unwrap(), "test");
+        assert_eq!(source.name(), "test");
     }
     #[test]
     fn not_invertable() {

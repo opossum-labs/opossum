@@ -5,13 +5,15 @@ use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
 use crate::optical::Optical;
-use crate::properties::{Properties, Proptype};
+use crate::properties::Proptype;
 use crate::refractive_index::refr_index_vaccuum;
 use crate::spectrum::Spectrum;
 use crate::surface::Plane;
 use crate::utils::EnumProxy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use super::node_attr::NodeAttr;
 
 /// Config data for an [`IdealFilter`].
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -35,33 +37,28 @@ pub enum FilterType {
 ///   - `inverted`
 ///   - `filter type`
 pub struct IdealFilter {
-    props: Properties,
-}
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("ideal filter", "ideal filter");
-    props
-        .create(
-            "filter type",
-            "used filter algorithm",
-            None,
-            EnumProxy::<FilterType> {
-                value: FilterType::Constant(1.0),
-            }
-            .into(),
-        )
-        .unwrap();
-    let mut ports = OpticPorts::new();
-    ports.create_input("front").unwrap();
-    ports.create_output("rear").unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
+    node_attr: NodeAttr,
 }
 impl Default for IdealFilter {
     /// Create an ideal filter node with a transmission of 100%.
     fn default() -> Self {
-        Self {
-            props: create_default_props(),
-        }
+        let mut node_attr = NodeAttr::new("ideal filter", "ideal filter");
+        node_attr
+            .create_property(
+                "filter type",
+                "used filter algorithm",
+                None,
+                EnumProxy::<FilterType> {
+                    value: FilterType::Constant(1.0),
+                }
+                .into(),
+            )
+            .unwrap();
+        let mut ports = OpticPorts::new();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
+        Self { node_attr }
     }
 }
 impl IdealFilter {
@@ -79,16 +76,16 @@ impl IdealFilter {
                 ));
             }
         }
-        let mut props = create_default_props();
-        props.set(
+        let mut filter = Self::default();
+        filter.node_attr.set_property(
             "filter type",
             EnumProxy::<FilterType> {
                 value: filter_type.clone(),
             }
             .into(),
         )?;
-        props.set("name", name.into())?;
-        Ok(Self { props })
+        filter.node_attr.set_property("name", name.into())?;
+        Ok(filter)
     }
     /// Returns the filter type of this [`IdealFilter`].
     ///
@@ -96,7 +93,9 @@ impl IdealFilter {
     /// Panics if the wrong data type is stored in the filter-type properties
     #[must_use]
     pub fn filter_type(&self) -> FilterType {
-        if let Proptype::FilterType(filter_type) = self.props.get("filter type").unwrap() {
+        if let Proptype::FilterType(filter_type) =
+            self.node_attr.get_property("filter type").unwrap()
+        {
             filter_type.value.clone()
         } else {
             panic!("wrong data type")
@@ -110,7 +109,7 @@ impl IdealFilter {
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
     pub fn set_transmission(&mut self, transmission: f64) -> OpmResult<()> {
         if (0.0..=1.0).contains(&transmission) {
-            self.props.set(
+            self.node_attr.set_property(
                 "filter type",
                 EnumProxy::<FilterType> {
                     value: FilterType::Constant(transmission),
@@ -132,7 +131,7 @@ impl IdealFilter {
     /// This function will return an error if an optical density < 0.0 was given.
     pub fn set_optical_density(&mut self, density: f64) -> OpmResult<()> {
         if density >= 0.0 {
-            self.props.set(
+            self.node_attr.set_property(
                 "filter type",
                 EnumProxy::<FilterType> {
                     value: FilterType::Constant(f64::powf(10.0, -1.0 * density)),
@@ -229,11 +228,11 @@ impl Optical for IdealFilter {
         }
         Err(OpossumError::Analysis("no data on input port".into()))
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -263,8 +262,8 @@ mod test {
     fn default() {
         let node = IdealFilter::default();
         assert_eq!(node.filter_type(), FilterType::Constant(1.0));
-        assert_eq!(node.properties().name().unwrap(), "ideal filter");
-        assert_eq!(node.properties().node_type().unwrap(), "ideal filter");
+        assert_eq!(node.name(), "ideal filter");
+        assert_eq!(node.node_type(), "ideal filter");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "darkgray");
@@ -275,7 +274,7 @@ mod test {
         assert!(IdealFilter::new("test", &FilterType::Constant(1.1)).is_err());
         assert!(IdealFilter::new("test", &FilterType::Constant(-0.1)).is_err());
         let node = IdealFilter::new("test", &FilterType::Constant(0.8)).unwrap();
-        assert_eq!(node.properties().name().unwrap(), "test");
+        assert_eq!(node.name(), "test");
         assert_eq!(node.filter_type(), FilterType::Constant(0.8));
     }
     #[test]

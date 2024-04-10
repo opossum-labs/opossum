@@ -11,7 +11,6 @@ graph:
           rear: None
       inverted: !Bool false
       name: !String dummy1
-      node_type: !String dummy
   - type: dummy
     id: 710f252d-2cbd-4613-8135-291a07cd4cbd
     properties:
@@ -22,7 +21,6 @@ graph:
           rear: None
       inverted: !Bool false
       name: !String dummy2
-      node_type: !String dummy
   edges:
   - - 2ac550f7-b62c-4aa8-8f57-9931a791bc99
     - 710f252d-2cbd-4613-8135-291a07cd4cbd

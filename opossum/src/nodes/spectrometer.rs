@@ -22,6 +22,8 @@ use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::{collections::HashMap, fmt::Display};
 
+use super::node_attr::NodeAttr;
+
 #[non_exhaustive]
 #[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
 /// Type of the [`Spectrometer`]. This is currently not used.
@@ -70,30 +72,27 @@ impl From<Spectrometer> for Proptype {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Spectrometer {
     light_data: Option<LightData>,
-    props: Properties,
-}
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("spectrometer", "spectrometer");
-    props
-        .create(
-            "spectrometer type",
-            "model type of the spectrometer",
-            None,
-            SpectrometerType::Ideal.into(),
-        )
-        .unwrap();
-    let mut ports = OpticPorts::new();
-    ports.create_input("in1").unwrap();
-    ports.create_output("out1").unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
+    node_attr: NodeAttr,
 }
 impl Default for Spectrometer {
     /// create an ideal spectrometer.
     fn default() -> Self {
+        let mut node_attr = NodeAttr::new("spectrometer", "spectrometer");
+        node_attr
+            .create_property(
+                "spectrometer type",
+                "model type of the spectrometer",
+                None,
+                SpectrometerType::Ideal.into(),
+            )
+            .unwrap();
+        let mut ports = OpticPorts::new();
+        ports.create_input("in1").unwrap();
+        ports.create_output("out1").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
         Self {
             light_data: None,
-            props: create_default_props(),
+            node_attr,
         }
     }
 }
@@ -109,15 +108,13 @@ impl Spectrometer {
     /// - the property "name" type can not be set.
     #[must_use]
     pub fn new(name: &str, spectrometer_type: SpectrometerType) -> Self {
-        let mut props = create_default_props();
-        props
-            .set("spectrometer type", spectrometer_type.into())
+        let mut spect = Self::default();
+        spect
+            .node_attr
+            .set_property("spectrometer type", spectrometer_type.into())
             .unwrap();
-        props.set("name", name.into()).unwrap();
-        Self {
-            props,
-            ..Default::default()
-        }
+        spect.node_attr.set_property("name", name.into()).unwrap();
+        spect
     }
     /// Returns the meter type of this [`Spectrometer`].
     ///
@@ -127,7 +124,11 @@ impl Spectrometer {
     /// - the meter type has the wrong data format
     #[must_use]
     pub fn spectrometer_type(&self) -> SpectrometerType {
-        let meter_type = self.props.get("spectrometer type").unwrap().clone();
+        let meter_type = self
+            .node_attr
+            .get_property("spectrometer type")
+            .unwrap()
+            .clone();
         if let Proptype::SpectrometerType(meter_type) = meter_type {
             meter_type
         } else {
@@ -142,7 +143,8 @@ impl Spectrometer {
     /// This function returns an error if
     /// - the property "spectrometer type" type can not be set.
     pub fn set_spectrometer_type(&mut self, meter_type: SpectrometerType) -> OpmResult<()> {
-        self.props.set("spectrometer type", meter_type.into())?;
+        self.node_attr
+            .set_property("spectrometer type", meter_type.into())?;
         Ok(())
     }
 }
@@ -191,10 +193,8 @@ impl Optical for Spectrometer {
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if self.light_data.is_some() {
-            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                "spectrometer_{}.svg",
-                self.properties().name()?
-            )));
+            let file_path = PathBuf::from(report_dir)
+                .join(Path::new(&format!("spectrometer_{}.svg", self.name())));
             self.to_plot(&file_path, PltBackEnd::SVG)
             // self.to_svg_plot(&file_path, (1200,800))
             // data.export(&file_path)
@@ -207,11 +207,8 @@ impl Optical for Spectrometer {
     fn is_detector(&self) -> bool {
         true
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
         let mut props = Properties::default();
@@ -231,16 +228,18 @@ impl Optical for Spectrometer {
                         "Model",
                         "Spectrometer model",
                         None,
-                        self.props.get("spectrometer type").unwrap().clone(),
+                        self.node_attr
+                            .get_property("spectrometer type")
+                            .unwrap()
+                            .clone(),
                     )
                     .unwrap();
             }
         }
-        Some(NodeReport::new(
-            self.properties().node_type().unwrap(),
-            self.properties().name().unwrap(),
-            props,
-        ))
+        Some(NodeReport::new(&self.node_type(), &self.name(), props))
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -334,8 +333,8 @@ mod test {
         let node = Spectrometer::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.spectrometer_type(), SpectrometerType::Ideal);
-        assert_eq!(node.properties().name().unwrap(), "spectrometer");
-        assert_eq!(node.properties().node_type().unwrap(), "spectrometer");
+        assert_eq!(node.name(), "spectrometer");
+        assert_eq!(node.node_type(), "spectrometer");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "lightseagreen");
@@ -344,7 +343,7 @@ mod test {
     #[test]
     fn new() {
         let meter = Spectrometer::new("test", SpectrometerType::HR2000);
-        assert_eq!(meter.properties().name().unwrap(), "test");
+        assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
         assert_eq!(meter.spectrometer_type(), SpectrometerType::HR2000);
     }

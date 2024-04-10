@@ -2,7 +2,7 @@
 use crate::analyzer::AnalyzerType;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::properties::{Properties, Proptype};
+use crate::properties::Proptype;
 use crate::refractive_index::refr_index_vaccuum;
 use crate::surface::Plane;
 use crate::{
@@ -12,6 +12,8 @@ use crate::{
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
+
+use super::node_attr::NodeAttr;
 
 /// A universal detector (so far for testing / debugging purposes).
 ///
@@ -32,18 +34,18 @@ use std::fmt::Debug;
 /// different detector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
 pub struct Detector {
     light_data: Option<LightData>,
-    props: Properties,
+    node_attr: NodeAttr,
 }
 impl Default for Detector {
     fn default() -> Self {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        let mut props = Properties::new("detector", "detector");
-        props.set("apertures", ports.into()).unwrap();
+        let mut node_attr = NodeAttr::new("detector", "detector");
+        node_attr.set_property("apertures", ports.into()).unwrap();
         Self {
             light_data: Option::default(),
-            props,
+            node_attr,
         }
     }
 }
@@ -59,15 +61,12 @@ impl Detector {
     /// - the property `apertures` can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
-        let mut ports = OpticPorts::new();
-        ports.create_input("in1").unwrap();
-        ports.create_output("out1").unwrap();
-        let mut props = Properties::new(name, "detector");
-        props.set("apertures", ports.into()).unwrap();
-        Self {
-            props,
-            ..Default::default()
-        }
+        let mut detector = Self::default();
+        detector
+            .node_attr
+            .set_property("name", name.into())
+            .unwrap();
+        detector
     }
 }
 impl Optical for Detector {
@@ -115,11 +114,11 @@ impl Optical for Detector {
     fn is_detector(&self) -> bool {
         true
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -146,8 +145,8 @@ mod test {
     #[test]
     fn default() {
         let node = Detector::default();
-        assert_eq!(node.properties().name().unwrap(), "detector");
-        assert_eq!(node.properties().node_type().unwrap(), "detector");
+        assert_eq!(node.name(), "detector");
+        assert_eq!(node.node_type(), "detector");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "lemonchiffon");
@@ -156,7 +155,7 @@ mod test {
     #[test]
     fn new() {
         let node = Detector::new("test");
-        assert_eq!(node.properties().name().unwrap(), "test");
+        assert_eq!(node.name(), "test");
     }
     #[test]
     fn inverted() {

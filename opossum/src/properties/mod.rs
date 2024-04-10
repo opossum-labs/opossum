@@ -6,10 +6,7 @@ use log::warn;
 pub use property::Property;
 pub use proptype::{PropCondition, Proptype};
 
-use crate::{
-    error::{OpmResult, OpossumError},
-    optic_ports::OpticPorts,
-};
+use crate::error::{OpmResult, OpossumError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -34,44 +31,6 @@ pub struct Properties {
     props: BTreeMap<String, Property>,
 }
 impl Properties {
-    /// Creates new [`Properties`].
-    ///
-    /// This automatically creates some "standard" properties common to all optic nodes (name, node type, inverted, apertures)
-    /// # Panics
-    ///
-    /// Panics theoretically if above properties could not be created.
-    #[must_use]
-    pub fn new(name: &str, node_type: &str) -> Self {
-        let mut properties = Self::default();
-        properties
-            .create(
-                "name",
-                "name of the optical element",
-                Some(vec![PropCondition::NonEmptyString]),
-                name.into(),
-            )
-            .unwrap();
-        properties
-            .create(
-                "node_type",
-                "specific optical type of this node",
-                Some(vec![PropCondition::NonEmptyString, PropCondition::ReadOnly]),
-                node_type.into(),
-            )
-            .unwrap();
-        properties
-            .create("inverted", "inverse propagation?", None, false.into())
-            .unwrap();
-        properties
-            .create(
-                "apertures",
-                "input and output apertures of the optical element",
-                None,
-                OpticPorts::default().into(),
-            )
-            .unwrap();
-        properties
-    }
     /// Create a new property with the given name.
     ///
     /// # Errors
@@ -172,32 +131,6 @@ impl Properties {
             },
         )
     }
-    /// Returns the name property of this node.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the property `name` and the property `node_type` does not exist.
-    pub fn name(&self) -> OpmResult<&str> {
-        if let Ok(Proptype::String(name)) = &self.get("name") {
-            Ok(name)
-        } else {
-            self.node_type()
-        }
-    }
-    /// Returns the node-type property of this node.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the property `node_type` does not exist.
-    pub fn node_type(&self) -> OpmResult<&str> {
-        if let Ok(Proptype::String(node_type)) = &self.get("node_type") {
-            Ok(node_type)
-        } else {
-            Err(OpossumError::Properties(
-                "Property: \"node_type\" not set!".into(),
-            ))
-        }
-    }
     /// Returns the inversion property of thie node.
     ///
     /// # Errors
@@ -219,7 +152,7 @@ impl Properties {
                 html_props.push(html_prop);
             } else {
                 warn!(
-                    "property {} could not be ceonverted to html. Skipping",
+                    "property {} could not be converted to html. Skipping",
                     prop.0.to_owned()
                 );
             }
@@ -264,20 +197,6 @@ mod test {
         let prop = props.get("test").unwrap();
         assert_matches!(prop, &Proptype::I32(1));
         assert!(props.get("wrong").is_err());
-    }
-    #[test]
-    fn properties_node_type() {
-        let mut props = Properties::default();
-        assert!(props.node_type().is_err());
-        props
-            .create("node_type", "my description", None, "my node".into())
-            .unwrap();
-        assert_eq!(props.node_type().unwrap(), "my node");
-        let mut props = Properties::default();
-        props
-            .create("node_type", "my description", None, true.into())
-            .unwrap();
-        assert!(props.node_type().is_err());
     }
     #[test]
     fn properties_get_bool() {
