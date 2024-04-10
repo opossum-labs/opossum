@@ -9,7 +9,9 @@ use crate::error::{OpmResult, OpossumError};
 use crate::optic_ports::OpticPorts;
 use crate::optic_ref::OpticRef;
 use crate::optical::{LightResult, Optical};
-use crate::properties::{Properties, Proptype};
+use crate::properties::Proptype;
+
+use super::node_attr::NodeAttr;
 
 #[derive(Debug)]
 /// A virtual component referring to another existing component.
@@ -30,25 +32,22 @@ use crate::properties::{Properties, Proptype};
 /// (ignores) any [`Aperture`](crate::aperture::Aperture) definitions on its ports.
 pub struct NodeReference {
     reference: Option<Weak<RefCell<dyn Optical>>>,
-    props: Properties,
-}
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("reference", "reference");
-    props
-        .create(
-            "reference id",
-            "unique id of the referenced node",
-            None,
-            Uuid::nil().into(),
-        )
-        .unwrap();
-    props
+    node_attr: NodeAttr,
 }
 impl Default for NodeReference {
     fn default() -> Self {
+        let mut node_attr = NodeAttr::new("reference", "reference");
+        node_attr
+            .create_property(
+                "reference id",
+                "unique id of the referenced node",
+                None,
+                Uuid::nil().into(),
+            )
+            .unwrap();
         Self {
             reference: Option::default(),
-            props: create_default_props(),
+            node_attr,
         }
     }
 }
@@ -62,17 +61,16 @@ impl NodeReference {
     /// - if the node [`Properties`] `name` can not be set
     #[must_use]
     pub fn from_node(node: &OpticRef) -> Self {
-        let mut props = create_default_props();
-        props.set("reference id", node.uuid().into()).unwrap();
-        let ref_name = format!(
-            "ref ({})",
-            node.optical_ref.borrow().properties().name().unwrap()
-        );
-        props.set("name", Proptype::String(ref_name)).unwrap();
-        Self {
-            reference: Some(Rc::downgrade(&node.optical_ref)),
-            props,
-        }
+        let mut refr = Self::default();
+        refr.node_attr
+            .set_property("reference id", node.uuid().into())
+            .unwrap();
+        let ref_name = format!("ref ({})", node.optical_ref.borrow().name());
+        refr.node_attr
+            .set_property("name", Proptype::String(ref_name))
+            .unwrap();
+        refr.reference = Some(Rc::downgrade(&node.optical_ref));
+        refr
     }
     /// Assign a reference to another optical node.
     ///
@@ -112,8 +110,8 @@ impl Optical for NodeReference {
                 .map_err(|_e| {
                     OpossumError::Analysis(format!(
                         "referenced node {} <{}> cannot be inverted",
-                        ref_node.properties().name().unwrap(),
-                        ref_node.properties().node_type().unwrap()
+                        ref_node.name(),
+                        ref_node.node_type()
                     ))
                 })?;
         }
@@ -123,16 +121,12 @@ impl Optical for NodeReference {
         }
         output
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
     }
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Ok(self)
     }
-
     fn is_source(&self) -> bool {
         let rf = &self.reference.clone();
 
@@ -149,6 +143,9 @@ impl Optical for NodeReference {
         } else {
             false
         }
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -170,8 +167,8 @@ mod test {
     fn default() {
         let node = NodeReference::default();
         assert!(node.reference.is_none());
-        assert_eq!(node.properties().name().unwrap(), "reference");
-        assert_eq!(node.properties().node_type().unwrap(), "reference");
+        assert_eq!(node.name(), "reference");
+        assert_eq!(node.node_type(), "reference");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "lightsalmon3");
@@ -190,13 +187,10 @@ mod test {
         let mut scenery = OpticScenery::default();
         let idx = scenery.add_node(Dummy::default());
         let node_ref = scenery.node(idx).unwrap();
-        let node_name = format!(
-            "ref ({})",
-            node_ref.optical_ref.borrow().properties().name().unwrap()
-        );
+        let node_name = format!("ref ({})", node_ref.optical_ref.borrow().name());
         let node = NodeReference::from_node(&node_ref);
 
-        assert_eq!(node.properties().name().unwrap(), node_name);
+        assert_eq!(node.name(), node_name);
     }
     #[test]
     fn assign_reference() {

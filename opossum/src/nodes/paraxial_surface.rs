@@ -10,23 +10,15 @@ use crate::{
     millimeter,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Proptype},
+    properties::Proptype,
     refractive_index::refr_index_vaccuum,
     surface::Plane,
 };
 use uom::num_traits::Zero;
 use uom::si::{f64::Length, length::millimeter};
-fn create_default_props() -> Properties {
-    let mut ports = OpticPorts::new();
-    ports.create_input("front").unwrap();
-    ports.create_output("rear").unwrap();
-    let mut props = Properties::new("paraxial surface", "paraxial");
-    props
-        .create("focal length", "focal length in mm", None, 1.0.into())
-        .unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
-}
+
+use super::node_attr::NodeAttr;
+
 /// Paraxial surface (=ideal lens)
 ///
 /// This node models a (flat) paraxial surface with a given `focal leength`. This corresponds to an ideal lens which is aberration free
@@ -49,13 +41,21 @@ fn create_default_props() -> Properties {
 ///   - `focal length`
 #[derive(Debug, Clone)]
 pub struct ParaxialSurface {
-    props: Properties,
+    node_attr: NodeAttr,
 }
 impl Default for ParaxialSurface {
     fn default() -> Self {
-        Self {
-            props: create_default_props(),
-        }
+        let mut node_attr = NodeAttr::new("paraxial surface", "paraxial");
+
+        let mut ports = OpticPorts::new();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
+
+        node_attr
+            .create_property("focal length", "focal length in mm", None, 1.0.into())
+            .unwrap();
+        Self { node_attr }
     }
 }
 impl ParaxialSurface {
@@ -73,10 +73,12 @@ impl ParaxialSurface {
         if focal_length.is_zero() || !focal_length.is_normal() {
             return Err(OpossumError::Other("focal length must be finite".into()));
         }
-        let mut props = create_default_props();
-        props.set("name", name.into())?;
-        props.set("focal length", focal_length.get::<millimeter>().into())?;
-        Ok(Self { props })
+        let mut parsurf = Self::default();
+        parsurf.node_attr.set_property("name", name.into())?;
+        parsurf
+            .node_attr
+            .set_property("focal length", focal_length.get::<millimeter>().into())?;
+        Ok(parsurf)
     }
 }
 impl Optical for ParaxialSurface {
@@ -95,12 +97,13 @@ impl Optical for ParaxialSurface {
             AnalyzerType::Energy => (),
             AnalyzerType::RayTrace(_config) => {
                 if let Some(LightData::Geometric(mut rays)) = data {
-                    let focal_length =
-                        if let Ok(Proptype::F64(length)) = self.props.get("focal length") {
-                            millimeter!(*length)
-                        } else {
-                            return Err(OpossumError::Analysis("cannot read focal length".into()));
-                        };
+                    let focal_length = if let Ok(Proptype::F64(length)) =
+                        self.node_attr.get_property("focal length")
+                    {
+                        millimeter!(*length)
+                    } else {
+                        return Err(OpossumError::Analysis("cannot read focal length".into()));
+                    };
                     let z_position =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     let plane = Plane::new(z_position)?;
@@ -132,11 +135,11 @@ impl Optical for ParaxialSurface {
         }
         Ok(HashMap::from([(target.into(), data)]))
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -153,8 +156,8 @@ mod test {
     #[test]
     fn default() {
         let node = ParaxialSurface::default();
-        assert_eq!(node.properties().name().unwrap(), "paraxial surface");
-        assert_eq!(node.properties().node_type().unwrap(), "paraxial");
+        assert_eq!(node.name(), "paraxial surface");
+        assert_eq!(node.node_type(), "paraxial");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert!(node.properties().get("focal length").is_ok());
@@ -171,7 +174,7 @@ mod test {
     #[test]
     fn new() {
         let node = ParaxialSurface::new("Test", millimeter!(1.0)).unwrap();
-        assert_eq!(node.properties().name().unwrap(), "Test");
+        assert_eq!(node.name(), "Test");
         if let Ok(Proptype::F64(dist)) = node.properties().get("focal length") {
             assert_eq!(dist, &1.0);
         }
@@ -185,7 +188,7 @@ mod test {
     fn name_property() {
         let mut node = ParaxialSurface::default();
         node.set_property("name", "Test1".into()).unwrap();
-        assert_eq!(node.properties().name().unwrap(), "Test1")
+        assert_eq!(node.name(), "Test1")
     }
     #[test]
     fn node_type_readonly() {

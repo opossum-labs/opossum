@@ -25,6 +25,8 @@ use crate::{
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use super::node_attr::NodeAttr;
+
 /// A ray-propagation monitor
 ///
 /// It generates a plot that visualizes the ray path during propagtaion through the scenery.
@@ -43,22 +45,19 @@ use std::path::{Path, PathBuf};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPropagationVisualizer {
     light_data: Option<LightData>,
-    props: Properties,
-}
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("ray propagation", "ray propagation");
-    let mut ports = OpticPorts::new();
-    ports.create_input("in1").unwrap();
-    ports.create_output("out1").unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
+    node_attr: NodeAttr,
 }
 impl Default for RayPropagationVisualizer {
     /// create a spot-diagram monitor.
     fn default() -> Self {
+        let mut node_attr = NodeAttr::new("ray propagation", "ray propagation");
+        let mut ports = OpticPorts::new();
+        ports.create_input("in1").unwrap();
+        ports.create_output("out1").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
         Self {
             light_data: None,
-            props: create_default_props(),
+            node_attr,
         }
     }
 }
@@ -71,15 +70,11 @@ impl RayPropagationVisualizer {
     /// This function may panic if the property "name" can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
-        let mut props = create_default_props();
-        props.set("name", name.into()).unwrap();
-        Self {
-            props,
-            ..Default::default()
-        }
+        let mut rpv = Self::default();
+        rpv.node_attr.set_property("name", name.into()).unwrap();
+        rpv
     }
 }
-
 impl Optical for RayPropagationVisualizer {
     fn analyze(
         &mut self,
@@ -127,10 +122,8 @@ impl Optical for RayPropagationVisualizer {
             if let Some(LightData::Geometric(rays)) = &self.light_data {
                 let ray_prop_data = rays.get_rays_position_history()?;
 
-                let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                    "ray_propagation_{}.svg",
-                    self.properties().name()?
-                )));
+                let file_path = PathBuf::from(report_dir)
+                    .join(Path::new(&format!("ray_propagation_{}.svg", self.name())));
                 ray_prop_data.to_plot(&file_path, PltBackEnd::SVG)
                 // data.export(&file_path)
             } else {
@@ -147,11 +140,8 @@ impl Optical for RayPropagationVisualizer {
     fn is_detector(&self) -> bool {
         true
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
         let mut props = Properties::default();
@@ -168,11 +158,10 @@ impl Optical for RayPropagationVisualizer {
                     .unwrap();
             }
         }
-        Some(NodeReport::new(
-            self.properties().node_type().unwrap(),
-            self.properties().name().unwrap(),
-            props,
-        ))
+        Some(NodeReport::new(&self.node_type(), &self.name(), props))
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -405,8 +394,8 @@ mod test {
     fn default() {
         let node = RayPropagationVisualizer::default();
         assert!(node.light_data.is_none());
-        assert_eq!(node.properties().name().unwrap(), "ray propagation");
-        assert_eq!(node.properties().node_type().unwrap(), "ray propagation");
+        assert_eq!(node.name(), "ray propagation");
+        assert_eq!(node.node_type(), "ray propagation");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "darkgreen");
@@ -415,7 +404,7 @@ mod test {
     #[test]
     fn new() {
         let meter = RayPropagationVisualizer::new("test");
-        assert_eq!(meter.properties().name().unwrap(), "test");
+        assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
     }
     #[test]
