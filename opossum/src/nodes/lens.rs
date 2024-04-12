@@ -12,11 +12,10 @@ use crate::{
     optical::{LightResult, Optical},
     properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    render::SDF,
     surface::{Plane, Sphere},
     utils::EnumProxy,
 };
-use num::{Float, Zero};
+use num::Zero;
 use uom::si::f64::Length;
 
 use super::node_attr::NodeAttr;
@@ -171,7 +170,10 @@ impl Optical for Lens {
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     if (*front_roc).is_infinite() {
-                        rays.refract_on_surface(&Plane::new_along_z(next_z_pos)?, &index_model.value)?;
+                        rays.refract_on_surface(
+                            &Plane::new_along_z(next_z_pos)?,
+                            &index_model.value,
+                        )?;
                     } else {
                         rays.refract_on_surface(
                             &Sphere::new_along_z(next_z_pos, *front_roc)?,
@@ -206,7 +208,10 @@ impl Optical for Lens {
                     if (*rear_roc).is_infinite() {
                         rays.refract_on_surface(&Plane::new_along_z(next_z_pos)?, index_1_0)?;
                     } else {
-                        rays.refract_on_surface(&Sphere::new_along_z(next_z_pos, *rear_roc)?, index_1_0)?;
+                        rays.refract_on_surface(
+                            &Sphere::new_along_z(next_z_pos, *rear_roc)?,
+                            index_1_0,
+                        )?;
                     };
                     if let Some(aperture) = self.ports().output_aperture("rear") {
                         rays.apodize(aperture)?;
@@ -236,7 +241,7 @@ impl Optical for Lens {
     }
 }
 
-// impl SDF for Lens 
+// impl SDF for Lens
 // {
 //     fn sdf_eval_point(&self, p: &nalgebra::Point3<f64>, p_out: &mut nalgebra::Point3<f64>) -> f64 {
 //         self.isometry.inverse_transform_point_mut_f64(&p, p_out);

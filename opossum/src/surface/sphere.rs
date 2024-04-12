@@ -2,7 +2,6 @@
 //!
 //! This module implements a spherical surface with a given radius of curvature and a given z position on the optical axis.
 use super::Surface;
-use crate::millimeter;
 use crate::ray::Ray;
 use crate::render::{Color, Render, Renderable, SDF};
 use crate::utils::geom_transformation::Isometry;
@@ -10,10 +9,9 @@ use crate::{
     error::{OpmResult, OpossumError},
     meter,
 };
-use nalgebra::{Point3, Vector4};
+use nalgebra::Point3;
 use nalgebra::Vector3;
-use ncollide2d::math::Vector;
-use num::{Float, Zero};
+use num::Zero;
 use roots::find_roots_quadratic;
 use roots::Roots;
 use uom::si::f64::Length;
@@ -40,7 +38,7 @@ impl Sphere {
         }
         let isometry = Isometry::new(
             Point3::new(Length::zero(), Length::zero(), z),
-            Vector3::new(0.,0.,0.),
+            Vector3::new(0., 0., 0.),
         );
 
         Ok(Self {
@@ -63,18 +61,27 @@ impl Sphere {
             ));
         }
         if pos.iter().any(|x| !x.is_finite()) {
-            return Err(OpossumError::Other("center point coordinates must be finite".into()));
+            return Err(OpossumError::Other(
+                "center point coordinates must be finite".into(),
+            ));
         }
-        let isometry = Isometry::new(pos, Vector3::new(0.,0.,0.));
-        Ok(Self {  
+        let isometry = Isometry::new(pos, Vector3::new(0., 0., 0.));
+        Ok(Self {
             z: pos.z,
             radius,
             pos,
-            isometry})
+            isometry,
+        })
+    }
+
+    /// Returns the position (center point) of this sphere
+    #[must_use]
+    pub const fn get_pos(&self) -> Point3<Length> {
+        self.pos
     }
 }
-impl Render<'_> for Sphere{}
-impl Renderable<'_> for Sphere{}
+impl Render<'_> for Sphere {}
+impl Renderable<'_> for Sphere {}
 
 impl Surface for Sphere {
     fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
@@ -149,20 +156,20 @@ impl Surface for Sphere {
     }
 }
 
-impl Color for Sphere{
+impl Color for Sphere {
     fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
-        Vector3::new(0.5,0.3,0.5)
+        Vector3::new(0.5, 0.3, 0.5)
     }
 }
-impl SDF for Sphere 
-{
-    fn sdf_eval_point(&self, p: &Point3<f64>, p_out: &mut Point3<f64>) -> f64 {
-        self.isometry.inverse_transform_point_mut_f64(&p, p_out);
-        // (p.x * p.x + p.y * p.y + p.z * p.z).sqrt() - self.radius.value
-        (p_out.x.mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z*p_out.z)) ).sqrt() - self.radius.value
-        // Vector4::<f64>::from_slice(&[self.get_color(&p).as_slice(),  &[(p.x * p.x + p.y * p.y + p.z * p.z).sqrt() - self.radius.value]].concat())
-
-        }
+impl SDF for Sphere {
+    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+        let p_out = self.isometry.inverse_transform_point_f64(p);
+        (p_out
+            .x
+            .mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z * p_out.z)))
+        .sqrt()
+            - self.radius.value
+    }
 }
 
 #[cfg(test)]

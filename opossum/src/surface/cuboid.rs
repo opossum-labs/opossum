@@ -1,25 +1,20 @@
-use std::f64::consts::PI;
-
 use approx::relative_eq;
-use delaunator::Point;
-use nalgebra::{Point3, Vector2, Vector3, Vector4};
-use num::{Float, Zero};
-use roots::find_roots_quadratic;
-use uom::si::{f64::Length, length::millimeter};
+use nalgebra::{Point3, Vector3};
+use uom::si::f64::Length;
 
-use super::Surface;
 use crate::{
-    error::{OpmResult, OpossumError}, millimeter, radian, ray::Ray, render::{Color, Render, Renderable, SDF}, utils::geom_transformation::Isometry
+    error::{OpmResult, OpossumError},
+    render::{Color, Render, Renderable, SDF},
+    utils::geom_transformation::Isometry,
 };
-use roots::Roots;
 
 #[derive(Debug)]
 /// A spherical surface with its origin on the optical axis.
 pub struct Cuboid {
     /// length of the cylinder
     length: Point3<Length>,
-    ///position of the center of the end face
-    base_pos: Point3<Length>,
+    ///position of the center of the cuboid
+    anchor_point: Point3<Length>,
     ///isometry of the cylinder that defines its orientation and position
     isometry: Isometry,
 }
@@ -32,14 +27,14 @@ impl Cuboid {
     ///
     /// # Errors
     ///
-    /// This function will return an error if 
+    /// This function will return an error if
     /// - the construction direction is zero in length or is not finite
     /// - the length is not finite
     /// - the center position is not finite
     pub fn new(
         length: Point3<Length>,
         center_pos: Point3<Length>,
-        dir: Vector3<f64>
+        dir: Vector3<f64>,
     ) -> OpmResult<Self> {
         if center_pos.iter().any(|x| !x.is_finite()) {
             return Err(OpossumError::Other(
@@ -65,9 +60,15 @@ impl Cuboid {
         let isometry = Isometry::new_from_view(center_pos, dir, Vector3::y());
         Ok(Self {
             length,
-            base_pos: center_pos,
-            isometry
+            anchor_point: center_pos,
+            isometry,
         })
+    }
+
+    /// Returns the anchor point of thie [`Cuboid`]
+    #[must_use]
+    pub const fn get_anchor_point(&self) -> Point3<Length> {
+        self.anchor_point
     }
 }
 // impl Surface for Cylinder {
@@ -128,24 +129,28 @@ impl Cuboid {
 //     }
 // }
 
-impl Color for Cuboid{
+impl Color for Cuboid {
     fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
-        Vector3::<f64>::new(0.7,0.6,0.5)
+        Vector3::<f64>::new(0.7, 0.6, 0.5)
     }
 }
-impl Renderable<'_> for Cuboid{}
-impl Render<'_> for Cuboid{}
+impl Renderable<'_> for Cuboid {}
+impl Render<'_> for Cuboid {}
 
-impl SDF for Cuboid
-{
-    fn sdf_eval_point(&self, p: &Point3<f64>, p_out: &mut Point3<f64>) -> f64 {
-        self.isometry.inverse_transform_point_mut_f64(&p, p_out);
+impl SDF for Cuboid {
+    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+        let p_out = self.isometry.inverse_transform_point_f64(p);
         let q = Vector3::new(
-            p_out.x.abs() - self.length.x.value/2.,
-            p_out.y.abs() - self.length.y.value/2.,
-            p_out.z.abs() - self.length.z.value/2.);
-        let mut q_max = q.clone();
-        q_max.iter_mut().for_each(|x:&mut f64|            *x = x.max(0.0)) ;
-        (q_max.x*q_max.x + q_max.y*q_max.y + q_max.z*q_max.z).sqrt() + q.y.max(q.z).max(q.x).min(0.0)
+            p_out.x.abs() - self.length.x.value / 2.,
+            p_out.y.abs() - self.length.y.value / 2.,
+            p_out.z.abs() - self.length.z.value / 2.,
+        );
+        let mut q_max = q;
+        q_max.iter_mut().for_each(|x: &mut f64| *x = x.max(0.0));
+        q_max
+            .x
+            .mul_add(q_max.x, q_max.y.mul_add(q_max.y, q_max.z.powi(2)))
+            .sqrt()
+            + q.y.max(q.z).clamp(q.x, 0.0) //q.y.max(q.z).max(q.x).min(0.0)
     }
 }

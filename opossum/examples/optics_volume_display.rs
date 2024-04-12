@@ -1,12 +1,15 @@
 use std::time::Instant;
 
-use nalgebra::{ Point3, Vector3};
-use opossum::{centimeter, meter};
+use nalgebra::{Point3, Vector3};
 use opossum::render::{Render, SDFCollection, SDFOperation};
 use opossum::surface::{OpticalTable, Plane, Sphere};
-use opossum::{degree, error::OpmResult, millimeter, surface::{Cuboid,Cylinder}};
-
-
+use opossum::{centimeter, meter};
+use opossum::{
+    degree,
+    error::OpmResult,
+    millimeter,
+    surface::{Cuboid, Cylinder},
+};
 
 fn main() -> OpmResult<()> {
     let cylinder = Cylinder::new(
@@ -14,29 +17,52 @@ fn main() -> OpmResult<()> {
         millimeter!(12.5),
         millimeter!(0., 20., 0.),
         Vector3::x(),
-    )?; 
-    let cuboid = Cuboid::new(centimeter!(10.,10.,10.), Point3::origin(), Vector3::z())?;
-    let sphere1 = Sphere::new(centimeter!(200.), centimeter!(-200.+0.4,2.,0.))?;
-    let sphere2 = Sphere::new(centimeter!(200.), centimeter!(200.-0.4,2.,0.))?;
-    let sphere3 = Sphere::new(centimeter!(1.), centimeter!(0.,2.,0.))?;
+    )?;
+    let _cuboid = Cuboid::new(centimeter!(10., 10., 10.), Point3::origin(), Vector3::z())?;
+    let sphere1 = Sphere::new(centimeter!(200.), centimeter!(-200. + 0.4, 2., 0.))?;
+    let sphere2 = Sphere::new(centimeter!(200.), centimeter!(200. - 0.4, 2., 0.))?;
+    let _sphere3 = Sphere::new(centimeter!(1.), centimeter!(0., 2., 0.))?;
 
-    let plane = Plane::new(meter!(0.00), Vector3::y(), centimeter!(0.,0.,0.))?;
-    let optical_table = OpticalTable::new(Vector3::new(0.5,0.5,0.).normalize(), centimeter!(0.,0.,2.), centimeter!(2.5))?;
+    let _plane = Plane::new(meter!(0.00), Vector3::y(), centimeter!(0., 0., 0.))?;
+    let optical_table = OpticalTable::new(
+        Vector3::new(0.5, 0.5, 0.).normalize(),
+        centimeter!(0., 0., 2.),
+        centimeter!(2.5),
+    )?;
 
-    let sdf_collection = SDFCollection::new(vec![&cylinder, &sphere1, &sphere2], Some(SDFOperation::Intersection)).unwrap();
-    let sdf_collection2 = SDFCollection::new(vec![&optical_table, &sdf_collection], Some(SDFOperation::Union)).unwrap();
+    let sdf_collection = SDFCollection::new(
+        vec![&cylinder, &sphere1, &sphere2],
+        Some(SDFOperation::Intersection),
+    )
+    .unwrap();
+    let sdf_collection2 = SDFCollection::new(
+        vec![&optical_table, &sdf_collection],
+        Some(SDFOperation::Union),
+    )
+    .unwrap();
 
     let now = Instant::now();
-    sdf_collection2.render(
-        centimeter!(10.,10.,10.), 
-        degree!(25.,25.), 
-        centimeter!(0.,2.,0.), 
-        centimeter!(1.), 
-        Some(Vector3::y()),
-        (256,256));
+    let image = sdf_collection2
+        .render(
+            centimeter!(10., 10., 10.),
+            degree!(25., 25.),
+            centimeter!(0., 2., 0.),
+            centimeter!(1.),
+            Some(Vector3::y()),
+            (256, 256),
+        )
+        .unwrap();
+
+    let fpath = "./opossum/playground/.render_test.png";
+    sdf_collection2
+        .plot_image(&image, (256, 256), fpath)
+        .unwrap();
 
     let elapsed_time = now.elapsed();
-    println!("Running render() took {} milliseconds.", elapsed_time.as_millis());
-    
+    println!(
+        "Running render() took {} milliseconds.",
+        elapsed_time.as_millis()
+    );
+
     Ok(())
 }

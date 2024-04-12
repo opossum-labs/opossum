@@ -1,3 +1,5 @@
+//! Module for gridding data
+
 #![warn(missing_docs)]
 use approx::{abs_diff_eq, abs_diff_ne, relative_eq};
 use kahan::KahanSum;
@@ -16,6 +18,7 @@ use crate::{
 
 use super::filter_data::{filter_nan_infinite, get_min_max_filter_nonfinite};
 
+/// Storage struct for voronoi diagram cells and associated values of its vertices
 #[derive(Clone, Debug)]
 pub struct VoronoiedData {
     voronoi_diagram: VoronoiDiagram<VPoint>,
@@ -81,10 +84,13 @@ impl VoronoiedData {
             Err(OpossumError::Other("Number of voronoi-diagram sites and data values is not the same! Cannot combine data and voronoi cells!".into()))
         }
     }
+    /// Get the voronoi diagram of the [`VoronoiedData`]
     #[must_use]
     pub const fn get_voronoi_diagram(&self) -> &VoronoiDiagram<VPoint> {
         &self.voronoi_diagram
     }
+
+    /// Get the z dataset of the [`VoronoiedData`]
     #[must_use]
     pub const fn get_z_data(&self) -> &Option<DVector<f64>> {
         &self.z_data

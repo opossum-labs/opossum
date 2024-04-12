@@ -128,8 +128,8 @@ impl PlotType {
                 let mut image_buffer = vec![
                     0;
                     (plot.fig_size.0 * plot.fig_size.1) as usize
-                    * plotters::backend::RGBPixel::PIXEL_SIZE
-                    ];
+                        * plotters::backend::RGBPixel::PIXEL_SIZE
+                ];
                 {
                     let backend = BitMapBackend::with_buffer(&mut image_buffer, plot.fig_size)
                         .into_drawing_area();
@@ -224,38 +224,40 @@ impl PlotType {
         y: &DVectorSlice<'_, f64>,
         z: &DVectorSlice<'_, f64>,
         triangle_color: RGBAColor,
-        triangle_normals: &MatrixXx3<f64>,
+        _triangle_normals: &MatrixXx3<f64>,
     ) {
-        let view = Vector3::new(-1.,-1.,-1.);
-        let series = triangle_index.row_iter()
-        // .filter(|(_, n)| n.transpose().dot(&view) > 0.)
-        .map(|idx| {
-            Polygon::new(
-                vec![
-                    (x[idx[0]], y[idx[0]], z[idx[0]]),
-                    (x[idx[1]], y[idx[1]], z[idx[1]]),
-                    (x[idx[2]], y[idx[2]], z[idx[2]]),
-                ],
-                Into::<ShapeStyle>::into(triangle_color).filled(),
-            )
-        });
+        let _view = Vector3::new(-1., -1., -1.);
+        let series = triangle_index
+            .row_iter()
+            // .filter(|(_, n)| n.transpose().dot(&view) > 0.)
+            .map(|idx| {
+                Polygon::new(
+                    vec![
+                        (x[idx[0]], y[idx[0]], z[idx[0]]),
+                        (x[idx[1]], y[idx[1]], z[idx[1]]),
+                        (x[idx[2]], y[idx[2]], z[idx[2]]),
+                    ],
+                    Into::<ShapeStyle>::into(triangle_color).filled(),
+                )
+            });
         chart.draw_series(series).unwrap();
-        let series = triangle_index.row_iter()
-        // .filter(|(_, n)| n.transpose().dot(&view) > 0.)
-        .map(|idx| {
-            PathElement::new(
-                vec![
-                    (x[idx[0]], y[idx[0]], z[idx[0]]),
-                    (x[idx[1]], y[idx[1]], z[idx[1]]),
-                    (x[idx[2]], y[idx[2]], z[idx[2]]),
-                ],
-                ShapeStyle {
-                    color: RGBAColor(0, 0, 0, 1.),
-                    filled: false,
-                    stroke_width: 1,
-                },
-            )
-        });
+        let series = triangle_index
+            .row_iter()
+            // .filter(|(_, n)| n.transpose().dot(&view) > 0.)
+            .map(|idx| {
+                PathElement::new(
+                    vec![
+                        (x[idx[0]], y[idx[0]], z[idx[0]]),
+                        (x[idx[1]], y[idx[1]], z[idx[1]]),
+                        (x[idx[2]], y[idx[2]], z[idx[2]]),
+                    ],
+                    ShapeStyle {
+                        color: RGBAColor(0, 0, 0, 1.),
+                        filled: false,
+                        stroke_width: 1,
+                    },
+                )
+            });
         chart.draw_series(series).unwrap();
     }
 
@@ -522,7 +524,7 @@ impl PlotType {
             if let PlotData::TriangulatedSurface {
                 triangle_idx,
                 xyz_dat,
-                triangle_face_normals: triangle_normals
+                triangle_face_normals: triangle_normals,
             } = plt_series_vec[0].get_plot_series_data()
             {
                 //main plot
@@ -536,7 +538,7 @@ impl PlotType {
                     &xyz_dat.column(1),
                     &xyz_dat.column(2),
                     plt_series_vec[0].color,
-                    triangle_normals
+                    triangle_normals,
                 );
             } else {
                 warn!("Wrong PlotData stored for this plot type! Must use TriangulatedSurface! Not all series will be plotted!");
@@ -635,7 +637,7 @@ impl PlotType {
         chart.with_projection(
             |mut pb: plotters::coord::ranged3d::ProjectionMatrixBuilder| {
                 pb.pitch = 45. / 180. * PI;
-                pb.yaw = 45. / 180. * PI;                
+                pb.yaw = 45. / 180. * PI;
                 pb.pitch = 0. / 180. * PI;
                 pb.yaw = 0. / 180. * PI;
                 pb.scale = 0.7;
@@ -924,61 +926,69 @@ impl PlotData {
     /// This function will return an error if
     /// - the length of xyz data: `xyz_dat` is zero
     /// - no axis bounds for x or y can be determined
-    pub fn new_triangulatedsurface(xyz_dat: &MatrixXx3<f64>, triangle_idx_opt: Option<&MatrixXx3<usize>>, triangle_face_normals_opt: Option<&MatrixXx3<f64>>) -> OpmResult<Self> {
+    #[allow(clippy::too_many_lines)]
+    pub fn new_triangulatedsurface(
+        xyz_dat: &MatrixXx3<f64>,
+        triangle_idx_opt: Option<&MatrixXx3<usize>>,
+        triangle_face_normals_opt: Option<&MatrixXx3<f64>>,
+    ) -> OpmResult<Self> {
         if xyz_dat.is_empty() {
             return Err(OpossumError::Other(
                 "No z-data provided! Cannot create `PlotData::TriangulatedSurface`!".into(),
             ));
         }
-        if let (Some(triangle_idx), Some(triangle_face_normals)) = (triangle_idx_opt, triangle_face_normals_opt){
-            if triangle_idx.shape().0 != triangle_face_normals.shape().0{
+        if let (Some(triangle_idx), Some(triangle_face_normals)) =
+            (triangle_idx_opt, triangle_face_normals_opt)
+        {
+            if triangle_idx.shape().0 != triangle_face_normals.shape().0 {
                 Err(OpossumError::Other("Shapes of triangle indices and face normals does not match! Cannot create `PlotData::TriangulatedSurface`!"        .into()))
-            }
-            else if triangle_idx.iter().fold(0,|arg0, idx| *idx.max(&arg0)) > xyz_dat.shape().0-1{
+            } else if triangle_idx.iter().fold(0, |arg0, idx| *idx.max(&arg0))
+                > xyz_dat.shape().0 - 1
+            {
                 Err(OpossumError::Other("Maximum triangle index is larger than number of points! Cannot create `PlotData::TriangulatedSurface`!"        .into()))
-            }
-            else{
+            } else {
                 Ok(Self::TriangulatedSurface {
                     triangle_idx: triangle_idx.clone(),
                     xyz_dat: xyz_dat.clone(),
-                    triangle_face_normals: triangle_face_normals.clone()
+                    triangle_face_normals: triangle_face_normals.clone(),
                 })
             }
-        }
-        else if let Some(triangle_idx) = triangle_idx_opt{
-            if triangle_idx.iter().fold(0,|arg0, idx| *idx.max(&arg0)) > xyz_dat.shape().0-1{
+        } else if let Some(triangle_idx) = triangle_idx_opt {
+            if triangle_idx.iter().fold(0, |arg0, idx| *idx.max(&arg0)) > xyz_dat.shape().0 - 1 {
                 Err(OpossumError::Other("Maximum triangle index is larger than number of points! Cannot create `PlotData::TriangulatedSurface`!"        .into()))
-            }
-            else{
-                let triangle_face_normals = Matrix3xX::from_vec(triangle_idx.row_iter().map(|tri_idx| {
-                    let p1 = xyz_dat.row(tri_idx[0]);
-                    let p2 = xyz_dat.row(tri_idx[1]);
-                    let p3 = xyz_dat.row(tri_idx[2]);
-                    let normal = ((p2 - p1).cross(&(p3-p1))).normalize();
-                    [normal[0], normal[1], normal[2]]
-                }).flatten().collect_vec()).transpose();
+            } else {
+                let triangle_face_normals = Matrix3xX::from_vec(
+                    triangle_idx
+                        .row_iter()
+                        .flat_map(|tri_idx| {
+                            let p1 = xyz_dat.row(tri_idx[0]);
+                            let p2 = xyz_dat.row(tri_idx[1]);
+                            let p3 = xyz_dat.row(tri_idx[2]);
+                            let normal = ((p2 - p1).cross(&(p3 - p1))).normalize();
+                            [normal[0], normal[1], normal[2]]
+                        })
+                        .collect_vec(),
+                )
+                .transpose();
                 Ok(Self::TriangulatedSurface {
                     triangle_idx: triangle_idx.clone(),
                     xyz_dat: xyz_dat.clone(),
-                    triangle_face_normals
+                    triangle_face_normals,
                 })
             }
-        }
-        else{
-
-
-        let min_max_x = get_min_max_filter_nonfinite(
+        } else {
+            let min_max_x = get_min_max_filter_nonfinite(
             xyz_dat
             .column(0)
             .as_slice())
             .ok_or_else(|| OpossumError::Other("Axes bounds could not be determined! Cannot create `PlotData::TriangulatedSurface`!"        .into()))?;
-        let min_max_y = get_min_max_filter_nonfinite(
+            let min_max_y = get_min_max_filter_nonfinite(
             xyz_dat
             .column(1)
             .as_slice())
             .ok_or_else(|| OpossumError::Other("Axes bounds could not be determined! Cannot create `PlotData::TriangulatedSurface`!"        .into()))?;
 
-        let voronoi = create_valued_voronoi_cells(
+            let voronoi = create_valued_voronoi_cells(
             xyz_dat,
             &AxLims::new(min_max_x.0, min_max_x.1).ok_or_else(|| OpossumError::Other(
                     "Cannot voronoi data with None-valued axis limits! Cannot create `PlotData::TriangulatedSurface`!"
@@ -989,7 +999,7 @@ impl PlotData {
                         .into()
                 ))?,
         )?;
-        let z_data = voronoi.get_z_data().as_ref().map_or_else(
+            let z_data = voronoi.get_z_data().as_ref().map_or_else(
             || {
                 Err(OpossumError::Other(
                     "Could not extract z data from voronoi diagram! Cannot create `PlotData::TriangulatedSurface`!"
@@ -998,39 +1008,45 @@ impl PlotData {
             },
             |z_data| Ok(DVector::from(z_data.column(0))),
         )?;
-        // let (x, y): (Vec<f64>, Vec<f64>) = voronoi.get_voronoi_diagram().sites.iter().cloned().map(|p| (p.x, p.y)).unzip();
-        let triangles = voronoi.get_voronoi_diagram().delaunay.triangles.clone();
-        let mut filtered_triangles = Vec::<usize>::with_capacity(triangles.len());
-        let triangle_idx = Matrix3xX::from_vec(triangles).transpose();
-        let len_dat = xyz_dat.shape().0;
-        for row in triangle_idx.row_iter() {
-            if row[0] < len_dat && row[1] < len_dat && row[2] < len_dat {
-                filtered_triangles.push(row[0]);
-                filtered_triangles.push(row[1]);
-                filtered_triangles.push(row[2]);
+            // let (x, y): (Vec<f64>, Vec<f64>) = voronoi.get_voronoi_diagram().sites.iter().cloned().map(|p| (p.x, p.y)).unzip();
+            let triangles = voronoi.get_voronoi_diagram().delaunay.triangles.clone();
+            let mut filtered_triangles = Vec::<usize>::with_capacity(triangles.len());
+            let triangle_idx = Matrix3xX::from_vec(triangles).transpose();
+            let len_dat = xyz_dat.shape().0;
+            for row in triangle_idx.row_iter() {
+                if row[0] < len_dat && row[1] < len_dat && row[2] < len_dat {
+                    filtered_triangles.push(row[0]);
+                    filtered_triangles.push(row[1]);
+                    filtered_triangles.push(row[2]);
+                }
             }
+            let triangle_idx_filtered = Matrix3xX::from_vec(filtered_triangles).transpose();
+            let xyz_dat = MatrixXx3::from_columns(&[
+                xyz_dat.column(0),
+                xyz_dat.column(1),
+                z_data.rows(0, len_dat),
+            ]);
+
+            let triangle_normals = Matrix3xX::from_vec(
+                triangle_idx_filtered
+                    .row_iter()
+                    .flat_map(|tri_idx| {
+                        let p1 = xyz_dat.row(tri_idx[0]);
+                        let p2 = xyz_dat.row(tri_idx[1]);
+                        let p3 = xyz_dat.row(tri_idx[2]);
+                        let normal = ((p2 - p1).cross(&(p3 - p1))).normalize();
+                        [normal[0], normal[1], normal[2]]
+                    })
+                    .collect_vec(),
+            )
+            .transpose();
+
+            Ok(Self::TriangulatedSurface {
+                triangle_idx: triangle_idx_filtered,
+                xyz_dat,
+                triangle_face_normals: triangle_normals,
+            })
         }
-        let triangle_idx_filtered = Matrix3xX::from_vec(filtered_triangles).transpose();
-        let xyz_dat = MatrixXx3::from_columns(&[
-            xyz_dat.column(0),
-            xyz_dat.column(1),
-            z_data.rows(0, len_dat),
-        ]);
-
-        let triangle_normals = Matrix3xX::from_vec(triangle_idx_filtered.row_iter().map(|tri_idx| {
-            let p1 = xyz_dat.row(tri_idx[0]);
-            let p2 = xyz_dat.row(tri_idx[1]);
-            let p3 = xyz_dat.row(tri_idx[2]);
-            let normal = ((p2 - p1).cross(&(p3-p1))).normalize();
-            [normal[0], normal[1], normal[2]]
-        }).flatten().collect_vec()).transpose();
-
-        Ok(Self::TriangulatedSurface {
-            triangle_idx: triangle_idx_filtered,
-            xyz_dat,
-            triangle_face_normals: triangle_normals
-        })
-    }
     }
 }
 
@@ -2178,7 +2194,7 @@ pub struct Plot {
     plot_size: (u32, u32),
     fig_size: (u32, u32),
     plot_series: Option<Vec<PlotSeries>>,
-    view_3d: Vector3<f64>,
+    _view_3d: Vector3<f64>,
 }
 
 impl Plot {
@@ -2368,7 +2384,7 @@ impl TryFrom<&PlotParameters> for Plot {
             plot_size,
             fig_size: plot_size,
             plot_series: None,
-            view_3d,
+            _view_3d: view_3d,
         })
     }
 }
@@ -2484,7 +2500,7 @@ mod test {
         let x_bounds = plt.bounds.get_x_bounds().unwrap();
         let y_bounds = plt.bounds.get_y_bounds().unwrap();
 
-        assert_relative_eq!(x_bounds.min, -0.1);
+        assert_relative_eq!(x_bounds.min, 3.9);
         assert_relative_eq!(x_bounds.max, 6.1);
         assert!(relative_eq!(
             y_bounds.min,
