@@ -109,7 +109,7 @@ impl Optical for ParaxialSurface {
                     };
                     let z_position =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let plane = Plane::new(z_position)?;
+                    let plane = Plane::new_along_z(z_position)?;
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     rays.refract_paraxial(*focal_length)?;
                     if let Some(aperture) = self.ports().input_aperture("front") {

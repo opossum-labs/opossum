@@ -3,12 +3,15 @@
 //! This module implements a spherical surface with a given radius of curvature and a given z position on the optical axis.
 use super::Surface;
 use crate::ray::Ray;
+use crate::render::{Color, Render, Renderable, SDF};
+use crate::utils::geom_transformation::Isometry;
 use crate::{
     error::{OpmResult, OpossumError},
     meter,
 };
 use nalgebra::Point3;
 use nalgebra::Vector3;
+use num::Zero;
 use roots::find_roots_quadratic;
 use roots::Roots;
 use uom::si::f64::Length;
@@ -18,6 +21,8 @@ use uom::si::f64::Length;
 pub struct Sphere {
     z: Length,
     radius: Length,
+    pos: Point3<Length>,
+    isometry: Isometry,
 }
 impl Sphere {
     /// Generate a new [`Sphere`] surface with a given z position on the optical axis and a given radius of curvature.
@@ -25,18 +30,59 @@ impl Sphere {
     /// # Errors
     ///
     /// This function will return an error if the radius of curvature is 0.0 or not finite.
-    pub fn new(z: Length, radius_of_curvature: Length) -> OpmResult<Self> {
+    pub fn new_along_z(z: Length, radius_of_curvature: Length) -> OpmResult<Self> {
         if !radius_of_curvature.is_normal() {
             return Err(OpossumError::Other(
                 "radius of curvature must be != 0.0 and finite".into(),
             ));
         }
+        let isometry = Isometry::new(
+            Point3::new(Length::zero(), Length::zero(), z),
+            Vector3::new(0., 0., 0.),
+        );
+
         Ok(Self {
             z: z + radius_of_curvature,
             radius: radius_of_curvature,
+            pos: Point3::new(Length::zero(), Length::zero(), z),
+            isometry,
         })
     }
+
+    /// Create a new [`Sphere`] located at a given position.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if any components of the `pos` are not finite or if the radius is not normal.
+    pub fn new(radius: Length, pos: Point3<Length>) -> OpmResult<Self> {
+        if !radius.is_normal() {
+            return Err(OpossumError::Other(
+                "radius of curvature must be != 0.0 and finite".into(),
+            ));
+        }
+        if pos.iter().any(|x| !x.is_finite()) {
+            return Err(OpossumError::Other(
+                "center point coordinates must be finite".into(),
+            ));
+        }
+        let isometry = Isometry::new(pos, Vector3::new(0., 0., 0.));
+        Ok(Self {
+            z: pos.z,
+            radius,
+            pos,
+            isometry,
+        })
+    }
+
+    /// Returns the position (center point) of this sphere
+    #[must_use]
+    pub const fn get_pos(&self) -> Point3<Length> {
+        self.pos
+    }
 }
+impl Render<'_> for Sphere {}
+impl Renderable<'_> for Sphere {}
+
 impl Surface for Sphere {
     fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         // sphere formula
@@ -110,6 +156,22 @@ impl Surface for Sphere {
     }
 }
 
+impl Color for Sphere {
+    fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
+        Vector3::new(0.5, 0.3, 0.5)
+    }
+}
+impl SDF for Sphere {
+    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+        let p_out = self.isometry.inverse_transform_point_f64(p);
+        (p_out
+            .x
+            .mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z * p_out.z)))
+        .sqrt()
+            - self.radius.value
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{joule, millimeter, nanometer};
@@ -120,20 +182,20 @@ mod test {
     use super::*;
     #[test]
     fn new() {
-        let s = Sphere::new(millimeter!(1.0), millimeter!(2.0)).unwrap();
+        let s = Sphere::new_along_z(millimeter!(1.0), millimeter!(2.0)).unwrap();
         assert_eq!(s.z, millimeter!(3.0));
         assert_eq!(s.radius, millimeter!(2.0));
-        assert!(Sphere::new(millimeter!(1.0), millimeter!(0.0)).is_err());
-        assert!(Sphere::new(millimeter!(1.0), millimeter!(f64::NAN)).is_err());
-        assert!(Sphere::new(millimeter!(1.0), millimeter!(f64::INFINITY)).is_err());
-        assert!(Sphere::new(millimeter!(1.0), millimeter!(f64::NEG_INFINITY)).is_err());
-        let s = Sphere::new(millimeter!(1.0), millimeter!(-2.0)).unwrap();
+        assert!(Sphere::new_along_z(millimeter!(1.0), millimeter!(0.0)).is_err());
+        assert!(Sphere::new_along_z(millimeter!(1.0), millimeter!(f64::NAN)).is_err());
+        assert!(Sphere::new_along_z(millimeter!(1.0), millimeter!(f64::INFINITY)).is_err());
+        assert!(Sphere::new_along_z(millimeter!(1.0), millimeter!(f64::NEG_INFINITY)).is_err());
+        let s = Sphere::new_along_z(millimeter!(1.0), millimeter!(-2.0)).unwrap();
         assert_eq!(s.z, millimeter!(-1.0));
         assert_eq!(s.radius, millimeter!(-2.0));
     }
     #[test]
     fn intersect_positive_on_axis() {
-        let s = Sphere::new(millimeter!(10.0), millimeter!(1.0)).unwrap();
+        let s = Sphere::new_along_z(millimeter!(10.0), millimeter!(1.0)).unwrap();
         let ray = Ray::new(
             millimeter!(0.0, 0.0, 0.0),
             Vector3::new(0.0, 0.0, 1.0),
@@ -158,9 +220,9 @@ mod test {
             joule!(1.0),
         )
         .unwrap();
-        let s = Sphere::new(millimeter!(-10.0), millimeter!(1.0)).unwrap();
+        let s = Sphere::new_along_z(millimeter!(-10.0), millimeter!(1.0)).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
-        let s = Sphere::new(millimeter!(-10.0), millimeter!(-1.0)).unwrap();
+        let s = Sphere::new_along_z(millimeter!(-10.0), millimeter!(-1.0)).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
@@ -172,7 +234,7 @@ mod test {
             joule!(1.0),
         )
         .unwrap();
-        let s = Sphere::new(millimeter!(10.0), millimeter!(1.0)).unwrap();
+        let s = Sphere::new_along_z(millimeter!(10.0), millimeter!(1.0)).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
         let ray = Ray::new(
             millimeter!(0.0, -1.1, 0.0),
@@ -187,7 +249,7 @@ mod test {
     fn intersect_positive_collinear_touch() {
         let wvl = nanometer!(1053.0);
         let ray = Ray::new(millimeter!(0.0, 1.0, 0.0), Vector3::z(), wvl, joule!(1.0)).unwrap();
-        let s = Sphere::new(millimeter!(10.0), millimeter!(1.0)).unwrap();
+        let s = Sphere::new_along_z(millimeter!(10.0), millimeter!(1.0)).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(0.0, 1.0, 11.0), Vector3::y()))
@@ -207,7 +269,7 @@ mod test {
     }
     #[test]
     fn intersect_negative_on_axis() {
-        let s = Sphere::new(millimeter!(10.0), millimeter!(-1.0)).unwrap();
+        let s = Sphere::new_along_z(millimeter!(10.0), millimeter!(-1.0)).unwrap();
         let ray = Ray::new(
             millimeter!(0.0, 0.0, 0.0),
             Vector3::new(0.0, 0.0, 1.0),

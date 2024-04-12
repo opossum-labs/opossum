@@ -1,3 +1,6 @@
+//! Module for gridding data
+
+#![warn(missing_docs)]
 use approx::{abs_diff_eq, abs_diff_ne, relative_eq};
 use kahan::KahanSum;
 use log::warn;
@@ -15,6 +18,7 @@ use crate::{
 
 use super::filter_data::{filter_nan_infinite, get_min_max_filter_nonfinite};
 
+/// Storage struct for voronoi diagram cells and associated values of its vertices
 #[derive(Clone, Debug)]
 pub struct VoronoiedData {
     voronoi_diagram: VoronoiDiagram<VPoint>,
@@ -80,10 +84,13 @@ impl VoronoiedData {
             Err(OpossumError::Other("Number of voronoi-diagram sites and data values is not the same! Cannot combine data and voronoi cells!".into()))
         }
     }
+    /// Get the voronoi diagram of the [`VoronoiedData`]
     #[must_use]
     pub const fn get_voronoi_diagram(&self) -> &VoronoiDiagram<VPoint> {
         &self.voronoi_diagram
     }
+
+    /// Get the z dataset of the [`VoronoiedData`]
     #[must_use]
     pub const fn get_z_data(&self) -> &Option<DVector<f64>> {
         &self.z_data
@@ -222,6 +229,50 @@ pub fn linspace(start: f64, end: f64, num: f64) -> OpmResult<DVector<f64>> {
             let bin_size = range.sum() / steps.sum();
 
             let mut summator: KahanSum<f64> = KahanSum::<f64>::new_with_value(start);
+            for val in linspace.iter_mut() {
+                *val = summator.sum();
+                summator += bin_size;
+            }
+            Ok(linspace)
+        },
+    )
+}
+
+/// Creates a linearly spaced Vector (Matrix with1 column and `num` rows) from `start` to `end`
+/// # Attributes
+/// - `start`:  Start value of the array
+/// - `end`:    end value of the array
+/// - `num`:    number of elements
+///
+/// # Errors
+/// This function will return an error if `num` cannot be casted to usize.
+pub fn linspace_f32(start: f32, end: f32, num: f32) -> OpmResult<DVector<f32>> {
+    if !start.is_finite() || !end.is_finite() {
+        return Err(OpossumError::Other(
+            "start and end values must be finite!".into(),
+        ));
+    };
+
+    if num < 2. {
+        warn!("Using linspace with less than two elements results in an empty Vector for num=0 or a Vector with one entry being num=start");
+    }
+    num.to_usize().map_or_else(
+        || {
+            Err(OpossumError::Other(
+                "Cannot cast num value to usize!".into(),
+            ))
+        },
+        |num_usize| {
+            let mut linspace = DVector::<f32>::zeros(num_usize);
+            let mut range = KahanSum::<f32>::new_with_value(end);
+            range += -start;
+
+            let mut steps = KahanSum::<f32>::new_with_value(num);
+            steps += -1.;
+
+            let bin_size = range.sum() / steps.sum();
+
+            let mut summator: KahanSum<f32> = KahanSum::<f32>::new_with_value(start);
             for val in linspace.iter_mut() {
                 *val = summator.sum();
                 summator += bin_size;

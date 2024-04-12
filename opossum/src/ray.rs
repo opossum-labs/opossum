@@ -662,7 +662,7 @@ mod test {
         let e = joule!(1.0);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
         let plane_z_pos = millimeter!(10.0);
-        let s = Plane::new(plane_z_pos).unwrap();
+        let s = Plane::new_along_z(plane_z_pos).unwrap();
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -686,7 +686,7 @@ mod test {
         let wvl = nanometer!(1054.0);
         let e = joule!(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        let s = Plane::new(millimeter!(10.0)).unwrap();
+        let s = Plane::new_along_z(millimeter!(10.0)).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
         assert_eq!(ray.pos, millimeter!(0., 0., 0.));
         assert_eq!(ray.dir, direction);
@@ -701,7 +701,7 @@ mod test {
         let e = joule!(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         let plane_z_pos = millimeter!(10.0);
-        let s = Plane::new(plane_z_pos).unwrap();
+        let s = Plane::new_along_z(plane_z_pos).unwrap();
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -733,7 +733,7 @@ mod test {
         let e = joule!(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.set_refractive_index(1.5).unwrap();
-        let s = Plane::new(millimeter!(10.0)).unwrap();
+        let s = Plane::new_along_z(millimeter!(10.0)).unwrap();
         let reflected = ray.refract_on_surface(&s, 1.0).unwrap();
         assert!(reflected.is_none());
         assert_eq!(ray.pos, millimeter!(0., 20., 10.));

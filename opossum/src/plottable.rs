@@ -6,10 +6,12 @@ use crate::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace
 use approx::{abs_diff_ne, relative_ne, RelativeEq};
 use colorous::Gradient;
 use image::RgbImage;
-use itertools::{iproduct, izip};
+use itertools::{iproduct, izip, Itertools};
 use kahan::KahanSum;
 use log::warn;
-use nalgebra::{DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3};
+use nalgebra::{
+    DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3, Vector3,
+};
 use num::ToPrimitive;
 use plotters::{
     backend::DrawingBackend,
@@ -221,17 +223,41 @@ impl PlotType {
         x: &DVectorSlice<'_, f64>,
         y: &DVectorSlice<'_, f64>,
         z: &DVectorSlice<'_, f64>,
+        triangle_color: RGBAColor,
+        _triangle_normals: &MatrixXx3<f64>,
     ) {
-        let series = triangle_index.row_iter().map(|idx| {
-            Polygon::new(
-                vec![
-                    (x[idx[0]], y[idx[0]], z[idx[0]]),
-                    (x[idx[1]], y[idx[1]], z[idx[1]]),
-                    (x[idx[2]], y[idx[2]], z[idx[2]]),
-                ],
-                Into::<ShapeStyle>::into(RGBAColor(0, 0, 255, 0.2)).filled(),
-            )
-        });
+        let _view = Vector3::new(-1., -1., -1.);
+        let series = triangle_index
+            .row_iter()
+            // .filter(|(_, n)| n.transpose().dot(&view) > 0.)
+            .map(|idx| {
+                Polygon::new(
+                    vec![
+                        (x[idx[0]], y[idx[0]], z[idx[0]]),
+                        (x[idx[1]], y[idx[1]], z[idx[1]]),
+                        (x[idx[2]], y[idx[2]], z[idx[2]]),
+                    ],
+                    Into::<ShapeStyle>::into(triangle_color).filled(),
+                )
+            });
+        chart.draw_series(series).unwrap();
+        let series = triangle_index
+            .row_iter()
+            // .filter(|(_, n)| n.transpose().dot(&view) > 0.)
+            .map(|idx| {
+                PathElement::new(
+                    vec![
+                        (x[idx[0]], y[idx[0]], z[idx[0]]),
+                        (x[idx[1]], y[idx[1]], z[idx[1]]),
+                        (x[idx[2]], y[idx[2]], z[idx[2]]),
+                    ],
+                    ShapeStyle {
+                        color: RGBAColor(0, 0, 0, 1.),
+                        filled: false,
+                        stroke_width: 1,
+                    },
+                )
+            });
         chart.draw_series(series).unwrap();
     }
 
@@ -472,8 +498,8 @@ impl PlotType {
                         Self::draw_line_3d(
                             &mut chart,
                             &line_dat.column(0),
-                            &line_dat.column(1),
                             &line_dat.column(2),
+                            &line_dat.column(1),
                             RGBAColor(255, 0, 0, 0.3),
                             label,
                         );
@@ -498,6 +524,7 @@ impl PlotType {
             if let PlotData::TriangulatedSurface {
                 triangle_idx,
                 xyz_dat,
+                triangle_face_normals: triangle_normals,
             } = plt_series_vec[0].get_plot_series_data()
             {
                 //main plot
@@ -508,8 +535,10 @@ impl PlotType {
                     &mut chart,
                     triangle_idx,
                     &xyz_dat.column(0),
-                    &xyz_dat.column(2),
                     &xyz_dat.column(1),
+                    &xyz_dat.column(2),
+                    plt_series_vec[0].color,
+                    triangle_normals,
                 );
             } else {
                 warn!("Wrong PlotData stored for this plot type! Must use TriangulatedSurface! Not all series will be plotted!");
@@ -607,8 +636,10 @@ impl PlotType {
 
         chart.with_projection(
             |mut pb: plotters::coord::ranged3d::ProjectionMatrixBuilder| {
+                pb.pitch = 45. / 180. * PI;
+                pb.yaw = 45. / 180. * PI;
                 pb.pitch = 0. / 180. * PI;
-                pb.yaw = -90. / 180. * PI;
+                pb.yaw = 0. / 180. * PI;
                 pb.scale = 0.7;
                 pb.into_matrix()
             },
@@ -788,6 +819,8 @@ pub enum PlotData {
         triangle_idx: MatrixXx3<usize>,
         /// - Matrix with 3 columns and N rows that hold the x,y,z data
         xyz_dat: MatrixXx3<f64>,
+        ///normal vectors of each triangle
+        triangle_face_normals: MatrixXx3<f64>,
     },
 }
 
@@ -893,25 +926,69 @@ impl PlotData {
     /// This function will return an error if
     /// - the length of xyz data: `xyz_dat` is zero
     /// - no axis bounds for x or y can be determined
-    pub fn new_triangulatedsurface(xyz_dat: &MatrixXx3<f64>) -> OpmResult<Self> {
+    #[allow(clippy::too_many_lines)]
+    pub fn new_triangulatedsurface(
+        xyz_dat: &MatrixXx3<f64>,
+        triangle_idx_opt: Option<&MatrixXx3<usize>>,
+        triangle_face_normals_opt: Option<&MatrixXx3<f64>>,
+    ) -> OpmResult<Self> {
         if xyz_dat.is_empty() {
             return Err(OpossumError::Other(
                 "No z-data provided! Cannot create `PlotData::TriangulatedSurface`!".into(),
             ));
         }
-
-        let min_max_x = get_min_max_filter_nonfinite(
+        if let (Some(triangle_idx), Some(triangle_face_normals)) =
+            (triangle_idx_opt, triangle_face_normals_opt)
+        {
+            if triangle_idx.shape().0 != triangle_face_normals.shape().0 {
+                Err(OpossumError::Other("Shapes of triangle indices and face normals does not match! Cannot create `PlotData::TriangulatedSurface`!"        .into()))
+            } else if triangle_idx.iter().fold(0, |arg0, idx| *idx.max(&arg0))
+                > xyz_dat.shape().0 - 1
+            {
+                Err(OpossumError::Other("Maximum triangle index is larger than number of points! Cannot create `PlotData::TriangulatedSurface`!"        .into()))
+            } else {
+                Ok(Self::TriangulatedSurface {
+                    triangle_idx: triangle_idx.clone(),
+                    xyz_dat: xyz_dat.clone(),
+                    triangle_face_normals: triangle_face_normals.clone(),
+                })
+            }
+        } else if let Some(triangle_idx) = triangle_idx_opt {
+            if triangle_idx.iter().fold(0, |arg0, idx| *idx.max(&arg0)) > xyz_dat.shape().0 - 1 {
+                Err(OpossumError::Other("Maximum triangle index is larger than number of points! Cannot create `PlotData::TriangulatedSurface`!"        .into()))
+            } else {
+                let triangle_face_normals = Matrix3xX::from_vec(
+                    triangle_idx
+                        .row_iter()
+                        .flat_map(|tri_idx| {
+                            let p1 = xyz_dat.row(tri_idx[0]);
+                            let p2 = xyz_dat.row(tri_idx[1]);
+                            let p3 = xyz_dat.row(tri_idx[2]);
+                            let normal = ((p2 - p1).cross(&(p3 - p1))).normalize();
+                            [normal[0], normal[1], normal[2]]
+                        })
+                        .collect_vec(),
+                )
+                .transpose();
+                Ok(Self::TriangulatedSurface {
+                    triangle_idx: triangle_idx.clone(),
+                    xyz_dat: xyz_dat.clone(),
+                    triangle_face_normals,
+                })
+            }
+        } else {
+            let min_max_x = get_min_max_filter_nonfinite(
             xyz_dat
             .column(0)
             .as_slice())
             .ok_or_else(|| OpossumError::Other("Axes bounds could not be determined! Cannot create `PlotData::TriangulatedSurface`!"        .into()))?;
-        let min_max_y = get_min_max_filter_nonfinite(
+            let min_max_y = get_min_max_filter_nonfinite(
             xyz_dat
             .column(1)
             .as_slice())
             .ok_or_else(|| OpossumError::Other("Axes bounds could not be determined! Cannot create `PlotData::TriangulatedSurface`!"        .into()))?;
 
-        let voronoi = create_valued_voronoi_cells(
+            let voronoi = create_valued_voronoi_cells(
             xyz_dat,
             &AxLims::new(min_max_x.0, min_max_x.1).ok_or_else(|| OpossumError::Other(
                     "Cannot voronoi data with None-valued axis limits! Cannot create `PlotData::TriangulatedSurface`!"
@@ -922,7 +999,7 @@ impl PlotData {
                         .into()
                 ))?,
         )?;
-        let z_data = voronoi.get_z_data().as_ref().map_or_else(
+            let z_data = voronoi.get_z_data().as_ref().map_or_else(
             || {
                 Err(OpossumError::Other(
                     "Could not extract z data from voronoi diagram! Cannot create `PlotData::TriangulatedSurface`!"
@@ -931,29 +1008,45 @@ impl PlotData {
             },
             |z_data| Ok(DVector::from(z_data.column(0))),
         )?;
-        // let (x, y): (Vec<f64>, Vec<f64>) = voronoi.get_voronoi_diagram().sites.iter().cloned().map(|p| (p.x, p.y)).unzip();
-        let triangles = voronoi.get_voronoi_diagram().delaunay.triangles.clone();
-        let mut filtered_triangles = Vec::<usize>::with_capacity(triangles.len());
-        let triangle_idx = Matrix3xX::from_vec(triangles).transpose();
-        let len_dat = xyz_dat.shape().0;
-        for row in triangle_idx.row_iter() {
-            if row[0] < len_dat && row[1] < len_dat && row[2] < len_dat {
-                filtered_triangles.push(row[0]);
-                filtered_triangles.push(row[1]);
-                filtered_triangles.push(row[2]);
+            // let (x, y): (Vec<f64>, Vec<f64>) = voronoi.get_voronoi_diagram().sites.iter().cloned().map(|p| (p.x, p.y)).unzip();
+            let triangles = voronoi.get_voronoi_diagram().delaunay.triangles.clone();
+            let mut filtered_triangles = Vec::<usize>::with_capacity(triangles.len());
+            let triangle_idx = Matrix3xX::from_vec(triangles).transpose();
+            let len_dat = xyz_dat.shape().0;
+            for row in triangle_idx.row_iter() {
+                if row[0] < len_dat && row[1] < len_dat && row[2] < len_dat {
+                    filtered_triangles.push(row[0]);
+                    filtered_triangles.push(row[1]);
+                    filtered_triangles.push(row[2]);
+                }
             }
-        }
-        let triangle_idx_filtered = Matrix3xX::from_vec(filtered_triangles).transpose();
-        let xyz_dat = MatrixXx3::from_columns(&[
-            xyz_dat.column(0),
-            xyz_dat.column(1),
-            z_data.rows(0, len_dat),
-        ]);
+            let triangle_idx_filtered = Matrix3xX::from_vec(filtered_triangles).transpose();
+            let xyz_dat = MatrixXx3::from_columns(&[
+                xyz_dat.column(0),
+                xyz_dat.column(1),
+                z_data.rows(0, len_dat),
+            ]);
 
-        Ok(Self::TriangulatedSurface {
-            triangle_idx: triangle_idx_filtered,
-            xyz_dat,
-        })
+            let triangle_normals = Matrix3xX::from_vec(
+                triangle_idx_filtered
+                    .row_iter()
+                    .flat_map(|tri_idx| {
+                        let p1 = xyz_dat.row(tri_idx[0]);
+                        let p2 = xyz_dat.row(tri_idx[1]);
+                        let p3 = xyz_dat.row(tri_idx[2]);
+                        let normal = ((p2 - p1).cross(&(p3 - p1))).normalize();
+                        [normal[0], normal[1], normal[2]]
+                    })
+                    .collect_vec(),
+            )
+            .transpose();
+
+            Ok(Self::TriangulatedSurface {
+                triangle_idx: triangle_idx_filtered,
+                xyz_dat,
+                triangle_face_normals: triangle_normals,
+            })
+        }
     }
 }
 
@@ -1565,6 +1658,9 @@ impl Default for PlotParameters {
 
                     plt_params.set(&PlotArgs::FDir(current_dir)).unwrap()
                 }
+                PlotArgs::ViewDirection3D(_) => plt_params
+                    .set(&PlotArgs::ViewDirection3D(Vector3::new(-1., -1., -1.)))
+                    .unwrap(),
             };
         }
 
@@ -1645,6 +1741,19 @@ impl PlotParameters {
     }
 
     ///This method gets the position of the x label which is stored in the [`PlotParameters`]
+    /// # Returns
+    /// This method returns an [`OpmResult<LabelPos>`] containing the [`LabelPos`] of the x axis
+    /// # Errors
+    /// This method throws an error if the argument is not found
+    pub fn get_3d_view(&self) -> OpmResult<Vector3<f64>> {
+        if let Some(PlotArgs::ViewDirection3D(view_vec)) = self.params.get("view3d") {
+            Ok(*view_vec)
+        } else {
+            Err(OpossumError::Other("view3d argument not found!".into()))
+        }
+    }
+
+    ///This method gets the 3d view of a 3d plot which is stored in the [`PlotParameters`]
     /// # Returns
     /// This method returns an [`OpmResult<LabelPos>`] containing the [`LabelPos`] of the x axis
     /// # Errors
@@ -1913,6 +2022,7 @@ impl PlotParameters {
             PlotArgs::FDir(_) => "fdir".to_owned(),
             PlotArgs::FName(_) => "fname".to_owned(),
             PlotArgs::Backend(_) => "backend".to_owned(),
+            PlotArgs::ViewDirection3D(_) => "view3d".to_owned(),
         }
     }
 
@@ -2002,6 +2112,9 @@ impl PlotParameters {
             PlotArgs::FDir(_) => self.params.insert("fdir".to_owned(), plt_arg.clone()),
             PlotArgs::FName(_) => self.params.insert("fname".to_owned(), plt_arg.clone()),
             PlotArgs::Backend(_) => self.params.insert("backend".to_owned(), plt_arg.clone()),
+            PlotArgs::ViewDirection3D(_) => {
+                self.params.insert("view3d".to_owned(), plt_arg.clone())
+            }
         };
     }
 }
@@ -2081,6 +2194,7 @@ pub struct Plot {
     plot_size: (u32, u32),
     fig_size: (u32, u32),
     plot_series: Option<Vec<PlotSeries>>,
+    _view_3d: Vector3<f64>,
 }
 
 impl Plot {
@@ -2095,7 +2209,7 @@ impl Plot {
     #[must_use]
     pub fn new(plt_series: &Vec<PlotSeries>, plt_params: &PlotParameters) -> Self {
         let mut plot = Self::try_from(plt_params).unwrap();
-        plot.add_plot_series(plt_series, true);
+        plot.add_plot_series(plt_series, false);
 
         plot
     }
@@ -2147,10 +2261,21 @@ impl Plot {
             self.plot_series = Some(plt_series_vec.clone());
         }
 
+        let mut bounds = PlotBounds::default();
+        for plt_series in plt_series_vec {
+            bounds.join(&plt_series.define_data_based_axes_bounds(self.expand_bounds));
+        }
         if join_bounds {
-            let bounds = &mut self.bounds;
-            for plt_series in plt_series_vec {
-                bounds.join(&plt_series.define_data_based_axes_bounds(self.expand_bounds));
+            self.bounds = bounds;
+        } else {
+            if self.bounds.get_x_bounds().is_none() {
+                self.bounds.x = bounds.get_x_bounds();
+            }
+            if self.bounds.get_y_bounds().is_none() {
+                self.bounds.y = bounds.get_y_bounds();
+            }
+            if self.bounds.get_z_bounds().is_none() {
+                self.bounds.z = bounds.get_z_bounds();
             }
         }
     }
@@ -2199,9 +2324,19 @@ impl Plot {
             if plot_series.is_empty() {
                 warn!("No plot series defined! Cannot define axes bounds!");
             } else {
+                let mut plt_bounds_series = PlotBounds::default();
                 for plt_series in plot_series {
-                    self.bounds
+                    plt_bounds_series
                         .join(&plt_series.define_data_based_axes_bounds(self.expand_bounds));
+                }
+                if self.bounds.get_x_bounds().is_none() {
+                    self.bounds.x = plt_bounds_series.get_x_bounds();
+                }
+                if self.bounds.get_y_bounds().is_none() {
+                    self.bounds.y = plt_bounds_series.get_y_bounds();
+                }
+                if self.bounds.get_z_bounds().is_none() {
+                    self.bounds.z = plt_bounds_series.get_z_bounds();
                 }
                 if self.ax_equal {
                     self.set_xy_axes_ranges_equal();
@@ -2229,6 +2364,7 @@ impl TryFrom<&PlotParameters> for Plot {
         let y_label_str = plt_params.get_y_label()?;
         let x_label_pos = plt_params.get_x_label_pos()?;
         let y_label_pos = plt_params.get_y_label_pos()?;
+        let view_3d = plt_params.get_3d_view()?;
 
         let x_label = LabelDescription::new(&x_label_str, x_label_pos);
         let y_label = LabelDescription::new(&y_label_str, y_label_pos);
@@ -2248,6 +2384,7 @@ impl TryFrom<&PlotParameters> for Plot {
             plot_size,
             fig_size: plot_size,
             plot_series: None,
+            _view_3d: view_3d,
         })
     }
 }
@@ -2287,6 +2424,8 @@ pub enum PlotArgs {
     FName(String),
     ///Plotting backend that should be used. Holds a [`PltBackEnd`] enum
     Backend(PltBackEnd),
+    ///Vector of the viewpoint for a 3d plot
+    ViewDirection3D(Vector3<f64>),
 }
 
 #[cfg(test)]
@@ -2361,7 +2500,7 @@ mod test {
         let x_bounds = plt.bounds.get_x_bounds().unwrap();
         let y_bounds = plt.bounds.get_y_bounds().unwrap();
 
-        assert_relative_eq!(x_bounds.min, -0.1);
+        assert_relative_eq!(x_bounds.min, 3.9);
         assert_relative_eq!(x_bounds.max, 6.1);
         assert!(relative_eq!(
             y_bounds.min,
@@ -3032,7 +3171,7 @@ mod test {
             Some("colormesh".to_owned()),
         );
         let plt_series_surf_triangle = PlotSeries::new(
-            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            &PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap(),
             RGBAColor(0, 0, 0, 1.),
             Some("tri_surf".to_owned()),
         );
@@ -3091,7 +3230,7 @@ mod test {
         assert_relative_eq!(min_max[2].unwrap().0, -0.0);
         assert_relative_eq!(min_max[2].unwrap().1, 4.0);
 
-        let plt_dat_surf_triangle = PlotData::new_triangulatedsurface(&dat_3d).unwrap();
+        let plt_dat_surf_triangle = PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap();
         let min_max: Vec<Option<(f64, f64)>> = plt_dat_surf_triangle.get_axes_min_max_values();
         assert_relative_eq!(min_max[0].unwrap().0, 0.0);
         assert_relative_eq!(min_max[0].unwrap().1, 2.0);
@@ -3137,7 +3276,7 @@ mod test {
         assert_relative_eq!(axlims.z.unwrap().min, -0.2);
         assert_relative_eq!(axlims.z.unwrap().max, 4.2);
 
-        let plt_dat_tri_surf = PlotData::new_triangulatedsurface(&dat_3d).unwrap();
+        let plt_dat_tri_surf = PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap();
         let axlims = plt_dat_tri_surf.define_data_based_axes_bounds(true);
         assert_relative_eq!(axlims.x.unwrap().min, -0.1);
         assert_relative_eq!(axlims.x.unwrap().max, 2.1);
@@ -3174,7 +3313,7 @@ mod test {
             None,
         );
         let plt_series_surf_triangle = PlotSeries::new(
-            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            &PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap(),
             RGBAColor(0, 0, 0, 1.),
             None,
         );
@@ -3451,7 +3590,7 @@ mod test {
             None,
         );
         let plt_series_surf_triangle = PlotSeries::new(
-            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            &PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap(),
             RGBAColor(0, 0, 0, 1.),
             None,
         );
@@ -3488,7 +3627,7 @@ mod test {
             None,
         );
         let plt_series_surf_triangle = PlotSeries::new(
-            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            &PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap(),
             RGBAColor(0, 0, 0, 1.),
             None,
         );
@@ -3534,7 +3673,7 @@ mod test {
             None,
         );
         let plt_series_surf_triangle = PlotSeries::new(
-            &PlotData::new_triangulatedsurface(&dat_3d).unwrap(),
+            &PlotData::new_triangulatedsurface(&dat_3d, None, None).unwrap(),
             RGBAColor(0, 0, 0, 1.),
             None,
         );

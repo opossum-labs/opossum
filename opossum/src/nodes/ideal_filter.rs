@@ -174,55 +174,59 @@ impl Optical for IdealFilter {
         if self.properties().inverted()? {
             (src, target) = (target, src);
         }
-        let Some(input) = incoming_data.get(src) else {
-            return Ok(LightResult::default());
-        };
-        match input {
-            LightData::Energy(e) => {
-                if !matches!(analyzer_type, AnalyzerType::Energy) {
-                    return Err(OpossumError::Analysis(
-                        "expected energy analyzer for LightData::Energy".into(),
-                    ));
-                }
-                let mut new_data = e.clone();
-                new_data.filter(&self.filter_type())?;
-                let light_data = LightData::Energy(new_data);
-                Ok(HashMap::from([(target.into(), light_data)]))
-            }
-            LightData::Geometric(r) => {
-                if !matches!(analyzer_type, AnalyzerType::RayTrace(_)) {
-                    return Err(OpossumError::Analysis(
-                        "expected ray tracing analyzer for LightData::Geometric".into(),
-                    ));
-                }
-                let mut rays = r.clone();
-                let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                let plane = Plane::new(z_position)?;
-                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
-                rays.filter_energy(&self.filter_type())?;
-                if let Some(aperture) = self.ports().input_aperture("front") {
-                    rays.apodize(aperture)?;
-                    if let AnalyzerType::RayTrace(config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+        let input = incoming_data.get(src);
+        if let Some(Some(input)) = input {
+            match input {
+                LightData::Energy(e) => {
+                    if !matches!(analyzer_type, AnalyzerType::Energy) {
+                        return Err(OpossumError::Analysis(
+                            "expected energy analyzer for LightData::Energy".into(),
+                        ));
                     }
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-                if let Some(aperture) = self.ports().output_aperture("rear") {
-                    rays.apodize(aperture)?;
-                    if let AnalyzerType::RayTrace(config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    let mut new_data = e.clone();
+                    new_data.filter(&self.filter_type())?;
+                    let light_data = Some(LightData::Energy(new_data));
+                    return Ok(HashMap::from([(target.into(), light_data)]));
+                }
+                LightData::Geometric(r) => {
+                    if !matches!(analyzer_type, AnalyzerType::RayTrace(_)) {
+                        return Err(OpossumError::Analysis(
+                            "expected ray tracing analyzer for LightData::Geometric".into(),
+                        ));
                     }
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-                let light_data = LightData::Geometric(rays);
-                Ok(HashMap::from([(target.into(), light_data)]))
+                    let mut rays = r.clone();
+                    let z_position =
+                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+                    let plane = Plane::new_along_z(z_position)?;
+                    rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    rays.filter_energy(&self.filter_type())?;
+                    if let Some(aperture) = self.ports().input_aperture("front") {
+                        rays.apodize(aperture)?;
+                        if let AnalyzerType::RayTrace(config) = analyzer_type {
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        }
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    };
+                    if let Some(aperture) = self.ports().output_aperture("rear") {
+                        rays.apodize(aperture)?;
+                        if let AnalyzerType::RayTrace(config) = analyzer_type {
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        }
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    };
+                    let light_data = Some(LightData::Geometric(rays));
+                    return Ok(HashMap::from([(target.into(), light_data)]));
+                }
+                LightData::Fourier => {
+                    return Err(OpossumError::Analysis(
+                        "Ideal filter: expected LightData::Energy or LightData::Geometric".into(),
+                    ))
+                }
             }
-            LightData::Fourier => Err(OpossumError::Analysis(
-                "Ideal filter: expected LightData::Energy or LightData::Geometric".into(),
-            )),
         }
+        Err(OpossumError::Analysis("no data on input port".into()))
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.node_attr.set_property(name, prop)

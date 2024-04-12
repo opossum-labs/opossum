@@ -167,10 +167,13 @@ impl Optical for Lens {
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
                     if (*front_roc).is_infinite() {
-                        rays.refract_on_surface(&Plane::new(next_z_pos)?, &index_model.value)?;
+                        rays.refract_on_surface(
+                            &Plane::new_along_z(next_z_pos)?,
+                            &index_model.value,
+                        )?;
                     } else {
                         rays.refract_on_surface(
-                            &Sphere::new(next_z_pos, *front_roc)?,
+                            &Sphere::new_along_z(next_z_pos, *front_roc)?,
                             &index_model.value,
                         )?;
                     };
@@ -200,9 +203,12 @@ impl Optical for Lens {
                     rays.set_refractive_index(&index_model.value)?;
                     let index_1_0 = &RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap());
                     if (*rear_roc).is_infinite() {
-                        rays.refract_on_surface(&Plane::new(next_z_pos)?, index_1_0)?;
+                        rays.refract_on_surface(&Plane::new_along_z(next_z_pos)?, index_1_0)?;
                     } else {
-                        rays.refract_on_surface(&Sphere::new(next_z_pos, *rear_roc)?, index_1_0)?;
+                        rays.refract_on_surface(
+                            &Sphere::new_along_z(next_z_pos, *rear_roc)?,
+                            index_1_0,
+                        )?;
                     };
                     if let Some(aperture) = self.ports().output_aperture("rear") {
                         rays.apodize(aperture)?;
@@ -231,6 +237,15 @@ impl Optical for Lens {
         &self.node_attr
     }
 }
+
+// impl SDF for Lens
+// {
+//     fn sdf_eval_point(&self, p: &nalgebra::Point3<f64>, p_out: &mut nalgebra::Point3<f64>) -> f64 {
+//         self.isometry.inverse_transform_point_mut_f64(&p, p_out);
+//         // (p.x * p.x + p.y * p.y + p.z * p.z).sqrt() - self.radius.value
+//         (p_out.x.mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z*p_out.z)) ).sqrt() - self.radius.value
+//     }
+// }
 
 impl Dottable for Lens {
     fn node_color(&self) -> &str {

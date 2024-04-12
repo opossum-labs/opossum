@@ -92,7 +92,7 @@ impl Optical for FluenceDetector {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-            let plane = Plane::new(z_position)?;
+            let plane = Plane::new_along_z(z_position)?;
             rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             if let Some(aperture) = self.ports().input_aperture("in1") {
                 rays.apodize(aperture)?;
