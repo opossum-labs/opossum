@@ -1,7 +1,5 @@
 #![warn(missing_docs)]
 //! Lens with spherical or flat surfaces
-use std::collections::HashMap;
-
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -147,14 +145,13 @@ impl Optical for Lens {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        match analyzer_type {
-            AnalyzerType::Energy => Err(OpossumError::Analysis(
-                "Energy Analysis is not yet implemented for Lens Nodes".into(),
-            )),
+        let Some(data) = incoming_data.get("front") else {
+            return Ok(LightResult::default());
+        };
+        let light_data = match analyzer_type {
+            AnalyzerType::Energy => data.clone(),
             AnalyzerType::RayTrace(_) => {
-                let data = incoming_data.get("front").unwrap_or(&None);
-                if let Some(LightData::Geometric(rays)) = data {
-                    let mut rays = rays.clone();
+                if let LightData::Geometric(mut rays) = data.clone() {
                     let Ok(Proptype::Length(front_roc)) =
                         self.node_attr.get_property("front curvature")
                     else {
@@ -221,17 +218,17 @@ impl Optical for Lens {
                     } else {
                         return Err(OpossumError::OpticPort("ouput aperture not found".into()));
                     };
-                    Ok(HashMap::from([(
-                        "rear".into(),
-                        Some(LightData::Geometric(rays)),
-                    )]))
+                    LightData::Geometric(rays)
                 } else {
-                    Err(OpossumError::Analysis(
+                    return Err(OpossumError::Analysis(
                         "expected ray data at input port".into(),
-                    ))
+                    ));
                 }
             }
-        }
+        };
+        let mut light_result = LightResult::default();
+        light_result.insert("rear".into(), light_data);
+        Ok(light_result)
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.node_attr.set_property(name, prop)
@@ -342,6 +339,23 @@ mod test {
         );
     }
     #[test]
+    fn analyze_empty() {
+        let mut node = Lens::default();
+        let output = node
+            .analyze(LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_wrong_port() {
+        let mut node = Lens::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Geometric(Rays::default());
+        input.insert("rear".into(), input_light.clone());
+        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
     fn analyze_flatflat() {
         let mut node = Lens::new(
             "test",
@@ -358,15 +372,15 @@ mod test {
         )
         .unwrap();
         rays.set_dist_to_next_surface(millimeter!(10.0));
-        let mut incoming_data = HashMap::default();
-        incoming_data.insert("front".into(), Some(LightData::Geometric(rays)));
+        let mut incoming_data = LightResult::default();
+        incoming_data.insert("front".into(), LightData::Geometric(rays));
         let output = node
             .analyze(
                 incoming_data,
                 &AnalyzerType::RayTrace(RayTraceConfig::default()),
             )
             .unwrap();
-        if let Some(Some(LightData::Geometric(rays))) = output.get("rear") {
+        if let Some(LightData::Geometric(rays)) = output.get("rear") {
             for ray in rays {
                 assert_eq!(ray.direction(), Vector3::z());
                 assert_eq!(ray.path_length(), millimeter!(30.0));
@@ -393,42 +407,20 @@ mod test {
         )
         .unwrap();
         rays.set_dist_to_next_surface(millimeter!(10.0));
-        let mut incoming_data = HashMap::default();
-        incoming_data.insert("front".into(), Some(LightData::Geometric(rays)));
+        let mut incoming_data = LightResult::default();
+        incoming_data.insert("front".into(), LightData::Geometric(rays));
         let output = node
             .analyze(
                 incoming_data,
                 &AnalyzerType::RayTrace(RayTraceConfig::default()),
             )
             .unwrap();
-        if let Some(Some(LightData::Geometric(rays))) = output.get("rear") {
+        if let Some(LightData::Geometric(rays)) = output.get("rear") {
             for ray in rays {
                 assert_eq!(ray.direction(), Vector3::z());
             }
         } else {
             assert!(false);
         }
-    }
-    #[test]
-    fn analyze_wrong() {
-        let mut node = Lens::default();
-        let mut rays = Rays::new_uniform_collimated(
-            nanometer!(1000.0),
-            joule!(1.0),
-            &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
-        )
-        .unwrap();
-        rays.set_dist_to_next_surface(millimeter!(10.0));
-        let mut incoming_data = HashMap::default();
-        incoming_data.insert("rear".into(), Some(LightData::Geometric(rays.clone())));
-        assert!(node
-            .analyze(
-                incoming_data,
-                &AnalyzerType::RayTrace(RayTraceConfig::default())
-            )
-            .is_err());
-        let mut incoming_data = HashMap::default();
-        incoming_data.insert("front".into(), Some(LightData::Geometric(rays)));
-        assert!(node.analyze(incoming_data, &AnalyzerType::Energy).is_err());
     }
 }

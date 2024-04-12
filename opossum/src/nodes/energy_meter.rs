@@ -138,9 +138,11 @@ impl Optical for EnergyMeter {
         } else {
             ("in1", "out1")
         };
-        let data = incoming_data.get(inport).unwrap_or(&None);
-        self.light_data = data.clone();
-        if let Some(LightData::Geometric(rays)) = data {
+        let Some(data) = incoming_data.get(inport) else {
+            return Ok(LightResult::default());
+        };
+        self.light_data = Some(data.clone());
+        if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
             let plane = Plane::new_along_z(z_position)?;
@@ -164,7 +166,7 @@ impl Optical for EnergyMeter {
             self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(HashMap::from([(
                 outport.into(),
-                Some(LightData::Geometric(rays)),
+                LightData::Geometric(rays),
             )]))
         } else {
             Ok(HashMap::from([(outport.into(), data.clone())]))
@@ -223,7 +225,6 @@ impl Dottable for EnergyMeter {
         "whitesmoke"
     }
 }
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -275,12 +276,31 @@ mod test {
         assert_eq!(meter.ports().output_names(), vec!["in1"]);
     }
     #[test]
+    fn analyze_empty() {
+        let mut node = EnergyMeter::default();
+        let output = node
+            .analyze(LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut node = EnergyMeter::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("out1".into(), input_light.clone());
+        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
     fn analyze() {
         let mut meter = EnergyMeter::default();
         let mut input = LightResult::default();
-        let input_data = Some(LightData::Energy(DataEnergy {
+        let input_data = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
-        }));
+        });
         input.insert("in1".into(), input_data.clone());
         let result = meter.analyze(input, &AnalyzerType::Energy);
         assert!(result.is_ok());
@@ -293,9 +313,9 @@ mod test {
         let mut meter = EnergyMeter::default();
         let mut input = LightResult::default();
         meter.set_property("inverted", true.into()).unwrap();
-        let input_data = Some(LightData::Energy(DataEnergy {
+        let input_data = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
-        }));
+        });
         input.insert("out1".into(), input_data.clone());
         let result = meter.analyze(input, &AnalyzerType::Energy);
         assert!(result.is_ok());
@@ -308,9 +328,9 @@ mod test {
         let mut meter = EnergyMeter::default();
         assert_eq!(format!("{meter:?}"), "no data");
         let mut input = LightResult::default();
-        let input_data = Some(LightData::Energy(DataEnergy {
+        let input_data = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
-        }));
+        });
         input.insert("in1".into(), input_data.clone());
         meter.analyze(input, &AnalyzerType::Energy).unwrap();
         assert_eq!(format!("{meter:?}"), "Energy: 1 J (Type: IdealEnergyMeter)");
@@ -334,9 +354,9 @@ mod test {
             panic!("could not read Model property");
         }
         let mut input = LightResult::default();
-        let input_data = Some(LightData::Energy(DataEnergy {
+        let input_data = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
-        }));
+        });
         input.insert("in1".into(), input_data.clone());
         meter.analyze(input, &AnalyzerType::Energy).unwrap();
         let report = meter.report().unwrap();
