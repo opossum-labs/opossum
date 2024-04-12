@@ -1,5 +1,4 @@
 //! The basic structure containing the entire optical model
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Cursor, Write};
 use std::path::Path;
@@ -250,7 +249,8 @@ impl OpticScenery {
     /// # Errors
     /// This function returns an error if an underlying node-specific analysis function returns an error.
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> OpmResult<()> {
-        if !&self.g.is_single_tree() {
+        let is_single_tree = self.g.is_single_tree();
+        if !is_single_tree {
             warn!("Scenery contains unconnected sub-trees. Analysis might not be complete.");
         }
         let sorted = toposort(&self.g.0, None)
@@ -266,7 +266,7 @@ impl OpticScenery {
             if neighbors.count() == 0 {
                 warn!("stale (completely unconnected) node {node_name} found. Skipping.");
             } else {
-                let incoming_edges: HashMap<String, Option<LightData>> = self.incoming_edges(idx);
+                let incoming_edges: LightResult = self.incoming_edges(idx);
                 // paranoia: check if all incoming ports are really input ports of the node to be analyzed
                 let input_ports = node.optical_ref.borrow().ports().input_names();
                 if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
@@ -283,6 +283,13 @@ impl OpticScenery {
                             "analysis of node {node_name} <{node_type}> failed: {e}"
                         ))
                     })?;
+                // Warn, if empty output LightResult but node has output ports defined.
+                if outgoing_edges.is_empty()
+                    && !node.optical_ref.borrow().ports().outputs().is_empty()
+                    && is_single_tree
+                {
+                    warn!("analysis of node {node_name} <{node_type}> did not result in any output data. This might come from wrong / empty input data.");
+                }
                 for outgoing_edge in outgoing_edges {
                     self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
                 }
@@ -313,15 +320,16 @@ impl OpticScenery {
         let edges = self.g.0.edges_directed(idx, petgraph::Direction::Incoming);
         edges
             .into_iter()
+            .filter(|e| e.weight().data().is_some())
             .map(|e| {
                 (
                     e.weight().target_port().to_owned(),
-                    e.weight().data().cloned(),
+                    e.weight().data().cloned().unwrap(),
                 )
             })
-            .collect::<HashMap<String, Option<LightData>>>()
+            .collect::<LightResult>()
     }
-    fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: Option<LightData>) {
+    fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: LightData) {
         let edges = self.g.0.edges_directed(idx, petgraph::Direction::Outgoing);
         let edge_ref = edges
             .into_iter()
@@ -331,7 +339,7 @@ impl OpticScenery {
             let edge_idx = edge_ref.id();
             let light = self.g.0.edge_weight_mut(edge_idx);
             if let Some(light) = light {
-                light.set_data(data);
+                light.set_data(Some(data));
             }
         } // else outgoing edge not connected
     }

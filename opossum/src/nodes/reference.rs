@@ -232,6 +232,22 @@ mod test {
         assert_eq!(node.ports().output_names(), vec!["front"]);
     }
     #[test]
+    fn analyze_empty() {
+        let mut scenery = OpticScenery::default();
+        let idx = scenery.add_node(Dummy::default());
+        let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
+        let output = node
+            .analyze(LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_no_reference() {
+        let mut node = NodeReference::default();
+        let output = node.analyze(LightResult::default(), &AnalyzerType::Energy);
+        assert!(output.is_err());
+    }
+    #[test]
     fn analyze() {
         let mut scenery = OpticScenery::default();
         let idx = scenery.add_node(Dummy::default());
@@ -241,16 +257,16 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("front".into(), Some(input_light.clone()));
+        input.insert("front".into(), input_light.clone());
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear").unwrap();
+        let output = output.get("rear");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        assert_eq!(output, input_light);
+        assert_eq!(*output, input_light);
     }
     #[test]
     fn analyze_inverse() {
@@ -262,17 +278,17 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("rear".into(), Some(input_light.clone()));
+        input.insert("rear".into(), input_light.clone());
 
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
-        let output = output.get("front").unwrap();
+        let output = output.get("front");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        assert_eq!(output, input_light);
+        assert_eq!(*output, input_light);
     }
     #[test]
     fn analyze_non_invertible_ref() {
@@ -284,7 +300,7 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("rear".into(), Some(input_light.clone()));
+        input.insert("rear".into(), input_light.clone());
 
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_err());

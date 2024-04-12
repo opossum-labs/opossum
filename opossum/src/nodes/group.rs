@@ -396,13 +396,14 @@ impl NodeGroup {
         let edges = self.g.0.edges_directed(idx, Direction::Incoming);
         edges
             .into_iter()
+            .filter(|e| e.weight().data().is_some())
             .map(|e| {
                 (
                     e.weight().target_port().to_owned(),
-                    e.weight().data().cloned(),
+                    e.weight().data().cloned().unwrap(),
                 )
             })
-            .collect::<HashMap<String, Option<LightData>>>()
+            .collect::<LightResult>()
     }
     fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: Option<LightData>) {
         let edges = self.g.0.edges_directed(idx, Direction::Outgoing);
@@ -426,6 +427,30 @@ impl NodeGroup {
         let group_sinks = self.g.0.externals(Direction::Outgoing);
         group_sinks.into_iter().any(|gs| gs == idx)
     }
+    fn get_incoming(&self, idx: NodeIndex, incoming_data: &LightResult) -> LightResult {
+        if self.is_group_src_node(idx) {
+            // get from incoming_data
+            let portmap = if self.node_attr.inverted().unwrap() {
+                self.output_port_map()
+            } else {
+                self.input_port_map()
+            };
+            let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
+            let mut incoming = LightResult::default();
+            for port in assigned_ports {
+                if let Some(input_data) = incoming_data.get(port.0) {
+                    incoming.insert(port.1 .1.clone(), input_data.clone());
+                }
+            }
+            incoming
+        } else {
+            self.incoming_edges(idx)
+        }
+    }
+    fn is_stale_node(&self, idx: NodeIndex) -> bool {
+        let neighbors = self.g.0.neighbors_undirected(idx);
+        neighbors.count() == 0 && !self.input_port_map().iter().any(|p| p.1 .0 == idx)
+    }
     fn analyze_group(
         &mut self,
         incoming_data: &LightResult,
@@ -439,41 +464,21 @@ impl NodeGroup {
         let group_name = self.name();
         if !&self.g.is_single_tree() {
             warn!(
-                "Group {} contains unconnected sub-trees. Analysis might not be complete.",
-                group_name
+                "Group {group_name} contains unconnected sub-trees. Analysis might not be complete."
             );
         }
-        let mut light_result = LightResult::default();
         let sorted = toposort(&self.g.0, None)
             .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
+        let mut light_result = LightResult::default();
         for idx in sorted {
             let node = g_clone.node_weight(idx).unwrap();
-            // Check if node is group src node
-            let incoming_edges = if self.is_group_src_node(idx) {
-                // get from incoming_data
-                let portmap = if is_inverted {
-                    self.output_port_map()
-                } else {
-                    self.input_port_map()
-                };
-                let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
-                let mut incoming = LightResult::default();
-                for port in assigned_ports {
-                    let input_data = incoming_data.get(port.0).unwrap_or(&None);
-                    incoming.insert(port.1 .1.clone(), input_data.clone());
-                }
-                incoming
+            if self.is_stale_node(idx) {
+                let node_name = node.optical_ref.borrow().name();
+                warn!("Group {group_name} contains stale (completely unconnected) node {node_name}. Skipping.");
             } else {
-                self.incoming_edges(idx)
-            };
-            let node_name = node.optical_ref.borrow().name();
-            let neighbors = self.g.0.neighbors_undirected(idx);
-            if neighbors.count() == 0 {
-                if !self.input_port_map().iter().any(|p| p.1 .0 == idx) {
-                    warn!("Group {group_name} contains stale (completely unconnected) node {node_name}. Skipping.");
-                }
-            } else {
-                let outgoing_edges: HashMap<String, Option<LightData>> = node
+                // Check if node is group src node
+                let incoming_edges = self.get_incoming(idx, incoming_data);
+                let outgoing_edges: LightResult = node
                     .optical_ref
                     .borrow_mut()
                     .analyze(incoming_edges, analyzer_type)?;
@@ -486,14 +491,13 @@ impl NodeGroup {
                     };
                     let assigned_ports = portmap.iter().filter(|p| p.1 .0 == idx);
                     for port in assigned_ports {
-                        light_result.insert(
-                            port.0.clone(),
-                            outgoing_edges.get(&port.1 .1).unwrap().clone(),
-                        );
+                        if let Some(light_data) = outgoing_edges.get(&port.1 .1) {
+                            light_result.insert(port.0.clone(), light_data.clone());
+                        }
                     }
                 } else {
                     for outgoing_edge in outgoing_edges {
-                        self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                        self.set_outgoing_edge_data(idx, &outgoing_edge.0, Some(outgoing_edge.1));
                     }
                 }
             }
@@ -823,10 +827,14 @@ impl Dottable for NodeGroup {
 mod test {
     use super::*;
     use crate::{
+        joule,
         lightdata::DataEnergy,
+        millimeter, nanometer,
         nodes::{BeamSplitter, Detector, Dummy, Source},
         optical::Optical,
+        position_distributions::Hexapolar,
         ray::SplittingConfig,
+        rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
     use approx::assert_abs_diff_eq;
@@ -1059,18 +1067,37 @@ mod test {
         group
     }
     #[test]
+    fn analyze_empty() {
+        let mut node = NodeGroup::default();
+        let output = node
+            .analyze(LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_wrong_input_data() {
+        let mut group = prepare_group();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("wrong".into(), input_light.clone());
+        let output = group.analyze(input, &AnalyzerType::Energy).unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
     fn analyze() {
         let mut group = prepare_group();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("input".into(), Some(input_light.clone()));
+        input.insert("input".into(), input_light.clone());
         let output = group.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("output"));
-        let output = output.get("output").unwrap().clone().unwrap();
+        let output = output.get("output").unwrap().clone();
         let energy = if let LightData::Energy(data) = output {
             data.spectrum.total_energy()
         } else {
@@ -1086,17 +1113,6 @@ mod test {
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.is_empty());
-    }
-    #[test]
-    fn analyze_wrong_input_data() {
-        let mut group = prepare_group();
-        let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
-        input.insert("wrong".into(), Some(input_light.clone()));
-        let output = group.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_err());
     }
     #[test]
     fn analyze_subtree_warning() {
@@ -1128,7 +1144,18 @@ mod test {
         let d1 = group.add_node(Dummy::default()).unwrap();
         let _ = group.add_node(Dummy::new("stale node")).unwrap();
         group.map_input_port(d1, "front", "input").unwrap();
-        let input = LightResult::default();
+        let mut input = LightResult::default();
+        input.insert(
+            "input".into(),
+            LightData::Geometric(
+                Rays::new_uniform_collimated(
+                    nanometer!(1054.0),
+                    joule!(1.0),
+                    &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
+                )
+                .unwrap(),
+            ),
+        );
         let output = group.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         testing_logger::validate(|captured_logs| {
@@ -1153,12 +1180,12 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         group.set_property("inverted", true.into()).unwrap();
-        input.insert("output".into(), Some(input_light.clone()));
+        input.insert("output".into(), input_light);
         let output = group.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("input"));
-        let output = output.get("input").unwrap().clone().unwrap();
+        let output = output.get("input").unwrap().clone();
         let energy = if let LightData::Energy(data) = output {
             data.spectrum.total_energy()
         } else {
@@ -1178,7 +1205,7 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("output".into(), Some(input_light.clone()));
+        input.insert("output".into(), input_light);
         let output = group.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_err());
     }

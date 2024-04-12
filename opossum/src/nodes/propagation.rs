@@ -12,7 +12,6 @@ use crate::{
     utils::EnumProxy,
 };
 use num::Zero;
-use std::collections::HashMap;
 use uom::si::f64::Length;
 
 use super::node_attr::NodeAttr;
@@ -106,11 +105,13 @@ impl Optical for Propagation {
         } else {
             ("front", "rear")
         };
-        let mut data = incoming_data.get(src).unwrap_or(&None).clone();
-        match analyzer_type {
-            AnalyzerType::Energy => (),
+        let Some(data) = incoming_data.get(src) else {
+            return Ok(LightResult::default());
+        };
+        let light_data = match analyzer_type {
+            AnalyzerType::Energy => data.clone(),
             AnalyzerType::RayTrace(_config) => {
-                if let Some(LightData::Geometric(mut rays)) = data {
+                if let LightData::Geometric(mut rays) = data.clone() {
                     let Ok(Proptype::Length(length_along_z)) =
                         self.node_attr.get_property("distance")
                     else {
@@ -126,15 +127,17 @@ impl Optical for Propagation {
                     rays.set_refractive_index(&refractive_index.value)?;
                     let previous_dist_to_next_surface = rays.dist_to_next_surface();
                     rays.set_dist_to_next_surface(previous_dist_to_next_surface + *length_along_z);
-                    data = Some(LightData::Geometric(rays));
+                    LightData::Geometric(rays)
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
                         "No LightData::Geometric for analyzer type RayTrace".into(),
                     ));
                 }
             }
-        }
-        Ok(HashMap::from([(target.into(), data)]))
+        };
+        let mut light_result = LightResult::default();
+        light_result.insert(target.into(), light_data);
+        Ok(light_result)
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.node_attr.set_property(name, prop)
@@ -152,7 +155,7 @@ impl Dottable for Propagation {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{aperture::Aperture, millimeter};
+    use crate::{aperture::Aperture, millimeter, rays::Rays};
     use assert_matches::assert_matches;
     #[test]
     fn default() {
@@ -166,8 +169,8 @@ mod test {
             node.properties().get("distance").unwrap(),
             Proptype::Length(_)
         );
-        if let Ok(Proptype::F64(dist)) = node.properties().get("distance") {
-            assert_eq!(dist, &0.0);
+        if let Ok(Proptype::Length(dist)) = node.properties().get("distance") {
+            assert_eq!(*dist, Length::zero());
         }
         assert_eq!(node.node_color(), "none");
         assert!(node.as_group().is_err());
@@ -203,6 +206,23 @@ mod test {
         let node = Propagation::default();
         assert_eq!(node.ports().input_names(), vec!["front"]);
         assert_eq!(node.ports().output_names(), vec!["rear"]);
+    }
+    #[test]
+    fn analyze_empty() {
+        let mut node = Propagation::default();
+        let output = node
+            .analyze(LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_wrong_port() {
+        let mut node = Propagation::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Geometric(Rays::default());
+        input.insert("rear".into(), input_light.clone());
+        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        assert!(output.is_empty());
     }
     #[test]
     fn set_input_aperture() {

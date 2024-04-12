@@ -174,8 +174,10 @@ impl Optical for WaveFront {
         } else {
             ("in1", "out1")
         };
-        let data = incoming_data.get(inport).unwrap_or(&None);
-        if let Some(LightData::Geometric(rays)) = data {
+        let Some(data) = incoming_data.get(inport) else {
+            return Ok(LightResult::default());
+        };
+        if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
             let plane = Plane::new(z_position)?;
@@ -199,7 +201,7 @@ impl Optical for WaveFront {
             self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(HashMap::from([(
                 outport.into(),
-                Some(LightData::Geometric(rays)),
+                LightData::Geometric(rays),
             )]))
         } else {
             Ok(HashMap::from([(outport.into(), data.clone())]))
@@ -431,6 +433,23 @@ mod test {
         assert_eq!(node.properties().inverted().unwrap(), true)
     }
     #[test]
+    fn analyze_empty() {
+        let mut node = WaveFront::default();
+        let output = node
+            .analyze(LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut node = WaveFront::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Geometric(Rays::default());
+        input.insert("out1".into(), input_light.clone());
+        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
     fn analyze_ok() {
         let mut node = WaveFront::default();
         let mut input = LightResult::default();
@@ -442,7 +461,7 @@ mod test {
             )
             .unwrap(),
         );
-        input.insert("in1".into(), Some(input_light.clone()));
+        input.insert("in1".into(), input_light.clone());
         let output = node.analyze(input.clone(), &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = node.analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()));
@@ -450,22 +469,8 @@ mod test {
         let output = output.unwrap();
         assert!(output.contains_key("out1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("out1").unwrap();
+        let output = output.get("out1");
         assert!(output.is_some());
-    }
-    #[test]
-    fn analyze_wrong() {
-        let mut node = WaveFront::default();
-        let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
-        input.insert("wrong".into(), Some(input_light.clone()));
-        let output = node.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
-        let output = output.get("out1").unwrap();
-        assert!(output.is_none());
     }
     #[test]
     fn analyze_inverse() {
@@ -475,17 +480,17 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("out1".into(), Some(input_light.clone()));
+        input.insert("out1".into(), input_light.clone());
 
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("in1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("in1").unwrap();
+        let output = output.get("in1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        assert_eq!(output, input_light);
+        assert_eq!(*output, input_light);
     }
     #[test]
     fn export_data() {
