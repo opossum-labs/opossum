@@ -47,7 +47,7 @@ impl OpticGraph {
         {
             return Err(OpossumError::OpticScenery(format!(
                 "source node {} does not have a port {}",
-                source.optical_ref.borrow().properties().name()?,
+                source.optical_ref.borrow().name(),
                 src_port
             )));
         }
@@ -63,7 +63,7 @@ impl OpticGraph {
         {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} does not have a port {}",
-                target.optical_ref.borrow().properties().name()?,
+                target.optical_ref.borrow().name(),
                 target_port
             )));
         }
@@ -71,19 +71,19 @@ impl OpticGraph {
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "src node <{}> with port <{}> is already connected",
-                source.optical_ref.borrow().properties().name()?,
+                source.optical_ref.borrow().name(),
                 src_port
             )));
         }
         if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "target node <{}> with port <{}> is already connected",
-                target.optical_ref.borrow().properties().name()?,
+                target.optical_ref.borrow().name(),
                 target_port
             )));
         }
-        let src_name = source.optical_ref.borrow().properties().name()?.to_owned();
-        let target_name = target.optical_ref.borrow().properties().name()?.to_owned();
+        let src_name = source.optical_ref.borrow().name();
+        let target_name = target.optical_ref.borrow().name();
         let edge_index = self
             .0
             .add_edge(src_node, target_node, Light::new(src_port, target_port));
@@ -235,7 +235,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                 }
                 // assign references to ref nodes (if any)
                 for node in &nodes {
-                    if node.optical_ref.borrow().properties().node_type().unwrap() == "reference" {
+                    if node.optical_ref.borrow().node_type() == "reference" {
                         let mut my_node = node.optical_ref.borrow_mut();
                         let refnode = my_node.as_refnode_mut().unwrap();
                         let node_props = refnode.properties().clone();
@@ -250,15 +250,8 @@ impl<'de> Deserialize<'de> for OpticGraph {
                                 "reference node found, which does not reference anything",
                             ));
                         };
-                        let ref_name = format!(
-                            "ref ({})",
-                            reference_node
-                                .optical_ref
-                                .borrow()
-                                .properties()
-                                .name()
-                                .unwrap()
-                        );
+                        let ref_name =
+                            format!("ref ({})", reference_node.optical_ref.borrow().name());
                         refnode.assign_reference(&reference_node);
 
                         refnode

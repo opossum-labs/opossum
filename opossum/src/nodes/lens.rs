@@ -10,7 +10,7 @@ use crate::{
     millimeter,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Proptype},
+    properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     render::SDF,
     surface::{Plane, Sphere},
@@ -18,6 +18,8 @@ use crate::{
 };
 use num::{Float, Zero};
 use uom::si::f64::Length;
+
+use super::node_attr::NodeAttr;
 
 #[derive(Debug)]
 /// A real lens with spherical (or flat) surfaces.
@@ -37,58 +39,54 @@ use uom::si::f64::Length;
 ///   - `center thickness`
 ///   - `refractive index`
 pub struct Lens {
-    props: Properties,
+    node_attr: NodeAttr,
 }
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("lens", "lens");
-    props
-        .create(
-            "front curvature",
-            "radius of curvature of front surface",
-            None,
-            millimeter!(500.0).into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "rear curvature",
-            "radius of curvature of rear surface",
-            None,
-            millimeter!(-500.0).into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "center thickness",
-            "thickness of the lens in the center",
-            None,
-            millimeter!(10.0).into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "refractive index",
-            "refractive index of the lens material",
-            None,
-            EnumProxy::<RefractiveIndexType> {
-                value: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
-            }
-            .into(),
-        )
-        .unwrap();
 
-    let mut ports = OpticPorts::new();
-    ports.create_input("front").unwrap();
-    ports.create_output("rear").unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
-}
 impl Default for Lens {
     /// Create a lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
     fn default() -> Self {
-        Self {
-            props: create_default_props(),
-        }
+        let mut node_attr = NodeAttr::new("lens", "lens");
+        node_attr
+            .create_property(
+                "front curvature",
+                "radius of curvature of front surface",
+                None,
+                millimeter!(500.0).into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                "rear curvature",
+                "radius of curvature of rear surface",
+                None,
+                millimeter!(-500.0).into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                "center thickness",
+                "thickness of the lens in the center",
+                None,
+                millimeter!(10.0).into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                "refractive index",
+                "refractive index of the lens material",
+                None,
+                EnumProxy::<RefractiveIndexType> {
+                    value: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
+                }
+                .into(),
+            )
+            .unwrap();
+
+        let mut ports = OpticPorts::new();
+        ports.create_input("front").unwrap();
+        ports.create_output("rear").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
+        Self { node_attr }
     }
 }
 impl Lens {
@@ -108,35 +106,39 @@ impl Lens {
         center_thickness: Length,
         refractive_index: &dyn RefractiveIndex,
     ) -> OpmResult<Self> {
-        let mut props = create_default_props();
-        props.set("name", name.into())?;
+        let mut lens = Self::default();
+        lens.node_attr.set_property("name", name.into())?;
 
         if front_curvature.is_zero() || front_curvature.is_nan() {
             return Err(OpossumError::Other(
                 "front curvature must not be 0.0 or NaN".into(),
             ));
         }
-        props.set("front curvature", front_curvature.into())?;
+        lens.node_attr
+            .set_property("front curvature", front_curvature.into())?;
         if rear_curvature.is_zero() || rear_curvature.is_nan() {
             return Err(OpossumError::Other(
                 "rear curvature must not be 0.0 or NaN".into(),
             ));
         }
-        props.set("rear curvature", rear_curvature.into())?;
+        lens.node_attr
+            .set_property("rear curvature", rear_curvature.into())?;
         if center_thickness.is_sign_negative() || !center_thickness.is_finite() {
             return Err(OpossumError::Other(
                 "rear curvature must be >= 0.0 and finite".into(),
             ));
         }
-        props.set("center thickness", center_thickness.into())?;
-        props.set(
+        lens.node_attr
+            .set_property("center thickness", center_thickness.into())?;
+
+        lens.node_attr.set_property(
             "refractive index",
             EnumProxy::<RefractiveIndexType> {
                 value: refractive_index.to_enum(),
             }
             .into(),
         )?;
-        Ok(Self { props })
+        Ok(lens)
     }
 }
 
@@ -154,11 +156,13 @@ impl Optical for Lens {
                 let data = incoming_data.get("front").unwrap_or(&None);
                 if let Some(LightData::Geometric(rays)) = data {
                     let mut rays = rays.clone();
-                    let Ok(Proptype::Length(front_roc)) = self.props.get("front curvature") else {
+                    let Ok(Proptype::Length(front_roc)) =
+                        self.node_attr.get_property("front curvature")
+                    else {
                         return Err(OpossumError::Analysis("cannot read front curvature".into()));
                     };
                     let Ok(Proptype::RefractiveIndex(index_model)) =
-                        self.props.get("refractive index")
+                        self.node_attr.get_property("refractive index")
                     else {
                         return Err(OpossumError::Analysis(
                             "cannot read refractive index".into(),
@@ -182,14 +186,17 @@ impl Optical for Lens {
                     } else {
                         return Err(OpossumError::OpticPort("input aperture not found".into()));
                     };
-                    let Ok(Proptype::Length(center_thickness)) = self.props.get("center thickness")
+                    let Ok(Proptype::Length(center_thickness)) =
+                        self.node_attr.get_property("center thickness")
                     else {
                         return Err(OpossumError::Analysis(
                             "cannot read center thickness".into(),
                         ));
                     };
                     rays.set_dist_to_next_surface(*center_thickness);
-                    let Ok(Proptype::Length(rear_roc)) = self.props.get("rear curvature") else {
+                    let Ok(Proptype::Length(rear_roc)) =
+                        self.node_attr.get_property("rear curvature")
+                    else {
                         return Err(OpossumError::Analysis("cannot read rear curvature".into()));
                     };
                     let next_z_pos =
@@ -221,11 +228,11 @@ impl Optical for Lens {
             }
         }
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -255,28 +262,32 @@ mod test {
     #[test]
     fn default() {
         let node = Lens::default();
-        assert_eq!(node.properties().name().unwrap(), "lens");
-        assert_eq!(node.properties().node_type().unwrap(), "lens");
+        assert_eq!(node.name(), "lens");
+        assert_eq!(node.node_type(), "lens");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "aqua");
         assert!(node.as_group().is_err());
-        let Ok(Proptype::Length(roc)) = node.props.get("front curvature") else {
+        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(500.0));
-        let Ok(Proptype::Length(roc)) = node.props.get("rear curvature") else {
+        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("rear curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(-500.0));
-        let Ok(Proptype::Length(roc)) = node.props.get("center thickness") else {
+        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("center thickness") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(10.0));
-        let Ok(Proptype::RefractiveIndex(index)) = node.props.get("refractive index") else {
+        let Ok(Proptype::RefractiveIndex(index)) = node.node_attr.get_property("refractive index")
+        else {
             panic!()
         };
-        assert_eq!((*index).value.get_refractive_index(Length::zero()), 1.5);
+        assert_eq!(
+            (*index).value.get_refractive_index(Length::zero()).unwrap(),
+            1.5
+        );
     }
     #[test]
     fn new() {
@@ -299,26 +310,31 @@ mod test {
         assert!(Lens::new("test", millimeter!(f64::NEG_INFINITY), roc, ct, &ref_index).is_ok());
         let ref_index = RefrIndexConst::new(2.0).unwrap();
         let node = Lens::new("test", roc, roc, ct, &ref_index).unwrap();
-        assert_eq!(node.props.name().unwrap(), "test");
-        let Ok(Proptype::Length(roc)) = node.props.get("front curvature") else {
+        assert_eq!(node.name(), "test");
+        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(100.0));
-        let Ok(Proptype::Length(roc)) = node.props.get("rear curvature") else {
+        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("rear curvature") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(100.0));
-        let Ok(Proptype::Length(roc)) = node.props.get("center thickness") else {
+        let Ok(Proptype::Length(roc)) = node.node_attr.get_property("center thickness") else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(11.0));
         let Ok(Proptype::RefractiveIndex(EnumProxy::<RefractiveIndexType> {
             value: RefractiveIndexType::Const(ref_index_const),
-        })) = node.props.get("refractive index")
+        })) = node.node_attr.get_property("refractive index")
         else {
             panic!()
         };
-        assert_eq!((*ref_index_const).get_refractive_index(Length::zero()), 2.0);
+        assert_eq!(
+            (*ref_index_const)
+                .get_refractive_index(Length::zero())
+                .unwrap(),
+            2.0
+        );
     }
     #[test]
     fn analyze_flatflat() {

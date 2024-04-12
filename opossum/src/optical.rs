@@ -8,7 +8,7 @@ use crate::aperture::Aperture;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
-use crate::nodes::{NodeGroup, NodeReference};
+use crate::nodes::{NodeAttr, NodeGroup, NodeReference};
 use crate::optic_ports::OpticPorts;
 use crate::properties::{Properties, Proptype};
 use crate::reporter::NodeReport;
@@ -87,10 +87,7 @@ pub trait Optical: Dottable {
         _incoming_data: LightResult,
         _analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        warn!(
-            "{}: No analyze function defined.",
-            self.properties().node_type()?
-        );
+        warn!("{}: No analyze function defined.", self.node_type());
         Ok(LightResult::default())
     }
     /// Export analysis data to file(s) within the given directory path.
@@ -143,10 +140,7 @@ pub trait Optical: Dottable {
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Err(OpossumError::Other("cannot cast to reference node".into()))
     }
-    /// Return the properties of this [`Optical`].
-    ///
-    /// Return all properties of an optical node. Note, that some properties might be read-only.
-    fn properties(&self) -> &Properties;
+
     /// Set a property of this [`Optical`].
     ///
     /// Set a property of an optical node. This property must already exist (e.g. defined in `new()` / `default()` functions of the node).
@@ -172,7 +166,7 @@ pub trait Optical: Dottable {
                     "apertures" => {
                         let mut ports = self.ports();
                         if let Proptype::OpticPorts(ports_to_be_set) = prop.1.prop().clone() {
-                            if self.properties().node_type().unwrap() == "group" {
+                            if self.node_type() == "group" {
                                 // apertures cannot be set here for groups since no port mapping is defined yet.
                                 // this will be done later dynamically in group:ports() function.
                                 self.set_property("apertures", ports_to_be_set.into())?;
@@ -195,15 +189,26 @@ pub trait Optical: Dottable {
     fn report(&self) -> Option<NodeReport> {
         None
     }
+    /// Get the [`NodeAttr`] (common attributes) of an [`Optical`].
+    fn node_attr(&self) -> &NodeAttr;
+    /// Get the node type of this [`Optical`]
+    fn node_type(&self) -> String {
+        self.node_attr().node_type()
+    }
+    /// Get the name of this [`Optical`]
+    fn name(&self) -> String {
+        self.node_attr().name()
+    }
+    /// Return the properties of this [`Optical`].
+    ///
+    /// Return all properties of an optical node.
+    fn properties(&self) -> &Properties {
+        self.node_attr().properties()
+    }
 }
 
 impl Debug for dyn Optical {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} ({})",
-            self.properties().name().unwrap(),
-            self.properties().node_type().unwrap()
-        )
+        write!(f, "{} ({})", self.name(), self.node_type())
     }
 }

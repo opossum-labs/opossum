@@ -49,17 +49,21 @@ fn create_dot_file(dot_path: &Path, fname: &str, scenery: &OpticScenery) -> OpmR
 
     write!(output, "{}", scenery.to_dot("LR")?)
         .map_err(|e| OpossumError::Other(format!("writing dot file failed: {e}")))?;
+
+    let mut output = create_dot_or_report_file_instance(dot_path, fname, "svg", "diagram")?;
+    write!(output, "{}", scenery.to_dot_svg()?)
+        .map_err(|e| OpossumError::Other(format!("writing dot file failed: {e}")))?;
     Ok(())
 }
 
 fn create_report_file(
     report_directory: &Path,
-    fname: &str,
+    base_file_name: &str,
     scenery: &OpticScenery,
     analyzer: &AnalyzerType,
 ) -> OpmResult<()> {
     let mut output =
-        create_dot_or_report_file_instance(report_directory, fname, "yaml", "detector report")?;
+        create_dot_or_report_file_instance(report_directory, "report", "yaml", "detector report")?;
     let analysis_report = scenery.report(report_directory)?;
     write!(
         output,
@@ -67,10 +71,10 @@ fn create_report_file(
         serde_yaml::to_string(&analysis_report).unwrap()
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
-    let pdf_generator = ReportGenerator::new(analysis_report);
+    let report_generator = ReportGenerator::new(analysis_report, Path::new(base_file_name));
     let mut report_path = report_directory.to_path_buf();
-    report_path.push("report.pdf");
-    pdf_generator.generate_pdf(&report_path, analyzer)?;
+    report_path.push("report.html");
+    report_generator.generate_html(&report_path, analyzer)?;
     Ok(())
 }
 
@@ -83,23 +87,21 @@ fn opossum() -> OpmResult<()> {
     //read scenery model from file and deserialize it
     let mut scenery = read_and_parse_model(&opossum_args.file_path)?;
 
+    let base_file_name = opossum_args
+        .file_path
+        .file_stem()
+        .unwrap()
+        .to_str()
+        .unwrap();
+
     //create the dot file of the scenery
-    create_dot_file(
-        &opossum_args.report_directory,
-        opossum_args
-            .file_path
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap(),
-        &scenery,
-    )?;
+    create_dot_file(&opossum_args.report_directory, base_file_name, &scenery)?;
     //analyze the scenery
     info!("Analyzing...");
     scenery.analyze(&opossum_args.analyzer)?;
     create_report_file(
         &opossum_args.report_directory,
-        "report",
+        base_file_name,
         &scenery,
         &opossum_args.analyzer,
     )
@@ -162,6 +164,8 @@ mod test {
             &scenery,
         )
         .unwrap();
+        fs::remove_file("./files_for_testing/dot/create_dot_file_test.dot").unwrap();
+        fs::remove_file("./files_for_testing/dot/create_dot_file_test.svg").unwrap();
     }
     #[test]
     fn create_report_file_test() {

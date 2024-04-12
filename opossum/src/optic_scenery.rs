@@ -15,10 +15,9 @@ use crate::{
     optic_ref::OpticRef,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    reporter::{AnalysisReport, PdfReportable},
+    reporter::AnalysisReport,
 };
 use chrono::Local;
-use genpdf::Alignment;
 use image::io::Reader;
 use image::DynamicImage;
 use log::warn;
@@ -132,7 +131,7 @@ impl OpticScenery {
                 .0
                 .node_weight(node_idx)
                 .ok_or_else(|| OpossumError::Other("could not get node_weigth".into()))?;
-            let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
+            let node_name = node.optical_ref.borrow().name();
             let inverted = node.optical_ref.borrow().properties().inverted()?;
             let ports = node.optical_ref.borrow().ports();
             dot_string += &node.optical_ref.borrow().to_dot(
@@ -191,17 +190,35 @@ impl OpticScenery {
         let img = DynamicImage::ImageRgb8(img);
         Ok(img)
     }
+    /// Generate an SVG of the [`OpticScenery`] diagram.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the image generation failes (e.g. program not found, no memory left etc.).
+    pub fn to_dot_svg(&self) -> OpmResult<String> {
+        let dot_string = self.to_dot("")?;
+        let mut f = NamedTempFile::new()
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
+        f.write_all(dot_string.as_bytes())
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
+        let r = std::process::Command::new("dot")
+            .arg(f.path())
+            .arg("-Tsvg")
+            .output()
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
+        let svg_string = String::from_utf8(r.stdout)
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
+        Ok(svg_string)
+    }
     /// Returns the dot-file header of this [`OpticScenery`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
-        let mut dot_string = String::from("digraph {\n\tfontsize = 8\n");
-        dot_string.push_str("\tsize = 5.0;\n");
-        dot_string.push_str("\tdpi = 400.0;\n");
+        let mut dot_string = String::from("digraph {\n\tfontsize = 8;\n");
         dot_string.push_str("\tcompound = true;\n");
         dot_string.push_str(&format!("\trankdir = \"{rankdir}\";\n"));
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description()));
-        dot_string.push_str("\tfontname=\"Consolas\"\n");
-        dot_string.push_str("\tnode [fontname=\"Consolas\" fontsize = 8]\n");
-        dot_string.push_str("\tedge [fontname=\"Consolas\"]\n\n");
+        dot_string.push_str("\tfontname=\"Courier\"\n");
+        dot_string.push_str("\tnode [fontname=\"Courier\" fontsize = 8]\n");
+        dot_string.push_str("\tedge [fontname=\"Courier\"]\n\n");
         dot_string
     }
     fn create_node_edge_str(
@@ -217,7 +234,7 @@ impl OpticScenery {
             format!("{}_i{}", &parent_identifier, end_node.index())
         };
 
-        if node.properties().node_type()? == "group" {
+        if node.node_type() == "group" {
             let group_node: &NodeGroup = node.as_group()?;
             Ok(group_node.get_mapped_port_str(light_port, &parent_identifier)?)
         } else {
@@ -244,7 +261,7 @@ impl OpticScenery {
                 .0
                 .node_weight(idx)
                 .ok_or_else(|| OpossumError::Analysis("getting node_weight failed".into()))?;
-            let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
+            let node_name = node.optical_ref.borrow().name();
             let neighbors = self.g.0.neighbors_undirected(idx);
             if neighbors.count() == 0 {
                 warn!("stale (completely unconnected) node {node_name} found. Skipping.");
@@ -256,12 +273,7 @@ impl OpticScenery {
                     warn!("input light data contains port which is not an input port of the node {node_name}. Data will be discarded.");
                 }
                 //
-                let node_type = node
-                    .optical_ref
-                    .borrow()
-                    .properties()
-                    .node_type()?
-                    .to_owned();
+                let node_type = node.optical_ref.borrow().node_type();
                 let outgoing_edges = node
                     .optical_ref
                     .borrow_mut()
@@ -489,18 +501,6 @@ impl<'de> Deserialize<'de> for OpticScenery {
             }
         }
         deserializer.deserialize_struct("OpticScenery", FIELDS, OpticSceneryVisitor)
-    }
-}
-impl PdfReportable for OpticScenery {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut l = genpdf::elements::LinearLayout::vertical();
-        let diagram = self.to_dot_img()?;
-        let img = genpdf::elements::Image::from_dynamic_image(diagram)
-            .map_err(|e| format!("failed to add diagram to report: {e}"))?
-            .with_alignment(Alignment::Center);
-        l.push(img);
-
-        Ok(l)
     }
 }
 #[cfg(test)]

@@ -32,7 +32,7 @@ use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{distance, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
 use num::ToPrimitive;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::ops::Add;
 use std::ops::Range;
@@ -651,7 +651,7 @@ impl Rays {
         let mut rays_missed = false;
         for ray in &mut self.rays {
             if ray.valid() {
-                let n2 = refractive_index.get_refractive_index(ray.wavelength());
+                let n2 = refractive_index.get_refractive_index(ray.wavelength())?;
                 if ray.refract_on_surface(surface, n2)?.is_none() {
                     rays_missed = true;
                 };
@@ -779,7 +779,7 @@ impl Rays {
             for ray in &mut self.rays {
                 if ray.valid() {
                     ray.set_refractive_index(
-                        refractive_index.get_refractive_index(ray.wavelength()),
+                        refractive_index.get_refractive_index(ray.wavelength())?,
                     )?;
                 }
             }

@@ -1,5 +1,8 @@
 #![warn(missing_docs)]
 //! This module contains the concrete node types (lenses, filters, etc...)
+
+mod node_attr;
+
 mod beam_splitter;
 mod detector;
 mod dummy;
@@ -46,6 +49,8 @@ pub use spot_diagram::SpotDiagram;
 
 pub use ray_propagation_visualizer::RayPropagationVisualizer;
 pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
+
+pub use node_attr::NodeAttr;
 
 use uuid::Uuid;
 

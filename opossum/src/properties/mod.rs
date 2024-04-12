@@ -2,18 +2,16 @@
 pub mod property;
 pub mod proptype;
 
+use log::warn;
 pub use property::Property;
 pub use proptype::{PropCondition, Proptype};
 
-use crate::{
-    error::{OpmResult, OpossumError},
-    optic_ports::OpticPorts,
-    reporter::PdfReportable,
-};
-use genpdf::{elements::TableLayout, style};
-use serde_derive::{Deserialize, Serialize};
+use crate::error::{OpmResult, OpossumError};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+
+use self::property::HtmlProperty;
 
 /// A general set of (optical) properties.
 ///
@@ -33,44 +31,6 @@ pub struct Properties {
     props: BTreeMap<String, Property>,
 }
 impl Properties {
-    /// Creates new [`Properties`].
-    ///
-    /// This automatically creates some "standard" properties common to all optic nodes (name, node type, inverted, apertures)
-    /// # Panics
-    ///
-    /// Panics theoretically if above properties could not be created.
-    #[must_use]
-    pub fn new(name: &str, node_type: &str) -> Self {
-        let mut properties = Self::default();
-        properties
-            .create(
-                "name",
-                "name of the optical element",
-                Some(vec![PropCondition::NonEmptyString]),
-                name.into(),
-            )
-            .unwrap();
-        properties
-            .create(
-                "node_type",
-                "specific optical type of this node",
-                Some(vec![PropCondition::NonEmptyString, PropCondition::ReadOnly]),
-                node_type.into(),
-            )
-            .unwrap();
-        properties
-            .create("inverted", "inverse propagation?", None, false.into())
-            .unwrap();
-        properties
-            .create(
-                "apertures",
-                "input and output apertures of the optical element",
-                None,
-                OpticPorts::default().into(),
-            )
-            .unwrap();
-        properties
-    }
     /// Create a new property with the given name.
     ///
     /// # Errors
@@ -171,32 +131,6 @@ impl Properties {
             },
         )
     }
-    /// Returns the name property of this node.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the property `name` and the property `node_type` does not exist.
-    pub fn name(&self) -> OpmResult<&str> {
-        if let Ok(Proptype::String(name)) = &self.get("name") {
-            Ok(name)
-        } else {
-            self.node_type()
-        }
-    }
-    /// Returns the node-type property of this node.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the property `node_type` does not exist.
-    pub fn node_type(&self) -> OpmResult<&str> {
-        if let Ok(Proptype::String(node_type)) = &self.get("node_type") {
-            Ok(node_type)
-        } else {
-            Err(OpossumError::Properties(
-                "Property: \"node_type\" not set!".into(),
-            ))
-        }
-    }
     /// Returns the inversion property of thie node.
     ///
     /// # Errors
@@ -205,6 +139,26 @@ impl Properties {
     pub fn inverted(&self) -> OpmResult<bool> {
         self.get_bool("inverted")
     }
+    #[must_use]
+    pub fn html_props(&self, node_name: &str) -> Vec<HtmlProperty> {
+        let mut html_props: Vec<HtmlProperty> = Vec::new();
+        for prop in &self.props {
+            if let Ok(html_prop_value) = prop.1.prop().to_html(node_name) {
+                let html_prop = HtmlProperty {
+                    name: prop.0.to_owned(),
+                    description: prop.1.description().into(),
+                    prop_value: html_prop_value,
+                };
+                html_props.push(html_prop);
+            } else {
+                warn!(
+                    "property {} could not be converted to html. Skipping",
+                    prop.0.to_owned()
+                );
+            }
+        }
+        html_props
+    }
 }
 
 impl<'a> IntoIterator for &'a Properties {
@@ -212,25 +166,6 @@ impl<'a> IntoIterator for &'a Properties {
     type Item = (&'a std::string::String, &'a Property);
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
-    }
-}
-
-impl PdfReportable for Properties {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-        let mut table = TableLayout::new(vec![1, 5]);
-        for property in &self.props {
-            let mut table_row = table.row();
-            let property_name = genpdf::elements::Paragraph::default()
-                .styled_string(format!("{}: ", property.0), style::Effect::Bold)
-                .aligned(genpdf::Alignment::Right);
-            table_row.push_element(property_name);
-            table_row.push_element(property.1.pdf_report()?);
-            table_row.push().unwrap();
-        }
-        layout.push(table);
-        layout.push(genpdf::elements::Break::new(1));
-        Ok(layout)
     }
 }
 #[cfg(test)]
@@ -262,20 +197,6 @@ mod test {
         let prop = props.get("test").unwrap();
         assert_matches!(prop, &Proptype::I32(1));
         assert!(props.get("wrong").is_err());
-    }
-    #[test]
-    fn properties_node_type() {
-        let mut props = Properties::default();
-        assert!(props.node_type().is_err());
-        props
-            .create("node_type", "my description", None, "my node".into())
-            .unwrap();
-        assert_eq!(props.node_type().unwrap(), "my node");
-        let mut props = Properties::default();
-        props
-            .create("node_type", "my description", None, true.into())
-            .unwrap();
-        assert!(props.node_type().is_err());
     }
     #[test]
     fn properties_get_bool() {

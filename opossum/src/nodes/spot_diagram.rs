@@ -1,9 +1,9 @@
 #![warn(missing_docs)]
-use image::{DynamicImage, ImageBuffer, RgbImage};
+use image::RgbImage;
 use itertools::izip;
 use log::warn;
 use plotters::style::RGBAColor;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use uom::si::length::nanometer;
 
 use crate::{
@@ -17,12 +17,14 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
     refractive_index::refr_index_vaccuum,
-    reporter::{NodeReport, PdfReportable},
+    reporter::NodeReport,
     surface::Plane,
 };
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+use super::node_attr::NodeAttr;
 
 /// A spot-diagram monitor
 ///
@@ -42,22 +44,19 @@ use std::path::{Path, PathBuf};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SpotDiagram {
     light_data: Option<LightData>,
-    props: Properties,
-}
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("spot diagram", "spot diagram");
-    let mut ports = OpticPorts::new();
-    ports.create_input("in1").unwrap();
-    ports.create_output("out1").unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
+    node_attr: NodeAttr,
 }
 impl Default for SpotDiagram {
     /// create a spot-diagram monitor.
     fn default() -> Self {
+        let mut node_attr = NodeAttr::new("spot diagram", "spot diagram");
+        let mut ports = OpticPorts::new();
+        ports.create_input("in1").unwrap();
+        ports.create_output("out1").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
         Self {
             light_data: None,
-            props: create_default_props(),
+            node_attr,
         }
     }
 }
@@ -70,15 +69,11 @@ impl SpotDiagram {
     /// This function may panic if the property "name" can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
-        let mut props = create_default_props();
-        props.set("name", name.into()).unwrap();
-        Self {
-            props,
-            ..Default::default()
-        }
+        let mut sd = Self::default();
+        sd.node_attr.set_property("name", name.into()).unwrap();
+        sd
     }
 }
-
 impl Optical for SpotDiagram {
     fn analyze(
         &mut self,
@@ -123,10 +118,8 @@ impl Optical for SpotDiagram {
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
         if self.light_data.is_some() {
-            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                "spot_diagram_{}.svg",
-                self.properties().name()?
-            )));
+            let file_path = PathBuf::from(report_dir)
+                .join(Path::new(&format!("spot_diagram_{}.svg", self.name())));
             self.to_plot(&file_path, PltBackEnd::SVG)
         } else {
             warn!("spot diagram: no light data for export available. Cannot create plot!");
@@ -136,11 +129,8 @@ impl Optical for SpotDiagram {
     fn is_detector(&self) -> bool {
         true
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
         let mut props = Properties::default();
@@ -189,11 +179,10 @@ impl Optical for SpotDiagram {
                     .unwrap();
             }
         }
-        Some(NodeReport::new(
-            self.properties().node_type().unwrap(),
-            self.properties().name().unwrap(),
-            props,
-        ))
+        Some(NodeReport::new(&self.node_type(), &self.name(), props))
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -208,21 +197,6 @@ impl From<SpotDiagram> for Proptype {
         Self::SpotDiagram(value)
     }
 }
-
-impl PdfReportable for SpotDiagram {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-        let img = self.to_plot(Path::new(""), PltBackEnd::Buf)?;
-        layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
-                img.unwrap_or_else(ImageBuffer::default),
-            ))
-            .map_err(|e| format!("adding of image failed: {e}"))?,
-        );
-        Ok(layout)
-    }
-}
-
 impl Plottable for SpotDiagram {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
@@ -291,8 +265,8 @@ mod test {
     fn default() {
         let node = SpotDiagram::default();
         assert!(node.light_data.is_none());
-        assert_eq!(node.properties().name().unwrap(), "spot diagram");
-        assert_eq!(node.properties().node_type().unwrap(), "spot diagram");
+        assert_eq!(node.name(), "spot diagram");
+        assert_eq!(node.node_type(), "spot diagram");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "darkorange");
@@ -301,7 +275,7 @@ mod test {
     #[test]
     fn new() {
         let meter = SpotDiagram::new("test");
-        assert_eq!(meter.properties().name().unwrap(), "test");
+        assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
     }
     #[test]

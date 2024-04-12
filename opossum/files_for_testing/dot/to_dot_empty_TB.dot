@@ -1,12 +1,10 @@
 digraph {
-	fontsize = 8
-	size = 5.0;
-	dpi = 400.0;
+	fontsize = 8;
 	compound = true;
 	rankdir = "TB";
 	label="Test"
-	fontname="Consolas"
-	node [fontname="Consolas" fontsize = 8]
-	edge [fontname="Consolas"]
+	fontname="Courier"
+	node [fontname="Courier" fontsize = 8]
+	edge [fontname="Courier"]
 
 }

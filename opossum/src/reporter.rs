@@ -2,22 +2,47 @@
 //! Module for generating analysis reports in PDF format.
 
 use crate::{
-    analyzer::{AnalyzerType, RayTracingMode},
+    analyzer::AnalyzerType,
     error::{OpmResult, OpossumError},
-    properties::{Properties, Proptype},
+    properties::{property::HtmlProperty, Properties, Proptype},
     OpticScenery,
 };
 use chrono::{DateTime, Local};
-use genpdf::{
-    self, elements,
-    fonts::{FontData, FontFamily},
-    style, Alignment, Scale,
+use log::{info, warn};
+use serde::{Deserialize, Serialize};
+use std::{
+    fs,
+    path::{Path, PathBuf},
 };
-use image::{io::Reader, DynamicImage};
-use log::warn;
-use serde_derive::{Deserialize, Serialize};
-use std::{io::Cursor, path::Path};
-#[derive(Serialize, Debug)]
+use tinytemplate::TinyTemplate;
+
+static HTML_REPORT: &str = include_str!("html/html_report.html");
+static HTML_DIAGRAM: &str = include_str!("html/diagram.html");
+static HTML_NODE_REPORT: &str = include_str!("html/node_report.html");
+
+#[derive(Serialize)]
+struct HtmlScenery {
+    description: String,
+    url: String,
+}
+/// Structure for storing a (detector) node report during html conversion.
+#[derive(Serialize)]
+pub struct HtmlNodeReport {
+    /// node name
+    pub node: String,
+    /// node type
+    pub node_type: String,
+    /// properties of the node
+    pub props: Vec<HtmlProperty>,
+}
+#[derive(Serialize)]
+struct HtmlReport {
+    opossum_version: String,
+    analysis_timestamp: String,
+    scenery: HtmlScenery,
+    node_reports: Vec<HtmlNodeReport>,
+}
+#[derive(Serialize, Debug, Clone)]
 /// Structure for storing data being integrated in an analysis report.
 pub struct AnalysisReport {
     opossum_version: String,
@@ -90,174 +115,88 @@ impl From<NodeReport> for Proptype {
         Self::NodeReport(value)
     }
 }
-/// Trait for providing information to be integrated in an PDF analysis report.
-pub trait PdfReportable {
-    /// Return a `genpdf`-based PDF component to be integrated in an analysis report.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the underlying particular implementation produces an error.
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout>;
-}
-
-/// PDF analysis report generator
+/// Report generator
 ///
 /// This report generator delivers a PDF file containing the analysis report based on the provided [`AnalysisReport`].
+#[derive(Clone)]
 pub struct ReportGenerator {
+    base_file_name: PathBuf,
     report: AnalysisReport,
 }
 
 impl ReportGenerator {
     /// Creates a new [`ReportGenerator`].
     #[must_use]
-    pub const fn new(report: AnalysisReport) -> Self {
-        Self { report }
-    }
-    fn add_report_title(&self, doc: &mut genpdf::Document, analyzer: &AnalyzerType) {
-        let img_data = include_bytes!("../logo/Logo_square.png");
-        let img = Reader::new(Cursor::new(img_data))
-            .with_guessed_format()
-            .unwrap()
-            .decode()
-            .unwrap()
-            .into_rgb8();
-        let img = DynamicImage::ImageRgb8(img);
-        if let Ok(image) = elements::Image::from_dynamic_image(img) {
-            doc.push(
-                image
-                    .with_scale(Scale::new(0.2, 0.2))
-                    .with_alignment(Alignment::Center),
-            );
-        } else {
-            doc.push(
-                elements::Paragraph::default()
-                    .styled_string("OPOSSUM", style::Style::new().with_font_size(20))
-                    .aligned(Alignment::Center),
-            );
-            warn!("report logo not found. Skip displaying.");
-        }
-        let p = elements::Paragraph::default()
-            .styled_string("Analysis Report", style::Effect::Bold)
-            .aligned(genpdf::Alignment::Center);
-        // Add one or more elements
-        doc.push(p);
-        let analyzer_type = match analyzer {
-            AnalyzerType::Energy => "Energy",
-            AnalyzerType::RayTrace(config) => match config.mode() {
-                RayTracingMode::Sequential => "Sequential Ray Tracing",
-            },
-        };
-        let p = elements::Paragraph::default()
-            .styled_string(
-                format!("Analysis Type: {analyzer_type}"),
-                style::Effect::Bold,
-            )
-            .aligned(genpdf::Alignment::Center);
-        // Add one or more elements
-        doc.push(p);
-        let mut table = elements::TableLayout::new(vec![1, 1]);
-        let mut table_row = table.row();
-        table_row.push_element(
-            elements::Paragraph::default()
-                .styled_string(
-                    format!("OPOSSUM v{}", self.report.opossum_version),
-                    style::Style::new().with_font_size(8),
-                )
-                .aligned(Alignment::Left),
-        );
-        table_row.push_element(
-            elements::Paragraph::default()
-                .styled_string(
-                    format!(
-                        "Date: {}",
-                        self.report.analysis_timestamp.format("%Y-%m-%d %H:%M:%S")
-                    ),
-                    style::Style::new().with_font_size(8),
-                )
-                .aligned(Alignment::Right),
-        );
-        table_row.push().unwrap();
-        doc.push(table);
-    }
-    fn add_scenery_report(&self, doc: &mut genpdf::Document) {
-        if let Some(scenery) = &self.report.scenery {
-            doc.push(genpdf::elements::Break::new(2));
-            let p = elements::Paragraph::default().styled_string(
-                format!("Scenery: {}", scenery.description()),
-                style::Effect::Bold,
-            );
-            doc.push(p);
-            if let Ok(report) = scenery.pdf_report() {
-                doc.push(report);
-            } else {
-                doc.push(elements::Paragraph::new(
-                    "cannot display scenery diagram. Is graphviz installed?",
-                ));
-                warn!("cannot display scenery diagram in report. Is graphviz installed?");
-            }
+    pub fn new(report: AnalysisReport, base_file_name: &Path) -> Self {
+        Self {
+            report,
+            base_file_name: PathBuf::from(base_file_name),
         }
     }
-    fn add_node_reports(&self, doc: &mut genpdf::Document) -> OpmResult<()> {
-        if !self.report.node_reports.is_empty() {
-            doc.push(genpdf::elements::Break::new(2));
-            let p = elements::Paragraph::default().styled_string("Detectors", style::Effect::Bold);
-            doc.push(p);
-            for detector in &self.report.node_reports {
-                doc.push(genpdf::elements::Break::new(1));
-                let p = elements::Paragraph::default()
-                    .string(format!("{} - {}", detector.name, detector.detector_type));
-                doc.push(p);
-                doc.push(detector.properties.pdf_report()?);
-            }
-        }
-        Ok(())
-    }
-    /// Generate a OPOSSUM analysis report as PDF.
+    /// Generate an html report.
+    ///
+    /// # Panics
+    ///
+    /// Panics if .
     ///
     /// # Errors
     ///
-    /// This function will return an error if the document generation fails because e.g.
-    ///   - fonts are not found
-    ///   - the file could not be generated on disk (disk full, not writable, etc...)
-    ///   - individual erros while generating sub components of the report
-    pub fn generate_pdf(&self, path: &Path, analyzer: &AnalyzerType) -> OpmResult<()> {
-        let font = include_bytes!("../fonts/LiberationSans-Regular.ttf");
-        let font_data_regular = FontData::new(font.to_vec(), None)
-            .map_err(|_| OpossumError::Other("embedding font 'regular' failed".into()))?;
-        let font = include_bytes!("../fonts/LiberationSans-Italic.ttf");
-        let font_data_italic = FontData::new(font.to_vec(), None)
-            .map_err(|_| OpossumError::Other("embedding font 'italic' failed".into()))?;
-        let font = include_bytes!("../fonts/LiberationSans-Bold.ttf");
-        let font_data_bold = FontData::new(font.to_vec(), None)
-            .map_err(|_| OpossumError::Other("embedding font 'bold' failed".into()))?;
-        let font = include_bytes!("../fonts/LiberationSans-BoldItalic.ttf");
-        let font_data_bold_italic = FontData::new(font.to_vec(), None)
-            .map_err(|_| OpossumError::Other("embedding font 'bold italic' failed".into()))?;
-        let font_family = FontFamily {
-            regular: font_data_regular,
-            bold: font_data_bold,
-            italic: font_data_italic,
-            bold_italic: font_data_bold_italic,
+    /// This function will return an error if
+    ///   - underlying templates could not be compiled.
+    ///   - the base file name could not be determined.
+    pub fn generate_html(&self, path: &Path, _analyzer: &AnalyzerType) -> OpmResult<()> {
+        info!("Write html report to {}", path.display());
+        let mut tt = TinyTemplate::new();
+        tt.add_template("report", HTML_REPORT)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        tt.add_template("diagram", HTML_DIAGRAM)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        tt.add_template("node_report", HTML_NODE_REPORT)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let Some(scenery) = &self.report.scenery else {
+            return Err(OpossumError::Other("no scenery found".into()));
         };
-        let mut doc = genpdf::Document::new(font_family);
-        doc.set_title("OPOSSUM Analysis report");
-        doc.set_font_size(10);
-        let mut decorator = genpdf::SimplePageDecorator::new();
-        decorator.set_margins(10);
-        doc.set_page_decorator(decorator);
-        self.add_report_title(&mut doc, analyzer);
-        self.add_scenery_report(&mut doc);
-        doc.push(genpdf::elements::PageBreak::new());
-        self.add_node_reports(&mut doc)?;
-        doc.render_to_file(path)
-            .map_err(|e| format!("failed to write file: {e}"))?;
+        let mut diagram_path = self.base_file_name.clone();
+        diagram_path.set_extension("svg");
+        let diagram_url = diagram_path
+            .file_name()
+            .ok_or_else(|| OpossumError::Other("could not determine base file name".into()))?
+            .to_os_string()
+            .into_string()
+            .unwrap();
+        let html_scenery = HtmlScenery {
+            description: scenery.description().into(),
+            url: diagram_url,
+        };
+        let mut node_reports: Vec<HtmlNodeReport> = Vec::new();
+        for report in &self.report.node_reports {
+            let html_node_report = HtmlNodeReport {
+                node: report.name().into(),
+                node_type: report.detector_type().into(),
+                props: report.properties().html_props(report.name()),
+            };
+            node_reports.push(html_node_report);
+        }
+        let html_report = HtmlReport {
+            opossum_version: self.report.opossum_version.clone(),
+            analysis_timestamp: self
+                .report
+                .analysis_timestamp
+                .format("%Y/%m/%d %H:%M")
+                .to_string(),
+            scenery: html_scenery,
+            node_reports,
+        };
+        let rendered = tt
+            .render("report", &html_report)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        fs::write(path, rendered).map_err(|e| OpossumError::Other(e.to_string()))?;
         Ok(())
     }
 }
 #[cfg(test)]
 mod test {
     use super::*;
-    use tempfile::NamedTempFile;
     #[test]
     fn analysis_report_new() {
         let timestamp = Local::now();
@@ -288,44 +227,5 @@ mod test {
         let report = NodeReport::new("test detector", "detector name", Properties::default());
         assert_eq!(report.detector_type, "test detector");
         assert_eq!(report.name, "detector name");
-    }
-    #[test]
-    fn report_generator_generate_pdf_empty_report() {
-        let report = AnalysisReport::new(String::from("test"), DateTime::default());
-        let generator = ReportGenerator::new(report);
-        assert!(generator
-            .generate_pdf(Path::new(""), &AnalyzerType::Energy)
-            .is_err());
-        let path = NamedTempFile::new().unwrap();
-        assert!(generator
-            .generate_pdf(path.path(), &AnalyzerType::Energy)
-            .is_ok());
-    }
-    #[test]
-    fn report_generator_generate_pdf_with_scenery() {
-        let mut analysis_report = AnalysisReport::new(String::from("test"), DateTime::default());
-        analysis_report.add_scenery(&OpticScenery::default());
-        let generator = ReportGenerator::new(analysis_report);
-        assert!(generator
-            .generate_pdf(Path::new(""), &AnalyzerType::Energy)
-            .is_err());
-        let path = NamedTempFile::new().unwrap();
-        assert!(generator
-            .generate_pdf(path.path(), &AnalyzerType::Energy)
-            .is_ok());
-    }
-    #[test]
-    fn report_generator_generate_pdf_with_node_report() {
-        let mut analysis_report = AnalysisReport::new(String::from("test"), DateTime::default());
-        let node_report = NodeReport::new("test detector", "detector name", Properties::default());
-        analysis_report.add_detector(node_report);
-        let generator = ReportGenerator::new(analysis_report);
-        assert!(generator
-            .generate_pdf(Path::new(""), &AnalyzerType::Energy)
-            .is_err());
-        let path = NamedTempFile::new().unwrap();
-        assert!(generator
-            .generate_pdf(path.path(), &AnalyzerType::Energy)
-            .is_ok());
     }
 }

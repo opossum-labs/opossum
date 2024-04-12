@@ -14,9 +14,11 @@ use log::warn;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::{algo::toposort, Direction};
-use serde_derive::Serialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
+
+use super::node_attr::NodeAttr;
 
 /// Mapping of group internal [`OpticPorts`] to externally visible ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
@@ -51,46 +53,42 @@ impl From<PortMap> for Proptype {
 pub struct NodeGroup {
     #[serde(skip)]
     g: OpticGraph,
-    props: Properties,
-}
-
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("group", "group");
-    props
-        .create(
-            "expand view",
-            "show group fully expanded in dot diagram?",
-            None,
-            false.into(),
-        )
-        .unwrap();
-    props
-        .create("graph", "optical graph", None, OpticGraph::default().into())
-        .unwrap();
-    props
-        .create(
-            "input port map",
-            "mapping of internal input ports to external ones",
-            None,
-            PortMap::new().into(),
-        )
-        .unwrap();
-    props
-        .create(
-            "output port map",
-            "mapping of internal output ports to external ones",
-            None,
-            PortMap::new().into(),
-        )
-        .unwrap();
-    props
+    node_attr: NodeAttr,
 }
 
 impl Default for NodeGroup {
     fn default() -> Self {
+        let mut node_attr = NodeAttr::new("group", "group");
+        node_attr
+            .create_property(
+                "expand view",
+                "show group fully expanded in dot diagram?",
+                None,
+                false.into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property("graph", "optical graph", None, OpticGraph::default().into())
+            .unwrap();
+        node_attr
+            .create_property(
+                "input port map",
+                "mapping of internal input ports to external ones",
+                None,
+                PortMap::new().into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                "output port map",
+                "mapping of internal output ports to external ones",
+                None,
+                PortMap::new().into(),
+            )
+            .unwrap();
         Self {
             g: OpticGraph::default(),
-            props: create_default_props(),
+            node_attr,
         }
     }
 }
@@ -104,12 +102,9 @@ impl NodeGroup {
     /// - the property `name` can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
-        let mut props = create_default_props();
-        props.set("name", name.into()).unwrap();
-        Self {
-            props,
-            ..Default::default()
-        }
+        let mut group = Self::default();
+        group.node_attr.set_property("name", name.into()).unwrap();
+        group
     }
     /// Add a given [`Optical`] to the (sub-)graph of this [`NodeGroup`].
     ///
@@ -128,8 +123,8 @@ impl NodeGroup {
             ));
         }
         let idx = self.g.add_node(node);
-        self.props
-            .set_unchecked("graph", self.g.clone().into())
+        self.node_attr
+            .set_property("graph", self.g.clone().into())
             .unwrap();
         Ok(idx)
     }
@@ -163,8 +158,8 @@ impl NodeGroup {
         }
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port)?;
-        self.props
-            .set_unchecked("graph", self.g.clone().into())
+        self.node_attr
+            .set_property("graph", self.g.clone().into())
             .unwrap();
 
         let in_map = self.input_port_map();
@@ -189,7 +184,11 @@ impl NodeGroup {
     }
 
     fn input_port_map(&self) -> PortMap {
-        let input_port_map = self.props.get("input port map").unwrap().clone();
+        let input_port_map = self
+            .node_attr
+            .get_property("input port map")
+            .unwrap()
+            .clone();
         if let Proptype::GroupPortMap(input_port_map) = input_port_map {
             input_port_map
         } else {
@@ -197,12 +196,16 @@ impl NodeGroup {
         }
     }
     fn set_input_port_map(&mut self, port_map: PortMap) {
-        self.props
-            .set_unchecked("input port map", port_map.into())
+        self.node_attr
+            .set_property("input port map", port_map.into())
             .unwrap();
     }
     fn output_port_map(&self) -> PortMap {
-        let output_port_map = self.props.get("output port map").unwrap().clone();
+        let output_port_map = self
+            .node_attr
+            .get_property("output port map")
+            .unwrap()
+            .clone();
         if let Proptype::GroupPortMap(output_port_map) = output_port_map {
             output_port_map
         } else {
@@ -210,8 +213,8 @@ impl NodeGroup {
         }
     }
     fn set_output_port_map(&mut self, port_map: PortMap) {
-        self.props
-            .set_unchecked("output port map", port_map.into())
+        self.node_attr
+            .set_property("output port map", port_map.into())
             .unwrap();
     }
 
@@ -428,13 +431,12 @@ impl NodeGroup {
         incoming_data: &LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let is_inverted = self.props.get_bool("inverted")?;
+        let is_inverted = self.node_attr.inverted()?;
         if is_inverted {
             self.invert_graph()?;
         }
         let g_clone = self.g.0.clone();
-        let props = self.properties().clone();
-        let group_name = props.name()?;
+        let group_name = self.name();
         if !&self.g.is_single_tree() {
             warn!(
                 "Group {} contains unconnected sub-trees. Analysis might not be complete.",
@@ -464,7 +466,7 @@ impl NodeGroup {
             } else {
                 self.incoming_edges(idx)
             };
-            let node_name = node.optical_ref.borrow().properties().name()?.to_owned();
+            let node_name = node.optical_ref.borrow().name();
             let neighbors = self.g.0.neighbors_undirected(idx);
             if neighbors.count() == 0 {
                 if !self.input_port_map().iter().any(|p| p.1 .0 == idx) {
@@ -510,7 +512,7 @@ impl NodeGroup {
     /// This function returns an error if the property "expand view" does not exist and the
     /// function [`get_bool()`](../properties/struct.Properties.html#method.get_bool) fails
     pub fn shall_expand(&self) -> OpmResult<bool> {
-        self.props.get_bool("expand view")
+        self.node_attr.get_property_bool("expand view")
     }
 
     /// Defines and returns the node/port identifier to connect the edges in the dot format
@@ -564,7 +566,8 @@ impl NodeGroup {
     /// # Errors
     /// This function returns an error if the property "expand view" can not be set
     pub fn expand_view(&mut self, expand_view: bool) -> OpmResult<()> {
-        self.props.set("expand view", expand_view.into())
+        self.node_attr
+            .set_property("expand view", expand_view.into())
     }
     /// Creates the dot-format string which describes the edge that connects two nodes
     /// parameters:
@@ -593,7 +596,7 @@ impl NodeGroup {
             format!("{}_i{}", &parent_identifier, end_node_idx.index())
         };
 
-        if node.properties().node_type()? == "group" {
+        if node.node_type() == "group" {
             let group_node: &Self = node.as_group()?;
             Ok(group_node.get_mapped_port_str(light_port, &parent_identifier)?)
         } else {
@@ -630,7 +633,7 @@ impl NodeGroup {
             let node = self.g.0.node_weight(node_idx).unwrap();
             dot_string += &node.optical_ref.borrow().to_dot(
                 &format!("{}", node_idx.index()),
-                node.optical_ref.borrow().properties().name()?,
+                &node.optical_ref.borrow().name(),
                 node.optical_ref.borrow().properties().inverted()?,
                 &node.optical_ref.borrow().ports(),
                 parent_identifier.clone(),
@@ -736,15 +739,12 @@ impl Optical for NodeGroup {
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Ok(self)
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
     }
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
         // Synchronize properties with (internal) graph structure.
-        if let Proptype::OpticGraph(g) = &self.props.get("graph")? {
+        if let Proptype::OpticGraph(g) = &self.node_attr.get_property("graph")? {
             self.g = g.clone();
         }
         Ok(())
@@ -753,18 +753,17 @@ impl Optical for NodeGroup {
         let mut group_props = Properties::default();
         for node_idx in self.g.0.node_indices() {
             let node = self.g.0.node_weight(node_idx).unwrap().optical_ref.borrow();
-            let node_props = node.properties();
             if let Some(node_report) = node.report() {
-                if !(group_props.contains(node_props.name().unwrap())) {
+                if !(group_props.contains(&node.name())) {
                     group_props
-                        .create(node_props.name().unwrap(), "", None, node_report.into())
+                        .create(&node.name(), "", None, node_report.into())
                         .unwrap();
                 }
             }
         }
         Some(NodeReport::new(
-            self.properties().node_type().unwrap(),
-            self.properties().name().unwrap(),
+            &self.node_type(),
+            &self.name(),
             group_props,
         ))
     }
@@ -783,6 +782,9 @@ impl Optical for NodeGroup {
         }
         Ok(None)
     }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
+    }
 }
 
 impl Dottable for NodeGroup {
@@ -796,7 +798,7 @@ impl Dottable for NodeGroup {
         rankdir: &str,
     ) -> OpmResult<String> {
         let mut cloned_self = self.clone();
-        if self.props.get_bool("inverted")? {
+        if self.node_attr.inverted()? {
             cloned_self.invert_graph()?;
         }
         if self.shall_expand()? {
@@ -836,8 +838,8 @@ mod test {
         assert_eq!(node.g.0.edge_count(), 0);
         assert!(node.input_port_map().is_empty());
         assert!(node.output_port_map().is_empty());
-        assert_eq!(node.properties().name().unwrap(), "group");
-        assert_eq!(node.properties().node_type().unwrap(), "group");
+        assert_eq!(node.name(), "group");
+        assert_eq!(node.node_type(), "group");
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "yellow");
         assert!(node.as_group().is_ok());
@@ -845,7 +847,7 @@ mod test {
     #[test]
     fn new() {
         let node = NodeGroup::new("test");
-        assert_eq!(node.properties().name().unwrap(), "test");
+        assert_eq!(node.name(), "test");
     }
     #[test]
     fn is_detector() {

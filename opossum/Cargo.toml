@@ -1,6 +1,6 @@
 [package]
 name = "opossum"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 authors = [
   "Udo Eisenbarth <u.eisenbarth@gsi.de>",
@@ -30,7 +30,6 @@ dialog = "opossum/logo/Logo_InstallDialog.png"
 petgraph = { version = "0", features = ["serde-1"] } # the graph library
 uom = {version="0", features = ["serde"] }
 serde = { version = "1" }
-serde_derive = "1"
 serde_yaml = "0"
 
 csv = "1"
@@ -47,8 +46,7 @@ chrono = { version= "0", features = ["serde"] }
 
 embed-doc-image = "0" # allows for embedded images in the rust API doc
 
-genpdf={ version="0", features = ["images"] }
-image="0.23"
+image="0"
 tempfile="3"
 rand="0"
 sobol="1"
@@ -66,6 +64,8 @@ roots = "0"
 voronator = "0.2.1"
 fast-surface-nets = "0.2.0"
 rayon = "1.10.0"
+
+tinytemplate = "1"
 
 [lints.rust]
 # missing_docs = "warn"

@@ -1,10 +1,10 @@
 #![warn(missing_docs)]
 //! Wavefront measurment node
-use image::{DynamicImage, RgbImage};
+use image::RgbImage;
 use log::warn;
 use nalgebra::{DVector, DVectorSlice, MatrixXx3};
 use plotters::style::RGBAColor;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
@@ -20,13 +20,15 @@ use crate::{
     },
     properties::{Properties, Proptype},
     refractive_index::refr_index_vaccuum,
-    reporter::{NodeReport, PdfReportable},
+    reporter::NodeReport,
     surface::Plane,
     utils::griddata::{create_linspace_axes, interpolate_3d_scatter_data},
 };
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+use super::node_attr::NodeAttr;
 
 /// A wavefront monitor node
 ///
@@ -46,9 +48,22 @@ use std::path::{Path, PathBuf};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WaveFront {
     light_data: Option<LightData>,
-    props: Properties,
+    node_attr: NodeAttr,
 }
-
+impl Default for WaveFront {
+    /// create a wavefront monitor.
+    fn default() -> Self {
+        let mut node_attr = NodeAttr::new("Wavefront monitor", "Wavefront monitor");
+        let mut ports = OpticPorts::new();
+        ports.create_input("in1").unwrap();
+        ports.create_output("out1").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
+        Self {
+            light_data: None,
+            node_attr,
+        }
+    }
+}
 impl WaveFront {
     /// Creates a new [`WaveFront`] Monitou.
     /// # Attributes
@@ -58,12 +73,9 @@ impl WaveFront {
     /// This function may panic if the property "name" can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
-        let mut props = create_default_props();
-        props.set("name", name.into()).unwrap();
-        Self {
-            props,
-            ..Default::default()
-        }
+        let mut wf = Self::default();
+        wf.node_attr.set_property("name", name.into()).unwrap();
+        wf
     }
 }
 
@@ -151,25 +163,6 @@ impl WaveFrontErrorMap {
         }
     }
 }
-
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("Wavefront monitor", "Wavefront monitor");
-    let mut ports = OpticPorts::new();
-    ports.create_input("in1").unwrap();
-    ports.create_output("out1").unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
-}
-impl Default for WaveFront {
-    /// create a wavefront monitor.
-    fn default() -> Self {
-        Self {
-            light_data: None,
-            props: create_default_props(),
-        }
-    }
-}
-
 impl Optical for WaveFront {
     fn analyze(
         &mut self,
@@ -219,10 +212,7 @@ impl Optical for WaveFront {
                 .ok();
 
             let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!(
-                "wavefront_diagram_{}.png",
-                self.properties().name()?
-            ));
+            file_path.push(format!("wavefront_diagram_{}.png", self.name()));
             if let Some(wf_data) = wf_data_opt {
                 //todo! for all wavelengths
                 Ok(wf_data.wavefront_error_maps[0]
@@ -243,11 +233,8 @@ impl Optical for WaveFront {
     fn is_detector(&self) -> bool {
         true
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
         let mut props = Properties::default();
@@ -294,38 +281,15 @@ impl Optical for WaveFront {
                 .unwrap();
             }
 
-            Some(NodeReport::new(
-                self.properties().node_type().unwrap(),
-                self.properties().name().unwrap(),
-                props,
-            ))
+            Some(NodeReport::new(&self.node_type(), &self.name(), props))
         } else {
             None
         }
     }
-}
-
-impl PdfReportable for WaveFrontData {
-    fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-        let mut layout = genpdf::elements::LinearLayout::vertical();
-
-        //todo! for all wavefronts!
-        let img = self.wavefront_error_maps[0]
-            .to_plot(Path::new(""), PltBackEnd::Buf)
-            .unwrap_or_else(|e| {
-                warn!("Could not create plot for pdf creation: {e}",);
-                None
-            });
-        layout.push(
-            genpdf::elements::Image::from_dynamic_image(DynamicImage::ImageRgb8(
-                img.unwrap_or_default(),
-            ))
-            .map_err(|e| format!("adding of image failed: {e}"))?,
-        );
-        Ok(layout)
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
-
 impl From<WaveFrontData> for Proptype {
     fn from(value: WaveFrontData) -> Self {
         Self::WaveFrontStats(value)
@@ -434,8 +398,8 @@ mod test {
     fn default() {
         let node = WaveFront::default();
         assert!(node.light_data.is_none());
-        assert_eq!(node.properties().name().unwrap(), "Wavefront monitor");
-        assert_eq!(node.properties().node_type().unwrap(), "Wavefront monitor");
+        assert_eq!(node.name(), "Wavefront monitor");
+        assert_eq!(node.node_type(), "Wavefront monitor");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "goldenrod1");
@@ -444,7 +408,7 @@ mod test {
     #[test]
     fn new() {
         let meter = WaveFront::new("test");
-        assert_eq!(meter.properties().name().unwrap(), "test");
+        assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
     }
     #[test]

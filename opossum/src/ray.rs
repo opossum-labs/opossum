@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 use nalgebra::{MatrixXx3, Point3, Vector3};
 use num::Zero;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use uom::si::f64::{Energy, Length};
 
 use crate::{

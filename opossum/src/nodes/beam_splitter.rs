@@ -10,11 +10,13 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::{Properties, Proptype},
+    properties::Proptype,
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
 };
 use std::collections::HashMap;
+
+use super::node_attr::NodeAttr;
 
 #[derive(Debug)]
 /// An ideal beamsplitter node with a given splitting ratio.
@@ -33,29 +35,31 @@ use std::collections::HashMap;
 ///   - `inverted`
 ///   - `splitter config`
 pub struct BeamSplitter {
-    props: Properties,
+    node_attr: NodeAttr,
 }
-
-fn create_default_props() -> Properties {
-    let mut props = Properties::new("beam splitter", "beam splitter");
-    props
-        .create(
-            "splitter config",
-            "config data of the beam splitter",
-            None,
-            EnumProxy::<SplittingConfig> {
-                value: SplittingConfig::Ratio(0.5),
-            }
-            .into(),
-        )
-        .unwrap();
-    let mut ports = OpticPorts::new();
-    ports.create_input("input1").unwrap();
-    ports.create_input("input2").unwrap();
-    ports.create_output("out1_trans1_refl2").unwrap();
-    ports.create_output("out2_trans2_refl1").unwrap();
-    props.set("apertures", ports.into()).unwrap();
-    props
+impl Default for BeamSplitter {
+    /// Create a 50:50 beamsplitter.
+    fn default() -> Self {
+        let mut node_attr = NodeAttr::new("beam splitter", "beam splitter");
+        node_attr
+            .create_property(
+                "splitter config",
+                "config data of the beam splitter",
+                None,
+                EnumProxy::<SplittingConfig> {
+                    value: SplittingConfig::Ratio(0.5),
+                }
+                .into(),
+            )
+            .unwrap();
+        let mut ports = OpticPorts::new();
+        ports.create_input("input1").unwrap();
+        ports.create_input("input2").unwrap();
+        ports.create_output("out1_trans1_refl2").unwrap();
+        ports.create_output("out2_trans2_refl1").unwrap();
+        node_attr.set_property("apertures", ports.into()).unwrap();
+        Self { node_attr }
+    }
 }
 impl BeamSplitter {
     /// Creates a new [`BeamSplitter`] with a given [`SplittingConfig`].
@@ -68,16 +72,16 @@ impl BeamSplitter {
                 "ratio must be within (0.0..=1.0)".into(),
             ));
         }
-        let mut props = create_default_props();
-        props.set(
+        let mut bs = Self::default();
+        bs.node_attr.set_property(
             "splitter config",
             EnumProxy::<SplittingConfig> {
                 value: config.clone(),
             }
             .into(),
         )?;
-        props.set("name", name.into())?;
-        Ok(Self { props })
+        bs.node_attr.set_property("name", name.into())?;
+        Ok(bs)
     }
     /// Returns the splitting config of this [`BeamSplitter`].
     ///
@@ -86,7 +90,7 @@ impl BeamSplitter {
     /// This functions panics if the specified [`Properties`], here `ratio`, do not exist or if the property has the wrong data format
     #[must_use]
     pub fn splitting_config(&self) -> SplittingConfig {
-        if let Ok(Proptype::SplitterType(config)) = self.props.get("splitter config") {
+        if let Ok(Proptype::SplitterType(config)) = self.node_attr.get_property("splitter config") {
             return config.value.clone();
         }
         panic!("property `splitter config` does not exist or has wrong data format")
@@ -101,7 +105,7 @@ impl BeamSplitter {
         //         "ratio must be within (0.0..1.0) and finite".into(),
         //     ));
         // }
-        self.props.set(
+        self.node_attr.set_property(
             "splitter config",
             EnumProxy::<SplittingConfig> {
                 value: config.clone(),
@@ -179,7 +183,9 @@ impl BeamSplitter {
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
         };
-        let Ok(Proptype::SplitterType(splitting_config)) = self.props.get("splitter config") else {
+        let Ok(Proptype::SplitterType(splitting_config)) =
+            self.node_attr.get_property("splitter config")
+        else {
             return Err(OpossumError::Analysis(
                 "could not read splitter config property".into(),
             ));
@@ -265,14 +271,6 @@ impl BeamSplitter {
     }
 }
 
-impl Default for BeamSplitter {
-    /// Create a 50:50 beamsplitter.
-    fn default() -> Self {
-        Self {
-            props: create_default_props(),
-        }
-    }
-}
 impl Optical for BeamSplitter {
     fn analyze(
         &mut self,
@@ -322,11 +320,11 @@ impl Optical for BeamSplitter {
             ]))
         }
     }
-    fn properties(&self) -> &Properties {
-        &self.props
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.props.set(name, prop)
+        self.node_attr.set_property(name, prop)
+    }
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
     }
 }
 
@@ -348,8 +346,8 @@ mod test {
     fn default() {
         let node = BeamSplitter::default();
         assert!(matches!(node.splitting_config(), SplittingConfig::Ratio(_)));
-        assert_eq!(node.properties().name().unwrap(), "beam splitter");
-        assert_eq!(node.properties().node_type().unwrap(), "beam splitter");
+        assert_eq!(node.name(), "beam splitter");
+        assert_eq!(node.node_type(), "beam splitter");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "lightpink");
@@ -360,8 +358,7 @@ mod test {
         let splitter = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6));
         assert!(splitter.is_ok());
         let splitter = splitter.unwrap();
-        assert_eq!(splitter.properties().name().unwrap(), "test");
-        //assert_eq!(splitter.ratio(), 0.6);
+        assert_eq!(splitter.name(), "test");
         assert!(BeamSplitter::new("test", &SplittingConfig::Ratio(-0.01)).is_err());
         assert!(BeamSplitter::new("test", &SplittingConfig::Ratio(1.01)).is_err());
     }
