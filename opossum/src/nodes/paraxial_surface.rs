@@ -1,7 +1,5 @@
 #![warn(missing_docs)]
 //! A paraxial surface (ideal lens)
-use std::collections::HashMap;
-
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -97,11 +95,13 @@ impl Optical for ParaxialSurface {
         } else {
             ("front", "rear")
         };
-        let mut data = incoming_data.get(src).unwrap_or(&None).clone();
-        match analyzer_type {
-            AnalyzerType::Energy => (),
+        let Some(data) = incoming_data.get(src) else {
+            return Ok(LightResult::default());
+        };
+        let light_data = match analyzer_type {
+            AnalyzerType::Energy => data.clone(),
             AnalyzerType::RayTrace(_config) => {
-                if let Some(LightData::Geometric(mut rays)) = data {
+                if let LightData::Geometric(mut rays) = data.clone() {
                     let Ok(Proptype::Length(focal_length)) =
                         self.node_attr.get_property("focal length")
                     else {
@@ -128,15 +128,17 @@ impl Optical for ParaxialSurface {
                     } else {
                         return Err(OpossumError::OpticPort("input aperture not found".into()));
                     };
-                    data = Some(LightData::Geometric(rays));
+                    LightData::Geometric(rays)
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
                         "No LightData::Geometric for analyzer type RayTrace".into(),
                     ));
                 }
             }
-        }
-        Ok(HashMap::from([(target.into(), data)]))
+        };
+        let mut light_result = LightResult::default();
+        light_result.insert(target.into(), light_data);
+        Ok(light_result)
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.node_attr.set_property(name, prop)
@@ -154,7 +156,7 @@ impl Dottable for ParaxialSurface {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{aperture::Aperture, millimeter};
+    use crate::{aperture::Aperture, millimeter, rays::Rays};
     use assert_matches::assert_matches;
     #[test]
     fn default() {
@@ -209,6 +211,23 @@ mod test {
         let node = ParaxialSurface::default();
         assert_eq!(node.ports().input_names(), vec!["front"]);
         assert_eq!(node.ports().output_names(), vec!["rear"]);
+    }
+    #[test]
+    fn analyze_empty() {
+        let mut node = ParaxialSurface::default();
+        let output = node
+            .analyze(LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_wrong_port() {
+        let mut node = ParaxialSurface::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Geometric(Rays::default());
+        input.insert("rear".into(), input_light.clone());
+        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        assert!(output.is_empty());
     }
     #[test]
     fn set_input_aperture() {

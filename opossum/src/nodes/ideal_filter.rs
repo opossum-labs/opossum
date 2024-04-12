@@ -4,7 +4,7 @@ use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::optic_ports::OpticPorts;
-use crate::optical::Optical;
+use crate::optical::{LightResult, Optical};
 use crate::properties::Proptype;
 use crate::refractive_index::refr_index_vaccuum;
 use crate::spectrum::Spectrum;
@@ -174,59 +174,55 @@ impl Optical for IdealFilter {
         if self.properties().inverted()? {
             (src, target) = (target, src);
         }
-        let input = incoming_data.get(src);
-        if let Some(Some(input)) = input {
-            match input {
-                LightData::Energy(e) => {
-                    if !matches!(analyzer_type, AnalyzerType::Energy) {
-                        return Err(OpossumError::Analysis(
-                            "expected energy analyzer for LightData::Energy".into(),
-                        ));
-                    }
-                    let mut new_data = e.clone();
-                    new_data.filter(&self.filter_type())?;
-                    let light_data = Some(LightData::Energy(new_data));
-                    return Ok(HashMap::from([(target.into(), light_data)]));
-                }
-                LightData::Geometric(r) => {
-                    if !matches!(analyzer_type, AnalyzerType::RayTrace(_)) {
-                        return Err(OpossumError::Analysis(
-                            "expected ray tracing analyzer for LightData::Geometric".into(),
-                        ));
-                    }
-                    let mut rays = r.clone();
-                    let z_position =
-                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let plane = Plane::new(z_position)?;
-                    rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
-                    rays.filter_energy(&self.filter_type())?;
-                    if let Some(aperture) = self.ports().input_aperture("front") {
-                        rays.apodize(aperture)?;
-                        if let AnalyzerType::RayTrace(config) = analyzer_type {
-                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        }
-                    } else {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    };
-                    if let Some(aperture) = self.ports().output_aperture("rear") {
-                        rays.apodize(aperture)?;
-                        if let AnalyzerType::RayTrace(config) = analyzer_type {
-                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        }
-                    } else {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    };
-                    let light_data = Some(LightData::Geometric(rays));
-                    return Ok(HashMap::from([(target.into(), light_data)]));
-                }
-                LightData::Fourier => {
+        let Some(input) = incoming_data.get(src) else {
+            return Ok(LightResult::default());
+        };
+        match input {
+            LightData::Energy(e) => {
+                if !matches!(analyzer_type, AnalyzerType::Energy) {
                     return Err(OpossumError::Analysis(
-                        "Ideal filter: expected LightData::Energy or LightData::Geometric".into(),
-                    ))
+                        "expected energy analyzer for LightData::Energy".into(),
+                    ));
                 }
+                let mut new_data = e.clone();
+                new_data.filter(&self.filter_type())?;
+                let light_data = LightData::Energy(new_data);
+                Ok(HashMap::from([(target.into(), light_data)]))
             }
+            LightData::Geometric(r) => {
+                if !matches!(analyzer_type, AnalyzerType::RayTrace(_)) {
+                    return Err(OpossumError::Analysis(
+                        "expected ray tracing analyzer for LightData::Geometric".into(),
+                    ));
+                }
+                let mut rays = r.clone();
+                let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+                let plane = Plane::new(z_position)?;
+                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                rays.filter_energy(&self.filter_type())?;
+                if let Some(aperture) = self.ports().input_aperture("front") {
+                    rays.apodize(aperture)?;
+                    if let AnalyzerType::RayTrace(config) = analyzer_type {
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                } else {
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                };
+                if let Some(aperture) = self.ports().output_aperture("rear") {
+                    rays.apodize(aperture)?;
+                    if let AnalyzerType::RayTrace(config) = analyzer_type {
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                } else {
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                };
+                let light_data = LightData::Geometric(rays);
+                Ok(HashMap::from([(target.into(), light_data)]))
+            }
+            LightData::Fourier => Err(OpossumError::Analysis(
+                "Ideal filter: expected LightData::Energy or LightData::Geometric".into(),
+            )),
         }
-        Err(OpossumError::Analysis("no data on input port".into()))
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.node_attr.set_property(name, prop)
@@ -330,13 +326,32 @@ mod test {
         assert_eq!(node.ports().output_names(), vec!["front"]);
     }
     #[test]
+    fn analyze_empty() {
+        let mut node = IdealFilter::default();
+        let output = node
+            .analyze(LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_wrong() {
+        let mut node = IdealFilter::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("rear".into(), input_light.clone());
+        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
     fn analyze_energy_ok() {
         let mut node = IdealFilter::new("test", &FilterType::Constant(0.5)).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("front".into(), Some(input_light.clone()));
+        input.insert("front".into(), input_light.clone());
         assert!(node
             .analyze(
                 input.clone(),
@@ -348,13 +363,13 @@ mod test {
         let output = output.unwrap();
         assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear").unwrap();
+        let output = output.get("rear");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         let expected_output_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(0.5).unwrap(),
         });
-        assert_eq!(output, expected_output_light);
+        assert_eq!(*output, expected_output_light);
     }
     #[test]
     fn analyzer_geometric_fixed() {
@@ -368,31 +383,20 @@ mod test {
             )
             .unwrap(),
         );
-        input.insert("front".into(), Some(input_light.clone()));
+        input.insert("front".into(), input_light.clone());
         assert!(node.analyze(input.clone(), &AnalyzerType::Energy).is_err());
         let output = node.analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()));
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear").unwrap();
+        let output = output.get("rear");
         assert!(output.is_some());
         if let LightData::Geometric(output) = output.clone().unwrap() {
             assert_abs_diff_eq!(output.total_energy().get::<joule>(), 0.3);
         } else {
             panic!("wrong data LightData format")
         }
-    }
-    #[test]
-    fn analyze_wrong() {
-        let mut node = IdealFilter::default();
-        let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
-        input.insert("rear".into(), Some(input_light.clone()));
-        let output = node.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_err());
     }
     #[test]
     fn analyze_inverse() {
@@ -402,18 +406,18 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("rear".into(), Some(input_light.clone()));
+        input.insert("rear".into(), input_light.clone());
         let output = node.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
-        let output = output.get("front").unwrap();
+        let output = output.get("front");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         let expected_output_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(0.5).unwrap(),
         });
-        assert_eq!(output, expected_output_light);
+        assert_eq!(*output, expected_output_light);
     }
 }

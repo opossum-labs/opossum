@@ -18,8 +18,7 @@ use std::path::Path;
 
 /// A [`LightResult`] represents the [`LightData`], which arrives at a given (`OpticPort`)[`OpticPorts`] of an optical node.
 ///
-/// The given (`OpticPort`)[`OpticPorts`] might also be `None`, which indicates, that no light has already "flown" to an input port of a node.
-pub type LightResult = HashMap<String, Option<LightData>>;
+pub type LightResult = HashMap<String, LightData>;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait Optical: Dottable {

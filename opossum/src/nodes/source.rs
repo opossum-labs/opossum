@@ -139,7 +139,7 @@ impl Optical for Source {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));
                 };
             }
-            Ok(HashMap::from([("out1".into(), Some(data))]))
+            Ok(HashMap::from([("out1".into(), data)]))
         } else {
             Err(OpossumError::Analysis(
                 "source has no light data defined".into(),
@@ -225,10 +225,10 @@ mod test {
         }
     }
     #[test]
-    fn analyze_empty() {
+    fn analyze_no_light_defined() {
         let mut node = Source::default();
-        let incoming_data: LightResult = LightResult::default();
-        assert!(node.analyze(incoming_data, &AnalyzerType::Energy).is_err())
+        let output = node.analyze(LightResult::default(), &AnalyzerType::Energy);
+        assert!(output.is_err());
     }
     #[test]
     fn analyze_ok() {
@@ -242,10 +242,10 @@ mod test {
         let output = output.unwrap();
         assert!(output.contains_key("out1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("out1").unwrap();
+        let output = output.get("out1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        assert_eq!(output, light);
+        assert_eq!(*output, light);
     }
     #[test]
     fn debug() {
