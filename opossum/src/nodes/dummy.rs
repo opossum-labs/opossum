@@ -124,6 +124,7 @@ mod test {
     use crate::{
         aperture::Aperture,
         lightdata::{DataEnergy, LightData},
+        nodes::test_helper::test_helper::*,
         spectrum_helper::create_he_ne_spec,
     };
     #[test]
@@ -148,9 +149,7 @@ mod test {
     }
     #[test]
     fn inverted() {
-        let mut node = Dummy::default();
-        node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.properties().inverted().unwrap(), true)
+        test_inverted::<Dummy>()
     }
     #[test]
     fn ports() {
@@ -203,11 +202,7 @@ mod test {
     }
     #[test]
     fn analyze_empty() {
-        let mut node = Dummy::default();
-        let output = node
-            .analyze(LightResult::default(), &AnalyzerType::Energy)
-            .unwrap();
-        assert!(output.is_empty());
+        test_analyze_empty::<Dummy>()
     }
     #[test]
     fn analyze_wrong() {

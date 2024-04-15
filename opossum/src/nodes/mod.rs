@@ -2,6 +2,7 @@
 //! This module contains the concrete node types (lenses, filters, etc...)
 
 mod node_attr;
+mod test_helper;
 
 mod beam_splitter;
 mod detector;

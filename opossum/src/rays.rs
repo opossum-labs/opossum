@@ -231,11 +231,14 @@ impl Rays {
     }
     /// Apodize (cut out or attenuate) the ray bundle by a given [`Aperture`].
     ///
-    /// This function only affects `valid` [`Ray`]s in the bundle.
+    /// This function only affects `valid` [`Ray`]s in the bundle. This functions returns `true` if valid beams have been invalidated due to the
+    /// apodization. Otherwise the functions returns `false`. **Note**: This only works with "binary" [`Aperture`]s. If using a non-binary aperture
+    /// (e.g. [`Aperture::Gaussian`]), rays are filtered but not invalidated. Hence the return type is always `false`.
     /// # Errors
     ///
-    /// This function returns an error if a single ray cannot be propery apodized (e.g. filter factor outside (0.0..=1.0)).
-    pub fn apodize(&mut self, aperture: &Aperture) -> OpmResult<()> {
+    /// This function returns an error if a single ray cannot be properly apodized (e.g. filter factor outside (0.0..=1.0)).
+    pub fn apodize(&mut self, aperture: &Aperture) -> OpmResult<bool> {
+        let mut beams_invalided = false;
         for ray in &mut self.rays {
             if ray.valid() {
                 let ap_factor = aperture.apodization_factor(&ray.position().xy());
@@ -244,10 +247,11 @@ impl Rays {
                 } else {
                     ray.add_to_pos_hist(ray.position());
                     ray.set_invalid();
+                    beams_invalided = true;
                 }
             }
         }
-        Ok(())
+        Ok(beams_invalided)
     }
     /// Finds all unique wavelengths in this raybundle and returns them in a vector
     #[must_use]

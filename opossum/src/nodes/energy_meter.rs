@@ -12,6 +12,7 @@ use crate::{
     reporter::NodeReport,
     surface::Plane,
 };
+use log::warn;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::{collections::HashMap, fmt::Display};
@@ -62,6 +63,7 @@ impl From<Metertype> for Proptype {
 pub struct EnergyMeter {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
+    apodization_warning: bool,
 }
 impl Default for EnergyMeter {
     fn default() -> Self {
@@ -81,6 +83,7 @@ impl Default for EnergyMeter {
         Self {
             light_data: None,
             node_attr,
+            apodization_warning: false,
         }
     }
 }
@@ -148,7 +151,11 @@ impl Optical for EnergyMeter {
             let plane = Plane::new_along_z(z_position)?;
             rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             if let Some(aperture) = self.ports().input_aperture("in1") {
-                rays.apodize(aperture)?;
+                let rays_apodized = rays.apodize(aperture)?;
+                if rays_apodized {
+                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", self.node_attr.name(), self.node_attr.node_type());
+                    self.apodization_warning = true;
+                }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
@@ -205,6 +212,17 @@ impl Optical for EnergyMeter {
                 self.node_attr.get_property("meter type").unwrap().clone(),
             )
             .unwrap();
+        if self.apodization_warning {
+            props
+                .create(
+                    "Warning",
+                    "warning during analysis",
+                    None,
+                    "Rays have been apodized at input aperture. Results might not be accurate."
+                        .into(),
+                )
+                .unwrap();
+        }
         Some(NodeReport::new(&self.node_type(), &self.name(), props))
     }
     fn node_attr(&self) -> &NodeAttr {
@@ -229,7 +247,8 @@ impl Dottable for EnergyMeter {
 mod test {
     use super::*;
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
+        analyzer::AnalyzerType, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
+        spectrum_helper::create_he_ne_spec,
     };
     #[test]
     fn default() {
@@ -252,9 +271,7 @@ mod test {
     }
     #[test]
     fn inverted() {
-        let mut meter = EnergyMeter::new("test", Metertype::IdealPowerMeter);
-        meter.set_property("inverted", true.into()).unwrap();
-        assert_eq!(meter.properties().inverted().unwrap(), true);
+        test_inverted::<EnergyMeter>()
     }
     #[test]
     fn set_meter_type() {
@@ -277,11 +294,7 @@ mod test {
     }
     #[test]
     fn analyze_empty() {
-        let mut node = EnergyMeter::default();
-        let output = node
-            .analyze(LightResult::default(), &AnalyzerType::Energy)
-            .unwrap();
-        assert!(output.is_empty());
+        test_analyze_empty::<EnergyMeter>()
     }
     #[test]
     fn analyze_wrong() {
@@ -295,7 +308,7 @@ mod test {
         assert!(output.is_empty());
     }
     #[test]
-    fn analyze() {
+    fn analyze_ok() {
         let mut meter = EnergyMeter::default();
         let mut input = LightResult::default();
         let input_data = LightData::Energy(DataEnergy {
@@ -307,6 +320,10 @@ mod test {
         let result = result.unwrap();
         assert!(result.contains_key("out1"));
         assert_eq!(result.get("out1").unwrap(), &input_data);
+    }
+    #[test]
+    fn analyze_apodization_warning() {
+        test_analyze_apodization_warning::<EnergyMeter>()
     }
     #[test]
     fn analyze_inverted() {

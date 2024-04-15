@@ -155,7 +155,7 @@ impl Dottable for Propagation {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{aperture::Aperture, millimeter, rays::Rays};
+    use crate::{aperture::Aperture, millimeter, nodes::test_helper::test_helper::*, rays::Rays};
     use assert_matches::assert_matches;
     #[test]
     fn default() {
@@ -197,9 +197,7 @@ mod test {
     }
     #[test]
     fn inverted() {
-        let mut node = Propagation::default();
-        node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.properties().inverted().unwrap(), true)
+        test_inverted::<Propagation>()
     }
     #[test]
     fn ports() {
@@ -209,11 +207,7 @@ mod test {
     }
     #[test]
     fn analyze_empty() {
-        let mut node = Propagation::default();
-        let output = node
-            .analyze(LightResult::default(), &AnalyzerType::Energy)
-            .unwrap();
-        assert!(output.is_empty());
+        test_analyze_empty::<Propagation>()
     }
     #[test]
     fn analyze_wrong_port() {

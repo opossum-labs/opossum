@@ -156,7 +156,7 @@ impl Dottable for ParaxialSurface {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{aperture::Aperture, millimeter, rays::Rays};
+    use crate::{aperture::Aperture, millimeter, nodes::test_helper::test_helper::*, rays::Rays};
     use assert_matches::assert_matches;
     #[test]
     fn default() {
@@ -202,9 +202,7 @@ mod test {
     }
     #[test]
     fn inverted() {
-        let mut node = ParaxialSurface::default();
-        node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.properties().inverted().unwrap(), true)
+        test_inverted::<ParaxialSurface>()
     }
     #[test]
     fn ports() {
@@ -214,11 +212,7 @@ mod test {
     }
     #[test]
     fn analyze_empty() {
-        let mut node = ParaxialSurface::default();
-        let output = node
-            .analyze(LightResult::default(), &AnalyzerType::Energy)
-            .unwrap();
-        assert!(output.is_empty());
+        test_analyze_empty::<ParaxialSurface>()
     }
     #[test]
     fn analyze_wrong_port() {

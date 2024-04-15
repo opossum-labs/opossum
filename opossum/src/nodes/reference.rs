@@ -159,6 +159,7 @@ mod test {
     use super::*;
     use crate::{
         lightdata::{DataEnergy, LightData},
+        nodes::test_helper::test_helper::*,
         nodes::{Dummy, Source},
         spectrum_helper::create_he_ne_spec,
         OpticScenery,
@@ -204,9 +205,7 @@ mod test {
     }
     #[test]
     fn inverted() {
-        let mut node = NodeReference::default();
-        node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.properties().inverted().unwrap(), true)
+        test_inverted::<NodeReference>()
     }
     #[test]
     fn ports_empty() {

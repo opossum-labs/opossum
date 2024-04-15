@@ -830,6 +830,7 @@ mod test {
         joule,
         lightdata::DataEnergy,
         millimeter, nanometer,
+        nodes::test_helper::test_helper::*,
         nodes::{BeamSplitter, Detector, Dummy, Source},
         optical::Optical,
         position_distributions::Hexapolar,
@@ -878,9 +879,7 @@ mod test {
     }
     #[test]
     fn inverted() {
-        let mut og = NodeGroup::default();
-        og.set_property("inverted", true.into()).unwrap();
-        assert_eq!(og.properties().inverted().unwrap(), true);
+        test_inverted::<NodeGroup>()
     }
     #[test]
     fn connect_nodes() {

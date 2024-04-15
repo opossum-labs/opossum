@@ -255,8 +255,8 @@ impl Dottable for Lens {
 #[cfg(test)]
 mod test {
     use crate::{
-        analyzer::RayTraceConfig, joule, millimeter, nanometer, position_distributions::Hexapolar,
-        rays::Rays,
+        analyzer::RayTraceConfig, joule, millimeter, nanometer, nodes::test_helper::test_helper::*,
+        position_distributions::Hexapolar, rays::Rays,
     };
     use nalgebra::Vector3;
 
@@ -339,12 +339,12 @@ mod test {
         );
     }
     #[test]
+    fn inverted() {
+        test_inverted::<Lens>()
+    }
+    #[test]
     fn analyze_empty() {
-        let mut node = Lens::default();
-        let output = node
-            .analyze(LightResult::default(), &AnalyzerType::Energy)
-            .unwrap();
-        assert!(output.is_empty());
+        test_analyze_empty::<Lens>()
     }
     #[test]
     fn analyze_wrong_port() {

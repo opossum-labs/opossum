@@ -1,4 +1,6 @@
 #![warn(missing_docs)]
+use log::warn;
+
 use crate::analyzer::AnalyzerType;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
@@ -89,7 +91,10 @@ impl Optical for Detector {
             let plane = Plane::new_along_z(z_position)?;
             rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             if let Some(aperture) = self.ports().input_aperture("in1") {
-                rays.apodize(aperture)?;
+                let rays_apodized = rays.apodize(aperture)?;
+                if rays_apodized {
+                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", self.node_attr.name(), self.node_attr.node_type());
+                }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
@@ -140,7 +145,8 @@ impl Dottable for Detector {
 #[cfg(test)]
 mod test {
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
+        analyzer::AnalyzerType, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
+        spectrum_helper::create_he_ne_spec,
     };
 
     use super::*;
@@ -161,9 +167,7 @@ mod test {
     }
     #[test]
     fn inverted() {
-        let mut node = Detector::default();
-        node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.properties().inverted().unwrap(), true)
+        test_inverted::<Detector>()
     }
     #[test]
     fn ports() {
@@ -180,10 +184,7 @@ mod test {
     }
     #[test]
     fn analyze_empty() {
-        let mut node = Detector::default();
-        let input = LightResult::default();
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
-        assert!(output.is_empty());
+        test_analyze_empty::<Detector>()
     }
     #[test]
     fn analyze_wrong() {
@@ -211,6 +212,10 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("out1").unwrap();
         assert_eq!(*output, input_light);
+    }
+    #[test]
+    fn analyze_apodization_warning() {
+        test_analyze_apodization_warning::<Detector>()
     }
     #[test]
     fn analyze_inverse() {
