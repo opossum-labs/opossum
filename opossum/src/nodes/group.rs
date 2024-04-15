@@ -1,24 +1,20 @@
 #![warn(missing_docs)]
-use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
-use crate::error::OpmResult;
-use crate::error::OpossumError;
-use crate::light::Light;
-use crate::lightdata::LightData;
-use crate::optic_graph::OpticGraph;
-use crate::optical::LightResult;
-use crate::properties::{Properties, Proptype};
-use crate::reporter::NodeReport;
-use crate::{optic_ports::OpticPorts, optical::Optical};
-use log::warn;
-use petgraph::prelude::NodeIndex;
-use petgraph::visit::EdgeRef;
-use petgraph::{algo::toposort, Direction};
-use serde::Serialize;
-use std::collections::HashMap;
-use std::path::Path;
-
 use super::node_attr::NodeAttr;
+use crate::{
+    analyzer::AnalyzerType,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    light::Light,
+    lightdata::LightData,
+    optic_graph::OpticGraph,
+    optic_ports::OpticPorts,
+    optical::{LightResult, Optical},
+    properties::{Properties, Proptype},
+    reporter::NodeReport,
+};
+use log::warn;
+use petgraph::{algo::toposort, prelude::NodeIndex, visit::EdgeRef, Direction};
+use std::{collections::HashMap, path::Path};
 
 /// Mapping of group internal [`OpticPorts`] to externally visible ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
@@ -28,7 +24,7 @@ impl From<PortMap> for Proptype {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 /// A node that represents a group of other [`Optical`]s arranges in a subgraph.
 ///
 /// All unconnected input and output ports of this subgraph could be used as ports of
@@ -51,11 +47,9 @@ impl From<PortMap> for Proptype {
 /// **Note**: The group node does currently ignore all [`Aperture`](crate::aperture::Aperture) definitions on its publicly
 /// mapped input and output ports.
 pub struct NodeGroup {
-    #[serde(skip)]
     g: OpticGraph,
     node_attr: NodeAttr,
 }
-
 impl Default for NodeGroup {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("group", "group");
