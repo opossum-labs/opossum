@@ -319,8 +319,8 @@ impl Dottable for BeamSplitter {
 mod test {
     use super::*;
     use crate::{
-        analyzer::RayTraceConfig, joule, millimeter, nanometer, ray::Ray,
-        spectrum_helper::create_he_ne_spec,
+        analyzer::RayTraceConfig, joule, millimeter, nanometer, nodes::test_helper::test_helper::*,
+        ray::Ray, spectrum_helper::create_he_ne_spec,
     };
     use approx::{assert_abs_diff_eq, AbsDiffEq};
     use uom::si::energy::joule;
@@ -346,9 +346,7 @@ mod test {
     }
     #[test]
     fn inverted() {
-        let mut node = BeamSplitter::default();
-        node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.properties().inverted().unwrap(), true)
+        test_inverted::<BeamSplitter>()
     }
     #[test]
     fn ports() {
@@ -373,11 +371,7 @@ mod test {
     }
     #[test]
     fn analyze_empty() {
-        let mut node = BeamSplitter::default();
-        let output = node
-            .analyze(LightResult::default(), &AnalyzerType::Energy)
-            .unwrap();
-        assert!(output.is_empty());
+        test_analyze_empty::<BeamSplitter>()
     }
     #[test]
     fn analyze_energy_empty_input() {

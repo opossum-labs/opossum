@@ -1,9 +1,11 @@
 use opossum::{
+    aperture::CircleConfig,
     error::OpmResult,
     millimeter,
     nodes::{
         BeamSplitter, EnergyMeter, FilterType, IdealFilter, Metertype, NodeGroup, Propagation,
     },
+    optical::Optical,
     ray::SplittingConfig,
     spectrum::Spectrum,
 };
@@ -26,7 +28,13 @@ pub fn hhts_input() -> OpmResult<NodeGroup> {
     let hhts_t1_cm = group.add_node(BeamSplitter::new("HHTS_T1_CM", &dichroic_mirror)?)?;
 
     let d4 = group.add_node(Propagation::new("d4", millimeter!(100.0))?)?;
-    let beam_dump = group.add_node(EnergyMeter::new("Beamdump", Metertype::IdealEnergyMeter))?;
+    let mut meter = EnergyMeter::new("Beamdump", Metertype::IdealEnergyMeter);
+    let circle_config = CircleConfig::new(millimeter!(10.0), millimeter!(0.0, 0.0))?;
+    meter.set_input_aperture(
+        "in1",
+        &opossum::aperture::Aperture::BinaryCircle(circle_config),
+    )?;
+    let beam_dump = group.add_node(meter)?;
 
     let d5 = group.add_node(Propagation::new("d5", millimeter!(1000.0))?)?;
     let hhts_t1_pm = group.add_node(BeamSplitter::new("HHTS_T1_PM", &double_mirror)?)?;

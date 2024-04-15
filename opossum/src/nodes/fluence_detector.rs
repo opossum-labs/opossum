@@ -45,6 +45,7 @@ use super::node_attr::NodeAttr;
 pub struct FluenceDetector {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
+    apodization_warning: bool,
 }
 impl Default for FluenceDetector {
     /// creates a fluence detector.
@@ -57,6 +58,7 @@ impl Default for FluenceDetector {
         Self {
             light_data: None,
             node_attr,
+            apodization_warning: false,
         }
     }
 }
@@ -95,7 +97,11 @@ impl Optical for FluenceDetector {
             let plane = Plane::new_along_z(z_position)?;
             rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             if let Some(aperture) = self.ports().input_aperture("in1") {
-                rays.apodize(aperture)?;
+                let rays_apodized = rays.apodize(aperture)?;
+                if rays_apodized {
+                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", self.node_attr.name(), self.node_attr.node_type());
+                    self.apodization_warning = true;
+                }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
@@ -177,6 +183,16 @@ impl Optical for FluenceDetector {
                         Proptype::Fluence(fluence_data.average),
                     )
                     .unwrap();
+                if self.apodization_warning {
+                    props
+                    .create(
+                        "Warning",
+                        "warning during analysis",
+                        None,
+                        "Rays have been apodized at input aperture. Results might not be accurate.".into(),
+                    )
+                    .unwrap();
+                }
             }
         }
         Some(NodeReport::new(&self.node_type(), &self.name(), props))
@@ -289,9 +305,9 @@ impl Plottable for FluenceData {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::position_distributions::Hexapolar;
     use crate::{
-        analyzer::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer, rays::Rays,
+        analyzer::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
     use tempfile::NamedTempFile;
@@ -329,17 +345,11 @@ mod test {
     }
     #[test]
     fn inverted() {
-        let mut node = FluenceDetector::default();
-        node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.properties().inverted().unwrap(), true)
+        test_inverted::<FluenceDetector>()
     }
     #[test]
     fn analyze_empty() {
-        let mut node = FluenceDetector::default();
-        let output = node
-            .analyze(LightResult::default(), &AnalyzerType::Energy)
-            .unwrap();
-        assert!(output.is_empty());
+        test_analyze_empty::<FluenceDetector>()
     }
     #[test]
     fn analyze_wrong() {
@@ -370,7 +380,10 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-
+    #[test]
+    fn analyze_apodization_warning() {
+        test_analyze_apodization_warning::<FluenceDetector>()
+    }
     #[test]
     fn analyze_inverse() {
         let mut node = FluenceDetector::default();

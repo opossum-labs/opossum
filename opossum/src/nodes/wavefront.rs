@@ -49,6 +49,7 @@ use super::node_attr::NodeAttr;
 pub struct WaveFront {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
+    apodization_warning: bool,
 }
 impl Default for WaveFront {
     /// create a wavefront monitor.
@@ -61,6 +62,7 @@ impl Default for WaveFront {
         Self {
             light_data: None,
             node_attr,
+            apodization_warning: false,
         }
     }
 }
@@ -183,7 +185,11 @@ impl Optical for WaveFront {
             let plane = Plane::new_along_z(z_position)?;
             rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             if let Some(aperture) = self.ports().input_aperture("in1") {
-                rays.apodize(aperture)?;
+                let rays_apodized = rays.apodize(aperture)?;
+                if rays_apodized {
+                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", self.node_attr.name(), self.node_attr.node_type());
+                    self.apodization_warning = true;
+                }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
@@ -281,6 +287,16 @@ impl Optical for WaveFront {
                     Proptype::WfLambda(wf_data.wavefront_error_maps[0].rms, wf_data.wavefront_error_maps[0].wavelength),
                 )
                 .unwrap();
+                if self.apodization_warning {
+                    props
+                .create(
+                    "Warning",
+                    "warning during analysis",
+                    None,
+                    "Rays have been apodized at input aperture. Results might not be accurate.".into(),
+                )
+                .unwrap();
+                }
             }
 
             Some(NodeReport::new(&self.node_type(), &self.name(), props))
@@ -359,8 +375,8 @@ mod test {
     use super::*;
     use crate::{
         analyzer::AnalyzerType, analyzer::RayTraceConfig, joule, lightdata::DataEnergy, millimeter,
-        nanometer, position_distributions::Hexapolar, ray::Ray, rays::Rays,
-        spectrum_helper::create_he_ne_spec,
+        nanometer, nodes::test_helper::test_helper::*, position_distributions::Hexapolar, ray::Ray,
+        rays::Rays, spectrum_helper::create_he_ne_spec,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Point3;
@@ -428,17 +444,11 @@ mod test {
     }
     #[test]
     fn inverted() {
-        let mut node = WaveFront::default();
-        node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.properties().inverted().unwrap(), true)
+        test_inverted::<WaveFront>()
     }
     #[test]
     fn analyze_empty() {
-        let mut node = WaveFront::default();
-        let output = node
-            .analyze(LightResult::default(), &AnalyzerType::Energy)
-            .unwrap();
-        assert!(output.is_empty());
+        test_analyze_empty::<WaveFront>()
     }
     #[test]
     fn analyze_wrong() {
@@ -471,6 +481,10 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("out1");
         assert!(output.is_some());
+    }
+    #[test]
+    fn analyze_apodazation_warning() {
+        test_analyze_apodization_warning::<WaveFront>()
     }
     #[test]
     fn analyze_inverse() {
