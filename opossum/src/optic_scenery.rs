@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::{Cursor, Write};
 use std::path::Path;
 
+use crate::utils::geom_transformation::Isometry;
 use crate::{
     analyzer::AnalyzerType,
     error::{OpmResult, OpossumError},
@@ -97,7 +98,7 @@ impl OpticScenery {
         target_port: &str,
     ) -> OpmResult<()> {
         self.g
-            .connect_nodes(src_node, src_port, target_node, target_port)
+            .connect_nodes(src_node, src_port, target_node, target_port, Isometry::identity())
     }
     /// Return a reference to the optical node specified by its node index.
     ///

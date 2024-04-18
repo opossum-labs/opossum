@@ -10,7 +10,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    reporter::NodeReport,
+    reporter::NodeReport, utils::geom_transformation::Isometry,
 };
 use log::warn;
 use petgraph::{algo::toposort, prelude::NodeIndex, visit::EdgeRef, Direction};
@@ -151,7 +151,7 @@ impl NodeGroup {
             ));
         }
         self.g
-            .connect_nodes(src_node, src_port, target_node, target_port)?;
+            .connect_nodes(src_node, src_port, target_node, target_port, Isometry::identity())?;
         self.node_attr
             .set_property("graph", self.g.clone().into())
             .unwrap();

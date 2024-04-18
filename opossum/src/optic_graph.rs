@@ -1,4 +1,11 @@
 #![warn(missing_docs)]
+use crate::{
+    error::{OpmResult, OpossumError},
+    light::Light,
+    optic_ref::OpticRef,
+    optical::Optical,
+    properties::Proptype, utils::geom_transformation::Isometry,
+};
 use petgraph::{
     algo::{connected_components, is_cyclic_directed},
     prelude::DiGraph,
@@ -12,13 +19,6 @@ use serde::{
 use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
 
-use crate::{
-    error::{OpmResult, OpossumError},
-    light::Light,
-    optical::Optical,
-};
-use crate::{optic_ref::OpticRef, properties::Proptype};
-
 #[derive(Debug, Default, Clone)]
 pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
 
@@ -27,13 +27,13 @@ impl OpticGraph {
         self.0
             .add_node(OpticRef::new(Rc::new(RefCell::new(node)), None))
     }
-
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
+        isometry: Isometry
     ) -> OpmResult<()> {
         let source = self.0.node_weight(src_node).ok_or_else(|| {
             OpossumError::OpticScenery("source node with given index does not exist".into())
@@ -84,9 +84,11 @@ impl OpticGraph {
         }
         let src_name = source.optical_ref.borrow().name();
         let target_name = target.optical_ref.borrow().name();
+        let mut light=Light::new(src_port, target_port);
+        light.set_isometry(isometry);
         let edge_index = self
             .0
-            .add_edge(src_node, target_node, Light::new(src_port, target_port));
+            .add_edge(src_node, target_node, light);
         if is_cyclic_directed(&self.0) {
             self.0.remove_edge(edge_index);
             return Err(OpossumError::OpticScenery(format!(
@@ -266,7 +268,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                     let target_idx = g.node_idx(edge.1).ok_or_else(|| {
                         de::Error::custom(format!("target id {} does not exist", edge.1))
                     })?;
-                    g.connect_nodes(src_idx, edge.2, target_idx, edge.3)
+                    g.connect_nodes(src_idx, edge.2, target_idx, edge.3, Isometry::identity())
                         .map_err(|e| {
                             de::Error::custom(format!("connecting OpticGraph nodes failed: {e}"))
                         })?;
@@ -297,7 +299,7 @@ mod test {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
-        assert!(graph.connect_nodes(n1, "rear", n2, "front").is_ok());
+        assert!(graph.connect_nodes(n1, "rear", n2, "front", Isometry::identity()).is_ok());
         assert_eq!(graph.0.edge_count(), 1);
     }
     #[test]
@@ -306,10 +308,10 @@ mod test {
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
         assert!(graph
-            .connect_nodes(n1, "rear", NodeIndex::new(5), "front")
+            .connect_nodes(n1, "rear", NodeIndex::new(5), "front", Isometry::identity())
             .is_err());
         assert!(graph
-            .connect_nodes(NodeIndex::new(5), "rear", n2, "front")
+            .connect_nodes(NodeIndex::new(5), "rear", n2, "front", Isometry::identity())
             .is_err());
     }
     #[test]
@@ -318,17 +320,17 @@ mod test {
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
         let n3 = graph.add_node(Dummy::new("Test"));
-        assert!(graph.connect_nodes(n1, "rear", n2, "front").is_ok());
-        assert!(graph.connect_nodes(n3, "rear", n2, "front").is_err());
-        assert!(graph.connect_nodes(n1, "rear", n3, "front").is_err());
+        assert!(graph.connect_nodes(n1, "rear", n2, "front", Isometry::identity()).is_ok());
+        assert!(graph.connect_nodes(n3, "rear", n2, "front", Isometry::identity()).is_err());
+        assert!(graph.connect_nodes(n1, "rear", n3, "front", Isometry::identity()).is_err());
     }
     #[test]
     fn connect_nodes_loop_error() {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
-        assert!(graph.connect_nodes(n1, "rear", n2, "front").is_ok());
-        assert!(graph.connect_nodes(n2, "rear", n1, "front").is_err());
+        assert!(graph.connect_nodes(n1, "rear", n2, "front", Isometry::identity()).is_ok());
+        assert!(graph.connect_nodes(n2, "rear", n1, "front", Isometry::identity()).is_err());
         assert_eq!(graph.0.edge_count(), 1);
     }
     #[test]
@@ -354,10 +356,10 @@ mod test {
         let n2 = graph.add_node(Dummy::default());
         let n3 = graph.add_node(Dummy::default());
         let n4 = graph.add_node(Dummy::default());
-        graph.connect_nodes(n1, "rear", n2, "front").unwrap();
-        graph.connect_nodes(n3, "rear", n4, "front").unwrap();
+        graph.connect_nodes(n1, "rear", n2, "front", Isometry::identity()).unwrap();
+        graph.connect_nodes(n3, "rear", n4, "front", Isometry::identity()).unwrap();
         assert_eq!(graph.is_single_tree(), false);
-        graph.connect_nodes(n2, "rear", n3, "front").unwrap();
+        graph.connect_nodes(n2, "rear", n3, "front", Isometry::identity()).unwrap();
         assert_eq!(graph.is_single_tree(), true);
     }
     #[test]

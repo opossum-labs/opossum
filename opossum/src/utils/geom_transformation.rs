@@ -16,7 +16,7 @@ use uom::si::{
 };
 
 /// Struct to store the isometric transofmeation matrix and its inverse
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Isometry {
     transform: Isometry3<f64>,
     inverse: Isometry3<f64>,
@@ -57,6 +57,10 @@ impl Isometry {
             trans_in_m,
             rot_in_radian,
         )))
+    }
+    /// Create a "identiy" Isometry, which represents a zero translation and rotation.
+    pub fn identity() -> Self {
+        Self{transform: Isometry3::<f64>::identity(), inverse: Isometry3::<f64>::identity()}
     }
     /// Create a new [`Isometry`] representing a translation along the z axis.
     ///

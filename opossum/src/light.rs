@@ -4,7 +4,7 @@
 //! the respective source an target port names this edge connects as well as the actual light information (stored as
 //! [`LightData`]).
 
-use crate::lightdata::LightData;
+use crate::{lightdata::LightData, utils::geom_transformation::Isometry};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -13,14 +13,16 @@ pub struct Light {
     target_port: String,
     #[serde(skip)]
     data: Option<LightData>,
+    #[serde(skip)]
+    isometry: Isometry
 }
-
 impl Light {
     pub fn new(src_port: &str, target_port: &str) -> Self {
         Self {
             src_port: src_port.into(),
             target_port: target_port.into(),
             data: None,
+            isometry: Isometry::identity()
         }
     }
     pub fn src_port(&self) -> &str {
@@ -40,6 +42,13 @@ impl Light {
         self.src_port = self.target_port.clone();
         self.target_port = tmp;
     }
+    pub fn isometry(&self) -> &Isometry {
+        &self.isometry
+    }
+    pub fn set_isometry(&mut self, isometry: Isometry) {
+        self.isometry = isometry;
+    }
+    
 }
 
 #[cfg(test)]
@@ -51,6 +60,7 @@ mod test {
         assert_eq!(light.src_port, "test1");
         assert_eq!(light.target_port, "test2");
         assert!(light.data.is_none());
+        assert_eq!(light.isometry, Isometry::identity())
     }
     #[test]
     fn src_port() {
