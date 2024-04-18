@@ -1,6 +1,10 @@
 //! Module for gridding data
 
 #![warn(missing_docs)]
+use crate::{
+    error::{OpmResult, OpossumError},
+    plottable::AxLims,
+};
 use approx::{abs_diff_eq, abs_diff_ne, relative_eq};
 use kahan::KahanSum;
 use log::warn;
@@ -9,11 +13,6 @@ use num::ToPrimitive;
 use voronator::{
     delaunator::{Coord, Point as VPoint},
     VoronoiDiagram,
-};
-
-use crate::{
-    error::{OpmResult, OpossumError},
-    plottable::AxLims,
 };
 
 use super::filter_data::{filter_nan_infinite, get_min_max_filter_nonfinite};

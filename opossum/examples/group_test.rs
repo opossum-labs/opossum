@@ -1,6 +1,8 @@
-use opossum::error::OpmResult;
-use opossum::nodes::{BeamSplitter, Dummy, NodeGroup};
-use opossum::OpticScenery;
+use opossum::{
+    error::OpmResult,
+    nodes::{BeamSplitter, Dummy, NodeGroup},
+    OpticScenery,
+};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

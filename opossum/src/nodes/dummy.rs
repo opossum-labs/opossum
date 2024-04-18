@@ -1,16 +1,23 @@
 #![warn(missing_docs)]
+use nalgebra::Point3;
+use uom::si::f64::Length;
+
 use super::node_attr::NodeAttr;
-use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
-use crate::lightdata::LightData;
-use crate::optic_ports::OpticPorts;
-use crate::optical::{LightResult, Optical};
-use crate::properties::Proptype;
-use crate::refractive_index::refr_index_vaccuum;
-use crate::reporter::NodeReport;
-use crate::surface::Plane;
-use std::collections::HashMap;
+use crate::{
+    analyzer::AnalyzerType,
+    degree,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    lightdata::LightData,
+    optic_ports::OpticPorts,
+    optical::{LightResult, Optical},
+    properties::Proptype,
+    refractive_index::refr_index_vaccuum,
+    reporter::NodeReport,
+    surface::Plane,
+    utils::geom_transformation::Isometry,
+};
+use num::Zero;
 
 #[derive(Debug, Clone)]
 /// A fake / dummy component without any optical functionality.
@@ -75,7 +82,11 @@ impl Optical for Dummy {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-            let plane = Plane::new_along_z(z_position)?;
+            let isometry = Isometry::new(
+                Point3::new(Length::zero(), Length::zero(), z_position),
+                degree!(0.0, 0.0, 0.0),
+            )?;
+            let plane = Plane::new(&isometry);
             rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             if let Some(aperture) = self.ports().input_aperture("front") {
                 rays.apodize(aperture)?;
@@ -93,12 +104,12 @@ impl Optical for Dummy {
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
-            Ok(HashMap::from([(
+            Ok(LightResult::from([(
                 outport.into(),
                 LightData::Geometric(rays),
             )]))
         } else {
-            Ok(HashMap::from([(outport.into(), data.clone())]))
+            Ok(LightResult::from([(outport.into(), data.clone())]))
         }
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
@@ -113,6 +124,9 @@ impl Optical for Dummy {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn set_isometry(&mut self, isometry: Isometry) {
+        self.node_attr.set_isometry(isometry);
     }
 }
 

@@ -1,5 +1,4 @@
-use opossum::error::OpmResult;
-use opossum::{joule, millimeter, nanometer, ray::Ray};
+use opossum::{error::OpmResult, joule, millimeter, nanometer, ray::Ray};
 
 #[derive(Debug)]
 struct SRay {

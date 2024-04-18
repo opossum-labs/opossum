@@ -12,6 +12,7 @@ use crate::nodes::{NodeAttr, NodeGroup, NodeReference};
 use crate::optic_ports::OpticPorts;
 use crate::properties::{Properties, Proptype};
 use crate::reporter::NodeReport;
+use crate::utils::geom_transformation::Isometry;
 use core::fmt::Debug;
 use std::collections::HashMap;
 use std::path::Path;
@@ -204,6 +205,12 @@ pub trait Optical: Dottable {
     fn properties(&self) -> &Properties {
         self.node_attr().properties()
     }
+    /// Return the [`Isometry`] of this optical node.
+    fn isometry(&self) -> &Isometry {
+        self.node_attr().isometry()
+    }
+    /// Set the [`Isometry`] (position and angle) of this optical node.
+    fn set_isometry(&mut self, isometry: Isometry);
 }
 
 impl Debug for dyn Optical {

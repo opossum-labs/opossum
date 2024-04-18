@@ -1,13 +1,13 @@
 //! Common optcial node attributes.
 //!
 //! This module handles common attributes of optical nodes such as [`Properties`] or geometric data (isometries, etc.)
-
 use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,
     properties::{PropCondition, Properties, Proptype},
+    utils::geom_transformation::Isometry,
 };
 
 /// Struct for sotring common attributes of optical nodes.
@@ -15,6 +15,7 @@ use crate::{
 pub struct NodeAttr {
     node_type: String,
     props: Properties,
+    isometry: Isometry,
 }
 impl NodeAttr {
     /// Creates new node attributes ([`NodeAttr`]).
@@ -48,6 +49,7 @@ impl NodeAttr {
         Self {
             node_type: node_type.into(),
             props: properties,
+            isometry: Isometry::default(),
         }
     }
     /// Returns the name property of this node.
@@ -128,5 +130,14 @@ impl NodeAttr {
         } else {
             Err(OpossumError::Other("not a bool property".into()))
         }
+    }
+    /// Sets the isometry of this [`NodeAttr`].
+    pub fn set_isometry(&mut self, isometry: Isometry) {
+        self.isometry = isometry;
+    }
+    /// Returns a reference to the isometry of this [`NodeAttr`].
+    #[must_use]
+    pub const fn isometry(&self) -> &Isometry {
+        &self.isometry
     }
 }

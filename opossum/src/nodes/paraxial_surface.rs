@@ -2,6 +2,7 @@
 //! A paraxial surface (ideal lens)
 use crate::{
     analyzer::AnalyzerType,
+    degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -11,9 +12,10 @@ use crate::{
     properties::Proptype,
     refractive_index::refr_index_vaccuum,
     surface::Plane,
+    utils::geom_transformation::Isometry,
 };
-use uom::num_traits::Zero;
-use uom::si::f64::Length;
+use nalgebra::Point3;
+use uom::{num_traits::Zero, si::f64::Length};
 
 use super::node_attr::NodeAttr;
 
@@ -109,7 +111,11 @@ impl Optical for ParaxialSurface {
                     };
                     let z_position =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let plane = Plane::new_along_z(z_position)?;
+                    let isometry = Isometry::new(
+                        Point3::new(Length::zero(), Length::zero(), z_position),
+                        degree!(0.0, 0.0, 0.0),
+                    )?;
+                    let plane = Plane::new(&isometry);
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     rays.refract_paraxial(*focal_length)?;
                     if let Some(aperture) = self.ports().input_aperture("front") {
@@ -145,6 +151,9 @@ impl Optical for ParaxialSurface {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+        self.node_attr.set_isometry(isometry);
     }
 }
 

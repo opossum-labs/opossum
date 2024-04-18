@@ -3,13 +3,15 @@ use std::rc::{Rc, Weak};
 
 use uuid::Uuid;
 
-use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
-use crate::optic_ports::OpticPorts;
-use crate::optic_ref::OpticRef;
-use crate::optical::{LightResult, Optical};
-use crate::properties::Proptype;
+use crate::{
+    analyzer::AnalyzerType,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    optic_ports::OpticPorts,
+    optic_ref::OpticRef,
+    optical::{LightResult, Optical},
+    properties::Proptype,
+};
 
 use super::node_attr::NodeAttr;
 
@@ -146,6 +148,9 @@ impl Optical for NodeReference {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+        self.node_attr.set_isometry(isometry);
     }
 }
 

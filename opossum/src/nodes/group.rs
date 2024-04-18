@@ -783,6 +783,9 @@ impl Optical for NodeGroup {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
+    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+        self.node_attr.set_isometry(isometry);
+    }
 }
 
 impl Dottable for NodeGroup {
@@ -1138,17 +1141,13 @@ mod test {
         let _ = group.add_node(Dummy::new("stale node")).unwrap();
         group.map_input_port(d1, "front", "input").unwrap();
         let mut input = LightResult::default();
-        input.insert(
-            "input".into(),
-            LightData::Geometric(
-                Rays::new_uniform_collimated(
-                    nanometer!(1054.0),
-                    joule!(1.0),
-                    &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
-                )
-                .unwrap(),
-            ),
-        );
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1054.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
+        )
+        .unwrap();
+        input.insert("input".into(), LightData::Geometric(rays));
         let output = group.analyze(input, &AnalyzerType::Energy);
         assert!(output.is_ok());
         testing_logger::validate(|captured_logs| {
