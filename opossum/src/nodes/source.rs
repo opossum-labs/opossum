@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+use super::node_attr::NodeAttr;
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -9,10 +10,7 @@ use crate::{
     properties::Proptype,
     utils::EnumProxy,
 };
-use std::collections::HashMap;
 use std::fmt::Debug;
-
-use super::node_attr::NodeAttr;
 
 /// A general light source
 ///
@@ -139,7 +137,7 @@ impl Optical for Source {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));
                 };
             }
-            Ok(HashMap::from([("out1".into(), data)]))
+            Ok(LightResult::from([("out1".into(), data)]))
         } else {
             Err(OpossumError::Analysis(
                 "source has no light data defined".into(),
@@ -164,6 +162,9 @@ impl Optical for Source {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+        self.node_attr.set_isometry(isometry);
     }
 }
 

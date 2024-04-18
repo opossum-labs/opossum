@@ -71,63 +71,6 @@ impl Cuboid {
         self.anchor_point
     }
 }
-// impl Surface for Cylinder {
-//     fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
-//         let ray_pos = Point3::new(
-//             ray.position().x.get::<millimeter>(),
-//             ray.position().y.get::<millimeter>(),
-//             ray.position().z.get::<millimeter>(),
-//         );
-//         let base_p_vec = (self.base_pos - ray.position())
-//             .iter()
-//             .map(uom::si::f64::Length::get::<millimeter>)
-//             .collect::<Vec<f64>>();
-//         let base_p_vec = Vector3::new(base_p_vec[0], base_p_vec[1], base_p_vec[2]);
-//         let a = ray.direction().cross(&self.dir).norm_squared() / 2.;
-//         let b = -ray
-//             .direction()
-//             .cross(&self.dir)
-//             .dot(&base_p_vec.cross(&self.dir));
-//         let c = -self.radius.get::<millimeter>() * self.radius.get::<millimeter>() / 2.;
-
-//         // Solve t of qudaratic equation
-//         let roots = find_roots_quadratic(a, b, c);
-//         let (intersection, normal_vec) = {
-//             let distance = match roots {
-//                 // no intersection
-//                 Roots::No(_) => return None,
-//                 // "just touching" intersection
-//                 Roots::One(t) => {
-//                     if t[0] >= 0.0 {
-//                         t[0]
-//                     } else {
-//                         return None;
-//                     }
-//                 }
-//                 // "regular" intersection
-//                 Roots::Two(t) => {
-//                     let real_t = f64::min(t[0], t[1]);
-//                     if real_t.is_sign_negative() {
-//                         // surface behind beam
-//                         return None;
-//                     }
-//                     real_t
-//                 }
-//                 _ => unreachable!(),
-//             };
-//             let intersection = (ray_pos + distance * ray.direction());
-//             let signed_distance = self.dir.dot(&(ray.direction() * distance - base_p_vec));
-//             let normal =
-//                 (ray.direction() * distance - signed_distance * self.dir - base_p_vec).normalize();
-//             (intersection, normal)
-//         };
-
-//         Some((
-//             millimeter!(intersection.x, intersection.y, intersection.z),
-//             normal_vec,
-//         ))
-//     }
-// }
 
 impl Color for Cuboid {
     fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {

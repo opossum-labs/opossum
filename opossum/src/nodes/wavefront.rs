@@ -2,13 +2,15 @@
 //! Wavefront measurment node
 use image::RgbImage;
 use log::warn;
-use nalgebra::{DVector, DVectorSlice, MatrixXx3};
+use nalgebra::{DVector, DVectorSlice, MatrixXx3, Point3};
+use num::Zero;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
     analyzer::AnalyzerType,
+    degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -22,13 +24,14 @@ use crate::{
     refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
     surface::Plane,
-    utils::griddata::{create_linspace_axes, interpolate_3d_scatter_data},
+    utils::{
+        geom_transformation::Isometry,
+        griddata::{create_linspace_axes, interpolate_3d_scatter_data},
+    },
 };
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-
 use super::node_attr::NodeAttr;
+use std::path::{Path, PathBuf};
 
 /// A wavefront monitor node
 ///
@@ -182,12 +185,18 @@ impl Optical for WaveFront {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-            let plane = Plane::new_along_z(z_position)?;
+            let isometry = Isometry::new(
+                Point3::new(Length::zero(), Length::zero(), z_position),
+                degree!(0.0, 0.0, 0.0),
+            )?;
+            let plane = Plane::new(&isometry);
             rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             if let Some(aperture) = self.ports().input_aperture("in1") {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
-                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", self.node_attr.name(), self.node_attr.node_type());
+                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.",
+                        self.node_attr.name(),
+                        self.node_attr.node_type());
                     self.apodization_warning = true;
                 }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -205,12 +214,12 @@ impl Optical for WaveFront {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
             self.light_data = Some(LightData::Geometric(rays.clone()));
-            Ok(HashMap::from([(
+            Ok(LightResult::from([(
                 outport.into(),
                 LightData::Geometric(rays),
             )]))
         } else {
-            Ok(HashMap::from([(outport.into(), data.clone())]))
+            Ok(LightResult::from([(outport.into(), data.clone())]))
         }
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
@@ -306,6 +315,9 @@ impl Optical for WaveFront {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+        self.node_attr.set_isometry(isometry);
     }
 }
 impl From<WaveFrontData> for Proptype {

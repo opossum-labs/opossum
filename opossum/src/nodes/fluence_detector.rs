@@ -2,26 +2,27 @@
 //! fluence measurement node
 use image::RgbImage;
 use log::warn;
-use nalgebra::{DMatrix, DVector};
+use nalgebra::{DMatrix, DVector, Point3};
+use num::Zero;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::Length;
 
-use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
-use crate::lightdata::LightData;
-use crate::plottable::{
-    PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
-};
-use crate::properties::{Properties, Proptype};
-use crate::refractive_index::refr_index_vaccuum;
-use crate::reporter::NodeReport;
-use crate::surface::Plane;
 use crate::{
+    analyzer::AnalyzerType,
+    degree,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
+    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
+    properties::{Properties, Proptype},
+    refractive_index::refr_index_vaccuum,
+    reporter::NodeReport,
+    surface::Plane,
+    utils::geom_transformation::Isometry,
 };
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use super::node_attr::NodeAttr;
@@ -94,7 +95,11 @@ impl Optical for FluenceDetector {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-            let plane = Plane::new_along_z(z_position)?;
+            let isometry = Isometry::new(
+                Point3::new(Length::zero(), Length::zero(), z_position),
+                degree!(0.0, 0.0, 0.0),
+            )?;
+            let plane = Plane::new(&isometry);
             rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             if let Some(aperture) = self.ports().input_aperture("in1") {
                 let rays_apodized = rays.apodize(aperture)?;
@@ -117,12 +122,12 @@ impl Optical for FluenceDetector {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
             self.light_data = Some(LightData::Geometric(rays.clone()));
-            Ok(HashMap::from([(
+            Ok(LightResult::from([(
                 outport.into(),
                 LightData::Geometric(rays),
             )]))
         } else {
-            Ok(HashMap::from([(outport.into(), data.clone())]))
+            Ok(LightResult::from([(outport.into(), data.clone())]))
         }
     }
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
@@ -199,6 +204,9 @@ impl Optical for FluenceDetector {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+        self.node_attr.set_isometry(isometry);
     }
 }
 

@@ -3,6 +3,7 @@
 //! An infinitely large flat 2D surface with hole markers
 
 use crate::error::{OpmResult, OpossumError};
+use crate::radian;
 use crate::render::{Color, Render, Renderable, SDF};
 use crate::utils::geom_transformation::Isometry;
 use approx::relative_eq;
@@ -40,12 +41,7 @@ impl OpticalTable {
                 "normal vector components must be finite and its norm != 0!".into(),
             ));
         }
-        if anchor_point.iter().any(|x| !x.is_finite()) {
-            return Err(OpossumError::Other(
-                "anchor_point components must be finite!".into(),
-            ));
-        }
-        let isometry = Isometry::new(anchor_point, Vector3::new(0., 0., 0.));
+        let isometry = Isometry::new(anchor_point, radian!(0., 0., 0.))?;
         let shift = (anchor_point.x * anchor_point.x
             + anchor_point.y * anchor_point.y
             + anchor_point.z * anchor_point.z)

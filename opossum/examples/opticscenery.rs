@@ -1,6 +1,4 @@
-use opossum::error::OpmResult;
-use opossum::nodes::Dummy;
-use opossum::OpticScenery;
+use opossum::{error::OpmResult, nodes::Dummy, OpticScenery};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

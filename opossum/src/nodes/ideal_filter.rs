@@ -1,19 +1,23 @@
 #![warn(missing_docs)]
-use crate::analyzer::AnalyzerType;
-use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
-use crate::lightdata::LightData;
-use crate::optic_ports::OpticPorts;
-use crate::optical::{LightResult, Optical};
-use crate::properties::Proptype;
-use crate::refractive_index::refr_index_vaccuum;
-use crate::spectrum::Spectrum;
-use crate::surface::Plane;
-use crate::utils::EnumProxy;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-
 use super::node_attr::NodeAttr;
+use crate::{
+    analyzer::AnalyzerType,
+    degree,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    lightdata::LightData,
+    optic_ports::OpticPorts,
+    optical::{LightResult, Optical},
+    properties::Proptype,
+    refractive_index::refr_index_vaccuum,
+    spectrum::Spectrum,
+    surface::Plane,
+    utils::{geom_transformation::Isometry, EnumProxy},
+};
+use nalgebra::Point3;
+use num::Zero;
+use serde::{Deserialize, Serialize};
+use uom::si::f64::Length;
 
 /// Config data for an [`IdealFilter`].
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -187,7 +191,7 @@ impl Optical for IdealFilter {
                 let mut new_data = e.clone();
                 new_data.filter(&self.filter_type())?;
                 let light_data = LightData::Energy(new_data);
-                Ok(HashMap::from([(target.into(), light_data)]))
+                Ok(LightResult::from([(target.into(), light_data)]))
             }
             LightData::Geometric(r) => {
                 if !matches!(analyzer_type, AnalyzerType::RayTrace(_)) {
@@ -197,7 +201,11 @@ impl Optical for IdealFilter {
                 }
                 let mut rays = r.clone();
                 let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                let plane = Plane::new_along_z(z_position)?;
+                let isometry = Isometry::new(
+                    Point3::new(Length::zero(), Length::zero(), z_position),
+                    degree!(0.0, 0.0, 0.0),
+                )?;
+                let plane = Plane::new(&isometry);
                 rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                 rays.filter_energy(&self.filter_type())?;
                 if let Some(aperture) = self.ports().input_aperture("front") {
@@ -217,7 +225,7 @@ impl Optical for IdealFilter {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));
                 };
                 let light_data = LightData::Geometric(rays);
-                Ok(HashMap::from([(target.into(), light_data)]))
+                Ok(LightResult::from([(target.into(), light_data)]))
             }
             LightData::Fourier => Err(OpossumError::Analysis(
                 "Ideal filter: expected LightData::Energy or LightData::Geometric".into(),
@@ -229,6 +237,9 @@ impl Optical for IdealFilter {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+        self.node_attr.set_isometry(isometry);
     }
 }
 

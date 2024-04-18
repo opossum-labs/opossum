@@ -1,42 +1,81 @@
 //!for all the functions, structs or trait that may be used for geometrical transformations
 #![warn(missing_docs)]
-use approx::relative_eq;
-use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Vector3};
-use uom::si::f64::Length;
-
 use crate::{
+    degree,
     error::{OpmResult, OpossumError},
     meter,
 };
+use approx::relative_eq;
+use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Vector3};
+use num::Zero;
+use serde::{Deserialize, Serialize};
+use uom::si::{
+    angle::radian,
+    f64::{Angle, Length},
+    length::meter,
+};
 
 /// Struct to store the isometric transofmeation matrix and its inverse
-#[derive(Debug)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Isometry {
     transform: Isometry3<f64>,
     inverse: Isometry3<f64>,
 }
 impl Isometry {
-    /// Creates a new isometry which stores the rotation and translation as a transform matrix and its inverse. For the translation, it is assumed to transform a point of meters
+    /// Creates a new [`Isometry`] which stores the rotation and translation as a transform matrix and its inverse.
+    /// Internally, translation is handled in meter, rotation in radians
     /// # Attributes
-    /// - `translation`: vector of translation for each axis as Length
-    /// - `axisangle`: axis of rotation with its magnitude being the amount of rotation in radians
-    /// # Returns
-    /// Returns a new [`Isometry`] struct
-    #[must_use]
-    pub fn new(translation: Point3<Length>, axisangle: Vector3<f64>) -> Self {
-        let trans_in_m =
-            Vector3::from_vec(translation.iter().map(|x| x.value).collect::<Vec<f64>>());
-        Self::new_from_transform(Isometry3::new(trans_in_m, axisangle))
+    /// - `translation`: vector of translation for each axis as [`Length`]
+    /// - `axisangle`: vector of rotation for each axis as [`Angle`]
+    ///
+    /// # Errors
+    /// his function return an error if the
+    ///  - the translation coordinates are not finite
+    ///  - the axis angles are not finite
+    pub fn new(translation: Point3<Length>, axisangle: Point3<Angle>) -> OpmResult<Self> {
+        if translation.iter().any(|x| !x.is_finite()) {
+            return Err(OpossumError::Other(
+                "translation coordinates must be finite".into(),
+            ));
+        }
+        if axisangle.iter().any(|x| !x.is_finite()) {
+            return Err(OpossumError::Other("axis angles must be finite".into()));
+        }
+        let trans_in_m = Vector3::from_vec(
+            translation
+                .iter()
+                .map(Length::get::<meter>)
+                .collect::<Vec<f64>>(),
+        );
+        let rot_in_radian = Vector3::from_vec(
+            axisangle
+                .iter()
+                .map(Angle::get::<radian>)
+                .collect::<Vec<f64>>(),
+        );
+        Ok(Self::new_from_transform(Isometry3::new(
+            trans_in_m,
+            rot_in_radian,
+        )))
     }
-
-    /// Creates a new isometry which stores the rotation and translation as a transform matrix and its inverse.
+    /// Create a new [`Isometry`] representing a translation along the z axis.
+    ///
+    /// This function is a convenience function and might be removed later.
+    /// # Errors
+    ///
+    /// This function will return an error if the given z position is not finite.
+    pub fn new_along_z(z_position: Length) -> OpmResult<Self> {
+        Self::new(
+            Point3::new(Length::zero(), Length::zero(), z_position),
+            degree!(0.0, 0.0, 0.0),
+        )
+    }
+    /// Creates a new [`Isometry`] which stores the rotation and translation as a transform matrix and its inverse.
     /// For the translation, it is assumed to transform a point of meters
     /// # Attributes
     /// - `view_point`: origin of the view. will translate the cartesian origin to this point
     /// - `view_direction`: view direction vector. The rotation will rotate the z vector onto this direction
     /// - `up_direction`: vertical direction of the view. Must not be collinear to the view!
-    /// # Returns
-    /// Returns a new [`Isometry`] struct
     #[must_use]
     pub fn new_from_view(
         view_point: Point3<Length>,
@@ -44,8 +83,12 @@ impl Isometry {
         up_direction: Vector3<f64>,
     ) -> Self {
         //get translation vector
-        let view_point_in_m =
-            Point3::from_slice(&view_point.iter().map(|x| x.value).collect::<Vec<f64>>());
+        let view_point_in_m = Point3::from_slice(
+            &view_point
+                .iter()
+                .map(Length::get::<meter>)
+                .collect::<Vec<f64>>(),
+        );
         let target_point_in_m = view_point_in_m + view_direction;
 
         Self::new_from_transform(Isometry3::face_towards(
@@ -54,7 +97,6 @@ impl Isometry {
             &up_direction,
         ))
     }
-
     /// Creates a new isometry which stores the rotation and translation as a transform matrix and its inverse.
     /// For the translation, it is assumed to transform a point of meters
     /// # Attributes
@@ -81,7 +123,18 @@ impl Isometry {
             &up_direction,
         ))
     }
-
+    /// Add another [`Isometry`] to this [`Isometry`].
+    ///
+    /// This function "chains" two isometries (translation & rotation)
+    #[must_use]
+    pub fn append(&self, rhs: &Self) -> Self {
+        let new_transform = self.transform * rhs.transform;
+        let new_inverse = new_transform.inverse();
+        Self {
+            transform: new_transform,
+            inverse: new_inverse,
+        }
+    }
     /// Creates a new isometry which stores the rotation and translation as a transform matrix and its inverse.
     /// The struct is created from an already exisiting tranformation isometry3
     #[must_use]
@@ -89,7 +142,12 @@ impl Isometry {
         let inverse = transform.inverse();
         Self { transform, inverse }
     }
-
+    /// Returns the translation vector of this [`Isometry`].
+    #[must_use]
+    pub fn translation(&self) -> Vector3<Length> {
+        let t = self.transform.translation * Point3::origin();
+        Vector3::new(meter!(t.x), meter!(t.y), meter!(t.z))
+    }
     /// Transforms a single point by the defined isometry
     /// # Attributes
     /// - `p`: Point3 with Length components
@@ -97,7 +155,7 @@ impl Isometry {
     /// Returns the transformed point3
     #[must_use]
     pub fn transform_point(&self, p: &Point3<Length>) -> Point3<Length> {
-        let p_in_m = Point3::new(p.x.value, p.y.value, p.z.value);
+        let p_in_m = Point3::new(p.x.get::<meter>(), p.y.value, p.z.value);
         let p_iso_trans = self.transform.transform_point(&p_in_m);
         meter!(p_iso_trans.x, p_iso_trans.y, p_iso_trans.z)
     }
@@ -192,7 +250,7 @@ impl Isometry {
     /// # Returns
     /// Returns the transformed vector3
     #[must_use]
-    pub fn transform_vector(&self, v: &Vector3<f64>) -> Vector3<f64> {
+    pub fn transform_vector_f64(&self, v: &Vector3<f64>) -> Vector3<f64> {
         self.transform.transform_vector(v)
     }
 
@@ -202,10 +260,10 @@ impl Isometry {
     /// # Returns
     /// Returns the transformed Vector3 as Vec
     #[must_use]
-    pub fn transform_vectors(&self, v_vec: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
+    pub fn transform_vectors_f64(&self, v_vec: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
         v_vec
             .iter()
-            .map(|p| self.transform_vector(p))
+            .map(|p| self.transform_vector_f64(p))
             .collect::<Vec<Vector3<f64>>>()
     }
 
@@ -215,7 +273,7 @@ impl Isometry {
     /// # Returns
     /// Returns the inverse-transformed vector3
     #[must_use]
-    pub fn inverse_transform_vector(&self, v: &Vector3<f64>) -> Vector3<f64> {
+    pub fn inverse_transform_vector_f64(&self, v: &Vector3<f64>) -> Vector3<f64> {
         self.inverse.transform_vector(v)
     }
 
@@ -225,10 +283,10 @@ impl Isometry {
     /// # Returns
     /// Returns the inverse-transformed Vector3 as Vec
     #[must_use]
-    pub fn inverse_transform_vectors(&self, v_vec: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
+    pub fn inverse_transform_vectors_f64(&self, v_vec: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
         v_vec
             .iter()
-            .map(|p| self.inverse_transform_vector(p))
+            .map(|p| self.inverse_transform_vector_f64(p))
             .collect::<Vec<Vector3<f64>>>()
     }
 }
@@ -311,7 +369,7 @@ pub fn project_points_to_plane(
     points_to_project: &[Vector3<f64>],
 ) -> OpmResult<MatrixXx3<f64>> {
     if relative_eq!(plane_normal_vector.norm(), 0.0)
-        || plane_normal_vector.iter().any(|x| !f64::is_finite(*x))
+        || plane_normal_vector.iter().any(|x| !(*x).is_finite())
     {
         return Err(OpossumError::Other(
             "plane normal vector must have a non zero length and be finite!".into(),
@@ -411,9 +469,39 @@ pub fn project_pos_to_plane_with_base_vectors(
 
 #[cfg(test)]
 mod test {
-    use approx::assert_relative_eq;
-
     use super::*;
+    use crate::millimeter;
+    use approx::assert_relative_eq;
+    #[test]
+    fn new_along_z() {
+        assert!(Isometry::new_along_z(millimeter!(f64::NAN)).is_err());
+        assert!(Isometry::new_along_z(millimeter!(f64::INFINITY)).is_err());
+        assert!(Isometry::new_along_z(millimeter!(f64::NEG_INFINITY)).is_err());
+        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        assert_eq!(i.transform.translation.x, 0.0);
+        assert_eq!(i.transform.translation.y, 0.0);
+        assert_eq!(i.transform.translation.z, 0.01);
+        assert_eq!(i.transform.rotation.i, 0.0);
+        assert_eq!(i.transform.rotation.j, 0.0);
+        assert_eq!(i.transform.rotation.k, 0.0);
+    }
+    #[test]
+    fn append_z() {
+        let i1 = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let i2 = Isometry::new_along_z(millimeter!(20.0)).unwrap();
+        let i = i1.append(&i2);
+        assert_eq!(i.transform.translation.x, 0.0);
+        assert_eq!(i.transform.translation.y, 0.0);
+        assert_eq!(i.transform.translation.z, 0.03);
+    }
+    #[test]
+    fn append_with_rot() {
+        let i1 = Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 90.0, 0.0)).unwrap();
+        let i2 = Isometry::new_along_z(millimeter!(20.0)).unwrap();
+        let i = i1.append(&i2);
+        let new_point = i.transform_point_f64(&Point3::origin());
+        assert_relative_eq!(new_point, Point3::new(0.02, 0.0, 0.01));
+    }
     #[test]
     fn define_plane_coordinate_axes_directions_test() {
         assert!(define_plane_coordinate_axes_directions(&Vector3::new(0., 0., 0.)).is_err());

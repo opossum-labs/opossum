@@ -1,8 +1,10 @@
-use opossum::error::OpmResult;
-use opossum::lightdata::{DataEnergy, LightData};
-use opossum::nodes::{EnergyMeter, IdealFilter, NodeReference, Source};
-use opossum::spectrum_helper::create_he_ne_spec;
-use opossum::OpticScenery;
+use opossum::{
+    error::OpmResult,
+    lightdata::{DataEnergy, LightData},
+    nodes::{EnergyMeter, IdealFilter, NodeReference, Source},
+    spectrum_helper::create_he_ne_spec,
+    OpticScenery,
+};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

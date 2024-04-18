@@ -145,6 +145,9 @@ impl Optical for Propagation {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
+    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+        self.node_attr.set_isometry(isometry);
+    }
 }
 
 impl Dottable for Propagation {

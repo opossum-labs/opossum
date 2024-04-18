@@ -13,6 +13,7 @@ use crate::{
     nodes::FilterType,
     spectrum::Spectrum,
     surface::Surface,
+    utils::geom_transformation::Isometry,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -379,6 +380,26 @@ impl Ray {
     pub fn set_invalid(&mut self) {
         self.valid = false;
     }
+    /// Get [`Ray`] translated and rotated by given [`Isometry`]
+    #[must_use]
+    pub fn transformed_ray(&self, isometry: &Isometry) -> Self {
+        let transformed_position = isometry.transform_point(&self.pos);
+        let transformed_dir = isometry.transform_vector_f64(&self.dir);
+        let mut new_ray = self.clone();
+        new_ray.pos = transformed_position;
+        new_ray.dir = transformed_dir;
+        new_ray
+    }
+    /// Get [`Ray`] inverse translated and rotated by given [`Isometry`]
+    #[must_use]
+    pub fn inverse_transformed_ray(&self, isometry: &Isometry) -> Self {
+        let transformed_position = isometry.inverse_transform_point(&self.pos);
+        let transformed_dir = isometry.inverse_transform_vector_f64(&self.dir);
+        let mut new_ray = self.clone();
+        new_ray.pos = transformed_position;
+        new_ray.dir = transformed_dir;
+        new_ray
+    }
 }
 impl Display for Ray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -395,11 +416,11 @@ mod test {
 
     use super::*;
     use crate::{
-        joule, millimeter, nanometer,
+        degree, joule, millimeter, nanometer, radian,
         spectrum_helper::{self, generate_filter_spectrum},
         surface::Plane,
     };
-    use approx::{abs_diff_eq, assert_abs_diff_eq};
+    use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq};
     use itertools::izip;
     use uom::si::{energy::joule, length::millimeter};
     #[test]
@@ -662,7 +683,12 @@ mod test {
         let e = joule!(1.0);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
         let plane_z_pos = millimeter!(10.0);
-        let s = Plane::new_along_z(plane_z_pos).unwrap();
+        let isometry = Isometry::new(
+            Point3::new(Length::zero(), Length::zero(), plane_z_pos),
+            degree!(0.0, 0.0, 0.0),
+        )
+        .unwrap();
+        let s = Plane::new(&isometry);
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -686,7 +712,12 @@ mod test {
         let wvl = nanometer!(1054.0);
         let e = joule!(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        let s = Plane::new_along_z(millimeter!(10.0)).unwrap();
+        let isometry = Isometry::new(
+            Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
+            degree!(0.0, 0.0, 0.0),
+        )
+        .unwrap();
+        let s = Plane::new(&isometry);
         ray.refract_on_surface(&s, 1.5).unwrap();
         assert_eq!(ray.pos, millimeter!(0., 0., 0.));
         assert_eq!(ray.dir, direction);
@@ -701,7 +732,12 @@ mod test {
         let e = joule!(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         let plane_z_pos = millimeter!(10.0);
-        let s = Plane::new_along_z(plane_z_pos).unwrap();
+        let isometry = Isometry::new(
+            Point3::new(Length::zero(), Length::zero(), plane_z_pos),
+            degree!(0.0, 0.0, 0.0),
+        )
+        .unwrap();
+        let s = Plane::new(&isometry);
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -733,7 +769,12 @@ mod test {
         let e = joule!(1.0);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.set_refractive_index(1.5).unwrap();
-        let s = Plane::new_along_z(millimeter!(10.0)).unwrap();
+        let isometry = Isometry::new(
+            Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
+            degree!(0.0, 0.0, 0.0),
+        )
+        .unwrap();
+        let s = Plane::new(&isometry);
         let reflected = ray.refract_on_surface(&s, 1.0).unwrap();
         assert!(reflected.is_none());
         assert_eq!(ray.pos, millimeter!(0., 20., 10.));
@@ -866,5 +907,105 @@ mod test {
             assert_eq!(row[1], row_calc[1]);
             assert_eq!(row[2], row_calc[2]);
         }
+    }
+    #[test]
+    fn transformed_ray_trans() {
+        let ray = Ray::new(
+            millimeter!(0., 0., 0.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1053.),
+            joule!(1.),
+        )
+        .unwrap();
+        let iso = Isometry::new(meter!(0.0, 0.0, 1.0), radian!(0.0, 0.0, 0.0)).unwrap();
+        let new_ray = ray.transformed_ray(&iso);
+        assert_eq!(new_ray.pos, meter!(0.0, 0.0, 1.0));
+        assert_eq!(new_ray.dir, ray.dir);
+        assert_eq!(new_ray.wvl, ray.wvl);
+        assert_eq!(new_ray.e, ray.e);
+    }
+    #[test]
+    fn transformed_ray_rot() {
+        let ray = Ray::new(
+            millimeter!(0., 0., 0.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1053.),
+            joule!(1.),
+        )
+        .unwrap();
+        let iso = Isometry::new(meter!(0.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0)).unwrap();
+        let new_ray = ray.transformed_ray(&iso);
+        assert_eq!(new_ray.pos, ray.pos);
+        assert_relative_eq!(new_ray.dir, Vector3::new(1.0, 0.0, 0.0));
+        assert_eq!(new_ray.wvl, ray.wvl);
+        assert_eq!(new_ray.e, ray.e);
+    }
+    #[test]
+    fn transformed_ray_rot_trans() {
+        let ray = Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1053.),
+            joule!(1.),
+        )
+        .unwrap();
+        let iso = Isometry::new(meter!(0.0, 1.0, 0.0), degree!(0.0, 0.0, 90.0)).unwrap();
+        let new_ray = ray.transformed_ray(&iso);
+        assert_relative_eq!(new_ray.pos.x.value, -1.0, epsilon = 2.0 * f64::EPSILON);
+        assert_relative_eq!(new_ray.pos.y.value, 2.0);
+        assert_relative_eq!(new_ray.pos.z.value, 1.0);
+        assert_relative_eq!(new_ray.dir, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(new_ray.wvl, ray.wvl);
+        assert_eq!(new_ray.e, ray.e);
+    }
+    #[test]
+    fn inversetransformed_ray_trans() {
+        let ray = Ray::new(
+            millimeter!(0., 0., 0.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1053.),
+            joule!(1.),
+        )
+        .unwrap();
+        let iso = Isometry::new(meter!(0.0, 0.0, 1.0), radian!(0.0, 0.0, 0.0)).unwrap();
+        let new_ray = ray.inverse_transformed_ray(&iso);
+        assert_eq!(new_ray.pos, meter!(0.0, 0.0, -1.0));
+        assert_eq!(new_ray.dir, ray.dir);
+        assert_eq!(new_ray.wvl, ray.wvl);
+        assert_eq!(new_ray.e, ray.e);
+    }
+    #[test]
+    fn inverse_transformed_ray_rot() {
+        let ray = Ray::new(
+            millimeter!(0., 0., 0.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1053.),
+            joule!(1.),
+        )
+        .unwrap();
+        let iso = Isometry::new(meter!(0.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0)).unwrap();
+        let new_ray = ray.inverse_transformed_ray(&iso);
+        assert_eq!(new_ray.pos, ray.pos);
+        assert_relative_eq!(new_ray.dir, Vector3::new(-1.0, 0.0, 0.0));
+        assert_eq!(new_ray.wvl, ray.wvl);
+        assert_eq!(new_ray.e, ray.e);
+    }
+    #[test]
+    fn inverse_transformed_ray_rot_trans() {
+        let ray = Ray::new(
+            meter!(-1., 2., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1053.),
+            joule!(1.),
+        )
+        .unwrap();
+        let iso = Isometry::new(meter!(0.0, 1.0, 0.0), degree!(0.0, 0.0, 90.0)).unwrap();
+        let new_ray = ray.inverse_transformed_ray(&iso);
+        assert_relative_eq!(new_ray.pos.x.value, 1.0, epsilon = 5.0 * f64::EPSILON);
+        assert_relative_eq!(new_ray.pos.y.value, 1.0);
+        assert_relative_eq!(new_ray.pos.z.value, 1.0);
+        assert_relative_eq!(new_ray.dir, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(new_ray.wvl, ray.wvl);
+        assert_eq!(new_ray.e, ray.e);
     }
 }

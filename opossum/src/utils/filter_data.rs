@@ -27,10 +27,9 @@ pub fn filter_nan_infinite<T: Float>(ax_vals: &[T]) -> Vec<T> {
 pub fn get_min_max_filter_nonfinite(ax_vals: &[f64]) -> Option<(f64, f64)> {
     let (min, max) = ax_vals
         .iter()
-        .copied()
         .filter(|x| x.is_finite())
         .fold((f64::INFINITY, f64::NEG_INFINITY), |arg, v| {
-            (f64::min(arg.0, v), f64::max(arg.1, v))
+            (f64::min(arg.0, *v), f64::max(arg.1, *v))
         });
 
     if !min.is_finite() || !max.is_finite() {

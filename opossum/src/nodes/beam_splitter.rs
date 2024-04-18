@@ -1,22 +1,25 @@
 #![warn(missing_docs)]
-use crate::ray::SplittingConfig;
-use crate::refractive_index::refr_index_vaccuum;
-use crate::surface::Plane;
-use crate::utils::EnumProxy;
+use nalgebra::Point3;
+use num::Zero;
+use uom::si::f64::Length;
+
+use super::node_attr::NodeAttr;
 use crate::{
     analyzer::AnalyzerType,
+    degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{DataEnergy, LightData},
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::Proptype,
+    ray::SplittingConfig,
     rays::Rays,
+    refractive_index::refr_index_vaccuum,
     spectrum::{merge_spectra, Spectrum},
+    surface::Plane,
+    utils::{geom_transformation::Isometry, EnumProxy},
 };
-use std::collections::HashMap;
-
-use super::node_attr::NodeAttr;
 
 #[derive(Debug)]
 /// An ideal beamsplitter node with a given splitting ratio.
@@ -196,7 +199,11 @@ impl BeamSplitter {
                     let mut rays = r.clone();
                     let z_position =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let plane = Plane::new_along_z(z_position)?;
+                    let isometry = Isometry::new(
+                        Point3::new(Length::zero(), Length::zero(), z_position),
+                        degree!(0.0, 0.0, 0.0),
+                    )?;
+                    let plane = Plane::new(&isometry);
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     if let Some(aperture) = self.ports().input_aperture("input1") {
                         rays.apodize(aperture)?;
@@ -224,7 +231,11 @@ impl BeamSplitter {
                     let mut rays = r.clone();
                     let z_position =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let plane = Plane::new_along_z(z_position)?;
+                    let isometry = Isometry::new(
+                        Point3::new(Length::zero(), Length::zero(), z_position),
+                        degree!(0.0, 0.0, 0.0),
+                    )?;
+                    let plane = Plane::new(&isometry);
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     if let Some(aperture) = self.ports().input_aperture("input2") {
                         rays.apodize(aperture)?;
@@ -294,7 +305,7 @@ impl Optical for BeamSplitter {
             } else {
                 ("out1_trans1_refl2", "out2_trans2_refl1")
             };
-            Ok(HashMap::from([
+            Ok(LightResult::from([
                 (target1.into(), out1_data.unwrap()),
                 (target2.into(), out2_data.unwrap()),
             ]))
@@ -307,6 +318,9 @@ impl Optical for BeamSplitter {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+        self.node_attr.set_isometry(isometry);
     }
 }
 

@@ -3,21 +3,19 @@
 //! An infinitely large flat 2D surface oriented perpendicular to the optical axis (xy plane) and positioned a the given z position.
 
 use super::Surface;
-use crate::ray::Ray;
-use crate::render::{Color, Render, Renderable, SDF};
-use crate::utils::geom_transformation::Isometry;
 use crate::{
-    error::{OpmResult, OpossumError},
     meter,
+    ray::Ray,
+    render::{Color, Render, Renderable, SDF},
+    utils::geom_transformation::Isometry,
 };
-use approx::relative_eq;
 use nalgebra::{Point3, Vector3};
+use num::Zero;
 use uom::si::f64::Length;
 
 #[derive(Debug)]
 /// An infinitely large flat surface with its normal collinear to the optical axis.
 pub struct Plane {
-    z: Length,
     normal: Vector3<f64>,
     anchor_point: Point3<Length>,
     shift: Length,
@@ -26,55 +24,15 @@ pub struct Plane {
 impl Plane {
     /// Create a new [`Plane`] located at the given z position on the optical axis.
     ///
-    /// The plane is oriented vertical with respect to the optical axis (xy plane).
-    /// # Errors
-    ///
-    /// This function will return an error if z is not finite.
-    pub fn new_along_z(z: Length) -> OpmResult<Self> {
-        if !z.is_finite() {
-            return Err(OpossumError::Other("z must be finite".into()));
-        }
-        let isometry = Isometry::new_from_view(Point3::origin(), Vector3::z(), Vector3::y());
-        Ok(Self {
-            z,
-            normal: Vector3::z(),
+    /// By default (all rotation angles zero), the plane is oriented vertical with respect to the optical axis (xy plane).
+    #[must_use]
+    pub fn new(isometry: &Isometry) -> Self {
+        Self {
+            normal: isometry.transform_vector_f64(&Vector3::z()),
             anchor_point: Point3::origin(),
-            shift: z,
-            isometry,
-        })
-    }
-    /// Create a new [`Plane`] located at the given z position on the optical axis.
-    ///
-    /// The plane is oriented vertical with respect to the optical axis (xy plane).
-    /// # Errors
-    ///
-    /// This function will return an error if z is not finite.
-    pub fn new(z: Length, normal: Vector3<f64>, anchor_point: Point3<Length>) -> OpmResult<Self> {
-        if !z.is_finite() {
-            return Err(OpossumError::Other("z must be finite".into()));
+            shift: Length::zero(),
+            isometry: isometry.clone(),
         }
-        if normal.iter().any(|x| !x.is_finite()) || relative_eq!(normal.norm(), 0.0) {
-            return Err(OpossumError::Other(
-                "normal vector components must be finite and its norm != 0!".into(),
-            ));
-        }
-        if anchor_point.iter().any(|x| !x.is_finite()) {
-            return Err(OpossumError::Other(
-                "anchor_point components must be finite!".into(),
-            ));
-        }
-        let isometry = Isometry::new(anchor_point, Vector3::new(0., 0., 0.));
-        let shift = (anchor_point.x * anchor_point.x
-            + anchor_point.y * anchor_point.y
-            + anchor_point.z * anchor_point.z)
-            .sqrt();
-        Ok(Self {
-            z,
-            normal: normal.normalize(),
-            anchor_point,
-            shift,
-            isometry,
-        })
     }
 
     /// Returns the anchor point of this plane
@@ -83,22 +41,33 @@ impl Plane {
         self.anchor_point
     }
 }
-
 impl Surface for Plane {
     fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
-        let mut ray_position = ray.position().map(|c| c.value);
-        let ray_direction = ray.direction();
-        let z_in_meter = self.z.value;
-        let distance_in_z_direction = z_in_meter - ray_position.z;
-        if distance_in_z_direction.signum() != ray_direction.z.signum() {
-            // Ray propagates away from the plane => no intersection
-            return None;
+        let transformed_ray = ray.inverse_transformed_ray(&self.isometry);
+        let mut trans_pos_in_m = transformed_ray.position().map(|c| c.value);
+        let trans_dir = transformed_ray.direction();
+        // Check, if ray position is on the surface, then directly return position as intersection point
+        if !trans_pos_in_m.z.is_zero() {
+            let distance_in_z_direction = -trans_pos_in_m.z;
+            if distance_in_z_direction.signum() != trans_dir.z.signum() {
+                // Ray propagates away from the plane => no intersection
+                return None;
+            }
+            let length_in_ray_dir = distance_in_z_direction / trans_dir.z;
+            trans_pos_in_m += length_in_ray_dir * trans_dir;
         }
-        let length_in_ray_dir = distance_in_z_direction / ray_direction.z;
-        ray_position += length_in_ray_dir * ray_direction;
-        let intersection_point = meter!(ray_position.x, ray_position.y, self.z.value);
         let normal_vector = Vector3::new(0.0, 0.0, -1.0);
-        Some((intersection_point, normal_vector))
+        Some((
+            self.isometry.transform_point(&meter!(
+                trans_pos_in_m.x,
+                trans_pos_in_m.y,
+                trans_pos_in_m.z
+            )),
+            self.isometry.transform_vector_f64(&normal_vector),
+        ))
+    }
+    fn set_isometry(&mut self, isometry: &Isometry) {
+        self.isometry = isometry.clone();
     }
 }
 impl Color for Plane {
@@ -120,18 +89,19 @@ impl Renderable<'_> for Plane {}
 mod test {
     use super::*;
     use crate::{joule, millimeter, nanometer};
-
     #[test]
     fn new() {
-        assert!(Plane::new_along_z(millimeter!(f64::NAN)).is_err());
-        assert!(Plane::new_along_z(millimeter!(f64::NEG_INFINITY)).is_err());
-        assert!(Plane::new_along_z(millimeter!(f64::INFINITY)).is_err());
-        let p = Plane::new_along_z(millimeter!(1.0)).unwrap();
-        assert_eq!(p.z, millimeter!(1.0));
+        let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
+        let p = Plane::new(&iso);
+        let t = p.isometry.translation();
+        assert_eq!(t.x, millimeter!(0.0));
+        assert_eq!(t.y, millimeter!(0.0));
+        assert_eq!(t.z, millimeter!(1.0));
     }
     #[test]
     fn intersect_on_axis() {
-        let s = Plane::new_along_z(millimeter!(10.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let s = Plane::new(&iso);
         let ray = Ray::new(
             millimeter!(0.0, 0.0, 0.0),
             Vector3::new(0.0, 0.0, 1.0),
@@ -146,10 +116,11 @@ mod test {
     }
     #[test]
     fn intersect_on_axis_behind() {
-        let s = Plane::new_along_z(millimeter!(-10.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(-10.0)).unwrap();
+        let s = Plane::new(&iso);
         let ray = Ray::new(
             millimeter!(0.0, 0.0, 0.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
         )
@@ -157,11 +128,28 @@ mod test {
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
+    fn intersect_zero_dist() {
+        let iso = Isometry::new_along_z(millimeter!(0.0)).unwrap();
+        let s = Plane::new(&iso);
+        let ray = Ray::new(
+            millimeter!(0.0, 0.0, 0.0),
+            Vector3::z(),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        assert_eq!(
+            s.calc_intersect_and_normal(&ray),
+            Some((millimeter!(0.0, 0.0, 0.0), Vector3::new(0.0, 0.0, -1.0)))
+        );
+    }
+    #[test]
     fn intersect_off_axis() {
-        let s = Plane::new_along_z(millimeter!(10.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let s = Plane::new(&iso);
         let ray = Ray::new(
             millimeter!(0.0, 1.0, 1.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            Vector3::z(),
             nanometer!(1053.0),
             joule!(1.0),
         )

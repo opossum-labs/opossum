@@ -28,14 +28,13 @@ pub mod test_helper {
         node.set_input_aperture("in1", &crate::aperture::Aperture::BinaryCircle(config))
             .unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Geometric(
-            Rays::new_uniform_collimated(
-                nanometer!(1054.0),
-                joule!(1.0),
-                &Hexapolar::new(millimeter!(10.0), 1).unwrap(),
-            )
-            .unwrap(),
-        );
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1054.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
+        )
+        .unwrap();
+        let input_light = LightData::Geometric(rays);
         input.insert("in1".into(), input_light.clone());
         node.analyze(input, &AnalyzerType::Energy).unwrap();
         testing_logger::validate(|captured_logs| {

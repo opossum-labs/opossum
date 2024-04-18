@@ -140,6 +140,9 @@ impl Surface for Cylinder {
             normal_vec,
         ))
     }
+    fn set_isometry(&mut self, isometry: &Isometry) {
+        self.isometry = isometry.clone();
+    }
 }
 
 impl Color for Cylinder {

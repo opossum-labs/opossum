@@ -1,18 +1,18 @@
 #![warn(missing_docs)]
 //! Module for handling optical surfaces
 
-pub use cuboid::Cuboid;
-pub use cylinder::Cylinder;
 mod cuboid;
 mod cylinder;
 mod optical_table;
 mod plane;
 mod sphere;
+pub use cuboid::Cuboid;
+pub use cylinder::Cylinder;
 pub use optical_table::OpticalTable;
 pub use plane::Plane;
 pub use sphere::Sphere;
 
-use crate::ray::Ray;
+use crate::{ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use std::fmt::Debug;
 use uom::si::f64::Length;
@@ -26,6 +26,10 @@ pub trait Surface {
     ///
     /// This function returns `None` if the given ray does not intersect with the surface.
     fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)>;
+    /// Set the [`Isometry`] of this [`Surface`].
+    ///
+    /// This function can be used to place and align the [`Surface`] in 3D space.
+    fn set_isometry(&mut self, isometry: &Isometry);
 }
 
 impl Debug for dyn Surface {

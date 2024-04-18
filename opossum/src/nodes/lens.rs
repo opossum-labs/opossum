@@ -9,10 +9,11 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::Proptype,
-    refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
+    refractive_index::{refr_index_vaccuum, RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Plane, Sphere},
-    utils::EnumProxy,
+    utils::{geom_transformation::Isometry, EnumProxy},
 };
+
 use num::Zero;
 use uom::si::f64::Length;
 
@@ -166,17 +167,17 @@ impl Optical for Lens {
                     };
                     let next_z_pos =
                         rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+                    let isometry = Isometry::new_along_z(next_z_pos)?;
                     if (*front_roc).is_infinite() {
-                        rays.refract_on_surface(
-                            &Plane::new_along_z(next_z_pos)?,
-                            &index_model.value,
-                        )?;
+                        let plane = Plane::new(&isometry);
+                        rays.refract_on_surface(&plane, &index_model.value)?;
                     } else {
                         rays.refract_on_surface(
-                            &Sphere::new_along_z(next_z_pos, *front_roc)?,
+                            &Sphere::new(*front_roc, &isometry)?,
                             &index_model.value,
                         )?;
                     };
+
                     if let Some(aperture) = self.ports().input_aperture("front") {
                         rays.apodize(aperture)?;
                         if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -193,21 +194,21 @@ impl Optical for Lens {
                         ));
                     };
                     rays.set_dist_to_next_surface(*center_thickness);
+                    let thickness_iso = Isometry::new_along_z(*center_thickness)?;
                     let Ok(Proptype::Length(rear_roc)) =
                         self.node_attr.get_property("rear curvature")
                     else {
                         return Err(OpossumError::Analysis("cannot read rear curvature".into()));
                     };
-                    let next_z_pos =
-                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
+                    let isometry = isometry.append(&thickness_iso);
                     rays.set_refractive_index(&index_model.value)?;
-                    let index_1_0 = &RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap());
                     if (*rear_roc).is_infinite() {
-                        rays.refract_on_surface(&Plane::new_along_z(next_z_pos)?, index_1_0)?;
+                        let plane = Plane::new(&isometry);
+                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     } else {
                         rays.refract_on_surface(
-                            &Sphere::new_along_z(next_z_pos, *rear_roc)?,
-                            index_1_0,
+                            &Sphere::new(*rear_roc, &isometry)?,
+                            &refr_index_vaccuum(),
                         )?;
                     };
                     if let Some(aperture) = self.ports().output_aperture("rear") {
@@ -226,8 +227,7 @@ impl Optical for Lens {
                 }
             }
         };
-        let mut light_result = LightResult::default();
-        light_result.insert("rear".into(), light_data);
+        let light_result = LightResult::from([("rear".into(), light_data)]);
         Ok(light_result)
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
@@ -235,6 +235,9 @@ impl Optical for Lens {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+        self.node_attr.set_isometry(isometry);
     }
 }
 
