@@ -4,7 +4,8 @@ use crate::{
     light::Light,
     optic_ref::OpticRef,
     optical::Optical,
-    properties::Proptype, utils::geom_transformation::Isometry,
+    properties::Proptype,
+    utils::geom_transformation::Isometry,
 };
 use petgraph::{
     algo::{connected_components, is_cyclic_directed},
@@ -33,7 +34,7 @@ impl OpticGraph {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
-        isometry: Isometry
+        isometry: Isometry,
     ) -> OpmResult<()> {
         let source = self.0.node_weight(src_node).ok_or_else(|| {
             OpossumError::OpticScenery("source node with given index does not exist".into())
@@ -84,11 +85,9 @@ impl OpticGraph {
         }
         let src_name = source.optical_ref.borrow().name();
         let target_name = target.optical_ref.borrow().name();
-        let mut light=Light::new(src_port, target_port);
+        let mut light = Light::new(src_port, target_port);
         light.set_isometry(isometry);
-        let edge_index = self
-            .0
-            .add_edge(src_node, target_node, light);
+        let edge_index = self.0.add_edge(src_node, target_node, light);
         if is_cyclic_directed(&self.0) {
             self.0.remove_edge(edge_index);
             return Err(OpossumError::OpticScenery(format!(
@@ -299,7 +298,9 @@ mod test {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
-        assert!(graph.connect_nodes(n1, "rear", n2, "front", Isometry::identity()).is_ok());
+        assert!(graph
+            .connect_nodes(n1, "rear", n2, "front", Isometry::identity())
+            .is_ok());
         assert_eq!(graph.0.edge_count(), 1);
     }
     #[test]
@@ -320,17 +321,27 @@ mod test {
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
         let n3 = graph.add_node(Dummy::new("Test"));
-        assert!(graph.connect_nodes(n1, "rear", n2, "front", Isometry::identity()).is_ok());
-        assert!(graph.connect_nodes(n3, "rear", n2, "front", Isometry::identity()).is_err());
-        assert!(graph.connect_nodes(n1, "rear", n3, "front", Isometry::identity()).is_err());
+        assert!(graph
+            .connect_nodes(n1, "rear", n2, "front", Isometry::identity())
+            .is_ok());
+        assert!(graph
+            .connect_nodes(n3, "rear", n2, "front", Isometry::identity())
+            .is_err());
+        assert!(graph
+            .connect_nodes(n1, "rear", n3, "front", Isometry::identity())
+            .is_err());
     }
     #[test]
     fn connect_nodes_loop_error() {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
-        assert!(graph.connect_nodes(n1, "rear", n2, "front", Isometry::identity()).is_ok());
-        assert!(graph.connect_nodes(n2, "rear", n1, "front", Isometry::identity()).is_err());
+        assert!(graph
+            .connect_nodes(n1, "rear", n2, "front", Isometry::identity())
+            .is_ok());
+        assert!(graph
+            .connect_nodes(n2, "rear", n1, "front", Isometry::identity())
+            .is_err());
         assert_eq!(graph.0.edge_count(), 1);
     }
     #[test]
@@ -356,10 +367,16 @@ mod test {
         let n2 = graph.add_node(Dummy::default());
         let n3 = graph.add_node(Dummy::default());
         let n4 = graph.add_node(Dummy::default());
-        graph.connect_nodes(n1, "rear", n2, "front", Isometry::identity()).unwrap();
-        graph.connect_nodes(n3, "rear", n4, "front", Isometry::identity()).unwrap();
+        graph
+            .connect_nodes(n1, "rear", n2, "front", Isometry::identity())
+            .unwrap();
+        graph
+            .connect_nodes(n3, "rear", n4, "front", Isometry::identity())
+            .unwrap();
         assert_eq!(graph.is_single_tree(), false);
-        graph.connect_nodes(n2, "rear", n3, "front", Isometry::identity()).unwrap();
+        graph
+            .connect_nodes(n2, "rear", n3, "front", Isometry::identity())
+            .unwrap();
         assert_eq!(graph.is_single_tree(), true);
     }
     #[test]

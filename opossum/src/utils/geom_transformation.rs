@@ -60,7 +60,10 @@ impl Isometry {
     }
     /// Create a "identiy" Isometry, which represents a zero translation and rotation.
     pub fn identity() -> Self {
-        Self{transform: Isometry3::<f64>::identity(), inverse: Isometry3::<f64>::identity()}
+        Self {
+            transform: Isometry3::<f64>::identity(),
+            inverse: Isometry3::<f64>::identity(),
+        }
     }
     /// Create a new [`Isometry`] representing a translation along the z axis.
     ///

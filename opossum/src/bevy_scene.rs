@@ -46,6 +46,7 @@ fn setup_rays(
                 commands.spawn(MaterialMeshBundle {
                     mesh: meshes.add(LineStrip { points: pos }),
                     material: materials.add(Color::GREEN),
+                    transform: Transform::from_scale(Vec3::new(10.0,10.0,10.0)),
                     ..default()
                 });
             }

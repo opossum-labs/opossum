@@ -97,8 +97,13 @@ impl OpticScenery {
         target_node: NodeIndex,
         target_port: &str,
     ) -> OpmResult<()> {
-        self.g
-            .connect_nodes(src_node, src_port, target_node, target_port, Isometry::identity())
+        self.g.connect_nodes(
+            src_node,
+            src_port,
+            target_node,
+            target_port,
+            Isometry::identity(),
+        )
     }
     /// Return a reference to the optical node specified by its node index.
     ///

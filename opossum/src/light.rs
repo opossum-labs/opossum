@@ -14,7 +14,7 @@ pub struct Light {
     #[serde(skip)]
     data: Option<LightData>,
     #[serde(skip)]
-    isometry: Isometry
+    isometry: Isometry,
 }
 impl Light {
     pub fn new(src_port: &str, target_port: &str) -> Self {
@@ -22,7 +22,7 @@ impl Light {
             src_port: src_port.into(),
             target_port: target_port.into(),
             data: None,
-            isometry: Isometry::identity()
+            isometry: Isometry::identity(),
         }
     }
     pub fn src_port(&self) -> &str {
@@ -48,7 +48,6 @@ impl Light {
     pub fn set_isometry(&mut self, isometry: Isometry) {
         self.isometry = isometry;
     }
-    
 }
 
 #[cfg(test)]

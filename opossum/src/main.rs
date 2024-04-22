@@ -5,11 +5,11 @@ use env_logger::Env;
 use log::{error, info};
 use opossum::{
     analyzer::AnalyzerType,
+    bevy_main,
     console::{Args, PartialArgs},
     error::{OpmResult, OpossumError},
     reporter::{AnalysisReport, ReportGenerator},
     OpticScenery,
-    bevy_main
 };
 use std::fs::{self, File};
 use std::io::{self, Write};

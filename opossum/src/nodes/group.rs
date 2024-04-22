@@ -10,7 +10,8 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
-    reporter::NodeReport, utils::geom_transformation::Isometry,
+    reporter::NodeReport,
+    utils::geom_transformation::Isometry,
 };
 use log::warn;
 use petgraph::{algo::toposort, prelude::NodeIndex, visit::EdgeRef, Direction};
@@ -150,8 +151,13 @@ impl NodeGroup {
                 "cannot connect nodes if group is set as inverted".into(),
             ));
         }
-        self.g
-            .connect_nodes(src_node, src_port, target_node, target_port, Isometry::identity())?;
+        self.g.connect_nodes(
+            src_node,
+            src_port,
+            target_node,
+            target_port,
+            Isometry::identity(),
+        )?;
         self.node_attr
             .set_property("graph", self.g.clone().into())
             .unwrap();
