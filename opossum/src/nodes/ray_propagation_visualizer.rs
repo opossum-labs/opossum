@@ -205,7 +205,7 @@ impl Dottable for RayPropagationVisualizer {
 /// struct that holds the history of the rays' positions for rays of a specific wavelength
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPositionHistorySpectrum {
-    history: Vec<MatrixXx3<Length>>,
+    pub history: Vec<MatrixXx3<Length>>,
     center_wavelength: Length,
     wavelength_bin_size: Length,
 }

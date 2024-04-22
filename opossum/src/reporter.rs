@@ -2,10 +2,7 @@
 //! Module for generating analysis reports in PDF format.
 
 use crate::{
-    analyzer::AnalyzerType,
-    error::{OpmResult, OpossumError},
-    properties::{property::HtmlProperty, Properties, Proptype},
-    OpticScenery,
+    analyzer::AnalyzerType, error::{OpmResult, OpossumError}, nodes::ray_propagation_visualizer::RayPositionHistories, properties::{property::HtmlProperty, Properties, Proptype}, rays::Rays, OpticScenery
 };
 use chrono::{DateTime, Local};
 use log::{info, warn};
@@ -75,6 +72,19 @@ impl AnalysisReport {
     pub fn add_detector(&mut self, report: NodeReport) {
         self.node_reports.push(report);
     }
+    pub fn get_ray_hist(&self) -> Option<&RayPositionHistories> {
+        for node in &self.node_reports {
+            println!("found node with type: {}", node.detector_type)
+        }
+        if let Some(node)=self.node_reports.iter().find(|n| n.detector_type=="ray propagation"){
+           
+            println!("found ray prop node");
+            node.get_ray_history()
+        } else {
+            println!("ray prop node not found");
+            None
+        }
+    }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 /// Structure for storing (detector-)node specific data to be integrated in the [`AnalysisReport`].
@@ -107,6 +117,13 @@ impl NodeReport {
     #[must_use]
     pub const fn properties(&self) -> &Properties {
         &self.properties
+    }
+    pub fn get_ray_history(&self) -> Option<&RayPositionHistories> {
+        if let Ok(Proptype::RayPositionHistory(ray_hist)) = self.properties.get("Ray Propagation visualization plot") {
+            Some(ray_hist)
+        } else {
+            None
+        }
     }
 }
 
