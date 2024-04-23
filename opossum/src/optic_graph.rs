@@ -17,7 +17,7 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 #[derive(Debug, Default, Clone)]
@@ -26,7 +26,7 @@ pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
 impl OpticGraph {
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         self.0
-            .add_node(OpticRef::new(Rc::new(RefCell::new(node)), None))
+            .add_node(OpticRef::new(Arc::new(Mutex::new(node)), None))
     }
     pub fn connect_nodes(
         &mut self,
@@ -41,14 +41,14 @@ impl OpticGraph {
         })?;
         if !source
             .optical_ref
-            .borrow()
+            .lock().unwrap()
             .ports()
             .output_names()
             .contains(&src_port.into())
         {
             return Err(OpossumError::OpticScenery(format!(
                 "source node {} does not have a port {}",
-                source.optical_ref.borrow().name(),
+                source.optical_ref.lock().unwrap().name(),
                 src_port
             )));
         }
@@ -57,14 +57,14 @@ impl OpticGraph {
         })?;
         if !target
             .optical_ref
-            .borrow()
+            .lock().unwrap()
             .ports()
             .input_names()
             .contains(&target_port.into())
         {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} does not have a port {}",
-                target.optical_ref.borrow().name(),
+                target.optical_ref.lock().unwrap().name(),
                 target_port
             )));
         }
@@ -72,19 +72,19 @@ impl OpticGraph {
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "src node <{}> with port <{}> is already connected",
-                source.optical_ref.borrow().name(),
+                source.optical_ref.lock().unwrap().name(),
                 src_port
             )));
         }
         if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "target node <{}> with port <{}> is already connected",
-                target.optical_ref.borrow().name(),
+                target.optical_ref.lock().unwrap().name(),
                 target_port
             )));
         }
-        let src_name = source.optical_ref.borrow().name();
-        let target_name = target.optical_ref.borrow().name();
+        let src_name = source.optical_ref.lock().unwrap().name();
+        let target_name = target.optical_ref.lock().unwrap().name();
         let mut light = Light::new(src_port, target_port);
         light.set_isometry(isometry);
         let edge_index = self.0.add_edge(src_node, target_node, light);
@@ -120,7 +120,7 @@ impl OpticGraph {
     pub fn contains_detector(&self) -> bool {
         self.0
             .node_weights()
-            .any(|node| node.optical_ref.borrow().is_detector())
+            .any(|node| node.optical_ref.lock().unwrap().is_detector())
     }
     pub fn is_single_tree(&self) -> bool {
         connected_components(&self.0) == 1
@@ -236,8 +236,8 @@ impl<'de> Deserialize<'de> for OpticGraph {
                 }
                 // assign references to ref nodes (if any)
                 for node in &nodes {
-                    if node.optical_ref.borrow().node_type() == "reference" {
-                        let mut my_node = node.optical_ref.borrow_mut();
+                    if node.optical_ref.lock().unwrap().node_type() == "reference" {
+                        let mut my_node = node.optical_ref.lock().unwrap();
                         let refnode = my_node.as_refnode_mut().unwrap();
                         let node_props = refnode.properties().clone();
                         let uuid =
@@ -252,7 +252,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                             ));
                         };
                         let ref_name =
-                            format!("ref ({})", reference_node.optical_ref.borrow().name());
+                            format!("ref ({})", reference_node.optical_ref.lock().unwrap().name());
                         refnode.assign_reference(&reference_node);
 
                         refnode

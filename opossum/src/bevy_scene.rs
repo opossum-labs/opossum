@@ -1,35 +1,32 @@
 //! A simple 3D scene with light shining over a cube sitting on a plane.
-use crate::nodes::ray_propagation_visualizer::RayPositionHistories;
+use crate::{nodes::ray_propagation_visualizer::RayPositionHistories, reporter::AnalysisReport};
 use bevy::{
     prelude::*,
     render::{mesh::PrimitiveTopology, render_asset::RenderAssetUsages},
 };
-use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
+use bevy_flycam::prelude::*;
 use uom::si::length::meter;
 
 #[derive(Resource)]
 struct RayPosHist(Option<RayPositionHistories>);
 
 pub struct MyScene {
-    pub rays_hist: Option<RayPositionHistories>,
+    pub report: AnalysisReport,
 }
 
 impl Plugin for MyScene {
     fn build(&self, app: &mut App) {
-        println!("Building MyScene");
-        app.insert_resource(RayPosHist(self.rays_hist.clone()))
-            .add_plugins((PanOrbitCameraPlugin,))
+        app.insert_resource(RayPosHist(self.report.get_ray_hist().cloned()))
+            .add_plugins(PlayerPlugin)
             .add_systems(Startup, (setup_scene, setup_rays));
     }
 }
-
 fn setup_rays(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     rays_hist: Res<RayPosHist>,
 ) {
-    println!("setup rays");
     if let Some(ray_pos_hist) = &rays_hist.as_ref().0 {
         for ray_hist_per_wvl in &ray_pos_hist.rays_pos_history {
             for ray_hist in &ray_hist_per_wvl.history {
@@ -46,7 +43,7 @@ fn setup_rays(
                 commands.spawn(MaterialMeshBundle {
                     mesh: meshes.add(LineStrip { points: pos }),
                     material: materials.add(Color::GREEN),
-                    transform: Transform::from_scale(Vec3::new(10.0,10.0,10.0)),
+                    transform: Transform::from_scale(Vec3::new(10.0, 10.0, 10.0)),
                     ..default()
                 });
             }
@@ -61,15 +58,14 @@ fn setup_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // circular base
+    // base plane
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Circle::new(4.0)),
+        mesh: meshes.add(Plane3d::new(Vec3::new(0.0, 1.0, 0.0))),
         material: materials.add(Color::WHITE),
-        transform: Transform::from_xyz(0.0, -0.1, 0.0)
-            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+        transform: Transform::from_xyz(0.0, -1.0, 0.0).with_scale(Vec3::new(10.0, 10.0, 10.0)),
         ..default()
     });
-    // light
+    // point light
     commands.spawn(PointLightBundle {
         point_light: PointLight {
             shadows_enabled: true,
@@ -78,6 +74,12 @@ fn setup_scene(
         transform: Transform::from_xyz(4.0, 8.0, 4.0),
         ..default()
     });
+    // directional light
+    // commands.spawn(DirectionalLightBundle {
+    //     directional_light: DirectionalLight::default(),
+    //     transform: Transform::from_rotation(Quat::from_rotation_x(0.2)),
+    //     ..default()
+    // });
     // optical axis
     commands.spawn(MaterialMeshBundle {
         mesh: meshes.add(LineStrip {
@@ -86,14 +88,13 @@ fn setup_scene(
         material: materials.add(Color::RED),
         ..default()
     });
-    // camera
-    commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(-0.05, 0.5, -0.5).looking_at(Vec3::ZERO, Vec3::Y),
-            ..default()
-        },
-        PanOrbitCamera::default(),
-    ));
+    // a plane surface
+    commands.spawn(MaterialMeshBundle {
+        mesh: meshes.add(Cuboid::new(2.0, 2.0, 0.005)),
+        material: materials.add(Color::YELLOW),
+        transform: Transform::from_xyz(0.0, 0.0, 1.0),
+        ..default()
+    });
 }
 
 /// A list of lines with a start and end position

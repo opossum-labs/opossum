@@ -232,7 +232,7 @@ impl NodeGroup {
                 .node_weight(node_idx)
                 .unwrap()
                 .optical_ref
-                .borrow()
+                .lock().unwrap()
                 .ports()
                 .input_names()
                 .len();
@@ -256,7 +256,7 @@ impl NodeGroup {
                 .node_weight(node_idx)
                 .unwrap()
                 .optical_ref
-                .borrow()
+                .lock().unwrap()
                 .ports()
                 .output_names()
                 .len();
@@ -295,7 +295,7 @@ impl NodeGroup {
             .ok_or_else(|| OpossumError::OpticGroup("internal node index not found".into()))?;
         if !node
             .optical_ref
-            .borrow()
+            .lock().unwrap()
             .ports()
             .input_names()
             .contains(&(internal_name.to_string()))
@@ -358,7 +358,7 @@ impl NodeGroup {
             .ok_or_else(|| OpossumError::OpticGroup("internal node index not found".into()))?;
         if !node
             .optical_ref
-            .borrow()
+            .lock().unwrap()
             .ports()
             .output_names()
             .contains(&(internal_name.to_string()))
@@ -473,14 +473,14 @@ impl NodeGroup {
         for idx in sorted {
             let node = g_clone.node_weight(idx).unwrap();
             if self.is_stale_node(idx) {
-                let node_name = node.optical_ref.borrow().name();
+                let node_name = node.optical_ref.lock().unwrap().name();
                 warn!("Group {group_name} contains stale (completely unconnected) node {node_name}. Skipping.");
             } else {
                 // Check if node is group src node
                 let incoming_edges = self.get_incoming(idx, incoming_data);
                 let outgoing_edges: LightResult = node
                     .optical_ref
-                    .borrow_mut()
+                    .lock().unwrap()
                     .analyze(incoming_edges, analyzer_type)?;
                 // Check if node is group sink node
                 if self.is_group_sink_node(idx) {
@@ -592,7 +592,7 @@ impl NodeGroup {
             .node_weight(end_node_idx)
             .unwrap()
             .optical_ref
-            .borrow();
+            .lock().unwrap();
 
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node_idx.index())
@@ -635,11 +635,11 @@ impl NodeGroup {
 
         for node_idx in self.g.0.node_indices() {
             let node = self.g.0.node_weight(node_idx).unwrap();
-            dot_string += &node.optical_ref.borrow().to_dot(
+            dot_string += &node.optical_ref.lock().unwrap().to_dot(
                 &format!("{}", node_idx.index()),
-                &node.optical_ref.borrow().name(),
-                node.optical_ref.borrow().properties().inverted()?,
-                &node.optical_ref.borrow().ports(),
+                &node.optical_ref.lock().unwrap().name(),
+                node.optical_ref.lock().unwrap().properties().inverted()?,
+                &node.optical_ref.lock().unwrap().ports(),
                 parent_identifier.clone(),
                 rankdir,
             )?;
@@ -698,7 +698,7 @@ impl NodeGroup {
     fn invert_graph(&mut self) -> OpmResult<()> {
         for node in self.g.0.node_weights_mut() {
             node.optical_ref
-                .borrow_mut()
+                .lock().unwrap()
                 .set_property("inverted", true.into())
                 .map_err(|_| {
                     OpossumError::OpticGroup(
@@ -756,7 +756,7 @@ impl Optical for NodeGroup {
     fn report(&self) -> Option<NodeReport> {
         let mut group_props = Properties::default();
         for node_idx in self.g.0.node_indices() {
-            let node = self.g.0.node_weight(node_idx).unwrap().optical_ref.borrow();
+            let node = self.g.0.node_weight(node_idx).unwrap().optical_ref.lock().unwrap();
             if let Some(node_report) = node.report() {
                 if !(group_props.contains(&node.name())) {
                     group_props
@@ -780,9 +780,9 @@ impl Optical for NodeGroup {
             .g
             .0
             .node_weights()
-            .filter(|node| node.optical_ref.borrow().is_detector());
+            .filter(|node| node.optical_ref.lock().unwrap().is_detector());
         for node in detector_nodes {
-            node.optical_ref.borrow().export_data(report_dir)?;
+            node.optical_ref.lock().unwrap().export_data(report_dir)?;
         }
         Ok(None)
     }

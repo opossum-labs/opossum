@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 //! Contains the basic trait representing an optical element
+use bevy::math::primitives::Cuboid;
+use bevy::render::mesh::Mesh;
 use image::RgbImage;
 use log::warn;
 
@@ -22,7 +24,7 @@ use std::path::Path;
 pub type LightResult = HashMap<String, LightData>;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
-pub trait Optical: Dottable {
+pub trait Optical: Dottable + Send {
     /// Returns a reference to the name of this [`Optical`].
     // fn name(&self) -> &str; // {
     //                         //    self.node_type()
@@ -211,6 +213,10 @@ pub trait Optical: Dottable {
     }
     /// Set the [`Isometry`] (position and angle) of this optical node.
     fn set_isometry(&mut self, isometry: Isometry);
+    ///
+    fn mesh(&self) -> Mesh {
+       Cuboid::new(2.0, 2.0, 0.005).into()
+    }
 }
 
 impl Debug for dyn Optical {

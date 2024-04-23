@@ -136,10 +136,10 @@ impl OpticScenery {
                 .0
                 .node_weight(node_idx)
                 .ok_or_else(|| OpossumError::Other("could not get node_weigth".into()))?;
-            let node_name = node.optical_ref.borrow().name();
-            let inverted = node.optical_ref.borrow().properties().inverted()?;
-            let ports = node.optical_ref.borrow().ports();
-            dot_string += &node.optical_ref.borrow().to_dot(
+            let node_name = node.optical_ref.lock().unwrap().name();
+            let inverted = node.optical_ref.lock().unwrap().properties().inverted()?;
+            let ports = node.optical_ref.lock().unwrap().ports();
+            dot_string += &node.optical_ref.lock().unwrap().to_dot(
                 &format!("{}", node_idx.index()),
                 &node_name,
                 inverted,
@@ -232,7 +232,7 @@ impl OpticScenery {
         light_port: &str,
         mut parent_identifier: String,
     ) -> OpmResult<String> {
-        let node = self.g.0.node_weight(end_node).unwrap().optical_ref.borrow();
+        let node = self.g.0.node_weight(end_node).unwrap().optical_ref.lock().unwrap();
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node.index())
         } else {
@@ -267,22 +267,22 @@ impl OpticScenery {
                 .0
                 .node_weight(idx)
                 .ok_or_else(|| OpossumError::Analysis("getting node_weight failed".into()))?;
-            let node_name = node.optical_ref.borrow().name();
+            let node_name = node.optical_ref.lock().unwrap().name();
             let neighbors = self.g.0.neighbors_undirected(idx);
             if neighbors.count() == 0 {
                 warn!("stale (completely unconnected) node {node_name} found. Skipping.");
             } else {
                 let incoming_edges: LightResult = self.incoming_edges(idx);
                 // paranoia: check if all incoming ports are really input ports of the node to be analyzed
-                let input_ports = node.optical_ref.borrow().ports().input_names();
+                let input_ports = node.optical_ref.lock().unwrap().ports().input_names();
                 if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
                     warn!("input light data contains port which is not an input port of the node {node_name}. Data will be discarded.");
                 }
                 //
-                let node_type = node.optical_ref.borrow().node_type();
+                let node_type = node.optical_ref.lock().unwrap().node_type();
                 let outgoing_edges = node
                     .optical_ref
-                    .borrow_mut()
+                    .lock().unwrap()
                     .analyze(incoming_edges, analyzer_type)
                     .map_err(|e| {
                         OpossumError::Analysis(format!(
@@ -291,7 +291,7 @@ impl OpticScenery {
                     })?;
                 // Warn, if empty output LightResult but node has output ports defined.
                 if outgoing_edges.is_empty()
-                    && !node.optical_ref.borrow().ports().outputs().is_empty()
+                    && !node.optical_ref.lock().unwrap().ports().outputs().is_empty()
                     && is_single_tree
                 {
                     warn!("analysis of node {node_name} <{node_type}> did not result in any output data. This might come from wrong / empty input data.");
@@ -364,13 +364,13 @@ impl OpticScenery {
             .g
             .0
             .node_weights()
-            .filter(|node| node.optical_ref.borrow().is_detector());
+            .filter(|node| node.optical_ref.lock().unwrap().is_detector());
         for node in detector_nodes {
-            if let Some(node_report) = node.optical_ref.borrow().report() {
+            if let Some(node_report) = node.optical_ref.lock().unwrap().report() {
                 analysis_report.add_detector(node_report);
             }
 
-            node.optical_ref.borrow().export_data(report_dir)?;
+            node.optical_ref.lock().unwrap().export_data(report_dir)?;
         }
 
         Ok(analysis_report)
@@ -646,7 +646,7 @@ mod test {
             .node(i_e)
             .unwrap()
             .optical_ref
-            .borrow()
+            .lock().unwrap()
             .report()
             .unwrap();
         if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {

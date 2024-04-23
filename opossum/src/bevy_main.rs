@@ -9,7 +9,7 @@ pub fn bevy_main(report: &AnalysisReport) {
         .add_plugins((
             DefaultPlugins.build().disable::<LogPlugin>(),
             MyScene {
-                rays_hist: report.get_ray_hist().cloned(),
+                report: report.clone(),
             },
         ))
         .run();

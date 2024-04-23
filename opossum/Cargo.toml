@@ -68,7 +68,7 @@ rayon = "1.10.0"
 tinytemplate = "1"
 
 bevy="0"
-bevy_panorbit_camera = "0"
+bevy_flycam = "0"
 
 [lints.rust]
 # missing_docs = "warn"

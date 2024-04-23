@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-use std::rc::{Rc, Weak};
+use std::sync::{Arc, Mutex, Weak};
 
 use uuid::Uuid;
 
@@ -33,7 +32,7 @@ use super::node_attr::NodeAttr;
 /// **Note**: Since this node only refers to another optical node it does not handle
 /// (ignores) any [`Aperture`](crate::aperture::Aperture) definitions on its ports.
 pub struct NodeReference {
-    reference: Option<Weak<RefCell<dyn Optical>>>,
+    reference: Option<Weak<Mutex<dyn Optical>>>,
     node_attr: NodeAttr,
 }
 impl Default for NodeReference {
@@ -67,11 +66,11 @@ impl NodeReference {
         refr.node_attr
             .set_property("reference id", node.uuid().into())
             .unwrap();
-        let ref_name = format!("ref ({})", node.optical_ref.borrow().name());
+        let ref_name = format!("ref ({})", node.optical_ref.lock().unwrap().name());
         refr.node_attr
             .set_property("name", Proptype::String(ref_name))
             .unwrap();
-        refr.reference = Some(Rc::downgrade(&node.optical_ref));
+        refr.reference = Some(Arc::downgrade(&node.optical_ref));
         refr
     }
     /// Assign a reference to another optical node.
@@ -80,7 +79,7 @@ impl NodeReference {
     /// construction of a [`NodeReference`] using it's `new` function. This function allows for setting / changing after construction (e.g.
     /// during deserialization).
     pub fn assign_reference(&mut self, node: &OpticRef) {
-        self.reference = Some(Rc::downgrade(&node.optical_ref));
+        self.reference = Some(Arc::downgrade(&node.optical_ref));
     }
 }
 impl Optical for NodeReference {
@@ -88,7 +87,7 @@ impl Optical for NodeReference {
         self.reference
             .as_ref()
             .map_or_else(OpticPorts::default, |rf| {
-                let mut ports = rf.upgrade().unwrap().borrow().ports();
+                let mut ports = rf.upgrade().unwrap().lock().unwrap().ports();
                 if self.properties().inverted().unwrap() {
                     ports.set_inverted(true);
                 }
@@ -105,7 +104,7 @@ impl Optical for NodeReference {
             .clone()
             .ok_or_else(|| OpossumError::Analysis("no reference defined".into()))?;
         let ref_node = rf.upgrade().unwrap();
-        let mut ref_node = ref_node.borrow_mut();
+        let mut ref_node = ref_node.lock().unwrap();
         if self.properties().inverted()? {
             ref_node
                 .set_property("inverted", true.into())
@@ -140,7 +139,7 @@ impl Optical for NodeReference {
 
         if ref_node.is_some() {
             let ref_node_unwrap = ref_node.unwrap();
-            let ref_node_borrow = ref_node_unwrap.borrow();
+            let ref_node_borrow = ref_node_unwrap.lock().unwrap();
             ref_node_borrow.is_source()
         } else {
             false
@@ -193,7 +192,7 @@ mod test {
         let mut scenery = OpticScenery::default();
         let idx = scenery.add_node(Dummy::default());
         let node_ref = scenery.node(idx).unwrap();
-        let node_name = format!("ref ({})", node_ref.optical_ref.borrow().name());
+        let node_name = format!("ref ({})", node_ref.optical_ref.lock().unwrap().name());
         let node = NodeReference::from_node(&node_ref);
 
         assert_eq!(node.name(), node_name);

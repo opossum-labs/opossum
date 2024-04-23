@@ -5,7 +5,7 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use crate::{nodes::create_node_ref, optical::Optical, properties::Properties};
@@ -18,7 +18,7 @@ use crate::{nodes::create_node_ref, optical::Optical, properties::Properties};
 /// In addition, it contains a unique id ([`Uuid`]) in order to unambiguously identify a node within a scene.
 pub struct OpticRef {
     /// The underlying optical reference.
-    pub optical_ref: Rc<RefCell<dyn Optical>>,
+    pub optical_ref: Arc<Mutex<dyn Optical>>,
     uuid: Uuid,
 }
 
@@ -26,7 +26,7 @@ impl OpticRef {
     /// Creates a new [`OpticRef`].
     ///
     /// You can either assign a given [`Uuid`] using `Some(uuid!(...))` or provide `None`, where a new unique id is generated.
-    pub fn new(node: Rc<RefCell<dyn Optical>>, uuid: Option<Uuid>) -> Self {
+    pub fn new(node: Arc<Mutex<dyn Optical>>, uuid: Option<Uuid>) -> Self {
         Self {
             optical_ref: node,
             uuid: uuid.unwrap_or_else(Uuid::new_v4),
@@ -44,9 +44,9 @@ impl Serialize for OpticRef {
         S: serde::Serializer,
     {
         let mut node = serializer.serialize_struct("node", 3)?;
-        node.serialize_field("type", &self.optical_ref.borrow().node_type())?;
+        node.serialize_field("type", &self.optical_ref.lock().unwrap().node_type())?;
         node.serialize_field("id", &self.uuid)?;
-        node.serialize_field("properties", &self.optical_ref.borrow().properties())?;
+        node.serialize_field("properties", &self.optical_ref.lock().unwrap().properties())?;
         node.end()
     }
 }
@@ -118,7 +118,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                 let node = create_node_ref(node_type, None)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
-                    .borrow_mut()
+                    .lock().unwrap()
                     .set_properties(properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 Ok(node)
@@ -160,12 +160,12 @@ impl<'de> Deserialize<'de> for OpticRef {
                 let node = create_node_ref(node_type, Some(id))
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
-                    .borrow_mut()
+                    .lock().unwrap()
                     .set_properties(properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 // group node: assign props to graph
                 node.optical_ref
-                    .borrow_mut()
+                    .lock().unwrap()
                     .after_deserialization_hook()
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 Ok(node)
@@ -184,19 +184,19 @@ mod test {
     #[test]
     fn new() {
         let uuid = Uuid::new_v4();
-        let optic_ref = OpticRef::new(Rc::new(RefCell::new(Dummy::default())), Some(uuid));
+        let optic_ref = OpticRef::new(Arc::new(Mutex::new(Dummy::default())), Some(uuid));
         assert_eq!(optic_ref.uuid, uuid);
     }
     #[test]
     fn uuid() {
         let uuid = Uuid::new_v4();
-        let optic_ref = OpticRef::new(Rc::new(RefCell::new(Dummy::default())), Some(uuid));
+        let optic_ref = OpticRef::new(Arc::new(Mutex::new(Dummy::default())), Some(uuid));
         assert_eq!(optic_ref.uuid(), uuid);
     }
     #[test]
     fn serialize() {
         let optic_ref = OpticRef::new(
-            Rc::new(RefCell::new(Dummy::default())),
+            Arc::new(Mutex::new(Dummy::default())),
             Some(uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb")),
         );
         let serialized = serde_yaml::to_string(&optic_ref);
@@ -215,7 +215,7 @@ mod test {
             optic_ref.uuid(),
             uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb")
         );
-        let optic_ref = optic_ref.optical_ref.borrow();
+        let optic_ref = optic_ref.optical_ref.lock().unwrap();
         assert_eq!(optic_ref.node_type(), "dummy");
         assert_eq!(optic_ref.name(), "test123");
     }
@@ -225,11 +225,11 @@ mod test {
             format!(
                 "{:?}",
                 OpticRef::new(
-                    Rc::new(RefCell::new(Dummy::default())),
+                    Arc::new(Mutex::new(Dummy::default())),
                     Some(uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb"))
                 )
             ),
-            "OpticRef { optical_ref: RefCell { value: dummy (dummy) }, uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb }"
+            "OpticRef { optical_ref: Mutex { value: dummy (dummy) }, uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb }"
         );
     }
 }

@@ -647,6 +647,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_flycam"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7118a5b89b335e6573d67bce01c9b7061fe618a295db6254782c2cae00635bd"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "bevy_gilrs"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -840,15 +849,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0d7ef7f2a826d0b19f059035831ce00a5e930435cc53c61e045773d0483f67a"
 dependencies = [
  "glam 0.25.0",
-]
-
-[[package]]
-name = "bevy_panorbit_camera"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc397afab8fcd6c7746c1ef6f959ebad495b708258e568e87cf7d1e5a9592267"
-dependencies = [
- "bevy",
 ]
 
 [[package]]
@@ -3653,7 +3653,7 @@ dependencies = [
  "approx",
  "assert_matches",
  "bevy",
- "bevy_panorbit_camera",
+ "bevy_flycam",
  "chrono",
  "clap 4.5.4",
  "colorous",

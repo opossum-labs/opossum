@@ -78,12 +78,15 @@ impl AnalysisReport {
     }
     pub fn get_ray_hist(&self) -> Option<&RayPositionHistories> {
         for node in &self.node_reports {
-            println!("node report type: {}", node.detector_type);
             if let Some(ray_hist) = node.get_ray_history() {
                 return Some(ray_hist)
             }
         }
         None
+    }
+    
+    pub fn scenery(&self) -> Option<&OpticScenery> {
+        self.scenery.as_ref()
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
