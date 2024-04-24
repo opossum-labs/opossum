@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 //! Contains the basic trait representing an optical element
 use bevy::math::primitives::Cuboid;
+use bevy::math::Vec3;
 use bevy::render::mesh::Mesh;
 use image::RgbImage;
 use log::warn;
@@ -215,7 +216,9 @@ pub trait Optical: Dottable + Send {
     fn set_isometry(&mut self, isometry: Isometry);
     ///
     fn mesh(&self) -> Mesh {
-       Cuboid::new(2.0, 2.0, 0.005).into()
+       let mesh: Mesh=Cuboid::new(0.5, 0.5, 0.005).into();
+       let t=self.isometry().translation();
+       mesh.translated_by(Vec3::new(t.x.value as f32, t.y.value as f32,t.z.value as f32))
     }
 }
 

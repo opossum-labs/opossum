@@ -1,33 +1,32 @@
 //! A simple 3D scene with light shining over a cube sitting on a plane.
-use crate::{nodes::ray_propagation_visualizer::RayPositionHistories, reporter::AnalysisReport};
+use crate::reporter::AnalysisReport;
 use bevy::{
     prelude::*,
     render::{mesh::PrimitiveTopology, render_asset::RenderAssetUsages},
 };
-use bevy_flycam::prelude::*;
+// use bevy_flycam::prelude::*;
 use uom::si::length::meter;
 
 #[derive(Resource)]
-struct RayPosHist(Option<RayPositionHistories>);
+struct Report(AnalysisReport);
 
 pub struct MyScene {
     pub report: AnalysisReport,
 }
-
 impl Plugin for MyScene {
     fn build(&self, app: &mut App) {
-        app.insert_resource(RayPosHist(self.report.get_ray_hist().cloned()))
-            .add_plugins(PlayerPlugin)
-            .add_systems(Startup, (setup_scene, setup_rays));
+        app.insert_resource(Report(self.report.clone()))
+            //.add_plugins(PlayerPlugin)
+            .add_systems(Startup, (setup_scene, setup_rays, setup_nodes));
     }
 }
 fn setup_rays(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    rays_hist: Res<RayPosHist>,
+    report: Res<Report>,
 ) {
-    if let Some(ray_pos_hist) = &rays_hist.as_ref().0 {
+    if let Some(ray_pos_hist) = report.0.get_ray_hist() {
         for ray_hist_per_wvl in &ray_pos_hist.rays_pos_history {
             for ray_hist in &ray_hist_per_wvl.history {
                 let pos: Vec<_> = ray_hist
@@ -43,7 +42,7 @@ fn setup_rays(
                 commands.spawn(MaterialMeshBundle {
                     mesh: meshes.add(LineStrip { points: pos }),
                     material: materials.add(Color::GREEN),
-                    transform: Transform::from_scale(Vec3::new(10.0, 10.0, 10.0)),
+                    transform: Transform::from_scale(Vec3::new(1.0, 1.0, 1.0)),
                     ..default()
                 });
             }
@@ -53,6 +52,24 @@ fn setup_rays(
     }
 }
 
+fn setup_nodes(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    report: Res<Report>,
+) {
+    if let Some(scenery)=report.0.scenery() {
+        for node in scenery.nodes() {
+            let mesh=node.optical_ref.lock().unwrap().mesh();
+            println!("add surface");
+            commands.spawn(MaterialMeshBundle {
+                mesh: meshes.add(mesh),
+                material: materials.add(Color::ORANGE),
+                ..default()
+            });
+        }
+    }
+}
 fn setup_scene(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -71,7 +88,7 @@ fn setup_scene(
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        transform: Transform::from_xyz(4.0, 8.0, -4.0),
         ..default()
     });
     // directional light
@@ -88,11 +105,9 @@ fn setup_scene(
         material: materials.add(Color::RED),
         ..default()
     });
-    // a plane surface
-    commands.spawn(MaterialMeshBundle {
-        mesh: meshes.add(Cuboid::new(2.0, 2.0, 0.005)),
-        material: materials.add(Color::YELLOW),
-        transform: Transform::from_xyz(0.0, 0.0, 1.0),
+    // static camera
+    commands.spawn(Camera3dBundle {
+        transform: Transform::from_xyz(3.0, 3.0, -5.0).looking_at(Vec3::new(0.0,0.0,1.0), Vec3::Y),
         ..default()
     });
 }

@@ -120,6 +120,9 @@ impl OpticScenery {
             .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
         Ok(node.clone())
     }
+    pub fn nodes(&self) -> Vec<&OpticRef> {
+        self.g.0.node_weights().collect()
+    }
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     ///
     /// # Errors

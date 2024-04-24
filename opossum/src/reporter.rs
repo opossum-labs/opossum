@@ -76,6 +76,7 @@ impl AnalysisReport {
     pub fn add_detector(&mut self, report: NodeReport) {
         self.node_reports.push(report);
     }
+    /// Returns the ray history for the first found RayPropagationVisualizer in this [`AnalysisReport`].
     pub fn get_ray_hist(&self) -> Option<&RayPositionHistories> {
         for node in &self.node_reports {
             if let Some(ray_hist) = node.get_ray_history() {
@@ -83,8 +84,8 @@ impl AnalysisReport {
             }
         }
         None
-    }
-    
+    } 
+    /// Returns the scenery of this [`AnalysisReport`].
     pub fn scenery(&self) -> Option<&OpticScenery> {
         self.scenery.as_ref()
     }
@@ -121,6 +122,7 @@ impl NodeReport {
     pub const fn properties(&self) -> &Properties {
         &self.properties
     }
+    /// Returns the get ray history of this [`NodeReport`].
     pub fn get_ray_history(&self) -> Option<&RayPositionHistories> {
         if self.detector_type == "group" {
             for prop in &self.properties {
