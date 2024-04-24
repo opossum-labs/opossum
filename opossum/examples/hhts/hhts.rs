@@ -7,6 +7,7 @@ use cambox_1w::cambox_1w;
 use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
+use num::Zero;
 use opossum::{
     aperture::{Aperture, CircleConfig},
     error::OpmResult,
@@ -28,6 +29,7 @@ use opossum::{
     spectrum_helper::generate_filter_spectrum,
     OpticScenery,
 };
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let wvl_1w = nanometer!(1054.0);
@@ -110,7 +112,7 @@ fn main() -> OpmResult<()> {
 
     let src = scenery.add_node(Source::new("Source", &LightData::Geometric(rays)));
     let input_group = scenery.add_node(hhts_input()?);
-    scenery.connect_nodes(src, "out1", input_group, "input")?;
+    scenery.connect_nodes(src, "out1", input_group, "input",Length::zero())?;
 
     // T1
     let mut group_t1 = NodeGroup::new("T1");
@@ -172,11 +174,11 @@ fn main() -> OpmResult<()> {
     group_t1.expand_view(false)?;
     let t1 = scenery.add_node(group_t1);
 
-    scenery.connect_nodes(input_group, "output", t1, "input")?;
+    scenery.connect_nodes(input_group, "output", t1, "input", Length::zero())?;
 
     let d6 = scenery.add_node(Propagation::new("d6", millimeter!(100.0))?);
 
-    scenery.connect_nodes(t1, "output", d6, "front")?;
+    scenery.connect_nodes(t1, "output", d6, "front", Length::zero())?;
 
     // Dichroic beam splitter + filters (1w/2w)
 
@@ -221,7 +223,7 @@ fn main() -> OpmResult<()> {
 
     let bs_group = scenery.add_node(group_bs);
 
-    scenery.connect_nodes(d6, "rear", bs_group, "input")?;
+    scenery.connect_nodes(d6, "rear", bs_group, "input", Length::zero())?;
 
     // 1w branch
 
@@ -292,10 +294,10 @@ fn main() -> OpmResult<()> {
     group_t3_1w.map_output_port(d_1w_12, "rear", "output")?;
     let t3_1w = scenery.add_node(group_t3_1w);
 
-    scenery.connect_nodes(bs_group, "output_1w", d_1w_7, "front")?;
-    scenery.connect_nodes(d_1w_7, "rear", t2_1w, "input")?;
-    scenery.connect_nodes(t2_1w, "output", d_1w_10, "front")?;
-    scenery.connect_nodes(d_1w_10, "rear", t3_1w, "input")?;
+    scenery.connect_nodes(bs_group, "output_1w", d_1w_7, "front", Length::zero())?;
+    scenery.connect_nodes(d_1w_7, "rear", t2_1w, "input", Length::zero())?;
+    scenery.connect_nodes(t2_1w, "output", d_1w_10, "front", Length::zero())?;
+    scenery.connect_nodes(d_1w_10, "rear", t3_1w, "input", Length::zero())?;
 
     let mut group_det_1w = NodeGroup::new("Detectors 1w");
 
@@ -312,7 +314,7 @@ fn main() -> OpmResult<()> {
     group_det_1w.map_input_port(det_prop, "in1", "input")?;
 
     let det_1w = scenery.add_node(group_det_1w);
-    scenery.connect_nodes(t3_1w, "output", det_1w, "input")?;
+    scenery.connect_nodes(t3_1w, "output", det_1w, "input", Length::zero())?;
 
     // 2w branch
 
@@ -383,10 +385,10 @@ fn main() -> OpmResult<()> {
     group_t3_2w.map_output_port(d_2w_12, "rear", "output")?;
     let t3_2w = scenery.add_node(group_t3_2w);
 
-    scenery.connect_nodes(bs_group, "output_2w", d_2w_7, "front")?;
-    scenery.connect_nodes(d_2w_7, "rear", t2_2w, "input")?;
-    scenery.connect_nodes(t2_2w, "output", d_2w_10, "front")?;
-    scenery.connect_nodes(d_2w_10, "rear", t3_2w, "input")?;
+    scenery.connect_nodes(bs_group, "output_2w", d_2w_7, "front", Length::zero())?;
+    scenery.connect_nodes(d_2w_7, "rear", t2_2w, "input", Length::zero())?;
+    scenery.connect_nodes(t2_2w, "output", d_2w_10, "front", Length::zero())?;
+    scenery.connect_nodes(d_2w_10, "rear", t3_2w, "input", Length::zero())?;
 
     // 2w detectors
     let mut group_det_2w = NodeGroup::new("Detectors 2w");
@@ -404,7 +406,7 @@ fn main() -> OpmResult<()> {
     group_det_2w.map_input_port(det_prop_2w, "in1", "input")?;
     let det_2w = scenery.add_node(group_det_2w);
 
-    scenery.connect_nodes(t3_2w, "output", det_2w, "input")?;
+    scenery.connect_nodes(t3_2w, "output", det_2w, "input", Length::zero())?;
     scenery.save_to_file(Path::new("./opossum/playground/hhts.opm"))?;
     Ok(())
 }

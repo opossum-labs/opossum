@@ -1,6 +1,7 @@
 #![allow(missing_docs)]
 use std::path::Path;
 
+use num::Zero;
 use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
@@ -10,6 +11,7 @@ use opossum::{
     spectrum_helper::{create_he_ne_spec, create_nd_glass_spec},
     OpticScenery,
 };
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
@@ -35,10 +37,10 @@ fn main() -> OpmResult<()> {
     )?);
     let i_d1 = scenery.add_node(Detector::default()); // Detector 1
 
-    scenery.connect_nodes(i_s1, "out1", i_bs, "input1")?;
-    scenery.connect_nodes(i_s2, "out1", i_bs, "input2")?;
-    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_f, "front")?;
-    scenery.connect_nodes(i_f, "rear", i_d1, "in1")?;
+    scenery.connect_nodes(i_s1, "out1", i_bs, "input1",Length::zero())?;
+    scenery.connect_nodes(i_s2, "out1", i_bs, "input2",Length::zero())?;
+    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_f, "front",Length::zero())?;
+    scenery.connect_nodes(i_f, "rear", i_d1, "in1",Length::zero())?;
     scenery.save_to_file(Path::new("./opossum/playground/beam_combiner_test.opm"))?;
 
     Ok(())

@@ -28,6 +28,7 @@ use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
+use uom::si::f64::Length;
 
 /// Overall optical model and additional metadata.
 ///
@@ -96,13 +97,14 @@ impl OpticScenery {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
+        dist: Length
     ) -> OpmResult<()> {
         self.g.connect_nodes(
             src_node,
             src_port,
             target_node,
             target_port,
-            Isometry::identity(),
+            Isometry::new_along_z(dist).unwrap(),
         )
     }
     /// Return a reference to the optical node specified by its node index.
@@ -540,6 +542,8 @@ mod test {
         OpticScenery,
     };
     use log::Level;
+    use num::Zero;
+    use uom::si::f64::Length;
     use std::path::{Path, PathBuf};
     use tempfile::NamedTempFile;
     use testing_logger;
@@ -582,7 +586,7 @@ mod test {
         let node1 = scenery.add_node(Dummy::new("dummy1"));
         let node2 = scenery.add_node(Dummy::new("dummy2"));
         scenery
-            .connect_nodes(node1, "rear", node2, "front")
+            .connect_nodes(node1, "rear", node2, "front", Length::zero())
             .unwrap();
         scenery.analyze(&AnalyzerType::Energy).unwrap();
     }
@@ -615,8 +619,8 @@ mod test {
         let n2 = scenery.add_node(Dummy::default());
         let n3 = scenery.add_node(Dummy::default());
         let n4 = scenery.add_node(Dummy::default());
-        scenery.connect_nodes(n1, "rear", n2, "front").unwrap();
-        scenery.connect_nodes(n3, "rear", n4, "front").unwrap();
+        scenery.connect_nodes(n1, "rear", n2, "front",Length::zero()).unwrap();
+        scenery.connect_nodes(n3, "rear", n4, "front",Length::zero()).unwrap();
         assert!(scenery.analyze(&AnalyzerType::Energy).is_ok());
         testing_logger::validate(|captured_logs| {
             assert_eq!(captured_logs.len(), 1);
@@ -639,7 +643,7 @@ mod test {
         let mut scenery = OpticScenery::new();
         let i_s = scenery.add_node(Source::new("src", &LightData::Geometric(rays)));
         let i_e = scenery.add_node(EnergyMeter::default());
-        scenery.connect_nodes(i_s, "out1", i_e, "in1").unwrap();
+        scenery.connect_nodes(i_s, "out1", i_e, "in1", Length::zero()).unwrap();
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();
         scenery

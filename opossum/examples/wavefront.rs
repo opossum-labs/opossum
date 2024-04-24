@@ -1,3 +1,4 @@
+use num::Zero;
 use opossum::{
     error::OpmResult,
     joule, meter,
@@ -7,6 +8,7 @@ use opossum::{
     },
     OpticScenery,
 };
+use uom::si::f64::Length;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
@@ -29,17 +31,17 @@ fn main() -> OpmResult<()> {
     let i_fl1: petgraph::prelude::NodeIndex =
         scenery.add_node(FluenceDetector::new("fluence monitor"));
 
-    scenery.connect_nodes(i_s, "out1", i_p1, "front")?;
-    scenery.connect_nodes(i_p1, "rear", i_wf1, "in1")?;
-    scenery.connect_nodes(i_wf1, "out1", i_l, "front")?;
-    scenery.connect_nodes(i_l, "rear", i_p2, "front")?;
-    scenery.connect_nodes(i_p2, "rear", i_wf2, "in1")?;
-    scenery.connect_nodes(i_wf2, "out1", i_sp, "in1")?;
-    scenery.connect_nodes(i_sp, "out1", i_l2, "front")?;
-    scenery.connect_nodes(i_l2, "rear", i_wf3, "in1")?;
-    scenery.connect_nodes(i_wf3, "out1", i_r1, "in1")?;
-    scenery.connect_nodes(i_r1, "out1", i_s1, "in1")?;
-    scenery.connect_nodes(i_s1, "out1", i_fl1, "in1")?;
+    scenery.connect_nodes(i_s, "out1", i_p1, "front", Length::zero())?;
+    scenery.connect_nodes(i_p1, "rear", i_wf1, "in1",Length::zero())?;
+    scenery.connect_nodes(i_wf1, "out1", i_l, "front",Length::zero())?;
+    scenery.connect_nodes(i_l, "rear", i_p2, "front",Length::zero())?;
+    scenery.connect_nodes(i_p2, "rear", i_wf2, "in1",Length::zero())?;
+    scenery.connect_nodes(i_wf2, "out1", i_sp, "in1",Length::zero())?;
+    scenery.connect_nodes(i_sp, "out1", i_l2, "front",Length::zero())?;
+    scenery.connect_nodes(i_l2, "rear", i_wf3, "in1", Length::zero())?;
+    scenery.connect_nodes(i_wf3, "out1", i_r1, "in1", Length::zero())?;
+    scenery.connect_nodes(i_r1, "out1", i_s1, "in1", Length::zero())?;
+    scenery.connect_nodes(i_s1, "out1", i_fl1, "in1", Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/wavefront.opm"))?;
     Ok(())

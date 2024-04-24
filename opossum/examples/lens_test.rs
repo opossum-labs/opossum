@@ -1,3 +1,4 @@
+use num::Zero;
 use opossum::{
     error::OpmResult,
     joule, millimeter,
@@ -5,6 +6,7 @@ use opossum::{
     refractive_index::RefrIndexConst,
     OpticScenery,
 };
+use uom::si::f64::Length;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
@@ -35,13 +37,13 @@ fn main() -> OpmResult<()> {
     let s3 = scenery.add_node(Propagation::new("Dist 3", millimeter!(50.0))?);
     let det = scenery.add_node(RayPropagationVisualizer::new("Ray plot"));
     let wf = scenery.add_node(WaveFront::new("Wavefront"));
-    scenery.connect_nodes(src, "out1", s1, "front")?;
-    scenery.connect_nodes(s1, "rear", l1, "front")?;
-    scenery.connect_nodes(l1, "rear", s2, "front")?;
-    scenery.connect_nodes(s2, "rear", l2, "front")?;
-    scenery.connect_nodes(l2, "rear", s3, "front")?;
-    scenery.connect_nodes(s3, "rear", wf, "in1")?;
-    scenery.connect_nodes(wf, "out1", det, "in1")?;
+    scenery.connect_nodes(src, "out1", s1, "front", Length::zero())?;
+    scenery.connect_nodes(s1, "rear", l1, "front", Length::zero())?;
+    scenery.connect_nodes(l1, "rear", s2, "front", Length::zero())?;
+    scenery.connect_nodes(s2, "rear", l2, "front", Length::zero())?;
+    scenery.connect_nodes(l2, "rear", s3, "front",Length::zero())?;
+    scenery.connect_nodes(s3, "rear", wf, "in1", Length::zero())?;
+    scenery.connect_nodes(wf, "out1", det, "in1",Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/lens_system.opm"))?;
     Ok(())

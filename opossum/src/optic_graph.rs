@@ -1,14 +1,11 @@
 #![warn(missing_docs)]
 use crate::{
-    error::{OpmResult, OpossumError},
-    light::Light,
-    optic_ref::OpticRef,
-    optical::Optical,
-    properties::Proptype,
-    utils::geom_transformation::Isometry,
+    error::{OpmResult, OpossumError}, light::Light, meter, optic_ref::OpticRef, optical::Optical, properties::Proptype, utils::geom_transformation::Isometry
 };
+use nalgebra::Point3;
+use num::Zero;
 use petgraph::{
-    algo::{connected_components, is_cyclic_directed},
+    algo::{self, connected_components, is_cyclic_directed},
     prelude::DiGraph,
     stable_graph::NodeIndex,
 };
@@ -41,7 +38,8 @@ impl OpticGraph {
         })?;
         if !source
             .optical_ref
-            .lock().unwrap()
+            .lock()
+            .unwrap()
             .ports()
             .output_names()
             .contains(&src_port.into())
@@ -57,7 +55,8 @@ impl OpticGraph {
         })?;
         if !target
             .optical_ref
-            .lock().unwrap()
+            .lock()
+            .unwrap()
             .ports()
             .input_names()
             .contains(&target_port.into())
@@ -94,6 +93,7 @@ impl OpticGraph {
                 "connecting nodes <{src_name}> -> <{target_name}> would form a loop"
             )));
         }
+        self.update_node_positions()?;
         Ok(())
     }
     fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
@@ -125,6 +125,68 @@ impl OpticGraph {
     pub fn is_single_tree(&self) -> bool {
         connected_components(&self.0) == 1
     }
+    fn sources(&self) -> Vec<NodeIndex> {
+        let mut srcs: Vec<NodeIndex> = Vec::new();
+        for node in self.0.node_indices() {
+            if self
+                .0
+                .neighbors_directed(node, petgraph::Direction::Incoming)
+                .count()
+                .is_zero()
+            {
+                srcs.push(node);
+            }
+        }
+        srcs
+    }
+    fn sinks(&self) -> Vec<NodeIndex> {
+        let mut srcs: Vec<NodeIndex> = Vec::new();
+        for node in self.0.node_indices() {
+            if self
+                .0
+                .neighbors_directed(node, petgraph::Direction::Outgoing)
+                .count()
+                .is_zero()
+            {
+                srcs.push(node);
+            }
+        }
+        srcs
+    }
+    pub fn update_node_positions(&mut self) -> OpmResult<()> {
+        // iterate over all possible paths from a src to a sink
+        for src in &self.sources() {
+            for sink in &self.sinks() {
+                let paths = algo::all_simple_paths::<Vec<_>, _>(&self.0, *src, *sink, 0, None)
+                    .collect::<Vec<_>>();
+                for path in paths {
+                    for node_idx in path {
+                        let cloned_graph = self.0.clone();
+                        // incoming meighbors
+                        let neighbors: Vec<NodeIndex> = cloned_graph
+                            .neighbors_directed(node_idx, petgraph::Direction::Incoming)
+                            .collect();
+                        for neighbor in neighbors {
+                            let neighbor_node_ref = cloned_graph.node_weight(neighbor).unwrap();
+                            let neighbor_node = neighbor_node_ref.optical_ref.lock().unwrap();
+                            let neighbor_isometry = neighbor_node.isometry();
+                            let connecting_edge =
+                                cloned_graph.edges_connecting(neighbor, node_idx).next().unwrap();
+                            let connecting_isometery = connecting_edge.weight().isometry();
+                            let node = self.0.node_weight_mut(node_idx).unwrap();
+                            node.optical_ref
+                                .lock()
+                                .unwrap()
+                                .set_isometry(neighbor_isometry.append(connecting_isometery));
+                            println!("{:?}", neighbor_isometry.append(connecting_isometery));
+                        }
+                    }
+                }
+            }
+        }
+        println!("");
+        Ok(())
+    }
 }
 impl Serialize for OpticGraph {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -147,9 +209,10 @@ impl Serialize for OpticGraph {
                         .uuid(),
                     g.edge_weight(e).unwrap().src_port(),
                     g.edge_weight(e).unwrap().target_port(),
+                    g.edge_weight(e).unwrap().isometry().transform_point_f64(&Point3::origin()).z
                 )
             })
-            .collect::<Vec<(Uuid, Uuid, &str, &str)>>();
+            .collect::<Vec<(Uuid, Uuid, &str, &str, f64)>>();
         graph.serialize_field("edges", &edgeidx)?;
         graph.end()
     }
@@ -212,7 +275,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
             {
                 let mut g = OpticGraph::default();
                 let mut nodes: Option<Vec<OpticRef>> = None;
-                let mut edges: Option<Vec<(Uuid, Uuid, &str, &str)>> = None;
+                let mut edges: Option<Vec<(Uuid, Uuid, &str, &str, f64)>> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Nodes => {
@@ -225,7 +288,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                             if edges.is_some() {
                                 return Err(de::Error::duplicate_field("edges"));
                             }
-                            edges = Some(map.next_value::<Vec<(Uuid, Uuid, &str, &str)>>()?);
+                            edges = Some(map.next_value::<Vec<(Uuid, Uuid, &str, &str, f64)>>()?);
                         }
                     }
                 }
@@ -251,8 +314,10 @@ impl<'de> Deserialize<'de> for OpticGraph {
                                 "reference node found, which does not reference anything",
                             ));
                         };
-                        let ref_name =
-                            format!("ref ({})", reference_node.optical_ref.lock().unwrap().name());
+                        let ref_name = format!(
+                            "ref ({})",
+                            reference_node.optical_ref.lock().unwrap().name()
+                        );
                         refnode.assign_reference(&reference_node);
 
                         refnode
@@ -267,7 +332,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                     let target_idx = g.node_idx(edge.1).ok_or_else(|| {
                         de::Error::custom(format!("target id {} does not exist", edge.1))
                     })?;
-                    g.connect_nodes(src_idx, edge.2, target_idx, edge.3, Isometry::identity())
+                    g.connect_nodes(src_idx, edge.2, target_idx, edge.3, Isometry::new_along_z(meter!(edge.4)).unwrap())
                         .map_err(|e| {
                             de::Error::custom(format!("connecting OpticGraph nodes failed: {e}"))
                         })?;

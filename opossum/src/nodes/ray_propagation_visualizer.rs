@@ -1,3 +1,4 @@
+//! Ray propagation monitor
 #![warn(missing_docs)]
 use image::RgbImage;
 use log::warn;

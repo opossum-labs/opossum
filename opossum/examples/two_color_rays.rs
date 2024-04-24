@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use num::Zero;
 use opossum::{
     error::OpmResult,
     joule,
@@ -11,6 +12,7 @@ use opossum::{
     refractive_index::RefrIndexConst,
     OpticScenery,
 };
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut rays_1w = Rays::new_uniform_collimated(
@@ -57,14 +59,14 @@ fn main() -> OpmResult<()> {
     let det = scenery.add_node(RayPropagationVisualizer::default());
     // let wf = scenery.add_node(WaveFront::default());
     let sd = scenery.add_node(SpotDiagram::default());
-    scenery.connect_nodes(src, "out1", s1, "front")?;
-    scenery.connect_nodes(s1, "rear", l1, "front")?;
-    scenery.connect_nodes(l1, "rear", s2, "front")?;
-    scenery.connect_nodes(s2, "rear", l2, "front")?;
-    scenery.connect_nodes(l2, "rear", s3, "front")?;
-    scenery.connect_nodes(s3, "rear", det, "in1")?;
+    scenery.connect_nodes(src, "out1", s1, "front",Length::zero())?;
+    scenery.connect_nodes(s1, "rear", l1, "front",Length::zero())?;
+    scenery.connect_nodes(l1, "rear", s2, "front",Length::zero())?;
+    scenery.connect_nodes(s2, "rear", l2, "front",Length::zero())?;
+    scenery.connect_nodes(l2, "rear", s3, "front",Length::zero())?;
+    scenery.connect_nodes(s3, "rear", det, "in1",Length::zero())?;
     // scenery.connect_nodes(sd, "out1", det, "in1")?;
-    scenery.connect_nodes(det, "out1", sd, "in1")?;
+    scenery.connect_nodes(det, "out1", sd, "in1",Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/two_color_spot_diagram.opm"))?;
     Ok(())

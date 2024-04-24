@@ -1,3 +1,4 @@
+use num::Zero;
 use opossum::{
     aperture::{Aperture, CircleConfig},
     error::OpmResult,
@@ -7,6 +8,7 @@ use opossum::{
     refractive_index::RefrIndexConst,
     OpticScenery,
 };
+use uom::si::f64::Length;
 use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
@@ -38,12 +40,12 @@ fn main() -> OpmResult<()> {
     let l2 = scenery.add_node(lens2);
     let s3 = scenery.add_node(Propagation::new("s3", millimeter!(30.0))?);
     let det = scenery.add_node(RayPropagationVisualizer::default());
-    scenery.connect_nodes(src, "out1", s1, "front")?;
-    scenery.connect_nodes(s1, "rear", l1, "front")?;
-    scenery.connect_nodes(l1, "rear", s2, "front")?;
-    scenery.connect_nodes(s2, "rear", l2, "front")?;
-    scenery.connect_nodes(l2, "rear", s3, "front")?;
-    scenery.connect_nodes(s3, "rear", det, "in1")?;
+    scenery.connect_nodes(src, "out1", s1, "front", Length::zero())?;
+    scenery.connect_nodes(s1, "rear", l1, "front", Length::zero())?;
+    scenery.connect_nodes(l1, "rear", s2, "front", Length::zero())?;
+    scenery.connect_nodes(s2, "rear", l2, "front", Length::zero())?;
+    scenery.connect_nodes(l2, "rear", s3, "front", Length::zero())?;
+    scenery.connect_nodes(s3, "rear", det, "in1", Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/ray_propagation.opm"))?;
     Ok(())
