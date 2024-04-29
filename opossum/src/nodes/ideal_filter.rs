@@ -2,7 +2,6 @@
 use super::node_attr::NodeAttr;
 use crate::{
     analyzer::AnalyzerType,
-    degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -12,12 +11,9 @@ use crate::{
     refractive_index::refr_index_vaccuum,
     spectrum::Spectrum,
     surface::Plane,
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::EnumProxy,
 };
-use nalgebra::Point3;
-use num::Zero;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::Length;
 
 /// Config data for an [`IdealFilter`].
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -200,13 +196,14 @@ impl Optical for IdealFilter {
                     ));
                 }
                 let mut rays = r.clone();
-                let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                let isometry = Isometry::new(
-                    Point3::new(Length::zero(), Length::zero(), z_position),
-                    degree!(0.0, 0.0, 0.0),
-                )?;
-                let plane = Plane::new(&isometry);
-                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                if let Some(iso) = self.node_attr.isometry() {
+                    let plane = Plane::new(&iso);
+                    rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                } else {
+                    return Err(OpossumError::Analysis(
+                        "no location for surface defined. Aborting".into(),
+                    ));
+                }
                 rays.filter_energy(&self.filter_type())?;
                 if let Some(aperture) = self.ports().input_aperture("front") {
                     rays.apodize(aperture)?;

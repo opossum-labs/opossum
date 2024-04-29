@@ -38,11 +38,11 @@ fn main() -> OpmResult<()> {
         opossum::nodes::Metertype::IdealEnergyMeter,
     ));
 
-    scenery.connect_nodes(i_s, "out1", i_bs, "input1",Length::zero())?;
-    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1",Length::zero())?;
-    scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front",Length::zero())?;
-    scenery.connect_nodes(i_f, "rear", i_d2, "in1",Length::zero())?;
-    scenery.connect_nodes(i_d2, "out1", i_d3, "in1",Length::zero())?;
+    scenery.connect_nodes(i_s, "out1", i_bs, "input1", Length::zero())?;
+    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1", Length::zero())?;
+    scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front", Length::zero())?;
+    scenery.connect_nodes(i_f, "rear", i_d2, "in1", Length::zero())?;
+    scenery.connect_nodes(i_d2, "out1", i_d3, "in1", Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/filter_test.opm"))?;
     Ok(())

@@ -97,7 +97,7 @@ impl OpticScenery {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
-        dist: Length
+        dist: Length,
     ) -> OpmResult<()> {
         self.g.connect_nodes(
             src_node,
@@ -237,7 +237,14 @@ impl OpticScenery {
         light_port: &str,
         mut parent_identifier: String,
     ) -> OpmResult<String> {
-        let node = self.g.0.node_weight(end_node).unwrap().optical_ref.lock().unwrap();
+        let node = self
+            .g
+            .0
+            .node_weight(end_node)
+            .unwrap()
+            .optical_ref
+            .lock()
+            .unwrap();
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node.index())
         } else {
@@ -287,7 +294,8 @@ impl OpticScenery {
                 let node_type = node.optical_ref.lock().unwrap().node_type();
                 let outgoing_edges = node
                     .optical_ref
-                    .lock().unwrap()
+                    .lock()
+                    .unwrap()
                     .analyze(incoming_edges, analyzer_type)
                     .map_err(|e| {
                         OpossumError::Analysis(format!(
@@ -296,7 +304,13 @@ impl OpticScenery {
                     })?;
                 // Warn, if empty output LightResult but node has output ports defined.
                 if outgoing_edges.is_empty()
-                    && !node.optical_ref.lock().unwrap().ports().outputs().is_empty()
+                    && !node
+                        .optical_ref
+                        .lock()
+                        .unwrap()
+                        .ports()
+                        .outputs()
+                        .is_empty()
                     && is_single_tree
                 {
                     warn!("analysis of node {node_name} <{node_type}> did not result in any output data. This might come from wrong / empty input data.");
@@ -543,10 +557,10 @@ mod test {
     };
     use log::Level;
     use num::Zero;
-    use uom::si::f64::Length;
     use std::path::{Path, PathBuf};
     use tempfile::NamedTempFile;
     use testing_logger;
+    use uom::si::f64::Length;
 
     #[test]
     fn new() {
@@ -619,8 +633,12 @@ mod test {
         let n2 = scenery.add_node(Dummy::default());
         let n3 = scenery.add_node(Dummy::default());
         let n4 = scenery.add_node(Dummy::default());
-        scenery.connect_nodes(n1, "rear", n2, "front",Length::zero()).unwrap();
-        scenery.connect_nodes(n3, "rear", n4, "front",Length::zero()).unwrap();
+        scenery
+            .connect_nodes(n1, "rear", n2, "front", Length::zero())
+            .unwrap();
+        scenery
+            .connect_nodes(n3, "rear", n4, "front", Length::zero())
+            .unwrap();
         assert!(scenery.analyze(&AnalyzerType::Energy).is_ok());
         testing_logger::validate(|captured_logs| {
             assert_eq!(captured_logs.len(), 1);
@@ -643,7 +661,9 @@ mod test {
         let mut scenery = OpticScenery::new();
         let i_s = scenery.add_node(Source::new("src", &LightData::Geometric(rays)));
         let i_e = scenery.add_node(EnergyMeter::default());
-        scenery.connect_nodes(i_s, "out1", i_e, "in1", Length::zero()).unwrap();
+        scenery
+            .connect_nodes(i_s, "out1", i_e, "in1", Length::zero())
+            .unwrap();
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();
         scenery
@@ -653,7 +673,8 @@ mod test {
             .node(i_e)
             .unwrap()
             .optical_ref
-            .lock().unwrap()
+            .lock()
+            .unwrap()
             .report()
             .unwrap();
         if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {

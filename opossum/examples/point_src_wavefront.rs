@@ -6,8 +6,8 @@ use opossum::{
     nodes::{point_ray_source, Propagation, WaveFront},
     OpticScenery,
 };
-use uom::si::f64::Length;
 use std::path::Path;
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
@@ -17,7 +17,7 @@ fn main() -> OpmResult<()> {
     let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));
 
     scenery.connect_nodes(i_s, "out1", i_p1, "front", Length::zero())?;
-    scenery.connect_nodes(i_p1, "rear", i_wf1, "in1",Length::zero())?;
+    scenery.connect_nodes(i_p1, "rear", i_wf1, "in1", Length::zero())?;
     scenery.save_to_file(Path::new("./opossum/playground/point_src_wavefront.opm"))?;
     Ok(())
 }

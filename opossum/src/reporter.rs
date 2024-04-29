@@ -80,11 +80,11 @@ impl AnalysisReport {
     pub fn get_ray_hist(&self) -> Option<&RayPositionHistories> {
         for node in &self.node_reports {
             if let Some(ray_hist) = node.get_ray_history() {
-                return Some(ray_hist)
+                return Some(ray_hist);
             }
         }
         None
-    } 
+    }
     /// Returns the scenery of this [`AnalysisReport`].
     pub fn scenery(&self) -> Option<&OpticScenery> {
         self.scenery.as_ref()
@@ -126,8 +126,8 @@ impl NodeReport {
     pub fn get_ray_history(&self) -> Option<&RayPositionHistories> {
         if self.detector_type == "group" {
             for prop in &self.properties {
-                if let Proptype::NodeReport(node)=prop.1.prop() {
-                    let data=node.get_ray_history();
+                if let Proptype::NodeReport(node) = prop.1.prop() {
+                    let data = node.get_ray_history();
                     if data.is_some() {
                         return data;
                     }
@@ -137,7 +137,7 @@ impl NodeReport {
             if let Ok(Proptype::RayPositionHistory(ray_hist)) =
                 self.properties.get("Ray Propagation visualization plot")
             {
-                return Some(ray_hist)
+                return Some(ray_hist);
             }
         }
         None

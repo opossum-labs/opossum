@@ -118,7 +118,8 @@ impl<'de> Deserialize<'de> for OpticRef {
                 let node = create_node_ref(node_type, None)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
-                    .lock().unwrap()
+                    .lock()
+                    .unwrap()
                     .set_properties(properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 Ok(node)
@@ -160,12 +161,14 @@ impl<'de> Deserialize<'de> for OpticRef {
                 let node = create_node_ref(node_type, Some(id))
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
-                    .lock().unwrap()
+                    .lock()
+                    .unwrap()
                     .set_properties(properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 // group node: assign props to graph
                 node.optical_ref
-                    .lock().unwrap()
+                    .lock()
+                    .unwrap()
                     .after_deserialization_hook()
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 Ok(node)

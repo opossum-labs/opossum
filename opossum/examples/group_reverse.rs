@@ -35,8 +35,8 @@ fn main() -> OpmResult<()> {
     let i_g = scenery.add_node(group);
     let i_d = scenery.add_node(EnergyMeter::default());
 
-    scenery.connect_nodes(i_s, "out1", i_g, "out1",Length::zero())?;
-    scenery.connect_nodes(i_g, "in1", i_d, "in1",Length::zero())?;
+    scenery.connect_nodes(i_s, "out1", i_g, "out1", Length::zero())?;
+    scenery.connect_nodes(i_g, "in1", i_d, "in1", Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/group_reverse.opm"))?;
     Ok(())

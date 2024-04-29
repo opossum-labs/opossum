@@ -58,9 +58,9 @@ fn setup_nodes(
     mut materials: ResMut<Assets<StandardMaterial>>,
     report: Res<Report>,
 ) {
-    if let Some(scenery)=report.0.scenery() {
+    if let Some(scenery) = report.0.scenery() {
         for node in scenery.nodes() {
-            let mesh=node.optical_ref.lock().unwrap().mesh();
+            let mesh = node.optical_ref.lock().unwrap().mesh();
             commands.spawn(MaterialMeshBundle {
                 mesh: meshes.add(mesh),
                 material: materials.add(Color::ORANGE),
@@ -106,7 +106,7 @@ fn setup_scene(
     });
     // static camera
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 1.0, 0.0).looking_at(Vec3::new(0.0,0.0,0.0), Vec3::Y),
+        transform: Transform::from_xyz(0.0, 1.0, 0.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
         ..default()
     });
 }

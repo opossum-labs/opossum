@@ -33,19 +33,19 @@ fn main() -> OpmResult<()> {
     ));
     let i_sd1 = scenery.add_node(SpotDiagram::new("Output"));
 
-    scenery.connect_nodes(i_src, "out1", i_l1, "front",Length::zero())?;
-    scenery.connect_nodes(i_l1, "rear", i_p1, "front",Length::zero())?;
-    scenery.connect_nodes(i_p1, "rear", i_l2, "front",Length::zero())?;
-    scenery.connect_nodes(i_l2, "rear", i_bs, "input1",Length::zero())?;
-    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_e1, "in1",Length::zero())?;
-    scenery.connect_nodes(i_e1, "out1", i_sd1, "in1",Length::zero())?;
+    scenery.connect_nodes(i_src, "out1", i_l1, "front", Length::zero())?;
+    scenery.connect_nodes(i_l1, "rear", i_p1, "front", Length::zero())?;
+    scenery.connect_nodes(i_p1, "rear", i_l2, "front", Length::zero())?;
+    scenery.connect_nodes(i_l2, "rear", i_bs, "input1", Length::zero())?;
+    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_e1, "in1", Length::zero())?;
+    scenery.connect_nodes(i_e1, "out1", i_sd1, "in1", Length::zero())?;
 
     // Diagnostic beam line
     let i_f = scenery.add_node(IdealFilter::new(
         "OD1 filter",
         &opossum::nodes::FilterType::Constant(0.1),
     )?);
-    scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front",Length::zero())?;
+    scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front", Length::zero())?;
 
     // Cam Box
     let mut cam_box = NodeGroup::new("CamBox");
@@ -70,7 +70,7 @@ fn main() -> OpmResult<()> {
     cam_box.map_input_port(i_cb_bs, "input1", "input")?;
     cam_box.expand_view(true)?;
     let i_cam_box = scenery.add_node(cam_box);
-    scenery.connect_nodes(i_f, "rear", i_cam_box, "input",Length::zero())?;
+    scenery.connect_nodes(i_f, "rear", i_cam_box, "input", Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/laser_system.opm"))?;
     Ok(())

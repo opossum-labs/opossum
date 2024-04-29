@@ -7,8 +7,8 @@ use opossum::{
     optical::Optical,
     OpticScenery,
 };
-use uom::si::f64::Length;
 use std::path::Path;
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();

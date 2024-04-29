@@ -112,7 +112,7 @@ fn main() -> OpmResult<()> {
 
     let src = scenery.add_node(Source::new("Source", &LightData::Geometric(rays)));
     let input_group = scenery.add_node(hhts_input()?);
-    scenery.connect_nodes(src, "out1", input_group, "input",Length::zero())?;
+    scenery.connect_nodes(src, "out1", input_group, "input", Length::zero())?;
 
     // T1
     let mut group_t1 = NodeGroup::new("T1");

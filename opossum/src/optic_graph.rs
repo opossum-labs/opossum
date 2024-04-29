@@ -1,6 +1,12 @@
 #![warn(missing_docs)]
 use crate::{
-    error::{OpmResult, OpossumError}, light::Light, meter, optic_ref::OpticRef, optical::Optical, properties::Proptype, utils::geom_transformation::Isometry
+    error::{OpmResult, OpossumError},
+    light::Light,
+    meter,
+    optic_ref::OpticRef,
+    optical::Optical,
+    properties::Proptype,
+    utils::geom_transformation::Isometry,
 };
 use log::warn;
 use nalgebra::Point3;
@@ -170,9 +176,11 @@ impl OpticGraph {
                         for neighbor in neighbors {
                             let neighbor_node_ref = cloned_graph.node_weight(neighbor).unwrap();
                             let neighbor_node = neighbor_node_ref.optical_ref.lock().unwrap();
-                            let neighbor_name=neighbor_node.name();
-                            let connecting_edge =
-                                cloned_graph.edges_connecting(neighbor, node_idx).next().unwrap();
+                            let neighbor_name = neighbor_node.name();
+                            let connecting_edge = cloned_graph
+                                .edges_connecting(neighbor, node_idx)
+                                .next()
+                                .unwrap();
                             let connecting_isometery = connecting_edge.weight().isometry();
                             let node = self.0.node_weight_mut(node_idx).unwrap();
                             if let Some(neighbor_isometry) = neighbor_node.isometry() {
@@ -212,7 +220,11 @@ impl Serialize for OpticGraph {
                         .uuid(),
                     g.edge_weight(e).unwrap().src_port(),
                     g.edge_weight(e).unwrap().target_port(),
-                    g.edge_weight(e).unwrap().isometry().transform_point_f64(&Point3::origin()).z
+                    g.edge_weight(e)
+                        .unwrap()
+                        .isometry()
+                        .transform_point_f64(&Point3::origin())
+                        .z,
                 )
             })
             .collect::<Vec<(Uuid, Uuid, &str, &str, f64)>>();
@@ -335,10 +347,16 @@ impl<'de> Deserialize<'de> for OpticGraph {
                     let target_idx = g.node_idx(edge.1).ok_or_else(|| {
                         de::Error::custom(format!("target id {} does not exist", edge.1))
                     })?;
-                    g.connect_nodes(src_idx, edge.2, target_idx, edge.3, Isometry::new_along_z(meter!(edge.4)).unwrap())
-                        .map_err(|e| {
-                            de::Error::custom(format!("connecting OpticGraph nodes failed: {e}"))
-                        })?;
+                    g.connect_nodes(
+                        src_idx,
+                        edge.2,
+                        target_idx,
+                        edge.3,
+                        Isometry::new_along_z(meter!(edge.4)).unwrap(),
+                    )
+                    .map_err(|e| {
+                        de::Error::custom(format!("connecting OpticGraph nodes failed: {e}"))
+                    })?;
                 }
                 Ok(g)
             }

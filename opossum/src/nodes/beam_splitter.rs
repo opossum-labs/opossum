@@ -1,12 +1,7 @@
 #![warn(missing_docs)]
-use nalgebra::Point3;
-use num::Zero;
-use uom::si::f64::Length;
-
 use super::node_attr::NodeAttr;
 use crate::{
     analyzer::AnalyzerType,
-    degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{DataEnergy, LightData},
@@ -18,7 +13,7 @@ use crate::{
     refractive_index::refr_index_vaccuum,
     spectrum::{merge_spectra, Spectrum},
     surface::Plane,
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::EnumProxy,
 };
 
 #[derive(Debug)]
@@ -197,14 +192,14 @@ impl BeamSplitter {
             match input1 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    let z_position =
-                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let isometry = Isometry::new(
-                        Point3::new(Length::zero(), Length::zero(), z_position),
-                        degree!(0.0, 0.0, 0.0),
-                    )?;
-                    let plane = Plane::new(&isometry);
-                    rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    if let Some(iso) = self.node_attr.isometry() {
+                        let plane = Plane::new(&iso);
+                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    } else {
+                        return Err(OpossumError::Analysis(
+                            "no location for surface defined. Aborting".into(),
+                        ));
+                    }
                     if let Some(aperture) = self.ports().input_aperture("input1") {
                         rays.apodize(aperture)?;
                         if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -229,14 +224,14 @@ impl BeamSplitter {
             match input2 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    let z_position =
-                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let isometry = Isometry::new(
-                        Point3::new(Length::zero(), Length::zero(), z_position),
-                        degree!(0.0, 0.0, 0.0),
-                    )?;
-                    let plane = Plane::new(&isometry);
-                    rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    if let Some(iso) = self.node_attr.isometry() {
+                        let plane = Plane::new(&iso);
+                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    } else {
+                        return Err(OpossumError::Analysis(
+                            "no location for surface defined. Aborting".into(),
+                        ));
+                    }
                     if let Some(aperture) = self.ports().input_aperture("input2") {
                         rays.apodize(aperture)?;
                         if let AnalyzerType::RayTrace(config) = analyzer_type {

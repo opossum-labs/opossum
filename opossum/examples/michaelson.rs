@@ -6,8 +6,8 @@ use opossum::{
     spectrum_helper::create_he_ne_spec,
     OpticScenery,
 };
-use uom::si::f64::Length;
 use std::path::Path;
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
@@ -35,7 +35,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(r_sample, "rear", r_bs, "input1", Length::zero())?;
     scenery.connect_nodes(bs, "out2_trans2_refl1", m2, "front", Length::zero())?;
     scenery.connect_nodes(m2, "rear", r_bs, "input2", Length::zero())?;
-    scenery.connect_nodes(r_bs, "out1_trans1_refl2", det, "in1",Length::zero())?;
+    scenery.connect_nodes(r_bs, "out1_trans1_refl2", det, "in1", Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/michaelson.opm"))?;
     Ok(())

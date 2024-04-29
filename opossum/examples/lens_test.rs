@@ -6,8 +6,8 @@ use opossum::{
     refractive_index::RefrIndexConst,
     OpticScenery,
 };
-use uom::si::f64::Length;
 use std::path::Path;
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
@@ -41,9 +41,9 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(s1, "rear", l1, "front", Length::zero())?;
     scenery.connect_nodes(l1, "rear", s2, "front", Length::zero())?;
     scenery.connect_nodes(s2, "rear", l2, "front", Length::zero())?;
-    scenery.connect_nodes(l2, "rear", s3, "front",Length::zero())?;
+    scenery.connect_nodes(l2, "rear", s3, "front", Length::zero())?;
     scenery.connect_nodes(s3, "rear", wf, "in1", Length::zero())?;
-    scenery.connect_nodes(wf, "out1", det, "in1",Length::zero())?;
+    scenery.connect_nodes(wf, "out1", det, "in1", Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/lens_system.opm"))?;
     Ok(())

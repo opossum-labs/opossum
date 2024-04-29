@@ -2,7 +2,6 @@
 //! A paraxial surface (ideal lens)
 use crate::{
     analyzer::AnalyzerType,
-    degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -12,9 +11,7 @@ use crate::{
     properties::Proptype,
     refractive_index::refr_index_vaccuum,
     surface::Plane,
-    utils::geom_transformation::Isometry,
 };
-use nalgebra::Point3;
 use uom::{num_traits::Zero, si::f64::Length};
 
 use super::node_attr::NodeAttr;
@@ -109,15 +106,15 @@ impl Optical for ParaxialSurface {
                     else {
                         return Err(OpossumError::Analysis("cannot read focal length".into()));
                     };
-                    let z_position =
-                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let isometry = Isometry::new(
-                        Point3::new(Length::zero(), Length::zero(), z_position),
-                        degree!(0.0, 0.0, 0.0),
-                    )?;
-                    let plane = Plane::new(&isometry);
-                    rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
-                    rays.refract_paraxial(*focal_length)?;
+                    if let Some(iso) = self.node_attr.isometry() {
+                        let plane = Plane::new(&iso);
+                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                        rays.refract_paraxial(*focal_length)?;
+                    } else {
+                        return Err(OpossumError::Analysis(
+                            "no location for surface defined. Aborting".into(),
+                        ));
+                    }
                     if let Some(aperture) = self.ports().input_aperture("front") {
                         rays.apodize(aperture)?;
                         if let AnalyzerType::RayTrace(config) = analyzer_type {

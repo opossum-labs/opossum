@@ -2,7 +2,13 @@
 //! Helper functions for easier creation of `standard` ray [`Source`]s.
 use super::Source;
 use crate::{
-    error::OpmResult, lightdata::LightData, nanometer, optical::Optical, position_distributions::{Grid, Hexapolar}, rays::Rays, utils::geom_transformation::Isometry
+    error::OpmResult,
+    lightdata::LightData,
+    nanometer,
+    optical::Optical,
+    position_distributions::{Grid, Hexapolar},
+    rays::Rays,
+    utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;
 use num::Zero;
@@ -53,7 +59,7 @@ pub fn collimated_line_ray_source(
         &Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?,
     )?;
     let light = LightData::Geometric(rays);
-    let mut src=Source::new("collimated line ray source", &light);
+    let mut src = Source::new("collimated line ray source", &light);
     src.set_isometry(Isometry::identity());
     Ok(src)
 }

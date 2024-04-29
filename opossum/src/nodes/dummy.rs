@@ -1,11 +1,7 @@
 #![warn(missing_docs)]
-use nalgebra::Point3;
-use uom::si::f64::Length;
-
 use super::node_attr::NodeAttr;
 use crate::{
     analyzer::AnalyzerType,
-    degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -17,7 +13,6 @@ use crate::{
     surface::Plane,
     utils::geom_transformation::Isometry,
 };
-use num::Zero;
 
 #[derive(Debug, Clone)]
 /// A fake / dummy component without any optical functionality.
@@ -81,13 +76,14 @@ impl Optical for Dummy {
         };
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
-            let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-            let isometry = Isometry::new(
-                Point3::new(Length::zero(), Length::zero(), z_position),
-                degree!(0.0, 0.0, 0.0),
-            )?;
-            let plane = Plane::new(&isometry);
-            rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+            if let Some(iso) = self.node_attr.isometry() {
+                let plane = Plane::new(&iso);
+                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+            } else {
+                return Err(OpossumError::Analysis(
+                    "no location for surface defined. Aborting".into(),
+                ));
+            }
             if let Some(aperture) = self.ports().input_aperture("front") {
                 rays.apodize(aperture)?;
                 if let AnalyzerType::RayTrace(config) = analyzer_type {

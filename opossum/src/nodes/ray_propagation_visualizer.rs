@@ -2,8 +2,7 @@
 #![warn(missing_docs)]
 use image::RgbImage;
 use log::warn;
-use nalgebra::{MatrixXx2, MatrixXx3, Point3, Vector3};
-use num::Zero;
+use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -14,7 +13,6 @@ use uom::si::{
 use super::node_attr::NodeAttr;
 use crate::{
     analyzer::AnalyzerType,
-    degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -27,7 +25,6 @@ use crate::{
     refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
     surface::Plane,
-    utils::geom_transformation::Isometry,
 };
 use std::path::{Path, PathBuf};
 
@@ -97,13 +94,14 @@ impl Optical for RayPropagationVisualizer {
         };
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
-            let z_position = rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-            let isometry = Isometry::new(
-                Point3::new(Length::zero(), Length::zero(), z_position),
-                degree!(0.0, 0.0, 0.0),
-            )?;
-            let plane = Plane::new(&isometry);
-            rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+            if let Some(iso) = self.node_attr.isometry() {
+                let plane = Plane::new(&iso);
+                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+            } else {
+                return Err(OpossumError::Analysis(
+                    "no location for surface defined. Aborting".into(),
+                ));
+            }
             if let Some(aperture) = self.ports().input_aperture("in1") {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {

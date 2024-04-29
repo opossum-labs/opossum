@@ -388,12 +388,14 @@ mod test {
             Metertype::IdealEnergyMeter,
         ));
 
-        scenery.connect_nodes(i_s, "out1", i_bs, "input1", Length::zero()).unwrap();
+        scenery
+            .connect_nodes(i_s, "out1", i_bs, "input1", Length::zero())
+            .unwrap();
         scenery
             .connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1", Length::zero())
             .unwrap();
         scenery
-            .connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1",Length::zero())
+            .connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1", Length::zero())
             .unwrap();
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
@@ -456,7 +458,7 @@ mod test {
 
         // set_output_port
         scenery
-            .connect_nodes(scene_g1, "out1", scene_g2, "in1",Length::zero())
+            .connect_nodes(scene_g1, "out1", scene_g2, "in1", Length::zero())
             .unwrap();
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();

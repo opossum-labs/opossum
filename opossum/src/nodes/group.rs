@@ -232,7 +232,8 @@ impl NodeGroup {
                 .node_weight(node_idx)
                 .unwrap()
                 .optical_ref
-                .lock().unwrap()
+                .lock()
+                .unwrap()
                 .ports()
                 .input_names()
                 .len();
@@ -256,7 +257,8 @@ impl NodeGroup {
                 .node_weight(node_idx)
                 .unwrap()
                 .optical_ref
-                .lock().unwrap()
+                .lock()
+                .unwrap()
                 .ports()
                 .output_names()
                 .len();
@@ -295,7 +297,8 @@ impl NodeGroup {
             .ok_or_else(|| OpossumError::OpticGroup("internal node index not found".into()))?;
         if !node
             .optical_ref
-            .lock().unwrap()
+            .lock()
+            .unwrap()
             .ports()
             .input_names()
             .contains(&(internal_name.to_string()))
@@ -358,7 +361,8 @@ impl NodeGroup {
             .ok_or_else(|| OpossumError::OpticGroup("internal node index not found".into()))?;
         if !node
             .optical_ref
-            .lock().unwrap()
+            .lock()
+            .unwrap()
             .ports()
             .output_names()
             .contains(&(internal_name.to_string()))
@@ -480,7 +484,8 @@ impl NodeGroup {
                 let incoming_edges = self.get_incoming(idx, incoming_data);
                 let outgoing_edges: LightResult = node
                     .optical_ref
-                    .lock().unwrap()
+                    .lock()
+                    .unwrap()
                     .analyze(incoming_edges, analyzer_type)?;
                 // Check if node is group sink node
                 if self.is_group_sink_node(idx) {
@@ -592,7 +597,8 @@ impl NodeGroup {
             .node_weight(end_node_idx)
             .unwrap()
             .optical_ref
-            .lock().unwrap();
+            .lock()
+            .unwrap();
 
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node_idx.index())
@@ -698,7 +704,8 @@ impl NodeGroup {
     fn invert_graph(&mut self) -> OpmResult<()> {
         for node in self.g.0.node_weights_mut() {
             node.optical_ref
-                .lock().unwrap()
+                .lock()
+                .unwrap()
                 .set_property("inverted", true.into())
                 .map_err(|_| {
                     OpossumError::OpticGroup(
@@ -756,7 +763,14 @@ impl Optical for NodeGroup {
     fn report(&self) -> Option<NodeReport> {
         let mut group_props = Properties::default();
         for node_idx in self.g.0.node_indices() {
-            let node = self.g.0.node_weight(node_idx).unwrap().optical_ref.lock().unwrap();
+            let node = self
+                .g
+                .0
+                .node_weight(node_idx)
+                .unwrap()
+                .optical_ref
+                .lock()
+                .unwrap();
             if let Some(node_report) = node.report() {
                 if !(group_props.contains(&node.name())) {
                     group_props

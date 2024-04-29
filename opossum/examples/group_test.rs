@@ -4,8 +4,8 @@ use opossum::{
     nodes::{BeamSplitter, Dummy, NodeGroup},
     OpticScenery,
 };
-use uom::si::f64::Length;
 use std::path::Path;
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
@@ -42,7 +42,7 @@ fn main() -> OpmResult<()> {
     let scene_g2 = scenery.add_node(group2);
 
     // set_output_port
-    scenery.connect_nodes(scene_g1, "out1", scene_g2, "in1",Length::zero())?;
+    scenery.connect_nodes(scene_g1, "out1", scene_g2, "in1", Length::zero())?;
     scenery.save_to_file(Path::new("./opossum/playground/group_test.opm"))?;
     Ok(())
 }

@@ -216,16 +216,18 @@ pub trait Optical: Dottable + Send {
     fn set_isometry(&mut self, isometry: Isometry);
     ///
     fn mesh(&self) -> Mesh {
-       let mesh: Mesh=Cuboid::new(0.5, 0.5, 0.005).into();
-       if let Some(iso)=self.isometry() {
-        let t=iso.translation();
-        mesh.translated_by(Vec3::new(t.x.value as f32, t.y.value as f32,t.z.value as f32))
-       } else {
-        warn!("Node has no isometry defined. Mesh will be located at origin.");
-        mesh
-       }
-      
-       
+        let mesh: Mesh = Cuboid::new(0.5, 0.5, 0.005).into();
+        if let Some(iso) = self.isometry() {
+            let t = iso.translation();
+            mesh.translated_by(Vec3::new(
+                t.x.value as f32,
+                t.y.value as f32,
+                t.z.value as f32,
+            ))
+        } else {
+            warn!("Node has no isometry defined. Mesh will be located at origin.");
+            mesh
+        }
     }
 }
 

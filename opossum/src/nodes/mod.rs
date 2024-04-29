@@ -1,8 +1,6 @@
 #![warn(missing_docs)]
 //! This module contains the concrete node types (lenses, filters, etc...)
 
-mod node_attr;
-mod test_helper;
 mod beam_splitter;
 mod detector;
 mod dummy;
@@ -11,6 +9,7 @@ mod fluence_detector;
 mod group;
 mod ideal_filter;
 mod lens;
+mod node_attr;
 mod paraxial_surface;
 mod propagation;
 pub mod ray_propagation_visualizer;
@@ -19,6 +18,7 @@ mod source;
 mod source_helper;
 mod spectrometer;
 mod spot_diagram;
+mod test_helper;
 mod wavefront;
 
 pub use beam_splitter::BeamSplitter;
@@ -35,16 +35,19 @@ pub use source_helper::{
     collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
 };
 
+use crate::{
+    error::{OpmResult, OpossumError},
+    optic_ref::OpticRef,
+};
 pub use energy_meter::{EnergyMeter, Metertype};
-pub use spectrometer::{Spectrometer, SpectrometerType};
 pub use fluence_detector::{FluenceData, FluenceDetector};
-pub use spot_diagram::SpotDiagram;
-pub use ray_propagation_visualizer::RayPropagationVisualizer;
-pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
 pub use node_attr::NodeAttr;
-use uuid::Uuid;
-use crate::{error::{OpmResult, OpossumError}, optic_ref::OpticRef};
+pub use ray_propagation_visualizer::RayPropagationVisualizer;
+pub use spectrometer::{Spectrometer, SpectrometerType};
+pub use spot_diagram::SpotDiagram;
 use std::sync::{Arc, Mutex};
+use uuid::Uuid;
+pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
 
 /// Factory function creating a new reference of an optical node of the given type.
 ///
@@ -82,10 +85,7 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
             uuid,
         )),
         "lens" => Ok(OpticRef::new(Arc::new(Mutex::new(Lens::default())), uuid)),
-        "light source" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(Source::default())),
-            uuid,
-        )),
+        "light source" => Ok(OpticRef::new(Arc::new(Mutex::new(Source::default())), uuid)),
         "spectrometer" => Ok(OpticRef::new(
             Arc::new(Mutex::new(Spectrometer::default())),
             uuid,

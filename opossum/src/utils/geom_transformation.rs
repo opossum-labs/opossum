@@ -3,7 +3,8 @@
 use crate::{
     degree,
     error::{OpmResult, OpossumError},
-    meter, properties::Proptype,
+    meter,
+    properties::Proptype,
 };
 use approx::relative_eq;
 use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Vector3};
@@ -306,7 +307,7 @@ impl From<EnumProxy<Option<Isometry>>> for Proptype {
 }
 impl From<Option<Isometry>> for Proptype {
     fn from(value: Option<Isometry>) -> Self {
-        Self::Isometry(EnumProxy {value})
+        Self::Isometry(EnumProxy { value })
     }
 }
 /// This function defines the coordinate axes on a plane.
