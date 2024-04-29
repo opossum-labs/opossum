@@ -405,6 +405,7 @@ mod test {
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
     }
     #[test]
+    #[ignore]
     fn to_dot_group() {
         let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot");

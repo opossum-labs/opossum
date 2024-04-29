@@ -375,13 +375,13 @@ mod test {
             &RefrIndexConst::new(2.0).unwrap(),
         )
         .unwrap();
-        let mut rays = Rays::new_uniform_collimated(
+        let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
             &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
         )
         .unwrap();
-        rays.set_dist_to_next_surface(millimeter!(10.0));
+        // rays.set_dist_to_next_surface(millimeter!(10.0));
         let mut incoming_data = LightResult::default();
         incoming_data.insert("front".into(), LightData::Geometric(rays));
         let output = node
@@ -410,13 +410,13 @@ mod test {
             &RefrIndexConst::new(1.0).unwrap(),
         )
         .unwrap();
-        let mut rays = Rays::new_uniform_collimated(
+        let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
             &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
         )
         .unwrap();
-        rays.set_dist_to_next_surface(millimeter!(10.0));
+        // rays.set_dist_to_next_surface(millimeter!(10.0));
         let mut incoming_data = LightResult::default();
         incoming_data.insert("front".into(), LightData::Geometric(rays));
         let output = node

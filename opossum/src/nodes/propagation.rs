@@ -112,11 +112,6 @@ impl Optical for Propagation {
             AnalyzerType::Energy => data.clone(),
             AnalyzerType::RayTrace(_config) => {
                 if let LightData::Geometric(mut rays) = data.clone() {
-                    let Ok(Proptype::Length(length_along_z)) =
-                        self.node_attr.get_property("distance")
-                    else {
-                        return Err(OpossumError::Analysis("cannot read distance".into()));
-                    };
                     let Ok(Proptype::RefractiveIndex(refractive_index)) =
                         self.node_attr.get_property("refractive index")
                     else {
@@ -125,8 +120,6 @@ impl Optical for Propagation {
                         ));
                     };
                     rays.set_refractive_index(&refractive_index.value)?;
-                    let previous_dist_to_next_surface = rays.dist_to_next_surface();
-                    rays.set_dist_to_next_surface(previous_dist_to_next_surface + *length_along_z);
                     LightData::Geometric(rays)
                 } else {
                     return Err(crate::error::OpossumError::Analysis(
