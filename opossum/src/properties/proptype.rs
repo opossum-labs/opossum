@@ -11,7 +11,7 @@ use crate::{
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporter::{HtmlNodeReport, NodeReport},
-    utils::EnumProxy,
+    utils::{geom_transformation::Isometry, EnumProxy},
 };
 use num::Float;
 use serde::{Deserialize, Serialize};
@@ -88,6 +88,8 @@ pub enum Proptype {
     Energy(Energy),
     /// a optical refractive index model
     RefractiveIndex(EnumProxy<RefractiveIndexType>),
+    /// a (node) location / orientation
+    Isometry(EnumProxy<Option<Isometry>>),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.

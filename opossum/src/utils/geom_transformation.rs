@@ -3,7 +3,7 @@
 use crate::{
     degree,
     error::{OpmResult, OpossumError},
-    meter,
+    meter, properties::Proptype,
 };
 use approx::relative_eq;
 use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Vector3};
@@ -14,6 +14,8 @@ use uom::si::{
     f64::{Angle, Length},
     length::meter,
 };
+
+use super::EnumProxy;
 
 /// Struct to store the isometric transofmeation matrix and its inverse
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -297,7 +299,16 @@ impl Isometry {
             .collect::<Vec<Vector3<f64>>>()
     }
 }
-
+impl From<EnumProxy<Option<Isometry>>> for Proptype {
+    fn from(value: EnumProxy<Option<Isometry>>) -> Self {
+        Self::Isometry(value)
+    }
+}
+impl From<Option<Isometry>> for Proptype {
+    fn from(value: Option<Isometry>) -> Self {
+        Self::Isometry(EnumProxy {value})
+    }
+}
 /// This function defines the coordinate axes on a plane.
 /// This may be useful if points are projected onto that plane and should be represented by values of two coordinate axes that span the plane
 /// If the plane normal is parallel to one of the main coordinate axes (x,y,z), the respective other axes are used.

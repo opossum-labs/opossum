@@ -82,11 +82,6 @@ impl DataEnergy {
         Ok(())
     }
 }
-// impl PdfReportable for DataEnergy {
-//     fn pdf_report(&self) -> OpmResult<genpdf::elements::LinearLayout> {
-//         self.spectrum.pdf_report()
-//     }
-// }
 #[cfg(test)]
 mod test {
     use crate::{properties::Proptype, spectrum_helper::create_visible_spec, utils::EnumProxy};

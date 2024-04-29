@@ -2,6 +2,7 @@
 use crate::{
     error::{OpmResult, OpossumError}, light::Light, meter, optic_ref::OpticRef, optical::Optical, properties::Proptype, utils::geom_transformation::Isometry
 };
+use log::warn;
 use nalgebra::Point3;
 use num::Zero;
 use petgraph::{
@@ -169,22 +170,24 @@ impl OpticGraph {
                         for neighbor in neighbors {
                             let neighbor_node_ref = cloned_graph.node_weight(neighbor).unwrap();
                             let neighbor_node = neighbor_node_ref.optical_ref.lock().unwrap();
-                            let neighbor_isometry = neighbor_node.isometry();
+                            let neighbor_name=neighbor_node.name();
                             let connecting_edge =
                                 cloned_graph.edges_connecting(neighbor, node_idx).next().unwrap();
                             let connecting_isometery = connecting_edge.weight().isometry();
                             let node = self.0.node_weight_mut(node_idx).unwrap();
-                            node.optical_ref
-                                .lock()
-                                .unwrap()
-                                .set_isometry(neighbor_isometry.append(connecting_isometery));
-                            println!("{:?}", neighbor_isometry.append(connecting_isometery));
+                            if let Some(neighbor_isometry) = neighbor_node.isometry() {
+                                node.optical_ref
+                                    .lock()
+                                    .unwrap()
+                                    .set_isometry(neighbor_isometry.append(connecting_isometery));
+                            } else {
+                                warn!("could not assign node isometry to {} because predecessor node {} has not iosmetry defined.", node.optical_ref.lock().unwrap().name(), neighbor_name);
+                            }
                         }
                     }
                 }
             }
         }
-        println!("");
         Ok(())
     }
 }

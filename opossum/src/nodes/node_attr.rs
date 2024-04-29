@@ -15,7 +15,7 @@ use crate::{
 pub struct NodeAttr {
     node_type: String,
     props: Properties,
-    isometry: Isometry,
+    isometry: Option<Isometry>,
 }
 impl NodeAttr {
     /// Creates new node attributes ([`NodeAttr`]).
@@ -49,7 +49,7 @@ impl NodeAttr {
         Self {
             node_type: node_type.into(),
             props: properties,
-            isometry: Isometry::default(),
+            isometry: None,
         }
     }
     /// Returns the name property of this node.
@@ -133,11 +133,11 @@ impl NodeAttr {
     }
     /// Sets the isometry of this [`NodeAttr`].
     pub fn set_isometry(&mut self, isometry: Isometry) {
-        self.isometry = isometry;
+        self.isometry = Some(isometry);
     }
     /// Returns a reference to the isometry of this [`NodeAttr`].
     #[must_use]
-    pub const fn isometry(&self) -> &Isometry {
+    pub const fn isometry(&self) -> &Option<Isometry> {
         &self.isometry
     }
 }

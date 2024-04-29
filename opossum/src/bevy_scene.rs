@@ -61,7 +61,6 @@ fn setup_nodes(
     if let Some(scenery)=report.0.scenery() {
         for node in scenery.nodes() {
             let mesh=node.optical_ref.lock().unwrap().mesh();
-            println!("add surface");
             commands.spawn(MaterialMeshBundle {
                 mesh: meshes.add(mesh),
                 material: materials.add(Color::ORANGE),

@@ -209,7 +209,7 @@ pub trait Optical: Dottable + Send {
         self.node_attr().properties()
     }
     /// Return the [`Isometry`] of this optical node.
-    fn isometry(&self) -> &Isometry {
+    fn isometry(&self) -> &Option<Isometry> {
         self.node_attr().isometry()
     }
     /// Set the [`Isometry`] (position and angle) of this optical node.
@@ -217,8 +217,15 @@ pub trait Optical: Dottable + Send {
     ///
     fn mesh(&self) -> Mesh {
        let mesh: Mesh=Cuboid::new(0.5, 0.5, 0.005).into();
-       let t=self.isometry().translation();
-       mesh.translated_by(Vec3::new(t.x.value as f32, t.y.value as f32,t.z.value as f32))
+       if let Some(iso)=self.isometry() {
+        let t=iso.translation();
+        mesh.translated_by(Vec3::new(t.x.value as f32, t.y.value as f32,t.z.value as f32))
+       } else {
+        warn!("Node has no isometry defined. Mesh will be located at origin.");
+        mesh
+       }
+      
+       
     }
 }
 
