@@ -189,7 +189,7 @@ impl OpticGraph {
                                     .unwrap()
                                     .set_isometry(neighbor_isometry.append(connecting_isometery));
                             } else {
-                                warn!("could not assign node isometry to {} because predecessor node {} has not iosmetry defined.", node.optical_ref.lock().unwrap().name(), neighbor_name);
+                                warn!("could not assign node isometry to {} because predecessor node {} has not isometry defined.", node.optical_ref.lock().unwrap().name(), neighbor_name);
                             }
                         }
                     }

@@ -27,7 +27,7 @@ fn main() -> OpmResult<()> {
     let g_n1 = group.add_node(Dummy::new("node1"))?;
     let g_n2 = group.add_node(Dummy::new("node2"))?;
 
-    group.connect_nodes(g_n1, "rear", g_n2, "front")?;
+    group.connect_nodes(g_n1, "rear", g_n2, "front", Length::zero())?;
     group.map_input_port(g_n1, "front", "in1")?;
     group.map_output_port(g_n2, "rear", "out1")?;
     group.set_property("inverted", true.into()).unwrap();

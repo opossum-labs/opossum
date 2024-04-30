@@ -449,7 +449,9 @@ mod test {
         let g2_n2 = group2.add_node(Dummy::new("node2_2")).unwrap();
         group2.map_input_port(g2_n1, "front", "in1").unwrap();
 
-        group2.connect_nodes(g2_n1, "rear", g2_n2, "front", Length::zero()).unwrap();
+        group2
+            .connect_nodes(g2_n1, "rear", g2_n2, "front", Length::zero())
+            .unwrap();
 
         let scene_g1 = scenery.add_node(group1);
         let scene_g2 = scenery.add_node(group2);

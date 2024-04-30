@@ -435,7 +435,7 @@ impl NodeGroup {
         } // else outgoing edge not connected -> data dropped
     }
     fn is_mapped_src(&self, idx: NodeIndex) -> bool {
-        self.input_port_map().iter().any(|m| m.1.0==idx)
+        self.input_port_map().iter().any(|m| m.1 .0 == idx)
     }
     fn is_group_src_node(&self, idx: NodeIndex) -> bool {
         let group_srcs = self.g.0.externals(Direction::Incoming);

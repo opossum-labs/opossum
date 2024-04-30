@@ -52,7 +52,6 @@ fn main() -> OpmResult<()> {
 
     let i_cb_bs = cam_box.add_node(BeamSplitter::new("50/50 BS", &SplittingConfig::Ratio(0.5))?)?;
     let i_cb_l = cam_box.add_node(ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
-    let i_cb_p = cam_box.add_node(Propagation::new("l=100", millimeter!(100.0))?)?;
     let i_cb_sd1 = cam_box.add_node(SpotDiagram::new("Nearfield"))?;
     let i_cb_sd2 = cam_box.add_node(SpotDiagram::new("Farfield"))?;
     let i_cb_e = cam_box.add_node(EnergyMeter::new(
@@ -60,15 +59,25 @@ fn main() -> OpmResult<()> {
         opossum::nodes::Metertype::IdealEnergyMeter,
     ))?;
 
-    cam_box.connect_nodes(i_cb_bs, "out1_trans1_refl2", i_cb_l, "front")?;
-    cam_box.connect_nodes(i_cb_l, "rear", i_cb_p, "front")?;
-    cam_box.connect_nodes(i_cb_p, "rear", i_cb_sd2, "in1")?;
+    cam_box.connect_nodes(
+        i_cb_bs,
+        "out1_trans1_refl2",
+        i_cb_l,
+        "front",
+        Length::zero(),
+    )?;
+    cam_box.connect_nodes(i_cb_l, "rear", i_cb_sd2, "in1", millimeter!(100.0))?;
 
-    cam_box.connect_nodes(i_cb_bs, "out2_trans2_refl1", i_cb_sd1, "in1")?;
-    cam_box.connect_nodes(i_cb_sd1, "out1", i_cb_e, "in1")?;
+    cam_box.connect_nodes(
+        i_cb_bs,
+        "out2_trans2_refl1",
+        i_cb_sd1,
+        "in1",
+        Length::zero(),
+    )?;
+    cam_box.connect_nodes(i_cb_sd1, "out1", i_cb_e, "in1", Length::zero())?;
 
     cam_box.map_input_port(i_cb_bs, "input1", "input")?;
-    cam_box.expand_view(true)?;
     let i_cam_box = scenery.add_node(cam_box);
     scenery.connect_nodes(i_f, "rear", i_cam_box, "input", Length::zero())?;
 
