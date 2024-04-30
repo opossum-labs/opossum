@@ -104,7 +104,7 @@ impl OpticScenery {
             src_port,
             target_node,
             target_port,
-            Isometry::new_along_z(dist).unwrap(),
+            Isometry::new_along_z(dist)?,
         )
     }
     /// Return a reference to the optical node specified by its node index.

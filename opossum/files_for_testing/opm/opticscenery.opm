@@ -2,7 +2,7 @@ opm version: '0'
 graph:
   nodes:
   - type: dummy
-    id: 2ac550f7-b62c-4aa8-8f57-9931a791bc99
+    id: 180328fe-7ad4-4568-b501-183b88c4daee
     properties:
       apertures: !OpticPorts
         inputs:
@@ -12,7 +12,7 @@ graph:
       inverted: !Bool false
       name: !String dummy1
   - type: dummy
-    id: 710f252d-2cbd-4613-8135-291a07cd4cbd
+    id: 642ce76e-b071-43c0-a77e-1bdbb99b40d8
     properties:
       apertures: !OpticPorts
         inputs:
@@ -22,9 +22,10 @@ graph:
       inverted: !Bool false
       name: !String dummy2
   edges:
-  - - 2ac550f7-b62c-4aa8-8f57-9931a791bc99
-    - 710f252d-2cbd-4613-8135-291a07cd4cbd
+  - - 180328fe-7ad4-4568-b501-183b88c4daee
+    - 642ce76e-b071-43c0-a77e-1bdbb99b40d8
     - rear
     - front
+    - 0.0
 properties:
   description: !String OpticScenery demo
