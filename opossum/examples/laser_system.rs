@@ -6,7 +6,7 @@ use opossum::{
     joule, millimeter,
     nodes::{
         round_collimated_ray_source, BeamSplitter, EnergyMeter, IdealFilter, NodeGroup,
-        ParaxialSurface, Propagation, SpotDiagram,
+        ParaxialSurface, SpotDiagram,
     },
     ray::SplittingConfig,
     OpticScenery,
@@ -24,7 +24,6 @@ fn main() -> OpmResult<()> {
         3,
     )?);
     let i_l1 = scenery.add_node(ParaxialSurface::new("f=100", millimeter!(100.0))?);
-    let i_p1 = scenery.add_node(Propagation::new("l=300", millimeter!(300.0))?);
     let i_l2 = scenery.add_node(ParaxialSurface::new("f=200", millimeter!(200.0))?);
     let i_bs = scenery.add_node(BeamSplitter::new("1% BS", &SplittingConfig::Ratio(0.99))?);
     let i_e1 = scenery.add_node(EnergyMeter::new(
@@ -34,8 +33,7 @@ fn main() -> OpmResult<()> {
     let i_sd1 = scenery.add_node(SpotDiagram::new("Output"));
 
     scenery.connect_nodes(i_src, "out1", i_l1, "front", Length::zero())?;
-    scenery.connect_nodes(i_l1, "rear", i_p1, "front", Length::zero())?;
-    scenery.connect_nodes(i_p1, "rear", i_l2, "front", Length::zero())?;
+    scenery.connect_nodes(i_l1, "rear", i_l2, "front", millimeter!(300.0))?;
     scenery.connect_nodes(i_l2, "rear", i_bs, "input1", Length::zero())?;
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_e1, "in1", Length::zero())?;
     scenery.connect_nodes(i_e1, "out1", i_sd1, "in1", Length::zero())?;

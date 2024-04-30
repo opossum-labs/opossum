@@ -258,7 +258,6 @@ impl OpticScenery {
             Ok(format!("i{}:{}", end_node.index(), light_port))
         }
     }
-
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     ///
     /// # Attributes
@@ -284,6 +283,14 @@ impl OpticScenery {
             if neighbors.count() == 0 {
                 warn!("stale (completely unconnected) node {node_name} found. Skipping.");
             } else {
+                // calc isometry for node if not already set.
+                if node.optical_ref.lock().unwrap().isometry().is_none() {
+                    if let Some(iso) = self.g.calc_node_isometry(idx) {
+                        node.optical_ref.lock().unwrap().set_isometry(iso);
+                    } else {
+                        warn!("could not assign node isometry to {} because predecessor node has no isometry defined.", node_name);
+                    }
+                }
                 let incoming_edges: LightResult = self.incoming_edges(idx);
                 // paranoia: check if all incoming ports are really input ports of the node to be analyzed
                 let input_ports = node.optical_ref.lock().unwrap().ports().input_names();
@@ -546,8 +553,8 @@ mod test {
         millimeter, nanometer,
         nodes::{
             BeamSplitter, Detector, Dummy, EnergyMeter, IdealFilter, NodeReference,
-            ParaxialSurface, Propagation, RayPropagationVisualizer, Source, Spectrometer,
-            SpotDiagram, WaveFront,
+            ParaxialSurface, RayPropagationVisualizer, Source, Spectrometer, SpotDiagram,
+            WaveFront,
         },
         optical::Optical,
         properties::Proptype,
@@ -717,7 +724,6 @@ mod test {
         assert!(!EnergyMeter::default().is_source());
         assert!(!IdealFilter::default().is_source());
         assert!(!ParaxialSurface::default().is_source());
-        assert!(!Propagation::default().is_source());
         assert!(!RayPropagationVisualizer::default().is_source());
         assert!(!Spectrometer::default().is_source());
         assert!(!SpotDiagram::default().is_source());

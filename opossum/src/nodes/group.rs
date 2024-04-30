@@ -152,13 +152,6 @@ impl NodeGroup {
                 "cannot connect nodes if group is set as inverted".into(),
             ));
         }
-        if let Some(iso) = self.isometry() {
-            if self.is_mapped_src(src_node) {
-                if let Some(node) = self.g.0.node_weight(src_node) {
-                    node.optical_ref.lock().unwrap().set_isometry(iso.clone())
-                }
-            }
-        }
         self.g.connect_nodes(
             src_node,
             src_port,
@@ -434,19 +427,8 @@ impl NodeGroup {
             }
         } // else outgoing edge not connected -> data dropped
     }
-    fn is_mapped_src(&self, idx: NodeIndex) -> bool {
-        self.input_port_map().iter().any(|m| m.1 .0 == idx)
-    }
-    fn is_group_src_node(&self, idx: NodeIndex) -> bool {
-        let group_srcs = self.g.0.externals(Direction::Incoming);
-        group_srcs.into_iter().any(|gs| gs == idx)
-    }
-    fn is_group_sink_node(&self, idx: NodeIndex) -> bool {
-        let group_sinks = self.g.0.externals(Direction::Outgoing);
-        group_sinks.into_iter().any(|gs| gs == idx)
-    }
     fn get_incoming(&self, idx: NodeIndex, incoming_data: &LightResult) -> LightResult {
-        if self.is_group_src_node(idx) {
+        if self.g.is_src_node(idx) {
             // get from incoming_data
             let portmap = if self.node_attr.inverted().unwrap() {
                 self.output_port_map()
@@ -490,10 +472,18 @@ impl NodeGroup {
         let mut light_result = LightResult::default();
         for idx in sorted {
             let node = g_clone.node_weight(idx).unwrap();
+            let node_name = node.optical_ref.lock().unwrap().name();
             if self.is_stale_node(idx) {
-                let node_name = node.optical_ref.lock().unwrap().name();
                 warn!("Group {group_name} contains stale (completely unconnected) node {node_name}. Skipping.");
             } else {
+                // calc isometry for node if not already set.
+                if node.optical_ref.lock().unwrap().isometry().is_none() {
+                    if let Some(iso) = self.g.calc_node_isometry(idx) {
+                        node.optical_ref.lock().unwrap().set_isometry(iso);
+                    } else {
+                        warn!("could not assign node isometry to {} because predecessor node has no isometry defined.", node_name);
+                    }
+                }
                 // Check if node is group src node
                 let incoming_edges = self.get_incoming(idx, incoming_data);
                 let outgoing_edges: LightResult = node
@@ -502,7 +492,7 @@ impl NodeGroup {
                     .unwrap()
                     .analyze(incoming_edges, analyzer_type)?;
                 // Check if node is group sink node
-                if self.is_group_sink_node(idx) {
+                if self.g.is_sink_node(idx) {
                     let portmap = if is_inverted {
                         self.input_port_map()
                     } else {
@@ -818,7 +808,15 @@ impl Optical for NodeGroup {
         &self.node_attr
     }
     fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+        self.node_attr.set_isometry(isometry.clone());
+        for portmap in self.input_port_map() {
+            if let Some(node) = self.g.0.node_weight(portmap.1 .0) {
+                node.optical_ref
+                    .lock()
+                    .unwrap()
+                    .set_isometry(isometry.clone());
+            }
+        }
     }
 }
 

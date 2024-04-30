@@ -11,7 +11,6 @@ mod ideal_filter;
 mod lens;
 mod node_attr;
 mod paraxial_surface;
-mod propagation;
 pub mod ray_propagation_visualizer;
 mod reference;
 mod source;
@@ -28,7 +27,6 @@ pub use group::{NodeGroup, PortMap};
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::Lens;
 pub use paraxial_surface::ParaxialSurface;
-pub use propagation::Propagation;
 pub use reference::NodeReference;
 pub use source::Source;
 pub use source_helper::{
@@ -96,10 +94,6 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         )),
         "Wavefront monitor" => Ok(OpticRef::new(
             Arc::new(Mutex::new(WaveFront::default())),
-            uuid,
-        )),
-        "propagation" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(Propagation::default())),
             uuid,
         )),
         "paraxial" => Ok(OpticRef::new(

@@ -100,7 +100,6 @@ impl OpticGraph {
                 "connecting nodes <{src_name}> -> <{target_name}> would form a loop"
             )));
         }
-        self.update_node_positions()?;
         Ok(())
     }
     fn src_node_port_exists(&self, src_node: NodeIndex, src_port: &str) -> bool {
@@ -160,6 +159,32 @@ impl OpticGraph {
         }
         srcs
     }
+    pub fn is_src_node(&self, idx: NodeIndex) -> bool {
+        let group_srcs = self.0.externals(petgraph::Direction::Incoming);
+        group_srcs.into_iter().any(|gs| gs == idx)
+    }
+    pub fn is_sink_node(&self, idx: NodeIndex) -> bool {
+        let group_sinks = self.0.externals(petgraph::Direction::Outgoing);
+        group_sinks.into_iter().any(|gs| gs == idx)
+    }
+    pub fn calc_node_isometry(&self, node_idx: NodeIndex) -> Option<Isometry> {
+        let neighbors: Vec<NodeIndex> = self
+            .0
+            .neighbors_directed(node_idx, petgraph::Direction::Incoming)
+            .collect();
+        for neighbor in neighbors {
+            let neighbor_node_ref = self.0.node_weight(neighbor).unwrap();
+            let neighbor_node = neighbor_node_ref.optical_ref.lock().unwrap();
+            if let Some(neighbor_iso) = neighbor_node.isometry() {
+                let connecting_edge = self.0.edges_connecting(neighbor, node_idx).next().unwrap();
+                let connecting_isometery = connecting_edge.weight().isometry();
+                return Some(neighbor_iso.append(connecting_isometery));
+            } else {
+                return None;
+            }
+        }
+        None
+    }
     pub fn update_node_positions(&mut self) -> OpmResult<()> {
         // iterate over all possible paths from a src to a sink
         for src in &self.sources() {
@@ -189,7 +214,7 @@ impl OpticGraph {
                                     .unwrap()
                                     .set_isometry(neighbor_isometry.append(connecting_isometery));
                             } else {
-                                warn!("could not assign node isometry to {} because predecessor node {} has not isometry defined.", node.optical_ref.lock().unwrap().name(), neighbor_name);
+                                warn!("could not assign node isometry to {} because predecessor node {} has no isometry defined.", node.optical_ref.lock().unwrap().name(), neighbor_name);
                             }
                         }
                     }

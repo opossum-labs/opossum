@@ -17,8 +17,8 @@ use opossum::{
     millimeter,
     nanometer,
     nodes::{
-        BeamSplitter, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
-        Propagation, RayPropagationVisualizer, Source, WaveFront,
+        BeamSplitter, Dummy, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
+        RayPropagationVisualizer, Source, WaveFront,
     },
     optical::Optical,
     position_distributions::Hexapolar,
@@ -168,10 +168,6 @@ fn main() -> OpmResult<()> {
 
     scenery.connect_nodes(input_group, "output", t1, "input", Length::zero())?;
 
-    let d6 = scenery.add_node(Propagation::new("d6", millimeter!(100.0))?);
-
-    scenery.connect_nodes(t1, "output", d6, "front", Length::zero())?;
-
     // Dichroic beam splitter + filters (1w/2w)
 
     let mut group_bs = NodeGroup::new("Dichroic beam splitter");
@@ -215,12 +211,8 @@ fn main() -> OpmResult<()> {
 
     let bs_group = scenery.add_node(group_bs);
 
-    scenery.connect_nodes(d6, "rear", bs_group, "input", Length::zero())?;
-
+    scenery.connect_nodes(t1, "output", bs_group, "input", millimeter!(100.0))?;
     // 1w branch
-
-    // Distance T1 -> T2 1w 637.5190 (-100.0 because of d6)
-    let d_1w_7 = scenery.add_node(Propagation::new("1w d7", millimeter!(537.5190))?);
 
     // T2_1w
     let mut group_t2_1w = NodeGroup::new("T2 1w");
@@ -265,8 +257,6 @@ fn main() -> OpmResult<()> {
     group_t2_1w.map_output_port(t2_1w_exit, "rear", "output")?;
     let t2_1w = scenery.add_node(group_t2_1w);
 
-    let d_1w_10 = scenery.add_node(Propagation::new("1w d10", millimeter!(664.58900))?);
-
     // T3_1w
     let mut group_t3_1w = NodeGroup::new("T3 1w");
 
@@ -284,7 +274,7 @@ fn main() -> OpmResult<()> {
         millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
-    let d_1w_12 = group_t3_1w.add_node(Propagation::new("1w d12", millimeter!(279.86873))?)?;
+    let d_1w_12 = group_t3_1w.add_node(Dummy::new("1w d12"))?;
     group_t3_1w.connect_nodes(
         t3_1w_input,
         "rear",
@@ -292,16 +282,14 @@ fn main() -> OpmResult<()> {
         "front",
         millimeter!(1181.0000),
     )?;
-    group_t3_1w.connect_nodes(t3_1w_exit, "rear", d_1w_12, "front", Length::zero())?;
+    group_t3_1w.connect_nodes(t3_1w_exit, "rear", d_1w_12, "front", millimeter!(279.86873))?;
 
     group_t3_1w.map_input_port(t3_1w_input, "front", "input")?;
     group_t3_1w.map_output_port(d_1w_12, "rear", "output")?;
     let t3_1w = scenery.add_node(group_t3_1w);
 
-    scenery.connect_nodes(bs_group, "output_1w", d_1w_7, "front", Length::zero())?;
-    scenery.connect_nodes(d_1w_7, "rear", t2_1w, "input", Length::zero())?;
-    scenery.connect_nodes(t2_1w, "output", d_1w_10, "front", Length::zero())?;
-    scenery.connect_nodes(d_1w_10, "rear", t3_1w, "input", Length::zero())?;
+    scenery.connect_nodes(bs_group, "output_1w", t2_1w, "input", millimeter!(537.5190))?;
+    scenery.connect_nodes(t2_1w, "output", t3_1w, "input", millimeter!(664.58900))?;
 
     let mut group_det_1w = NodeGroup::new("Detectors 1w");
 
@@ -327,9 +315,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(t3_1w, "output", det_1w, "input", Length::zero())?;
 
     // 2w branch
-
-    // Distance T1 -> T2 1w 637.5190 (-100.0 because of d6)
-    let d_2w_7 = scenery.add_node(Propagation::new("2w d7", millimeter!(474.589))?);
 
     // T2_2w
     let mut group_t2_2w = NodeGroup::new("T2 2w");
@@ -374,8 +359,6 @@ fn main() -> OpmResult<()> {
     group_t2_2w.map_output_port(t2_2w_exit, "rear", "output")?;
     let t2_2w = scenery.add_node(group_t2_2w);
 
-    let d_2w_10 = scenery.add_node(Propagation::new("2w d10", millimeter!(622.09000))?);
-
     // T3_2w
     let mut group_t3_2w = NodeGroup::new("T3 2w");
 
@@ -393,7 +376,7 @@ fn main() -> OpmResult<()> {
         millimeter!(9.5),
         &refr_index_hk9l,
     )?)?;
-    let d_2w_12 = group_t3_2w.add_node(Propagation::new("2w d12", millimeter!(250.35850))?)?;
+    let d_2w_12 = group_t3_2w.add_node(Dummy::new("2w d12"))?;
     group_t3_2w.connect_nodes(
         t3_2w_input,
         "rear",
@@ -401,16 +384,14 @@ fn main() -> OpmResult<()> {
         "front",
         millimeter!(1181.0000),
     )?;
-    group_t3_2w.connect_nodes(t3_2w_exit, "rear", d_2w_12, "front", Length::zero())?;
+    group_t3_2w.connect_nodes(t3_2w_exit, "rear", d_2w_12, "front", millimeter!(250.35850))?;
 
     group_t3_2w.map_input_port(t3_2w_input, "front", "input")?;
     group_t3_2w.map_output_port(d_2w_12, "rear", "output")?;
     let t3_2w = scenery.add_node(group_t3_2w);
 
-    scenery.connect_nodes(bs_group, "output_2w", d_2w_7, "front", Length::zero())?;
-    scenery.connect_nodes(d_2w_7, "rear", t2_2w, "input", Length::zero())?;
-    scenery.connect_nodes(t2_2w, "output", d_2w_10, "front", Length::zero())?;
-    scenery.connect_nodes(d_2w_10, "rear", t3_2w, "input", Length::zero())?;
+    scenery.connect_nodes(bs_group, "output_2w", t2_2w, "input", millimeter!(474.589))?;
+    scenery.connect_nodes(t2_2w, "output", t3_2w, "input", millimeter!(622.09000))?;
 
     // 2w detectors
     let mut group_det_2w = NodeGroup::new("Detectors 2w");

@@ -35,7 +35,9 @@ pub fn round_collimated_ray_source(
         &Hexapolar::new(radius, nr_of_rings)?,
     )?;
     let light = LightData::Geometric(rays);
-    Ok(Source::new("collimated ray source", &light))
+    let mut src = Source::new("collimated ray source", &light);
+    src.set_isometry(Isometry::identity());
+    Ok(src)
 }
 /// Create a [`Source`] containing a line of collimated rays.
 ///

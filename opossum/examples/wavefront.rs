@@ -3,8 +3,8 @@ use opossum::{
     error::OpmResult,
     joule, meter,
     nodes::{
-        round_collimated_ray_source, FluenceDetector, ParaxialSurface, Propagation,
-        RayPropagationVisualizer, Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
+        round_collimated_ray_source, FluenceDetector, ParaxialSurface, RayPropagationVisualizer,
+        Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
     },
     OpticScenery,
 };
@@ -16,10 +16,8 @@ fn main() -> OpmResult<()> {
     scenery.set_description("Wavefont Demo")?;
     let source = round_collimated_ray_source(meter!(5e-3), joule!(1.), 15)?;
     let i_s = scenery.add_node(source);
-    let i_p1 = scenery.add_node(Propagation::new("propagation", meter!(0.1))?);
     let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));
     let i_l = scenery.add_node(ParaxialSurface::new("lens", meter!(0.1))?);
-    let i_p2 = scenery.add_node(Propagation::new("propagation", meter!(0.2))?);
     let i_wf2: petgraph::prelude::NodeIndex = scenery.add_node(WaveFront::new("wf_monitor 2"));
     let i_sp: petgraph::prelude::NodeIndex = scenery.add_node(SpotDiagram::new("spot 3"));
     let i_l2 = scenery.add_node(ParaxialSurface::new("lens", meter!(0.1))?);
@@ -31,11 +29,9 @@ fn main() -> OpmResult<()> {
     let i_fl1: petgraph::prelude::NodeIndex =
         scenery.add_node(FluenceDetector::new("fluence monitor"));
 
-    scenery.connect_nodes(i_s, "out1", i_p1, "front", Length::zero())?;
-    scenery.connect_nodes(i_p1, "rear", i_wf1, "in1", Length::zero())?;
+    scenery.connect_nodes(i_s, "out1", i_wf1, "in1", meter!(0.1))?;
     scenery.connect_nodes(i_wf1, "out1", i_l, "front", Length::zero())?;
-    scenery.connect_nodes(i_l, "rear", i_p2, "front", Length::zero())?;
-    scenery.connect_nodes(i_p2, "rear", i_wf2, "in1", Length::zero())?;
+    scenery.connect_nodes(i_l, "rear", i_wf2, "in1", meter!(0.2))?;
     scenery.connect_nodes(i_wf2, "out1", i_sp, "in1", Length::zero())?;
     scenery.connect_nodes(i_sp, "out1", i_l2, "front", Length::zero())?;
     scenery.connect_nodes(i_l2, "rear", i_wf3, "in1", Length::zero())?;
