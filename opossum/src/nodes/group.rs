@@ -1157,6 +1157,7 @@ mod test {
     fn analyze_stale_node() {
         testing_logger::setup();
         let mut group = NodeGroup::default();
+        group.set_isometry(Isometry::identity());
         let d1 = group.add_node(Dummy::default()).unwrap();
         let _ = group.add_node(Dummy::new("stale node")).unwrap();
         group.map_input_port(d1, "front", "input").unwrap();

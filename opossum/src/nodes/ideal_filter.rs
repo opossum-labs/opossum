@@ -260,6 +260,7 @@ mod test {
         position_distributions::Hexapolar,
         rays::Rays,
         spectrum_helper::create_he_ne_spec,
+        utils::geom_transformation::Isometry,
     };
 
     use super::*;
@@ -377,6 +378,7 @@ mod test {
     #[test]
     fn analyzer_geometric_fixed() {
         let mut node = IdealFilter::new("test", &FilterType::Constant(0.3)).unwrap();
+        node.set_isometry(Isometry::identity());
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
             Rays::new_uniform_collimated(

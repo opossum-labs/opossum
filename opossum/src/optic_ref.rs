@@ -232,7 +232,7 @@ mod test {
                     Some(uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb"))
                 )
             ),
-            "OpticRef { optical_ref: Mutex { value: dummy (dummy) }, uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb }"
+            "OpticRef { optical_ref: Mutex { data: dummy (dummy), poisoned: false, .. }, uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb }"
         );
     }
 }

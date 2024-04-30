@@ -553,6 +553,7 @@ mod test {
         properties::Proptype,
         ray::Ray,
         rays::Rays,
+        utils::geom_transformation::Isometry,
         OpticScenery,
     };
     use log::Level;
@@ -629,9 +630,11 @@ mod test {
     fn analyze_unconnected_sub_trees() {
         testing_logger::setup();
         let mut scenery = OpticScenery::new();
-        let n1 = scenery.add_node(Dummy::default());
+        let mut d = Dummy::default();
+        d.set_isometry(Isometry::identity());
+        let n1 = scenery.add_node(d.clone());
         let n2 = scenery.add_node(Dummy::default());
-        let n3 = scenery.add_node(Dummy::default());
+        let n3 = scenery.add_node(d);
         let n4 = scenery.add_node(Dummy::default());
         scenery
             .connect_nodes(n1, "rear", n2, "front", Length::zero())
@@ -641,6 +644,9 @@ mod test {
             .unwrap();
         assert!(scenery.analyze(&AnalyzerType::Energy).is_ok());
         testing_logger::validate(|captured_logs| {
+            for log in captured_logs {
+                println!("{}", log.body);
+            }
             assert_eq!(captured_logs.len(), 1);
             assert_eq!(
                 captured_logs[0].body,
@@ -660,7 +666,9 @@ mod test {
         );
         let mut scenery = OpticScenery::new();
         let i_s = scenery.add_node(Source::new("src", &LightData::Geometric(rays)));
-        let i_e = scenery.add_node(EnergyMeter::default());
+        let mut em = EnergyMeter::default();
+        em.set_isometry(Isometry::identity());
+        let i_e = scenery.add_node(em);
         scenery
             .connect_nodes(i_s, "out1", i_e, "in1", Length::zero())
             .unwrap();

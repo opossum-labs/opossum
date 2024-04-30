@@ -381,6 +381,7 @@ impl Plottable for WaveFrontErrorMap {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::utils::geom_transformation::Isometry;
     use crate::{
         analyzer::AnalyzerType, analyzer::RayTraceConfig, joule, lightdata::DataEnergy, millimeter,
         nanometer, nodes::test_helper::test_helper::*, position_distributions::Hexapolar, ray::Ray,
@@ -470,6 +471,7 @@ mod test {
     #[test]
     fn analyze_ok() {
         let mut node = WaveFront::default();
+        node.set_isometry(Isometry::identity());
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
             Rays::new_uniform_collimated(

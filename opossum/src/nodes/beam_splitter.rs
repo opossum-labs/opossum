@@ -329,7 +329,7 @@ mod test {
     use super::*;
     use crate::{
         analyzer::RayTraceConfig, joule, millimeter, nanometer, nodes::test_helper::test_helper::*,
-        ray::Ray, spectrum_helper::create_he_ne_spec,
+        ray::Ray, spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
     use approx::{assert_abs_diff_eq, AbsDiffEq};
     use uom::si::energy::joule;
@@ -461,6 +461,7 @@ mod test {
     #[test]
     fn analyze_raytrace_one_input() {
         let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
+        node.set_isometry(Isometry::identity());
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         let ray =
@@ -488,6 +489,7 @@ mod test {
     #[test]
     fn analyze_raytrace_two_input() {
         let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
+        node.set_isometry(Isometry::identity());
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         let ray =
