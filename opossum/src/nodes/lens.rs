@@ -193,7 +193,6 @@ impl Optical for Lens {
                                 "cannot read center thickness".into(),
                             ));
                         };
-                        // rays.set_dist_to_next_surface(*center_thickness);
                         let thickness_iso = Isometry::new_along_z(*center_thickness)?;
                         let Ok(Proptype::Length(rear_roc)) =
                             self.node_attr.get_property("rear curvature")
@@ -245,6 +244,19 @@ impl Optical for Lens {
     }
     fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
         self.node_attr.set_isometry(isometry);
+    }
+    fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
+        if let Some(iso) = self.node_attr.isometry() {
+            let Ok(Proptype::Length(center_thickness)) =
+                self.node_attr.get_property("center thickness")
+            else {
+                return None;
+            };
+            let thickness_iso = Isometry::new_along_z(*center_thickness).unwrap();
+            Some(iso.append(&thickness_iso))
+        } else {
+            None
+        }
     }
 }
 

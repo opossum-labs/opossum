@@ -90,12 +90,6 @@ fn setup_scene(
         transform: Transform::from_xyz(4.0, 8.0, -4.0),
         ..default()
     });
-    // directional light
-    // commands.spawn(DirectionalLightBundle {
-    //     directional_light: DirectionalLight::default(),
-    //     transform: Transform::from_rotation(Quat::from_rotation_x(0.2)),
-    //     ..default()
-    // });
     // optical axis
     commands.spawn(MaterialMeshBundle {
         mesh: meshes.add(LineStrip {
@@ -106,7 +100,7 @@ fn setup_scene(
     });
     // static camera
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 1.0, 0.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        transform: Transform::from_xyz(0.0, 2.0, 1.0).looking_at(Vec3::new(0.0, 0.0, 1.0), Vec3::Y),
         ..default()
     });
 }

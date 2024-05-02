@@ -13,9 +13,7 @@ use opossum::{
     error::OpmResult,
     joule,
     lightdata::LightData,
-    // degree,
-    millimeter,
-    nanometer,
+    millimeter, nanometer,
     nodes::{
         BeamSplitter, Dummy, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
         RayPropagationVisualizer, Source, WaveFront,
@@ -27,6 +25,7 @@ use opossum::{
     refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
     spectrum::Spectrum,
     spectrum_helper::generate_filter_spectrum,
+    utils::geom_transformation::Isometry,
     OpticScenery,
 };
 use uom::si::f64::Length;
@@ -109,8 +108,9 @@ fn main() -> OpmResult<()> {
 
     let mut scenery = OpticScenery::default();
     scenery.set_description("HHT Sensor")?;
-
-    let src = scenery.add_node(Source::new("Source", &LightData::Geometric(rays)));
+    let mut src = Source::new("Source", &LightData::Geometric(rays));
+    src.set_isometry(Isometry::identity());
+    let src = scenery.add_node(src);
     let input_group = scenery.add_node(hhts_input()?);
     scenery.connect_nodes(src, "out1", input_group, "input", Length::zero())?;
 
@@ -166,7 +166,7 @@ fn main() -> OpmResult<()> {
     group_t1.expand_view(false)?;
     let t1 = scenery.add_node(group_t1);
 
-    scenery.connect_nodes(input_group, "output", t1, "input", Length::zero())?;
+    scenery.connect_nodes(input_group, "output", t1, "input", millimeter!(100.0))?;
 
     // Dichroic beam splitter + filters (1w/2w)
 

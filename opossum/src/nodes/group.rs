@@ -818,6 +818,22 @@ impl Optical for NodeGroup {
             }
         }
     }
+    fn output_port_isometry(&self, output_port_name: &str) -> Option<Isometry> {
+        if let Some(output_port) = self.output_port_map().get(output_port_name) {
+            if let Some(node) = self.g.0.node_weight(output_port.0) {
+                node.optical_ref
+                    .lock()
+                    .unwrap()
+                    .output_port_isometry(&output_port.1)
+            } else {
+                warn!("node not found");
+                None
+            }
+        } else {
+            warn!("output port name {} not found", output_port_name);
+            None
+        }
+    }
 }
 
 impl Dottable for NodeGroup {

@@ -1,9 +1,4 @@
 //! The basic structure containing the entire optical model
-use std::fs::File;
-use std::io::{Cursor, Write};
-use std::path::Path;
-
-use crate::utils::geom_transformation::Isometry;
 use crate::{
     analyzer::AnalyzerType,
     error::{OpmResult, OpossumError},
@@ -16,17 +11,22 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     reporter::AnalysisReport,
+    utils::geom_transformation::Isometry,
 };
 use chrono::Local;
-use image::io::Reader;
-use image::DynamicImage;
+use image::{io::Reader, DynamicImage};
 use log::warn;
-use petgraph::algo::toposort;
-use petgraph::prelude::NodeIndex;
-use petgraph::visit::EdgeRef;
-use serde::de::{self, MapAccess, Visitor};
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize};
+use petgraph::{algo::toposort, prelude::NodeIndex, visit::EdgeRef};
+use serde::{
+    de::{self, MapAccess, Visitor},
+    ser::SerializeStruct,
+    Deserialize, Serialize,
+};
+use std::{
+    fs::File,
+    io::{Cursor, Write},
+    path::Path,
+};
 use tempfile::NamedTempFile;
 use uom::si::f64::Length;
 
@@ -279,6 +279,7 @@ impl OpticScenery {
                 .node_weight(idx)
                 .ok_or_else(|| OpossumError::Analysis("getting node_weight failed".into()))?;
             let node_name = node.optical_ref.lock().unwrap().name();
+
             let neighbors = self.g.0.neighbors_undirected(idx);
             if neighbors.count() == 0 {
                 warn!("stale (completely unconnected) node {node_name} found. Skipping.");

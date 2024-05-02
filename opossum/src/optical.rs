@@ -208,11 +208,19 @@ pub trait Optical: Dottable + Send {
     fn properties(&self) -> &Properties {
         self.node_attr().properties()
     }
-    /// Return the [`Isometry`] of this optical node.
+    /// Return the (base) [`Isometry`] of this optical node.
     fn isometry(&self) -> &Option<Isometry> {
         self.node_attr().isometry()
     }
-    /// Set the [`Isometry`] (position and angle) of this optical node.
+    /// Return the [`Isometry`] of the output surface of this optical node.
+    ///
+    /// This function returns the [`Isometry`] of the output surface of the port with the given name. It returns the position and orientation of
+    /// the optical axis after passing the optical node. The default implementation returns the base isometry of the node which corresponds to an
+    /// optical component with an infinitely thin flat surface. In this case the optical axis before and behind the component is unmodified.
+    fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
+        self.node_attr().isometry().clone()
+    }
+    /// Set the (base) [`Isometry`] (position and angle) of this optical node.
     fn set_isometry(&mut self, isometry: Isometry);
     ///
     fn mesh(&self) -> Mesh {

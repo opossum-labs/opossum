@@ -31,7 +31,6 @@ pub fn hhts_input() -> OpmResult<NodeGroup> {
     let beam_dump = group.add_node(meter)?;
 
     let hhts_t1_pm = group.add_node(BeamSplitter::new("HHTS_T1_PM", &double_mirror)?)?;
-    let d6 = group.add_node(Dummy::new("d6"))?;
 
     group.connect_nodes(d1, "rear", mm15, "input1", millimeter!(500.0))?;
     group.connect_nodes(
@@ -56,15 +55,7 @@ pub fn hhts_input() -> OpmResult<NodeGroup> {
         "input1",
         millimeter!(1000.0),
     )?;
-    group.connect_nodes(
-        hhts_t1_pm,
-        "out2_trans2_refl1",
-        d6,
-        "front",
-        millimeter!(100.0),
-    )?;
-
     group.map_input_port(d1, "front", "input")?;
-    group.map_output_port(d6, "rear", "output")?;
+    group.map_output_port(hhts_t1_pm, "out2_trans2_refl1", "output")?;
     Ok(group)
 }

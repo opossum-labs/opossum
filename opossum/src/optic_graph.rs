@@ -175,8 +175,11 @@ impl OpticGraph {
         for neighbor in neighbors {
             let neighbor_node_ref = self.0.node_weight(neighbor).unwrap();
             let neighbor_node = neighbor_node_ref.optical_ref.lock().unwrap();
-            if let Some(neighbor_iso) = neighbor_node.isometry() {
-                let connecting_edge = self.0.edges_connecting(neighbor, node_idx).next().unwrap();
+            let connecting_edge = self.0.edges_connecting(neighbor, node_idx).next().unwrap();
+            let neighbor_output_port_name = connecting_edge.weight().src_port();
+            if let Some(neighbor_iso) =
+                neighbor_node.output_port_isometry(neighbor_output_port_name)
+            {
                 let connecting_isometery = connecting_edge.weight().isometry();
                 return Some(neighbor_iso.append(connecting_isometery));
             } else {
