@@ -224,7 +224,7 @@ pub trait Optical: Dottable + Send {
     fn set_isometry(&mut self, isometry: Isometry);
     ///
     fn mesh(&self) -> Mesh {
-        let mesh: Mesh = Cuboid::new(0.5, 0.5, 0.005).into();
+        let mesh: Mesh = Cuboid::new(0.3, 0.3, 0.001).into();
         if let Some(iso) = self.isometry() {
             let t = iso.translation();
             mesh.translated_by(Vec3::new(
@@ -235,6 +235,20 @@ pub trait Optical: Dottable + Send {
         } else {
             warn!("Node has no isometry defined. Mesh will be located at origin.");
             mesh
+        }
+    }
+    /// Return the effective input isometry of this optical node.
+    ///
+    /// The effective input isometry is the base isometry modified by the local alignment isometry (if any)
+    fn effective_iso(&self) -> Option<Isometry> {
+        if let Some(iso) = self.isometry() {
+            if let Some(local_iso) = self.node_attr().alignment() {
+                Some(iso.append(local_iso))
+            } else {
+                Some(iso.clone())
+            }
+        } else {
+            None
         }
     }
 }

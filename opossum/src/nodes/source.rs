@@ -44,7 +44,7 @@ impl Default for Source {
         node_attr
             .create_property(
                 "isometry",
-                "node location / orientation",
+                "absolute node location / orientation",
                 None,
                 EnumProxy::<Option<Isometry>> { value: None }.into(),
             )

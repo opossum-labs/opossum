@@ -2,18 +2,22 @@
 //! Lens with spherical or flat surfaces
 use crate::{
     analyzer::AnalyzerType,
+    degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    joule,
     lightdata::LightData,
-    millimeter,
+    millimeter, nanometer,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::Proptype,
+    ray::Ray,
     refractive_index::{refr_index_vaccuum, RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
-
+use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
+use log::warn;
 use num::Zero;
 use uom::si::f64::Length;
 
@@ -165,7 +169,7 @@ impl Optical for Lens {
                             "cannot read refractive index".into(),
                         ));
                     };
-                    if let Some(iso) = self.node_attr.isometry() {
+                    if let Some(iso) = self.effective_iso() {
                         if (*front_roc).is_infinite() {
                             let plane = Plane::new(&iso);
                             rays.refract_on_surface(&plane, &index_model.value)?;
@@ -175,9 +179,6 @@ impl Optical for Lens {
                                 &index_model.value,
                             )?;
                         };
-                        // let next_z_pos =
-                        //     rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                        // let isometry = Isometry::new_along_z(next_z_pos)?;
                         if let Some(aperture) = self.ports().input_aperture("front") {
                             rays.apodize(aperture)?;
                             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -246,16 +247,60 @@ impl Optical for Lens {
         self.node_attr.set_isometry(isometry);
     }
     fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
-        if let Some(iso) = self.node_attr.isometry() {
+        // if lens is aligned (tilted, decentered), calculate single ray on incoming optical axis
+        // todo: use central wavelength
+        let aligment_iso = if let Some(alignment_iso) = self.node_attr.alignment() {
+            let mut ray =
+                Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
+                    .unwrap();
+            let front_plane = Plane::new(alignment_iso);
+            let Ok(Proptype::RefractiveIndex(index_model)) =
+                self.node_attr.get_property("refractive index")
+            else {
+                return None;
+            };
+            let n2 = index_model
+                .value
+                .get_refractive_index(ray.wavelength())
+                .unwrap();
+            ray.refract_on_surface(&front_plane, n2).unwrap();
             let Ok(Proptype::Length(center_thickness)) =
                 self.node_attr.get_property("center thickness")
             else {
                 return None;
             };
             let thickness_iso = Isometry::new_along_z(*center_thickness).unwrap();
-            Some(iso.append(&thickness_iso))
+            let back_plane = Plane::new(&alignment_iso.append(&thickness_iso));
+            let n2 = refr_index_vaccuum()
+                .get_refractive_index(ray.wavelength())
+                .unwrap();
+            ray.refract_on_surface(&back_plane, n2).unwrap();
+            let ray_pos_after_lens = ray.position();
+            Isometry::new(ray_pos_after_lens, degree!(0.0, 0.0, 0.0)).unwrap()
+        } else {
+            Isometry::identity()
+        };
+        if let Some(iso) = self.node_attr.isometry() {
+            Some(iso.append(&aligment_iso))
         } else {
             None
+        }
+    }
+    fn mesh(&self) -> Mesh {
+        let thickness = if let Ok(Proptype::Length(center_thickness)) =
+            self.node_attr.get_property("center thickness")
+        {
+            center_thickness.value as f32
+        } else {
+            warn!("could not read center thickness. using 0.001 as default");
+            0.001_f32
+        };
+        let mesh: Mesh = Cuboid::new(0.3, 0.3, thickness).into();
+        if let Some(iso) = self.effective_iso() {
+            mesh.transformed_by(iso.into())
+        } else {
+            warn!("Node has no isometry defined. Mesh will be located at origin.");
+            mesh
         }
     }
 }

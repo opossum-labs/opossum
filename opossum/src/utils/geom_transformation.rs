@@ -7,6 +7,10 @@ use crate::{
     properties::Proptype,
 };
 use approx::relative_eq;
+use bevy::{
+    math::{Quat, Vec3, Vec4},
+    transform::components::Transform,
+};
 use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Vector3};
 use num::Zero;
 use serde::{Deserialize, Serialize};
@@ -308,6 +312,16 @@ impl From<EnumProxy<Option<Isometry>>> for Proptype {
 impl From<Option<Isometry>> for Proptype {
     fn from(value: Option<Isometry>) -> Self {
         Self::Isometry(EnumProxy { value })
+    }
+}
+
+impl From<Isometry> for Transform {
+    fn from(value: Isometry) -> Self {
+        let t = value.transform.translation;
+        let r = value.transform.rotation;
+        Transform::from_translation(Vec3::new(t.x as f32, t.y as f32, t.z as f32)).with_rotation(
+            Quat::from_vec4(Vec4::new(r.i as f32, r.j as f32, r.k as f32, r.w as f32)),
+        )
     }
 }
 /// This function defines the coordinate axes on a plane.
