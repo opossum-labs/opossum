@@ -253,7 +253,7 @@ impl Optical for Lens {
             .node_attr
             .alignment()
             .clone()
-            .unwrap_or_else(|| Isometry::identity());
+            .unwrap_or_else(Isometry::identity);
         let mut ray =
             Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
                 .unwrap();
@@ -281,12 +281,10 @@ impl Optical for Lens {
         ray.refract_on_surface(&back_plane, n2).unwrap();
         let ray_pos_after_lens = ray.position();
         let alignment_iso = Isometry::new(ray_pos_after_lens, Point3::origin()).unwrap();
-        if let Some(iso) = self.node_attr.isometry() {
-            // println!("lens output axis: {:?}", iso.append(&alignment_iso));
-            Some(iso.append(&alignment_iso))
-        } else {
-            None
-        }
+        self.node_attr
+            .isometry()
+            .as_ref()
+            .map(|iso| iso.append(&alignment_iso))
     }
     fn mesh(&self) -> Mesh {
         let thickness = if let Ok(Proptype::Length(center_thickness)) =

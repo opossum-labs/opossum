@@ -202,7 +202,7 @@ impl Optical for Wedge {
             .node_attr
             .alignment()
             .clone()
-            .unwrap_or_else(|| Isometry::identity());
+            .unwrap_or_else(Isometry::identity);
         let mut ray =
             Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
                 .unwrap();
@@ -238,12 +238,16 @@ impl Optical for Wedge {
             .unwrap();
         ray.refract_on_surface(&back_plane, n2).unwrap();
         let alignment_iso = Isometry::new_from_view(ray.position(), ray.direction(), Vector3::y());
-        if let Some(iso) = self.node_attr.isometry() {
-            // println!("wedge output axis: {:?}", iso.append(&alignment_iso));
-            Some(iso.append(&alignment_iso))
-        } else {
-            None
-        }
+        // if let Some(iso) = self.node_attr.isometry() {
+        //     // println!("wedge output axis: {:?}", iso.append(&alignment_iso));
+        //     Some(iso.append(&alignment_iso))
+        // } else {
+        //     None
+        // }
+        self.node_attr
+            .isometry()
+            .as_ref()
+            .map(|iso| iso.append(&alignment_iso))
     }
 }
 impl Dottable for Wedge {

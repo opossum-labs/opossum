@@ -77,7 +77,7 @@ impl Optical for Dummy {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.node_attr.isometry() {
-                let plane = Plane::new(&iso);
+                let plane = Plane::new(iso);
                 rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             } else {
                 return Err(OpossumError::Analysis(

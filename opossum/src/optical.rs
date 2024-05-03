@@ -1,7 +1,6 @@
 #![warn(missing_docs)]
 //! Contains the basic trait representing an optical element
 use bevy::math::primitives::Cuboid;
-use bevy::math::Vec3;
 use bevy::render::mesh::Mesh;
 use image::RgbImage;
 use log::warn;

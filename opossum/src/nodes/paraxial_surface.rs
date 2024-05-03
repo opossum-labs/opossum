@@ -107,7 +107,7 @@ impl Optical for ParaxialSurface {
                         return Err(OpossumError::Analysis("cannot read focal length".into()));
                     };
                     if let Some(iso) = self.node_attr.isometry() {
-                        let plane = Plane::new(&iso);
+                        let plane = Plane::new(iso);
                         rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                         rays.refract_paraxial(*focal_length)?;
                     } else {

@@ -40,7 +40,7 @@ fn main() -> OpmResult<()> {
     let p2 = scenery.add_node(prism2);
 
     let det = scenery.add_node(RayPropagationVisualizer::new("Ray plot"));
-    let sd=scenery.add_node(SpotDiagram::default());
+    let sd = scenery.add_node(SpotDiagram::default());
     //let wf = scenery.add_node(WaveFront::new("Wavefront"));
 
     scenery.connect_nodes(src, "out1", p1, "front", millimeter!(10.0))?;

@@ -172,7 +172,7 @@ impl OpticGraph {
             .0
             .neighbors_directed(node_idx, petgraph::Direction::Incoming)
             .collect();
-        for neighbor in neighbors {
+        if let Some(neighbor) = neighbors.into_iter().next() {
             let neighbor_node_ref = self.0.node_weight(neighbor).unwrap();
             let neighbor_node = neighbor_node_ref.optical_ref.lock().unwrap();
             let connecting_edge = self.0.edges_connecting(neighbor, node_idx).next().unwrap();
