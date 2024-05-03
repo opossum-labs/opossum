@@ -19,6 +19,7 @@ mod spectrometer;
 mod spot_diagram;
 mod test_helper;
 mod wavefront;
+mod wedge;
 
 pub use beam_splitter::BeamSplitter;
 pub use detector::Detector;
@@ -46,6 +47,7 @@ pub use spot_diagram::SpotDiagram;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
+pub use wedge::Wedge;
 
 /// Factory function creating a new reference of an optical node of the given type.
 ///
@@ -108,6 +110,7 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
             Arc::new(Mutex::new(FluenceDetector::default())),
             uuid,
         )),
+        "wedge" => Ok(OpticRef::new(Arc::new(Mutex::new(Wedge::default())), uuid)),
         _ => Err(OpossumError::Other(format!(
             "cannot create node type <{node_type}>"
         ))),

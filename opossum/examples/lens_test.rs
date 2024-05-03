@@ -2,10 +2,8 @@ use opossum::{
     degree,
     error::OpmResult,
     joule, millimeter,
-    nodes::{collimated_line_ray_source, Lens, RayPropagationVisualizer},
-    optical::Optical,
+    nodes::{collimated_line_ray_source, Lens, RayPropagationVisualizer, Wedge},
     refractive_index::RefrIndexConst,
-    utils::geom_transformation::Isometry,
     OpticScenery,
 };
 use std::path::Path;
@@ -31,18 +29,25 @@ fn main() -> OpmResult<()> {
     //     millimeter!(2.79),
     //     &RefrIndexConst::new(1.5068)?,
     // )?;
-    let mut lens1 = Lens::new(
-        "Lens 1",
-        millimeter!(f64::INFINITY),
-        millimeter!(f64::INFINITY),
+    // let mut lens1 = Lens::new(
+    //     "Lens 1",
+    //     millimeter!(f64::INFINITY),
+    //     millimeter!(f64::INFINITY),
+    //     millimeter!(20.0),
+    //     &RefrIndexConst::new(1.5068)?,
+    // )?;
+    // let lens1_align = Some(Isometry::new(
+    //     millimeter!(0.0, 0.0, 0.0),
+    //     degree!(15.0, 0.0, 0.0),
+    // )?);
+
+    let lens1 = Wedge::new(
+        "Wedge",
         millimeter!(20.0),
+        degree!(5.0),
         &RefrIndexConst::new(1.5068)?,
     )?;
-    let lens1_align = Some(Isometry::new(
-        millimeter!(0.0, 0.0, 0.0),
-        degree!(15.0, 0.0, 0.0),
-    )?);
-    lens1.set_property("alignment", lens1_align.into())?;
+    // lens1.set_property("alignment", lens1_align.into())?;
     let l1 = scenery.add_node(lens1);
     let l2 = scenery.add_node(Lens::new(
         "Lens 2",

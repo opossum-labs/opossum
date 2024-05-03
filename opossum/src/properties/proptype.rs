@@ -16,13 +16,13 @@ use crate::{
 use num::Float;
 use serde::{Deserialize, Serialize};
 use tinytemplate::TinyTemplate;
-use uom::lib::fmt::Debug;
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
     length::meter,
     Dimension, Quantity, Unit, Units,
 };
+use uom::{lib::fmt::Debug, si::f64::Angle};
 use uuid::Uuid;
 static HTML_PROP_SIMPLE: &str = include_str!("../html/prop_simple.html");
 static HTML_PROP_IMAGE: &str = include_str!("../html/prop_image.html");
@@ -87,6 +87,7 @@ pub enum Proptype {
     /// an energy value
     Energy(Energy),
     /// a optical refractive index model
+    Angle(Angle),
     RefractiveIndex(EnumProxy<RefractiveIndexType>),
     /// a (node) location / orientation
     Isometry(EnumProxy<Option<Isometry>>),
@@ -194,6 +195,11 @@ impl From<Length> for Proptype {
 impl From<Energy> for Proptype {
     fn from(value: Energy) -> Self {
         Self::Energy(value)
+    }
+}
+impl From<Angle> for Proptype {
+    fn from(value: Angle) -> Self {
+        Self::Angle(value)
     }
 }
 

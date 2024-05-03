@@ -2,7 +2,6 @@
 //! Lens with spherical or flat surfaces
 use crate::{
     analyzer::AnalyzerType,
-    degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     joule,
@@ -18,6 +17,7 @@ use crate::{
 };
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
+use nalgebra::Point3;
 use num::Zero;
 use uom::si::f64::Length;
 
@@ -247,41 +247,42 @@ impl Optical for Lens {
         self.node_attr.set_isometry(isometry);
     }
     fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
-        // if lens is aligned (tilted, decentered), calculate single ray on incoming optical axis
+        // if wedge is aligned (tilted, decentered), calculate single ray on incoming optical axis
         // todo: use central wavelength
-        let aligment_iso = if let Some(alignment_iso) = self.node_attr.alignment() {
-            let mut ray =
-                Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
-                    .unwrap();
-            let front_plane = Plane::new(alignment_iso);
-            let Ok(Proptype::RefractiveIndex(index_model)) =
-                self.node_attr.get_property("refractive index")
-            else {
-                return None;
-            };
-            let n2 = index_model
-                .value
-                .get_refractive_index(ray.wavelength())
+        let alignment_iso = self
+            .node_attr
+            .alignment()
+            .clone()
+            .unwrap_or_else(|| Isometry::identity());
+        let mut ray =
+            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
                 .unwrap();
-            ray.refract_on_surface(&front_plane, n2).unwrap();
-            let Ok(Proptype::Length(center_thickness)) =
-                self.node_attr.get_property("center thickness")
-            else {
-                return None;
-            };
-            let thickness_iso = Isometry::new_along_z(*center_thickness).unwrap();
-            let back_plane = Plane::new(&alignment_iso.append(&thickness_iso));
-            let n2 = refr_index_vaccuum()
-                .get_refractive_index(ray.wavelength())
-                .unwrap();
-            ray.refract_on_surface(&back_plane, n2).unwrap();
-            let ray_pos_after_lens = ray.position();
-            Isometry::new(ray_pos_after_lens, degree!(0.0, 0.0, 0.0)).unwrap()
-        } else {
-            Isometry::identity()
+        let front_plane = Plane::new(&alignment_iso);
+        let Ok(Proptype::RefractiveIndex(index_model)) =
+            self.node_attr.get_property("refractive index")
+        else {
+            return None;
         };
+        let n2 = index_model
+            .value
+            .get_refractive_index(ray.wavelength())
+            .unwrap();
+        ray.refract_on_surface(&front_plane, n2).unwrap();
+        let Ok(Proptype::Length(center_thickness)) =
+            self.node_attr.get_property("center thickness")
+        else {
+            return None;
+        };
+        let thickness_iso = Isometry::new_along_z(*center_thickness).unwrap();
+        let back_plane = Plane::new(&alignment_iso.append(&thickness_iso));
+        let n2 = refr_index_vaccuum()
+            .get_refractive_index(ray.wavelength())
+            .unwrap();
+        ray.refract_on_surface(&back_plane, n2).unwrap();
+        let ray_pos_after_lens = ray.position();
+        let alignment_iso = Isometry::new(ray_pos_after_lens, Point3::origin()).unwrap();
         if let Some(iso) = self.node_attr.isometry() {
-            Some(iso.append(&aligment_iso))
+            Some(iso.append(&alignment_iso))
         } else {
             None
         }
