@@ -237,13 +237,9 @@ impl Optical for Wedge {
             .get_refractive_index(ray.wavelength())
             .unwrap();
         ray.refract_on_surface(&back_plane, n2).unwrap();
-        let ray_pos_after_lens = ray.position();
-        let ray_dir_after_lens = ray.direction();
-
-        //let alignment_iso = Isometry::new(ray_pos_after_lens, Point3::origin()).unwrap();
-        let alignment_iso =
-            Isometry::new_from_view(ray_pos_after_lens, ray_dir_after_lens, Vector3::y());
+        let alignment_iso = Isometry::new_from_view(ray.position(), ray.direction(), Vector3::y());
         if let Some(iso) = self.node_attr.isometry() {
+            // println!("wedge output axis: {:?}", iso.append(&alignment_iso));
             Some(iso.append(&alignment_iso))
         } else {
             None

@@ -282,6 +282,7 @@ impl Optical for Lens {
         let ray_pos_after_lens = ray.position();
         let alignment_iso = Isometry::new(ray_pos_after_lens, Point3::origin()).unwrap();
         if let Some(iso) = self.node_attr.isometry() {
+            // println!("lens output axis: {:?}", iso.append(&alignment_iso));
             Some(iso.append(&alignment_iso))
         } else {
             None

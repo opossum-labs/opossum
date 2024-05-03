@@ -94,7 +94,7 @@ impl Optical for RayPropagationVisualizer {
         };
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
-            if let Some(iso) = self.node_attr.isometry() {
+            if let Some(iso) = self.effective_iso() {
                 let plane = Plane::new(&iso);
                 rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             } else {
