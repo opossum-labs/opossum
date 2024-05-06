@@ -41,13 +41,15 @@ use uom::si::f64::Length;
 /// use opossum::OpticScenery;
 /// use opossum::nodes::Dummy;
 /// use opossum::error::OpmResult;
+/// use opossum::millimeter;
 ///
 /// fn main() -> OpmResult<()> {
 ///   let mut scenery = OpticScenery::new();
 ///   scenery.set_description("OpticScenery demo");
 ///   let node1 = scenery.add_node(Dummy::new("dummy1"));
 ///   let node2 = scenery.add_node(Dummy::new("dummy2"));
-///   scenery.connect_nodes(node1, "rear", node2, "front")
+///   scenery.connect_nodes(node1, "rear", node2, "front", millimeter!(100.0))?;
+///   Ok(())
 /// }
 ///
 /// ```
