@@ -149,9 +149,9 @@ impl Optical for SpotDiagram {
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
             let mut transformed_rays = Rays::default();
-            let iso = self.effective_iso().unwrap_or(Isometry::identity());
+            let iso = self.effective_iso().unwrap_or_else(Isometry::identity);
             for ray in rays {
-                transformed_rays.add_ray(ray.inverse_transformed_ray(&iso))
+                transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
             }
             props
                 .create("Spot diagram", "2D spot diagram", None, self.clone().into())
@@ -261,7 +261,7 @@ impl Plottable for SpotDiagram {
                     let grad_val = 0.42 + (*wvl - wavelengths[0]).get::<nanometer>() / wvl_range;
                     let rgbcolor = color_grad.eval_continuous(grad_val);
                     let series_label = format!("{:.1} nm", wvl.get::<nanometer>());
-                    let iso = self.effective_iso().unwrap_or(Isometry::identity());
+                    let iso = self.effective_iso().unwrap_or_else(Isometry::identity);
                     let data = PlotData::Dim2 {
                         xy_data: ray_bundle.get_xy_rays_pos(true, &iso),
                     };

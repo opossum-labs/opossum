@@ -124,6 +124,7 @@ impl OpticScenery {
             .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
         Ok(node.clone())
     }
+    #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
         self.g.0.node_weights().collect()
     }

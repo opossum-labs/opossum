@@ -149,6 +149,7 @@ impl NodeAttr {
         &self.isometry
     }
     /// Returns the local alignment isometry of a node (if any).
+    #[must_use]
     pub fn alignment(&self) -> &Option<Isometry> {
         if let Ok(Proptype::Isometry(prox)) = self.props.get("alignment") {
             &prox.value

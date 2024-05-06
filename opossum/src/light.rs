@@ -42,7 +42,7 @@ impl Light {
         self.src_port = self.target_port.clone();
         self.target_port = tmp;
     }
-    pub fn isometry(&self) -> &Isometry {
+    pub const fn isometry(&self) -> &Isometry {
         &self.isometry
     }
     pub fn set_isometry(&mut self, isometry: Isometry) {

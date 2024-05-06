@@ -182,13 +182,11 @@ impl OpticGraph {
             {
                 let connecting_isometery = connecting_edge.weight().isometry();
                 return Some(neighbor_iso.append(connecting_isometery));
-            } else {
-                return None;
             }
         }
         None
     }
-    pub fn update_node_positions(&mut self) -> OpmResult<()> {
+    pub fn update_node_positions(&mut self) {
         // iterate over all possible paths from a src to a sink
         for src in &self.sources() {
             for sink in &self.sinks() {
@@ -224,7 +222,6 @@ impl OpticGraph {
                 }
             }
         }
-        Ok(())
     }
 }
 impl Serialize for OpticGraph {

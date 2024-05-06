@@ -66,6 +66,7 @@ impl Isometry {
         )))
     }
     /// Create a "identiy" Isometry, which represents a zero translation and rotation.
+    #[must_use]
     pub fn identity() -> Self {
         Self {
             transform: Isometry3::<f64>::identity(),
@@ -319,7 +320,7 @@ impl From<Isometry> for Transform {
     fn from(value: Isometry) -> Self {
         let t = value.transform.translation;
         let r = value.transform.rotation;
-        Transform::from_translation(Vec3::new(t.x as f32, t.y as f32, t.z as f32)).with_rotation(
+        Self::from_translation(Vec3::new(t.x as f32, t.y as f32, t.z as f32)).with_rotation(
             Quat::from_vec4(Vec4::new(r.i as f32, r.j as f32, r.k as f32, r.w as f32)),
         )
     }
