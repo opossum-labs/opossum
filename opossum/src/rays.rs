@@ -19,6 +19,7 @@ use crate::{
     surface::Surface,
     utils::{
         filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
+        geom_transformation::Isometry,
         griddata::{
             calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
             interpolate_3d_triangulated_scatter_data, VoronoiedData,
@@ -457,11 +458,11 @@ impl Rays {
         wave_front_err
     }
 
-    /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx2<f64>]`.
+    /// Returns the x and y positions of the ray bundle in form of a `[MatrixXx2<f64>]` transformed by an [`Isometry`].
     ///
     /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be returned.
     #[must_use]
-    pub fn get_xy_rays_pos(&self, valid_only: bool) -> MatrixXx2<f64> {
+    pub fn get_xy_rays_pos(&self, valid_only: bool, isometry: &Isometry) -> MatrixXx2<f64> {
         let mut rays_at_pos = MatrixXx2::from_element(self.nr_of_rays(valid_only), 0.);
         for (row, ray) in self
             .rays
@@ -469,8 +470,9 @@ impl Rays {
             .filter(|r| !valid_only || r.valid())
             .enumerate()
         {
-            rays_at_pos[(row, 0)] = ray.position().x.get::<millimeter>();
-            rays_at_pos[(row, 1)] = ray.position().y.get::<millimeter>();
+            let inverse_transformed_ray = ray.inverse_transformed_ray(isometry);
+            rays_at_pos[(row, 0)] = inverse_transformed_ray.position().x.get::<millimeter>();
+            rays_at_pos[(row, 1)] = inverse_transformed_ray.position().y.get::<millimeter>();
         }
         rays_at_pos
     }
@@ -516,7 +518,7 @@ impl Rays {
         let num_axes_points = 100.;
 
         // get ray positions
-        let rays_pos_vec = self.get_xy_rays_pos(true) / 10.; //for centimeter;
+        let rays_pos_vec = self.get_xy_rays_pos(true, &Isometry::identity()) / 10.; //for centimeter;
 
         //axes definition
         let (co_ax1, co_ax1_lim) = create_linspace_axes(rays_pos_vec.column(0), num_axes_points)?;
@@ -1755,7 +1757,7 @@ mod test {
         )
         .unwrap();
 
-        let xy_pos = rays.get_xy_rays_pos(false);
+        let xy_pos = rays.get_xy_rays_pos(false, &Isometry::identity());
         for val in xy_pos.row_iter() {
             assert!(val[(0, 0)].abs() < f64::EPSILON);
             assert!(val[(0, 1)].abs() < f64::EPSILON);
@@ -1795,7 +1797,7 @@ mod test {
         ];
 
         let rays = Rays::from(ray_vec);
-        let xy_pos = rays.get_xy_rays_pos(false);
+        let xy_pos = rays.get_xy_rays_pos(false, &Isometry::identity());
 
         for (val_is, val_got) in izip!(pos_xy.row_iter(), xy_pos.row_iter()) {
             assert!((val_is[(0, 0)] - val_got[(0, 0)]).abs() < f64::EPSILON * val_is[(0, 0)].abs());

@@ -17,9 +17,11 @@ use crate::{
     optical::{LightResult, Optical},
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
+    rays::Rays,
     refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
     surface::Plane,
+    utils::geom_transformation::Isometry,
 };
 use std::path::{Path, PathBuf};
 
@@ -146,10 +148,15 @@ impl Optical for SpotDiagram {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
+            let mut transformed_rays = Rays::default();
+            let iso = self.effective_iso().unwrap_or(Isometry::identity());
+            for ray in rays {
+                transformed_rays.add_ray(ray.inverse_transformed_ray(&iso))
+            }
             props
                 .create("Spot diagram", "2D spot diagram", None, self.clone().into())
                 .unwrap();
-            if let Some(c) = rays.energy_weighted_centroid() {
+            if let Some(c) = transformed_rays.energy_weighted_centroid() {
                 props
                     .create(
                         "centroid x",
@@ -168,7 +175,7 @@ impl Optical for SpotDiagram {
                     )
                     .unwrap();
             }
-            if let Some(radius) = rays.beam_radius_geo() {
+            if let Some(radius) = transformed_rays.beam_radius_geo() {
                 props
                     .create(
                         "geo beam radius",
@@ -178,7 +185,7 @@ impl Optical for SpotDiagram {
                     )
                     .unwrap();
             }
-            if let Some(radius) = rays.energy_weighted_beam_radius_rms() {
+            if let Some(radius) = transformed_rays.energy_weighted_beam_radius_rms() {
                 props
                     .create(
                         "rms beam radius",
@@ -254,8 +261,9 @@ impl Plottable for SpotDiagram {
                     let grad_val = 0.42 + (*wvl - wavelengths[0]).get::<nanometer>() / wvl_range;
                     let rgbcolor = color_grad.eval_continuous(grad_val);
                     let series_label = format!("{:.1} nm", wvl.get::<nanometer>());
+                    let iso = self.effective_iso().unwrap_or(Isometry::identity());
                     let data = PlotData::Dim2 {
-                        xy_data: ray_bundle.get_xy_rays_pos(true),
+                        xy_data: ray_bundle.get_xy_rays_pos(true, &iso),
                     };
                     plt_series.push(PlotSeries::new(
                         &data,

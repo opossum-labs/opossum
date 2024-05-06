@@ -22,14 +22,14 @@ fn main() -> OpmResult<()> {
     let prism1 = Wedge::new(
         "Prism1",
         millimeter!(20.0),
-        degree!(0.0),
+        degree!(30.0),
         &RefrIndexConst::new(1.5068)?,
     )?;
     let p1 = scenery.add_node(prism1);
     let mut prism2 = Wedge::new(
         "Prism2",
         millimeter!(20.0),
-        degree!(0.0),
+        degree!(-30.0),
         &RefrIndexConst::new(1.5068).unwrap(),
     )?;
     let prism2_align = Some(Isometry::new(
@@ -39,15 +39,22 @@ fn main() -> OpmResult<()> {
     prism2.set_property("alignment", prism2_align.into())?;
     let p2 = scenery.add_node(prism2);
 
-    let det = scenery.add_node(RayPropagationVisualizer::new("Ray plot"));
-    let sd = scenery.add_node(SpotDiagram::default());
+    let det = scenery.add_node(RayPropagationVisualizer::default());
+
+    let sd_align = Some(Isometry::new(
+        millimeter!(0.0, 0.0, 0.0),
+        degree!(0.0, 0.0, 0.0),
+    )?);
+    let mut spot_diagram = SpotDiagram::default();
+    spot_diagram.set_property("alignment", sd_align.into())?;
+    let sd = scenery.add_node(spot_diagram);
     //let wf = scenery.add_node(WaveFront::new("Wavefront"));
 
     scenery.connect_nodes(src, "out1", p1, "front", millimeter!(10.0))?;
     scenery.connect_nodes(p1, "rear", p2, "front", millimeter!(100.0))?;
 
-    scenery.connect_nodes(p2, "rear", det, "in1", millimeter!(20.0))?;
-    scenery.connect_nodes(det, "out1", sd, "in1", millimeter!(0.0))?;
+    scenery.connect_nodes(p2, "rear", sd, "in1", millimeter!(150.0))?;
+    scenery.connect_nodes(sd, "out1", det, "in1", millimeter!(100.0))?;
     //scenery.connect_nodes(l2, "rear", wf, "in1", millimeter!(50.0))?;
 
     scenery.save_to_file(Path::new("./opossum/playground/prism_pair.opm"))?;

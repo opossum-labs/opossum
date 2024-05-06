@@ -4,6 +4,7 @@ use opossum::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     position_distributions::Hexapolar,
     rays::Rays,
+    utils::geom_transformation::Isometry,
 };
 use plotters::style::RGBAColor;
 
@@ -23,7 +24,7 @@ fn main() -> OpmResult<()> {
         .set(&PlotArgs::PlotSize((1000, 1000)))
         .unwrap();
 
-    let pltdat = rays.get_xy_rays_pos(true);
+    let pltdat = rays.get_xy_rays_pos(true, &Isometry::identity());
     let plt_series = PlotSeries::new(
         &PlotData::new_dim2(pltdat).unwrap(),
         RGBAColor(255, 0, 0, 1.),
