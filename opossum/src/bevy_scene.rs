@@ -21,10 +21,10 @@ impl Plugin for MyScene {
     }
 }
 fn setup_rays(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    report: Res<Report>,
+    mut commands: Commands<'_, '_>,
+    mut meshes: ResMut<'_, Assets<Mesh>>,
+    mut materials: ResMut<'_, Assets<StandardMaterial>>,
+    report: Res<'_, Report>,
 ) {
     if let Some(ray_pos_hist) = report.0.get_ray_hist() {
         for ray_hist_per_wvl in &ray_pos_hist.rays_pos_history {
@@ -53,10 +53,10 @@ fn setup_rays(
 }
 
 fn setup_nodes(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    report: Res<Report>,
+    mut commands: Commands<'_, '_>,
+    mut meshes: ResMut<'_, Assets<Mesh>>,
+    mut materials: ResMut<'_, Assets<StandardMaterial>>,
+    report: Res<'_, Report>,
 ) {
     if let Some(scenery) = report.0.scenery() {
         for node in scenery.nodes() {
@@ -70,9 +70,9 @@ fn setup_nodes(
     }
 }
 fn setup_scene(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands<'_, '_>,
+    mut meshes: ResMut<'_, Assets<Mesh>>,
+    mut materials: ResMut<'_, Assets<StandardMaterial>>,
 ) {
     // base plane
     commands.spawn(PbrBundle {
