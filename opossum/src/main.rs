@@ -9,7 +9,7 @@ use opossum::{
     console::{Args, PartialArgs},
     error::{OpmResult, OpossumError},
     reporter::{AnalysisReport, ReportGenerator},
-    OpticScenery,
+    OpticScenery, SceneryBevyData,
 };
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -103,8 +103,7 @@ fn opossum() -> OpmResult<()> {
         &scenery,
         &opossum_args.analyzer,
     )?;
-    info!("Starting visualization");
-    bevy_main::bevy_main(&analysis_report);
+    bevy_main::bevy_main(SceneryBevyData::from_report(&analysis_report));
     Ok(())
 }
 

@@ -1,20 +1,17 @@
 //! A simple 3D scene with light shining over a cube sitting on a plane.
-use crate::reporter::AnalysisReport;
+use crate::scenery_bevy_data::SceneryBevyData;
 use bevy::{
     prelude::*,
     render::{mesh::PrimitiveTopology, render_asset::RenderAssetUsages},
 };
 use uom::si::length::meter;
 
-#[derive(Resource)]
-struct Report(AnalysisReport);
-
 pub struct MyScene {
-    pub report: AnalysisReport,
+    pub scenery_bevy_data: SceneryBevyData,
 }
 impl Plugin for MyScene {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Report(self.report.clone()))
+        app.insert_resource(self.scenery_bevy_data.clone())
             .add_systems(Startup, (setup_scene, setup_rays, setup_nodes));
     }
 }
@@ -22,9 +19,9 @@ fn setup_rays(
     mut commands: Commands<'_, '_>,
     mut meshes: ResMut<'_, Assets<Mesh>>,
     mut materials: ResMut<'_, Assets<StandardMaterial>>,
-    report: Res<'_, Report>,
+    scenery_data: Res<'_, SceneryBevyData>,
 ) {
-    if let Some(ray_pos_hist) = report.0.get_ray_hist() {
+    if let Some(ray_pos_hist) = scenery_data.ray_history() {
         for ray_hist_per_wvl in &ray_pos_hist.rays_pos_history {
             for ray_hist in &ray_hist_per_wvl.history {
                 let pos: Vec<_> = ray_hist
@@ -40,7 +37,6 @@ fn setup_rays(
                 commands.spawn(MaterialMeshBundle {
                     mesh: meshes.add(LineStrip { points: pos }),
                     material: materials.add(Color::GREEN),
-                    transform: Transform::from_scale(Vec3::new(1.0, 1.0, 1.0)),
                     ..default()
                 });
             }
@@ -54,17 +50,14 @@ fn setup_nodes(
     mut commands: Commands<'_, '_>,
     mut meshes: ResMut<'_, Assets<Mesh>>,
     mut materials: ResMut<'_, Assets<StandardMaterial>>,
-    report: Res<'_, Report>,
+    scenery_data: Res<'_, SceneryBevyData>,
 ) {
-    if let Some(scenery) = report.0.scenery() {
-        for node in scenery.nodes() {
-            let mesh = node.optical_ref.lock().unwrap().mesh();
-            commands.spawn(MaterialMeshBundle {
-                mesh: meshes.add(mesh),
-                material: materials.add(Color::ORANGE),
-                ..default()
-            });
-        }
+    for mesh in scenery_data.node_meshes() {
+        commands.spawn(MaterialMeshBundle {
+            mesh: meshes.add(mesh.clone()),
+            material: materials.add(Color::ORANGE),
+            ..default()
+        });
     }
 }
 fn setup_scene(

@@ -152,13 +152,8 @@ impl NodeGroup {
                 "cannot connect nodes if group is set as inverted".into(),
             ));
         }
-        self.g.connect_nodes(
-            src_node,
-            src_port,
-            target_node,
-            target_port,
-            distance,
-        )?;
+        self.g
+            .connect_nodes(src_node, src_port, target_node, target_port, distance)?;
         self.node_attr
             .set_property("graph", self.g.clone().into())
             .unwrap();
@@ -233,8 +228,7 @@ impl NodeGroup {
                 .node_weight(node_idx)
                 .unwrap()
                 .optical_ref
-                .lock()
-                .unwrap()
+                .borrow()
                 .ports()
                 .input_names()
                 .len();
@@ -258,8 +252,7 @@ impl NodeGroup {
                 .node_weight(node_idx)
                 .unwrap()
                 .optical_ref
-                .lock()
-                .unwrap()
+                .borrow()
                 .ports()
                 .output_names()
                 .len();
@@ -298,8 +291,7 @@ impl NodeGroup {
             .ok_or_else(|| OpossumError::OpticGroup("internal node index not found".into()))?;
         if !node
             .optical_ref
-            .lock()
-            .unwrap()
+            .borrow()
             .ports()
             .input_names()
             .contains(&(internal_name.to_string()))
@@ -326,7 +318,7 @@ impl NodeGroup {
         }
         let mut input_port_map = self.input_port_map();
         if let Some(iso) = self.isometry() {
-            node.optical_ref.lock().unwrap().set_isometry(iso.clone());
+            node.optical_ref.borrow_mut().set_isometry(iso.clone());
         }
         input_port_map.insert(
             external_name.to_string(),
@@ -365,8 +357,7 @@ impl NodeGroup {
             .ok_or_else(|| OpossumError::OpticGroup("internal node index not found".into()))?;
         if !node
             .optical_ref
-            .lock()
-            .unwrap()
+            .borrow()
             .ports()
             .output_names()
             .contains(&(internal_name.to_string()))
@@ -472,14 +463,14 @@ impl NodeGroup {
         let mut light_result = LightResult::default();
         for idx in sorted {
             let node = g_clone.node_weight(idx).unwrap();
-            let node_name = node.optical_ref.lock().unwrap().name();
+            let node_name = node.optical_ref.borrow().name();
             if self.is_stale_node(idx) {
                 warn!("Group {group_name} contains stale (completely unconnected) node {node_name}. Skipping.");
             } else {
                 // calc isometry for node if not already set.
-                if node.optical_ref.lock().unwrap().isometry().is_none() {
+                if node.optical_ref.borrow().isometry().is_none() {
                     if let Some(iso) = self.g.calc_node_isometry(idx) {
-                        node.optical_ref.lock().unwrap().set_isometry(iso);
+                        node.optical_ref.borrow_mut().set_isometry(iso);
                     } else {
                         warn!("could not assign node isometry to {} because predecessor node has no isometry defined.", node_name);
                     }
@@ -488,8 +479,7 @@ impl NodeGroup {
                 let incoming_edges = self.get_incoming(idx, incoming_data);
                 let outgoing_edges: LightResult = node
                     .optical_ref
-                    .lock()
-                    .unwrap()
+                    .borrow_mut()
                     .analyze(incoming_edges, analyzer_type)?;
                 // Check if node is group sink node
                 if self.g.is_sink_node(idx) {
@@ -601,8 +591,7 @@ impl NodeGroup {
             .node_weight(end_node_idx)
             .unwrap()
             .optical_ref
-            .lock()
-            .unwrap();
+            .borrow();
 
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node_idx.index())
@@ -645,11 +634,11 @@ impl NodeGroup {
 
         for node_idx in self.g.0.node_indices() {
             let node = self.g.0.node_weight(node_idx).unwrap();
-            dot_string += &node.optical_ref.lock().unwrap().to_dot(
+            dot_string += &node.optical_ref.borrow().to_dot(
                 &format!("{}", node_idx.index()),
-                &node.optical_ref.lock().unwrap().name(),
-                node.optical_ref.lock().unwrap().properties().inverted()?,
-                &node.optical_ref.lock().unwrap().ports(),
+                &node.optical_ref.borrow().name(),
+                node.optical_ref.borrow().properties().inverted()?,
+                &node.optical_ref.borrow().ports(),
                 parent_identifier.clone(),
                 rankdir,
             )?;
@@ -708,8 +697,7 @@ impl NodeGroup {
     fn invert_graph(&mut self) -> OpmResult<()> {
         for node in self.g.0.node_weights_mut() {
             node.optical_ref
-                .lock()
-                .unwrap()
+                .borrow_mut()
                 .set_property("inverted", true.into())
                 .map_err(|_| {
                     OpossumError::OpticGroup(
@@ -767,14 +755,7 @@ impl Optical for NodeGroup {
     fn report(&self) -> Option<NodeReport> {
         let mut group_props = Properties::default();
         for node_idx in self.g.0.node_indices() {
-            let node = self
-                .g
-                .0
-                .node_weight(node_idx)
-                .unwrap()
-                .optical_ref
-                .lock()
-                .unwrap();
+            let node = self.g.0.node_weight(node_idx).unwrap().optical_ref.borrow();
             if let Some(node_report) = node.report() {
                 if !(group_props.contains(&node.name())) {
                     group_props
@@ -798,9 +779,9 @@ impl Optical for NodeGroup {
             .g
             .0
             .node_weights()
-            .filter(|node| node.optical_ref.lock().unwrap().is_detector());
+            .filter(|node| node.optical_ref.borrow().is_detector());
         for node in detector_nodes {
-            node.optical_ref.lock().unwrap().export_data(report_dir)?;
+            node.optical_ref.borrow().export_data(report_dir)?;
         }
         Ok(None)
     }
@@ -811,10 +792,7 @@ impl Optical for NodeGroup {
         self.node_attr.set_isometry(isometry.clone());
         for portmap in self.input_port_map() {
             if let Some(node) = self.g.0.node_weight(portmap.1 .0) {
-                node.optical_ref
-                    .lock()
-                    .unwrap()
-                    .set_isometry(isometry.clone());
+                node.optical_ref.borrow_mut().set_isometry(isometry.clone());
             }
         }
     }
@@ -822,8 +800,7 @@ impl Optical for NodeGroup {
         if let Some(output_port) = self.output_port_map().get(output_port_name) {
             if let Some(node) = self.g.0.node_weight(output_port.0) {
                 node.optical_ref
-                    .lock()
-                    .unwrap()
+                    .borrow()
                     .output_port_isometry(&output_port.1)
             } else {
                 warn!("node not found");

@@ -24,7 +24,7 @@ use std::path::Path;
 pub type LightResult = HashMap<String, LightData>;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
-pub trait Optical: Dottable + Send {
+pub trait Optical: Dottable {
     /// Returns a reference to the name of this [`Optical`].
     // fn name(&self) -> &str; // {
     //                         //    self.node_type()

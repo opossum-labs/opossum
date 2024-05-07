@@ -4,7 +4,10 @@
 //! the respective source an target port names this edge connects as well as the actual light information (stored as
 //! [`LightData`]).
 
-use crate::{error::{OpmResult, OpossumError}, lightdata::LightData};
+use crate::{
+    error::{OpmResult, OpossumError},
+    lightdata::LightData,
+};
 use serde::Serialize;
 use uom::si::f64::Length;
 
@@ -57,15 +60,15 @@ impl Light {
 
 #[cfg(test)]
 mod test {
-    use num::Zero;
-    use crate::millimeter;
     use super::*;
+    use crate::millimeter;
+    use num::Zero;
 
     #[test]
     fn new() {
-        assert!(Light::new("test1","test2", millimeter!(f64::NAN)).is_err());
-        assert!(Light::new("test1","test2", millimeter!(f64::NEG_INFINITY)).is_err());
-        assert!(Light::new("test1","test2", millimeter!(f64::INFINITY)).is_err());
+        assert!(Light::new("test1", "test2", millimeter!(f64::NAN)).is_err());
+        assert!(Light::new("test1", "test2", millimeter!(f64::NEG_INFINITY)).is_err());
+        assert!(Light::new("test1", "test2", millimeter!(f64::INFINITY)).is_err());
         let light = Light::new("test1", "test2", Length::zero()).unwrap();
         assert_eq!(light.src_port, "test1");
         assert_eq!(light.target_port, "test2");

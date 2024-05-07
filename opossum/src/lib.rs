@@ -19,6 +19,7 @@ pub mod bevy_scene;
 mod light;
 mod optic_graph;
 mod optic_scenery;
+mod scenery_bevy_data;
 
 pub mod analyzer;
 pub mod aperture;
@@ -45,6 +46,7 @@ pub mod surface;
 pub mod utils;
 
 pub use optic_scenery::OpticScenery;
+pub use scenery_bevy_data::SceneryBevyData;
 
 use chrono::DateTime;
 /// Return the version information of the currently built OPOSSUM executable.

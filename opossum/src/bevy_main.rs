@@ -2,14 +2,14 @@ use bevy::log::LogPlugin;
 use bevy::prelude::*;
 
 use crate::bevy_scene::MyScene;
-use crate::reporter::AnalysisReport;
+use crate::scenery_bevy_data::SceneryBevyData;
 
-pub fn bevy_main(report: &AnalysisReport) {
+pub fn bevy_main(scenery_data: SceneryBevyData) {
     App::new()
         .add_plugins((
             DefaultPlugins.build().disable::<LogPlugin>(),
             MyScene {
-                report: report.clone(),
+                scenery_bevy_data: scenery_data,
             },
         ))
         .run();

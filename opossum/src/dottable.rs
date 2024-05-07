@@ -405,7 +405,6 @@ mod test {
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
     }
     #[test]
-    #[ignore]
     fn to_dot_group() {
         let mut scenery = OpticScenery::new();
         scenery

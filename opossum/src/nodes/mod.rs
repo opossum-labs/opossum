@@ -44,7 +44,7 @@ pub use node_attr::NodeAttr;
 pub use ray_propagation_visualizer::RayPropagationVisualizer;
 pub use spectrometer::{Spectrometer, SpectrometerType};
 pub use spot_diagram::SpotDiagram;
-use std::sync::{Arc, Mutex};
+use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
 pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
 pub use wedge::Wedge;
@@ -59,58 +59,61 @@ pub use wedge::Wedge;
 /// This function will return an [`OpossumError`] if there is no node with the given type.
 pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRef> {
     match node_type {
-        "dummy" => Ok(OpticRef::new(Arc::new(Mutex::new(Dummy::default())), uuid)),
+        "dummy" => Ok(OpticRef::new(Rc::new(RefCell::new(Dummy::default())), uuid)),
         "detector" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(Detector::default())),
+            Rc::new(RefCell::new(Detector::default())),
             uuid,
         )),
         "beam splitter" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(BeamSplitter::default())),
+            Rc::new(RefCell::new(BeamSplitter::default())),
             uuid,
         )),
         "energy meter" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(EnergyMeter::default())),
+            Rc::new(RefCell::new(EnergyMeter::default())),
             uuid,
         )),
         "group" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(NodeGroup::default())),
+            Rc::new(RefCell::new(NodeGroup::default())),
             uuid,
         )),
         "ideal filter" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(IdealFilter::default())),
+            Rc::new(RefCell::new(IdealFilter::default())),
             uuid,
         )),
         "reference" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(NodeReference::default())),
+            Rc::new(RefCell::new(NodeReference::default())),
             uuid,
         )),
-        "lens" => Ok(OpticRef::new(Arc::new(Mutex::new(Lens::default())), uuid)),
-        "light source" => Ok(OpticRef::new(Arc::new(Mutex::new(Source::default())), uuid)),
+        "lens" => Ok(OpticRef::new(Rc::new(RefCell::new(Lens::default())), uuid)),
+        "light source" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(Source::default())),
+            uuid,
+        )),
         "spectrometer" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(Spectrometer::default())),
+            Rc::new(RefCell::new(Spectrometer::default())),
             uuid,
         )),
         "spot diagram" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(SpotDiagram::default())),
+            Rc::new(RefCell::new(SpotDiagram::default())),
             uuid,
         )),
         "Wavefront monitor" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(WaveFront::default())),
+            Rc::new(RefCell::new(WaveFront::default())),
             uuid,
         )),
         "paraxial" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(ParaxialSurface::default())),
+            Rc::new(RefCell::new(ParaxialSurface::default())),
             uuid,
         )),
         "ray propagation" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(RayPropagationVisualizer::default())),
+            Rc::new(RefCell::new(RayPropagationVisualizer::default())),
             uuid,
         )),
         "fluence detector" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(FluenceDetector::default())),
+            Rc::new(RefCell::new(FluenceDetector::default())),
             uuid,
         )),
-        "wedge" => Ok(OpticRef::new(Arc::new(Mutex::new(Wedge::default())), uuid)),
+        "wedge" => Ok(OpticRef::new(Rc::new(RefCell::new(Wedge::default())), uuid)),
         _ => Err(OpossumError::Other(format!(
             "cannot create node type <{node_type}>"
         ))),
