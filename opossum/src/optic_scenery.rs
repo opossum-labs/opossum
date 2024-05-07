@@ -11,7 +11,6 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     reporter::AnalysisReport,
-    utils::geom_transformation::Isometry,
 };
 use chrono::Local;
 use image::{io::Reader, DynamicImage};
@@ -99,15 +98,14 @@ impl OpticScenery {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
-        dist: Length,
+        distance: Length,
     ) -> OpmResult<()> {
         self.g.connect_nodes(
             src_node,
             src_port,
             target_node,
             target_port,
-            Isometry::new_along_z(dist)?,
-        )
+            distance)
     }
     /// Return a reference to the optical node specified by its node index.
     ///

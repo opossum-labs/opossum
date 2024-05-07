@@ -145,7 +145,7 @@ impl NodeGroup {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
-        dist: Length,
+        distance: Length,
     ) -> OpmResult<()> {
         if self.properties().inverted()? {
             return Err(OpossumError::OpticGroup(
@@ -157,7 +157,7 @@ impl NodeGroup {
             src_port,
             target_node,
             target_port,
-            Isometry::new_along_z(dist)?,
+            distance,
         )?;
         self.node_attr
             .set_property("graph", self.g.clone().into())

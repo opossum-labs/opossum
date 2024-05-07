@@ -4,7 +4,6 @@ use bevy::{
     prelude::*,
     render::{mesh::PrimitiveTopology, render_asset::RenderAssetUsages},
 };
-// use bevy_flycam::prelude::*;
 use uom::si::length::meter;
 
 #[derive(Resource)]
@@ -16,7 +15,6 @@ pub struct MyScene {
 impl Plugin for MyScene {
     fn build(&self, app: &mut App) {
         app.insert_resource(Report(self.report.clone()))
-            //.add_plugins(PlayerPlugin)
             .add_systems(Startup, (setup_scene, setup_rays, setup_nodes));
     }
 }
