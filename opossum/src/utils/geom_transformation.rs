@@ -315,13 +315,21 @@ impl From<Option<Isometry>> for Proptype {
         Self::Isometry(EnumProxy { value })
     }
 }
-
+#[allow(clippy::cast_possible_truncation)]
+const fn as_f32(x: f64) -> f32 {
+    x as f32
+}
 impl From<Isometry> for Transform {
     fn from(value: Isometry) -> Self {
         let t = value.transform.translation;
         let r = value.transform.rotation;
-        Self::from_translation(Vec3::new(t.x as f32, t.y as f32, t.z as f32)).with_rotation(
-            Quat::from_vec4(Vec4::new(r.i as f32, r.j as f32, r.k as f32, r.w as f32)),
+        Self::from_translation(Vec3::new(as_f32(t.x), as_f32(t.y), as_f32(t.z))).with_rotation(
+            Quat::from_vec4(Vec4::new(
+                as_f32(r.i),
+                as_f32(r.j),
+                as_f32(r.k),
+                as_f32(r.w),
+            )),
         )
     }
 }

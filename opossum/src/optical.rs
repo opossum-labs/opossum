@@ -235,15 +235,12 @@ pub trait Optical: Dottable {
     ///
     /// The effective input isometry is the base isometry modified by the local alignment isometry (if any)
     fn effective_iso(&self) -> Option<Isometry> {
-        if let Some(iso) = self.isometry() {
-            if let Some(local_iso) = self.node_attr().alignment() {
-                Some(iso.append(local_iso))
-            } else {
-                Some(iso.clone())
-            }
-        } else {
-            None
-        }
+        self.isometry().as_ref().and_then(|iso| {
+            self.node_attr().alignment().as_ref().map_or_else(
+                || Some(iso.clone()),
+                |local_iso| Some(iso.append(local_iso)),
+            )
+        })
     }
 }
 

@@ -15,6 +15,11 @@ impl Plugin for MyScene {
             .add_systems(Startup, (setup_scene, setup_rays, setup_nodes));
     }
 }
+#[allow(clippy::cast_possible_truncation)]
+const fn as_f32(x: f64) -> f32 {
+    x as f32
+}
+#[allow(clippy::needless_pass_by_value)]
 fn setup_rays(
     mut commands: Commands<'_, '_>,
     mut meshes: ResMut<'_, Assets<Mesh>>,
@@ -28,9 +33,9 @@ fn setup_rays(
                     .row_iter()
                     .map(|p| {
                         Vec3::new(
-                            p[0].get::<meter>() as f32,
-                            p[1].get::<meter>() as f32,
-                            p[2].get::<meter>() as f32,
+                            as_f32(p[0].get::<meter>()),
+                            as_f32(p[1].get::<meter>()),
+                            as_f32(p[2].get::<meter>()),
                         )
                     })
                     .collect();
@@ -46,6 +51,7 @@ fn setup_rays(
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn setup_nodes(
     mut commands: Commands<'_, '_>,
     mut meshes: ResMut<'_, Assets<Mesh>>,
@@ -105,6 +111,7 @@ struct LineList {
 
 impl From<LineList> for Mesh {
     fn from(line: LineList) -> Self {
+        #[allow(clippy::tuple_array_conversions)]
         let vertices: Vec<_> = line.lines.into_iter().flat_map(|(a, b)| [a, b]).collect();
 
         Self::new(

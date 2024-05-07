@@ -158,7 +158,10 @@ impl NodeAttr {
         }
     }
     /// Sets the local alignment isometry of this [`NodeAttr`].
-    pub fn set_alignment(&mut self, isometry: Isometry) -> OpmResult<()> {
-        self.props.set("alignment", Some(isometry).into())
+    ///
+    /// # Panics
+    /// This function could theoretically panic if the property `alignment` is not defined.
+    pub fn set_alignment(&mut self, isometry: Isometry) {
+        self.props.set("alignment", Some(isometry).into()).unwrap();
     }
 }

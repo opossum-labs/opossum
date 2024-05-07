@@ -8,6 +8,7 @@ pub struct SceneryBevyData {
 }
 
 impl SceneryBevyData {
+    #[must_use]
     pub fn from_report(report: &AnalysisReport) -> Self {
         let mut meshes: Vec<Mesh> = Vec::default();
         if let Some(scenery) = report.scenery() {
@@ -20,11 +21,11 @@ impl SceneryBevyData {
             node_meshes: meshes,
         }
     }
-
-    pub fn ray_history(&self) -> Option<&RayPositionHistories> {
+    #[must_use]
+    pub const fn ray_history(&self) -> Option<&RayPositionHistories> {
         self.ray_history.as_ref()
     }
-
+    #[must_use]
     pub fn node_meshes(&self) -> &[Mesh] {
         &self.node_meshes
     }

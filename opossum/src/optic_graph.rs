@@ -163,11 +163,10 @@ impl OpticGraph {
         group_sinks.into_iter().any(|gs| gs == idx)
     }
     pub fn calc_node_isometry(&self, node_idx: NodeIndex) -> Option<Isometry> {
-        let neighbors: Vec<NodeIndex> = self
+        let mut neighbors = self
             .0
-            .neighbors_directed(node_idx, petgraph::Direction::Incoming)
-            .collect();
-        if let Some(neighbor) = neighbors.into_iter().next() {
+            .neighbors_directed(node_idx, petgraph::Direction::Incoming);
+        if let Some(neighbor) = neighbors.next() {
             let neighbor_node_ref = self.0.node_weight(neighbor).unwrap();
             let neighbor_node = neighbor_node_ref.optical_ref.borrow();
             let connecting_edge = self.0.edges_connecting(neighbor, node_idx).next().unwrap();
@@ -241,17 +240,20 @@ impl Serialize for OpticGraph {
                         .uuid(),
                     g.edge_weight(e).unwrap().src_port(),
                     g.edge_weight(e).unwrap().target_port(),
-                    g.edge_weight(e).unwrap().distance(),
+                    *g.edge_weight(e).unwrap().distance(),
                 )
             })
-            .collect::<Vec<(Uuid, Uuid, &str, &str, &Length)>>();
+            .collect::<Vec<EdgeInfo<'_>>>();
         graph.serialize_field("edges", &edgeidx)?;
         graph.end()
     }
 }
 
+type EdgeInfo<'a> = (Uuid, Uuid, &'a str, &'a str, Length);
+
 impl<'de> Deserialize<'de> for OpticGraph {
     #[allow(clippy::too_many_lines)]
+
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -307,7 +309,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
             {
                 let mut g = OpticGraph::default();
                 let mut nodes: Option<Vec<OpticRef>> = None;
-                let mut edges: Option<Vec<(Uuid, Uuid, &str, &str, Length)>> = None;
+                let mut edges: Option<Vec<EdgeInfo<'_>>> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Nodes => {
@@ -320,8 +322,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                             if edges.is_some() {
                                 return Err(de::Error::duplicate_field("edges"));
                             }
-                            edges =
-                                Some(map.next_value::<Vec<(Uuid, Uuid, &str, &str, Length)>>()?);
+                            edges = Some(map.next_value::<Vec<EdgeInfo<'_>>>()?);
                         }
                     }
                 }

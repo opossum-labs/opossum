@@ -287,6 +287,7 @@ impl Optical for Lens {
             .map(|iso| iso.append(&alignment_iso))
     }
     fn mesh(&self) -> Mesh {
+        #[allow(clippy::cast_possible_truncation)]
         let thickness = if let Ok(Proptype::Length(center_thickness)) =
             self.node_attr.get_property("center thickness")
         {
