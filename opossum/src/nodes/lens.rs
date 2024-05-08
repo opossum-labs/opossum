@@ -15,6 +15,7 @@ use crate::{
     surface::{Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
+#[cfg(feature = "bevy")]
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
 use nalgebra::Point3;
@@ -286,6 +287,7 @@ impl Optical for Lens {
             .as_ref()
             .map(|iso| iso.append(&alignment_iso))
     }
+    #[cfg(feature = "bevy")]
     fn mesh(&self) -> Mesh {
         #[allow(clippy::cast_possible_truncation)]
         let thickness = if let Ok(Proptype::Length(center_thickness)) =

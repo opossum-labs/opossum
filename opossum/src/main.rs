@@ -3,14 +3,18 @@
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info};
+#[cfg(feature = "bevy")]
+use opossum::bevy_main;
+#[cfg(feature = "bevy")]
+use opossum::SceneryBevyData;
 use opossum::{
     analyzer::AnalyzerType,
-    bevy_main,
     console::{Args, PartialArgs},
     error::{OpmResult, OpossumError},
     reporter::{AnalysisReport, ReportGenerator},
-    OpticScenery, SceneryBevyData,
+    OpticScenery,
 };
+
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
@@ -97,12 +101,21 @@ fn opossum() -> OpmResult<()> {
     //analyze the scenery
     info!("Analyzing...");
     scenery.analyze(&opossum_args.analyzer)?;
+    #[cfg(feature = "bevy")]
     let analysis_report = create_report_file(
         &opossum_args.report_directory,
         base_file_name,
         &scenery,
         &opossum_args.analyzer,
     )?;
+    #[cfg(not(feature = "bevy"))]
+    create_report_file(
+        &opossum_args.report_directory,
+        base_file_name,
+        &scenery,
+        &opossum_args.analyzer,
+    )?;
+    #[cfg(feature = "bevy")]
     bevy_main::bevy_main(SceneryBevyData::from_report(&analysis_report));
     Ok(())
 }

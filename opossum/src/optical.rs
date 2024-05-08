@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Contains the basic trait representing an optical element
-use bevy::math::primitives::Cuboid;
-use bevy::render::mesh::Mesh;
+#[cfg(feature = "bevy")]
+use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use image::RgbImage;
 use log::warn;
 
@@ -222,6 +222,7 @@ pub trait Optical: Dottable {
     /// Set the (base) [`Isometry`] (position and angle) of this optical node.
     fn set_isometry(&mut self, isometry: Isometry);
     ///
+    #[cfg(feature = "bevy")]
     fn mesh(&self) -> Mesh {
         let mesh: Mesh = Cuboid::new(0.3, 0.3, 0.001).into();
         if let Some(iso) = self.effective_iso() {
