@@ -49,7 +49,7 @@ impl<'a> SDFCollection<'a> {
     /// - `sdf_op_opt`: option for the Operation that should be used for combining the sdfs. default: Union
     /// Returns
     /// - None if the length of the SDF oject vector is zero
-    /// - Option<Self> otherwise
+    /// - `Option<Self>` otherwise
     #[must_use]
     pub fn new(
         sdf_objs: Vec<&'a dyn Renderable<'a>>,

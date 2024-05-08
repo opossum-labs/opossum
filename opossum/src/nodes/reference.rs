@@ -61,8 +61,8 @@ impl NodeReference {
     /// `node`: `OpticRef` of the node
     ///
     /// # Panics
-    /// - if the node [`Properties`] `name` and `node_type` do not exist
-    /// - if the node [`Properties`] `name` can not be set
+    /// - if the node [`Properties`](crate::properties::Properties) `name` and `node_type` do not exist
+    /// - if the node [`Properties`](crate::properties::Properties) `name` can not be set
     #[must_use]
     pub fn from_node(node: &OpticRef) -> Self {
         let mut refr = Self::default();

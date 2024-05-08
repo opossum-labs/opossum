@@ -54,7 +54,7 @@ impl OpticalTable {
             raster_dist,
         })
     }
-    /// Returns the anchor point of thie [`Cuboid`]
+    /// Returns the anchor point of this [`OpticalTable`]
     #[must_use]
     pub const fn get_anchor_point(&self) -> Point3<Length> {
         self.anchor_point

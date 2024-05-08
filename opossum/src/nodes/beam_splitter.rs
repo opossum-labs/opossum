@@ -85,7 +85,7 @@ impl BeamSplitter {
     ///
     /// See [`SplittingConfig`] for further details.
     /// # Panics
-    /// This functions panics if the specified [`Properties`], here `ratio`, do not exist or if the property has the wrong data format
+    /// This functions panics if the specified [`Properties`](crate::properties::Properties), here `ratio`, do not exist or if the property has the wrong data format
     #[must_use]
     pub fn splitting_config(&self) -> SplittingConfig {
         if let Ok(Proptype::SplitterType(config)) = self.node_attr.get_property("splitter config") {

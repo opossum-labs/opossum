@@ -259,22 +259,20 @@ impl Isometry {
             .map(|p| self.inverse_transform_point_f64(p))
             .collect::<Vec<Point3<f64>>>()
     }
-
-    /// Transforms a single vector3<f64> by the defined isometry
+    /// Transforms a single `Vector3<f64>` by the defined isometry
     /// # Attributes
     /// - `v`: Vector3 dfining a direction
     /// # Returns
-    /// Returns the transformed vector3
+    /// Returns the transformed `Vector3`
     #[must_use]
     pub fn transform_vector_f64(&self, v: &Vector3<f64>) -> Vector3<f64> {
         self.transform.transform_vector(v)
     }
-
-    /// Transforms a vector of Vector3<f64> by the defined isometry
+    /// Transforms a vector of `Vector3<f64>` by the defined isometry
     /// # Attributes
-    /// - `v_vec`: Vec of Vector3
+    /// - `v_vec`: Vec of `Vector3`
     /// # Returns
-    /// Returns the transformed Vector3 as Vec
+    /// Returns the transformed `Vector3` as Vec
     #[must_use]
     pub fn transform_vectors_f64(&self, v_vec: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
         v_vec
@@ -282,22 +280,20 @@ impl Isometry {
             .map(|p| self.transform_vector_f64(p))
             .collect::<Vec<Vector3<f64>>>()
     }
-
-    /// Inverse transforms a single vector3<f64> by the defined isometry
+    /// Inverse transforms a single `Vector3<f64>` by the defined isometry
     /// # Attributes
-    /// - `v`: Vector3 dfining a direction
+    /// - `v`: `Vector3` defining a direction
     /// # Returns
-    /// Returns the inverse-transformed vector3
+    /// Returns the inverse-transformed `Vector3`
     #[must_use]
     pub fn inverse_transform_vector_f64(&self, v: &Vector3<f64>) -> Vector3<f64> {
         self.inverse.transform_vector(v)
     }
-
-    /// Inverse transforms a vector of Vector3<f64> by the defined isometry
+    /// Inverse transforms a vector of `Vector3<f64>` by the defined isometry
     /// # Attributes
-    /// - `v_vec`: Vec of Vector3
+    /// - `v_vec`: Vec of `Vector3`
     /// # Returns
-    /// Returns the inverse-transformed Vector3 as Vec
+    /// Returns the inverse-transformed `Vector3` as Vec
     #[must_use]
     pub fn inverse_transform_vectors_f64(&self, v_vec: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
         v_vec
