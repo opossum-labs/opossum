@@ -1,4 +1,13 @@
 #![warn(missing_docs)]
+use crate::{
+    error::{OpmResult, OpossumError},
+    light::Light,
+    optic_ref::OpticRef,
+    optical::Optical,
+    properties::Proptype,
+    utils::geom_transformation::Isometry,
+};
+use log::warn;
 use petgraph::{
     algo::{connected_components, is_cyclic_directed},
     prelude::DiGraph,
@@ -10,14 +19,8 @@ use serde::{
     Deserialize, Serialize,
 };
 use std::{cell::RefCell, rc::Rc};
+use uom::si::f64::Length;
 use uuid::Uuid;
-
-use crate::{
-    error::{OpmResult, OpossumError},
-    light::Light,
-    optical::Optical,
-};
-use crate::{optic_ref::OpticRef, properties::Proptype};
 
 #[derive(Debug, Default, Clone)]
 pub struct OpticGraph(pub DiGraph<OpticRef, Light>);
@@ -27,13 +30,13 @@ impl OpticGraph {
         self.0
             .add_node(OpticRef::new(Rc::new(RefCell::new(node)), None))
     }
-
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
+        distance: Length,
     ) -> OpmResult<()> {
         let source = self.0.node_weight(src_node).ok_or_else(|| {
             OpossumError::OpticScenery("source node with given index does not exist".into())
@@ -84,9 +87,8 @@ impl OpticGraph {
         }
         let src_name = source.optical_ref.borrow().name();
         let target_name = target.optical_ref.borrow().name();
-        let edge_index = self
-            .0
-            .add_edge(src_node, target_node, Light::new(src_port, target_port));
+        let light = Light::new(src_port, target_port, distance)?;
+        let edge_index = self.0.add_edge(src_node, target_node, light);
         if is_cyclic_directed(&self.0) {
             self.0.remove_edge(edge_index);
             return Err(OpossumError::OpticScenery(format!(
@@ -124,6 +126,98 @@ impl OpticGraph {
     pub fn is_single_tree(&self) -> bool {
         connected_components(&self.0) == 1
     }
+    // fn sources(&self) -> Vec<NodeIndex> {
+    //     let mut srcs: Vec<NodeIndex> = Vec::new();
+    //     for node in self.0.node_indices() {
+    //         if self
+    //             .0
+    //             .neighbors_directed(node, petgraph::Direction::Incoming)
+    //             .count()
+    //             .is_zero()
+    //         {
+    //             srcs.push(node);
+    //         }
+    //     }
+    //     srcs
+    // }
+    // fn sinks(&self) -> Vec<NodeIndex> {
+    //     let mut srcs: Vec<NodeIndex> = Vec::new();
+    //     for node in self.0.node_indices() {
+    //         if self
+    //             .0
+    //             .neighbors_directed(node, petgraph::Direction::Outgoing)
+    //             .count()
+    //             .is_zero()
+    //         {
+    //             srcs.push(node);
+    //         }
+    //     }
+    //     srcs
+    // }
+    pub fn is_src_node(&self, idx: NodeIndex) -> bool {
+        let group_srcs = self.0.externals(petgraph::Direction::Incoming);
+        group_srcs.into_iter().any(|gs| gs == idx)
+    }
+    pub fn is_sink_node(&self, idx: NodeIndex) -> bool {
+        let group_sinks = self.0.externals(petgraph::Direction::Outgoing);
+        group_sinks.into_iter().any(|gs| gs == idx)
+    }
+    pub fn calc_node_isometry(&self, node_idx: NodeIndex) -> Option<Isometry> {
+        let mut neighbors = self
+            .0
+            .neighbors_directed(node_idx, petgraph::Direction::Incoming);
+        if let Some(neighbor) = neighbors.next() {
+            let neighbor_node_ref = self.0.node_weight(neighbor).unwrap();
+            let neighbor_node = neighbor_node_ref.optical_ref.borrow();
+            let connecting_edge = self.0.edges_connecting(neighbor, node_idx).next().unwrap();
+            let neighbor_output_port_name = connecting_edge.weight().src_port();
+            if let Some(neighbor_iso) =
+                neighbor_node.output_port_isometry(neighbor_output_port_name)
+            {
+                let distance = connecting_edge.weight().distance();
+                let connecting_isometry = Isometry::new_along_z(*distance).unwrap();
+                return Some(neighbor_iso.append(&connecting_isometry));
+            }
+        }
+        None
+    }
+    // pub fn update_node_positions(&mut self) {
+    //     // iterate over all possible paths from a src to a sink
+    //     for src in &self.sources() {
+    //         for sink in &self.sinks() {
+    //             let paths = algo::all_simple_paths::<Vec<_>, _>(&self.0, *src, *sink, 0, None)
+    //                 .collect::<Vec<_>>();
+    //             for path in paths {
+    //                 for node_idx in path {
+    //                     let cloned_graph = self.0.clone();
+    //                     // incoming meighbors
+    //                     let neighbors: Vec<NodeIndex> = cloned_graph
+    //                         .neighbors_directed(node_idx, petgraph::Direction::Incoming)
+    //                         .collect();
+    //                     for neighbor in neighbors {
+    //                         let neighbor_node_ref = cloned_graph.node_weight(neighbor).unwrap();
+    //                         let neighbor_node = neighbor_node_ref.optical_ref.borrow();
+    //                         let neighbor_name = neighbor_node.name();
+    //                         let connecting_edge = cloned_graph
+    //                             .edges_connecting(neighbor, node_idx)
+    //                             .next()
+    //                             .unwrap();
+    //                         let connecting_isometery = connecting_edge.weight().isometry();
+    //                         let node = self.0.node_weight_mut(node_idx).unwrap();
+    //                         if let Some(neighbor_isometry) = neighbor_node.isometry() {
+    //                             node.optical_ref
+    //                                 .lock()
+    //                                 .unwrap()
+    //                                 .set_isometry(neighbor_isometry.append(connecting_isometery));
+    //                         } else {
+    //                             warn!("could not assign node isometry to {} because predecessor node {} has no isometry defined.", node.optical_ref.borrow().name(), neighbor_name);
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 }
 impl Serialize for OpticGraph {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -146,16 +240,20 @@ impl Serialize for OpticGraph {
                         .uuid(),
                     g.edge_weight(e).unwrap().src_port(),
                     g.edge_weight(e).unwrap().target_port(),
+                    *g.edge_weight(e).unwrap().distance(),
                 )
             })
-            .collect::<Vec<(Uuid, Uuid, &str, &str)>>();
+            .collect::<Vec<EdgeInfo<'_>>>();
         graph.serialize_field("edges", &edgeidx)?;
         graph.end()
     }
 }
 
+type EdgeInfo<'a> = (Uuid, Uuid, &'a str, &'a str, Length);
+
 impl<'de> Deserialize<'de> for OpticGraph {
     #[allow(clippy::too_many_lines)]
+
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -211,7 +309,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
             {
                 let mut g = OpticGraph::default();
                 let mut nodes: Option<Vec<OpticRef>> = None;
-                let mut edges: Option<Vec<(Uuid, Uuid, &str, &str)>> = None;
+                let mut edges: Option<Vec<EdgeInfo<'_>>> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Nodes => {
@@ -224,7 +322,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                             if edges.is_some() {
                                 return Err(de::Error::duplicate_field("edges"));
                             }
-                            edges = Some(map.next_value::<Vec<(Uuid, Uuid, &str, &str)>>()?);
+                            edges = Some(map.next_value::<Vec<EdgeInfo<'_>>>()?);
                         }
                     }
                 }
@@ -266,7 +364,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                     let target_idx = g.node_idx(edge.1).ok_or_else(|| {
                         de::Error::custom(format!("target id {} does not exist", edge.1))
                     })?;
-                    g.connect_nodes(src_idx, edge.2, target_idx, edge.3)
+                    g.connect_nodes(src_idx, edge.2, target_idx, edge.3, edge.4)
                         .map_err(|e| {
                             de::Error::custom(format!("connecting OpticGraph nodes failed: {e}"))
                         })?;
@@ -286,6 +384,8 @@ impl From<OpticGraph> for Proptype {
 mod test {
     use super::*;
     use crate::nodes::Dummy;
+    use num::Zero;
+
     #[test]
     fn add_node() {
         let mut graph = OpticGraph::default();
@@ -297,7 +397,9 @@ mod test {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
-        assert!(graph.connect_nodes(n1, "rear", n2, "front").is_ok());
+        assert!(graph
+            .connect_nodes(n1, "rear", n2, "front", Length::zero())
+            .is_ok());
         assert_eq!(graph.0.edge_count(), 1);
     }
     #[test]
@@ -306,10 +408,10 @@ mod test {
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
         assert!(graph
-            .connect_nodes(n1, "rear", NodeIndex::new(5), "front")
+            .connect_nodes(n1, "rear", NodeIndex::new(5), "front", Length::zero())
             .is_err());
         assert!(graph
-            .connect_nodes(NodeIndex::new(5), "rear", n2, "front")
+            .connect_nodes(NodeIndex::new(5), "rear", n2, "front", Length::zero())
             .is_err());
     }
     #[test]
@@ -318,17 +420,27 @@ mod test {
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
         let n3 = graph.add_node(Dummy::new("Test"));
-        assert!(graph.connect_nodes(n1, "rear", n2, "front").is_ok());
-        assert!(graph.connect_nodes(n3, "rear", n2, "front").is_err());
-        assert!(graph.connect_nodes(n1, "rear", n3, "front").is_err());
+        assert!(graph
+            .connect_nodes(n1, "rear", n2, "front", Length::zero())
+            .is_ok());
+        assert!(graph
+            .connect_nodes(n3, "rear", n2, "front", Length::zero())
+            .is_err());
+        assert!(graph
+            .connect_nodes(n1, "rear", n3, "front", Length::zero())
+            .is_err());
     }
     #[test]
     fn connect_nodes_loop_error() {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::new("Test"));
         let n2 = graph.add_node(Dummy::new("Test"));
-        assert!(graph.connect_nodes(n1, "rear", n2, "front").is_ok());
-        assert!(graph.connect_nodes(n2, "rear", n1, "front").is_err());
+        assert!(graph
+            .connect_nodes(n1, "rear", n2, "front", Length::zero())
+            .is_ok());
+        assert!(graph
+            .connect_nodes(n2, "rear", n1, "front", Length::zero())
+            .is_err());
         assert_eq!(graph.0.edge_count(), 1);
     }
     #[test]
@@ -354,10 +466,16 @@ mod test {
         let n2 = graph.add_node(Dummy::default());
         let n3 = graph.add_node(Dummy::default());
         let n4 = graph.add_node(Dummy::default());
-        graph.connect_nodes(n1, "rear", n2, "front").unwrap();
-        graph.connect_nodes(n3, "rear", n4, "front").unwrap();
+        graph
+            .connect_nodes(n1, "rear", n2, "front", Length::zero())
+            .unwrap();
+        graph
+            .connect_nodes(n3, "rear", n4, "front", Length::zero())
+            .unwrap();
         assert_eq!(graph.is_single_tree(), false);
-        graph.connect_nodes(n2, "rear", n3, "front").unwrap();
+        graph
+            .connect_nodes(n2, "rear", n3, "front", Length::zero())
+            .unwrap();
         assert_eq!(graph.is_single_tree(), true);
     }
     #[test]

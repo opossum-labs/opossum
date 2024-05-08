@@ -4,16 +4,20 @@ use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    joule,
     lightdata::LightData,
-    millimeter,
+    millimeter, nanometer,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::Proptype,
+    ray::Ray,
     refractive_index::{refr_index_vaccuum, RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
-
+use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
+use log::warn;
+use nalgebra::Point3;
 use num::Zero;
 use uom::si::f64::Length;
 
@@ -165,52 +169,55 @@ impl Optical for Lens {
                             "cannot read refractive index".into(),
                         ));
                     };
-                    let next_z_pos =
-                        rays.absolute_z_of_last_surface() + rays.dist_to_next_surface();
-                    let isometry = Isometry::new_along_z(next_z_pos)?;
-                    if (*front_roc).is_infinite() {
-                        let plane = Plane::new(&isometry);
-                        rays.refract_on_surface(&plane, &index_model.value)?;
+                    if let Some(iso) = self.effective_iso() {
+                        if (*front_roc).is_infinite() {
+                            let plane = Plane::new(&iso);
+                            rays.refract_on_surface(&plane, &index_model.value)?;
+                        } else {
+                            rays.refract_on_surface(
+                                &Sphere::new(*front_roc, &iso)?,
+                                &index_model.value,
+                            )?;
+                        };
+                        if let Some(aperture) = self.ports().input_aperture("front") {
+                            rays.apodize(aperture)?;
+                            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                            }
+                        } else {
+                            return Err(OpossumError::OpticPort("input aperture not found".into()));
+                        };
+                        let Ok(Proptype::Length(center_thickness)) =
+                            self.node_attr.get_property("center thickness")
+                        else {
+                            return Err(OpossumError::Analysis(
+                                "cannot read center thickness".into(),
+                            ));
+                        };
+                        let thickness_iso = Isometry::new_along_z(*center_thickness)?;
+                        let Ok(Proptype::Length(rear_roc)) =
+                            self.node_attr.get_property("rear curvature")
+                        else {
+                            return Err(OpossumError::Analysis(
+                                "cannot read rear curvature".into(),
+                            ));
+                        };
+                        let isometry = iso.append(&thickness_iso);
+                        rays.set_refractive_index(&index_model.value)?;
+                        if (*rear_roc).is_infinite() {
+                            let plane = Plane::new(&isometry);
+                            rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                        } else {
+                            rays.refract_on_surface(
+                                &Sphere::new(*rear_roc, &isometry)?,
+                                &refr_index_vaccuum(),
+                            )?;
+                        };
                     } else {
-                        rays.refract_on_surface(
-                            &Sphere::new(*front_roc, &isometry)?,
-                            &index_model.value,
-                        )?;
-                    };
-
-                    if let Some(aperture) = self.ports().input_aperture("front") {
-                        rays.apodize(aperture)?;
-                        if let AnalyzerType::RayTrace(config) = analyzer_type {
-                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        }
-                    } else {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    };
-                    let Ok(Proptype::Length(center_thickness)) =
-                        self.node_attr.get_property("center thickness")
-                    else {
                         return Err(OpossumError::Analysis(
-                            "cannot read center thickness".into(),
+                            "no location for surface defined. Aborting".into(),
                         ));
-                    };
-                    rays.set_dist_to_next_surface(*center_thickness);
-                    let thickness_iso = Isometry::new_along_z(*center_thickness)?;
-                    let Ok(Proptype::Length(rear_roc)) =
-                        self.node_attr.get_property("rear curvature")
-                    else {
-                        return Err(OpossumError::Analysis("cannot read rear curvature".into()));
-                    };
-                    let isometry = isometry.append(&thickness_iso);
-                    rays.set_refractive_index(&index_model.value)?;
-                    if (*rear_roc).is_infinite() {
-                        let plane = Plane::new(&isometry);
-                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
-                    } else {
-                        rays.refract_on_surface(
-                            &Sphere::new(*rear_roc, &isometry)?,
-                            &refr_index_vaccuum(),
-                        )?;
-                    };
+                    }
                     if let Some(aperture) = self.ports().output_aperture("rear") {
                         rays.apodize(aperture)?;
                         if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -238,6 +245,64 @@ impl Optical for Lens {
     }
     fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
         self.node_attr.set_isometry(isometry);
+    }
+    fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
+        // if wedge is aligned (tilted, decentered), calculate single ray on incoming optical axis
+        // todo: use central wavelength
+        let alignment_iso = self
+            .node_attr
+            .alignment()
+            .clone()
+            .unwrap_or_else(Isometry::identity);
+        let mut ray =
+            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
+                .unwrap();
+        let front_plane = Plane::new(&alignment_iso);
+        let Ok(Proptype::RefractiveIndex(index_model)) =
+            self.node_attr.get_property("refractive index")
+        else {
+            return None;
+        };
+        let n2 = index_model
+            .value
+            .get_refractive_index(ray.wavelength())
+            .unwrap();
+        ray.refract_on_surface(&front_plane, n2).unwrap();
+        let Ok(Proptype::Length(center_thickness)) =
+            self.node_attr.get_property("center thickness")
+        else {
+            return None;
+        };
+        let thickness_iso = Isometry::new_along_z(*center_thickness).unwrap();
+        let back_plane = Plane::new(&alignment_iso.append(&thickness_iso));
+        let n2 = refr_index_vaccuum()
+            .get_refractive_index(ray.wavelength())
+            .unwrap();
+        ray.refract_on_surface(&back_plane, n2).unwrap();
+        let ray_pos_after_lens = ray.position();
+        let alignment_iso = Isometry::new(ray_pos_after_lens, Point3::origin()).unwrap();
+        self.node_attr
+            .isometry()
+            .as_ref()
+            .map(|iso| iso.append(&alignment_iso))
+    }
+    fn mesh(&self) -> Mesh {
+        #[allow(clippy::cast_possible_truncation)]
+        let thickness = if let Ok(Proptype::Length(center_thickness)) =
+            self.node_attr.get_property("center thickness")
+        {
+            center_thickness.value as f32
+        } else {
+            warn!("could not read center thickness. using 0.001 as default");
+            0.001_f32
+        };
+        let mesh: Mesh = Cuboid::new(0.3, 0.3, thickness).into();
+        if let Some(iso) = self.effective_iso() {
+            mesh.transformed_by(iso.into())
+        } else {
+            warn!("Node has no isometry defined. Mesh will be located at origin.");
+            mesh
+        }
     }
 }
 
@@ -368,13 +433,13 @@ mod test {
             &RefrIndexConst::new(2.0).unwrap(),
         )
         .unwrap();
-        let mut rays = Rays::new_uniform_collimated(
+        node.set_isometry(Isometry::new_along_z(millimeter!(10.0)).unwrap());
+        let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
             &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
         )
         .unwrap();
-        rays.set_dist_to_next_surface(millimeter!(10.0));
         let mut incoming_data = LightResult::default();
         incoming_data.insert("front".into(), LightData::Geometric(rays));
         let output = node
@@ -403,13 +468,14 @@ mod test {
             &RefrIndexConst::new(1.0).unwrap(),
         )
         .unwrap();
-        let mut rays = Rays::new_uniform_collimated(
+        node.set_isometry(Isometry::identity());
+        let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
             &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
         )
         .unwrap();
-        rays.set_dist_to_next_surface(millimeter!(10.0));
+        // rays.set_dist_to_next_surface(millimeter!(10.0));
         let mut incoming_data = LightResult::default();
         incoming_data.insert("front".into(), LightData::Geometric(rays));
         let output = node

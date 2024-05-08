@@ -1,8 +1,4 @@
 //! The basic structure containing the entire optical model
-use std::fs::File;
-use std::io::{Cursor, Write};
-use std::path::Path;
-
 use crate::{
     analyzer::AnalyzerType,
     error::{OpmResult, OpossumError},
@@ -17,16 +13,21 @@ use crate::{
     reporter::AnalysisReport,
 };
 use chrono::Local;
-use image::io::Reader;
-use image::DynamicImage;
+use image::{io::Reader, DynamicImage};
 use log::warn;
-use petgraph::algo::toposort;
-use petgraph::prelude::NodeIndex;
-use petgraph::visit::EdgeRef;
-use serde::de::{self, MapAccess, Visitor};
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize};
+use petgraph::{algo::toposort, prelude::NodeIndex, visit::EdgeRef};
+use serde::{
+    de::{self, MapAccess, Visitor},
+    ser::SerializeStruct,
+    Deserialize, Serialize,
+};
+use std::{
+    fs::File,
+    io::{Cursor, Write},
+    path::Path,
+};
 use tempfile::NamedTempFile;
+use uom::si::f64::Length;
 
 /// Overall optical model and additional metadata.
 ///
@@ -39,13 +40,15 @@ use tempfile::NamedTempFile;
 /// use opossum::OpticScenery;
 /// use opossum::nodes::Dummy;
 /// use opossum::error::OpmResult;
+/// use opossum::millimeter;
 ///
 /// fn main() -> OpmResult<()> {
 ///   let mut scenery = OpticScenery::new();
 ///   scenery.set_description("OpticScenery demo");
 ///   let node1 = scenery.add_node(Dummy::new("dummy1"));
 ///   let node2 = scenery.add_node(Dummy::new("dummy2"));
-///   scenery.connect_nodes(node1, "rear", node2, "front")
+///   scenery.connect_nodes(node1, "rear", node2, "front", millimeter!(100.0))?;
+///   Ok(())
 /// }
 ///
 /// ```
@@ -95,9 +98,10 @@ impl OpticScenery {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
+        distance: Length,
     ) -> OpmResult<()> {
         self.g
-            .connect_nodes(src_node, src_port, target_node, target_port)
+            .connect_nodes(src_node, src_port, target_node, target_port, distance)
     }
     /// Return a reference to the optical node specified by its node index.
     ///
@@ -113,6 +117,10 @@ impl OpticScenery {
             .node_weight(node)
             .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
         Ok(node.clone())
+    }
+    #[must_use]
+    pub fn nodes(&self) -> Vec<&OpticRef> {
+        self.g.0.node_weights().collect()
     }
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     ///
@@ -240,7 +248,6 @@ impl OpticScenery {
             Ok(format!("i{}:{}", end_node.index(), light_port))
         }
     }
-
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     ///
     /// # Attributes
@@ -262,10 +269,19 @@ impl OpticScenery {
                 .node_weight(idx)
                 .ok_or_else(|| OpossumError::Analysis("getting node_weight failed".into()))?;
             let node_name = node.optical_ref.borrow().name();
+
             let neighbors = self.g.0.neighbors_undirected(idx);
             if neighbors.count() == 0 {
                 warn!("stale (completely unconnected) node {node_name} found. Skipping.");
             } else {
+                // calc isometry for node if not already set.
+                if node.optical_ref.borrow().isometry().is_none() {
+                    if let Some(iso) = self.g.calc_node_isometry(idx) {
+                        node.optical_ref.borrow_mut().set_isometry(iso);
+                    } else {
+                        warn!("could not assign node isometry to {} because predecessor node has no isometry defined.", node_name);
+                    }
+                }
                 let incoming_edges: LightResult = self.incoming_edges(idx);
                 // paranoia: check if all incoming ports are really input ports of the node to be analyzed
                 let input_ports = node.optical_ref.borrow().ports().input_names();
@@ -521,19 +537,22 @@ mod test {
         millimeter, nanometer,
         nodes::{
             BeamSplitter, Detector, Dummy, EnergyMeter, IdealFilter, NodeReference,
-            ParaxialSurface, Propagation, RayPropagationVisualizer, Source, Spectrometer,
-            SpotDiagram, WaveFront,
+            ParaxialSurface, RayPropagationVisualizer, Source, Spectrometer, SpotDiagram,
+            WaveFront,
         },
         optical::Optical,
         properties::Proptype,
         ray::Ray,
         rays::Rays,
+        utils::geom_transformation::Isometry,
         OpticScenery,
     };
     use log::Level;
+    use num::Zero;
     use std::path::{Path, PathBuf};
     use tempfile::NamedTempFile;
     use testing_logger;
+    use uom::si::f64::Length;
 
     #[test]
     fn new() {
@@ -573,7 +592,7 @@ mod test {
         let node1 = scenery.add_node(Dummy::new("dummy1"));
         let node2 = scenery.add_node(Dummy::new("dummy2"));
         scenery
-            .connect_nodes(node1, "rear", node2, "front")
+            .connect_nodes(node1, "rear", node2, "front", Length::zero())
             .unwrap();
         scenery.analyze(&AnalyzerType::Energy).unwrap();
     }
@@ -602,14 +621,23 @@ mod test {
     fn analyze_unconnected_sub_trees() {
         testing_logger::setup();
         let mut scenery = OpticScenery::new();
-        let n1 = scenery.add_node(Dummy::default());
+        let mut d = Dummy::default();
+        d.set_isometry(Isometry::identity());
+        let n1 = scenery.add_node(d.clone());
         let n2 = scenery.add_node(Dummy::default());
-        let n3 = scenery.add_node(Dummy::default());
+        let n3 = scenery.add_node(d);
         let n4 = scenery.add_node(Dummy::default());
-        scenery.connect_nodes(n1, "rear", n2, "front").unwrap();
-        scenery.connect_nodes(n3, "rear", n4, "front").unwrap();
+        scenery
+            .connect_nodes(n1, "rear", n2, "front", Length::zero())
+            .unwrap();
+        scenery
+            .connect_nodes(n3, "rear", n4, "front", Length::zero())
+            .unwrap();
         assert!(scenery.analyze(&AnalyzerType::Energy).is_ok());
         testing_logger::validate(|captured_logs| {
+            for log in captured_logs {
+                println!("{}", log.body);
+            }
             assert_eq!(captured_logs.len(), 1);
             assert_eq!(
                 captured_logs[0].body,
@@ -629,8 +657,12 @@ mod test {
         );
         let mut scenery = OpticScenery::new();
         let i_s = scenery.add_node(Source::new("src", &LightData::Geometric(rays)));
-        let i_e = scenery.add_node(EnergyMeter::default());
-        scenery.connect_nodes(i_s, "out1", i_e, "in1").unwrap();
+        let mut em = EnergyMeter::default();
+        em.set_isometry(Isometry::identity());
+        let i_e = scenery.add_node(em);
+        scenery
+            .connect_nodes(i_s, "out1", i_e, "in1", Length::zero())
+            .unwrap();
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();
         scenery
@@ -675,7 +707,6 @@ mod test {
         assert!(!EnergyMeter::default().is_source());
         assert!(!IdealFilter::default().is_source());
         assert!(!ParaxialSurface::default().is_source());
-        assert!(!Propagation::default().is_source());
         assert!(!RayPropagationVisualizer::default().is_source());
         assert!(!Spectrometer::default().is_source());
         assert!(!SpotDiagram::default().is_source());

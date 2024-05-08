@@ -1,3 +1,4 @@
+use num::Zero;
 use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
@@ -6,6 +7,7 @@ use opossum::{
     OpticScenery,
 };
 use std::path::Path;
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
@@ -22,9 +24,9 @@ fn main() -> OpmResult<()> {
     )?);
     let reference = scenery.add_node(NodeReference::from_node(&scenery.node(filt).unwrap()));
     let detector = scenery.add_node(EnergyMeter::default());
-    scenery.connect_nodes(src, "out1", filt, "front")?;
-    scenery.connect_nodes(filt, "rear", reference, "front")?;
-    scenery.connect_nodes(reference, "rear", detector, "in1")?;
+    scenery.connect_nodes(src, "out1", filt, "front", Length::zero())?;
+    scenery.connect_nodes(filt, "rear", reference, "front", Length::zero())?;
+    scenery.connect_nodes(reference, "rear", detector, "in1", Length::zero())?;
     scenery.save_to_file(Path::new("./opossum/playground/reference_test.opm"))?;
     Ok(())
 }

@@ -1,4 +1,9 @@
 [env]
 OPM_FILE_VERSION = "0"
+RUST_TEST_THREADS = "1"
+
 [alias]
 xtask = "run --package xtask --"
+[build]
+jobs=2
+

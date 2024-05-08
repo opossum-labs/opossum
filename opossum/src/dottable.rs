@@ -322,6 +322,9 @@ pub trait Dottable {
 mod test {
     use std::{fs::File, io::Read};
 
+    use num::Zero;
+    use uom::si::f64::Length;
+
     use crate::{
         lightdata::LightData,
         nodes::{BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, Source},
@@ -385,12 +388,14 @@ mod test {
             Metertype::IdealEnergyMeter,
         ));
 
-        scenery.connect_nodes(i_s, "out1", i_bs, "input1").unwrap();
         scenery
-            .connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1")
+            .connect_nodes(i_s, "out1", i_bs, "input1", Length::zero())
             .unwrap();
         scenery
-            .connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1")
+            .connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1", Length::zero())
+            .unwrap();
+        scenery
+            .connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1", Length::zero())
             .unwrap();
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
@@ -401,9 +406,6 @@ mod test {
     }
     #[test]
     fn to_dot_group() {
-        let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot");
-        let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot");
-
         let mut scenery = OpticScenery::new();
         scenery
             .set_description("Node Group test section".into())
@@ -417,7 +419,7 @@ mod test {
             .map_output_port(g1_n2, "out1_trans1_refl2", "out1")
             .unwrap();
         group1
-            .connect_nodes(g1_n1, "rear", g1_n2, "input1")
+            .connect_nodes(g1_n1, "rear", g1_n2, "input1", Length::zero())
             .unwrap();
 
         let mut nested_group = NodeGroup::new("group 1_1");
@@ -426,7 +428,7 @@ mod test {
         nested_group.expand_view(true).unwrap();
 
         nested_group
-            .connect_nodes(nested_g_n1, "rear", nested_g_n2, "front")
+            .connect_nodes(nested_g_n1, "rear", nested_g_n2, "front", Length::zero())
             .unwrap();
         nested_group
             .map_input_port(nested_g_n1, "front", "in1")
@@ -437,7 +439,7 @@ mod test {
 
         let nested_group_index = group1.add_node(nested_group).unwrap();
         group1
-            .connect_nodes(nested_group_index, "out1", g1_n1, "front")
+            .connect_nodes(nested_group_index, "out1", g1_n1, "front", Length::zero())
             .unwrap();
 
         let mut group2: NodeGroup = NodeGroup::new("group 2");
@@ -446,16 +448,19 @@ mod test {
         let g2_n2 = group2.add_node(Dummy::new("node2_2")).unwrap();
         group2.map_input_port(g2_n1, "front", "in1").unwrap();
 
-        group2.connect_nodes(g2_n1, "rear", g2_n2, "front").unwrap();
+        group2
+            .connect_nodes(g2_n1, "rear", g2_n2, "front", Length::zero())
+            .unwrap();
 
         let scene_g1 = scenery.add_node(group1);
         let scene_g2 = scenery.add_node(group2);
 
         // set_output_port
         scenery
-            .connect_nodes(scene_g1, "out1", scene_g2, "in1")
+            .connect_nodes(scene_g1, "out1", scene_g2, "in1", Length::zero())
             .unwrap();
-
+        let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot");
+        let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot");
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
         let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
 

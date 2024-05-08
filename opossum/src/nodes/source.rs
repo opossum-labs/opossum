@@ -8,7 +8,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::Proptype,
-    utils::EnumProxy,
+    utils::{geom_transformation::Isometry, EnumProxy},
 };
 use std::fmt::Debug;
 
@@ -39,6 +39,14 @@ impl Default for Source {
                 "data of the emitted light",
                 None,
                 EnumProxy::<Option<LightData>> { value: None }.into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                "isometry",
+                "absolute node location / orientation",
+                None,
+                EnumProxy::<Option<Isometry>> { value: None }.into(),
             )
             .unwrap();
         let mut ports = OpticPorts::new();
@@ -163,8 +171,19 @@ impl Optical for Source {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
+    fn after_deserialization_hook(&mut self) -> OpmResult<()> {
+        // Synchronize iosmetry property.
+        if let Proptype::Isometry(prox_iso) = &self.node_attr.get_property("isometry")? {
+            if let Some(iso) = &prox_iso.value {
+                self.set_isometry(iso.clone());
+            }
+        }
+        Ok(())
+    }
     fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+        self.node_attr.set_isometry(isometry.clone());
+        self.set_property("isometry", Some(isometry).into())
+            .unwrap();
     }
 }
 
