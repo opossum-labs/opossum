@@ -17,7 +17,6 @@ use uom::si::f64::Length;
 /// An infinitely large flat surface with its normal collinear to the optical axis.
 pub struct Plane {
     normal: Vector3<f64>,
-    anchor_point: Point3<Length>,
     shift: Length,
     isometry: Isometry,
 }
@@ -29,16 +28,9 @@ impl Plane {
     pub fn new(isometry: &Isometry) -> Self {
         Self {
             normal: isometry.transform_vector_f64(&Vector3::z()),
-            anchor_point: Point3::origin(),
             shift: Length::zero(),
             isometry: isometry.clone(),
         }
-    }
-
-    /// Returns the anchor point of this plane
-    #[must_use]
-    pub const fn get_anchor_point(&self) -> Point3<Length> {
-        self.anchor_point
     }
 }
 impl Surface for Plane {
