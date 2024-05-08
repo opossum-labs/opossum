@@ -13,12 +13,11 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
 )]
 #![cfg_attr(feature = "cargo-clippy", allow(clippy::module_name_repetitions))]
 
+#[cfg(feature = "bevy")]
 pub mod bevy_main;
+#[cfg(feature = "bevy")]
 pub mod bevy_scene;
-
-mod light;
-mod optic_graph;
-mod optic_scenery;
+#[cfg(feature = "bevy")]
 mod scenery_bevy_data;
 
 pub mod analyzer;
@@ -27,10 +26,13 @@ pub mod console;
 pub mod dottable;
 pub mod energy_distributions;
 pub mod error;
+mod light;
 pub mod lightdata;
 pub mod nodes;
+mod optic_graph;
 pub mod optic_ports;
 pub mod optic_ref;
+mod optic_scenery;
 pub mod optical;
 pub mod plottable;
 pub mod position_distributions;
@@ -46,6 +48,7 @@ pub mod surface;
 pub mod utils;
 
 pub use optic_scenery::OpticScenery;
+#[cfg(feature = "bevy")]
 pub use scenery_bevy_data::SceneryBevyData;
 
 use chrono::DateTime;

@@ -7,6 +7,7 @@ use crate::{
     properties::Proptype,
 };
 use approx::relative_eq;
+#[cfg(feature = "bevy")]
 use bevy::{
     math::{Quat, Vec3, Vec4},
     transform::components::Transform,
@@ -315,10 +316,12 @@ impl From<Option<Isometry>> for Proptype {
         Self::Isometry(EnumProxy { value })
     }
 }
+#[cfg(feature = "bevy")]
 #[allow(clippy::cast_possible_truncation)]
 const fn as_f32(x: f64) -> f32 {
     x as f32
 }
+#[cfg(feature = "bevy")]
 impl From<Isometry> for Transform {
     fn from(value: Isometry) -> Self {
         let t = value.transform.translation;
