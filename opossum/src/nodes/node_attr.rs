@@ -7,7 +7,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,
     properties::{PropCondition, Properties, Proptype},
-    utils::geom_transformation::Isometry,
+    utils::{geom_transformation::Isometry, EnumProxy},
 };
 
 /// Struct for sotring common attributes of optical nodes.
@@ -15,7 +15,7 @@ use crate::{
 pub struct NodeAttr {
     node_type: String,
     props: Properties,
-    isometry: Isometry,
+    isometry: Option<Isometry>,
 }
 impl NodeAttr {
     /// Creates new node attributes ([`NodeAttr`]).
@@ -46,10 +46,18 @@ impl NodeAttr {
                 OpticPorts::default().into(),
             )
             .unwrap();
+        properties
+            .create(
+                "alignment",
+                "local alignment (decenter, tilt) of the optical element",
+                None,
+                EnumProxy::<Option<Isometry>> { value: None }.into(),
+            )
+            .unwrap();
         Self {
             node_type: node_type.into(),
             props: properties,
-            isometry: Isometry::default(),
+            isometry: None,
         }
     }
     /// Returns the name property of this node.
@@ -133,11 +141,27 @@ impl NodeAttr {
     }
     /// Sets the isometry of this [`NodeAttr`].
     pub fn set_isometry(&mut self, isometry: Isometry) {
-        self.isometry = isometry;
+        self.isometry = Some(isometry);
     }
     /// Returns a reference to the isometry of this [`NodeAttr`].
     #[must_use]
-    pub const fn isometry(&self) -> &Isometry {
+    pub const fn isometry(&self) -> &Option<Isometry> {
         &self.isometry
+    }
+    /// Returns the local alignment isometry of a node (if any).
+    #[must_use]
+    pub fn alignment(&self) -> &Option<Isometry> {
+        if let Ok(Proptype::Isometry(prox)) = self.props.get("alignment") {
+            &prox.value
+        } else {
+            &None
+        }
+    }
+    /// Sets the local alignment isometry of this [`NodeAttr`].
+    ///
+    /// # Panics
+    /// This function could theoretically panic if the property `alignment` is not defined.
+    pub fn set_alignment(&mut self, isometry: Isometry) {
+        self.props.set("alignment", Some(isometry).into()).unwrap();
     }
 }

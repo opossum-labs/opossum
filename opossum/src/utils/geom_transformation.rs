@@ -4,8 +4,13 @@ use crate::{
     degree,
     error::{OpmResult, OpossumError},
     meter,
+    properties::Proptype,
 };
 use approx::relative_eq;
+use bevy::{
+    math::{Quat, Vec3, Vec4},
+    transform::components::Transform,
+};
 use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Vector3};
 use num::Zero;
 use serde::{Deserialize, Serialize};
@@ -15,8 +20,10 @@ use uom::si::{
     length::meter,
 };
 
+use super::EnumProxy;
+
 /// Struct to store the isometric transofmeation matrix and its inverse
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Isometry {
     transform: Isometry3<f64>,
     inverse: Isometry3<f64>,
@@ -57,6 +64,14 @@ impl Isometry {
             trans_in_m,
             rot_in_radian,
         )))
+    }
+    /// Create a "identiy" Isometry, which represents a zero translation and rotation.
+    #[must_use]
+    pub fn identity() -> Self {
+        Self {
+            transform: Isometry3::<f64>::identity(),
+            inverse: Isometry3::<f64>::identity(),
+        }
     }
     /// Create a new [`Isometry`] representing a translation along the z axis.
     ///
@@ -290,7 +305,34 @@ impl Isometry {
             .collect::<Vec<Vector3<f64>>>()
     }
 }
-
+impl From<EnumProxy<Option<Isometry>>> for Proptype {
+    fn from(value: EnumProxy<Option<Isometry>>) -> Self {
+        Self::Isometry(value)
+    }
+}
+impl From<Option<Isometry>> for Proptype {
+    fn from(value: Option<Isometry>) -> Self {
+        Self::Isometry(EnumProxy { value })
+    }
+}
+#[allow(clippy::cast_possible_truncation)]
+const fn as_f32(x: f64) -> f32 {
+    x as f32
+}
+impl From<Isometry> for Transform {
+    fn from(value: Isometry) -> Self {
+        let t = value.transform.translation;
+        let r = value.transform.rotation;
+        Self::from_translation(Vec3::new(as_f32(t.x), as_f32(t.y), as_f32(t.z))).with_rotation(
+            Quat::from_vec4(Vec4::new(
+                as_f32(r.i),
+                as_f32(r.j),
+                as_f32(r.k),
+                as_f32(r.w),
+            )),
+        )
+    }
+}
 /// This function defines the coordinate axes on a plane.
 /// This may be useful if points are projected onto that plane and should be represented by values of two coordinate axes that span the plane
 /// If the plane normal is parallel to one of the main coordinate axes (x,y,z), the respective other axes are used.

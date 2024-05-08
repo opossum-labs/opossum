@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 //! Contains the basic trait representing an optical element
+use bevy::math::primitives::Cuboid;
+use bevy::render::mesh::Mesh;
 use image::RgbImage;
 use log::warn;
 
@@ -205,12 +207,41 @@ pub trait Optical: Dottable {
     fn properties(&self) -> &Properties {
         self.node_attr().properties()
     }
-    /// Return the [`Isometry`] of this optical node.
-    fn isometry(&self) -> &Isometry {
+    /// Return the (base) [`Isometry`] of this optical node.
+    fn isometry(&self) -> &Option<Isometry> {
         self.node_attr().isometry()
     }
-    /// Set the [`Isometry`] (position and angle) of this optical node.
+    /// Return the [`Isometry`] of the output surface of this optical node.
+    ///
+    /// This function returns the [`Isometry`] of the output surface of the port with the given name. It returns the position and orientation of
+    /// the optical axis after passing the optical node. The default implementation returns the base isometry of the node which corresponds to an
+    /// optical component with an infinitely thin flat surface. In this case the optical axis before and behind the component is unmodified.
+    fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
+        self.node_attr().isometry().clone()
+    }
+    /// Set the (base) [`Isometry`] (position and angle) of this optical node.
     fn set_isometry(&mut self, isometry: Isometry);
+    ///
+    fn mesh(&self) -> Mesh {
+        let mesh: Mesh = Cuboid::new(0.3, 0.3, 0.001).into();
+        if let Some(iso) = self.effective_iso() {
+            mesh.transformed_by(iso.into())
+        } else {
+            warn!("Node has no isometry defined. Mesh will be located at origin.");
+            mesh
+        }
+    }
+    /// Return the effective input isometry of this optical node.
+    ///
+    /// The effective input isometry is the base isometry modified by the local alignment isometry (if any)
+    fn effective_iso(&self) -> Option<Isometry> {
+        self.isometry().as_ref().and_then(|iso| {
+            self.node_attr().alignment().as_ref().map_or_else(
+                || Some(iso.clone()),
+                |local_iso| Some(iso.append(local_iso)),
+            )
+        })
+    }
 }
 
 impl Debug for dyn Optical {

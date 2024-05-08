@@ -1,3 +1,4 @@
+use num::Zero;
 use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
@@ -6,6 +7,7 @@ use opossum::{
     OpticScenery,
 };
 use std::path::Path;
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
@@ -26,14 +28,14 @@ fn main() -> OpmResult<()> {
     let r_bs = scenery.add_node(rf);
     let det = scenery.add_node(Detector::default());
 
-    scenery.connect_nodes(src, "out1", bs, "input1")?;
-    scenery.connect_nodes(bs, "out1_trans1_refl2", sample, "front")?;
-    scenery.connect_nodes(sample, "rear", m1, "front")?;
-    scenery.connect_nodes(m1, "rear", r_sample, "front")?;
-    scenery.connect_nodes(r_sample, "rear", r_bs, "input1")?;
-    scenery.connect_nodes(bs, "out2_trans2_refl1", m2, "front")?;
-    scenery.connect_nodes(m2, "rear", r_bs, "input2")?;
-    scenery.connect_nodes(r_bs, "out1_trans1_refl2", det, "in1")?;
+    scenery.connect_nodes(src, "out1", bs, "input1", Length::zero())?;
+    scenery.connect_nodes(bs, "out1_trans1_refl2", sample, "front", Length::zero())?;
+    scenery.connect_nodes(sample, "rear", m1, "front", Length::zero())?;
+    scenery.connect_nodes(m1, "rear", r_sample, "front", Length::zero())?;
+    scenery.connect_nodes(r_sample, "rear", r_bs, "input1", Length::zero())?;
+    scenery.connect_nodes(bs, "out2_trans2_refl1", m2, "front", Length::zero())?;
+    scenery.connect_nodes(m2, "rear", r_bs, "input2", Length::zero())?;
+    scenery.connect_nodes(r_bs, "out1_trans1_refl2", det, "in1", Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/michaelson.opm"))?;
     Ok(())

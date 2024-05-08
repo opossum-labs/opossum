@@ -1,3 +1,4 @@
+use num::Zero;
 use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
@@ -8,6 +9,7 @@ use opossum::{
     OpticScenery,
 };
 use std::path::Path;
+use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
@@ -31,9 +33,9 @@ fn main() -> OpmResult<()> {
         opossum::nodes::Metertype::IdealEnergyMeter,
     ));
 
-    scenery.connect_nodes(i_s, "out1", i_bs, "out1_trans1_refl2")?;
-    scenery.connect_nodes(i_bs, "input1", i_d1, "in1")?;
-    scenery.connect_nodes(i_bs, "input2", i_d2, "in1")?;
+    scenery.connect_nodes(i_s, "out1", i_bs, "out1_trans1_refl2", Length::zero())?;
+    scenery.connect_nodes(i_bs, "input1", i_d1, "in1", Length::zero())?;
+    scenery.connect_nodes(i_bs, "input2", i_d2, "in1", Length::zero())?;
 
     scenery.save_to_file(Path::new("./opossum/playground/inverse_beam_splitter.opm"))?;
 

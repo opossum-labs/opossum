@@ -4,6 +4,7 @@
 use crate::{
     analyzer::AnalyzerType,
     error::{OpmResult, OpossumError},
+    nodes::ray_propagation_visualizer::RayPositionHistories,
     properties::{property::HtmlProperty, Properties, Proptype},
     OpticScenery,
 };
@@ -75,6 +76,21 @@ impl AnalysisReport {
     pub fn add_detector(&mut self, report: NodeReport) {
         self.node_reports.push(report);
     }
+    /// Returns the ray history for the first found [`RayPropagationVisualizer`](crate::nodes::RayPropagationVisualizer) in this [`AnalysisReport`].
+    #[must_use]
+    pub fn get_ray_hist(&self) -> Option<&RayPositionHistories> {
+        for node in &self.node_reports {
+            if let Some(ray_hist) = node.get_ray_history() {
+                return Some(ray_hist);
+            }
+        }
+        None
+    }
+    /// Returns the scenery of this [`AnalysisReport`].
+    #[must_use]
+    pub const fn scenery(&self) -> Option<&OpticScenery> {
+        self.scenery.as_ref()
+    }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 /// Structure for storing (detector-)node specific data to be integrated in the [`AnalysisReport`].
@@ -107,6 +123,27 @@ impl NodeReport {
     #[must_use]
     pub const fn properties(&self) -> &Properties {
         &self.properties
+    }
+    /// Returns the get ray history of this [`NodeReport`].
+    #[must_use]
+    pub fn get_ray_history(&self) -> Option<&RayPositionHistories> {
+        if self.detector_type == "group" {
+            for prop in &self.properties {
+                if let Proptype::NodeReport(node) = prop.1.prop() {
+                    let data = node.get_ray_history();
+                    if data.is_some() {
+                        return data;
+                    }
+                }
+            }
+        } else if self.detector_type == "ray propagation" {
+            if let Ok(Proptype::RayPositionHistory(ray_hist)) =
+                self.properties.get("Ray Propagation visualization plot")
+            {
+                return Some(ray_hist);
+            }
+        }
+        None
     }
 }
 

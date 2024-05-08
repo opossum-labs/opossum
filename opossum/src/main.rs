@@ -3,15 +3,13 @@
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info};
-use opossum::analyzer::AnalyzerType;
-use opossum::error::OpmResult;
-use opossum::reporter::ReportGenerator;
 use opossum::{
-    OpticScenery,
-    {
-        console::{Args, PartialArgs},
-        error::OpossumError,
-    },
+    analyzer::AnalyzerType,
+    bevy_main,
+    console::{Args, PartialArgs},
+    error::{OpmResult, OpossumError},
+    reporter::{AnalysisReport, ReportGenerator},
+    OpticScenery, SceneryBevyData,
 };
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -61,7 +59,7 @@ fn create_report_file(
     base_file_name: &str,
     scenery: &OpticScenery,
     analyzer: &AnalyzerType,
-) -> OpmResult<()> {
+) -> OpmResult<AnalysisReport> {
     let mut output =
         create_dot_or_report_file_instance(report_directory, "report", "yaml", "detector report")?;
     let analysis_report = scenery.report(report_directory)?;
@@ -71,16 +69,16 @@ fn create_report_file(
         serde_yaml::to_string(&analysis_report).unwrap()
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
-    let report_generator = ReportGenerator::new(analysis_report, Path::new(base_file_name));
+    let report_generator = ReportGenerator::new(analysis_report.clone(), Path::new(base_file_name));
     let mut report_path = report_directory.to_path_buf();
     report_path.push("report.html");
     report_generator.generate_html(&report_path, analyzer)?;
-    Ok(())
+    Ok(analysis_report)
 }
 
 fn opossum() -> OpmResult<()> {
     // by default, log everything from level `info` and up.
-    env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     //parse CLI arguments
     let opossum_args = Args::try_from(PartialArgs::parse())?;
 
@@ -99,12 +97,14 @@ fn opossum() -> OpmResult<()> {
     //analyze the scenery
     info!("Analyzing...");
     scenery.analyze(&opossum_args.analyzer)?;
-    create_report_file(
+    let analysis_report = create_report_file(
         &opossum_args.report_directory,
         base_file_name,
         &scenery,
         &opossum_args.analyzer,
-    )
+    )?;
+    bevy_main::bevy_main(SceneryBevyData::from_report(&analysis_report));
+    Ok(())
 }
 
 /// OPOSSUM main function
@@ -138,11 +138,11 @@ mod test {
         let node1 = scenery.node(NodeIndex::from(0)).unwrap();
         let node2 = scenery.node(NodeIndex::from(1)).unwrap();
         assert_eq!(
-            "2ac550f7-b62c-4aa8-8f57-9931a791bc99",
+            "180328fe-7ad4-4568-b501-183b88c4daee",
             node1.uuid().to_string()
         );
         assert_eq!(
-            "710f252d-2cbd-4613-8135-291a07cd4cbd",
+            "642ce76e-b071-43c0-a77e-1bdbb99b40d8",
             node2.uuid().to_string()
         );
     }

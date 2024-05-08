@@ -1,9 +1,6 @@
 #![warn(missing_docs)]
 //! This module contains the concrete node types (lenses, filters, etc...)
 
-mod node_attr;
-mod test_helper;
-
 mod beam_splitter;
 mod detector;
 mod dummy;
@@ -12,53 +9,45 @@ mod fluence_detector;
 mod group;
 mod ideal_filter;
 mod lens;
+mod node_attr;
 mod paraxial_surface;
-mod propagation;
-/// ray propagation visualizer node
 pub mod ray_propagation_visualizer;
 mod reference;
 mod source;
 mod source_helper;
 mod spectrometer;
 mod spot_diagram;
+mod test_helper;
 mod wavefront;
+mod wedge;
 
 pub use beam_splitter::BeamSplitter;
 pub use detector::Detector;
 pub use dummy::Dummy;
-pub use group::NodeGroup;
-pub use group::PortMap;
+pub use group::{NodeGroup, PortMap};
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::Lens;
 pub use paraxial_surface::ParaxialSurface;
-pub use propagation::Propagation;
 pub use reference::NodeReference;
 pub use source::Source;
 pub use source_helper::{
     collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
 };
 
-pub use energy_meter::EnergyMeter;
-pub use energy_meter::Metertype;
-
-pub use spectrometer::Spectrometer;
-pub use spectrometer::SpectrometerType;
-
+use crate::{
+    error::{OpmResult, OpossumError},
+    optic_ref::OpticRef,
+};
+pub use energy_meter::{EnergyMeter, Metertype};
 pub use fluence_detector::{FluenceData, FluenceDetector};
-pub use spot_diagram::SpotDiagram;
-
-pub use ray_propagation_visualizer::RayPropagationVisualizer;
-pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
-
 pub use node_attr::NodeAttr;
-
+pub use ray_propagation_visualizer::RayPropagationVisualizer;
+pub use spectrometer::{Spectrometer, SpectrometerType};
+pub use spot_diagram::SpotDiagram;
+use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
-
-use crate::error::OpmResult;
-use crate::error::OpossumError;
-use crate::optic_ref::OpticRef;
-use std::cell::RefCell;
-use std::rc::Rc;
+pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
+pub use wedge::Wedge;
 
 /// Factory function creating a new reference of an optical node of the given type.
 ///
@@ -112,10 +101,6 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
             Rc::new(RefCell::new(WaveFront::default())),
             uuid,
         )),
-        "propagation" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(Propagation::default())),
-            uuid,
-        )),
         "paraxial" => Ok(OpticRef::new(
             Rc::new(RefCell::new(ParaxialSurface::default())),
             uuid,
@@ -128,6 +113,7 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
             Rc::new(RefCell::new(FluenceDetector::default())),
             uuid,
         )),
+        "wedge" => Ok(OpticRef::new(Rc::new(RefCell::new(Wedge::default())), uuid)),
         _ => Err(OpossumError::Other(format!(
             "cannot create node type <{node_type}>"
         ))),

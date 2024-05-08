@@ -9,6 +9,7 @@ pub mod test_helper {
         optical::{LightResult, Optical},
         position_distributions::Hexapolar,
         rays::Rays,
+        utils::geom_transformation::Isometry,
     };
     pub fn test_inverted<T: Default + Optical>() {
         let mut node = T::default();
@@ -24,6 +25,7 @@ pub mod test_helper {
     pub fn test_analyze_apodization_warning<T: Default + Optical>() {
         testing_logger::setup();
         let mut node = T::default();
+        node.set_isometry(Isometry::identity());
         let config = CircleConfig::new(millimeter!(1.0), millimeter!(0.0, 0.0)).unwrap();
         node.set_input_aperture("in1", &crate::aperture::Aperture::BinaryCircle(config))
             .unwrap();

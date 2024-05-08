@@ -11,10 +11,12 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     reporter::NodeReport,
+    utils::geom_transformation::Isometry,
 };
 use log::warn;
 use petgraph::{algo::toposort, prelude::NodeIndex, visit::EdgeRef, Direction};
 use std::{collections::HashMap, path::Path};
+use uom::si::f64::Length;
 
 /// Mapping of group internal [`OpticPorts`] to externally visible ports.
 pub type PortMap = HashMap<String, (NodeIndex, String)>;
@@ -23,7 +25,6 @@ impl From<PortMap> for Proptype {
         Self::GroupPortMap(value)
     }
 }
-
 #[derive(Debug, Clone)]
 /// A node that represents a group of other [`Optical`]s arranges in a subgraph.
 ///
@@ -144,6 +145,7 @@ impl NodeGroup {
         src_port: &str,
         target_node: NodeIndex,
         target_port: &str,
+        distance: Length,
     ) -> OpmResult<()> {
         if self.properties().inverted()? {
             return Err(OpossumError::OpticGroup(
@@ -151,7 +153,7 @@ impl NodeGroup {
             ));
         }
         self.g
-            .connect_nodes(src_node, src_port, target_node, target_port)?;
+            .connect_nodes(src_node, src_port, target_node, target_port, distance)?;
         self.node_attr
             .set_property("graph", self.g.clone().into())
             .unwrap();
@@ -315,6 +317,9 @@ impl NodeGroup {
             ));
         }
         let mut input_port_map = self.input_port_map();
+        if let Some(iso) = self.isometry() {
+            node.optical_ref.borrow_mut().set_isometry(iso.clone());
+        }
         input_port_map.insert(
             external_name.to_string(),
             (input_node, internal_name.to_string()),
@@ -413,16 +418,8 @@ impl NodeGroup {
             }
         } // else outgoing edge not connected -> data dropped
     }
-    fn is_group_src_node(&self, idx: NodeIndex) -> bool {
-        let group_srcs = self.g.0.externals(Direction::Incoming);
-        group_srcs.into_iter().any(|gs| gs == idx)
-    }
-    fn is_group_sink_node(&self, idx: NodeIndex) -> bool {
-        let group_sinks = self.g.0.externals(Direction::Outgoing);
-        group_sinks.into_iter().any(|gs| gs == idx)
-    }
     fn get_incoming(&self, idx: NodeIndex, incoming_data: &LightResult) -> LightResult {
-        if self.is_group_src_node(idx) {
+        if self.g.is_src_node(idx) {
             // get from incoming_data
             let portmap = if self.node_attr.inverted().unwrap() {
                 self.output_port_map()
@@ -466,10 +463,18 @@ impl NodeGroup {
         let mut light_result = LightResult::default();
         for idx in sorted {
             let node = g_clone.node_weight(idx).unwrap();
+            let node_name = node.optical_ref.borrow().name();
             if self.is_stale_node(idx) {
-                let node_name = node.optical_ref.borrow().name();
                 warn!("Group {group_name} contains stale (completely unconnected) node {node_name}. Skipping.");
             } else {
+                // calc isometry for node if not already set.
+                if node.optical_ref.borrow().isometry().is_none() {
+                    if let Some(iso) = self.g.calc_node_isometry(idx) {
+                        node.optical_ref.borrow_mut().set_isometry(iso);
+                    } else {
+                        warn!("could not assign node isometry to {} because predecessor node has no isometry defined.", node_name);
+                    }
+                }
                 // Check if node is group src node
                 let incoming_edges = self.get_incoming(idx, incoming_data);
                 let outgoing_edges: LightResult = node
@@ -477,7 +482,7 @@ impl NodeGroup {
                     .borrow_mut()
                     .analyze(incoming_edges, analyzer_type)?;
                 // Check if node is group sink node
-                if self.is_group_sink_node(idx) {
+                if self.g.is_sink_node(idx) {
                     let portmap = if is_inverted {
                         self.input_port_map()
                     } else {
@@ -784,7 +789,33 @@ impl Optical for NodeGroup {
         &self.node_attr
     }
     fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+        self.node_attr.set_isometry(isometry.clone());
+        for portmap in self.input_port_map() {
+            if let Some(node) = self.g.0.node_weight(portmap.1 .0) {
+                node.optical_ref.borrow_mut().set_isometry(isometry.clone());
+            }
+        }
+    }
+    fn output_port_isometry(&self, output_port_name: &str) -> Option<Isometry> {
+        self.output_port_map().get(output_port_name).map_or_else(
+            || {
+                warn!("output port name {} not found", output_port_name);
+                None
+            },
+            |output_port| {
+                self.g.0.node_weight(output_port.0).map_or_else(
+                    || {
+                        warn!("node not found");
+                        None
+                    },
+                    |node| {
+                        node.optical_ref
+                            .borrow()
+                            .output_port_isometry(&output_port.1)
+                    },
+                )
+            },
+        )
     }
 }
 
@@ -827,8 +858,7 @@ mod test {
         joule,
         lightdata::DataEnergy,
         millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
-        nodes::{BeamSplitter, Detector, Dummy, Source},
+        nodes::{test_helper::test_helper::*, BeamSplitter, Detector, Dummy, Source},
         optical::Optical,
         position_distributions::Hexapolar,
         ray::SplittingConfig,
@@ -837,6 +867,7 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
     use log::Level;
+    use num::Zero;
     #[test]
     fn default() {
         let node = NodeGroup::default();
@@ -884,17 +915,27 @@ mod test {
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         // wrong port names
-        assert!(og.connect_nodes(sn1_i, "wrong", sn2_i, "front").is_err());
+        assert!(og
+            .connect_nodes(sn1_i, "wrong", sn2_i, "front", Length::zero())
+            .is_err());
         assert_eq!(og.g.0.edge_count(), 0);
-        assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "wrong").is_err());
+        assert!(og
+            .connect_nodes(sn1_i, "rear", sn2_i, "wrong", Length::zero())
+            .is_err());
         assert_eq!(og.g.0.edge_count(), 0);
         // wrong node index
-        assert!(og.connect_nodes(5.into(), "rear", sn2_i, "front").is_err());
+        assert!(og
+            .connect_nodes(5.into(), "rear", sn2_i, "front", Length::zero())
+            .is_err());
         assert_eq!(og.g.0.edge_count(), 0);
-        assert!(og.connect_nodes(sn1_i, "rear", 5.into(), "front").is_err());
+        assert!(og
+            .connect_nodes(sn1_i, "rear", 5.into(), "front", Length::zero())
+            .is_err());
         assert_eq!(og.g.0.edge_count(), 0);
         // correct usage
-        assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "front").is_ok());
+        assert!(og
+            .connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+            .is_ok());
         assert_eq!(og.g.0.edge_count(), 1);
     }
     #[test]
@@ -903,7 +944,9 @@ mod test {
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         og.set_property("inverted", true.into()).unwrap();
-        assert!(og.connect_nodes(sn1_i, "rear", sn2_i, "front").is_err());
+        assert!(og
+            .connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+            .is_err());
     }
     #[test]
     fn connect_nodes_update_port_mapping() {
@@ -915,7 +958,8 @@ mod test {
         og.map_output_port(sn1_i, "rear", "output").unwrap();
         assert_eq!(og.input_port_map().len(), 1);
         assert_eq!(og.output_port_map().len(), 1);
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+            .unwrap();
         // delete no longer valid port mapping
         assert_eq!(og.input_port_map().len(), 0);
         assert_eq!(og.output_port_map().len(), 0);
@@ -927,8 +971,10 @@ mod test {
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
         let sub_node3 = BeamSplitter::new("test", &SplittingConfig::Ratio(0.5)).unwrap();
         let sn3_i = og.add_node(sub_node3).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
-        og.connect_nodes(sn2_i, "rear", sn3_i, "input1").unwrap();
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+            .unwrap();
+        og.connect_nodes(sn2_i, "rear", sn3_i, "input1", Length::zero())
+            .unwrap();
         assert_eq!(og.input_nodes(), vec![0.into(), 2.into()])
     }
     #[test]
@@ -938,8 +984,9 @@ mod test {
         let sub_node1 = BeamSplitter::new("test", &SplittingConfig::Ratio(0.5)).unwrap();
         let sn2_i = og.add_node(sub_node1).unwrap();
         let sn3_i = og.add_node(Dummy::new("n3")).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
-        og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front")
+        og.connect_nodes(sn1_i, "rear", sn2_i, "input1", Length::zero())
+            .unwrap();
+        og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front", Length::zero())
             .unwrap();
         assert_eq!(og.input_nodes(), vec![0.into(), 1.into()])
     }
@@ -948,7 +995,8 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+            .unwrap();
 
         // wrong port name
         assert!(og.map_input_port(sn1_i, "wrong", "input").is_err());
@@ -971,7 +1019,8 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sn2_i = og.add_node(BeamSplitter::default()).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "input1").unwrap();
+        og.connect_nodes(sn1_i, "rear", sn2_i, "input1", Length::zero())
+            .unwrap();
 
         // node port already internally connected
         assert!(og.map_input_port(sn2_i, "input1", "bs_input").is_err());
@@ -986,7 +1035,8 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+            .unwrap();
 
         // wrong port name
         assert!(og.map_output_port(sn2_i, "wrong", "output").is_err());
@@ -1009,7 +1059,7 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(BeamSplitter::default()).unwrap();
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
-        og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "front")
+        og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "front", Length::zero())
             .unwrap();
 
         // node port already internally connected
@@ -1029,7 +1079,8 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+            .unwrap();
         assert!(og.ports().input_names().is_empty());
         assert!(og.ports().output_names().is_empty());
         og.map_input_port(sn1_i, "front", "input").unwrap();
@@ -1042,7 +1093,8 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::new("n1")).unwrap();
         let sn2_i = og.add_node(Dummy::new("n2")).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front").unwrap();
+        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+            .unwrap();
         og.map_input_port(sn1_i, "front", "input").unwrap();
         og.map_output_port(sn2_i, "rear", "output").unwrap();
         og.set_property("inverted", true.into()).unwrap();
@@ -1059,7 +1111,9 @@ mod test {
             .map_output_port(g1_n2, "out1_trans1_refl2", "output")
             .unwrap();
         group.map_input_port(g1_n1, "front", "input").unwrap();
-        group.connect_nodes(g1_n1, "rear", g1_n2, "input1").unwrap();
+        group
+            .connect_nodes(g1_n1, "rear", g1_n2, "input1", Length::zero())
+            .unwrap();
         group
     }
     #[test]
@@ -1114,12 +1168,18 @@ mod test {
     fn analyze_subtree_warning() {
         testing_logger::setup();
         let mut group = NodeGroup::default();
-        let d1 = group.add_node(Dummy::default()).unwrap();
+        let mut d = Dummy::default();
+        d.set_isometry(Isometry::identity());
+        let d1 = group.add_node(d.clone()).unwrap();
         let d2 = group.add_node(Dummy::default()).unwrap();
-        let d3 = group.add_node(Dummy::default()).unwrap();
+        let d3 = group.add_node(d).unwrap();
         let d4 = group.add_node(Dummy::default()).unwrap();
-        group.connect_nodes(d1, "rear", d2, "front").unwrap();
-        group.connect_nodes(d3, "rear", d4, "front").unwrap();
+        group
+            .connect_nodes(d1, "rear", d2, "front", Length::zero())
+            .unwrap();
+        group
+            .connect_nodes(d3, "rear", d4, "front", Length::zero())
+            .unwrap();
         group.map_input_port(d1, "front", "input").unwrap();
         let input = LightResult::default();
         let output = group.analyze(input, &AnalyzerType::Energy);
@@ -1137,6 +1197,7 @@ mod test {
     fn analyze_stale_node() {
         testing_logger::setup();
         let mut group = NodeGroup::default();
+        group.set_isometry(Isometry::identity());
         let d1 = group.add_node(Dummy::default()).unwrap();
         let _ = group.add_node(Dummy::new("stale node")).unwrap();
         group.map_input_port(d1, "front", "input").unwrap();
@@ -1191,7 +1252,9 @@ mod test {
         let g1_n1 = group.add_node(Source::default()).unwrap();
         let g1_n2 = group.add_node(Dummy::new("node1")).unwrap();
         group.map_output_port(g1_n2, "rear", "output").unwrap();
-        group.connect_nodes(g1_n1, "out1", g1_n2, "front").unwrap();
+        group
+            .connect_nodes(g1_n1, "out1", g1_n2, "front", Length::zero())
+            .unwrap();
         group.set_property("inverted", true.into()).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
