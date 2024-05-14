@@ -20,19 +20,24 @@ pub struct NodeAttr {
 impl NodeAttr {
     /// Creates new node attributes ([`NodeAttr`]).
     ///
-    /// This automatically creates some "standard" properties common to all optic nodes (name, node type, inverted, apertures)
+    /// This automatically creates some "standard" properties common to all optic nodes (name, node type, inverted, apertures). The
+    /// standard properties / values are:
+    ///   - `name`: the given `node_type`
+    ///   - `inverted`: `false`
+    ///   - `apertures`: default [`OpticPorts`] structure
+    ///   - `alignment`: `None`
     /// # Panics
     ///
     /// Panics theoretically if the standarnd properties could not be created.
     #[must_use]
-    pub fn new(name: &str, node_type: &str) -> Self {
+    pub fn new(node_type: &str) -> Self {
         let mut properties = Properties::default();
         properties
             .create(
                 "name",
                 "name of the optical element",
                 Some(vec![PropCondition::NonEmptyString]),
-                name.into(),
+                node_type.into(),
             )
             .unwrap();
         properties

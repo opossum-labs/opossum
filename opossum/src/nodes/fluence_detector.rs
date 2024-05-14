@@ -47,7 +47,7 @@ pub struct FluenceDetector {
 impl Default for FluenceDetector {
     /// creates a fluence detector.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("fluence detector", "fluence detector");
+        let mut node_attr = NodeAttr::new("fluence detector");
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
@@ -90,8 +90,8 @@ impl Optical for FluenceDetector {
         };
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
-            if let Some(iso) = self.node_attr.isometry() {
-                let plane = Plane::new(iso);
+            if let Some(iso) = self.effective_iso() {
+                let plane = Plane::new(&iso);
                 rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             } else {
                 return Err(OpossumError::Analysis(
@@ -116,7 +116,7 @@ impl Optical for FluenceDetector {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
             } else {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
+                return Err(OpossumError::OpticPort("output aperture not found".into()));
             };
             self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(LightResult::from([(
@@ -149,9 +149,6 @@ impl Optical for FluenceDetector {
     }
     fn is_detector(&self) -> bool {
         true
-    }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
         let mut props = Properties::default();
@@ -202,8 +199,8 @@ impl Optical for FluenceDetector {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
 }
 

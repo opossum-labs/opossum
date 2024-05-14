@@ -4,7 +4,6 @@
 use super::Surface;
 use crate::radian;
 use crate::ray::Ray;
-use crate::render::{Color, Render, Renderable, SDF};
 use crate::utils::geom_transformation::Isometry;
 use crate::{
     error::{OpmResult, OpossumError},
@@ -69,17 +68,16 @@ impl Sphere {
         self.isometry.transform_point(&Point3::origin())
     }
 }
-impl Render<'_> for Sphere {}
-impl Renderable<'_> for Sphere {}
+// impl Render<'_> for Sphere {}
+// impl Renderable<'_> for Sphere {}
 
 impl Surface for Sphere {
-    fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
-        let transformed_ray = ray.inverse_transformed_ray(&self.isometry);
-        let dir = transformed_ray.direction();
+    fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
+        let dir = ray.direction();
         let pos = Vector3::new(
-            transformed_ray.position().x.value,
-            transformed_ray.position().y.value,
-            transformed_ray.position().z.value,
+            ray.position().x.value,
+            ray.position().y.value,
+            ray.position().z.value,
         );
         let radius = self.radius.value;
         // sphere formula (at origin)
@@ -130,34 +128,37 @@ impl Surface for Sphere {
             normal_vector *= -1.0;
         }
         Some((
-            self.isometry.transform_point(&meter!(
+            meter!(
                 intersection_point.x,
                 intersection_point.y,
                 intersection_point.z
-            )),
-            self.isometry.transform_vector_f64(&normal_vector),
+            ),
+            normal_vector,
         ))
     }
     fn set_isometry(&mut self, isometry: &Isometry) {
         self.isometry = isometry.clone();
     }
+    fn isometry(&self) -> &Isometry {
+        &self.isometry
+    }
 }
 
-impl Color for Sphere {
-    fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
-        Vector3::new(0.5, 0.3, 0.5)
-    }
-}
-impl SDF for Sphere {
-    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
-        let p_out = self.isometry.inverse_transform_point_f64(p);
-        (p_out
-            .x
-            .mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z * p_out.z)))
-        .sqrt()
-            - self.radius.value
-    }
-}
+// impl Color for Sphere {
+//     fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
+//         Vector3::new(0.5, 0.3, 0.5)
+//     }
+// }
+// impl SDF for Sphere {
+//     fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+//         let p_out = self.isometry.inverse_transform_point_f64(p);
+//         (p_out
+//             .x
+//             .mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z * p_out.z)))
+//         .sqrt()
+//             - self.radius.value
+//     }
+// }
 #[cfg(test)]
 mod test {
     use crate::{joule, millimeter, nanometer};

@@ -3,9 +3,8 @@ use opossum::{
     error::OpmResult,
     joule, millimeter,
     nodes::{collimated_line_ray_source, RayPropagationVisualizer, SpotDiagram, Wedge},
-    optical::Optical,
+    optical::Alignable,
     refractive_index::RefrIndexConst,
-    utils::geom_transformation::Isometry,
     OpticScenery,
 };
 use std::path::Path;
@@ -26,28 +25,18 @@ fn main() -> OpmResult<()> {
         &RefrIndexConst::new(1.5068)?,
     )?;
     let p1 = scenery.add_node(prism1);
-    let mut prism2 = Wedge::new(
+
+    let prism2 = Wedge::new(
         "Prism2",
         millimeter!(20.0),
         degree!(-30.0),
-        &RefrIndexConst::new(1.5068).unwrap(),
-    )?;
-    let prism2_align = Some(Isometry::new(
-        millimeter!(0.0, 0.0, 0.0),
-        degree!(0.0, 0.0, 0.0),
-    )?);
-    prism2.set_property("alignment", prism2_align.into())?;
+        &RefrIndexConst::new(1.5068)?,
+    )?
+    .with_tilt(degree!(0.0, 0.0, 0.0))?;
     let p2 = scenery.add_node(prism2);
 
     let det = scenery.add_node(RayPropagationVisualizer::default());
-
-    let sd_align = Some(Isometry::new(
-        millimeter!(0.0, 0.0, 0.0),
-        degree!(0.0, 0.0, 0.0),
-    )?);
-    let mut spot_diagram = SpotDiagram::default();
-    spot_diagram.set_property("alignment", sd_align.into())?;
-    let sd = scenery.add_node(spot_diagram);
+    let sd = scenery.add_node(SpotDiagram::default());
     //let wf = scenery.add_node(WaveFront::new("Wavefront"));
 
     scenery.connect_nodes(src, "out1", p1, "front", millimeter!(10.0))?;

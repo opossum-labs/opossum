@@ -3,12 +3,7 @@
 //! An infinitely large flat 2D surface oriented perpendicular to the optical axis (xy plane) and positioned a the given z position.
 
 use super::Surface;
-use crate::{
-    meter,
-    ray::Ray,
-    render::{Color, Render, Renderable, SDF},
-    utils::geom_transformation::Isometry,
-};
+use crate::{meter, ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use num::Zero;
 use uom::si::f64::Length;
@@ -16,8 +11,6 @@ use uom::si::f64::Length;
 #[derive(Debug)]
 /// An infinitely large flat surface with its normal collinear to the optical axis.
 pub struct Plane {
-    normal: Vector3<f64>,
-    shift: Length,
     isometry: Isometry,
 }
 impl Plane {
@@ -27,17 +20,14 @@ impl Plane {
     #[must_use]
     pub fn new(isometry: &Isometry) -> Self {
         Self {
-            normal: isometry.transform_vector_f64(&Vector3::z()),
-            shift: Length::zero(),
             isometry: isometry.clone(),
         }
     }
 }
 impl Surface for Plane {
-    fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
-        let transformed_ray = ray.inverse_transformed_ray(&self.isometry);
-        let mut trans_pos_in_m = transformed_ray.position().map(|c| c.value);
-        let trans_dir = transformed_ray.direction();
+    fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
+        let mut trans_pos_in_m = ray.position().map(|c| c.value);
+        let trans_dir = ray.direction();
         // Check, if ray position is on the surface, then directly return position as intersection point
         if !trans_pos_in_m.z.is_zero() {
             let distance_in_z_direction = -trans_pos_in_m.z;
@@ -48,35 +38,32 @@ impl Surface for Plane {
             let length_in_ray_dir = distance_in_z_direction / trans_dir.z;
             trans_pos_in_m += length_in_ray_dir * trans_dir;
         }
-        let normal_vector = Vector3::new(0.0, 0.0, -1.0);
         Some((
-            self.isometry.transform_point(&meter!(
-                trans_pos_in_m.x,
-                trans_pos_in_m.y,
-                trans_pos_in_m.z
-            )),
-            self.isometry.transform_vector_f64(&normal_vector),
+            meter!(trans_pos_in_m.x, trans_pos_in_m.y, trans_pos_in_m.z),
+            Vector3::new(0.0, 0.0, -1.0),
         ))
     }
     fn set_isometry(&mut self, isometry: &Isometry) {
         self.isometry = isometry.clone();
     }
-}
-impl Color for Plane {
-    fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
-        Vector3::new(0.3, 0.3, 0.3)
+    fn isometry(&self) -> &Isometry {
+        &self.isometry
     }
 }
-impl SDF for Plane {
-    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
-        let p_out = self.isometry.inverse_transform_point_f64(p);
-        p_out.x.mul_add(self.normal.x, p_out.y * self.normal.y)
-            + p_out.z.mul_add(self.normal.z, self.shift.value)
-    }
-}
-impl Render<'_> for Plane {}
-impl Renderable<'_> for Plane {}
-
+// impl Color for Plane {
+//     fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
+//         Vector3::new(0.3, 0.3, 0.3)
+//     }
+// }
+// impl SDF for Plane {
+//     fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+//         let p_out = self.isometry.inverse_transform_point_f64(p);
+//         p_out.x.mul_add(self.normal.x, p_out.y * self.normal.y)
+//             + p_out.z.mul_add(self.normal.z, self.shift.value)
+//     }
+// }
+// impl Render<'_> for Plane {}
+// impl Renderable<'_> for Plane {}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -85,7 +72,7 @@ mod test {
     fn new() {
         let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
         let p = Plane::new(&iso);
-        let t = p.isometry.translation();
+        let t = p.isometry.translation_vec();
         assert_eq!(t.x, millimeter!(0.0));
         assert_eq!(t.y, millimeter!(0.0));
         assert_eq!(t.z, millimeter!(1.0));

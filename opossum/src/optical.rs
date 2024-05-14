@@ -4,6 +4,8 @@
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use image::RgbImage;
 use log::warn;
+use nalgebra::Point3;
+use uom::si::f64::{Angle, Length};
 
 use crate::analyzer::AnalyzerType;
 use crate::aperture::Aperture;
@@ -150,7 +152,9 @@ pub trait Optical: Dottable {
     /// # Errors
     ///
     /// This function will return an error if a non-defined property is set or the property has the wrong data type.
-    fn set_property(&mut self, name: &str, proptype: Proptype) -> OpmResult<()>;
+    fn set_property(&mut self, name: &str, proptype: Proptype) -> OpmResult<()> {
+        self.node_attr_mut().set_property(name, proptype)
+    }
     /// Set all properties of this [`Optical`].
     ///
     /// This is a convenience function. It internally calls [`set_property`](Optical::set_property) for all given properties. **Note**: Properties, which are not
@@ -184,15 +188,17 @@ pub trait Optical: Dottable {
         }
         Ok(())
     }
-    /// Return a JSON representation of the current state of this [`Optical`].
+    /// Return a YAML representation of the current state of this [`Optical`].
     ///
     /// This function must be overridden for generating output in the analysis report. Mainly detector nodes use this feature.
-    /// The default implementation is to return a JSON `null` value.
     fn report(&self) -> Option<NodeReport> {
         None
     }
     /// Get the [`NodeAttr`] (common attributes) of an [`Optical`].
     fn node_attr(&self) -> &NodeAttr;
+    /// Get the mutable[`NodeAttr`] (common attributes) of an [`Optical`].
+    fn node_attr_mut(&mut self) -> &mut NodeAttr;
+
     /// Get the node type of this [`Optical`]
     fn node_type(&self) -> String {
         self.node_attr().node_type()
@@ -201,9 +207,7 @@ pub trait Optical: Dottable {
     fn name(&self) -> String {
         self.node_attr().name()
     }
-    /// Return the properties of this [`Optical`].
-    ///
-    /// Return all properties of an optical node.
+    /// Return all properties of this [`Optical`].
     fn properties(&self) -> &Properties {
         self.node_attr().properties()
     }
@@ -220,17 +224,8 @@ pub trait Optical: Dottable {
         self.node_attr().isometry().clone()
     }
     /// Set the (base) [`Isometry`] (position and angle) of this optical node.
-    fn set_isometry(&mut self, isometry: Isometry);
-    ///
-    #[cfg(feature = "bevy")]
-    fn mesh(&self) -> Mesh {
-        let mesh: Mesh = Cuboid::new(0.3, 0.3, 0.001).into();
-        if let Some(iso) = self.effective_iso() {
-            mesh.transformed_by(iso.into())
-        } else {
-            warn!("Node has no isometry defined. Mesh will be located at origin.");
-            mesh
-        }
+    fn set_isometry(&mut self, isometry: Isometry) {
+        self.node_attr_mut().set_isometry(isometry);
     }
     /// Return the effective input isometry of this optical node.
     ///
@@ -243,8 +238,59 @@ pub trait Optical: Dottable {
             )
         })
     }
+    /// Set local alignment (decenter, tilt) of an optical node.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    fn set_alignment(&mut self, decenter: Point3<Length>, tilt: Point3<Angle>) -> OpmResult<()> {
+        let align = Some(Isometry::new(decenter, tilt)?);
+        self.set_property("alignment", align.into())?;
+        Ok(())
+    }
+    ///
+    #[cfg(feature = "bevy")]
+    fn mesh(&self) -> Mesh {
+        let mesh: Mesh = Cuboid::new(0.3, 0.3, 0.001).into();
+        if let Some(iso) = self.effective_iso() {
+            mesh.transformed_by(iso.into())
+        } else {
+            warn!("Node has no isometry defined. Mesh will be located at origin.");
+            mesh
+        }
+    }
 }
-
+/// Helper trait for optical elements that can be locally aligned
+pub trait Alignable: Optical + Sized {
+    /// Locally decenter an optical element.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    fn with_decenter(mut self, decenter: Point3<Length>) -> OpmResult<Self> {
+        let old_rotation = self
+            .isometry()
+            .as_ref()
+            .map_or_else(Point3::origin, Isometry::rotation);
+        let translation_iso = Some(Isometry::new(decenter, old_rotation)?);
+        self.set_property("alignment", translation_iso.into())?;
+        Ok(self)
+    }
+    /// Locally tilt an optical element.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    fn with_tilt(mut self, tilt: Point3<Angle>) -> OpmResult<Self> {
+        let old_translation = self
+            .isometry()
+            .as_ref()
+            .map_or_else(Point3::origin, Isometry::translation);
+        let rotation_iso = Some(Isometry::new(old_translation, tilt)?);
+        self.set_property("alignment", rotation_iso.into())?;
+        Ok(self)
+    }
+}
 impl Debug for dyn Optical {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} ({})", self.name(), self.node_type())

@@ -1,6 +1,5 @@
 #![warn(missing_docs)]
-use log::warn;
-
+use super::node_attr::NodeAttr;
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -8,13 +7,11 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::Proptype,
     refractive_index::refr_index_vaccuum,
     surface::Plane,
 };
+use log::warn;
 use std::fmt::Debug;
-
-use super::node_attr::NodeAttr;
 
 /// A universal detector (so far for testing / debugging purposes).
 ///
@@ -42,7 +39,7 @@ impl Default for Detector {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        let mut node_attr = NodeAttr::new("detector", "detector");
+        let mut node_attr = NodeAttr::new("detector");
         node_attr.set_property("apertures", ports.into()).unwrap();
         Self {
             light_data: Option::default(),
@@ -86,8 +83,8 @@ impl Optical for Detector {
         };
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
-            if let Some(iso) = self.node_attr.isometry() {
-                let plane = Plane::new(iso);
+            if let Some(iso) = self.effective_iso() {
+                let plane = Plane::new(&iso);
                 rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             } else {
                 return Err(OpossumError::Analysis(
@@ -125,14 +122,11 @@ impl Optical for Detector {
     fn is_detector(&self) -> bool {
         true
     }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
 }
 
@@ -175,6 +169,10 @@ mod test {
     #[test]
     fn inverted() {
         test_inverted::<Detector>()
+    }
+    #[test]
+    fn set_aperture() {
+        test_set_aperture::<Detector>("in1", "out1");
     }
     #[test]
     fn ports() {

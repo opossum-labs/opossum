@@ -41,8 +41,9 @@ pub struct ParaxialSurface {
     node_attr: NodeAttr,
 }
 impl Default for ParaxialSurface {
+    /// Create a default paraxial surface (ideal thin lens) with a focal length of 10 mm.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("paraxial surface", "paraxial");
+        let mut node_attr = NodeAttr::new("paraxial surface");
 
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
@@ -54,7 +55,7 @@ impl Default for ParaxialSurface {
                 "focal length",
                 "focal length",
                 None,
-                millimeter!(1.0).into(),
+                millimeter!(10.0).into(),
             )
             .unwrap();
         Self { node_attr }
@@ -106,9 +107,8 @@ impl Optical for ParaxialSurface {
                     else {
                         return Err(OpossumError::Analysis("cannot read focal length".into()));
                     };
-                    if let Some(iso) = self.node_attr.isometry() {
-                        let plane = Plane::new(iso);
-                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    if let Some(iso) = self.effective_iso() {
+                        rays.refract_on_surface(&Plane::new(&iso), &refr_index_vaccuum())?;
                         rays.refract_paraxial(*focal_length)?;
                     } else {
                         return Err(OpossumError::Analysis(
@@ -129,7 +129,7 @@ impl Optical for ParaxialSurface {
                             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                         }
                     } else {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                        return Err(OpossumError::OpticPort("output aperture not found".into()));
                     };
                     LightData::Geometric(rays)
                 } else {
@@ -143,14 +143,11 @@ impl Optical for ParaxialSurface {
         light_result.insert(target.into(), light_data);
         Ok(light_result)
     }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
 }
 
@@ -162,13 +159,18 @@ impl Dottable for ParaxialSurface {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{aperture::Aperture, millimeter, nodes::test_helper::test_helper::*, rays::Rays};
+    use crate::{
+        analyzer::RayTraceConfig, degree, joule, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
+        utils::geom_transformation::Isometry,
+    };
     use assert_matches::assert_matches;
+    use nalgebra::Vector3;
     #[test]
     fn default() {
         let node = ParaxialSurface::default();
         assert_eq!(node.name(), "paraxial surface");
-        assert_eq!(node.node_type(), "paraxial");
+        assert_eq!(node.node_type(), "paraxial surface");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert!(node.properties().get("focal length").is_ok());
@@ -177,17 +179,21 @@ mod test {
             Proptype::Length(_)
         );
         if let Ok(Proptype::Length(dist)) = node.properties().get("focal length") {
-            assert_eq!(*dist, millimeter!(1.0));
+            assert_eq!(*dist, millimeter!(10.0));
+        } else {
+            assert!(false, "cannot read focal length");
         }
         assert_eq!(node.node_color(), "palegreen");
         assert!(node.as_group().is_err());
     }
     #[test]
     fn new() {
-        let node = ParaxialSurface::new("Test", millimeter!(1.0)).unwrap();
+        let node = ParaxialSurface::new("Test", millimeter!(100.0)).unwrap();
         assert_eq!(node.name(), "Test");
-        if let Ok(Proptype::F64(dist)) = node.properties().get("focal length") {
-            assert_eq!(dist, &1.0);
+        if let Ok(Proptype::Length(dist)) = node.properties().get("focal length") {
+            assert_eq!(dist, &millimeter!(100.0));
+        } else {
+            assert!(false, "cannot read focal length");
         }
         assert!(ParaxialSurface::new("Test", millimeter!(-1.0)).is_ok());
         assert!(ParaxialSurface::new("Test", millimeter!(0.0)).is_err());
@@ -217,6 +223,10 @@ mod test {
         assert_eq!(node.ports().output_names(), vec!["rear"]);
     }
     #[test]
+    fn set_aperture() {
+        test_set_aperture::<ParaxialSurface>("front", "rear");
+    }
+    #[test]
     fn analyze_empty() {
         test_analyze_empty::<ParaxialSurface>()
     }
@@ -226,24 +236,44 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("rear".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = node
+            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
+            .unwrap();
         assert!(output.is_empty());
     }
     #[test]
-    fn set_input_aperture() {
-        let mut node = ParaxialSurface::default();
-        let aperture = Aperture::default();
-        assert!(node.set_input_aperture("front", &aperture).is_ok());
-        assert!(node.set_input_aperture("rear", &aperture).is_err());
-        assert!(node.set_input_aperture("no port", &aperture).is_err());
+    fn analyze_geometric_wrong_data_type() {
+        test_analyze_wrong_data_type::<ParaxialSurface>("front");
     }
     #[test]
-    fn set_output_aperture() {
+    fn analyze_geometric_no_isometery() {
+        test_analyze_geometric_no_isometry::<ParaxialSurface>("front");
+    }
+    #[test]
+    fn analyze_geometric_ok() {
         let mut node = ParaxialSurface::default();
-        let aperture = Aperture::default();
-        assert!(node.set_output_aperture("rear", &aperture).is_ok());
-        assert!(node.set_output_aperture("front", &aperture).is_err());
-        assert!(node.set_output_aperture("no port", &aperture).is_err());
+        node.set_isometry(
+            Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
+        );
+        let mut rays = Rays::default();
+        rays.add_ray(
+            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
+                .unwrap(),
+        );
+        let mut input = LightResult::default();
+        input.insert("front".into(), LightData::Geometric(rays));
+        let output = node
+            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
+            .unwrap();
+        if let Some(LightData::Geometric(rays)) = output.get("rear") {
+            assert_eq!(rays.nr_of_rays(true), 1);
+            let ray = rays.iter().next().unwrap();
+            assert_eq!(ray.position(), millimeter!(0.0, 0.0, 10.0));
+            let dir = Vector3::new(0.0, 0.0, 1.0);
+            assert_eq!(ray.direction(), dir);
+        } else {
+            assert!(false, "could not get LightData");
+        }
     }
     // #[test]
     // #[ignore]

@@ -7,7 +7,7 @@ use crate::{
     lightdata::LightData,
     millimeter, nanometer,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optical::{Alignable, LightResult, Optical},
     properties::Proptype,
     ray::Ray,
     refractive_index::{refr_index_vaccuum, RefrIndexConst, RefractiveIndex, RefractiveIndexType},
@@ -16,7 +16,10 @@ use crate::{
 };
 use nalgebra::{Point3, Vector3};
 use num::Zero;
-use uom::si::f64::{Angle, Length};
+use uom::si::{
+    angle::degree,
+    f64::{Angle, Length},
+};
 
 #[derive(Debug)]
 /// An optical element with two flat surfaces, a given thickness and a  given wedge angle (= wedged window).
@@ -40,7 +43,7 @@ pub struct Wedge {
 impl Default for Wedge {
     /// Create a wedge with a center thickness of 10.0 mm, refractive index of 1.5 and no wedge angle (flat windows)
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("wedge", "wedge");
+        let mut node_attr = NodeAttr::new("wedge");
         node_attr
             .create_property(
                 "center thickness",
@@ -100,9 +103,12 @@ impl Wedge {
             }
             .into(),
         )?;
-        if !wedge_angle.is_finite() {
+        if wedge_angle.is_sign_negative()
+            || !wedge_angle.is_finite()
+            || wedge_angle.get::<degree>() > 180.0
+        {
             return Err(crate::error::OpossumError::Other(
-                "wedge angle must be finite".into(),
+                "wedge angle must be within inth interval [0.0 deg; 180 deg] and finite".into(),
             ));
         }
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
@@ -186,14 +192,11 @@ impl Optical for Wedge {
         let light_result = LightResult::from([("rear".into(), light_data)]);
         Ok(light_result)
     }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
     fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
         // if wedge is aligned (tilted, decentered), calculate single ray on incoming optical axis
@@ -238,20 +241,237 @@ impl Optical for Wedge {
             .unwrap();
         ray.refract_on_surface(&back_plane, n2).unwrap();
         let alignment_iso = Isometry::new_from_view(ray.position(), ray.direction(), Vector3::y());
-        // if let Some(iso) = self.node_attr.isometry() {
-        //     // println!("wedge output axis: {:?}", iso.append(&alignment_iso));
-        //     Some(iso.append(&alignment_iso))
-        // } else {
-        //     None
-        // }
         self.node_attr
             .isometry()
             .as_ref()
             .map(|iso| iso.append(&alignment_iso))
     }
 }
+
+impl Alignable for Wedge {}
+
 impl Dottable for Wedge {
     fn node_color(&self) -> &str {
         "aquamarine"
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{
+        analyzer::RayTraceConfig, degree, lightdata::DataEnergy,
+        nodes::test_helper::test_helper::*, rays::Rays, spectrum_helper::create_he_ne_spec,
+    };
+
+    #[test]
+    fn default() {
+        let node = Wedge::default();
+        assert_eq!(node.name(), "wedge");
+        assert_eq!(node.node_type(), "wedge");
+        assert_eq!(node.is_detector(), false);
+        assert_eq!(node.node_color(), "aquamarine");
+        assert_eq!(node.properties().inverted().unwrap(), false);
+        if let Ok(Proptype::Length(p)) = node.properties().get("center thickness") {
+            assert_eq!(p, &millimeter!(10.0));
+        } else {
+            assert!(false, "could not read center thickness.");
+        }
+        if let Ok(Proptype::Angle(p)) = node.properties().get("wedge") {
+            assert_eq!(p, &degree!(0.0));
+        } else {
+            assert!(false, "could not read angle.");
+        }
+        if let Ok(Proptype::RefractiveIndex(p)) = node.properties().get("refractive index") {
+            if let RefractiveIndexType::Const(val) = &p.value {
+                let idx = val.get_refractive_index(nanometer!(1000.0)).unwrap();
+                assert_eq!(idx, 1.5);
+            } else {
+                assert!(false, "could not read refractive index constant.");
+            }
+        } else {
+            assert!(false, "could not read refractive index.");
+        }
+    }
+    #[test]
+    fn new() {
+        assert!(Wedge::new(
+            "test",
+            millimeter!(-0.1),
+            degree!(0.0),
+            &RefrIndexConst::new(1.5).unwrap()
+        )
+        .is_err());
+        assert!(Wedge::new(
+            "test",
+            millimeter!(f64::NEG_INFINITY),
+            degree!(0.0),
+            &RefrIndexConst::new(1.5).unwrap()
+        )
+        .is_err());
+        assert!(Wedge::new(
+            "test",
+            millimeter!(f64::INFINITY),
+            degree!(0.0),
+            &RefrIndexConst::new(1.5).unwrap()
+        )
+        .is_err());
+        assert!(Wedge::new(
+            "test",
+            millimeter!(f64::NAN),
+            degree!(0.0),
+            &RefrIndexConst::new(1.5).unwrap()
+        )
+        .is_err());
+
+        assert!(Wedge::new(
+            "test",
+            millimeter!(0.0),
+            degree!(-0.1),
+            &RefrIndexConst::new(1.0).unwrap()
+        )
+        .is_err());
+        assert!(Wedge::new(
+            "test",
+            millimeter!(0.0),
+            degree!(f64::NEG_INFINITY),
+            &RefrIndexConst::new(1.0).unwrap()
+        )
+        .is_err());
+        assert!(Wedge::new(
+            "test",
+            millimeter!(0.0),
+            degree!(f64::INFINITY),
+            &RefrIndexConst::new(1.0).unwrap()
+        )
+        .is_err());
+        assert!(Wedge::new(
+            "test",
+            millimeter!(0.0),
+            degree!(f64::NAN),
+            &RefrIndexConst::new(1.0).unwrap()
+        )
+        .is_err());
+        assert!(Wedge::new(
+            "test",
+            millimeter!(0.0),
+            degree!(180.1),
+            &RefrIndexConst::new(1.0).unwrap()
+        )
+        .is_err());
+        assert!(Wedge::new(
+            "test",
+            millimeter!(0.0),
+            degree!(180.0),
+            &RefrIndexConst::new(1.0).unwrap()
+        )
+        .is_ok());
+
+        let n = Wedge::new(
+            "test",
+            millimeter!(0.0),
+            degree!(10.0),
+            &RefrIndexConst::new(1.0).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(n.name(), "test");
+        if let Ok(Proptype::Length(p)) = n.properties().get("center thickness") {
+            assert_eq!(p, &millimeter!(0.0));
+        } else {
+            assert!(false, "could not read center thickness.");
+        }
+        if let Ok(Proptype::Angle(p)) = n.properties().get("wedge") {
+            assert_eq!(p, &degree!(10.0));
+        } else {
+            assert!(false, "could not read angle.");
+        }
+        if let Ok(Proptype::RefractiveIndex(p)) = n.properties().get("refractive index") {
+            if let RefractiveIndexType::Const(val) = &p.value {
+                let idx = val.get_refractive_index(nanometer!(1000.0)).unwrap();
+                assert_eq!(idx, 1.0);
+            } else {
+                assert!(false, "could not read refractive index constant.");
+            }
+        } else {
+            assert!(false, "could not read refractive index.");
+        }
+    }
+    #[test]
+    fn ports() {
+        let node = Wedge::default();
+        assert_eq!(node.ports().input_names(), vec!["front"]);
+        assert_eq!(node.ports().output_names(), vec!["rear"]);
+    }
+    #[test]
+    fn set_aperture() {
+        test_set_aperture::<Wedge>("front", "rear");
+    }
+    #[test]
+    fn inverted() {
+        test_inverted::<Wedge>()
+    }
+    #[test]
+    fn analyze_empty() {
+        test_analyze_empty::<Wedge>()
+    }
+    #[test]
+    fn analyze_wrong_port() {
+        let mut node = Wedge::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Geometric(Rays::default());
+        input.insert("rear".into(), input_light.clone());
+        let output = node
+            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
+            .unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_energy_ok() {
+        let mut node = Wedge::default();
+        let mut input = LightResult::default();
+        let input_light = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        input.insert("front".into(), input_light.clone());
+        let output = node.analyze(input, &AnalyzerType::Energy);
+        assert!(output.is_ok());
+        let output = output.unwrap();
+        assert!(output.contains_key("rear"));
+        assert_eq!(output.len(), 1);
+        let output = output.get("rear");
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(*output, input_light);
+    }
+    #[test]
+    fn analyze_geometric_wrong_data_type() {
+        test_analyze_wrong_data_type::<Wedge>("front");
+    }
+    #[test]
+    fn analyze_geometric_ok() {
+        let mut node = Wedge::default();
+        node.set_isometry(
+            Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
+        );
+        let mut input = LightResult::default();
+        let mut rays = Rays::default();
+        rays.add_ray(
+            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
+                .unwrap(),
+        );
+        let input_light = LightData::Geometric(rays);
+        input.insert("front".into(), input_light.clone());
+        let output = node
+            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
+            .unwrap();
+        if let Some(LightData::Geometric(rays)) = output.get("rear") {
+            assert_eq!(rays.nr_of_rays(true), 1);
+            let ray = rays.iter().next().unwrap();
+            assert_eq!(ray.position(), millimeter!(0.0, 0.0, 20.0));
+            let dir = Vector3::new(0.0_f64, 0.0, 1.0);
+            assert_eq!(ray.direction(), dir);
+        } else {
+            assert!(false, "could not get LightData");
+        }
     }
 }

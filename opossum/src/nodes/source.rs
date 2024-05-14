@@ -32,7 +32,7 @@ pub struct Source {
 }
 impl Default for Source {
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("source", "light source");
+        let mut node_attr = NodeAttr::new("source");
         node_attr
             .create_property(
                 "light data",
@@ -171,6 +171,9 @@ impl Optical for Source {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
+    }
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
         // Synchronize iosmetry property.
         if let Proptype::Isometry(prox_iso) = &self.node_attr.get_property("isometry")? {
@@ -204,7 +207,7 @@ mod test {
     fn default() {
         let node = Source::default();
         assert_eq!(node.name(), "source");
-        assert_eq!(node.node_type(), "light source");
+        assert_eq!(node.node_type(), "source");
         if let Ok(Proptype::LightData(light_data)) = node.properties().get("light data") {
             assert_eq!(light_data.value, None);
         } else {

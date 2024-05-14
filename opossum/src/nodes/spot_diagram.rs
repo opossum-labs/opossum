@@ -49,7 +49,7 @@ pub struct SpotDiagram {
 impl Default for SpotDiagram {
     /// create a spot-diagram monitor.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("spot diagram", "spot diagram");
+        let mut node_attr = NodeAttr::new("spot diagram");
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
@@ -117,7 +117,7 @@ impl Optical for SpotDiagram {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
             } else {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
+                return Err(OpossumError::OpticPort("output aperture not found".into()));
             };
             self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(LightResult::from([(
@@ -140,9 +140,6 @@ impl Optical for SpotDiagram {
     }
     fn is_detector(&self) -> bool {
         true
-    }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
         let mut props = Properties::default();
@@ -212,8 +209,8 @@ impl Optical for SpotDiagram {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
 }
 

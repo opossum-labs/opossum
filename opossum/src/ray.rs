@@ -56,7 +56,7 @@ pub struct Ray {
     /// True if ray is allowd to further propagate, false else
     valid: bool,
     path_length: Length,
-    // refractive index of the medium this ray is propagatin in.
+    // refractive index of the medium this ray is propagating in.
     refractive_index: f64,
 }
 impl Ray {
@@ -123,6 +123,18 @@ impl Ray {
     pub const fn direction(&self) -> Vector3<f64> {
         self.dir
     }
+    /// Sets the direction of this [`Ray`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if an invalid direction vector is provided.
+    pub fn set_direction(&mut self, dir: Vector3<f64>) -> OpmResult<()> {
+        if dir.norm().is_zero() {
+            return Err(OpossumError::Other("length of direction must be >0".into()));
+        }
+        self.dir = dir;
+        Ok(())
+    }
     /// Returns the energy of this [`Ray`].
     #[must_use]
     pub fn energy(&self) -> Energy {
@@ -174,7 +186,7 @@ impl Ray {
     ///
     /// # Errors
     ///
-    /// This function will return an error if the given refractive inde is <1.0 or not finite.
+    /// This function will return an error if the given refractive index is <1.0 or not finite.
     pub fn set_refractive_index(&mut self, refractive_index: f64) -> OpmResult<()> {
         if refractive_index < 1.0 || !refractive_index.is_finite() {
             return Err(OpossumError::Other(
@@ -239,9 +251,9 @@ impl Ray {
     /// This function refracts an incoming [`Ray`] on a given [`Surface`] thereby changing its position (= intersection point) and
     /// its direction. The intial refractive index is (already) stored in the ray itself. The refractive index behind the surface is given
     /// by the parameter `n2`. In addition, it returns the directional vector of the reflected ray. If the [`Ray`] does not intersect with
-    /// the surface, the [`Ray`] ist unmodified and `None` is returned (since there is no reflection). This function also considers
+    /// the surface, the [`Ray`] is unmodified and `None` is returned (since there is no reflection). This function also considers
     /// total reflection: If the n1 > n2 and the incoming angle is larger than Brewster's angle, the beam is totally reflected. In this case,
-    /// this function also returns `None` (since there is no additional relfected ray).
+    /// this function also returns `None` (since there is no additional reflected ray).
     ///
     /// # Errors
     ///
