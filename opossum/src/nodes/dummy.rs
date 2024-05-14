@@ -7,18 +7,16 @@ use crate::{
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    properties::Proptype,
     refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
     surface::Plane,
-    utils::geom_transformation::Isometry,
 };
 
 #[derive(Debug, Clone)]
 /// A fake / dummy component without any optical functionality.
 ///
 /// Any [`LightResult`] is directly forwarded without any modification. It is mainly used for
-/// development and debugging purposes.
+/// development and debugging purposes. A [`Dummy`] node geometrically consists of a single flat surface.
 ///
 /// ## Optical Ports
 ///   - Inputs
@@ -32,10 +30,9 @@ use crate::{
 pub struct Dummy {
     node_attr: NodeAttr,
 }
-
 impl Default for Dummy {
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("dummy", "dummy");
+        let mut node_attr = NodeAttr::new("dummy");
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
@@ -45,14 +42,12 @@ impl Default for Dummy {
 }
 impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
-    /// # Attributes
-    /// * `name`: name of the  [`Dummy`] node
     ///
     /// # Panics
+    ///
     /// This function panics if
-    /// - the input port name already exists. (Theoretically impossible at this point, as the [`OpticPorts`] are created just before in this function)
-    /// - the output port name already exists. (Theoretically impossible at this point, as the [`OpticPorts`] are created just before in this function)
-    /// - the property `apertures` can not be set.
+    ///   - the default [`Dummy`] could not be constructed.
+    ///   - the name property cannot be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut dummy = Self::default();
@@ -76,8 +71,8 @@ impl Optical for Dummy {
         };
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
-            if let Some(iso) = self.node_attr.isometry() {
-                let plane = Plane::new(iso);
+            if let Some(iso) = self.effective_iso() {
+                let plane = Plane::new(&iso);
                 rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             } else {
                 return Err(OpossumError::Analysis(
@@ -108,9 +103,6 @@ impl Optical for Dummy {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
     }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn report(&self) -> Option<NodeReport> {
         Some(NodeReport::new(
             &self.node_type(),
@@ -121,8 +113,8 @@ impl Optical for Dummy {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
 }
 
@@ -132,7 +124,6 @@ impl Dottable for Dummy {}
 mod test {
     use super::*;
     use crate::{
-        aperture::Aperture,
         lightdata::{DataEnergy, LightData},
         nodes::test_helper::test_helper::*,
         spectrum_helper::create_he_ne_spec,
@@ -168,20 +159,8 @@ mod test {
         assert_eq!(node.ports().output_names(), vec!["rear"]);
     }
     #[test]
-    fn set_input_aperture() {
-        let mut node = Dummy::default();
-        let aperture = Aperture::default();
-        assert!(node.set_input_aperture("front", &aperture).is_ok());
-        assert!(node.set_input_aperture("rear", &aperture).is_err());
-        assert!(node.set_input_aperture("no port", &aperture).is_err());
-    }
-    #[test]
-    fn set_output_aperture() {
-        let mut node = Dummy::default();
-        let aperture = Aperture::default();
-        assert!(node.set_output_aperture("rear", &aperture).is_ok());
-        assert!(node.set_output_aperture("front", &aperture).is_err());
-        assert!(node.set_output_aperture("no port", &aperture).is_err());
+    fn set_aperture() {
+        test_set_aperture::<Dummy>("front", "rear");
     }
     // #[test]
     // #[ignore]

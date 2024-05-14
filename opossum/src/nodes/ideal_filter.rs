@@ -42,7 +42,7 @@ pub struct IdealFilter {
 impl Default for IdealFilter {
     /// Create an ideal filter node with a transmission of 100%.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("ideal filter", "ideal filter");
+        let mut node_attr = NodeAttr::new("ideal filter");
         node_attr
             .create_property(
                 "filter type",
@@ -196,8 +196,8 @@ impl Optical for IdealFilter {
                     ));
                 }
                 let mut rays = r.clone();
-                if let Some(iso) = self.node_attr.isometry() {
-                    let plane = Plane::new(iso);
+                if let Some(iso) = self.effective_iso() {
+                    let plane = Plane::new(&iso);
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                 } else {
                     return Err(OpossumError::Analysis(
@@ -219,7 +219,7 @@ impl Optical for IdealFilter {
                         rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                     }
                 } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    return Err(OpossumError::OpticPort("output aperture not found".into()));
                 };
                 let light_data = LightData::Geometric(rays);
                 Ok(LightResult::from([(target.into(), light_data)]))
@@ -229,14 +229,11 @@ impl Optical for IdealFilter {
             )),
         }
     }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
 }
 
@@ -347,6 +344,10 @@ mod test {
         input.insert("rear".into(), input_light.clone());
         let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
         assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_geometric_wrong_data_type() {
+        test_analyze_wrong_data_type::<IdealFilter>("front");
     }
     #[test]
     fn analyze_energy_ok() {

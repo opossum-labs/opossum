@@ -52,7 +52,7 @@ pub struct WaveFront {
 impl Default for WaveFront {
     /// create a wavefront monitor.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("Wavefront monitor", "Wavefront monitor");
+        let mut node_attr = NodeAttr::new("wavefront monitor");
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
@@ -179,8 +179,8 @@ impl Optical for WaveFront {
         };
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
-            if let Some(iso) = self.node_attr.isometry() {
-                let plane = Plane::new(iso);
+            if let Some(iso) = self.effective_iso() {
+                let plane = Plane::new(&iso);
                 rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             } else {
                 return Err(OpossumError::Analysis(
@@ -207,7 +207,7 @@ impl Optical for WaveFront {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
             } else {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
+                return Err(OpossumError::OpticPort("output aperture not found".into()));
             };
             self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(LightResult::from([(
@@ -245,9 +245,6 @@ impl Optical for WaveFront {
     }
     fn is_detector(&self) -> bool {
         true
-    }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
     }
     fn report(&self) -> Option<NodeReport> {
         let mut props = Properties::default();
@@ -312,8 +309,8 @@ impl Optical for WaveFront {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
 }
 impl From<WaveFrontData> for Proptype {
@@ -425,8 +422,8 @@ mod test {
     fn default() {
         let node = WaveFront::default();
         assert!(node.light_data.is_none());
-        assert_eq!(node.name(), "Wavefront monitor");
-        assert_eq!(node.node_type(), "Wavefront monitor");
+        assert_eq!(node.name(), "wavefront monitor");
+        assert_eq!(node.node_type(), "wavefront monitor");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "goldenrod1");
@@ -553,8 +550,8 @@ mod test {
             .unwrap(),
         ));
         let node_report = wf.report().unwrap();
-        assert_eq!(node_report.detector_type(), "Wavefront monitor");
-        assert_eq!(node_report.name(), "Wavefront monitor");
+        assert_eq!(node_report.detector_type(), "wavefront monitor");
+        assert_eq!(node_report.name(), "wavefront monitor");
         assert!(node_report.properties().contains("Wavefront Map"));
         assert!(node_report.properties().contains("Wavefront RMS"));
         assert!(node_report.properties().contains("Wavefront PtV"));

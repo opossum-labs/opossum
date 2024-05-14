@@ -48,7 +48,7 @@ pub struct Lens {
 impl Default for Lens {
     /// Create a lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("lens", "lens");
+        let mut node_attr = NodeAttr::new("lens");
         node_attr
             .create_property(
                 "front curvature",
@@ -101,7 +101,7 @@ impl Lens {
     ///
     /// # Errors
     ///
-    /// This function return an error if the given parameters are not correct.
+    /// This function returns an error if the given parameters are not correct.
     pub fn new(
         name: &str,
         front_curvature: Length,
@@ -225,7 +225,7 @@ impl Optical for Lens {
                             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                         }
                     } else {
-                        return Err(OpossumError::OpticPort("ouput aperture not found".into()));
+                        return Err(OpossumError::OpticPort("output aperture not found".into()));
                     };
                     LightData::Geometric(rays)
                 } else {
@@ -238,14 +238,11 @@ impl Optical for Lens {
         let light_result = LightResult::from([("rear".into(), light_data)]);
         Ok(light_result)
     }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
     fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
         // if wedge is aligned (tilted, decentered), calculate single ray on incoming optical axis
@@ -424,6 +421,10 @@ mod test {
         input.insert("rear".into(), input_light.clone());
         let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
         assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_geometric_wrong_data_type() {
+        test_analyze_wrong_data_type::<Lens>("front");
     }
     #[test]
     fn analyze_flatflat() {

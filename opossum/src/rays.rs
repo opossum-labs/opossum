@@ -103,7 +103,6 @@ impl Rays {
             .collect::<Vec<Point2<f64>>>();
         //apply distribution strategy
         let ray_energies = energy_strategy.apply(&ray_pos_plane);
-
         //sum up energy of rays that are valid: energy is larger than machine epsilon times total energy
         let min_energy = f64::EPSILON * energy_strategy.get_total_energy();
         let total_energy_valid_rays = joule!(ray_energies
@@ -121,7 +120,6 @@ impl Rays {
             .sum());
         //scaling factor if a significant amount of enery has been lost
         let energy_scale_factor = energy_strategy.get_total_energy() / total_energy_valid_rays;
-
         //create rays
         let nr_of_rays = ray_pos.len();
         let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
@@ -205,7 +203,6 @@ impl Rays {
     pub fn iter(&self) -> std::slice::Iter<'_, Ray> {
         self.rays.iter()
     }
-
     /// Returns the mutable iterator of this [`Rays`].
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, Ray> {
         self.rays.iter_mut()
@@ -476,7 +473,6 @@ impl Rays {
         }
         rays_at_pos
     }
-
     fn calc_ray_fluence_in_voronoi_cells(
         &self,
         projected_ray_pos: &MatrixXx2<f64>,
@@ -575,23 +571,6 @@ impl Rays {
     pub fn add_rays(&mut self, rays: &mut Self) {
         self.rays.append(&mut rays.rays);
     }
-    /// Propagate a ray bundle along the z axis.
-    ///
-    /// This function propgatates all valid [`Ray`]s along the z axis. The propagation length must be
-    /// set with the function `set_dist_to_next_surface`.
-    ///
-    /// # Errors
-    /// This function returns an error if
-    ///  - the z component of a ray direction is zero.
-    ///  - the given length is not finite.
-    pub fn propagate_along_z(&mut self, distance: Length) -> OpmResult<()> {
-        for ray in &mut self.rays {
-            if ray.valid() {
-                ray.propagate_along_z(distance)?;
-            }
-        }
-        Ok(())
-    }
     /// Refract a ray bundle on a paraxial surface of given focal length.
     ///
     /// This function refracts all valid [`Ray`]s.
@@ -613,7 +592,7 @@ impl Rays {
         }
         Ok(())
     }
-    /// Refract a ray bundle on a [`Surface`].
+    /// Refract a ray bundle on a [`Surface`] and returns a reflected [`Ray`] bundle.
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
@@ -628,13 +607,18 @@ impl Rays {
         &mut self,
         surface: &dyn Surface,
         refractive_index: &RefractiveIndexType,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
+        let mut reflected_rays = Self::default();
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength())?;
-                if ray.refract_on_surface(surface, n2)?.is_none() {
+                if let Some(reflected) = ray.refract_on_surface(surface, n2)? {
+                    let mut reflected_ray = ray.clone();
+                    reflected_ray.set_direction(reflected)?;
+                    reflected_rays.add_ray(reflected_ray);
+                } else {
                     rays_missed = true;
                 };
                 valid_rays_found = true;
@@ -646,7 +630,7 @@ impl Rays {
         if !valid_rays_found {
             warn!("ray bundle contains no valid rays - not propagating");
         }
-        Ok(())
+        Ok(reflected_rays)
     }
     /// Filter a ray bundle by a given filter.
     ///
@@ -990,6 +974,14 @@ mod test {
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
 
+    fn propagate_along_z(rays: &mut Rays, distance: Length) -> OpmResult<()> {
+        for ray in rays {
+            if ray.valid() {
+                ray.propagate_along_z(distance)?;
+            }
+        }
+        Ok(())
+    }
     #[test]
     fn split_ray_bundle_by_wavelength_test() {
         let mut rays_1w = Rays::new_uniform_collimated(
@@ -1249,7 +1241,7 @@ mod test {
         for ray in &rays.rays {
             assert_eq!(ray.position(), millimeter!(0., 0., 0.))
         }
-        rays.propagate_along_z(millimeter!(1.0)).unwrap();
+        propagate_along_z(&mut rays, millimeter!(1.0)).unwrap();
         assert_eq!(rays.rays[0].position(), millimeter!(0., 0., 1.));
         assert_eq!(rays.rays[1].position()[0], Length::zero());
         assert_abs_diff_eq!(rays.rays[1].position()[1].value, millimeter!(1.0).value);
@@ -1432,7 +1424,7 @@ mod test {
             Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
         rays.add_ray(ray0);
         rays.add_ray(ray1);
-        rays.propagate_along_z(millimeter!(1.0)).unwrap();
+        propagate_along_z(&mut rays, millimeter!(1.0)).unwrap();
         assert_eq!(rays.rays[0].position(), millimeter!(0., 0., 1.));
         assert_eq!(rays.rays[1].position(), millimeter!(0., 1., 1.));
     }
@@ -1631,8 +1623,8 @@ mod test {
         )
         .unwrap()];
         let mut rays = Rays::from(ray_vec);
-        let _ = rays.propagate_along_z(millimeter!(0.5));
-        let _ = rays.propagate_along_z(millimeter!(1.0));
+        let _ = propagate_along_z(&mut rays, millimeter!(0.5));
+        let _ = propagate_along_z(&mut rays, millimeter!(1.0));
 
         let pos_hist_comp = vec![MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5])]; // 0., 1., 3.,
                                                                                        //])];
@@ -1664,7 +1656,7 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        let _ = rays.propagate_along_z(millimeter!(1.0));
+        let _ = propagate_along_z(&mut rays, millimeter!(1.0));
         let wf_data = rays
             .get_wavefront_data_in_units_of_wvl(true, nanometer!(10.))
             .unwrap();
@@ -1715,7 +1707,7 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        let _ = rays.propagate_along_z(millimeter!(10.0));
+        let _ = propagate_along_z(&mut rays, millimeter!(10.0));
 
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.));
 
@@ -1734,7 +1726,7 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        let _ = rays.propagate_along_z(millimeter!(10.0));
+        let _ = propagate_along_z(&mut rays, millimeter!(10.0));
 
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.));
 

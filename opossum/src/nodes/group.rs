@@ -53,7 +53,7 @@ pub struct NodeGroup {
 }
 impl Default for NodeGroup {
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("group", "group");
+        let mut node_attr = NodeAttr::new("group");
         node_attr
             .create_property(
                 "expand view",
@@ -742,9 +742,6 @@ impl Optical for NodeGroup {
     fn as_group(&self) -> OpmResult<&NodeGroup> {
         Ok(self)
     }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
         // Synchronize properties with (internal) graph structure.
         if let Proptype::OpticGraph(g) = &self.node_attr.get_property("graph")? {
@@ -773,7 +770,6 @@ impl Optical for NodeGroup {
     fn is_detector(&self) -> bool {
         self.g.contains_detector()
     }
-
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<image::RgbImage>> {
         let detector_nodes = self
             .g
@@ -787,6 +783,9 @@ impl Optical for NodeGroup {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
     fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
         self.node_attr.set_isometry(isometry.clone());

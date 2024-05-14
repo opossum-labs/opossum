@@ -5,6 +5,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     meter,
     properties::Proptype,
+    radian,
 };
 use approx::relative_eq;
 #[cfg(feature = "bevy")]
@@ -160,9 +161,21 @@ impl Isometry {
     }
     /// Returns the translation vector of this [`Isometry`].
     #[must_use]
-    pub fn translation(&self) -> Vector3<Length> {
+    pub fn translation_vec(&self) -> Vector3<Length> {
         let t = self.transform.translation * Point3::origin();
         Vector3::new(meter!(t.x), meter!(t.y), meter!(t.z))
+    }
+    /// Returns the translation of this [`Isometry`].
+    #[must_use]
+    pub fn translation(&self) -> Point3<Length> {
+        let t = self.transform.translation;
+        meter!(t.x, t.y, t.z)
+    }
+    /// Returns the rotation of this [`Isometry`].
+    #[must_use]
+    pub fn rotation(&self) -> Point3<Angle> {
+        let rot = self.transform.rotation.euler_angles();
+        radian!(rot.0, rot.1, rot.2)
     }
     /// Transforms a single point by the defined isometry
     /// # Attributes

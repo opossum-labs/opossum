@@ -18,6 +18,7 @@ mod source_helper;
 mod spectrometer;
 mod spot_diagram;
 mod test_helper;
+mod thin_mirror;
 mod wavefront;
 mod wedge;
 
@@ -45,6 +46,7 @@ pub use ray_propagation_visualizer::RayPropagationVisualizer;
 pub use spectrometer::{Spectrometer, SpectrometerType};
 pub use spot_diagram::SpotDiagram;
 use std::{cell::RefCell, rc::Rc};
+pub use thin_mirror::ThinMirror;
 use uuid::Uuid;
 pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
 pub use wedge::Wedge;
@@ -85,7 +87,7 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
             uuid,
         )),
         "lens" => Ok(OpticRef::new(Rc::new(RefCell::new(Lens::default())), uuid)),
-        "light source" => Ok(OpticRef::new(
+        "source" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Source::default())),
             uuid,
         )),
@@ -97,11 +99,11 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
             Rc::new(RefCell::new(SpotDiagram::default())),
             uuid,
         )),
-        "Wavefront monitor" => Ok(OpticRef::new(
+        "wavefront monitor" => Ok(OpticRef::new(
             Rc::new(RefCell::new(WaveFront::default())),
             uuid,
         )),
-        "paraxial" => Ok(OpticRef::new(
+        "paraxial surface" => Ok(OpticRef::new(
             Rc::new(RefCell::new(ParaxialSurface::default())),
             uuid,
         )),
@@ -114,6 +116,10 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
             uuid,
         )),
         "wedge" => Ok(OpticRef::new(Rc::new(RefCell::new(Wedge::default())), uuid)),
+        "mirror" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(ThinMirror::default())),
+            uuid,
+        )),
         _ => Err(OpossumError::Other(format!(
             "cannot create node type <{node_type}>"
         ))),

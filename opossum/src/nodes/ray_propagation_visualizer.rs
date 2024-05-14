@@ -52,7 +52,7 @@ pub struct RayPropagationVisualizer {
 impl Default for RayPropagationVisualizer {
     /// create a spot-diagram monitor.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("ray propagation", "ray propagation");
+        let mut node_attr = NodeAttr::new("ray propagation");
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
@@ -157,9 +157,6 @@ impl Optical for RayPropagationVisualizer {
     fn is_detector(&self) -> bool {
         true
     }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn report(&self) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
@@ -190,8 +187,8 @@ impl Optical for RayPropagationVisualizer {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
 }
 

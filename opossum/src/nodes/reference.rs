@@ -40,7 +40,7 @@ pub struct NodeReference {
 }
 impl Default for NodeReference {
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("reference", "reference");
+        let mut node_attr = NodeAttr::new("reference");
         node_attr
             .create_property(
                 "reference id",
@@ -125,9 +125,6 @@ impl Optical for NodeReference {
         }
         output
     }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Ok(self)
     }
@@ -150,6 +147,9 @@ impl Optical for NodeReference {
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
+    }
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
     fn set_isometry(&mut self, _isometry: crate::utils::geom_transformation::Isometry) {
         // setting an isometry is silently ignored. Isometry is defined by the refrenced node.

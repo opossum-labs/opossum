@@ -38,7 +38,7 @@ pub struct BeamSplitter {
 impl Default for BeamSplitter {
     /// Create a 50:50 beamsplitter.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("beam splitter", "beam splitter");
+        let mut node_attr = NodeAttr::new("beam splitter");
         node_attr
             .create_property(
                 "splitter config",
@@ -192,8 +192,8 @@ impl BeamSplitter {
             match input1 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    if let Some(iso) = self.node_attr.isometry() {
-                        let plane = Plane::new(iso);
+                    if let Some(iso) = self.effective_iso() {
+                        let plane = Plane::new(&iso);
                         rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     } else {
                         return Err(OpossumError::Analysis(
@@ -224,8 +224,8 @@ impl BeamSplitter {
             match input2 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    if let Some(iso) = self.node_attr.isometry() {
-                        let plane = Plane::new(iso);
+                    if let Some(iso) = self.effective_iso() {
+                        let plane = Plane::new(&iso);
                         rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     } else {
                         return Err(OpossumError::Analysis(
@@ -308,14 +308,11 @@ impl Optical for BeamSplitter {
             Ok(LightResult::default())
         }
     }
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry);
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
     }
 }
 
