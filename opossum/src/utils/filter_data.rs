@@ -1,7 +1,7 @@
 //!This module should contain all the functions that are used for filtering arrays, vectors and such.
 
 use approx::{relative_eq, RelativeEq};
-use num::Float;
+use num::{Float, Num};
 
 /// This method filters out all NaN and infinite values  
 /// # Attributes
@@ -43,7 +43,7 @@ pub fn get_min_max_filter_nonfinite(ax_vals: &[f64]) -> Option<(f64, f64)> {
 /// # Attributes
 /// - `array`: array of values
 #[must_use]
-pub fn get_unique_finite_values<T: Clone + RelativeEq + Float>(array: &[T]) -> Vec<T> {
+pub fn get_unique_finite_values<T: Clone + RelativeEq + Num + Float>(array: &[T]) -> Vec<T> {
     let mut unique_vals = Vec::<T>::new();
     let filtered_array = filter_nan_infinite(array);
     for val in &filtered_array {

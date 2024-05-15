@@ -49,9 +49,7 @@ impl Light {
         self.data = data;
     }
     pub fn inverse(&mut self) {
-        let tmp = self.src_port.clone();
-        self.src_port = self.target_port.clone();
-        self.target_port = tmp;
+        std::mem::swap(&mut self.src_port, &mut self.target_port);
     }
     pub const fn distance(&self) -> &Length {
         &self.distance

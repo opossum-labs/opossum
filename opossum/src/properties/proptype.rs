@@ -3,8 +3,9 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
-        ray_propagation_visualizer::RayPositionHistories, FilterType, FluenceData, Metertype,
-        PortMap, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
+        fluence_detector::Fluence, ray_propagation_visualizer::RayPositionHistories, FilterType,
+        FluenceData, Metertype, PortMap, Spectrometer, SpectrometerType, SpotDiagram,
+        WaveFrontData,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
@@ -20,6 +21,7 @@ use uom::si::{
     energy::joule,
     f64::{Energy, Length},
     length::meter,
+    radiant_exposure::joule_per_square_centimeter,
     Dimension, Quantity, Unit, Units,
 };
 use uom::{lib::fmt::Debug, si::f64::Angle};
@@ -79,7 +81,7 @@ pub enum Proptype {
     /// A (nested set) of Properties
     NodeReport(NodeReport),
     /// Fluence in Units of J/cm²
-    Fluence(f64),
+    Fluence(Fluence),
     /// Unit of Wavelength
     WfLambda(f64, Length),
     /// a geometrical length
@@ -137,7 +139,7 @@ impl Proptype {
             }
             Self::Fluence(value) => tt.render(
                 "simple",
-                &format!("{}J/cm²", format_value_with_prefix(*value)),
+                &format_quantity(joule_per_square_centimeter, *value),
             ),
             Self::WfLambda(value, wvl) => tt.render(
                 "simple",

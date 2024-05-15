@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 //! Module for additional uom macros that facilitate the creation of Points, vecs or single unit values
+
 /// helper macro to create the units
 #[macro_export]
 macro_rules! uom_unit_creator {
@@ -255,6 +256,237 @@ macro_rules! degree {
         use uom::si::{f64::Angle, angle::degree};
         $crate::uom_unit_creator![degree, Angle, $( $x ),*]
     }};
+}
+
+///macro to create a fluence in terajoule per square meter
+#[macro_export]
+macro_rules! TJ_per_m2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::terajoule_per_square_meter};
+        $crate::uom_unit_creator![terajoule_per_square_meter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in terajoule per square centimeter
+#[macro_export]
+macro_rules! TJ_per_cm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::terajoule_per_square_centimeter};
+        $crate::uom_unit_creator![terajoule_per_square_centimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in terajoule per square millimeter
+#[macro_export]
+macro_rules! TJ_per_mm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::terajoule_per_square_millimeter};
+        $crate::uom_unit_creator![terajoule_per_square_millimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in megajoule per square meter
+#[macro_export]
+macro_rules! GJ_per_m2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::gigajoule_per_square_meter};
+        $crate::uom_unit_creator![gigajoule_per_square_meter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in megajoule per square centimeter
+#[macro_export]
+macro_rules! GJ_per_cm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::gigajoule_per_square_centimeter};
+        $crate::uom_unit_creator![gigajoule_per_square_centimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in megajoule per square millimeter
+#[macro_export]
+macro_rules! GJ_per_mm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::gigajoule_per_square_millimeter};
+        $crate::uom_unit_creator![gigajoule_per_square_millimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in megajoule per square meter
+#[macro_export]
+macro_rules! MJ_per_m2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::megajoule_per_square_meter};
+        $crate::uom_unit_creator![megajoule_per_square_meter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in megajoule per square centimeter
+#[macro_export]
+macro_rules! MJ_per_cm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::megajoule_per_square_centimeter};
+        $crate::uom_unit_creator![megajoule_per_square_centimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in megajoule per square millimeter
+#[macro_export]
+macro_rules! MJ_per_mm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::megajoule_per_square_millimeter};
+        $crate::uom_unit_creator![megajoule_per_square_millimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in kilojoule per square meter
+#[macro_export]
+macro_rules! kJ_per_m2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::kilojoule_per_square_meter};
+        $crate::uom_unit_creator![kilojoule_per_square_meter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in kilojoule per square centimeter
+#[macro_export]
+macro_rules! kJ_per_cm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::kilojoule_per_square_centimeter};
+        $crate::uom_unit_creator![kilojoule_per_square_centimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in kilojoule per square millimeter
+#[macro_export]
+macro_rules! kJ_per_mm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::kilojoule_per_square_millimeter};
+        $crate::uom_unit_creator![kilojoule_per_square_millimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in joule per square meter
+#[macro_export]
+macro_rules! J_per_m2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::joule_per_square_meter};
+        $crate::uom_unit_creator![joule_per_square_meter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in joule per square centimeter
+#[macro_export]
+macro_rules! J_per_cm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::joule_per_square_centimeter};
+        $crate::uom_unit_creator![joule_per_square_centimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in joule per square millimeter
+#[macro_export]
+macro_rules! J_per_mm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::joule_per_square_millimeter};
+        $crate::uom_unit_creator![joule_per_square_millimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in millijoule per square meter
+#[macro_export]
+macro_rules! mJ_per_m2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::millijoule_per_square_meter};
+        $crate::uom_unit_creator![millijoule_per_square_meter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in millijoule per square centimeter
+#[macro_export]
+macro_rules! mJ_per_cm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::millijoule_per_square_centimeter};
+        $crate::uom_unit_creator![millijoule_per_square_centimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in millijoule per square millimeter
+#[macro_export]
+macro_rules! mJ_per_mm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::millijoule_per_square_millimeter};
+        $crate::uom_unit_creator![millijoule_per_square_millimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in microjoule per square meter
+#[macro_export]
+macro_rules! microJ_per_m2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::microjoule_per_square_meter};
+        $crate::uom_unit_creator![microjoule_per_square_meter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in microjoule per square centimeter
+#[macro_export]
+macro_rules! microJ_per_cm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::microjoule_per_square_centimeter};
+        $crate::uom_unit_creator![microjoule_per_square_centimeter, RadiantExposure, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a fluence in microjoule per square millimeter
+#[macro_export]
+macro_rules! microJ_per_mm2 {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::RadiantExposure, radiant_exposure::microjoule_per_square_millimeter};
+        $crate::uom_unit_creator![microjoule_per_square_millimeter, RadiantExposure, $( $x ),*]
+        }
+    };
 }
 
 #[cfg(test)]

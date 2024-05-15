@@ -2,7 +2,7 @@
 //! Module for handling bundles of [`Ray`]s
 use crate::{
     aperture::Aperture,
-    degree,
+    centimeter, degree,
     energy_distributions::EnergyDistribution,
     error::{OpmResult, OpossumError},
     joule, micrometer, millimeter, nanometer,
@@ -21,27 +21,36 @@ use crate::{
         filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
         geom_transformation::Isometry,
         griddata::{
-            calc_closed_poly_area, create_linspace_axes, create_voronoi_cells,
-            interpolate_3d_triangulated_scatter_data, VoronoiedData,
+            calc_closed_poly_area, create_voronoi_cells, interpolate_3d_triangulated_scatter_data,
+            linspace, VoronoiedData,
         },
     },
+    J_per_cm2,
 };
 
 use approx::relative_eq;
 use itertools::izip;
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::{distance, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3};
+use nalgebra::{
+    distance, DMatrix, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3,
+};
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-use std::ops::Add;
-use std::ops::Range;
-use uom::si::energy::joule;
-use uom::si::f64::{Angle, Energy, Length};
-use uom::si::length::{micrometer, millimeter, nanometer};
-use uom::{num_traits::Zero, si::f64::Area};
-
+use std::{
+    fmt::Display,
+    ops::{Add, Range},
+};
+use uom::{
+    num_traits::Zero,
+    si::f64::Area,
+    si::{
+        energy::joule,
+        f64::{Angle, Energy, Length},
+        length::centimeter,
+        length::{micrometer, millimeter, nanometer},
+    },
+};
 /// Struct containing all relevant information of a ray bundle
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Rays {
@@ -459,8 +468,8 @@ impl Rays {
     ///
     /// The `valid_only` switch determines if all [`Ray`]s or only `valid` [`Ray`]s will be returned.
     #[must_use]
-    pub fn get_xy_rays_pos(&self, valid_only: bool, isometry: &Isometry) -> MatrixXx2<f64> {
-        let mut rays_at_pos = MatrixXx2::from_element(self.nr_of_rays(valid_only), 0.);
+    pub fn get_xy_rays_pos(&self, valid_only: bool, isometry: &Isometry) -> MatrixXx2<Length> {
+        let mut rays_at_pos = MatrixXx2::from_element(self.nr_of_rays(valid_only), Length::zero());
         for (row, ray) in self
             .rays
             .iter()
@@ -468,19 +477,34 @@ impl Rays {
             .enumerate()
         {
             let inverse_transformed_ray = ray.inverse_transformed_ray(isometry);
-            rays_at_pos[(row, 0)] = inverse_transformed_ray.position().x.get::<millimeter>();
-            rays_at_pos[(row, 1)] = inverse_transformed_ray.position().y.get::<millimeter>();
+            rays_at_pos[(row, 0)] = inverse_transformed_ray.position().x;
+            rays_at_pos[(row, 1)] = inverse_transformed_ray.position().y;
         }
         rays_at_pos
     }
     fn calc_ray_fluence_in_voronoi_cells(
         &self,
-        projected_ray_pos: &MatrixXx2<f64>,
-        proj_ax1_lim: AxLims,
-        proj_ax2_lim: AxLims,
-    ) -> OpmResult<VoronoiedData> {
-        let voronoi = create_voronoi_cells(projected_ray_pos, &proj_ax1_lim, &proj_ax2_lim)
-            .map_err(|_| {
+        projected_ray_pos: &MatrixXx2<Length>,
+    ) -> OpmResult<(OpmResult<VoronoiedData>, AxLims, AxLims)> {
+        let ray_pos_cm = MatrixXx2::from_iterator(
+            projected_ray_pos.nrows(),
+            projected_ray_pos
+                .iter()
+                .map(uom::si::f64::Length::get::<centimeter>),
+        );
+        let proj_ax1_lim = AxLims::finite_from_dvector(&ray_pos_cm.column(0)).ok_or_else(|| {
+            OpossumError::Other(
+                "cannot construct vorronoi cells with non-finite axes bounds!".into(),
+            )
+        })?;
+        let proj_ax2_lim = AxLims::finite_from_dvector(&ray_pos_cm.column(1)).ok_or_else(|| {
+            OpossumError::Other(
+                "cannot construct vorronoi cells with non-finite axes bounds!".into(),
+            )
+        })?;
+
+        let voronoi =
+            create_voronoi_cells(&ray_pos_cm, &proj_ax1_lim, &proj_ax2_lim).map_err(|_| {
                 OpossumError::Other(
                     "Voronoi diagram for fluence estimation could not be created!".into(),
                 )
@@ -497,36 +521,47 @@ impl Rays {
                 .iter()
                 .map(|p| Point2::new(p.x, p.y))
                 .collect::<Vec<Point2<f64>>>();
-            let poly_area = calc_closed_poly_area(&v_neighbours)?;
-            fluence_scatter[idx] = self.rays[idx].energy().get::<joule>() / poly_area;
+            if v_neighbours.len() >= 3 {
+                let poly_area = calc_closed_poly_area(&v_neighbours)?;
+                fluence_scatter[idx] = self.rays[idx].energy().get::<joule>() / poly_area;
+            } else {
+                warn!(
+                    "polygon could not be created. number of neighbors {}",
+                    v_neighbours.len()
+                );
+            }
         }
-
-        VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)
+        Ok((
+            VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter),
+            proj_ax1_lim,
+            proj_ax2_lim,
+        ))
     }
 
-    /// Calculates the spatial energy distribution (fluence) of a ray bundle, its coordinates in a plane transversal to its propagation diraction and the peak fluence in J/cm²
+    /// Calculates the spatial energy distribution (fluence) of a ray bundle, its coordinates in a plane
+    /// transversal to its propagation diraction and the peak fluence.
     /// # Errors
     /// This function errors if
-    /// - creation of hte linearly spaced axes fails
+    /// - creation of the linearly spaced axes fails
     /// - voronating the ray position or the fluence calculation in the voronoi cells fails
     /// - interpolation fails
     pub fn calc_fluence_at_position(&self) -> OpmResult<FluenceData> {
-        let num_axes_points = 100.;
+        let num_axes_points = 100;
 
         // get ray positions
-        let rays_pos_vec = self.get_xy_rays_pos(true, &Isometry::identity()) / 10.; //for centimeter;
-
-        //axes definition
-        let (co_ax1, co_ax1_lim) = create_linspace_axes(rays_pos_vec.column(0), num_axes_points)?;
-        let (co_ax2, co_ax2_lim) = create_linspace_axes(rays_pos_vec.column(1), num_axes_points)?;
+        let rays_pos_vec = self.get_xy_rays_pos(true, &Isometry::identity());
 
         // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
-        let voronoi_fluence_scatter =
-            self.calc_ray_fluence_in_voronoi_cells(&rays_pos_vec, co_ax1_lim, co_ax2_lim)?;
+        let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim) =
+            self.calc_ray_fluence_in_voronoi_cells(&rays_pos_vec)?;
+
+        //axes definition
+        let co_ax1 = linspace(co_ax1_lim.min, co_ax1_lim.max, num_axes_points)?;
+        let co_ax2 = linspace(co_ax2_lim.min, co_ax2_lim.max, num_axes_points)?;
 
         //currently only interpolation. voronoid data for plotting must still be implemented
         let (interp_fluence, interp_mask) =
-            interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter, &co_ax1, &co_ax2)?;
+            interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter?, &co_ax1, &co_ax2)?;
 
         let (peak_fluence, mut average) = izip!(
             interp_fluence.into_iter(),
@@ -549,11 +584,15 @@ impl Rays {
         average /= interp_mask.sum();
 
         Ok(FluenceData::new(
-            peak_fluence,
-            average,
-            interp_fluence,
-            co_ax1,
-            co_ax2,
+            J_per_cm2!(peak_fluence),
+            J_per_cm2!(average),
+            DMatrix::from_iterator(
+                co_ax1.len(),
+                co_ax2.len(),
+                interp_fluence.iter().map(|val| J_per_cm2!(*val)),
+            ),
+            DVector::from_iterator(co_ax1.len(), co_ax1.iter().map(|val| centimeter!(*val))),
+            DVector::from_iterator(co_ax2.len(), co_ax2.iter().map(|val| centimeter!(*val))),
         ))
     }
 
@@ -962,7 +1001,7 @@ mod test {
         aperture::CircleConfig,
         centimeter,
         energy_distributions::General2DGaussian,
-        joule, millimeter, nanometer,
+        joule, meter, millimeter, nanometer,
         position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         radian,
         ray::SplittingConfig,
@@ -972,7 +1011,9 @@ mod test {
     use itertools::izip;
     use log::Level;
     use testing_logger;
-    use uom::si::{energy::joule, length::nanometer};
+    use uom::si::{
+        energy::joule, length::nanometer, radiant_exposure::joule_per_square_centimeter,
+    };
 
     fn propagate_along_z(rays: &mut Rays, distance: Length) -> OpmResult<()> {
         for ray in rays {
@@ -1751,36 +1792,36 @@ mod test {
 
         let xy_pos = rays.get_xy_rays_pos(false, &Isometry::identity());
         for val in xy_pos.row_iter() {
-            assert!(val[(0, 0)].abs() < f64::EPSILON);
-            assert!(val[(0, 1)].abs() < f64::EPSILON);
+            assert!(val[(0, 0)].value.abs() < f64::EPSILON);
+            assert!(val[(0, 1)].value.abs() < f64::EPSILON);
         }
 
         let pos_xy = MatrixXx2::from_vec(vec![1., 2., -10., -2000., 1., 2., -10., -2000.]);
 
         let ray_vec = vec![
             Ray::new(
-                millimeter!(1.0, 1.0, 0.),
+                meter!(1.0, 1.0, 0.),
                 Vector3::new(0., 1., 0.),
                 nanometer!(1000.),
                 joule!(1.),
             )
             .unwrap(),
             Ray::new(
-                millimeter!(2.0, 2.0, 0.),
+                meter!(2.0, 2.0, 0.),
                 Vector3::new(0., 1., 0.),
                 nanometer!(1000.),
                 joule!(1.),
             )
             .unwrap(),
             Ray::new(
-                millimeter!(-10.0, -10.0, 0.),
+                meter!(-10.0, -10.0, 0.),
                 Vector3::new(0., 1., 0.),
                 nanometer!(1000.),
                 joule!(1.),
             )
             .unwrap(),
             Ray::new(
-                millimeter!(-2000.0, -2000.0, 0.),
+                meter!(-2000.0, -2000.0, 0.),
                 Vector3::new(0., 1., 0.),
                 nanometer!(1000.),
                 joule!(1.),
@@ -1792,8 +1833,14 @@ mod test {
         let xy_pos = rays.get_xy_rays_pos(false, &Isometry::identity());
 
         for (val_is, val_got) in izip!(pos_xy.row_iter(), xy_pos.row_iter()) {
-            assert!((val_is[(0, 0)] - val_got[(0, 0)]).abs() < f64::EPSILON * val_is[(0, 0)].abs());
-            assert!((val_is[(0, 1)] - val_got[(0, 1)]).abs() < f64::EPSILON * val_is[(0, 1)].abs());
+            assert!(
+                (val_is[(0, 0)] - val_got[(0, 0)].value).abs()
+                    < f64::EPSILON * val_is[(0, 0)].abs()
+            );
+            assert!(
+                (val_is[(0, 1)] - val_got[(0, 1)].value).abs()
+                    < f64::EPSILON * val_is[(0, 1)].abs()
+            );
         }
     }
     #[test]
@@ -1807,7 +1854,9 @@ mod test {
 
         let fluence = rays.calc_fluence_at_position().unwrap();
         assert!(approx::RelativeEq::relative_eq(
-            &fluence.get_average_fluence(),
+            &fluence
+                .get_average_fluence()
+                .get::<joule_per_square_centimeter>(),
             &1.,
             0.01,
             0.01
@@ -1822,7 +1871,9 @@ mod test {
 
         let fluence = rays.calc_fluence_at_position().unwrap();
         assert!(approx::RelativeEq::relative_eq(
-            &fluence.get_average_fluence(),
+            &fluence
+                .get_average_fluence()
+                .get::<joule_per_square_centimeter>(),
             &0.5,
             0.01,
             0.01

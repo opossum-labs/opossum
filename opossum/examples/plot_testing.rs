@@ -1,3 +1,4 @@
+use nalgebra::{DMatrix, DVector, MatrixXx2};
 use opossum::{
     error::OpmResult,
     joule, millimeter, nanometer,
@@ -7,6 +8,7 @@ use opossum::{
     utils::geom_transformation::Isometry,
 };
 use plotters::style::RGBAColor;
+use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
 fn main() -> OpmResult<()> {
     let rays = Rays::new_uniform_collimated(
@@ -24,7 +26,14 @@ fn main() -> OpmResult<()> {
         .set(&PlotArgs::PlotSize((1000, 1000)))
         .unwrap();
 
-    let pltdat = rays.get_xy_rays_pos(true, &Isometry::identity());
+    let pltdat_uom = rays.get_xy_rays_pos(true, &Isometry::identity());
+    let pltdat = MatrixXx2::from_iterator(
+        pltdat_uom.nrows(),
+        pltdat_uom
+            .iter()
+            .map(uom::si::f64::Length::get::<millimeter>),
+    );
+
     let plt_series = PlotSeries::new(
         &PlotData::new_dim2(pltdat).unwrap(),
         RGBAColor(255, 0, 0, 1.),
@@ -56,13 +65,24 @@ fn main() -> OpmResult<()> {
     let fluence_data = rays.calc_fluence_at_position()?;
     // let duration = start.elapsed();
     // println!("{duration:?}");
-    println!("{}", fluence_data.get_peak_fluence());
-    println!("{}", fluence_data.get_average_fluence());
+    println!("{:?}", fluence_data.get_peak_fluence());
+    println!("{:?}", fluence_data.get_average_fluence());
     let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
     let plt_dat = PlotData::ColorMesh {
-        x_dat_n: fl_x,
-        y_dat_m: fl_y,
-        z_dat_nxm: fl_d,
+        x_dat_n: DVector::from_iterator(
+            fl_x.len(),
+            fl_x.iter().map(uom::si::f64::Length::get::<millimeter>),
+        ),
+        y_dat_m: DVector::from_iterator(
+            fl_y.len(),
+            fl_y.iter().map(uom::si::f64::Length::get::<millimeter>),
+        ),
+        z_dat_nxm: DMatrix::from_iterator(
+            fluence_data.len_y(),
+            fluence_data.len_x(),
+            fl_d.iter()
+                .map(uom::si::f64::RadiantExposure::get::<joule_per_square_centimeter>),
+        ),
     };
 
     let plt_series = PlotSeries::new(&plt_dat, RGBAColor(0, 0, 0, 0.), None);

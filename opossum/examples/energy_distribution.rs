@@ -1,4 +1,4 @@
-use nalgebra::Point2;
+use nalgebra::{DMatrix, DVector, Point2};
 use opossum::{
     degree,
     energy_distributions::general_gaussian::General2DGaussian,
@@ -9,6 +9,7 @@ use opossum::{
     rays::Rays,
 };
 use plotters::style::RGBAColor;
+use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
 fn main() -> OpmResult<()> {
     let rays = Rays::new_collimated(
@@ -36,9 +37,20 @@ fn main() -> OpmResult<()> {
         .set(&PlotArgs::PlotSize((1000, 800)))
         .unwrap();
     let plt_dat = PlotData::ColorMesh {
-        x_dat_n: fl_x,
-        y_dat_m: fl_y,
-        z_dat_nxm: fl_d,
+        x_dat_n: DVector::from_iterator(
+            fl_x.len(),
+            fl_x.iter().map(uom::si::f64::Length::get::<millimeter>),
+        ),
+        y_dat_m: DVector::from_iterator(
+            fl_y.len(),
+            fl_y.iter().map(uom::si::f64::Length::get::<millimeter>),
+        ),
+        z_dat_nxm: DMatrix::from_iterator(
+            fluence_data.len_y(),
+            fluence_data.len_x(),
+            fl_d.iter()
+                .map(uom::si::f64::RadiantExposure::get::<joule_per_square_centimeter>),
+        ),
     };
     let plt_type = PlotType::ColorMesh(plt_params);
     let plt_series = PlotSeries::new(&plt_dat, RGBAColor(0, 0, 0, 0.), None);

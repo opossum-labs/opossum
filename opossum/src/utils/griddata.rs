@@ -8,8 +8,8 @@ use crate::{
 use approx::{abs_diff_eq, abs_diff_ne, relative_eq};
 use kahan::KahanSum;
 use log::warn;
-use nalgebra::{DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx2, MatrixXx3, Point2};
-use num::ToPrimitive;
+use nalgebra::{DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Scalar};
+use num::{Float, NumCast, ToPrimitive};
 use voronator::{
     delaunator::{Coord, Point as VPoint},
     VoronoiDiagram,
@@ -100,7 +100,7 @@ impl VoronoiedData {
 /// # Attributes
 /// `poly_coords`: array of x-y coordinates of the polygon vertices
 /// # Errors
-/// This function errors if the numer of coordinates is below 3
+/// This function returns an errror if the numer of coordinates is below 3
 pub fn calc_closed_poly_area(poly_coords: &[Point2<f64>]) -> OpmResult<f64> {
     let mut area = 0.;
     let num_points = poly_coords.len();
@@ -201,40 +201,30 @@ pub fn meshgrid(x: &DVector<f64>, y: &DVector<f64>) -> OpmResult<(DMatrix<f64>, 
 ///
 /// # Errors
 /// This function will return an error if `num` cannot be casted to usize.
-pub fn linspace(start: f64, end: f64, num: f64) -> OpmResult<DVector<f64>> {
+///
+/// # Panics
+/// This function panics if step cannot be casted from usize to T
+pub fn linspace<T: Float + Scalar>(start: T, end: T, num: usize) -> OpmResult<DVector<T>> {
     if !start.is_finite() || !end.is_finite() {
         return Err(OpossumError::Other(
             "start and end values must be finite!".into(),
         ));
     };
 
-    if num < 2. {
+    let mut linspace = DVector::<T>::from_element(num, start);
+    if num < 2 {
         warn!("Using linspace with less than two elements results in an empty Vector for num=0 or a Vector with one entry being num=start");
+        return Ok(linspace);
     }
-    num.to_usize().map_or_else(
-        || {
-            Err(OpossumError::Other(
-                "Cannot cast num value to usize!".into(),
-            ))
-        },
-        |num_usize| {
-            let mut linspace = DVector::<f64>::zeros(num_usize);
-            let mut range = KahanSum::<f64>::new_with_value(end);
-            range += -start;
 
-            let mut steps = KahanSum::<f64>::new_with_value(num);
-            steps += -1.;
+    let bin_size = (end - start)
+        / NumCast::from(num - 1)
+            .ok_or_else(|| OpossumError::Other("Cannot Cast usize to float type!".into()))?;
 
-            let bin_size = range.sum() / steps.sum();
-
-            let mut summator: KahanSum<f64> = KahanSum::<f64>::new_with_value(start);
-            for val in linspace.iter_mut() {
-                *val = summator.sum();
-                summator += bin_size;
-            }
-            Ok(linspace)
-        },
-    )
+    for (step, val) in linspace.iter_mut().enumerate() {
+        *val = *val + <T as NumCast>::from(step).unwrap() * bin_size;
+    }
+    Ok(linspace)
 }
 
 /// Creates a linearly spaced Vector (Matrix with1 column and `num` rows) from `start` to `end`
@@ -290,17 +280,11 @@ pub fn linspace_f32(start: f32, end: f32, num: f32) -> OpmResult<DVector<f32>> {
 /// This function will return an error if `num_axes_points` is below 1 or if `linspace fails`.
 pub fn create_linspace_axes(
     data: DVectorSlice<'_, f64>,
-    num_axes_points: f64,
+    num_axes_points: usize,
 ) -> OpmResult<(DVector<f64>, AxLims)> {
-    let filtered_data = DVector::from_vec(filter_nan_infinite(data.as_slice()));
-    if filtered_data.len() < 2 {
-        return Err(OpossumError::Other(
-            "Length of input data after filtering out non-finite values is below 2! Creating a linearly-spaced array from 1 value is not possible!".into(),
-        ));
-    }
-    let ax_lim = AxLims::new(filtered_data.min(), filtered_data.max())
+    let ax_lim = AxLims::finite_from_dvector(&data)
         .ok_or_else(|| OpossumError::Other("Cannot create linspace from axlims of None!".into()))?;
-    if num_axes_points < 1. {
+    if num_axes_points < 1 {
         Err(OpossumError::Other(
             "The number of points to create linearly-spaced vector must be more than 1!".into(),
         ))
@@ -716,8 +700,8 @@ mod test {
         let scattered_data =
             Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 1., 1., 1., 1.]).transpose();
 
-        let x_interp = linspace(-0.5, 1., 4.).unwrap();
-        let y_interp = linspace(-0.5, 1., 4.).unwrap();
+        let x_interp = linspace(-0.5, 1., 4).unwrap();
+        let y_interp = linspace(-0.5, 1., 4).unwrap();
         let (interp_data, _) =
             interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
 
@@ -743,8 +727,8 @@ mod test {
         let scattered_data =
             Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 1., 1., 1., 1.]).transpose();
 
-        let x_interp = linspace(-0.5, 1., 4.).unwrap();
-        let y_interp = linspace(-0.5, 1., 4.).unwrap();
+        let x_interp = linspace(-0.5, 1., 4).unwrap();
+        let y_interp = linspace(-0.5, 1., 4).unwrap();
         let (_data, mask) =
             interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).unwrap();
 
@@ -770,8 +754,8 @@ mod test {
     fn interpolate_3d_scatter_data_amount_data_test() {
         let scattered_data =
             Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 1., 1., 1., 1.]).transpose();
-        let x_interp = linspace(-0.5, 1., 4.).unwrap();
-        let y_interp = linspace(-0.5, 1., 4.).unwrap();
+        let x_interp = linspace(-0.5, 1., 4).unwrap();
+        let y_interp = linspace(-0.5, 1., 4).unwrap();
         assert!(interpolate_3d_scatter_data(
             &scattered_data,
             &DVector::from_vec(vec![0.]),
@@ -796,8 +780,8 @@ mod test {
     }
     #[test]
     fn interpolate_3d_scatter_data_finite_values_test() {
-        let x_interp = linspace(-0.5, 1., 4.).unwrap();
-        let y_interp = linspace(-0.5, 1., 4.).unwrap();
+        let x_interp = linspace(-0.5, 1., 4).unwrap();
+        let y_interp = linspace(-0.5, 1., 4).unwrap();
 
         let scattered_data =
             Matrix3xX::from_vec(vec![-1., 0., f64::NAN, 1., 0., 0., 0., 1., 0.]).transpose();
@@ -818,8 +802,8 @@ mod test {
     }
     #[test]
     fn interpolate_3d_scatter_data_finite_coordinates_test() {
-        let x_interp = linspace(-0.5, 1., 4.).unwrap();
-        let y_interp = linspace(-0.5, 1., 4.).unwrap();
+        let x_interp = linspace(-0.5, 1., 4).unwrap();
+        let y_interp = linspace(-0.5, 1., 4).unwrap();
         let scattered_data =
             Matrix3xX::from_vec(vec![f64::NAN, 0., 0., 1., 0., 0., 0., 1., 0.]).transpose();
         assert!(interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
@@ -847,14 +831,14 @@ mod test {
         let z_data = DVector::from_vec(vec![0., 0., 1.]);
         let v_data = VoronoiedData::new(&xy_coord, Some(z_data)).unwrap();
 
-        let x_interp = linspace(0.5, 1., 1.).unwrap();
-        let y_interp = linspace(0.5, 1., 1.).unwrap();
+        let x_interp = linspace(0.5, 1., 1).unwrap();
+        let y_interp = linspace(0.5, 1., 1).unwrap();
         let (interp_data, _) =
             interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp).unwrap();
         assert_relative_eq!(interp_data[(0, 0)], 0.5);
 
-        let x_interp = linspace(0., 1., 3.).unwrap();
-        let y_interp = linspace(0., 1., 3.).unwrap();
+        let x_interp = linspace(0., 1., 3).unwrap();
+        let y_interp = linspace(0., 1., 3).unwrap();
         let (interp_data, _interp_mask) =
             interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp).unwrap();
 
@@ -870,8 +854,8 @@ mod test {
     }
     #[test]
     fn meshgrid_value_test() {
-        let x = linspace(1., 3., 3.).unwrap();
-        let y = linspace(4., 5., 2.).unwrap();
+        let x = linspace(1., 3., 3).unwrap();
+        let y = linspace(4., 5., 2).unwrap();
 
         let (yy, xx) = meshgrid(&y, &x).unwrap();
 
@@ -891,8 +875,8 @@ mod test {
     }
     #[test]
     fn meshgrid_shape_test() {
-        let x = linspace(1., 3., 3.).unwrap();
-        let y = linspace(4., 5., 2.).unwrap();
+        let x = linspace(1., 3., 3).unwrap();
+        let y = linspace(4., 5., 2).unwrap();
 
         let (xx, yy) = meshgrid(&x, &y).unwrap();
         assert_eq!(xx.shape(), (2, 3));
@@ -903,27 +887,27 @@ mod test {
     }
     #[test]
     fn linspace_test() {
-        let x = linspace(1., 3., 3.).unwrap();
+        let x = linspace(1., 3., 3).unwrap();
         assert_eq!(x.len(), 3);
         assert_abs_diff_eq!(x[0], 1.);
         assert_abs_diff_eq!(x[1], 2.);
         assert_abs_diff_eq!(x[2], 3.);
-        assert!(linspace(1., 3., -3.).is_err());
+        // assert!(linspace(1., 3., -3).is_err());
 
-        assert!(linspace(1., f64::NAN, 3.).is_err());
-        assert!(linspace(f64::NAN, 3., 3.).is_err());
-        assert!(linspace(f64::INFINITY, 3., 3.).is_err());
-        assert!(linspace(f64::NEG_INFINITY, 3., 3.).is_err());
-        assert!(linspace(1., f64::NEG_INFINITY, 3.).is_err());
-        assert!(linspace(1., f64::INFINITY, 3.).is_err());
-        assert!(linspace(1., 10., f64::INFINITY).is_err());
-        assert!(linspace(1., 10., f64::NEG_INFINITY).is_err());
-        assert!(linspace(1., 10., f64::NAN).is_err());
+        assert!(linspace(1., f64::NAN, 3).is_err());
+        assert!(linspace(f64::NAN, 3., 3).is_err());
+        assert!(linspace(f64::INFINITY, 3., 3).is_err());
+        assert!(linspace(f64::NEG_INFINITY, 3., 3).is_err());
+        assert!(linspace(1., f64::NEG_INFINITY, 3).is_err());
+        assert!(linspace(1., f64::INFINITY, 3).is_err());
+        // assert!(linspace(1., 10., f64::INFINITY).is_err());
+        // assert!(linspace(1., 10., f64::NEG_INFINITY).is_err());
+        // assert!(linspace(1., 10., f64::NAN).is_err());
     }
     #[test]
     fn create_linspace_axes_test() {
         let x_dat = DVector::from_vec(vec![0., -3., 10., 50.]);
-        let num_axes_points = 100.;
+        let num_axes_points = 100;
         let (x, xlim) = create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).unwrap();
         assert_eq!(x.len(), 100);
         assert_abs_diff_eq!(xlim.min, -3.);
@@ -953,11 +937,11 @@ mod test {
         assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
 
         let x_dat = DVector::from_vec(vec![0., -3., 10., f64::INFINITY]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), 0.).is_err());
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::NAN).is_err());
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::INFINITY).is_err());
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::NEG_INFINITY).is_err());
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), -1.).is_err());
+        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), 0).is_err());
+        // assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::NAN).is_err());
+        // assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::INFINITY).is_err());
+        // assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::NEG_INFINITY).is_err());
+        // assert!(create_linspace_axes(DVectorSlice::from(&x_dat), -1.).is_err());
     }
     #[test]
     fn create_voronoi_cells_same_line_test() {
