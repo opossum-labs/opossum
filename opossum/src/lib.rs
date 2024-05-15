@@ -11,7 +11,7 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
     doc = "**Doc images not enabled**. Compile with feature `doc-images` and Rust version >= 1.54 \
            to enable."
 )]
-#![cfg_attr(feature = "cargo-clippy", allow(clippy::module_name_repetitions))]
+#![allow(clippy::module_name_repetitions)]
 
 #[cfg(feature = "bevy")]
 pub mod bevy_main;

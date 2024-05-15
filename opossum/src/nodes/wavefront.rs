@@ -355,9 +355,9 @@ impl Plottable for WaveFrontErrorMap {
 
     fn get_plot_series(&self, _plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
         let (x_interp, _) =
-            create_linspace_axes(DVectorSlice::from(&DVector::from_vec(self.x.clone())), 100.)?;
+            create_linspace_axes(DVectorSlice::from(&DVector::from_vec(self.x.clone())), 100)?;
         let (y_interp, _) =
-            create_linspace_axes(DVectorSlice::from(&DVector::from_vec(self.y.clone())), 100.)?;
+            create_linspace_axes(DVectorSlice::from(&DVector::from_vec(self.y.clone())), 100)?;
         let scattered_data = MatrixXx3::from_columns(&[
             DVector::from_vec(self.x.clone()),
             DVector::from_vec(self.y.clone()),

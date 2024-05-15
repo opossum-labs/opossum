@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 //! Trait for adding the possibility to generate a (x/y) plot of an element.
 use crate::error::{OpmResult, OpossumError};
+use crate::utils::filter_data::filter_nan_infinite;
 use crate::utils::griddata::create_valued_voronoi_cells;
 use crate::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace};
 use approx::{abs_diff_ne, relative_ne, RelativeEq};
@@ -576,13 +577,13 @@ impl PlotType {
                 );
 
                 let c_dat =
-                    linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap();
+                    linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100).unwrap();
                 let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
                 let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
                 Self::draw_2d_colormesh(
                     &mut chart,
                     &xxx,
-                    &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100.).unwrap(),
+                    &linspace(plt.bounds.z.unwrap().min, plt.bounds.z.unwrap().max, 100).unwrap(),
                     &d_mat,
                     &plt.cbar.cmap,
                     plt.bounds.z.unwrap(),
@@ -804,13 +805,13 @@ pub enum PlotData {
         vec_of_xyz_data: Vec<MatrixXx3<f64>>,
     },
     /// [`PlotData`] for [`PlotType::ColorMesh`]
-    /// Data to create a 2d colormesh plot. Vector with N entries for x, Vector with M entries for y and a Matrix with NxM entries for the colordata
+    /// Data to create a 2d colormesh plot. Vector with N entries for x, Vector with M entries for y and a Matrix with nxm entries for the colordata
     ColorMesh {
         /// xdata: Vector with N entries
         x_dat_n: DVector<f64>,
         /// ydata: Vector with M entries
         y_dat_m: DVector<f64>,
-        /// zdata: Matrix with NxM entries for the color
+        /// zdata: Matrix with nxm entries for the color
         z_dat_nxm: DMatrix<f64>,
     },
     /// [`PlotData`] for [`PlotType::TriangulatedSurface`]
@@ -1215,6 +1216,32 @@ impl AxLims {
         }
     }
 
+    ///Creates a new [`AxLims`] struct from a provided `DVector` filtering out all non finite values
+    /// # Attributes
+    /// -`dat_vec`: data vector
+    ///
+    /// # Returns
+    /// This function retuns Some([`AxLims`]) or None if non of the dvector entries is finite
+    #[must_use]
+    pub fn finite_from_dvector(dat_vec: &DVectorSlice<'_, f64>) -> Option<Self> {
+        let filtered_data = DVector::from_vec(filter_nan_infinite(dat_vec.as_slice()));
+        if filtered_data.len() < 2 {
+            warn!("Length of input data after filtering out non-finite values is below 2! Useful Axlims cannot be returned! AxLimit is set to None!");
+            None
+        } else {
+            let axlim = Self {
+                min: filtered_data.min(),
+                max: filtered_data.max(),
+            };
+            if axlim.check_validity() {
+                Some(axlim)
+            } else {
+                warn!("Invalid ax limit! Must be finite, not NaN, not equal and min must be smaller than max! AxLimit is set to None!");
+                None
+            }
+        }
+    }
+
     /// Checks the validity of the delivered min and max values and returns a true if it is valid, false otherwise
     #[must_use]
     pub fn check_validity(self) -> bool {
@@ -1369,10 +1396,10 @@ pub trait Plottable {
 ///Enum to describe which type of plotting backend should be used
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum PltBackEnd {
-    /// BitmapBackend. Used to create .png, .bmp, .jpg
+    /// `BitmapBackend`. Used to create .png, .bmp, .jpg
     #[default]
     BMP,
-    /// SVGBackend. Used to create .svg
+    /// `SVGBackend`. Used to create .svg
     SVG,
     /// Buffered Backend. Used to buffer the image data into an image buffer.
     Buf,
@@ -1457,7 +1484,7 @@ impl LabelDescription {
     /// # Attributes
     /// - `txt`: text to be shown as label
     pub fn set_label(&mut self, txt: &str) {
-        self.label = txt.to_owned();
+        txt.clone_into(&mut self.label);
     }
 }
 
@@ -3125,8 +3152,8 @@ mod test {
     #[test]
     fn new_plot() {
         let plt_params = PlotParameters::default();
-        let x = linspace(0., 2., 3.).unwrap();
-        let y = linspace(3., 5., 3.).unwrap();
+        let x = linspace(0., 2., 3).unwrap();
+        let y = linspace(3., 5., 3).unwrap();
         let plt_series_dim2 = PlotSeries::new(
             &PlotData::new_dim2(MatrixXx2::from_columns(&[x, y])).unwrap(),
             RGBAColor(0, 0, 0, 1.),
@@ -3146,9 +3173,9 @@ mod test {
     #[test]
     fn get_series_labels_test() {
         //define test data
-        let x = linspace(0., 2., 3.).unwrap();
+        let x = linspace(0., 2., 3).unwrap();
         let y = DVector::from_vec(vec![2., 0., 1.7]);
-        let z = linspace(2., 4., 3.).unwrap();
+        let z = linspace(2., 4., 3).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -3195,9 +3222,9 @@ mod test {
     }
     #[test]
     fn get_axes_min_max_values_test() {
-        let x = linspace(0., 2., 3.).unwrap();
+        let x = linspace(0., 2., 3).unwrap();
         let y = DVector::from_vec(vec![2., 0., 1.7]);
-        let z = linspace(2., 4., 3.).unwrap();
+        let z = linspace(2., 4., 3).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -3241,9 +3268,9 @@ mod test {
     }
     #[test]
     fn define_data_based_axes_bounds_test() {
-        let x = linspace(0., 2., 3.).unwrap();
+        let x = linspace(0., 2., 3).unwrap();
         let y = DVector::from_vec(vec![2., 0., 1.7]);
-        let z = linspace(2., 4., 3.).unwrap();
+        let z = linspace(2., 4., 3).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -3288,9 +3315,9 @@ mod test {
     #[test]
     fn define_plot_axes_bounds() {
         //define test data
-        let x = linspace(0., 2., 3.).unwrap();
+        let x = linspace(0., 2., 3).unwrap();
         let y = DVector::from_vec(vec![2., 0., 1.7]);
-        let z = linspace(2., 4., 3.).unwrap();
+        let z = linspace(2., 4., 3).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -3488,20 +3515,20 @@ mod test {
     }
     #[test]
     fn get_ax_val_distance_if_equidistant_test() {
-        let x = linspace(0., 1., 101.).unwrap();
+        let x = linspace(0., 1., 101).unwrap();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
         assert!((dist - 0.005).abs() < f64::EPSILON);
 
-        let x = linspace(0., f64::EPSILON, 101.).unwrap();
+        let x = linspace(0., f64::EPSILON, 101).unwrap();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
         assert!((dist - 0.5).abs() < f64::EPSILON);
     }
     #[test]
     fn check_equistancy_of_mesh_test() {
-        let x = linspace(0., 1., 101.).unwrap();
+        let x = linspace(0., 1., 101).unwrap();
         assert!(PlotType::check_equistancy_of_mesh(&x));
 
-        let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100.).unwrap();
+        let x = linspace(-118.63435185555608, 0.000000000000014210854715202004, 100).unwrap();
         assert!(PlotType::check_equistancy_of_mesh(&x));
 
         let x = MatrixXx1::from_vec(vec![0., 1., 3.]);
@@ -3572,7 +3599,7 @@ mod test {
         //define test data
         let x = DVector::from_vec(vec![0., -3., 20., 15.]);
         let y = DVector::from_vec(vec![10., -13., 25., 5.]);
-        let z = linspace(4., 5., 4.).unwrap();
+        let z = linspace(4., 5., 4).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -3609,7 +3636,7 @@ mod test {
         //define test data
         let x = DVector::from_vec(vec![0., -3., 20., 15.]);
         let y = DVector::from_vec(vec![10., -13., 25., 5.]);
-        let z = linspace(4., 5., 4.).unwrap();
+        let z = linspace(4., 5., 4).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);
@@ -3651,7 +3678,7 @@ mod test {
         //define test data
         let x = DVector::from_vec(vec![0., -3., 20., 15.]);
         let y = DVector::from_vec(vec![10., -13., 25., 5.]);
-        let z = linspace(4., 5., 4.).unwrap();
+        let z = linspace(4., 5., 4).unwrap();
         let z_mat = x.clone() * y.clone().transpose();
 
         let dat_2d = MatrixXx2::from_columns(&[x.clone(), y.clone()]);

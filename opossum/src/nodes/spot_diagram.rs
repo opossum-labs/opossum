@@ -2,9 +2,10 @@
 use image::RgbImage;
 use itertools::izip;
 use log::warn;
+use nalgebra::MatrixXx2;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use uom::si::length::nanometer;
+use uom::si::length::{millimeter, nanometer};
 
 use super::node_attr::NodeAttr;
 use crate::{
@@ -259,8 +260,12 @@ impl Plottable for SpotDiagram {
                     let rgbcolor = color_grad.eval_continuous(grad_val);
                     let series_label = format!("{:.1} nm", wvl.get::<nanometer>());
                     let iso = self.effective_iso().unwrap_or_else(Isometry::identity);
+                    let xy_pos = ray_bundle.get_xy_rays_pos(true, &iso);
                     let data = PlotData::Dim2 {
-                        xy_data: ray_bundle.get_xy_rays_pos(true, &iso),
+                        xy_data: MatrixXx2::from_iterator(
+                            xy_pos.nrows(),
+                            xy_pos.iter().map(uom::si::f64::Length::get::<millimeter>),
+                        ),
                     };
                     plt_series.push(PlotSeries::new(
                         &data,

@@ -5,5 +5,5 @@ RUST_TEST_THREADS = "1"
 [alias]
 xtask = "run --package xtask --"
 [build]
-jobs=2
+jobs=8
 

@@ -5,6 +5,7 @@ use log::warn;
 use nalgebra::{DMatrix, DVector};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
+use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
 use crate::{
     analyzer::AnalyzerType,
@@ -22,6 +23,9 @@ use crate::{
 use std::path::{Path, PathBuf};
 
 use super::node_attr::NodeAttr;
+
+///alias for uom `RadiantExposure`, as this name is rather uncommon to use for laser scientists
+pub type Fluence = uom::si::f64::RadiantExposure;
 
 /// A fluence monitor
 ///
@@ -131,16 +135,13 @@ impl Optical for FluenceDetector {
         if let Some(LightData::Geometric(rays)) = &self.light_data {
             let file_path =
                 PathBuf::from(report_dir).join(Path::new(&format!("fluence_{}.png", self.name())));
-
-            let fluence_data_opt = rays.calc_fluence_at_position().ok();
-            fluence_data_opt.map_or_else(
-                || {
+            rays.calc_fluence_at_position().map_or_else(
+                |_| {
                     warn!("Fluence Detector diagram: no fluence data for export available",);
                     Ok(None)
                 },
                 |fluence_data| fluence_data.to_plot(&file_path, PltBackEnd::BMP),
             )
-            // data.export(&file_path)
         } else {
             Err(OpossumError::Other(
                 "Fluence detector: no light data for export available".into(),
@@ -220,26 +221,26 @@ impl From<FluenceData> for Proptype {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FluenceData {
     /// peak fluence of the beam
-    peak: f64,
+    peak: Fluence,
     /// average fluence of the beam
-    average: f64,
+    average: Fluence,
     /// 2d fluence distribution of the beam.
-    interp_distribution: DMatrix<f64>,
+    interp_distribution: DMatrix<Fluence>,
     /// x coordinates of the fluence distribution
-    x_data: DVector<f64>,
+    x_data: DVector<Length>,
     /// y coordinates of the fluence distribution
-    y_data: DVector<f64>,
+    y_data: DVector<Length>,
 }
 
 impl FluenceData {
     /// Constructs a new [`FluenceData`] struct
     #[must_use]
     pub const fn new(
-        peak: f64,
-        average: f64,
-        interp_distribution: DMatrix<f64>,
-        x_data: DVector<f64>,
-        y_data: DVector<f64>,
+        peak: Fluence,
+        average: Fluence,
+        interp_distribution: DMatrix<Fluence>,
+        x_data: DVector<Length>,
+        y_data: DVector<Length>,
     ) -> Self {
         Self {
             peak,
@@ -252,24 +253,42 @@ impl FluenceData {
 
     /// Returns the peak fluence value
     #[must_use]
-    pub const fn get_peak_fluence(&self) -> f64 {
+    pub const fn get_peak_fluence(&self) -> Fluence {
         self.peak
     }
 
     /// Returns the average fluence value
     #[must_use]
-    pub const fn get_average_fluence(&self) -> f64 {
+    pub const fn get_average_fluence(&self) -> Fluence {
         self.average
     }
 
     /// Returns the fluence distribution and the corresponding x and y axes in a tuple (x, y, distribution)
     #[must_use]
-    pub fn get_fluence_distribution(&self) -> (DVector<f64>, DVector<f64>, DMatrix<f64>) {
+    pub fn get_fluence_distribution(&self) -> (DVector<Length>, DVector<Length>, DMatrix<Fluence>) {
         (
             self.x_data.clone(),
             self.y_data.clone(),
             self.interp_distribution.clone(),
         )
+    }
+
+    /// Returns length of the x data points (columns)
+    #[must_use]
+    pub fn len_x(&self) -> usize {
+        self.x_data.len()
+    }
+
+    /// Returns length of the y data points (rows)
+    #[must_use]
+    pub fn len_y(&self) -> usize {
+        self.y_data.len()
+    }
+
+    /// Returns the peak fluence value
+    #[must_use]
+    pub fn shape(&self) -> (usize, usize) {
+        self.interp_distribution.shape()
     }
 }
 impl Plottable for FluenceData {
@@ -289,12 +308,30 @@ impl Plottable for FluenceData {
     }
 
     fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+        let (nrows, ncols) = self.interp_distribution.shape();
+
         match plt_type {
             PlotType::ColorMesh(_) => {
                 let plt_data = PlotData::ColorMesh {
-                    x_dat_n: self.x_data.clone(),
-                    y_dat_m: self.y_data.clone(),
-                    z_dat_nxm: self.interp_distribution.clone(),
+                    x_dat_n: DVector::from_iterator(
+                        self.len_x(),
+                        self.x_data
+                            .iter()
+                            .map(uom::si::f64::Length::get::<millimeter>),
+                    ),
+                    y_dat_m: DVector::from_iterator(
+                        self.len_y(),
+                        self.y_data
+                            .iter()
+                            .map(uom::si::f64::Length::get::<millimeter>),
+                    ),
+                    z_dat_nxm: DMatrix::from_iterator(
+                        nrows,
+                        ncols,
+                        self.interp_distribution
+                            .iter()
+                            .map(uom::si::f64::RadiantExposure::get::<joule_per_square_centimeter>),
+                    ),
                 };
                 let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
                 Ok(Some(vec![plt_series]))
