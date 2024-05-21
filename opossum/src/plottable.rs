@@ -282,7 +282,7 @@ impl PlotType {
     }
 
     fn get_ax_val_distance_if_equidistant(ax_vals: &MatrixXx1<f64>) -> f64 {
-        let mut dist = (ax_vals[1] - ax_vals[0]) / 2.;
+        let mut dist = ax_vals[1] - ax_vals[0]; // / 2.;
         if Self::check_equistancy_of_mesh(ax_vals) {
             if dist <= 2. * f64::EPSILON {
                 dist = 0.5;
@@ -1374,7 +1374,6 @@ pub trait Plottable {
                 plt_series[0].color = RGBAColor(255, 0, 0, 0.8);
             }
         }
-
         plt_series_opt.map_or(Ok(None), |plt_series| plt_type.plot(&plt_series))
     }
 
@@ -3517,7 +3516,7 @@ mod test {
     fn get_ax_val_distance_if_equidistant_test() {
         let x = linspace(0., 1., 101).unwrap();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
-        assert!((dist - 0.005).abs() < f64::EPSILON);
+        assert!((dist - 0.01).abs() < f64::EPSILON);
 
         let x = linspace(0., f64::EPSILON, 101).unwrap();
         let dist = PlotType::get_ax_val_distance_if_equidistant(&x);
