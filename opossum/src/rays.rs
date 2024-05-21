@@ -29,7 +29,7 @@ use crate::{
 };
 
 use approx::relative_eq;
-use itertools::izip;
+use itertools::{izip, Itertools};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{
@@ -484,8 +484,18 @@ impl Rays {
     }
     fn calc_ray_fluence_in_voronoi_cells(
         &self,
-        projected_ray_pos: &MatrixXx2<Length>,
+        // projected_ray_pos: &MatrixXx2<Length>,
     ) -> OpmResult<(OpmResult<VoronoiedData>, AxLims, AxLims)> {
+        let valid_rays = Self::from(
+            self.rays
+                .iter()
+                .filter(|r| r.valid())
+                .cloned()
+                .collect_vec(),
+        );
+
+        let projected_ray_pos = valid_rays.get_xy_rays_pos(true, &Isometry::identity());
+
         let ray_pos_cm = MatrixXx2::from_iterator(
             projected_ray_pos.nrows(),
             projected_ray_pos
@@ -494,12 +504,12 @@ impl Rays {
         );
         let proj_ax1_lim = AxLims::finite_from_dvector(&ray_pos_cm.column(0)).ok_or_else(|| {
             OpossumError::Other(
-                "cannot construct vorronoi cells with non-finite axes bounds!".into(),
+                "cannot construct voronoi cells with non-finite axes bounds!".into(),
             )
         })?;
         let proj_ax2_lim = AxLims::finite_from_dvector(&ray_pos_cm.column(1)).ok_or_else(|| {
             OpossumError::Other(
-                "cannot construct vorronoi cells with non-finite axes bounds!".into(),
+                "cannot construct voronoi cells with non-finite axes bounds!".into(),
             )
         })?;
 
@@ -515,7 +525,8 @@ impl Rays {
 
         let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), 0.);
 
-        for idx in 0..self.nr_of_rays(true) {
+        for (idx, ray) in valid_rays.iter().enumerate() {
+            //} in 0..self.nr_of_rays(true) {
             let v_neighbours = v_cells[idx]
                 .points()
                 .iter()
@@ -523,7 +534,7 @@ impl Rays {
                 .collect::<Vec<Point2<f64>>>();
             if v_neighbours.len() >= 3 {
                 let poly_area = calc_closed_poly_area(&v_neighbours)?;
-                fluence_scatter[idx] = self.rays[idx].energy().get::<joule>() / poly_area;
+                fluence_scatter[idx] = ray.energy().get::<joule>() / poly_area;
             } else {
                 warn!(
                     "polygon could not be created. number of neighbors {}",
@@ -548,12 +559,9 @@ impl Rays {
     pub fn calc_fluence_at_position(&self) -> OpmResult<FluenceData> {
         let num_axes_points = 100;
 
-        // get ray positions
-        let rays_pos_vec = self.get_xy_rays_pos(true, &Isometry::identity());
-
         // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
         let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim) =
-            self.calc_ray_fluence_in_voronoi_cells(&rays_pos_vec)?;
+            self.calc_ray_fluence_in_voronoi_cells()?;
 
         //axes definition
         let co_ax1 = linspace(co_ax1_lim.min, co_ax1_lim.max, num_axes_points)?;

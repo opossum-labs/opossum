@@ -2,7 +2,7 @@ use opossum::{
     aperture::{Aperture, RectangleConfig},
     error::OpmResult,
     millimeter,
-    nodes::{BeamSplitter, Dummy, NodeGroup, ParaxialSurface, SpotDiagram},
+    nodes::{BeamSplitter, Dummy, FluenceDetector, NodeGroup, ParaxialSurface, SpotDiagram},
     optical::Optical,
     ray::SplittingConfig,
 };
@@ -25,6 +25,10 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     node.set_input_aperture("in1", &cam_aperture)?;
     let ff_cam = cb.add_node(node)?;
 
+    let mut ff_fluence = FluenceDetector::new("FF fluence");
+    ff_fluence.set_input_aperture("in1", &cam_aperture)?;
+    let ff_fluence_cam = cb.add_node(ff_fluence)?;
+
     cb.connect_nodes(
         bs1,
         "out1_trans1_refl2",
@@ -40,6 +44,7 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
         millimeter!(25.0),
     )?;
     cb.connect_nodes(ff_lens, "rear", ff_cam, "in1", millimeter!(100.0))?;
+    cb.connect_nodes(ff_cam, "out1", ff_fluence_cam, "in1", millimeter!(0.0))?;
 
     // NF path
     let nf_lens1 = cb.add_node(ParaxialSurface::new("NF lens1", millimeter!(125.0))?)?;
@@ -48,6 +53,10 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let mut node = SpotDiagram::new("NF cam");
     node.set_input_aperture("in1", &cam_aperture)?;
     let nf_cam = cb.add_node(node)?;
+
+    let mut nf_fluence = FluenceDetector::new("NF fluence");
+    nf_fluence.set_input_aperture("in1", &cam_aperture)?;
+    let nf_fluence_cam = cb.add_node(nf_fluence)?;
 
     cb.connect_nodes(
         bs1,
@@ -65,6 +74,8 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
         "in1",
         millimeter!(130.0),
     )?;
+
+    cb.connect_nodes(nf_cam, "out1", nf_fluence_cam, "in1", millimeter!(0.0))?;
 
     cb.map_input_port(d1, "front", "input")?;
     Ok(cb)

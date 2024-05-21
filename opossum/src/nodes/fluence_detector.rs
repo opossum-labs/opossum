@@ -122,6 +122,7 @@ impl Optical for FluenceDetector {
             } else {
                 return Err(OpossumError::OpticPort("output aperture not found".into()));
             };
+
             self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(LightResult::from([(
                 outport.into(),

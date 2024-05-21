@@ -2,7 +2,7 @@ use opossum::{
     aperture::{Aperture, RectangleConfig},
     error::OpmResult,
     millimeter,
-    nodes::{BeamSplitter, Dummy, NodeGroup, ParaxialSurface, SpotDiagram},
+    nodes::{BeamSplitter, Dummy, FluenceDetector, NodeGroup, ParaxialSurface, SpotDiagram},
     optical::Optical,
     ray::SplittingConfig,
 };
@@ -21,9 +21,13 @@ pub fn cambox_2w() -> OpmResult<NodeGroup> {
     // FF path
     let bs_ff = cb.add_node(BeamSplitter::new("bs_ff", &SplittingConfig::Ratio(0.04))?)?;
     let ff_lens = cb.add_node(ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
-    let mut node = SpotDiagram::new("FF cam");
+    let mut node = SpotDiagram::new("FF cam cb2");
     node.set_input_aperture("in1", &cam_aperture)?;
     let ff_cam = cb.add_node(node)?;
+
+    let mut ff_fluence = FluenceDetector::new("FF fluence cb2");
+    ff_fluence.set_input_aperture("in1", &cam_aperture)?;
+    let ff_fluence_cam = cb.add_node(ff_fluence)?;
 
     cb.connect_nodes(
         bs1,
@@ -40,14 +44,19 @@ pub fn cambox_2w() -> OpmResult<NodeGroup> {
         millimeter!(25.0),
     )?;
     cb.connect_nodes(ff_lens, "rear", ff_cam, "in1", millimeter!(100.0))?;
+    cb.connect_nodes(ff_cam, "out1", ff_fluence_cam, "in1", millimeter!(0.0))?;
 
     // NF path
     let nf_lens1 = cb.add_node(ParaxialSurface::new("NF lens1", millimeter!(125.0))?)?;
     let nf_lens2 = cb.add_node(ParaxialSurface::new("NF lens2", millimeter!(125.0))?)?;
     let nf_bs = cb.add_node(BeamSplitter::new("nf bs", &SplittingConfig::Ratio(0.5))?)?;
-    let mut node = SpotDiagram::new("NF cam");
+    let mut node = SpotDiagram::new("NF cam cb2");
     node.set_input_aperture("in1", &cam_aperture)?;
     let nf_cam = cb.add_node(node)?;
+
+    let mut nf_fluence = FluenceDetector::new("NF fluence cb2");
+    nf_fluence.set_input_aperture("in1", &cam_aperture)?;
+    let nf_fluence_cam = cb.add_node(nf_fluence)?;
 
     cb.connect_nodes(
         bs1,
@@ -65,6 +74,8 @@ pub fn cambox_2w() -> OpmResult<NodeGroup> {
         "in1",
         millimeter!(130.0),
     )?;
+
+    cb.connect_nodes(nf_cam, "out1", nf_fluence_cam, "in1", millimeter!(0.0))?;
 
     cb.map_input_port(d1, "front", "input")?;
     Ok(cb)

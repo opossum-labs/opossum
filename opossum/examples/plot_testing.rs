@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use nalgebra::{DMatrix, DVector, MatrixXx2};
 use opossum::{
     error::OpmResult,
@@ -9,7 +11,6 @@ use opossum::{
 };
 use plotters::style::RGBAColor;
 use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
-
 fn main() -> OpmResult<()> {
     let rays = Rays::new_uniform_collimated(
         nanometer!(1053.),
@@ -40,7 +41,9 @@ fn main() -> OpmResult<()> {
         None,
     );
     let plt_type = PlotType::Line2D(plt_params);
+    let start = Instant::now();
     let _ = plt_type.plot(&vec![plt_series]);
+    println!("Time elapsed in plotting: {:?}", start.elapsed());
 
     // // rays.set_dist_to_next_surface(millimeter!(10.));
     // // rays.propagate_along_z()?;
