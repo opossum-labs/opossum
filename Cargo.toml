@@ -22,3 +22,8 @@ strip = true
 
 [profile.release]
 # strip = true
+
+# Disable debug symbols an link time optimization due to limitations of the Linux pipeline VM.
+[profile.test]
+debug = 0
+lto = "off"
