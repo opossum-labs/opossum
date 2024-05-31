@@ -201,6 +201,7 @@ impl Optical for WaveFront {
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
+            self.light_data = Some(LightData::Geometric(rays.clone()));
             if let Some(aperture) = self.ports().output_aperture("out1") {
                 rays.apodize(aperture)?;
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -209,7 +210,6 @@ impl Optical for WaveFront {
             } else {
                 return Err(OpossumError::OpticPort("output aperture not found".into()));
             };
-            self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(LightResult::from([(
                 outport.into(),
                 LightData::Geometric(rays),
