@@ -114,6 +114,7 @@ impl Optical for RayPropagationVisualizer {
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
+            self.light_data = Some(LightData::Geometric(rays.clone()));
             if let Some(aperture) = self.ports().output_aperture("out1") {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
@@ -125,7 +126,6 @@ impl Optical for RayPropagationVisualizer {
             } else {
                 return Err(OpossumError::OpticPort("output aperture not found".into()));
             };
-            self.light_data = Some(LightData::Geometric(rays.clone()));
             Ok(LightResult::from([(
                 outport.into(),
                 LightData::Geometric(rays),
