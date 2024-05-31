@@ -216,15 +216,15 @@ impl NodeGroup {
 
     fn input_nodes(&self) -> Vec<NodeIndex> {
         let mut input_nodes: Vec<NodeIndex> = Vec::default();
-        for node_idx in self.g.0.node_indices() {
+        for node_idx in self.g.g.node_indices() {
             let incoming_edges = self
                 .g
-                .0
+                .g
                 .edges_directed(node_idx, Direction::Incoming)
                 .count();
             let input_ports = self
                 .g
-                .0
+                .g
                 .node_weight(node_idx)
                 .unwrap()
                 .optical_ref
@@ -240,15 +240,15 @@ impl NodeGroup {
     }
     fn output_nodes(&self) -> Vec<NodeIndex> {
         let mut output_nodes: Vec<NodeIndex> = Vec::default();
-        for node_idx in self.g.0.node_indices() {
+        for node_idx in self.g.g.node_indices() {
             let outgoing_edges = self
                 .g
-                .0
+                .g
                 .edges_directed(node_idx, Direction::Outgoing)
                 .count();
             let output_ports = self
                 .g
-                .0
+                .g
                 .node_weight(node_idx)
                 .unwrap()
                 .optical_ref
@@ -286,7 +286,7 @@ impl NodeGroup {
         }
         let node = self
             .g
-            .0
+            .g
             .node_weight(input_node)
             .ok_or_else(|| OpossumError::OpticGroup("internal node index not found".into()))?;
         if !node
@@ -307,7 +307,7 @@ impl NodeGroup {
         }
         let incoming_edge_connected = self
             .g
-            .0
+            .g
             .edges_directed(input_node, Direction::Incoming)
             .map(|e| e.weight().target_port())
             .any(|p| p == internal_name);
@@ -352,7 +352,7 @@ impl NodeGroup {
         }
         let node = self
             .g
-            .0
+            .g
             .node_weight(output_node)
             .ok_or_else(|| OpossumError::OpticGroup("internal node index not found".into()))?;
         if !node
@@ -374,7 +374,7 @@ impl NodeGroup {
         }
         let outgoing_edge_connected = self
             .g
-            .0
+            .g
             .edges_directed(output_node, Direction::Outgoing)
             .map(|e| e.weight().src_port())
             .any(|p| p == internal_name);
@@ -392,7 +392,7 @@ impl NodeGroup {
         Ok(())
     }
     fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
-        let edges = self.g.0.edges_directed(idx, Direction::Incoming);
+        let edges = self.g.g.edges_directed(idx, Direction::Incoming);
         edges
             .into_iter()
             .filter(|e| e.weight().data().is_some())
@@ -405,14 +405,14 @@ impl NodeGroup {
             .collect::<LightResult>()
     }
     fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: Option<LightData>) {
-        let edges = self.g.0.edges_directed(idx, Direction::Outgoing);
+        let edges = self.g.g.edges_directed(idx, Direction::Outgoing);
         let edge_ref = edges
             .into_iter()
             .filter(|idx| idx.weight().src_port() == port)
             .last();
         if let Some(edge_ref) = edge_ref {
             let edge_idx = edge_ref.id();
-            let light = self.g.0.edge_weight_mut(edge_idx);
+            let light = self.g.g.edge_weight_mut(edge_idx);
             if let Some(light) = light {
                 light.set_data(data);
             }
@@ -439,7 +439,7 @@ impl NodeGroup {
         }
     }
     fn is_stale_node(&self, idx: NodeIndex) -> bool {
-        let neighbors = self.g.0.neighbors_undirected(idx);
+        let neighbors = self.g.g.neighbors_undirected(idx);
         neighbors.count() == 0 && !self.input_port_map().iter().any(|p| p.1 .0 == idx)
     }
     fn analyze_group(
@@ -451,14 +451,14 @@ impl NodeGroup {
         if is_inverted {
             self.invert_graph()?;
         }
-        let g_clone = self.g.0.clone();
+        let g_clone = self.g.g.clone();
         let group_name = self.name();
         if !&self.g.is_single_tree() {
             warn!(
                 "Group {group_name} contains unconnected sub-trees. Analysis might not be complete."
             );
         }
-        let sorted = toposort(&self.g.0, None)
+        let sorted = toposort(&self.g.g, None)
             .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
         let mut light_result = LightResult::default();
         for idx in sorted {
@@ -587,7 +587,7 @@ impl NodeGroup {
     ) -> OpmResult<String> {
         let node = self
             .g
-            .0
+            .g
             .node_weight(end_node_idx)
             .unwrap()
             .optical_ref
@@ -632,8 +632,8 @@ impl NodeGroup {
             "  subgraph {parent_identifier} {{\n\tlabel=\"{name}{inv_string}\"\n\tfontsize=8\n\tcluster=true\n\t"
         );
 
-        for node_idx in self.g.0.node_indices() {
-            let node = self.g.0.node_weight(node_idx).unwrap();
+        for node_idx in self.g.g.node_indices() {
+            let node = self.g.g.node_weight(node_idx).unwrap();
             dot_string += &node.optical_ref.borrow().to_dot(
                 &format!("{}", node_idx.index()),
                 &node.optical_ref.borrow().name(),
@@ -643,9 +643,9 @@ impl NodeGroup {
                 rankdir,
             )?;
         }
-        for edge in self.g.0.edge_indices() {
-            let light: &Light = self.g.0.edge_weight(edge).unwrap();
-            let end_nodes = self.g.0.edge_endpoints(edge).unwrap();
+        for edge in self.g.g.edge_indices() {
+            let light: &Light = self.g.g.edge_weight(edge).unwrap();
+            let end_nodes = self.g.g.edge_endpoints(edge).unwrap();
 
             let src_edge_str = self.create_node_edge_str(
                 end_nodes.0,
@@ -695,7 +695,7 @@ impl NodeGroup {
         dot_str
     }
     fn invert_graph(&mut self) -> OpmResult<()> {
-        for node in self.g.0.node_weights_mut() {
+        for node in self.g.g.node_weights_mut() {
             node.optical_ref
                 .borrow_mut()
                 .set_property("inverted", true.into())
@@ -705,10 +705,10 @@ impl NodeGroup {
                     )
                 })?;
         }
-        for edge in self.g.0.edge_weights_mut() {
+        for edge in self.g.g.edge_weights_mut() {
             edge.inverse();
         }
-        self.g.0.reverse();
+        self.g.g.reverse();
         Ok(())
     }
 }
@@ -751,8 +751,8 @@ impl Optical for NodeGroup {
     }
     fn report(&self) -> Option<NodeReport> {
         let mut group_props = Properties::default();
-        for node_idx in self.g.0.node_indices() {
-            let node = self.g.0.node_weight(node_idx).unwrap().optical_ref.borrow();
+        for node_idx in self.g.g.node_indices() {
+            let node = self.g.g.node_weight(node_idx).unwrap().optical_ref.borrow();
             if let Some(node_report) = node.report() {
                 if !(group_props.contains(&node.name())) {
                     group_props
@@ -773,7 +773,7 @@ impl Optical for NodeGroup {
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<image::RgbImage>> {
         let detector_nodes = self
             .g
-            .0
+            .g
             .node_weights()
             .filter(|node| node.optical_ref.borrow().is_detector());
         for node in detector_nodes {
@@ -790,7 +790,7 @@ impl Optical for NodeGroup {
     fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
         self.node_attr.set_isometry(isometry.clone());
         for portmap in self.input_port_map() {
-            if let Some(node) = self.g.0.node_weight(portmap.1 .0) {
+            if let Some(node) = self.g.g.node_weight(portmap.1 .0) {
                 node.optical_ref.borrow_mut().set_isometry(isometry.clone());
             }
         }
@@ -802,7 +802,7 @@ impl Optical for NodeGroup {
                 None
             },
             |output_port| {
-                self.g.0.node_weight(output_port.0).map_or_else(
+                self.g.g.node_weight(output_port.0).map_or_else(
                     || {
                         warn!("node not found");
                         None
@@ -870,8 +870,8 @@ mod test {
     #[test]
     fn default() {
         let node = NodeGroup::default();
-        assert_eq!(node.g.0.node_count(), 0);
-        assert_eq!(node.g.0.edge_count(), 0);
+        assert_eq!(node.g.g.node_count(), 0);
+        assert_eq!(node.g.g.edge_count(), 0);
         assert!(node.input_port_map().is_empty());
         assert!(node.output_port_map().is_empty());
         assert_eq!(node.name(), "group");
@@ -896,7 +896,7 @@ mod test {
     fn add_node() {
         let mut og = NodeGroup::default();
         og.add_node(Dummy::new("n1")).unwrap();
-        assert_eq!(og.g.0.node_count(), 1);
+        assert_eq!(og.g.g.node_count(), 1);
     }
     #[test]
     fn add_node_inverted() {
@@ -917,25 +917,25 @@ mod test {
         assert!(og
             .connect_nodes(sn1_i, "wrong", sn2_i, "front", Length::zero())
             .is_err());
-        assert_eq!(og.g.0.edge_count(), 0);
+        assert_eq!(og.g.g.edge_count(), 0);
         assert!(og
             .connect_nodes(sn1_i, "rear", sn2_i, "wrong", Length::zero())
             .is_err());
-        assert_eq!(og.g.0.edge_count(), 0);
+        assert_eq!(og.g.g.edge_count(), 0);
         // wrong node index
         assert!(og
             .connect_nodes(5.into(), "rear", sn2_i, "front", Length::zero())
             .is_err());
-        assert_eq!(og.g.0.edge_count(), 0);
+        assert_eq!(og.g.g.edge_count(), 0);
         assert!(og
             .connect_nodes(sn1_i, "rear", 5.into(), "front", Length::zero())
             .is_err());
-        assert_eq!(og.g.0.edge_count(), 0);
+        assert_eq!(og.g.g.edge_count(), 0);
         // correct usage
         assert!(og
             .connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
             .is_ok());
-        assert_eq!(og.g.0.edge_count(), 1);
+        assert_eq!(og.g.g.edge_count(), 1);
     }
     #[test]
     fn connect_nodes_inverted() {

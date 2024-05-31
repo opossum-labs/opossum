@@ -8,6 +8,7 @@ use crate::{
     nodes::NodeGroup,
     optic_graph::OpticGraph,
     optic_ref::OpticRef,
+    optic_senery_rsc::SceneryResources,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     reporter::AnalysisReport,
@@ -22,9 +23,11 @@ use serde::{
     Deserialize, Serialize,
 };
 use std::{
+    cell::RefCell,
     fs::File,
     io::{Cursor, Write},
     path::Path,
+    rc::Rc,
 };
 use tempfile::NamedTempFile;
 use uom::si::f64::Length;
@@ -56,21 +59,18 @@ use uom::si::f64::Length;
 pub struct OpticScenery {
     g: OpticGraph,
     props: Properties,
+    global_conf: Rc<RefCell<SceneryResources>>,
 }
-
-fn create_default_props() -> Properties {
-    let mut props = Properties::default();
-    props
-        .create("description", "title of the scenery", None, "".into())
-        .unwrap();
-    props
-}
-
 impl Default for OpticScenery {
     fn default() -> Self {
+        let mut props = Properties::default();
+        props
+            .create("description", "title of the scenery", None, "".into())
+            .unwrap();
         Self {
             g: OpticGraph::default(),
-            props: create_default_props(),
+            props,
+            global_conf: Rc::new(RefCell::new(SceneryResources::default())),
         }
     }
 }
@@ -113,14 +113,14 @@ impl OpticScenery {
     pub fn node(&self, node: NodeIndex) -> OpmResult<OpticRef> {
         let node = self
             .g
-            .0
+            .g
             .node_weight(node)
             .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
         Ok(node.clone())
     }
     #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
-        self.g.0.node_weights().collect()
+        self.g.g.node_weights().collect()
     }
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
     ///
@@ -132,10 +132,10 @@ impl OpticScenery {
 
         let mut dot_string = self.add_dot_header(rankdir);
 
-        for node_idx in self.g.0.node_indices() {
+        for node_idx in self.g.g.node_indices() {
             let node = self
                 .g
-                .0
+                .g
                 .node_weight(node_idx)
                 .ok_or_else(|| OpossumError::Other("could not get node_weigth".into()))?;
             let node_name = node.optical_ref.borrow().name();
@@ -150,15 +150,15 @@ impl OpticScenery {
                 rankdir,
             )?;
         }
-        for edge in self.g.0.edge_indices() {
+        for edge in self.g.g.edge_indices() {
             let light: &Light = self
                 .g
-                .0
+                .g
                 .edge_weight(edge)
                 .ok_or_else(|| OpossumError::Other("could not get node_weigth".into()))?;
             let end_nodes = self
                 .g
-                .0
+                .g
                 .edge_endpoints(edge)
                 .ok_or_else(|| OpossumError::Other("could not get edge_endpoints".into()))?;
 
@@ -234,7 +234,7 @@ impl OpticScenery {
         light_port: &str,
         mut parent_identifier: String,
     ) -> OpmResult<String> {
-        let node = self.g.0.node_weight(end_node).unwrap().optical_ref.borrow();
+        let node = self.g.g.node_weight(end_node).unwrap().optical_ref.borrow();
         parent_identifier = if parent_identifier.is_empty() {
             format!("i{}", end_node.index())
         } else {
@@ -260,17 +260,17 @@ impl OpticScenery {
         if !is_single_tree {
             warn!("Scenery contains unconnected sub-trees. Analysis might not be complete.");
         }
-        let sorted = toposort(&self.g.0, None)
+        let sorted = toposort(&self.g.g, None)
             .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
         for idx in sorted {
             let node = self
                 .g
-                .0
+                .g
                 .node_weight(idx)
                 .ok_or_else(|| OpossumError::Analysis("getting node_weight failed".into()))?;
             let node_name = node.optical_ref.borrow().name();
 
-            let neighbors = self.g.0.neighbors_undirected(idx);
+            let neighbors = self.g.g.neighbors_undirected(idx);
             if neighbors.count() == 0 {
                 warn!("stale (completely unconnected) node {node_name} found. Skipping.");
             } else {
@@ -333,7 +333,7 @@ impl OpticScenery {
         }
     }
     fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
-        let edges = self.g.0.edges_directed(idx, petgraph::Direction::Incoming);
+        let edges = self.g.g.edges_directed(idx, petgraph::Direction::Incoming);
         edges
             .into_iter()
             .filter(|e| e.weight().data().is_some())
@@ -346,14 +346,14 @@ impl OpticScenery {
             .collect::<LightResult>()
     }
     fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: LightData) {
-        let edges = self.g.0.edges_directed(idx, petgraph::Direction::Outgoing);
+        let edges = self.g.g.edges_directed(idx, petgraph::Direction::Outgoing);
         let edge_ref = edges
             .into_iter()
             .filter(|idx| idx.weight().src_port() == port)
             .last();
         if let Some(edge_ref) = edge_ref {
             let edge_idx = edge_ref.id();
-            let light = self.g.0.edge_weight_mut(edge_idx);
+            let light = self.g.g.edge_weight_mut(edge_idx);
             if let Some(light) = light {
                 light.set_data(Some(data));
             }
@@ -372,7 +372,7 @@ impl OpticScenery {
         analysis_report.add_scenery(self);
         let detector_nodes = self
             .g
-            .0
+            .g
             .node_weights()
             .filter(|node| node.optical_ref.borrow().is_detector());
         for node in detector_nodes {
@@ -410,6 +410,14 @@ impl OpticScenery {
         })?;
         Ok(())
     }
+    #[must_use]
+    pub fn global_conf(&self) -> &RefCell<SceneryResources> {
+        &self.global_conf
+    }
+    pub fn set_global_conf(&mut self, rsrc: SceneryResources) {
+        self.global_conf = Rc::new(RefCell::new(rsrc));
+        self.g.update_global_config(&Some(self.global_conf.clone()));
+    }
 }
 
 impl Serialize for OpticScenery {
@@ -417,14 +425,17 @@ impl Serialize for OpticScenery {
     where
         S: serde::Serializer,
     {
-        let mut scene = serializer.serialize_struct("scenery", 3)?;
+        let mut scene = serializer.serialize_struct("scenery", 4)?;
         scene.serialize_field("opm version", &env!("OPM_FILE_VERSION"))?;
         scene.serialize_field("graph", &self.g)?;
         scene.serialize_field("properties", &self.props)?;
+        let global_conf = self.global_conf.borrow().to_owned();
+        scene.serialize_field("global", &global_conf)?;
         scene.end()
     }
 }
 impl<'de> Deserialize<'de> for OpticScenery {
+    #[allow(clippy::too_many_lines)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -433,8 +444,9 @@ impl<'de> Deserialize<'de> for OpticScenery {
             OpmVersion,
             Graph,
             Properties,
+            Global,
         }
-        const FIELDS: &[&str] = &["opm version", "graph", "properties"];
+        const FIELDS: &[&str] = &["opm version", "graph", "properties", "global"];
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -450,7 +462,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
                         &self,
                         formatter: &mut std::fmt::Formatter<'_>,
                     ) -> std::fmt::Result {
-                        formatter.write_str("`opm version`, `graph`, or `properties`")
+                        formatter.write_str("`opm version`, `graph`, `properties`, or `global`")
                     }
                     fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
                     where
@@ -460,6 +472,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
                             "opm version" => Ok(Field::OpmVersion),
                             "graph" => Ok(Field::Graph),
                             "properties" => Ok(Field::Properties),
+                            "global" => Ok(Field::Global),
                             _ => Err(de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -483,6 +496,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
                 let mut opm_version: Option<String> = None;
                 let mut graph: Option<OpticGraph> = None;
                 let mut properties: Option<Properties> = None;
+                let mut global_conf: Option<SceneryResources> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::OpmVersion => {
@@ -503,6 +517,12 @@ impl<'de> Deserialize<'de> for OpticScenery {
                             }
                             properties = Some(map.next_value()?);
                         }
+                        Field::Global => {
+                            if global_conf.is_some() {
+                                return Err(de::Error::duplicate_field("global"));
+                            }
+                            global_conf = Some(map.next_value()?);
+                        }
                     }
                 }
                 if let Some(opm_version) = opm_version {
@@ -515,13 +535,19 @@ impl<'de> Deserialize<'de> for OpticScenery {
                     }
                 }
                 let graph = graph.ok_or_else(|| de::Error::missing_field("graph"))?;
-                let properties =
-                    properties.ok_or_else(|| de::Error::missing_field("properties"))?;
+                let properties = properties.unwrap_or_default();
+                let global_conf = global_conf.unwrap_or_else(|| {
+                    warn!("no global resources found, using default");
+                    SceneryResources::default()
+                });
 
-                Ok(OpticScenery {
+                let mut s = OpticScenery {
                     g: graph,
                     props: properties,
-                })
+                    global_conf: Rc::new(RefCell::new(SceneryResources::default())),
+                };
+                s.set_global_conf(global_conf);
+                Ok(s)
             }
         }
         deserializer.deserialize_struct("OpticScenery", FIELDS, OpticSceneryVisitor)
@@ -558,8 +584,8 @@ mod test {
     fn new() {
         let scenery = OpticScenery::new();
         assert_eq!(scenery.description(), "");
-        assert_eq!(scenery.g.0.edge_count(), 0);
-        assert_eq!(scenery.g.0.node_count(), 0);
+        assert_eq!(scenery.g.g.edge_count(), 0);
+        assert_eq!(scenery.g.g.node_count(), 0);
     }
     #[test]
     fn description() {

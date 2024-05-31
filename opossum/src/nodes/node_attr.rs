@@ -1,11 +1,14 @@
 //! Common optcial node attributes.
 //!
 //! This module handles common attributes of optical nodes such as [`Properties`] or geometric data (isometries, etc.)
+use std::{cell::RefCell, rc::Rc};
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,
+    optic_senery_rsc::SceneryResources,
     properties::{PropCondition, Properties, Proptype},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
@@ -15,6 +18,8 @@ use crate::{
 pub struct NodeAttr {
     node_type: String,
     props: Properties,
+    #[serde(skip)]
+    global_conf: Option<Rc<RefCell<SceneryResources>>>,
     isometry: Option<Isometry>,
 }
 impl NodeAttr {
@@ -62,6 +67,7 @@ impl NodeAttr {
         Self {
             node_type: node_type.into(),
             props: properties,
+            global_conf: None,
             isometry: None,
         }
     }
@@ -168,5 +174,14 @@ impl NodeAttr {
     /// This function could theoretically panic if the property `alignment` is not defined.
     pub fn set_alignment(&mut self, isometry: Isometry) {
         self.props.set("alignment", Some(isometry).into()).unwrap();
+    }
+    /// Returns a reference to the global config (if any) of this [`NodeAttr`].
+    #[must_use]
+    pub const fn global_conf(&self) -> &Option<Rc<RefCell<SceneryResources>>> {
+        &self.global_conf
+    }
+    /// Sets the global conf of this [`NodeAttr`].
+    pub fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
+        self.global_conf = global_conf;
     }
 }

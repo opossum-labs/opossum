@@ -10,7 +10,7 @@ use crate::{
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
     ray::Ray,
-    refractive_index::{refr_index_vaccuum, RefrIndexConst, RefractiveIndex, RefractiveIndexType},
+    refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::Plane,
     utils::{geom_transformation::Isometry, EnumProxy},
 };
@@ -167,7 +167,7 @@ impl Optical for Wedge {
                         let isometry = iso.append(&thickness_iso).append(&wedge_iso);
                         rays.set_refractive_index(&index_model.value)?;
                         let plane = Plane::new(&isometry);
-                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                        rays.refract_on_surface(&plane, &self.ambient_idx())?;
                     } else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
@@ -236,7 +236,8 @@ impl Optical for Wedge {
         .unwrap();
         let isometry = alignment_iso.append(&thickness_iso).append(&wedge_iso);
         let back_plane = Plane::new(&isometry);
-        let n2 = refr_index_vaccuum()
+        let n2 = self
+            .ambient_idx()
             .get_refractive_index(ray.wavelength())
             .unwrap();
         ray.refract_on_surface(&back_plane, n2).unwrap();
