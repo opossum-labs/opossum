@@ -14,12 +14,16 @@ use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
 use crate::nodes::{NodeAttr, NodeGroup, NodeReference};
 use crate::optic_ports::OpticPorts;
+use crate::optic_senery_rsc::SceneryResources;
 use crate::properties::{Properties, Proptype};
+use crate::refractive_index::RefractiveIndexType;
 use crate::reporter::NodeReport;
 use crate::utils::geom_transformation::Isometry;
 use core::fmt::Debug;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
+use std::rc::Rc;
 
 /// A [`LightResult`] represents the [`LightData`], which arrives at a given (`OpticPort`)[`OpticPorts`] of an optical node.
 ///
@@ -258,6 +262,31 @@ pub trait Optical: Dottable {
             warn!("Node has no isometry defined. Mesh will be located at origin.");
             mesh
         }
+    }
+    /// Get a refrecne to a global configuration (if any).
+    fn global_conf(&self) -> &Option<Rc<RefCell<SceneryResources>>> {
+        self.node_attr().global_conf()
+    }
+    /// Set the global configuration for this [`Optical`].
+    /// **Note**: This function should normally only be used by [`OpticRef`](crate::optic_ref::OpticRef).
+    fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
+        let node_attr = self.node_attr_mut();
+        node_attr.set_global_conf(global_conf);
+    }
+    /// Get the ambient refractive index.
+    ///
+    /// This value is determined by the global configuration. A warning is issued and a default value is returned
+    /// if the global config could not be found.
+    fn ambient_idx(&self) -> RefractiveIndexType {
+        self.global_conf().as_ref().map_or_else(
+            || {
+                warn!(
+                    "could not get ambient medium since global config not found ... using default"
+                );
+                SceneryResources::default().ambient_refr_index
+            },
+            |conf| conf.borrow().ambient_refr_index.clone(),
+        )
     }
 }
 /// Helper trait for optical elements that can be locally aligned

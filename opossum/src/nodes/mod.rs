@@ -61,64 +61,90 @@ pub use wedge::Wedge;
 /// This function will return an [`OpossumError`] if there is no node with the given type.
 pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRef> {
     match node_type {
-        "dummy" => Ok(OpticRef::new(Rc::new(RefCell::new(Dummy::default())), uuid)),
+        "dummy" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(Dummy::default())),
+            uuid,
+            None,
+        )),
         "detector" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Detector::default())),
             uuid,
+            None,
         )),
         "beam splitter" => Ok(OpticRef::new(
             Rc::new(RefCell::new(BeamSplitter::default())),
             uuid,
+            None,
         )),
         "energy meter" => Ok(OpticRef::new(
             Rc::new(RefCell::new(EnergyMeter::default())),
             uuid,
+            None,
         )),
         "group" => Ok(OpticRef::new(
             Rc::new(RefCell::new(NodeGroup::default())),
             uuid,
+            None,
         )),
         "ideal filter" => Ok(OpticRef::new(
             Rc::new(RefCell::new(IdealFilter::default())),
             uuid,
+            None,
         )),
         "reference" => Ok(OpticRef::new(
             Rc::new(RefCell::new(NodeReference::default())),
             uuid,
+            None,
         )),
-        "lens" => Ok(OpticRef::new(Rc::new(RefCell::new(Lens::default())), uuid)),
+        "lens" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(Lens::default())),
+            uuid,
+            None,
+        )),
         "source" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Source::default())),
             uuid,
+            None,
         )),
         "spectrometer" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Spectrometer::default())),
             uuid,
+            None,
         )),
         "spot diagram" => Ok(OpticRef::new(
             Rc::new(RefCell::new(SpotDiagram::default())),
             uuid,
+            None,
         )),
         "wavefront monitor" => Ok(OpticRef::new(
             Rc::new(RefCell::new(WaveFront::default())),
             uuid,
+            None,
         )),
         "paraxial surface" => Ok(OpticRef::new(
             Rc::new(RefCell::new(ParaxialSurface::default())),
             uuid,
+            None,
         )),
         "ray propagation" => Ok(OpticRef::new(
             Rc::new(RefCell::new(RayPropagationVisualizer::default())),
             uuid,
+            None,
         )),
         "fluence detector" => Ok(OpticRef::new(
             Rc::new(RefCell::new(FluenceDetector::default())),
             uuid,
+            None,
         )),
-        "wedge" => Ok(OpticRef::new(Rc::new(RefCell::new(Wedge::default())), uuid)),
+        "wedge" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(Wedge::default())),
+            uuid,
+            None,
+        )),
         "mirror" => Ok(OpticRef::new(
             Rc::new(RefCell::new(ThinMirror::default())),
             uuid,
+            None,
         )),
         _ => Err(OpossumError::Other(format!(
             "cannot create node type <{node_type}>"

@@ -807,9 +807,9 @@ pub enum PlotData {
     /// [`PlotData`] for [`PlotType::ColorMesh`]
     /// Data to create a 2d colormesh plot. Vector with N entries for x, Vector with M entries for y and a Matrix with nxm entries for the colordata
     ColorMesh {
-        /// xdata: Vector with N entries
+        /// xdata: Vector with `N` entries
         x_dat_n: DVector<f64>,
-        /// ydata: Vector with M entries
+        /// ydata: Vector with `M` entries
         y_dat_m: DVector<f64>,
         /// zdata: Matrix with nxm entries for the color
         z_dat_nxm: DMatrix<f64>,

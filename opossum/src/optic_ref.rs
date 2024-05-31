@@ -8,7 +8,10 @@ use serde::{
 use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
 
-use crate::{nodes::create_node_ref, optical::Optical, properties::Properties};
+use crate::{
+    nodes::create_node_ref, optic_senery_rsc::SceneryResources, optical::Optical,
+    properties::Properties,
+};
 
 #[derive(Debug, Clone)]
 /// Structure for storing an optical node.
@@ -26,7 +29,12 @@ impl OpticRef {
     /// Creates a new [`OpticRef`].
     ///
     /// You can either assign a given [`Uuid`] using `Some(uuid!(...))` or provide `None`, where a new unique id is generated.
-    pub fn new(node: Rc<RefCell<dyn Optical>>, uuid: Option<Uuid>) -> Self {
+    pub fn new(
+        node: Rc<RefCell<dyn Optical>>,
+        uuid: Option<Uuid>,
+        global_conf: Option<Rc<RefCell<SceneryResources>>>,
+    ) -> Self {
+        node.borrow_mut().set_global_conf(global_conf);
         Self {
             optical_ref: node,
             uuid: uuid.unwrap_or_else(Uuid::new_v4),
@@ -36,6 +44,11 @@ impl OpticRef {
     #[must_use]
     pub const fn uuid(&self) -> Uuid {
         self.uuid
+    }
+    /// Update the reference to the global configuration.
+    /// **Note**: This functions is normally only called from [`OpticGraph`](crate::optic_graph::OpticGraph).
+    pub fn update_global_config(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
+        self.optical_ref.borrow_mut().set_global_conf(global_conf);
     }
 }
 impl Serialize for OpticRef {
@@ -184,13 +197,13 @@ mod test {
     #[test]
     fn new() {
         let uuid = Uuid::new_v4();
-        let optic_ref = OpticRef::new(Rc::new(RefCell::new(Dummy::default())), Some(uuid));
+        let optic_ref = OpticRef::new(Rc::new(RefCell::new(Dummy::default())), Some(uuid), None);
         assert_eq!(optic_ref.uuid, uuid);
     }
     #[test]
     fn uuid() {
         let uuid = Uuid::new_v4();
-        let optic_ref = OpticRef::new(Rc::new(RefCell::new(Dummy::default())), Some(uuid));
+        let optic_ref = OpticRef::new(Rc::new(RefCell::new(Dummy::default())), Some(uuid), None);
         assert_eq!(optic_ref.uuid(), uuid);
     }
     #[test]
@@ -198,6 +211,7 @@ mod test {
         let optic_ref = OpticRef::new(
             Rc::new(RefCell::new(Dummy::default())),
             Some(uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb")),
+            None,
         );
         let serialized = serde_yaml::to_string(&optic_ref);
         assert!(serialized.is_ok());
@@ -226,7 +240,7 @@ mod test {
                 "{:?}",
                 OpticRef::new(
                     Rc::new(RefCell::new(Dummy::default())),
-                    Some(uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb"))
+                    Some(uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb")), None
                 )
             ),
             "OpticRef { optical_ref: RefCell { value: dummy (dummy) }, uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb }"

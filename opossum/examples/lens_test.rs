@@ -4,14 +4,17 @@ use opossum::{
     joule, millimeter,
     nodes::{collimated_line_ray_source, Lens, RayPropagationVisualizer, Wedge},
     optical::Optical,
-    refractive_index::RefrIndexConst,
+    refractive_index::{RefrIndexConst, RefractiveIndex},
     utils::geom_transformation::Isometry,
-    OpticScenery,
+    OpticScenery, SceneryResources,
 };
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
+    let mut global_config = SceneryResources::default();
+    global_config.ambient_refr_index = RefrIndexConst::new(1.2)?.to_enum();
+    scenery.set_global_conf(global_config);
     scenery.set_description("Lens Ray-trace test".into())?;
 
     let src = scenery.add_node(collimated_line_ray_source(

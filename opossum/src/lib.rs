@@ -33,6 +33,7 @@ mod optic_graph;
 pub mod optic_ports;
 pub mod optic_ref;
 mod optic_scenery;
+mod optic_senery_rsc;
 pub mod optical;
 pub mod plottable;
 pub mod position_distributions;
@@ -48,6 +49,8 @@ pub mod surface;
 pub mod utils;
 
 pub use optic_scenery::OpticScenery;
+pub use optic_senery_rsc::SceneryResources;
+
 #[cfg(feature = "bevy")]
 pub use scenery_bevy_data::SceneryBevyData;
 

@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 //! Lens with spherical or flat surfaces
+
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -207,7 +208,7 @@ impl Optical for Lens {
                         rays.set_refractive_index(&index_model.value)?;
                         if (*rear_roc).is_infinite() {
                             let plane = Plane::new(&isometry);
-                            rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                            rays.refract_on_surface(&plane, &self.ambient_idx())?;
                         } else {
                             rays.refract_on_surface(
                                 &Sphere::new(*rear_roc, &isometry)?,
@@ -273,7 +274,8 @@ impl Optical for Lens {
         };
         let thickness_iso = Isometry::new_along_z(*center_thickness).unwrap();
         let back_plane = Plane::new(&alignment_iso.append(&thickness_iso));
-        let n2 = refr_index_vaccuum()
+        let n2 = self
+            .ambient_idx()
             .get_refractive_index(ray.wavelength())
             .unwrap();
         ray.refract_on_surface(&back_plane, n2).unwrap();
