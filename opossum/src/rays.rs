@@ -662,9 +662,7 @@ impl Rays {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength())?;
                 if let Some(reflected) = ray.refract_on_surface(surface, n2)? {
-                    let mut reflected_ray = ray.clone();
-                    reflected_ray.set_direction(reflected)?;
-                    reflected_rays.add_ray(reflected_ray);
+                    reflected_rays.add_ray(reflected);
                 } else {
                     rays_missed = true;
                 };
@@ -672,7 +670,7 @@ impl Rays {
             }
         }
         if rays_missed {
-            warn!("rays missed a surface");
+            warn!("rays totally reflected or missed a surface");
         }
         if !valid_rays_found {
             warn!("ray bundle contains no valid rays - not propagating");
@@ -800,7 +798,7 @@ impl Rays {
     /// Split a ray bundle
     ///
     /// This function splits a ray bundle determined by the given [`SplittingConfig`]. See [`split`](Ray::split) function for details.
-    /// **Note**: Only `valid`[`Ray`]s in the bunlde will be affected.
+    /// **Note**: Only `valid`[`Ray`]s in the bundle will be affected.
     /// # Errors
     ///
     /// This function will return an error if the underlying split function for a single ray returns an error.
@@ -819,18 +817,11 @@ impl Rays {
     /// Merge two ray bundles.
     ///
     /// This function simply adds the given rays to the existing ray bundle.
-    /// **Note**: The temporarily introduced "absolute z position" is taken from the ray bundle with the maximum position....We have
-    /// to work on that...
     pub fn merge(&mut self, rays: &Self) {
-        // let max_z_position = self
-        //     .absolute_z_of_last_surface()
-        //     .max(rays.absolute_z_of_last_surface());
         for ray in &rays.rays {
             self.add_ray(ray.clone());
         }
-        //self.z_position = max_z_position;
     }
-
     /// Split an existing ray bundle into multiple ray bundles corresponding to their wavelength
     /// # Attributes
     /// - `wavelength_bin_size`: size of the wavelength binning
@@ -941,27 +932,26 @@ impl Rays {
             rays_pos_history: ray_pos_hists,
         })
     }
-    // Returns the dist to next surface of this [`Rays`].
-    //
-    // **Note**: This function is a hack and will be removed in later versions.
-    // #[must_use]
-    // pub fn dist_to_next_surface(&self) -> Length {
-    //     self.dist_to_next_surface
-    // }
-    // Sets the dist to next surface of this [`Rays`].
-    //
-    // **Note**: This function is a hack and will be removed in later versions.
-    // pub fn set_dist_to_next_surface(&mut self, dist_to_next_surface: Length) {
-    //     self.dist_to_next_surface = dist_to_next_surface;
-    // }
-    // fn set_dist_zero(&mut self) {
-    //     self.dist_to_next_surface = Length::zero();
-    // }
-    // Returns the absolute z of last surface of this [`Rays`].
-    // #[must_use]
-    // pub fn absolute_z_of_last_surface(&self) -> Length {
-    //     self.z_position
-    // }
+    /// Invalide all rays that have a number of refractions higher or equal than the given upper limit.
+    pub fn filter_by_nr_of_refractions(&mut self, max_refractions: usize) {
+        for ray in self
+            .rays
+            .iter_mut()
+            .filter(|r| r.number_of_refractions() >= max_refractions)
+        {
+            ray.set_invalid();
+        }
+    }
+    /// Invalide all rays that have a number of bounces (reflections) higher or equal than the given upper limit.
+    pub fn filter_by_nr_of_bounces(&mut self, max_bounces: usize) {
+        for ray in self
+            .rays
+            .iter_mut()
+            .filter(|r| r.number_of_bounces() >= max_bounces)
+        {
+            ray.set_invalid();
+        }
+    }
 }
 
 impl Display for Rays {
@@ -1013,7 +1003,8 @@ mod test {
         position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         radian,
         ray::SplittingConfig,
-        refractive_index::RefrIndexConst,
+        refractive_index::{refr_index_vaccuum, RefrIndexConst},
+        surface::Plane,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use itertools::izip;
@@ -1030,6 +1021,23 @@ mod test {
             }
         }
         Ok(())
+    }
+    #[test]
+    fn test_default() {
+        assert_eq!(Rays::default().nr_of_rays(false), 0);
+    }
+    #[test]
+    fn display() {
+        let mut rays = Rays::default();
+        rays.add_ray(
+            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
+                .unwrap(),
+        );
+        rays.add_ray(
+            Ray::new_collimated(millimeter!(0.0, 1.0, 0.0), nanometer!(1001.0), joule!(1.0))
+                .unwrap(),
+        );
+        assert_eq!(format!("{}",rays),"pos: (0 m, 0 m, 0 m), dir: (0, 0, 1), energy: 1.000000 J, wavelength: 1000.0000 nm, valid: true\npos: (0 m, 0.001 m, 0 m), dir: (0, 0, 1), energy: 1.000000 J, wavelength: 1001.0000 nm, valid: true\n# of rays: 2");
     }
     #[test]
     fn split_ray_bundle_by_wavelength_test() {
@@ -1501,6 +1509,44 @@ mod test {
         assert_abs_diff_eq!(rays.rays[1].direction().x, new_dir.x);
         assert_abs_diff_eq!(rays.rays[1].direction().y, new_dir.y);
         assert_abs_diff_eq!(rays.rays[1].direction().z, new_dir.z);
+    }
+    #[test]
+    fn refract_on_surface_empty() {
+        let mut rays = Rays::default();
+        testing_logger::setup();
+        let reflected = rays
+            .refract_on_surface(&Plane::new(&Isometry::identity()), &refr_index_vaccuum())
+            .unwrap();
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "ray bundle contains no valid rays - not propagating"
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
+        assert_eq!(reflected.nr_of_rays(false), 0);
+    }
+    #[test]
+    fn refract_on_surface_missed() {
+        let mut rays = Rays::default();
+        rays.add_ray(
+            Ray::new_collimated(millimeter!(0.0, 0.0, 1.0), nanometer!(1000.0), joule!(1.0))
+                .unwrap(),
+        );
+        testing_logger::setup();
+        let reflected = rays
+            .refract_on_surface(&Plane::new(&Isometry::identity()), &refr_index_vaccuum())
+            .unwrap();
+        testing_logger::validate(|captured_logs| {
+            assert_eq!(captured_logs.len(), 1);
+            assert_eq!(
+                captured_logs[0].body,
+                "rays totally reflected or missed a surface"
+            );
+            assert_eq!(captured_logs[0].level, Level::Warn);
+        });
+        assert_eq!(reflected.nr_of_rays(false), 0);
     }
     #[test]
     fn filter_energy() {

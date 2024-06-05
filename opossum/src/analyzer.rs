@@ -51,10 +51,16 @@ pub enum RayTracingMode {
 #[derive(PartialEq, Debug)]
 /// Configuration data for a rays tracing analysis.
 ///
-/// It currently only contains the `RayTracingMode`.
+/// The config contains the following info
+///   - ray tracing mode (see [`RayTracingMode`])
+///   - minimum energy / ray
+///   - maximum number of bounces (reflections) / ray
+///   - maximum number of refractions / ray
 pub struct RayTraceConfig {
     mode: RayTracingMode,
     min_energy_per_ray: Energy,
+    max_number_of_bounces: usize,
+    max_number_of_refractions: usize,
 }
 
 impl RayTraceConfig {
@@ -69,7 +75,6 @@ impl RayTraceConfig {
     pub const fn mode(&self) -> RayTracingMode {
         self.mode
     }
-
     /// Sets the min energy per ray during analysis. Rays with energies lower than this limit will be dropped.
     ///
     /// # Errors
@@ -84,12 +89,37 @@ impl RayTraceConfig {
         self.min_energy_per_ray = min_energy_per_ray;
         Ok(())
     }
+    /// Returns the maximum number of bounces of this [`RayTraceConfig`].
+    #[must_use]
+    pub const fn max_number_of_bounces(&self) -> usize {
+        self.max_number_of_bounces
+    }
+    /// Sets the max number of bounces of this [`RayTraceConfig`].
+    pub fn set_max_number_of_bounces(&mut self, max_number_of_bounces: usize) {
+        self.max_number_of_bounces = max_number_of_bounces;
+    }
+    /// Sets the max number of refractions of this [`RayTraceConfig`].
+    pub fn set_max_number_of_refractions(&mut self, max_number_of_refractions: usize) {
+        self.max_number_of_refractions = max_number_of_refractions;
+    }
+    /// Returns the max number of refractions of this [`RayTraceConfig`].
+    #[must_use]
+    pub const fn max_number_of_refractions(&self) -> usize {
+        self.max_number_of_refractions
+    }
 }
 impl Default for RayTraceConfig {
+    /// Create a default config for a ray tracing analysis with the following parameters:
+    ///   - ray tracing mode: [`RayTracingMode::Sequential`]
+    ///   - mininum energy / ray: `1 p`
+    ///   - maximum number of bounces / ray: `1000`
+    ///   - maximum number od refractions / ray: `1000`
     fn default() -> Self {
         Self {
             mode: RayTracingMode::default(),
             min_energy_per_ray: picojoule!(1.0),
+            max_number_of_bounces: 1000,
+            max_number_of_refractions: 1000,
         }
     }
 }
@@ -128,13 +158,43 @@ mod test {
     }
     #[test]
     fn ray_tracing_config_default() {
-        assert_matches!(RayTraceConfig::default().mode, RayTracingMode::Sequential);
+        let rt_conf = RayTraceConfig::default();
+        assert_matches!(rt_conf.mode, RayTracingMode::Sequential);
+        assert_matches!(rt_conf.mode(), RayTracingMode::Sequential);
+        assert_eq!(rt_conf.max_number_of_bounces, 1000);
+        assert_eq!(rt_conf.max_number_of_bounces(), 1000);
+        assert_eq!(rt_conf.max_number_of_refractions, 1000);
+        assert_eq!(rt_conf.max_number_of_refractions(), 1000);
+        assert_eq!(rt_conf.min_energy_per_ray, picojoule!(1.0));
+        assert_eq!(rt_conf.min_energy_per_ray(), picojoule!(1.0));
+    }
+    #[test]
+    fn ray_tracing_config_set_min_energy() {
+        let mut rt_conf = RayTraceConfig::default();
+        assert!(rt_conf.set_min_energy_per_ray(picojoule!(-0.1)).is_err());
+        assert!(rt_conf
+            .set_min_energy_per_ray(picojoule!(f64::NAN))
+            .is_err());
+        assert!(rt_conf
+            .set_min_energy_per_ray(picojoule!(f64::INFINITY))
+            .is_err());
+        assert!(rt_conf.set_min_energy_per_ray(picojoule!(0.0)).is_ok());
+        assert!(rt_conf.set_min_energy_per_ray(picojoule!(20.0)).is_ok());
+        assert_eq!(rt_conf.min_energy_per_ray, picojoule!(20.0));
+    }
+    #[test]
+    fn ray_tracing_config_setters() {
+        let mut rt_conf = RayTraceConfig::default();
+        rt_conf.set_max_number_of_bounces(123);
+        rt_conf.set_max_number_of_refractions(456);
+        assert_eq!(rt_conf.max_number_of_bounces, 123);
+        assert_eq!(rt_conf.max_number_of_refractions, 456);
     }
     #[test]
     fn ray_tracing_config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { mode: Sequential, min_energy_per_ray: 1e-12 m^2 kg^1 s^-2 }"
+            "RayTraceConfig { mode: Sequential, min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000 }"
         );
     }
 }

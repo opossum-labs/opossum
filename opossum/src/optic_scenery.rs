@@ -1,6 +1,6 @@
 //! The basic structure containing the entire optical model
 use crate::{
-    analyzer::AnalyzerType,
+    analyzer::{AnalyzerType, RayTraceConfig},
     error::{OpmResult, OpossumError},
     get_version,
     light::Light,
@@ -248,6 +248,14 @@ impl OpticScenery {
             Ok(format!("i{}:{}", end_node.index(), light_port))
         }
     }
+    fn filter_ray_limits(light_result: &mut LightResult, r_config: &RayTraceConfig) {
+        for lr in light_result {
+            if let LightData::Geometric(rays) = lr.1 {
+                rays.filter_by_nr_of_bounces(r_config.max_number_of_bounces());
+                rays.filter_by_nr_of_refractions(r_config.max_number_of_refractions());
+            }
+        }
+    }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     ///
     /// # Attributes
@@ -290,7 +298,7 @@ impl OpticScenery {
                 }
                 //
                 let node_type = node.optical_ref.borrow().node_type();
-                let outgoing_edges = node
+                let mut outgoing_edges = node
                     .optical_ref
                     .borrow_mut()
                     .analyze(incoming_edges, analyzer_type)
@@ -305,6 +313,9 @@ impl OpticScenery {
                     && is_single_tree
                 {
                     warn!("analysis of node {node_name} <{node_type}> did not result in any output data. This might come from wrong / empty input data.");
+                }
+                if let AnalyzerType::RayTrace(r_config) = analyzer_type {
+                    Self::filter_ray_limits(&mut outgoing_edges, r_config);
                 }
                 for outgoing_edge in outgoing_edges {
                     self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
