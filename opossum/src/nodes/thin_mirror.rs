@@ -165,8 +165,11 @@ impl Optical for ThinMirror {
         ray.refract_on_surface(&front_plane, 1.0)
             .unwrap()
             .and_then(|reflected_ray| {
-                let alignment_iso =
-                    Isometry::new_from_view(ray.position(), reflected_ray, Vector3::y());
+                let alignment_iso = Isometry::new_from_view(
+                    ray.position(),
+                    reflected_ray.direction(),
+                    Vector3::y(),
+                );
                 self.node_attr
                     .isometry()
                     .as_ref()

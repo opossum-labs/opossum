@@ -5,7 +5,11 @@ use std::fmt::Display;
 use nalgebra::{MatrixXx3, Point3, Vector3};
 use num::Zero;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Energy, Length};
+use uom::si::{
+    energy::joule,
+    f64::{Energy, Length},
+    length::{meter, nanometer},
+};
 
 use crate::{
     error::{OpmResult, OpossumError},
@@ -39,9 +43,9 @@ impl SplittingConfig {
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {
-    /// Stores the current position of the ray (in mm)
+    /// Stores the current position of the ray
     pos: Point3<Length>,
-    /// Stores the position history of the ray (in mm)
+    /// Stores the position history of the ray
     pos_hist: Vec<Point3<Length>>,
     /// Stores the current propagation direction of the ray (stored as direction cosine)
     dir: Vector3<f64>,
@@ -51,10 +55,13 @@ pub struct Ray {
     e: Energy,
     /// Wavelength of the ray
     wvl: Length,
-    // ///Bounce count of the ray. Necessary to check if the maximum number of bounces is reached
-    // bounce: usize,
+    /// Bounce count of the ray. Used as stop criterion.
+    number_of_bounces: usize,
+    /// Refraction count of the ray. Used as stop criterion.
+    number_of_refractions: usize,
     /// True if ray is allowd to further propagate, false else
     valid: bool,
+    /// optical path length of the ray
     path_length: Length,
     // refractive index of the medium this ray is propagating in.
     refractive_index: f64,
@@ -93,6 +100,8 @@ impl Ray {
             wvl: wave_length,
             path_length: Length::zero(),
             refractive_index: 1.0,
+            number_of_bounces: 0,
+            number_of_refractions: 0,
             valid: true,
         })
     }
@@ -244,25 +253,24 @@ impl Ray {
             .mul_add(self.pos.x.value, self.pos.y.value * self.pos.y.value);
         let f_square = (focal_length * focal_length).value;
         self.path_length -= meter!((r_square + f_square).sqrt()) - focal_length.abs();
+        self.number_of_refractions += 1;
         Ok(())
     }
     /// Refract the [`Ray`] on a given [`Surface`] using Snellius' law.
     ///
     /// This function refracts an incoming [`Ray`] on a given [`Surface`] thereby changing its position (= intersection point) and
     /// its direction. The intial refractive index is (already) stored in the ray itself. The refractive index behind the surface is given
-    /// by the parameter `n2`. In addition, it returns the directional vector of the reflected ray. If the [`Ray`] does not intersect with
-    /// the surface, the [`Ray`] is unmodified and `None` is returned (since there is no reflection). This function also considers
-    /// total reflection: If the n1 > n2 and the incoming angle is larger than Brewster's angle, the beam is totally reflected. In this case,
-    /// this function also returns `None` (since there is no additional reflected ray).
+    /// by the parameter `n2`. In addition, it returns a possible reflected [`Ray`], which is a copy of the refracted ray (same position,
+    /// wavelength, energy (!) etc.) but with the relection directions. If the [`Ray`] does not intersect with
+    /// the surface, the [`Ray`] is unmodified and `None` is returned (since there is no reflection).
+    ///
+    /// This function also considers total reflection: If the n1 > n2 and the incoming angle is larger than Brewster's angle, the beam
+    /// is totally reflected. In this case, this function also returns `None` (since there is no additional reflected ray).
     ///
     /// # Errors
     ///
     /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
-    pub fn refract_on_surface(
-        &mut self,
-        s: &dyn Surface,
-        n2: f64,
-    ) -> OpmResult<Option<Vector3<f64>>> {
+    pub fn refract_on_surface(&mut self, s: &dyn Surface, n2: f64) -> OpmResult<Option<Self>> {
         if n2 < 1.0 || !n2.is_finite() {
             return Err(OpossumError::Other(
                 "the refractive index must be >=1.0 and finite".into(),
@@ -292,9 +300,14 @@ impl Ray {
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
                     - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
                 self.dir = refract_dir;
+                let mut reflected_ray = self.clone();
+                reflected_ray.dir = reflected_dir;
+                reflected_ray.number_of_bounces += 1;
                 self.refractive_index = n2;
-                Ok(Some(reflected_dir))
+                self.number_of_refractions += 1;
+                Ok(Some(reflected_ray))
             } else {
+                self.number_of_bounces += 1;
                 self.dir = reflected_dir;
                 Ok(None)
             }
@@ -412,13 +425,34 @@ impl Ray {
         new_ray.dir = transformed_dir;
         new_ray
     }
+    /// Returns the number of bounces of this [`Ray`].
+    #[must_use]
+    pub const fn number_of_bounces(&self) -> usize {
+        self.number_of_bounces
+    }
+    /// Returns the number of refractions of this [`Ray`].
+    #[must_use]
+    pub const fn number_of_refractions(&self) -> usize {
+        self.number_of_refractions
+    }
 }
 impl Display for Ray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let m = Length::format_args(meter, uom::fmt::DisplayStyle::Abbreviation);
+        let nm = Length::format_args(nanometer, uom::fmt::DisplayStyle::Abbreviation);
+        let e = Energy::format_args(joule, uom::fmt::DisplayStyle::Abbreviation);
         write!(
             f,
-            "pos: {:?}, dir: {:?}, energy: {:?}, valid: {}, ",
-            self.pos, self.dir, self.e, self.valid
+            "pos: ({}, {}, {}), dir: ({}, {}, {}), energy: {:.6}, wavelength: {:.4}, valid: {}",
+            m.with(self.pos[0]),
+            m.with(self.pos[1]),
+            m.with(self.pos[2]),
+            self.dir[0],
+            self.dir[1],
+            self.dir[2],
+            e.with(self.e),
+            nm.with(self.wavelength()),
+            self.valid
         )
     }
 }
@@ -455,6 +489,8 @@ mod test {
         assert_eq!(ray.refractive_index, 1.0);
         assert_eq!(ray.pos_hist.len(), 0);
         assert_eq!(ray.valid, true);
+        assert_eq!(ray.number_of_bounces, 0);
+        assert_eq!(ray.number_of_refractions, 0);
         assert!(Ray::new(pos, dir, nanometer!(0.0), e).is_err());
         assert!(Ray::new(pos, dir, nanometer!(-10.0), e).is_err());
         assert!(Ray::new(pos, dir, nanometer!(f64::NAN), e).is_err());
@@ -531,6 +567,25 @@ mod test {
         assert_eq!(ray.refractive_index, 2.0);
     }
     #[test]
+    fn set_direction() {
+        let mut ray =
+            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(100.0), joule!(1.0))
+                .unwrap();
+        assert!(ray.set_direction(Vector3::new(0.0, 0.0, 0.0)).is_err());
+        let new_dir = Vector3::new(0.0, 1.0, 0.0);
+        ray.set_direction(new_dir).unwrap();
+        assert_eq!(ray.direction(), new_dir);
+    }
+    #[test]
+    fn display() {
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1001.0), joule!(1.0))
+            .unwrap();
+        assert_eq!(
+            format!("{}", ray),
+            "pos: (0 m, 0 m, 0 m), dir: (0, 0, 1), energy: 1.000000 J, wavelength: 1001.0000 nm, valid: true"
+        );
+    }
+    #[test]
     fn propagate_along_z() {
         let wvl = nanometer!(1053.0);
         let energy = joule!(1.0);
@@ -544,6 +599,8 @@ mod test {
         );
         assert_eq!(ray.wavelength(), wvl);
         assert_eq!(ray.energy(), energy);
+        assert_eq!(ray.number_of_bounces(), 0);
+        assert_eq!(ray.number_of_refractions(), 0);
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.position(), millimeter!(0., 0., 2.0));
         assert_eq!(ray.path_length(), millimeter!(2.0));
@@ -595,6 +652,8 @@ mod test {
         assert_eq!(ray.wavelength(), wvl);
         assert_eq!(ray.energy(), energy);
         assert_eq!(ray.dir, Vector3::z());
+        assert_eq!(ray.number_of_bounces(), 0);
+        assert_eq!(ray.number_of_refractions(), 0);
         assert_eq!(ray.position(), millimeter!(0., 0., 1.));
         assert_eq!(ray.path_length(), millimeter!(2.0));
     }
@@ -623,6 +682,11 @@ mod test {
         assert_eq!(refracted_ray.dir, ray.dir);
         assert_eq!(refracted_ray.e, e);
         assert_eq!(refracted_ray.wvl, wvl);
+        assert_eq!(refracted_ray.number_of_bounces(), ray.number_of_bounces());
+        assert_eq!(
+            refracted_ray.number_of_refractions(),
+            ray.number_of_refractions() + 1
+        );
         assert_eq!(refracted_ray.path_length, Length::zero());
 
         let mut refracted_ray = ray.clone();
@@ -631,6 +695,11 @@ mod test {
         assert_eq!(refracted_ray.dir, ray_dir);
         assert_eq!(refracted_ray.e, e);
         assert_eq!(refracted_ray.wvl, wvl);
+        assert_eq!(refracted_ray.number_of_bounces(), ray.number_of_bounces());
+        assert_eq!(
+            refracted_ray.number_of_refractions(),
+            ray.number_of_refractions() + 1
+        );
         assert_eq!(refracted_ray.path_length, Length::zero());
     }
     #[test]
@@ -689,7 +758,7 @@ mod test {
         assert_eq!(ray.dir, Vector3::z());
     }
     #[test]
-    fn refract_on_plane_collimated() {
+    fn refract_on_surface_collimated() {
         let position = Point3::origin();
         let wvl = nanometer!(1054.0);
         let e = joule!(1.0);
@@ -704,18 +773,34 @@ mod test {
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
-        ray.refract_on_surface(&s, 1.5).unwrap();
+        let reflected_ray = ray.refract_on_surface(&s, 1.5).unwrap().unwrap();
+
+        // refracted ray
         assert_eq!(ray.pos, millimeter!(0., 0., 10.));
         assert_eq!(ray.refractive_index, 1.5);
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.pos_hist, vec![Point3::origin()]);
         assert_eq!(ray.path_length(), plane_z_pos);
+        assert_eq!(ray.number_of_bounces(), 0);
+        assert_eq!(ray.number_of_refractions(), 1);
+
+        // reflected ray
+        assert_eq!(reflected_ray.pos, millimeter!(0., 0., 10.));
+        assert_eq!(reflected_ray.refractive_index, 1.0);
+        assert_eq!(reflected_ray.dir, -1.0 * Vector3::z());
+        assert_eq!(reflected_ray.pos_hist, vec![Point3::origin()]);
+        assert_eq!(reflected_ray.path_length(), plane_z_pos);
+        assert_eq!(reflected_ray.number_of_bounces(), 1);
+        assert_eq!(reflected_ray.number_of_refractions(), 0);
+
         let position = millimeter!(0., 1., 0.);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
         assert_eq!(ray.pos, millimeter!(0., 1., 10.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.path_length, plane_z_pos);
+        assert_eq!(ray.number_of_bounces(), 0);
+        assert_eq!(ray.number_of_refractions(), 1);
     }
     #[test]
     fn refract_on_surface_non_intersecting() {
@@ -735,9 +820,11 @@ mod test {
         assert_eq!(ray.dir, direction);
         assert_eq!(ray.refractive_index, 1.0);
         assert_eq!(ray.path_length, Length::zero());
+        assert_eq!(ray.number_of_bounces(), 0);
+        assert_eq!(ray.number_of_refractions(), 0);
     }
     #[test]
-    fn refract_on_plane_non_collimated() {
+    fn refract_on_surface_non_collimated() {
         let position = Point3::origin();
         let direction = Vector3::new(0.0, 1.0, 1.0);
         let wvl = nanometer!(1054.0);
@@ -761,6 +848,8 @@ mod test {
         assert_abs_diff_eq!(ray.path_length.value, 2.0_f64.sqrt() * plane_z_pos.value);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
         ray.refract_on_surface(&s, 1.5).unwrap();
+        assert_eq!(ray.number_of_bounces(), 0);
+        assert_eq!(ray.number_of_refractions(), 1);
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], 0.4714045207910317);
