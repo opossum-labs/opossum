@@ -4,8 +4,6 @@ use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light::Light,
-    lightdata::LightData,
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -14,7 +12,7 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use log::warn;
-use petgraph::{algo::toposort, prelude::NodeIndex, visit::EdgeRef, Direction};
+use petgraph::{prelude::NodeIndex, Direction};
 use std::{collections::HashMap, path::Path};
 use uom::si::f64::Length;
 
@@ -213,19 +211,13 @@ impl NodeGroup {
             .set_property("output port map", port_map.into())
             .unwrap();
     }
-
     fn input_nodes(&self) -> Vec<NodeIndex> {
         let mut input_nodes: Vec<NodeIndex> = Vec::default();
-        for node_idx in self.g.g.node_indices() {
-            let incoming_edges = self
-                .g
-                .g
-                .edges_directed(node_idx, Direction::Incoming)
-                .count();
+        for node_idx in self.g.node_idxs() {
+            let incoming_edges = self.g.edges_directed(node_idx, Direction::Incoming).count();
             let input_ports = self
                 .g
-                .g
-                .node_weight(node_idx)
+                .node_by_idx(node_idx)
                 .unwrap()
                 .optical_ref
                 .borrow()
@@ -240,16 +232,11 @@ impl NodeGroup {
     }
     fn output_nodes(&self) -> Vec<NodeIndex> {
         let mut output_nodes: Vec<NodeIndex> = Vec::default();
-        for node_idx in self.g.g.node_indices() {
-            let outgoing_edges = self
-                .g
-                .g
-                .edges_directed(node_idx, Direction::Outgoing)
-                .count();
+        for node_idx in self.g.node_idxs() {
+            let outgoing_edges = self.g.edges_directed(node_idx, Direction::Outgoing).count();
             let output_ports = self
                 .g
-                .g
-                .node_weight(node_idx)
+                .node_by_idx(node_idx)
                 .unwrap()
                 .optical_ref
                 .borrow()
@@ -284,11 +271,7 @@ impl NodeGroup {
                 "external input port name already assigned".into(),
             ));
         }
-        let node = self
-            .g
-            .g
-            .node_weight(input_node)
-            .ok_or_else(|| OpossumError::OpticGroup("internal node index not found".into()))?;
+        let node = self.g.node_by_idx(input_node)?;
         if !node
             .optical_ref
             .borrow()
@@ -306,7 +289,6 @@ impl NodeGroup {
             ));
         }
         let incoming_edge_connected = self
-            .g
             .g
             .edges_directed(input_node, Direction::Incoming)
             .map(|e| e.weight().target_port())
@@ -350,11 +332,7 @@ impl NodeGroup {
                 "external output port name already assigned".into(),
             ));
         }
-        let node = self
-            .g
-            .g
-            .node_weight(output_node)
-            .ok_or_else(|| OpossumError::OpticGroup("internal node index not found".into()))?;
+        let node = self.g.node_by_idx(output_node)?;
         if !node
             .optical_ref
             .borrow()
@@ -374,7 +352,6 @@ impl NodeGroup {
         }
         let outgoing_edge_connected = self
             .g
-            .g
             .edges_directed(output_node, Direction::Outgoing)
             .map(|e| e.weight().src_port())
             .any(|p| p == internal_name);
@@ -390,33 +367,6 @@ impl NodeGroup {
         );
         self.set_output_port_map(out_map);
         Ok(())
-    }
-    fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
-        let edges = self.g.g.edges_directed(idx, Direction::Incoming);
-        edges
-            .into_iter()
-            .filter(|e| e.weight().data().is_some())
-            .map(|e| {
-                (
-                    e.weight().target_port().to_owned(),
-                    e.weight().data().cloned().unwrap(),
-                )
-            })
-            .collect::<LightResult>()
-    }
-    fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: Option<LightData>) {
-        let edges = self.g.g.edges_directed(idx, Direction::Outgoing);
-        let edge_ref = edges
-            .into_iter()
-            .filter(|idx| idx.weight().src_port() == port)
-            .last();
-        if let Some(edge_ref) = edge_ref {
-            let edge_idx = edge_ref.id();
-            let light = self.g.g.edge_weight_mut(edge_idx);
-            if let Some(light) = light {
-                light.set_data(data);
-            }
-        } // else outgoing edge not connected -> data dropped
     }
     fn get_incoming(&self, idx: NodeIndex, incoming_data: &LightResult) -> LightResult {
         if self.g.is_src_node(idx) {
@@ -435,11 +385,11 @@ impl NodeGroup {
             }
             incoming
         } else {
-            self.incoming_edges(idx)
+            self.g.incoming_edges(idx)
         }
     }
     fn is_stale_node(&self, idx: NodeIndex) -> bool {
-        let neighbors = self.g.g.neighbors_undirected(idx);
+        let neighbors = self.g.neighbors_undirected(idx);
         neighbors.count() == 0 && !self.input_port_map().iter().any(|p| p.1 .0 == idx)
     }
     fn analyze_group(
@@ -449,20 +399,19 @@ impl NodeGroup {
     ) -> OpmResult<LightResult> {
         let is_inverted = self.node_attr.inverted()?;
         if is_inverted {
-            self.invert_graph()?;
+            self.g.invert_graph()?;
         }
-        let g_clone = self.g.g.clone();
+        let g_clone = self.g.clone();
         let group_name = self.name();
         if !&self.g.is_single_tree() {
             warn!(
                 "Group {group_name} contains unconnected sub-trees. Analysis might not be complete."
             );
         }
-        let sorted = toposort(&self.g.g, None)
-            .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
+        let sorted = self.g.topologically_sorted()?;
         let mut light_result = LightResult::default();
         for idx in sorted {
-            let node = g_clone.node_weight(idx).unwrap();
+            let node = g_clone.node_by_idx(idx)?;
             let node_name = node.optical_ref.borrow().name();
             if self.is_stale_node(idx) {
                 warn!("Group {group_name} contains stale (completely unconnected) node {node_name}. Skipping.");
@@ -496,13 +445,14 @@ impl NodeGroup {
                     }
                 } else {
                     for outgoing_edge in outgoing_edges {
-                        self.set_outgoing_edge_data(idx, &outgoing_edge.0, Some(outgoing_edge.1));
+                        self.g
+                            .set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
                     }
                 }
             }
         }
         if is_inverted {
-            self.invert_graph()?;
+            self.g.invert_graph()?;
         } // revert initial inversion (if necessary)
         Ok(light_result)
     }
@@ -519,48 +469,30 @@ impl NodeGroup {
     }
 
     /// Defines and returns the node/port identifier to connect the edges in the dot format
-    /// # Arguments
+    /// # Parameters
     /// * `port_name`:            name of the external port of the group
-    /// * `parent_identifier`:    String that contains the hierarchical structure: `parentidx_childidx_childofchildidx` ...
+    /// * `node_id`:    String containing the uuid of the parent node
     ///
     /// # Errors
     /// Throws an [`OpossumError::OpticGroup`] if the specified port name is not mapped as input or output
     ///
     /// # Panics
-    /// This funciton panics if the specified `port_name` is not mapped to a port
-    pub fn get_mapped_port_str(
-        &self,
-        port_name: &str,
-        parent_identifier: &str,
-    ) -> OpmResult<String> {
+    /// This function panics if the specified `port_name` is not mapped to a port
+    pub fn get_mapped_port_str(&self, port_name: &str, node_id: &str) -> OpmResult<String> {
         if self.shall_expand()? {
-            if self.input_port_map().contains_key(port_name) {
-                let input_port_map = self.input_port_map();
-                let port = input_port_map.get(port_name).unwrap();
-
-                Ok(format!(
-                    "{}_i{}:{}",
-                    parent_identifier,
-                    port.0.index(),
-                    port.1
-                ))
+            let port_info = if self.input_port_map().contains_key(port_name) {
+                self.input_port_map().get(port_name).unwrap().clone()
             } else if self.output_port_map().contains_key(port_name) {
-                let output_port_map = self.output_port_map();
-                let port = output_port_map.get(port_name).unwrap();
-
-                Ok(format!(
-                    "{}_i{}:{}",
-                    parent_identifier,
-                    port.0.index(),
-                    port.1
-                ))
+                self.output_port_map().get(port_name).unwrap().clone()
             } else {
-                Err(OpossumError::OpticGroup(format!(
+                return Err(OpossumError::OpticGroup(format!(
                     "port {port_name} is not mapped"
-                )))
-            }
+                )));
+            };
+            let node_id = *self.g.node_by_idx(port_info.0)?.uuid().as_simple();
+            Ok(format!("i{}:{}", node_id, port_info.1))
         } else {
-            Ok(format!("{parent_identifier}:{port_name}"))
+            Ok(format!("{node_id}:{port_name}"))
         }
     }
 
@@ -572,46 +504,11 @@ impl NodeGroup {
         self.node_attr
             .set_property("expand view", expand_view.into())
     }
-    /// Creates the dot-format string which describes the edge that connects two nodes
-    /// parameters:
-    /// * `end_node_idx`:         [`NodeIndex`] of the node that should be connected
-    /// * `light_port`:           port name that should be connected
-    /// * `parent_identifier`:    String that contains the hierarchical structure: `parentidx_childidx_childofchildidx` ...
-    ///
-    /// Returns the result of the edge strnig for the dot format
-    fn create_node_edge_str(
-        &self,
-        end_node_idx: NodeIndex,
-        light_port: &str,
-        mut parent_identifier: String,
-    ) -> OpmResult<String> {
-        let node = self
-            .g
-            .g
-            .node_weight(end_node_idx)
-            .unwrap()
-            .optical_ref
-            .borrow();
-
-        parent_identifier = if parent_identifier.is_empty() {
-            format!("i{}", end_node_idx.index())
-        } else {
-            format!("{}_i{}", &parent_identifier, end_node_idx.index())
-        };
-
-        if node.node_type() == "group" {
-            let group_node: &Self = node.as_group()?;
-            Ok(group_node.get_mapped_port_str(light_port, &parent_identifier)?)
-        } else {
-            Ok(format!("{parent_identifier}:{light_port}"))
-        }
-    }
     /// Creates the dot format of the [`NodeGroup`] in its expanded view
-    /// # Attributes:
+    /// # Parameters:
     /// * `node_index`:           [`NodeIndex`] of the group
     /// * `name`:                 name of the node
     /// * `inverted`:             boolean that descries wether the node is inverted or not
-    /// * `parent_identifier`:    String that contains the hierarchical structure: `parentidx_childidx_childofchildidx` ...
     ///
     /// Returns the result of the dot string that describes this node
     fn to_dot_expanded_view(
@@ -619,58 +516,21 @@ impl NodeGroup {
         node_index: &str,
         name: &str,
         inverted: bool,
-        mut parent_identifier: String,
         rankdir: &str,
     ) -> OpmResult<String> {
         let inv_string = if inverted { "(inv)" } else { "" };
-        parent_identifier = if parent_identifier.is_empty() {
-            format!("i{node_index}")
-        } else {
-            format!("{}_i{}", &parent_identifier, node_index)
-        };
         let mut dot_string = format!(
-            "  subgraph {parent_identifier} {{\n\tlabel=\"{name}{inv_string}\"\n\tfontsize=8\n\tcluster=true\n\t"
+            "  subgraph i{node_index} {{\n\tlabel=\"{name}{inv_string}\"\n\tfontsize=8\n\tcluster=true\n\t"
         );
-
-        for node_idx in self.g.g.node_indices() {
-            let node = self.g.g.node_weight(node_idx).unwrap();
-            dot_string += &node.optical_ref.borrow().to_dot(
-                &format!("{}", node_idx.index()),
-                &node.optical_ref.borrow().name(),
-                node.optical_ref.borrow().properties().inverted()?,
-                &node.optical_ref.borrow().ports(),
-                parent_identifier.clone(),
-                rankdir,
-            )?;
-        }
-        for edge in self.g.g.edge_indices() {
-            let light: &Light = self.g.g.edge_weight(edge).unwrap();
-            let end_nodes = self.g.g.edge_endpoints(edge).unwrap();
-
-            let src_edge_str = self.create_node_edge_str(
-                end_nodes.0,
-                light.src_port(),
-                parent_identifier.clone(),
-            )?;
-            let target_edge_str = self.create_node_edge_str(
-                end_nodes.1,
-                light.target_port(),
-                parent_identifier.clone(),
-            )?;
-
-            dot_string.push_str(&format!("  {src_edge_str} -> {target_edge_str} \n"));
-        }
-        dot_string += "}";
+        dot_string += &self.g.create_dot_string(rankdir)?;
         Ok(dot_string)
     }
-
     /// Creates the dot format of the [`NodeGroup`] in its collapsed view
     ///
-    /// # Attributes:            [`NodeIndex`] of the group
+    /// # Parameters:
     /// * `name`:                 name of the node
     /// * `inverted`:             boolean that descries wether the node is inverted or not
     /// * `ports`:               
-    /// * `parent_identifier`:    String that contains the hierarchical structure: `parentidx_childidx_childofchildidx` ...
     ///
     /// Returns the result of the dot string that describes this node
     fn to_dot_collapsed_view(
@@ -679,37 +539,14 @@ impl NodeGroup {
         name: &str,
         inverted: bool,
         ports: &OpticPorts,
-        mut parent_identifier: String,
         rankdir: &str,
     ) -> String {
         let inv_string = if inverted { " (inv)" } else { "" };
         let node_name = format!("{name}{inv_string}");
-        parent_identifier = if parent_identifier.is_empty() {
-            format!("i{node_index}")
-        } else {
-            format!("{}_i{node_index}", &parent_identifier)
-        };
-        let mut dot_str = format!("\t{parent_identifier} [\n\t\tshape=plaintext\n");
+        let mut dot_str = format!("\ti{node_index} [\n\t\tshape=plaintext\n");
         let mut indent_level = 2;
         dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports, rankdir));
         dot_str
-    }
-    fn invert_graph(&mut self) -> OpmResult<()> {
-        for node in self.g.g.node_weights_mut() {
-            node.optical_ref
-                .borrow_mut()
-                .set_property("inverted", true.into())
-                .map_err(|_| {
-                    OpossumError::OpticGroup(
-                        "group cannot be inverted because it contains a non-invertable node".into(),
-                    )
-                })?;
-        }
-        for edge in self.g.g.edge_weights_mut() {
-            edge.inverse();
-        }
-        self.g.g.reverse();
-        Ok(())
     }
 }
 
@@ -751,12 +588,12 @@ impl Optical for NodeGroup {
     }
     fn report(&self) -> Option<NodeReport> {
         let mut group_props = Properties::default();
-        for node_idx in self.g.g.node_indices() {
-            let node = self.g.g.node_weight(node_idx).unwrap().optical_ref.borrow();
-            if let Some(node_report) = node.report() {
-                if !(group_props.contains(&node.name())) {
+        for node in self.g.nodes() {
+            if let Some(node_report) = node.optical_ref.borrow().report() {
+                let node_name = &node.optical_ref.borrow().name();
+                if !(group_props.contains(node_name)) {
                     group_props
-                        .create(&node.name(), "", None, node_report.into())
+                        .create(node_name, "", None, node_report.into())
                         .unwrap();
                 }
             }
@@ -773,8 +610,8 @@ impl Optical for NodeGroup {
     fn export_data(&self, report_dir: &Path) -> OpmResult<Option<image::RgbImage>> {
         let detector_nodes = self
             .g
-            .g
-            .node_weights()
+            .nodes()
+            .into_iter()
             .filter(|node| node.optical_ref.borrow().is_detector());
         for node in detector_nodes {
             node.optical_ref.borrow().export_data(report_dir)?;
@@ -790,7 +627,7 @@ impl Optical for NodeGroup {
     fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
         self.node_attr.set_isometry(isometry.clone());
         for portmap in self.input_port_map() {
-            if let Some(node) = self.g.g.node_weight(portmap.1 .0) {
+            if let Ok(node) = self.g.node_by_idx(portmap.1 .0) {
                 node.optical_ref.borrow_mut().set_isometry(isometry.clone());
             }
         }
@@ -802,17 +639,14 @@ impl Optical for NodeGroup {
                 None
             },
             |output_port| {
-                self.g.g.node_weight(output_port.0).map_or_else(
-                    || {
-                        warn!("node not found");
-                        None
-                    },
-                    |node| {
-                        node.optical_ref
-                            .borrow()
-                            .output_port_isometry(&output_port.1)
-                    },
-                )
+                if let Ok(node) = self.g.node_by_idx(output_port.0) {
+                    node.optical_ref
+                        .borrow()
+                        .output_port_isometry(&output_port.1)
+                } else {
+                    warn!("node not found");
+                    None
+                }
             },
         )
     }
@@ -825,24 +659,16 @@ impl Dottable for NodeGroup {
         name: &str,
         inverted: bool,
         ports: &OpticPorts,
-        parent_identifier: String,
         rankdir: &str,
     ) -> OpmResult<String> {
         let mut cloned_self = self.clone();
         if self.node_attr.inverted()? {
-            cloned_self.invert_graph()?;
+            cloned_self.g.invert_graph()?;
         }
         if self.shall_expand()? {
-            cloned_self.to_dot_expanded_view(node_index, name, inverted, parent_identifier, rankdir)
+            cloned_self.to_dot_expanded_view(node_index, name, inverted, rankdir)
         } else {
-            Ok(cloned_self.to_dot_collapsed_view(
-                node_index,
-                name,
-                inverted,
-                ports,
-                parent_identifier,
-                rankdir,
-            ))
+            Ok(cloned_self.to_dot_collapsed_view(node_index, name, inverted, ports, rankdir))
         }
     }
     fn node_color(&self) -> &str {
@@ -855,7 +681,7 @@ mod test {
     use super::*;
     use crate::{
         joule,
-        lightdata::DataEnergy,
+        lightdata::{DataEnergy, LightData},
         millimeter, nanometer,
         nodes::{test_helper::test_helper::*, BeamSplitter, Detector, Dummy, Source},
         optical::Optical,
@@ -870,8 +696,8 @@ mod test {
     #[test]
     fn default() {
         let node = NodeGroup::default();
-        assert_eq!(node.g.g.node_count(), 0);
-        assert_eq!(node.g.g.edge_count(), 0);
+        assert_eq!(node.g.node_count(), 0);
+        assert_eq!(node.g.edge_count(), 0);
         assert!(node.input_port_map().is_empty());
         assert!(node.output_port_map().is_empty());
         assert_eq!(node.name(), "group");
@@ -896,7 +722,7 @@ mod test {
     fn add_node() {
         let mut og = NodeGroup::default();
         og.add_node(Dummy::new("n1")).unwrap();
-        assert_eq!(og.g.g.node_count(), 1);
+        assert_eq!(og.g.node_count(), 1);
     }
     #[test]
     fn add_node_inverted() {
@@ -917,25 +743,25 @@ mod test {
         assert!(og
             .connect_nodes(sn1_i, "wrong", sn2_i, "front", Length::zero())
             .is_err());
-        assert_eq!(og.g.g.edge_count(), 0);
+        assert_eq!(og.g.edge_count(), 0);
         assert!(og
             .connect_nodes(sn1_i, "rear", sn2_i, "wrong", Length::zero())
             .is_err());
-        assert_eq!(og.g.g.edge_count(), 0);
+        assert_eq!(og.g.edge_count(), 0);
         // wrong node index
         assert!(og
             .connect_nodes(5.into(), "rear", sn2_i, "front", Length::zero())
             .is_err());
-        assert_eq!(og.g.g.edge_count(), 0);
+        assert_eq!(og.g.edge_count(), 0);
         assert!(og
             .connect_nodes(sn1_i, "rear", 5.into(), "front", Length::zero())
             .is_err());
-        assert_eq!(og.g.g.edge_count(), 0);
+        assert_eq!(og.g.edge_count(), 0);
         // correct usage
         assert!(og
             .connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
             .is_ok());
-        assert_eq!(og.g.g.edge_count(), 1);
+        assert_eq!(og.g.edge_count(), 1);
     }
     #[test]
     fn connect_nodes_inverted() {

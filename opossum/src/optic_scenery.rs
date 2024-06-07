@@ -3,9 +3,7 @@ use crate::{
     analyzer::{AnalyzerType, RayTraceConfig},
     error::{OpmResult, OpossumError},
     get_version,
-    light::Light,
     lightdata::LightData,
-    nodes::NodeGroup,
     optic_graph::OpticGraph,
     optic_ref::OpticRef,
     optic_senery_rsc::SceneryResources,
@@ -16,7 +14,7 @@ use crate::{
 use chrono::Local;
 use image::{io::Reader, DynamicImage};
 use log::warn;
-use petgraph::{algo::toposort, prelude::NodeIndex, visit::EdgeRef};
+use petgraph::prelude::NodeIndex;
 use serde::{
     de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
@@ -80,18 +78,27 @@ impl OpticScenery {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Add a given [`Optical`] (Source, Detector, Lens, etc.) to the graph of this [`OpticScenery`].
+    /// Add a given [`Optical`] (Source, Detector, Lens, etc.) to this [`OpticScenery`].
     ///
     /// This command just adds an [`Optical`] to the graph. It does not connect
     /// it to existing nodes in the graph. The given optical element is consumed (owned) by the [`OpticScenery`].
+    /// This function returns a reference to the element in the scenery as [`NodeIndex`]. This reference must be used lateron
+    /// for connecting nodes (see `connect_nodes` function).
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         self.g.add_node(node)
     }
-    /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
+    /// Connect (already existing) optical nodes within this [`OpticScenery`].
     ///
+    /// This function connects two optical nodes (referenced by their [`NodeIndex`]) with their respective port names and their geometrical distance
+    /// (= propagation length) to each other thus extending the network.
     /// # Errors
-    /// Both node indices must exist. Otherwise an [`OpossumError::OpticScenery`] is returned. In addition, connections are
-    /// rejected and an [`OpossumError::OpticScenery`] is returned, if the graph would form a cycle (loop in the graph).
+    ///
+    /// This function will return an error if
+    ///   - the [`NodeIndex`] of source or target node does not exist in the [`OpticGraph`]
+    ///   - a port name of the source or target node does not exist
+    ///   - if a node/port combination was already connected earlier
+    ///   - the connection of the nodes would form a loop in the network.
+    ///   - the given geometric distance between the nodes is not finite.
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
@@ -103,73 +110,29 @@ impl OpticScenery {
         self.g
             .connect_nodes(src_node, src_port, target_node, target_port, distance)
     }
-    /// Return a reference to the optical node specified by its node index.
+    /// Return a reference to the optical node specified by its [`NodeIndex`].
     ///
-    /// This function is mainly useful for setting up a reference node.
+    /// This function is mainly useful for setting up a [reference node](crate::nodes::NodeReference).
     ///
     /// # Errors
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
-    pub fn node(&self, node: NodeIndex) -> OpmResult<OpticRef> {
-        let node = self
-            .g
-            .g
-            .node_weight(node)
-            .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
-        Ok(node.clone())
+    pub fn node(&self, node_idx: NodeIndex) -> OpmResult<OpticRef> {
+        self.g.node_by_idx(node_idx)
     }
+    /// Returns a vector of node references of this [`OpticScenery`].
     #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
-        self.g.g.node_weights().collect()
+        self.g.nodes()
     }
-    /// Export the optic graph, including ports, into the `dot` format to be used in combination with the [`graphviz`](https://graphviz.org/) software.
+    /// Export the optic graph, including ports, into the `dot` format to be used in combination with
+    /// the [`graphviz`](https://graphviz.org/) software.
     ///
     /// # Errors
-    /// This function returns an error nodes do not return a proper value for their `name` property.
+    /// This function returns an error if nodes do not return a proper value for their `name` property.
     pub fn to_dot(&self, rankdir: &str) -> OpmResult<String> {
-        //check direction
-        let rankdir = if rankdir == "LR" { "LR" } else { "TB" };
-
         let mut dot_string = self.add_dot_header(rankdir);
-
-        for node_idx in self.g.g.node_indices() {
-            let node = self
-                .g
-                .g
-                .node_weight(node_idx)
-                .ok_or_else(|| OpossumError::Other("could not get node_weigth".into()))?;
-            let node_name = node.optical_ref.borrow().name();
-            let inverted = node.optical_ref.borrow().properties().inverted()?;
-            let ports = node.optical_ref.borrow().ports();
-            dot_string += &node.optical_ref.borrow().to_dot(
-                &format!("{}", node_idx.index()),
-                &node_name,
-                inverted,
-                &ports,
-                String::new(),
-                rankdir,
-            )?;
-        }
-        for edge in self.g.g.edge_indices() {
-            let light: &Light = self
-                .g
-                .g
-                .edge_weight(edge)
-                .ok_or_else(|| OpossumError::Other("could not get node_weigth".into()))?;
-            let end_nodes = self
-                .g
-                .g
-                .edge_endpoints(edge)
-                .ok_or_else(|| OpossumError::Other("could not get edge_endpoints".into()))?;
-
-            let src_edge_str =
-                self.create_node_edge_str(end_nodes.0, light.src_port(), String::new())?;
-            let target_edge_str =
-                self.create_node_edge_str(end_nodes.1, light.target_port(), String::new())?;
-
-            dot_string.push_str(&format!("  {src_edge_str} -> {target_edge_str} \n"));
-        }
-        dot_string.push_str("}\n");
+        dot_string += &self.g.create_dot_string(rankdir)?;
         Ok(dot_string)
     }
     /// Generate a [`DynamicImage`] of the [`OpticScenery`] diagram.
@@ -199,6 +162,8 @@ impl OpticScenery {
     }
     /// Generate an SVG of the [`OpticScenery`] diagram.
     ///
+    /// This function returns a string of a SVG image (scalable vector graphics). This string can be directly written to a
+    /// `*.svg` file.
     /// # Errors
     ///
     /// This function will return an error if the image generation failes (e.g. program not found, no memory left etc.).
@@ -228,26 +193,6 @@ impl OpticScenery {
         dot_string.push_str("\tedge [fontname=\"Courier\"]\n\n");
         dot_string
     }
-    fn create_node_edge_str(
-        &self,
-        end_node: NodeIndex,
-        light_port: &str,
-        mut parent_identifier: String,
-    ) -> OpmResult<String> {
-        let node = self.g.g.node_weight(end_node).unwrap().optical_ref.borrow();
-        parent_identifier = if parent_identifier.is_empty() {
-            format!("i{}", end_node.index())
-        } else {
-            format!("{}_i{}", &parent_identifier, end_node.index())
-        };
-
-        if node.node_type() == "group" {
-            let group_node: &NodeGroup = node.as_group()?;
-            Ok(group_node.get_mapped_port_str(light_port, &parent_identifier)?)
-        } else {
-            Ok(format!("i{}:{}", end_node.index(), light_port))
-        }
-    }
     fn filter_ray_limits(light_result: &mut LightResult, r_config: &RayTraceConfig) {
         for lr in light_result {
             if let LightData::Geometric(rays) = lr.1 {
@@ -268,17 +213,12 @@ impl OpticScenery {
         if !is_single_tree {
             warn!("Scenery contains unconnected sub-trees. Analysis might not be complete.");
         }
-        let sorted = toposort(&self.g.g, None)
-            .map_err(|_| OpossumError::Analysis("topological sort failed".into()))?;
+        let sorted = self.g.topologically_sorted()?;
         for idx in sorted {
-            let node = self
-                .g
-                .g
-                .node_weight(idx)
-                .ok_or_else(|| OpossumError::Analysis("getting node_weight failed".into()))?;
+            let node = self.g.node_by_idx(idx)?;
             let node_name = node.optical_ref.borrow().name();
 
-            let neighbors = self.g.g.neighbors_undirected(idx);
+            let neighbors = self.g.neighbors_undirected(idx);
             if neighbors.count() == 0 {
                 warn!("stale (completely unconnected) node {node_name} found. Skipping.");
             } else {
@@ -290,7 +230,7 @@ impl OpticScenery {
                         warn!("could not assign node isometry to {} because predecessor node has no isometry defined.", node_name);
                     }
                 }
-                let incoming_edges: LightResult = self.incoming_edges(idx);
+                let incoming_edges: LightResult = self.g.incoming_edges(idx);
                 // paranoia: check if all incoming ports are really input ports of the node to be analyzed
                 let input_ports = node.optical_ref.borrow().ports().input_names();
                 if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
@@ -318,7 +258,8 @@ impl OpticScenery {
                     Self::filter_ray_limits(&mut outgoing_edges, r_config);
                 }
                 for outgoing_edge in outgoing_edges {
-                    self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                    self.g
+                        .set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
                 }
             }
         }
@@ -343,33 +284,6 @@ impl OpticScenery {
             ""
         }
     }
-    fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
-        let edges = self.g.g.edges_directed(idx, petgraph::Direction::Incoming);
-        edges
-            .into_iter()
-            .filter(|e| e.weight().data().is_some())
-            .map(|e| {
-                (
-                    e.weight().target_port().to_owned(),
-                    e.weight().data().cloned().unwrap(),
-                )
-            })
-            .collect::<LightResult>()
-    }
-    fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: LightData) {
-        let edges = self.g.g.edges_directed(idx, petgraph::Direction::Outgoing);
-        let edge_ref = edges
-            .into_iter()
-            .filter(|idx| idx.weight().src_port() == port)
-            .last();
-        if let Some(edge_ref) = edge_ref {
-            let edge_idx = edge_ref.id();
-            let light = self.g.g.edge_weight_mut(edge_idx);
-            if let Some(light) = light {
-                light.set_data(Some(data));
-            }
-        } // else outgoing edge not connected
-    }
     /// Generate an [`AnalysisReport`] containing the result of an analysis.
     ///
     /// This [`AnalysisReport`] can then be used to either save it to disk or produce a PDF document from. In addition,
@@ -383,8 +297,8 @@ impl OpticScenery {
         analysis_report.add_scenery(self);
         let detector_nodes = self
             .g
-            .g
-            .node_weights()
+            .nodes()
+            .into_iter()
             .filter(|node| node.optical_ref.borrow().is_detector());
         for node in detector_nodes {
             if let Some(node_report) = node.optical_ref.borrow().report() {
@@ -595,8 +509,8 @@ mod test {
     fn new() {
         let scenery = OpticScenery::new();
         assert_eq!(scenery.description(), "");
-        assert_eq!(scenery.g.g.edge_count(), 0);
-        assert_eq!(scenery.g.g.node_count(), 0);
+        assert_eq!(scenery.g.edge_count(), 0);
+        assert_eq!(scenery.g.node_count(), 0);
     }
     #[test]
     fn description() {

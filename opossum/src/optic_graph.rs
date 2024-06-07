@@ -2,17 +2,22 @@
 use crate::{
     error::{OpmResult, OpossumError},
     light::Light,
+    lightdata::LightData,
+    nodes::NodeGroup,
     optic_ref::OpticRef,
     optic_senery_rsc::SceneryResources,
-    optical::Optical,
+    optical::{LightResult, Optical},
     properties::Proptype,
     utils::geom_transformation::Isometry,
 };
 use log::warn;
 use petgraph::{
-    algo::{connected_components, is_cyclic_directed},
+    algo::{connected_components, is_cyclic_directed, toposort},
+    graph::{EdgeIndex, Edges, Neighbors, NodeIndices},
     prelude::DiGraph,
     stable_graph::NodeIndex,
+    visit::EdgeRef,
+    Directed, Direction,
 };
 use serde::{
     de::{self, MapAccess, Visitor},
@@ -25,11 +30,14 @@ use uuid::Uuid;
 
 #[derive(Debug, Default, Clone)]
 pub struct OpticGraph {
-    pub g: DiGraph<OpticRef, Light>,
+    g: DiGraph<OpticRef, Light>,
     global_confg: Option<Rc<RefCell<SceneryResources>>>,
 }
-
 impl OpticGraph {
+    /// Add a new optical node to this [`OpticGraph`].
+    ///
+    /// This function returns a [`NodeIndex`] of the added node for later referencing (see `connect_nodes`).
+    /// **Note**: While constructing the underlying [`OpticRef`] a rando, uuid is assigned.
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
         self.g.add_node(OpticRef::new(
             Rc::new(RefCell::new(node)),
@@ -37,6 +45,18 @@ impl OpticGraph {
             self.global_confg.clone(),
         ))
     }
+    /// Connect two optical nodes within this [`OpticGraph`].
+    ///
+    /// This function connects two optical nodes (referenced by their [`NodeIndex`]) with their respective port names and their geometrical distance
+    /// (= propagation length) to each other thus extending the network.
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///   - the [`NodeIndex`] of source or target node does not exist in the [`OpticGraph`]
+    ///   - a port name of the source or target node does not exist
+    ///   - if a node/port combination was already connected earlier
+    ///   - the connection of the nodes would form a loop in the network.
+    ///   - the given geometric distance between the nodes is not finite.
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
@@ -121,16 +141,45 @@ impl OpticGraph {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
-    pub fn node(&self, uuid: Uuid) -> Option<OpticRef> {
+    fn node_by_uuid(&self, uuid: Uuid) -> Option<OpticRef> {
         self.g
             .node_weights()
             .find(|node| node.uuid() == uuid)
             .cloned()
     }
-    pub fn node_idx(&self, uuid: Uuid) -> Option<NodeIndex> {
+    /// Return a reference to the optical node specified by its node index.
+    ///
+    /// This function is mainly useful for setting up a reference node.
+    ///
+    /// # Errors
+    ///
+    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
+    pub fn node_by_idx(&self, node: NodeIndex) -> OpmResult<OpticRef> {
+        let node = self
+            .g
+            .node_weight(node)
+            .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
+        Ok(node.clone())
+    }
+    pub fn node_idxs(&self) -> NodeIndices {
+        self.g.node_indices()
+    }
+    fn node_idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
         self.g
             .node_indices()
             .find(|idx| self.g.node_weight(*idx).unwrap().uuid() == uuid)
+    }
+    pub fn nodes(&self) -> Vec<&OpticRef> {
+        self.g.node_weights().collect()
+    }
+    fn edge_by_idx(&self, idx: EdgeIndex) -> OpmResult<&Light> {
+        self.g
+            .edge_weight(idx)
+            .ok_or_else(|| OpossumError::Other("could not get edge weight".into()))
+    }
+    pub fn topologically_sorted(&self) -> OpmResult<Vec<NodeIndex>> {
+        toposort(&self.g, None)
+            .map_err(|_| OpossumError::Analysis("topological sort failed".into()))
     }
     pub fn contains_detector(&self) -> bool {
         self.g
@@ -139,6 +188,12 @@ impl OpticGraph {
     }
     pub fn is_single_tree(&self) -> bool {
         connected_components(&self.g) == 1
+    }
+    pub fn node_count(&self) -> usize {
+        self.g.node_count()
+    }
+    pub fn edge_count(&self) -> usize {
+        self.g.edge_count()
     }
     pub fn is_src_node(&self, idx: NodeIndex) -> bool {
         let group_srcs = self.g.externals(petgraph::Direction::Incoming);
@@ -166,6 +221,105 @@ impl OpticGraph {
             }
         }
         None
+    }
+    pub fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
+        let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
+        edges
+            .into_iter()
+            .filter(|e| e.weight().data().is_some())
+            .map(|e| {
+                (
+                    e.weight().target_port().to_owned(),
+                    e.weight().data().cloned().unwrap(),
+                )
+            })
+            .collect::<LightResult>()
+    }
+    pub fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: LightData) {
+        let edges = self.g.edges_directed(idx, Direction::Outgoing);
+        let edge_ref = edges
+            .into_iter()
+            .filter(|idx| idx.weight().src_port() == port)
+            .last();
+        if let Some(edge_ref) = edge_ref {
+            let edge_idx = edge_ref.id();
+            let light = self.g.edge_weight_mut(edge_idx);
+            if let Some(light) = light {
+                light.set_data(Some(data));
+            }
+        } // else outgoing edge not connected -> data dropped
+    }
+    pub fn neighbors_undirected(&self, idx: NodeIndex) -> Neighbors<'_, Light> {
+        self.g.neighbors_undirected(idx)
+    }
+    pub fn edges_directed(&self, idx: NodeIndex, dir: Direction) -> Edges<'_, Light, Directed> {
+        self.g.edges_directed(idx, dir)
+    }
+    pub fn invert_graph(&mut self) -> OpmResult<()> {
+        for node in self.g.node_weights_mut() {
+            node.optical_ref
+                .borrow_mut()
+                .set_property("inverted", true.into())
+                .map_err(|_| {
+                    OpossumError::OpticGroup(
+                        "group cannot be inverted because it contains a non-invertable node".into(),
+                    )
+                })?;
+        }
+        for edge in self.g.edge_weights_mut() {
+            edge.inverse();
+        }
+        self.g.reverse();
+        Ok(())
+    }
+    /// Creates the dot-format string which describes the edge that connects two nodes
+    ///
+    /// # Parameters:
+    /// * `end_node_idx`:         [`NodeIndex`] of the node that should be connected
+    /// * `light_port`:           port name that should be connected
+    ///
+    /// Returns the result of the edge strnig for the dot format
+    fn create_node_edge_str(&self, end_node_idx: NodeIndex, light_port: &str) -> OpmResult<String> {
+        let node_id = format!("i{}", self.node_by_idx(end_node_idx)?.uuid().as_simple());
+        let node = self.node_by_idx(end_node_idx)?;
+        if node.optical_ref.borrow().node_type() == "group" {
+            let node = node.optical_ref.borrow();
+            let group_node: &NodeGroup = node.as_group()?;
+            Ok(group_node.get_mapped_port_str(light_port, &node_id)?)
+        } else {
+            Ok(format!("{node_id}:{light_port}"))
+        }
+    }
+    pub fn create_dot_string(&self, rankdir: &str) -> OpmResult<String> {
+        //check direction
+        let rankdir = if rankdir == "LR" { "LR" } else { "TB" };
+        let mut dot_string = String::default();
+        for node in self.nodes() {
+            let node_name = node.optical_ref.borrow().name();
+            let inverted = node.optical_ref.borrow().properties().inverted()?;
+            let ports = node.optical_ref.borrow().ports();
+            dot_string += &node.optical_ref.borrow().to_dot(
+                &format!("{}", node.uuid().as_simple()),
+                &node_name,
+                inverted,
+                &ports,
+                rankdir,
+            )?;
+        }
+        for edge_idx in self.g.edge_indices() {
+            let light: &Light = self.edge_by_idx(edge_idx)?;
+            let end_nodes = self
+                .g
+                .edge_endpoints(edge_idx)
+                .ok_or_else(|| OpossumError::Other("could not get edge_endpoints".into()))?;
+
+            let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port())?;
+            let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port())?;
+
+            dot_string.push_str(&format!("  {src_edge_str} -> {target_edge_str} \n"));
+        }
+        dot_string.push_str("}\n");
+        Ok(dot_string)
     }
 }
 impl Serialize for OpticGraph {
@@ -292,7 +446,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                             } else {
                                 Uuid::nil()
                             };
-                        let Some(reference_node) = g.node(uuid) else {
+                        let Some(reference_node) = g.node_by_uuid(uuid) else {
                             return Err(de::Error::custom(
                                 "reference node found, which does not reference anything",
                             ));
@@ -307,10 +461,10 @@ impl<'de> Deserialize<'de> for OpticGraph {
                     }
                 }
                 for edge in &edges {
-                    let src_idx = g.node_idx(edge.0).ok_or_else(|| {
+                    let src_idx = g.node_idx_by_uuid(edge.0).ok_or_else(|| {
                         de::Error::custom(format!("src id {} does not exist", edge.0))
                     })?;
-                    let target_idx = g.node_idx(edge.1).ok_or_else(|| {
+                    let target_idx = g.node_idx_by_uuid(edge.1).ok_or_else(|| {
                         de::Error::custom(format!("target id {} does not exist", edge.1))
                     })?;
                     g.connect_nodes(src_idx, edge.2, target_idx, edge.3, edge.4)
@@ -332,7 +486,7 @@ impl From<OpticGraph> for Proptype {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::nodes::Dummy;
+    use crate::{millimeter, nodes::Dummy};
     use num::Zero;
 
     #[test]
@@ -361,6 +515,21 @@ mod test {
             .is_err());
         assert!(graph
             .connect_nodes(NodeIndex::new(5), "rear", n2, "front", Length::zero())
+            .is_err());
+    }
+    #[test]
+    fn connect_nodes_wrong_distance() {
+        let mut graph = OpticGraph::default();
+        let n1 = graph.add_node(Dummy::new("Test"));
+        let n2 = graph.add_node(Dummy::new("Test"));
+        assert!(graph
+            .connect_nodes(n1, "rear", n2, "front", millimeter!(f64::NAN))
+            .is_err());
+        assert!(graph
+            .connect_nodes(n1, "rear", n2, "front", millimeter!(f64::INFINITY))
+            .is_err());
+        assert!(graph
+            .connect_nodes(n1, "rear", n2, "front", millimeter!(f64::NEG_INFINITY))
             .is_err());
     }
     #[test]
@@ -393,20 +562,20 @@ mod test {
         assert_eq!(graph.g.edge_count(), 1);
     }
     #[test]
-    fn node() {
+    fn node_by_uuid() {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::default());
         let uuid = graph.g.node_weight(n1).unwrap().uuid();
-        assert!(graph.node(uuid).is_some());
-        assert!(graph.node(Uuid::new_v4()).is_none());
+        assert!(graph.node_by_uuid(uuid).is_some());
+        assert!(graph.node_by_uuid(Uuid::new_v4()).is_none());
     }
     #[test]
     fn node_id() {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::default());
         let uuid = graph.g.node_weight(n1).unwrap().uuid();
-        assert_eq!(graph.node_idx(uuid), Some(n1));
-        assert_eq!(graph.node_idx(Uuid::new_v4()), None);
+        assert_eq!(graph.node_idx_by_uuid(uuid), Some(n1));
+        assert_eq!(graph.node_idx_by_uuid(Uuid::new_v4()), None);
     }
     #[test]
     fn is_single_tree() {
