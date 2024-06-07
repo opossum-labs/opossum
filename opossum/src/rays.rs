@@ -127,7 +127,7 @@ impl Rays {
             .iter()
             .kahan_sum()
             .sum());
-        //scaling factor if a significant amount of enery has been lost
+        //scaling factor if a significant amount of energy has been lost
         let energy_scale_factor = energy_strategy.get_total_energy() / total_energy_valid_rays;
         //create rays
         let nr_of_rays = ray_pos.len();
