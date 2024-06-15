@@ -586,10 +586,11 @@ impl Optical for NodeGroup {
         }
         Ok(())
     }
-    fn report(&self) -> Option<NodeReport> {
+    fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut group_props = Properties::default();
         for node in self.g.nodes() {
-            if let Some(node_report) = node.optical_ref.borrow().report() {
+            let sub_uuid = node.uuid().as_simple().to_string();
+            if let Some(node_report) = node.optical_ref.borrow().report(&sub_uuid) {
                 let node_name = &node.optical_ref.borrow().name();
                 if !(group_props.contains(node_name)) {
                     group_props
@@ -601,22 +602,24 @@ impl Optical for NodeGroup {
         Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
+            uuid,
             group_props,
         ))
     }
     fn is_detector(&self) -> bool {
         self.g.contains_detector()
     }
-    fn export_data(&self, report_dir: &Path) -> OpmResult<Option<image::RgbImage>> {
+    fn export_data(&self, report_dir: &Path, _uuid: &str) -> OpmResult<()> {
         let detector_nodes = self
             .g
             .nodes()
             .into_iter()
             .filter(|node| node.optical_ref.borrow().is_detector());
         for node in detector_nodes {
-            node.optical_ref.borrow().export_data(report_dir)?;
+            let uuid = node.uuid().as_simple().to_string();
+            node.optical_ref.borrow().export_data(report_dir, &uuid)?;
         }
-        Ok(None)
+        Ok(())
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -1092,8 +1095,8 @@ mod test {
     #[test]
     fn report_default() {
         let group = NodeGroup::default();
-        assert!(group.report().is_some());
-        let report = group.report().unwrap();
+        assert!(group.report("").is_some());
+        let report = group.report("").unwrap();
         let nr_of_props = report.properties().iter().fold(0, |s: usize, _p| s + 1);
         assert_eq!(nr_of_props, 0);
     }

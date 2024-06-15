@@ -36,7 +36,14 @@
         </div>
       </div>
       <hr/>
-      {{call diagram with scenery}}
+      <div class="row">
+        <div class="col">
+            <h3>{description}</h3>
+            <div class="text-center">
+              <img src="scenery.svg" class="img-fluid" style="max-height: 600pt;" alt="Optical scene diagram"/>
+            </div>
+        </div>
+      </div>
       {{ for node_report in node_reports}}
         {{ call node_report with node_report }}
       {{ endfor }}

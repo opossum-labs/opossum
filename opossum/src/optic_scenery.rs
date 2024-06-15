@@ -286,13 +286,13 @@ impl OpticScenery {
     }
     /// Generate an [`AnalysisReport`] containing the result of an analysis.
     ///
-    /// This [`AnalysisReport`] can then be used to either save it to disk or produce a PDF document from. In addition,
+    /// This [`AnalysisReport`] can then be used to either save it to disk or produce an HTML document from. In addition,
     /// the given report folder is used for the individual nodes to export specific result files.
     ///
     /// # Errors
     ///
     /// This function will return an error if the individual export function of a node fails.
-    pub fn report(&self, report_dir: &Path) -> OpmResult<AnalysisReport> {
+    pub fn report(&self) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
         analysis_report.add_scenery(self);
         let detector_nodes = self
@@ -301,14 +301,25 @@ impl OpticScenery {
             .into_iter()
             .filter(|node| node.optical_ref.borrow().is_detector());
         for node in detector_nodes {
-            if let Some(node_report) = node.optical_ref.borrow().report() {
+            let uuid = node.uuid().as_simple().to_string();
+            if let Some(node_report) = node.optical_ref.borrow().report(&uuid) {
                 analysis_report.add_detector(node_report);
             }
-
-            node.optical_ref.borrow().export_data(report_dir)?;
         }
-
         Ok(analysis_report)
+    }
+    /// Write node specific data files to the given `data_dir`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the underlying `export_data` function of the corresponding
+    /// node returns an error.
+    pub fn export_node_data(&self, data_dir: &Path) -> OpmResult<()> {
+        for node in self.g.nodes() {
+            let uuid = node.uuid().as_simple().to_string();
+            node.optical_ref.borrow().export_data(data_dir, &uuid)?;
+        }
+        Ok(())
     }
     /// Save this [`OpticScenery`] to an .opm file with the given path
     ///
@@ -523,7 +534,7 @@ mod test {
     fn report() {
         let mut scenery = OpticScenery::new();
         scenery.add_node(Detector::default());
-        let report = scenery.report(Path::new(""));
+        let report = scenery.report();
         assert!(report.is_ok());
         let report = report.unwrap();
         assert!(serde_yaml::to_string(&report).is_ok());
@@ -619,12 +630,13 @@ mod test {
         scenery
             .analyze(&AnalyzerType::RayTrace(raytrace_config))
             .unwrap();
+        let uuid = scenery.node(i_e).unwrap().uuid().as_simple().to_string();
         let report = scenery
             .node(i_e)
             .unwrap()
             .optical_ref
             .borrow()
-            .report()
+            .report(&uuid)
             .unwrap();
         if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {
             assert_eq!(*e, joule!(1.0));
@@ -637,7 +649,7 @@ mod test {
         let mut scenery = OpticScenery::new();
         scenery.set_description("report_empty_test").unwrap();
         scenery.analyze(&AnalyzerType::Energy).unwrap();
-        let _report = scenery.report(&PathBuf::from("./opossum/files_for_testing/"));
+        let _report = scenery.report();
     }
 
     #[test]

@@ -102,7 +102,7 @@ impl Proptype {
     /// This function will return an error if
     ///   - underlying html templates could not be compiled
     ///   - a property value could not be converted to html code.
-    pub fn to_html(&self, property_name: &str) -> OpmResult<String> {
+    pub fn to_html(&self, property_name: &str, uuid: &str) -> OpmResult<String> {
         let mut tt = TinyTemplate::new();
         tt.add_template("simple", HTML_PROP_SIMPLE)
             .map_err(|e| OpossumError::Other(e.to_string()))?;
@@ -117,23 +117,27 @@ impl Proptype {
             Self::Bool(value) => tt.render("simple", &format!("{value}")),
             Self::SpectrometerType(value) => tt.render("simple", &value.to_string()),
             Self::Metertype(value) => tt.render("simple", &value.to_string()),
-            Self::Spectrometer(_) => {
-                tt.render("image", &format!("spectrometer_{property_name}.svg"))
-            }
-            Self::SpotDiagram(_) => {
-                tt.render("image", &format!("spot_diagram_{property_name}.svg"))
-            }
-            Self::WaveFrontStats(_value) => {
-                tt.render("image", &format!("wavefront_diagram_{property_name}.png"))
-            }
+            Self::Spectrometer(_) => tt.render(
+                "image",
+                &format!("data/spectrometer_{property_name}_{uuid}.svg"),
+            ),
+            Self::SpotDiagram(_) => tt.render(
+                "image",
+                &format!("data/spot_diagram_{property_name}_{uuid}.svg"),
+            ),
+            Self::WaveFrontStats(_value) => tt.render(
+                "image",
+                &format!("data/wavefront_diagram_{property_name}_{uuid}.png"),
+            ),
             Self::FluenceDetector(_value) => {
-                tt.render("image", &format!("fluence_{property_name}.png"))
+                tt.render("image", &format!("data/fluence_{property_name}_{uuid}.png"))
             }
             Self::NodeReport(report) => {
                 let html_node_report = HtmlNodeReport {
                     node: report.name().into(),
                     node_type: report.detector_type().into(),
-                    props: report.properties().html_props(report.name()),
+                    props: report.properties().html_props(report.name(), uuid),
+                    uuid: uuid.to_string(),
                 };
                 tt.render("group", &html_node_report)
             }
@@ -151,9 +155,10 @@ impl Proptype {
             ),
             Self::Length(value) => tt.render("simple", &format_quantity(meter, *value)),
             Self::Energy(value) => tt.render("simple", &format_quantity(joule, *value)),
-            Self::RayPositionHistory(_) => {
-                tt.render("image", &format!("ray_propagation_{property_name}.svg"))
-            }
+            Self::RayPositionHistory(_) => tt.render(
+                "image",
+                &format!("data/ray_propagation_{property_name}_{uuid}.svg"),
+            ),
             _ => Ok("unknown property type".into()),
         };
         string_value.map_err(|e| OpossumError::Other(e.to_string()))

@@ -1,5 +1,4 @@
 #![warn(missing_docs)]
-use image::RgbImage;
 use itertools::izip;
 use log::warn;
 use nalgebra::MatrixXx2;
@@ -130,20 +129,23 @@ impl Optical for SpotDiagram {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
     }
-    fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
+    fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
         if self.light_data.is_some() {
-            let file_path = PathBuf::from(report_dir)
-                .join(Path::new(&format!("spot_diagram_{}.svg", self.name())));
-            self.to_plot(&file_path, PltBackEnd::SVG)
+            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+                "spot_diagram_{}_{}.svg",
+                self.name(),
+                uuid
+            )));
+            self.to_plot(&file_path, PltBackEnd::SVG)?;
         } else {
             warn!("spot diagram: no light data for export available. Cannot create plot!");
-            Ok(None)
         }
+        Ok(())
     }
     fn is_detector(&self) -> bool {
         true
     }
-    fn report(&self) -> Option<NodeReport> {
+    fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
@@ -206,7 +208,12 @@ impl Optical for SpotDiagram {
                     .unwrap();
             }
         }
-        Some(NodeReport::new(&self.node_type(), &self.name(), props))
+        Some(NodeReport::new(
+            &self.node_type(),
+            &self.name(),
+            uuid,
+            props,
+        ))
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -386,17 +393,17 @@ mod test {
     fn export_data() {
         testing_logger::setup();
         let mut sd = SpotDiagram::default();
-        let exp = sd.export_data(Path::new(""));
-        assert!(exp.is_ok());
-        assert!(exp.unwrap().is_none());
-        let warning = "spot diagram: no light data for export available. Cannot create plot!";
+        assert!(sd.export_data(Path::new(""), "").is_ok());
         testing_logger::validate(|captured_logs| {
             assert_eq!(captured_logs.len(), 1);
-            assert_eq!(captured_logs[0].body, warning);
+            assert_eq!(
+                captured_logs[0].body,
+                "spot diagram: no light data for export available. Cannot create plot!"
+            );
         });
         sd.light_data = Some(LightData::Geometric(Rays::default()));
         let path = NamedTempFile::new().unwrap();
-        assert!(sd.export_data(path.path().parent().unwrap()).is_err());
+        assert!(sd.export_data(path.path().parent().unwrap(), "").is_err());
         sd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
@@ -405,19 +412,19 @@ mod test {
             )
             .unwrap(),
         ));
-        assert!(sd.export_data(path.path().parent().unwrap()).is_ok());
+        assert!(sd.export_data(path.path().parent().unwrap(), "").is_ok());
     }
     #[test]
     fn report() {
         let mut sd = SpotDiagram::default();
-        let node_report = sd.report().unwrap();
+        let node_report = sd.report("").unwrap();
         assert_eq!(node_report.detector_type(), "spot diagram");
         assert_eq!(node_report.name(), "spot diagram");
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
         sd.light_data = Some(LightData::Geometric(Rays::default()));
-        let node_report = sd.report().unwrap();
+        let node_report = sd.report("").unwrap();
         assert!(node_report.properties().contains("Spot diagram"));
         sd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
@@ -427,7 +434,7 @@ mod test {
             )
             .unwrap(),
         ));
-        let node_report = sd.report().unwrap();
+        let node_report = sd.report("").unwrap();
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 5);

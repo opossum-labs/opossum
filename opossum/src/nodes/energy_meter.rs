@@ -186,7 +186,7 @@ impl Optical for EnergyMeter {
     fn is_detector(&self) -> bool {
         true
     }
-    fn report(&self) -> Option<NodeReport> {
+    fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut energy: Option<Energy> = None;
         if let Some(light_data) = &self.light_data {
             energy = match light_data {
@@ -224,7 +224,12 @@ impl Optical for EnergyMeter {
                 )
                 .unwrap();
         }
-        Some(NodeReport::new(&self.node_type(), &self.name(), props))
+        Some(NodeReport::new(
+            &self.node_type(),
+            &self.name(),
+            uuid,
+            props,
+        ))
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -363,7 +368,7 @@ mod test {
     #[test]
     fn report() {
         let mut meter = EnergyMeter::default();
-        let report = meter.report().unwrap();
+        let report = meter.report("123").unwrap();
         assert_eq!(report.name(), "energy meter");
         assert_eq!(report.detector_type(), "energy meter");
         assert!(report.properties().contains("Energy"));
@@ -384,7 +389,7 @@ mod test {
         });
         input.insert("in1".into(), input_data.clone());
         meter.analyze(input, &AnalyzerType::Energy).unwrap();
-        let report = meter.report().unwrap();
+        let report = meter.report("123").unwrap();
         if let Ok(Proptype::Energy(e)) = report.properties().get("Energy") {
             assert_eq!(e, &joule!(1.0));
         } else {

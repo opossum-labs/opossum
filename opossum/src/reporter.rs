@@ -2,7 +2,6 @@
 //! Module for generating analysis reports in PDF format.
 
 use crate::{
-    analyzer::AnalyzerType,
     error::{OpmResult, OpossumError},
     nodes::ray_propagation_visualizer::RayPositionHistories,
     properties::{property::HtmlProperty, Properties, Proptype},
@@ -11,20 +10,18 @@ use crate::{
 use chrono::{DateTime, Local};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 use tinytemplate::TinyTemplate;
 
 static HTML_REPORT: &str = include_str!("html/html_report.html");
-static HTML_DIAGRAM: &str = include_str!("html/diagram.html");
 static HTML_NODE_REPORT: &str = include_str!("html/node_report.html");
 
 #[derive(Serialize)]
-struct HtmlScenery {
+struct HtmlReport {
+    opossum_version: String,
+    analysis_timestamp: String,
     description: String,
-    url: String,
+    node_reports: Vec<HtmlNodeReport>,
 }
 /// Structure for storing a (detector) node report during html conversion.
 #[derive(Serialize)]
@@ -35,14 +32,10 @@ pub struct HtmlNodeReport {
     pub node_type: String,
     /// properties of the node
     pub props: Vec<HtmlProperty>,
+    /// uuid of the node (needed for constructing filenames)
+    pub uuid: String,
 }
-#[derive(Serialize)]
-struct HtmlReport {
-    opossum_version: String,
-    analysis_timestamp: String,
-    scenery: HtmlScenery,
-    node_reports: Vec<HtmlNodeReport>,
-}
+
 #[derive(Serialize, Debug, Clone)]
 /// Structure for storing data being integrated in an analysis report.
 pub struct AnalysisReport {
@@ -77,6 +70,7 @@ impl AnalysisReport {
         self.node_reports.push(report);
     }
     /// Returns the ray history for the first found [`RayPropagationVisualizer`](crate::nodes::RayPropagationVisualizer) in this [`AnalysisReport`].
+    /// **Note**: This function is only a hack for displaying rays in the bevy engine.
     #[must_use]
     pub fn get_ray_hist(&self) -> Option<&RayPositionHistories> {
         for node in &self.node_reports {
@@ -86,26 +80,61 @@ impl AnalysisReport {
         }
         None
     }
-    /// Returns the scenery of this [`AnalysisReport`].
-    #[must_use]
-    pub const fn scenery(&self) -> Option<&OpticScenery> {
-        self.scenery.as_ref()
+    fn to_html_report(&self) -> OpmResult<HtmlReport> {
+        let Some(scenery) = &self.scenery else {
+            return Err(OpossumError::Other("no scenery found".into()));
+        };
+        let html_node_reports: Vec<HtmlNodeReport> = self
+            .node_reports
+            .iter()
+            .map(NodeReport::to_html_node_report)
+            .collect();
+        Ok(HtmlReport {
+            opossum_version: self.opossum_version.clone(),
+            analysis_timestamp: self.analysis_timestamp.format("%Y/%m/%d %H:%M").to_string(),
+            description: scenery.description().to_string(),
+            node_reports: html_node_reports,
+        })
+    }
+    /// Generate an html report from this [`AnalysisReport`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///   - underlying templates could not be compiled.
+    ///   - the base file name could not be determined.
+    ///   - the conversion
+    pub fn generate_html(&self, path: &Path) -> OpmResult<()> {
+        info!("Write html report to {}", path.display());
+        let mut tt = TinyTemplate::new();
+        tt.add_template("report", HTML_REPORT)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        tt.add_template("node_report", HTML_NODE_REPORT)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let rendered = tt
+            .render("report", &self.to_html_report()?)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        fs::write(path, rendered).map_err(|e| OpossumError::Other(e.to_string()))?;
+        Ok(())
     }
 }
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 /// Structure for storing (detector-)node specific data to be integrated in the [`AnalysisReport`].
 pub struct NodeReport {
     detector_type: String,
     name: String,
+    uuid: String,
     properties: Properties,
 }
 impl NodeReport {
     /// Creates a new [`NodeReport`].
     #[must_use]
-    pub fn new(detector_type: &str, name: &str, properties: Properties) -> Self {
+    pub fn new(detector_type: &str, name: &str, uuid: &str, properties: Properties) -> Self {
         Self {
             detector_type: detector_type.to_owned(),
             name: name.to_owned(),
+            uuid: uuid.to_string(),
             properties,
         }
     }
@@ -124,7 +153,18 @@ impl NodeReport {
     pub const fn properties(&self) -> &Properties {
         &self.properties
     }
-    /// Returns the get ray history of this [`NodeReport`].
+    /// Return an [`HtmlNodeReport`] from this [`NodeReport`].
+    #[must_use]
+    pub fn to_html_node_report(&self) -> HtmlNodeReport {
+        HtmlNodeReport {
+            node: self.name.clone(),
+            node_type: self.detector_type.clone(),
+            props: self.properties.html_props(self.name(), &self.uuid),
+            uuid: self.uuid.clone(),
+        }
+    }
+    /// Returns the ray history of this [`NodeReport`] if it describe either a ray propagation
+    /// visualizer node or a group containing such a node. Otherwise the return value is `None`.
     #[must_use]
     pub fn get_ray_history(&self) -> Option<&RayPositionHistories> {
         if self.detector_type == "group" {
@@ -145,90 +185,16 @@ impl NodeReport {
         }
         None
     }
+    /// Returns a reference to the uuid of this [`NodeReport`].
+    #[must_use]
+    pub fn uuid(&self) -> &str {
+        &self.uuid
+    }
 }
 
 impl From<NodeReport> for Proptype {
     fn from(value: NodeReport) -> Self {
         Self::NodeReport(value)
-    }
-}
-/// Report generator
-///
-/// This report generator delivers a PDF file containing the analysis report based on the provided [`AnalysisReport`].
-#[derive(Clone)]
-pub struct ReportGenerator {
-    base_file_name: PathBuf,
-    report: AnalysisReport,
-}
-
-impl ReportGenerator {
-    /// Creates a new [`ReportGenerator`].
-    #[must_use]
-    pub fn new(report: AnalysisReport, base_file_name: &Path) -> Self {
-        Self {
-            report,
-            base_file_name: PathBuf::from(base_file_name),
-        }
-    }
-    /// Generate an html report.
-    ///
-    /// # Panics
-    ///
-    /// Panics if .
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    ///   - underlying templates could not be compiled.
-    ///   - the base file name could not be determined.
-    pub fn generate_html(&self, path: &Path, _analyzer: &AnalyzerType) -> OpmResult<()> {
-        info!("Write html report to {}", path.display());
-        let mut tt = TinyTemplate::new();
-        tt.add_template("report", HTML_REPORT)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        tt.add_template("diagram", HTML_DIAGRAM)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        tt.add_template("node_report", HTML_NODE_REPORT)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        let Some(scenery) = &self.report.scenery else {
-            return Err(OpossumError::Other("no scenery found".into()));
-        };
-        let mut diagram_path = self.base_file_name.clone();
-        diagram_path.set_extension("svg");
-        let diagram_url = diagram_path
-            .file_name()
-            .ok_or_else(|| OpossumError::Other("could not determine base file name".into()))?
-            .to_os_string()
-            .into_string()
-            .unwrap();
-        let html_scenery = HtmlScenery {
-            description: scenery.description().into(),
-            url: diagram_url,
-        };
-        let mut node_reports: Vec<HtmlNodeReport> = Vec::new();
-        for report in &self.report.node_reports {
-            let html_node_report = HtmlNodeReport {
-                node: report.name().into(),
-                node_type: report.detector_type().into(),
-                props: report.properties().html_props(report.name()),
-            };
-            node_reports.push(html_node_report);
-        }
-        let html_report = HtmlReport {
-            opossum_version: self.report.opossum_version.clone(),
-            analysis_timestamp: self
-                .report
-                .analysis_timestamp
-                .format("%Y/%m/%d %H:%M")
-                .to_string(),
-            scenery: html_scenery,
-            node_reports,
-        };
-        let rendered = tt
-            .render("report", &html_report)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        fs::write(path, rendered).map_err(|e| OpossumError::Other(e.to_string()))?;
-        Ok(())
     }
 }
 #[cfg(test)]
@@ -255,13 +221,19 @@ mod test {
         report.add_detector(NodeReport::new(
             "test detector",
             "detector name",
+            "123",
             Properties::default(),
         ));
         assert_eq!(report.node_reports.len(), 1);
     }
     #[test]
     fn node_report_new() {
-        let report = NodeReport::new("test detector", "detector name", Properties::default());
+        let report = NodeReport::new(
+            "test detector",
+            "detector name",
+            "123",
+            Properties::default(),
+        );
         assert_eq!(report.detector_type, "test detector");
         assert_eq!(report.name, "detector name");
     }

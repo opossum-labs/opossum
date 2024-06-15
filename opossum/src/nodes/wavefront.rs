@@ -1,6 +1,5 @@
 #![warn(missing_docs)]
 //! Wavefront measurment node
-use image::RgbImage;
 use log::warn;
 use nalgebra::{DVector, DVectorSlice, MatrixXx3};
 use plotters::style::RGBAColor;
@@ -218,35 +217,32 @@ impl Optical for WaveFront {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
     }
-    fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
+    fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
         if let Some(LightData::Geometric(rays)) = &self.light_data {
             let wf_data_opt = rays
                 .get_wavefront_data_in_units_of_wvl(true, nanometer!(1.))
                 .ok();
 
             let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!("wavefront_diagram_{}.png", self.name()));
+            file_path.push(format!("wavefront_diagram_{}_{}.png", self.name(), uuid));
             if let Some(wf_data) = wf_data_opt {
                 //todo! for all wavelengths
-                Ok(wf_data.wavefront_error_maps[0]
-                    .to_plot(&file_path, PltBackEnd::BMP)
-                    .unwrap_or_else(|e| {
-                        warn!("Could not export plot: {e}",);
-                        None
-                    }))
+                if let Err(e) = wf_data.wavefront_error_maps[0].to_plot(&file_path, PltBackEnd::BMP)
+                {
+                    warn!("Could not export wavefront diagram: {}", e.to_string());
+                }
             } else {
                 warn!("Wavefront diagram: no wavefront data for export available",);
-                Ok(None)
             }
         } else {
             warn!("Wavefront diagram: no light data for export available",);
-            Ok(None)
         }
+        Ok(())
     }
     fn is_detector(&self) -> bool {
         true
     }
-    fn report(&self) -> Option<NodeReport> {
+    fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
@@ -301,7 +297,12 @@ impl Optical for WaveFront {
                 }
             }
 
-            Some(NodeReport::new(&self.node_type(), &self.name(), props))
+            Some(NodeReport::new(
+                &self.node_type(),
+                &self.name(),
+                uuid,
+                props,
+            ))
         } else {
             None
         }
@@ -516,15 +517,10 @@ mod test {
     #[test]
     fn export_data() {
         let mut wf = WaveFront::default();
-        assert!(wf.export_data(Path::new("")).is_ok());
-        assert!(wf.export_data(Path::new("")).unwrap().is_none());
+        assert!(wf.export_data(Path::new(""), "").is_ok());
         wf.light_data = Some(LightData::Geometric(Rays::default()));
         let path = NamedTempFile::new().unwrap();
-        assert!(wf.export_data(path.path().parent().unwrap()).is_ok());
-        assert!(wf
-            .export_data(path.path().parent().unwrap())
-            .unwrap()
-            .is_none());
+        assert!(wf.export_data(path.path().parent().unwrap(), "").is_ok());
         wf.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
@@ -533,14 +529,15 @@ mod test {
             )
             .unwrap(),
         ));
-        assert!(wf.export_data(path.path().parent().unwrap()).is_ok());
+        assert!(wf.export_data(path.path().parent().unwrap(), "").is_ok());
+        // todo! check for warnings
     }
     #[test]
     fn report() {
         let mut wf = WaveFront::default();
-        assert!(wf.report().is_none());
+        assert!(wf.report("").is_none());
         wf.light_data = Some(LightData::Geometric(Rays::default()));
-        assert!(wf.report().is_some());
+        assert!(wf.report("").is_some());
         wf.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
@@ -549,7 +546,7 @@ mod test {
             )
             .unwrap(),
         ));
-        let node_report = wf.report().unwrap();
+        let node_report = wf.report("").unwrap();
         assert_eq!(node_report.detector_type(), "wavefront monitor");
         assert_eq!(node_report.name(), "wavefront monitor");
         assert!(node_report.properties().contains("Wavefront Map"));
