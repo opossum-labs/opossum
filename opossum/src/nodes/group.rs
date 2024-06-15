@@ -9,7 +9,8 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     reporter::NodeReport,
-    utils::geom_transformation::Isometry, SceneryResources,
+    utils::geom_transformation::Isometry,
+    SceneryResources,
 };
 use log::warn;
 use petgraph::{prelude::NodeIndex, Direction};

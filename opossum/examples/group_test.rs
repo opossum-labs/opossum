@@ -1,13 +1,16 @@
 use num::Zero;
 use opossum::{
-    error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, BeamSplitter, Dummy, Lens, NodeGroup}, OpticScenery
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{collimated_line_ray_source, BeamSplitter, Dummy, Lens, NodeGroup},
+    OpticScenery,
 };
 use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
-    
+
     let d0 = scenery.add_node(collimated_line_ray_source(
         millimeter!(20.0),
         joule!(1.0),
