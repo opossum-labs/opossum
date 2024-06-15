@@ -1,26 +1,28 @@
 use num::Zero;
 use opossum::{
-    error::OpmResult,
-    nodes::{BeamSplitter, Dummy, NodeGroup},
-    OpticScenery,
+    error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, BeamSplitter, Dummy, Lens, NodeGroup}, OpticScenery
 };
 use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
-    //scenery.set_description("Node Group test section".into())?;
-    let d0 = scenery.add_node(Dummy::new("node0"));
+    
+    let d0 = scenery.add_node(collimated_line_ray_source(
+        millimeter!(20.0),
+        joule!(1.0),
+        6,
+    )?);
     let mut group1 = NodeGroup::new("group 1");
     group1.expand_view(true)?;
-    let g1_n1 = group1.add_node(Dummy::new("node1"))?;
+    let g1_n1 = group1.add_node(Lens::default())?;
     let g1_n2 = group1.add_node(BeamSplitter::default())?;
     group1.connect_nodes(g1_n1, "rear", g1_n2, "input1", Length::zero())?;
     group1.map_input_port(g1_n1, "front", "input")?;
     group1.map_output_port(g1_n2, "out1_trans1_refl2", "output")?;
     let scene_g1 = scenery.add_node(group1);
 
-    scenery.connect_nodes(d0, "rear", scene_g1, "input", Length::zero())?;
+    scenery.connect_nodes(d0, "out1", scene_g1, "input", Length::zero())?;
 
     let d2 = scenery.add_node(Dummy::new("node2"));
     scenery.connect_nodes(scene_g1, "output", d2, "front", Length::zero())?;

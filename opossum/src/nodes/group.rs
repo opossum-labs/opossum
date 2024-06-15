@@ -9,11 +9,11 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     reporter::NodeReport,
-    utils::geom_transformation::Isometry,
+    utils::geom_transformation::Isometry, SceneryResources,
 };
 use log::warn;
 use petgraph::{prelude::NodeIndex, Direction};
-use std::{collections::HashMap, path::Path};
+use std::{cell::RefCell, collections::HashMap, path::Path, rc::Rc};
 use uom::si::f64::Length;
 
 /// Mapping of group internal [`OpticPorts`] to externally visible ports.
@@ -652,6 +652,11 @@ impl Optical for NodeGroup {
                 }
             },
         )
+    }
+    fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
+        let node_attr = self.node_attr_mut();
+        node_attr.set_global_conf(global_conf.clone());
+        self.g.update_global_config(&global_conf);
     }
 }
 

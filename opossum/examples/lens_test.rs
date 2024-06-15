@@ -12,9 +12,9 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::new();
-    let mut global_config = SceneryResources::default();
-    global_config.ambient_refr_index = RefrIndexConst::new(1.2)?.to_enum();
-    scenery.set_global_conf(global_config);
+    //let mut global_config = SceneryResources::default();
+    //global_config.ambient_refr_index = RefrIndexConst::new(1.2)?.to_enum();
+    //scenery.set_global_conf(global_config);
     scenery.set_description("Lens Ray-trace test".into())?;
 
     let src = scenery.add_node(collimated_line_ray_source(
@@ -72,6 +72,6 @@ fn main() -> OpmResult<()> {
     //scenery.connect_nodes(l2, "rear", wf, "in1", millimeter!(50.0))?;
     // scenery.connect_nodes(l2, "rear", det, "in1", millimeter!(100.0))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/lens_system.opm"))?;
+    scenery.save_to_file(Path::new("./opossum/playground/lens_test.opm"))?;
     Ok(())
 }

@@ -153,7 +153,6 @@ mod test {
             node2.uuid().to_string()
         );
     }
-
     #[test]
     fn create_dot_file_test() {
         let scenery =
