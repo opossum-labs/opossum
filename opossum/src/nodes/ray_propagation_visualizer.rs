@@ -1,6 +1,5 @@
 //! Ray propagation monitor
 #![warn(missing_docs)]
-use image::RgbImage;
 use log::warn;
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
 use plotters::style::RGBAColor;
@@ -134,15 +133,18 @@ impl Optical for RayPropagationVisualizer {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
     }
-    fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
+    fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
         if self.light_data.is_some() {
             if let Some(LightData::Geometric(rays)) = &self.light_data {
                 let ray_prop_data = rays.get_rays_position_history()?;
 
-                let file_path = PathBuf::from(report_dir)
-                    .join(Path::new(&format!("ray_propagation_{}.svg", self.name())));
-                ray_prop_data.to_plot(&file_path, PltBackEnd::SVG)
-                // data.export(&file_path)
+                let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+                    "ray_propagation_{}_{}.svg",
+                    self.name(),
+                    uuid
+                )));
+                ray_prop_data.to_plot(&file_path, PltBackEnd::SVG)?;
+                Ok(())
             } else {
                 Err(OpossumError::Other(
                     "ray-propagation visualizer: wrong light data".into(),
@@ -157,7 +159,7 @@ impl Optical for RayPropagationVisualizer {
     fn is_detector(&self) -> bool {
         true
     }
-    fn report(&self) -> Option<NodeReport> {
+    fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
@@ -182,7 +184,12 @@ impl Optical for RayPropagationVisualizer {
                 }
             }
         }
-        Some(NodeReport::new(&self.node_type(), &self.name(), props))
+        Some(NodeReport::new(
+            &self.node_type(),
+            &self.name(),
+            uuid,
+            props,
+        ))
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -509,10 +516,10 @@ mod test {
     #[test]
     fn export_data() {
         let mut rpv = RayPropagationVisualizer::default();
-        assert!(rpv.export_data(Path::new("")).is_err());
+        assert!(rpv.export_data(Path::new(""), "").is_err());
         rpv.light_data = Some(LightData::Geometric(Rays::default()));
         let path = NamedTempFile::new().unwrap();
-        assert!(rpv.export_data(path.path().parent().unwrap()).is_err());
+        assert!(rpv.export_data(path.path().parent().unwrap(), "").is_err());
         rpv.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
@@ -521,19 +528,19 @@ mod test {
             )
             .unwrap(),
         ));
-        assert!(rpv.export_data(path.path().parent().unwrap()).is_ok());
+        assert!(rpv.export_data(path.path().parent().unwrap(), "").is_ok());
     }
     #[test]
     fn report() {
         let mut fd = RayPropagationVisualizer::default();
-        let node_report = fd.report().unwrap();
+        let node_report = fd.report("").unwrap();
         assert_eq!(node_report.detector_type(), "ray propagation");
         assert_eq!(node_report.name(), "ray propagation");
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
         fd.light_data = Some(LightData::Geometric(Rays::default()));
-        let node_report = fd.report().unwrap();
+        let node_report = fd.report("").unwrap();
         assert!(!node_report
             .properties()
             .contains("Ray Propagation visualization plot"));
@@ -545,7 +552,7 @@ mod test {
             )
             .unwrap(),
         ));
-        let node_report = fd.report().unwrap();
+        let node_report = fd.report("").unwrap();
         assert!(node_report
             .properties()
             .contains("Ray Propagation visualization plot"));

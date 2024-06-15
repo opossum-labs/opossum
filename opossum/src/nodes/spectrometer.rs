@@ -1,5 +1,4 @@
 #![warn(missing_docs)]
-use image::RgbImage;
 use log::warn;
 use serde::{Deserialize, Serialize};
 use uom::si::length::nanometer;
@@ -204,11 +203,15 @@ impl Optical for Spectrometer {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
     }
-    fn export_data(&self, report_dir: &Path) -> OpmResult<Option<RgbImage>> {
+    fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
         if self.light_data.is_some() {
-            let file_path = PathBuf::from(report_dir)
-                .join(Path::new(&format!("spectrometer_{}.svg", self.name())));
-            self.to_plot(&file_path, PltBackEnd::SVG)
+            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+                "spectrometer_{}_{}.svg",
+                self.name(),
+                uuid
+            )));
+            self.to_plot(&file_path, PltBackEnd::SVG)?;
+            Ok(())
         } else {
             Err(OpossumError::Other(
                 "spectrometer: no light data available".into(),
@@ -218,7 +221,7 @@ impl Optical for Spectrometer {
     fn is_detector(&self) -> bool {
         true
     }
-    fn report(&self) -> Option<NodeReport> {
+    fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(light_data) = data {
@@ -254,7 +257,12 @@ impl Optical for Spectrometer {
                 }
             }
         }
-        Some(NodeReport::new(&self.node_type(), &self.name(), props))
+        Some(NodeReport::new(
+            &self.node_type(),
+            &self.name(),
+            uuid,
+            props,
+        ))
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -451,19 +459,10 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-    // #[test]
-    // fn export_data() {
-    //     let mut s = Spectrometer::default();
-    //     assert!(s.export_data(Path::new("")).is_err());
-    //     s.light_data = Some(LightData::Geometric(Rays::default()));
-    //     let tmp_dir = tempdir().unwrap();
-    //     assert!(s.export_data(tmp_dir.path()).is_ok());
-    //     tmp_dir.close().unwrap();
-    // }
     #[test]
     fn report() {
         let mut sd = Spectrometer::default();
-        let node_report = sd.report().unwrap();
+        let node_report = sd.report("").unwrap();
         assert_eq!(node_report.detector_type(), "spectrometer");
         assert_eq!(node_report.name(), "spectrometer");
         let node_props = node_report.properties();
@@ -477,7 +476,7 @@ mod test {
             )
             .unwrap(),
         ));
-        let node_report = sd.report().unwrap();
+        let node_report = sd.report("").unwrap();
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 2);

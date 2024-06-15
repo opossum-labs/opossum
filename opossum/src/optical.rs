@@ -2,7 +2,6 @@
 //! Contains the basic trait representing an optical element
 #[cfg(feature = "bevy")]
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
-use image::RgbImage;
 use log::warn;
 use nalgebra::Point3;
 use uom::si::f64::{Angle, Length};
@@ -105,8 +104,8 @@ pub trait Optical: Dottable {
     ///
     /// # Errors
     /// This function might return an error depending on the particular implementation.
-    fn export_data(&self, _report_dir: &Path) -> OpmResult<Option<RgbImage>> {
-        Ok(None)
+    fn export_data(&self, _data_dir: &Path, _uuid: &str) -> OpmResult<()> {
+        Ok(())
     }
     /// Returns `true` if the [`Optical`] represents a detector that can report analysis data.
     fn is_detector(&self) -> bool {
@@ -194,8 +193,9 @@ pub trait Optical: Dottable {
     }
     /// Return a YAML representation of the current state of this [`Optical`].
     ///
-    /// This function must be overridden for generating output in the analysis report. Mainly detector nodes use this feature.
-    fn report(&self) -> Option<NodeReport> {
+    /// This function must be overridden for generating output in the analysis report. Mainly
+    /// detector nodes use this feature.
+    fn report(&self, _uuid: &str) -> Option<NodeReport> {
         None
     }
     /// Get the [`NodeAttr`] (common attributes) of an [`Optical`].

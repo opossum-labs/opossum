@@ -3,7 +3,6 @@
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
-use opossum::analyzer::AnalyzerType;
 #[cfg(feature = "bevy")]
 use opossum::bevy_main;
 #[cfg(feature = "bevy")]
@@ -11,17 +10,17 @@ use opossum::SceneryBevyData;
 use opossum::{
     console::{Args, PartialArgs},
     error::{OpmResult, OpossumError},
-    reporter::{AnalysisReport, ReportGenerator},
     OpticScenery,
 };
 use std::env;
+use std::fs::create_dir;
+use std::fs::remove_dir_all;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
 
 fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
     info!("Reading model...");
-    let _ = io::stdout().flush();
     let contents = fs::read_to_string(path).map_err(|e| {
         OpossumError::Console(format!("cannot read file {} : {}", path.display(), e))
     })?;
@@ -46,38 +45,40 @@ fn create_dot_or_report_file_instance(
         .map_err(|e| OpossumError::Other(format!("{f_name} file creation failed: {e}")))
 }
 
-fn create_dot_file(dot_path: &Path, fname: &str, scenery: &OpticScenery) -> OpmResult<()> {
-    let mut output = create_dot_or_report_file_instance(dot_path, fname, "dot", "diagram")?;
+fn create_dot_file(dot_path: &Path, scenery: &OpticScenery) -> OpmResult<()> {
+    let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "dot", "diagram")?;
 
     write!(output, "{}", scenery.to_dot("LR")?)
-        .map_err(|e| OpossumError::Other(format!("writing dot file failed: {e}")))?;
+        .map_err(|e| OpossumError::Other(format!("writing diagram file (.dot) failed: {e}")))?;
 
-    let mut output = create_dot_or_report_file_instance(dot_path, fname, "svg", "diagram")?;
+    let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "svg", "diagram")?;
     write!(output, "{}", scenery.to_dot_svg()?)
-        .map_err(|e| OpossumError::Other(format!("writing dot file failed: {e}")))?;
+        .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))?;
     Ok(())
 }
-
-fn create_report_file(
-    report_directory: &Path,
-    base_file_name: &str,
-    scenery: &OpticScenery,
-    analyzer: &AnalyzerType,
-) -> OpmResult<AnalysisReport> {
+fn create_report_and_data_files(report_directory: &Path, scenery: &OpticScenery) -> OpmResult<()> {
+    let data_dir = report_directory.join("data/");
+    if data_dir.exists() {
+        info!("deleting old report data dir");
+        remove_dir_all(&data_dir)
+            .map_err(|e| OpossumError::Other(format!("removing old data directory failed: {e}")))?;
+    }
+    create_dir(&data_dir)
+        .map_err(|e| OpossumError::Other(format!("creating data directory failed: {e}")))?;
+    scenery.export_node_data(&data_dir)?;
     let mut output =
         create_dot_or_report_file_instance(report_directory, "report", "yaml", "detector report")?;
-    let analysis_report = scenery.report(report_directory)?;
+    let analysis_report = scenery.report()?;
     write!(
         output,
         "{}",
         serde_yaml::to_string(&analysis_report).unwrap()
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
-    let report_generator = ReportGenerator::new(analysis_report.clone(), Path::new(base_file_name));
     let mut report_path = report_directory.to_path_buf();
     report_path.push("report.html");
-    report_generator.generate_html(&report_path, analyzer)?;
-    Ok(analysis_report)
+    analysis_report.generate_html(&report_path)?;
+    Ok(())
 }
 
 fn opossum() -> OpmResult<()> {
@@ -94,32 +95,20 @@ fn opossum() -> OpmResult<()> {
     //read scenery model from file and deserialize it
     let mut scenery = read_and_parse_model(&opossum_args.file_path)?;
 
-    let base_file_name = opossum_args
-        .file_path
-        .file_stem()
-        .unwrap()
-        .to_str()
-        .unwrap();
-
     //create the dot file of the scenery
-    create_dot_file(&opossum_args.report_directory, base_file_name, &scenery)?;
+    create_dot_file(&opossum_args.report_directory, &scenery)?;
     //analyze the scenery
     info!("Analyzing...");
     scenery.analyze(&opossum_args.analyzer)?;
     #[cfg(feature = "bevy")]
-    let analysis_report = create_report_file(
+    let analysis_report = create_report_and_data_files(
         &opossum_args.report_directory,
         base_file_name,
         &scenery,
         &opossum_args.analyzer,
     )?;
     #[cfg(not(feature = "bevy"))]
-    create_report_file(
-        &opossum_args.report_directory,
-        base_file_name,
-        &scenery,
-        &opossum_args.analyzer,
-    )?;
+    create_report_and_data_files(&opossum_args.report_directory, &scenery)?;
     #[cfg(feature = "bevy")]
     bevy_main::bevy_main(SceneryBevyData::from_report(&analysis_report));
     Ok(())
@@ -172,18 +161,12 @@ mod test {
                 .unwrap();
         let dot_file = create_dot_file(
             &PathBuf::from("./files_for_testing/dot/_not_valid/"),
-            "create_dot_file_test",
             &scenery,
         );
         assert!(dot_file.is_err());
-        let _ = create_dot_file(
-            &PathBuf::from("./files_for_testing/dot/"),
-            "create_dot_file_test",
-            &scenery,
-        )
-        .unwrap();
-        fs::remove_file("./files_for_testing/dot/create_dot_file_test.dot").unwrap();
-        fs::remove_file("./files_for_testing/dot/create_dot_file_test.svg").unwrap();
+        let _ = create_dot_file(&PathBuf::from("./files_for_testing/dot/"), &scenery).unwrap();
+        fs::remove_file("./files_for_testing/dot/scenery.dot").unwrap();
+        fs::remove_file("./files_for_testing/dot/scenery.svg").unwrap();
     }
     #[test]
     fn create_report_file_test() {
@@ -191,11 +174,9 @@ mod test {
             read_and_parse_model(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
                 .unwrap();
 
-        let report_file = create_report_file(
+        let report_file = create_report_and_data_files(
             &PathBuf::from("./files_for_testing/report/_not_valid/"),
-            "create_report_file_test",
             &scenery,
-            &AnalyzerType::Energy,
         );
         assert!(report_file.is_err());
     }

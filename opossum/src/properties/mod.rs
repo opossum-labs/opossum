@@ -140,10 +140,17 @@ impl Properties {
         self.get_bool("inverted")
     }
     #[must_use]
-    pub fn html_props(&self, node_name: &str) -> Vec<HtmlProperty> {
+    pub fn html_props(&self, node_name: &str, uuid: &str) -> Vec<HtmlProperty> {
         let mut html_props: Vec<HtmlProperty> = Vec::new();
         for prop in &self.props {
-            if let Ok(html_prop_value) = prop.1.prop().to_html(node_name) {
+            // Check if property is a NodeReport (= group node) and use the uuid of the individual sub nodes
+            // instead of the uuid of the group node itself.
+            let node_uuid = if let Ok(Proptype::NodeReport(r)) = self.get(prop.0) {
+                r.uuid()
+            } else {
+                uuid
+            };
+            if let Ok(html_prop_value) = prop.1.prop().to_html(node_name, node_uuid) {
                 let html_prop = HtmlProperty {
                     name: prop.0.to_owned(),
                     description: prop.1.description().into(),

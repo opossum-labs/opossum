@@ -103,10 +103,11 @@ impl Optical for Dummy {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
     }
-    fn report(&self) -> Option<NodeReport> {
+    fn report(&self, uuid: &str) -> Option<NodeReport> {
         Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
+            uuid,
             self.node_attr.properties().clone(),
         ))
     }
@@ -174,7 +175,7 @@ mod test {
     }
     #[test]
     fn report() {
-        let report = Dummy::default().report();
+        let report = Dummy::default().report("123");
         assert!(report.is_some());
     }
     #[test]
