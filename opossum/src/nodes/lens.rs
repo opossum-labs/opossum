@@ -9,7 +9,7 @@ use crate::{
     lightdata::LightData,
     millimeter, nanometer,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optical::{Alignable, LightResult, Optical},
     properties::Proptype,
     ray::Ray,
     refractive_index::{refr_index_vaccuum, RefrIndexConst, RefractiveIndex, RefractiveIndexType},
@@ -245,7 +245,7 @@ impl Optical for Lens {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
+    fn output_port_isometry(&self, _output_port_name: &str, light: &LightData) -> Option<Isometry> {
         // if wedge is aligned (tilted, decentered), calculate single ray on incoming optical axis
         // todo: use central wavelength
         let alignment_iso = self
@@ -253,9 +253,22 @@ impl Optical for Lens {
             .alignment()
             .clone()
             .unwrap_or_else(Isometry::identity);
+        let wavelength = match light {
+            LightData::Energy(e) => e.spectrum.center_wavelength(),
+            LightData::Geometric(r) => {
+                let Some(wavelength) = r.central_wavelength() else {
+                    warn!("could not dertemine centeral wavelength for output isometry");
+                    return None;
+                };
+                wavelength
+            }
+            LightData::Fourier => {
+                warn!("no average wavelength defined using 1000 nm as default");
+                nanometer!(1000.0)
+            }
+        };
         let mut ray =
-            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap();
+            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), wavelength, joule!(1.0)).unwrap();
         let front_plane = Plane::new(&alignment_iso);
         let Ok(Proptype::RefractiveIndex(index_model)) =
             self.node_attr.get_property("refractive index")
@@ -315,6 +328,7 @@ impl Optical for Lens {
 //         (p_out.x.mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z*p_out.z)) ).sqrt() - self.radius.value
 //     }
 // }
+impl Alignable for Lens {}
 
 impl Dottable for Lens {
     fn node_color(&self) -> &str {

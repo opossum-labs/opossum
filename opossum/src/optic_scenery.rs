@@ -10,6 +10,7 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     reporter::AnalysisReport,
+    utils::geom_transformation::Isometry,
 };
 use chrono::Local;
 use image::{io::Reader, DynamicImage};
@@ -201,6 +202,19 @@ impl OpticScenery {
             }
         }
     }
+    fn is_stale_node(&self, idx: NodeIndex) -> bool {
+        let neighbors = self.g.neighbors_undirected(idx);
+        let is_stale = neighbors.count() == 0;
+        if is_stale {
+            let node_name = if let Ok(node) = self.g.node_by_idx(idx) {
+                node.optical_ref.borrow().name()
+            } else {
+                "unknown".to_string()
+            };
+            warn!("stale (completely unconnected) node {node_name} found. Skipping.");
+        }
+        is_stale
+    }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].
     ///
     /// # Attributes
@@ -218,21 +232,17 @@ impl OpticScenery {
             let node = self.g.node_by_idx(idx)?;
             let node_name = node.optical_ref.borrow().name();
 
-            let neighbors = self.g.neighbors_undirected(idx);
-            if neighbors.count() == 0 {
-                warn!("stale (completely unconnected) node {node_name} found. Skipping.");
-            } else {
-                // calc isometry for node if not already set.
+            if !self.is_stale_node(idx) {
+                // check if node has isometry, otherwise place @ origin.
                 if node.optical_ref.borrow().isometry().is_none() {
-                    if let Some(iso) = self.g.calc_node_isometry(idx) {
-                        node.optical_ref.borrow_mut().set_isometry(iso);
-                    } else {
-                        warn!("could not assign node isometry to {} because predecessor node has no isometry defined.", node_name);
-                    }
+                    warn!("node {node_name} has no isometry defined, setting to coordinate origin");
+                    node.optical_ref
+                        .borrow_mut()
+                        .set_isometry(Isometry::identity());
                 }
-                let incoming_edges: LightResult = self.g.incoming_edges(idx);
                 // paranoia: check if all incoming ports are really input ports of the node to be analyzed
                 let input_ports = node.optical_ref.borrow().ports().input_names();
+                let incoming_edges: LightResult = self.g.incoming_edges(idx);
                 if !incoming_edges.iter().all(|e| input_ports.contains(e.0)) {
                     warn!("input light data contains port which is not an input port of the node {node_name}. Data will be discarded.");
                 }
@@ -248,11 +258,13 @@ impl OpticScenery {
                         ))
                     })?;
                 // Warn, if empty output LightResult but node has output ports defined.
-                if outgoing_edges.is_empty()
-                    && !node.optical_ref.borrow().ports().outputs().is_empty()
-                    && is_single_tree
-                {
-                    warn!("analysis of node {node_name} <{node_type}> did not result in any output data. This might come from wrong / empty input data.");
+                if is_single_tree {
+                    if outgoing_edges.len() == node.optical_ref.borrow().ports().outputs().len() {
+                        self.g
+                            .set_position_of_successor_nodes(idx, &outgoing_edges)?;
+                    } else {
+                        warn!("analysis of node {node_name} <{node_type}> did not result in output data for all ports. This might come from wrong / empty input data.");
+                    }
                 }
                 if let AnalyzerType::RayTrace(r_config) = analyzer_type {
                     Self::filter_ray_limits(&mut outgoing_edges, r_config);
@@ -550,7 +562,6 @@ mod test {
     #[test]
     fn analyze_dummy_test() {
         let mut scenery = OpticScenery::new();
-        scenery.set_description("analyze_dummy_test").unwrap();
         let node1 = scenery.add_node(Dummy::new("dummy1"));
         let node2 = scenery.add_node(Dummy::new("dummy2"));
         scenery
@@ -561,14 +572,15 @@ mod test {
     #[test]
     fn analyze_empty_test() {
         let mut scenery = OpticScenery::new();
-        scenery.set_description("analyze_empty_test").unwrap();
         scenery.analyze(&AnalyzerType::Energy).unwrap();
     }
     #[test]
     fn analyze_stale_node() {
         testing_logger::setup();
         let mut scenery = OpticScenery::new();
-        scenery.add_node(Dummy::default());
+        let mut dummy = Dummy::default();
+        dummy.set_isometry(Isometry::identity());
+        scenery.add_node(dummy);
         assert!(scenery.analyze(&AnalyzerType::Energy).is_ok());
         testing_logger::validate(|captured_logs| {
             assert_eq!(captured_logs.len(), 1);
@@ -586,9 +598,9 @@ mod test {
         let mut d = Dummy::default();
         d.set_isometry(Isometry::identity());
         let n1 = scenery.add_node(d.clone());
-        let n2 = scenery.add_node(Dummy::default());
-        let n3 = scenery.add_node(d);
-        let n4 = scenery.add_node(Dummy::default());
+        let n2 = scenery.add_node(d.clone());
+        let n3 = scenery.add_node(d.clone());
+        let n4 = scenery.add_node(d);
         scenery
             .connect_nodes(n1, "rear", n2, "front", Length::zero())
             .unwrap();
@@ -597,9 +609,6 @@ mod test {
             .unwrap();
         assert!(scenery.analyze(&AnalyzerType::Energy).is_ok());
         testing_logger::validate(|captured_logs| {
-            for log in captured_logs {
-                println!("{}", log.body);
-            }
             assert_eq!(captured_logs.len(), 1);
             assert_eq!(
                 captured_logs[0].body,

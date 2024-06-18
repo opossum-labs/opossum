@@ -727,6 +727,19 @@ impl Rays {
             .count();
         Ok(())
     }
+    /// Returns the central wavelength of this [`Rays`].
+    /// If the ray bundle is emtpy, `None` is returned.
+    #[must_use]
+    pub fn central_wavelength(&self) -> Option<Length> {
+        if self.rays.is_empty() {
+            return None;
+        };
+        let mut center = Length::zero() * Energy::zero();
+        for ray in self.rays.iter().filter(|r| r.valid()) {
+            center += ray.energy() * ray.wavelength();
+        }
+        Some(center / self.total_energy())
+    }
     /// Returns the wavelength range of this [`Rays`].
     ///
     /// This functions returns the minimum and maximum wavelength of the containing `valid` rays as `Range`. If [`Rays`] is empty, `None` is returned.

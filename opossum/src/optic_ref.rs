@@ -60,6 +60,7 @@ impl Serialize for OpticRef {
         node.serialize_field("type", &self.optical_ref.borrow().node_type())?;
         node.serialize_field("id", &self.uuid)?;
         node.serialize_field("properties", &self.optical_ref.borrow().properties())?;
+        // node.serialize_field("attributes", &self.optical_ref.borrow().node_attr())?;
         node.end()
     }
 }

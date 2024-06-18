@@ -150,9 +150,13 @@ impl Optical for ThinMirror {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
+    fn output_port_isometry(
+        &self,
+        _output_port_name: &str,
+        _light: &LightData,
+    ) -> Option<Isometry> {
         // if mirror is aligned (tilted, decentered), calculate single ray on incoming optical axis
-        // todo: use central wavelength
+        // Note: light information is not (yet) necessary here since the reflection does not depend on the wavelength
         let alignment_iso = self
             .node_attr
             .alignment()
@@ -346,16 +350,22 @@ mod test {
     #[test]
     fn output_port_isometry() {
         let mut m = ThinMirror::default();
-        assert!(m.output_port_isometry("input").is_none());
+        assert!(m
+            .output_port_isometry("input", &LightData::Fourier)
+            .is_none());
         m.set_isometry(Isometry::identity());
-        let i = m.output_port_isometry("input").unwrap();
+        let i = m
+            .output_port_isometry("input", &LightData::Fourier)
+            .unwrap();
         let after_pos = i.transform_point(&meter!(0.0, 0.0, 0.0));
         assert_eq!(after_pos, meter!(0.0, 0.0, 0.0));
         let after_reflection = i.transform_vector_f64(&Vector3::z());
         assert_relative_eq!(after_reflection, Vector3::new(0.0, 0.0, -1.0));
         m.set_alignment(meter!(0.0, 0.0, 0.0), degree!(45.0, 0.0, 0.0))
             .unwrap();
-        let i = m.output_port_isometry("input").unwrap();
+        let i = m
+            .output_port_isometry("input", &LightData::Fourier)
+            .unwrap();
         let after_reflection = i.transform_vector_f64(&Vector3::z());
         assert_relative_eq!(after_reflection, Vector3::new(0.0, 1.0, 0.0));
     }
