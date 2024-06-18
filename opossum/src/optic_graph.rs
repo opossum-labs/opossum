@@ -203,25 +203,6 @@ impl OpticGraph {
         let group_sinks = self.g.externals(petgraph::Direction::Outgoing);
         group_sinks.into_iter().any(|gs| gs == idx)
     }
-    pub fn calc_node_isometry(&self, node_idx: NodeIndex) -> Option<Isometry> {
-        let mut neighbors = self
-            .g
-            .neighbors_directed(node_idx, petgraph::Direction::Incoming);
-        if let Some(neighbor) = neighbors.next() {
-            let neighbor_node_ref = self.g.node_weight(neighbor).unwrap();
-            let neighbor_node = neighbor_node_ref.optical_ref.borrow();
-            let connecting_edge = self.g.edges_connecting(neighbor, node_idx).next().unwrap();
-            let neighbor_output_port_name = connecting_edge.weight().src_port();
-            if let Some(neighbor_iso) =
-                neighbor_node.output_port_isometry(neighbor_output_port_name)
-            {
-                let distance = connecting_edge.weight().distance();
-                let connecting_isometry = Isometry::new_along_z(*distance).unwrap();
-                return Some(neighbor_iso.append(&connecting_isometry));
-            }
-        }
-        None
-    }
     pub fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
         let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
         edges
@@ -320,6 +301,49 @@ impl OpticGraph {
         }
         dot_string.push_str("}\n");
         Ok(dot_string)
+    }
+
+    pub fn set_position_of_successor_nodes(
+        &mut self,
+        idx: NodeIndex,
+        outgoing: &LightResult,
+    ) -> OpmResult<()> {
+        let node = self.node_by_idx(idx)?;
+        let neighbors = self
+            .g
+            .neighbors_directed(idx, petgraph::Direction::Outgoing);
+        for neighbor in neighbors {
+            let neighbor_node_ref = self.g.node_weight(neighbor).unwrap();
+            let mut neighbor_node = neighbor_node_ref.optical_ref.borrow_mut();
+            if neighbor_node.isometry().is_some() {
+                warn!("node has already an isometry set. leaving untouched.");
+                return Ok(());
+            }
+            let Some(connecting_edge) = self.g.edges_connecting(idx, neighbor).next() else {
+                return Err(OpossumError::Analysis(
+                    "could not find connecting edge".into(),
+                ));
+            };
+            let port_name_to_neighbor = connecting_edge.weight().src_port();
+            let distance = connecting_edge.weight().distance();
+            let connecting_isometry = Isometry::new_along_z(*distance).unwrap();
+            let Some(light_data_at_port) = outgoing.get(port_name_to_neighbor) else {
+                return Err(OpossumError::Analysis(
+                    format!("could not find light data for port name {port_name_to_neighbor} of node {} for isometry calculation", node.optical_ref.borrow().name()),
+                ));
+            };
+            if let Some(output_port_iso) = node
+                .optical_ref
+                .borrow()
+                .output_port_isometry(port_name_to_neighbor, light_data_at_port)
+            {
+                let neighbor_node_iso = output_port_iso.append(&connecting_isometry);
+                neighbor_node.set_isometry(neighbor_node_iso);
+            } else if let Some(iso) = node.optical_ref.borrow().isometry() {
+                neighbor_node.set_isometry(iso.clone());
+            }
+        }
+        Ok(())
     }
 }
 impl Serialize for OpticGraph {

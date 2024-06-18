@@ -224,7 +224,11 @@ pub trait Optical: Dottable {
     /// This function returns the [`Isometry`] of the output surface of the port with the given name. It returns the position and orientation of
     /// the optical axis after passing the optical node. The default implementation returns the base isometry of the node which corresponds to an
     /// optical component with an infinitely thin flat surface. In this case the optical axis before and behind the component is unmodified.
-    fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
+    fn output_port_isometry(
+        &self,
+        _output_port_name: &str,
+        _light: &LightData,
+    ) -> Option<Isometry> {
         self.node_attr().isometry().clone()
     }
     /// Set the (base) [`Isometry`] (position and angle) of this optical node.
@@ -249,7 +253,8 @@ pub trait Optical: Dottable {
     /// This function will return an error if .
     fn set_alignment(&mut self, decenter: Point3<Length>, tilt: Point3<Angle>) -> OpmResult<()> {
         let align = Some(Isometry::new(decenter, tilt)?);
-        self.set_property("alignment", align.into())?;
+        self.node_attr_mut()
+            .set_property("alignment", align.into())?;
         Ok(())
     }
     ///

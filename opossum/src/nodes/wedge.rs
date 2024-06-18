@@ -14,6 +14,7 @@ use crate::{
     surface::Plane,
     utils::{geom_transformation::Isometry, EnumProxy},
 };
+use log::warn;
 use nalgebra::{Point3, Vector3};
 use num::Zero;
 use uom::si::{
@@ -78,7 +79,9 @@ impl Wedge {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if
+    ///   - the center thickness is ngeative or not finite
+    ///   - the wedge angle is outside ]-90°; 90°[ or not finite
     pub fn new(
         name: &str,
         center_thickness: Length,
@@ -103,12 +106,9 @@ impl Wedge {
             }
             .into(),
         )?;
-        if wedge_angle.is_sign_negative()
-            || !wedge_angle.is_finite()
-            || wedge_angle.get::<degree>() > 180.0
-        {
+        if !wedge_angle.is_finite() || wedge_angle.get::<degree>().abs() > 90.0 {
             return Err(crate::error::OpossumError::Other(
-                "wedge angle must be within inth interval [0.0 deg; 180 deg] and finite".into(),
+                "wedge angle must be within the interval ]-90 deg; 90 deg[ and finite".into(),
             ));
         }
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
@@ -198,7 +198,7 @@ impl Optical for Wedge {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn output_port_isometry(&self, _output_port_name: &str) -> Option<Isometry> {
+    fn output_port_isometry(&self, _output_port_name: &str, light: &LightData) -> Option<Isometry> {
         // if wedge is aligned (tilted, decentered), calculate single ray on incoming optical axis
         // todo: use central wavelength
         let alignment_iso = self
@@ -206,9 +206,22 @@ impl Optical for Wedge {
             .alignment()
             .clone()
             .unwrap_or_else(Isometry::identity);
+        let wavelength = match light {
+            LightData::Energy(e) => e.spectrum.center_wavelength(),
+            LightData::Geometric(r) => {
+                let Some(wavelength) = r.central_wavelength() else {
+                    warn!("could not dertemine centeral wavelength for output isometry");
+                    return None;
+                };
+                wavelength
+            }
+            LightData::Fourier => {
+                warn!("no average wavelength defined using 1000 nm as default");
+                nanometer!(1000.0)
+            }
+        };
         let mut ray =
-            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap();
+            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), wavelength, joule!(1.0)).unwrap();
         let front_plane = Plane::new(&alignment_iso);
         let Ok(Proptype::RefractiveIndex(index_model)) =
             self.node_attr.get_property("refractive index")
@@ -328,13 +341,6 @@ mod test {
         assert!(Wedge::new(
             "test",
             millimeter!(0.0),
-            degree!(-0.1),
-            &RefrIndexConst::new(1.0).unwrap()
-        )
-        .is_err());
-        assert!(Wedge::new(
-            "test",
-            millimeter!(0.0),
             degree!(f64::NEG_INFINITY),
             &RefrIndexConst::new(1.0).unwrap()
         )
@@ -356,18 +362,31 @@ mod test {
         assert!(Wedge::new(
             "test",
             millimeter!(0.0),
-            degree!(180.1),
+            degree!(90.01),
             &RefrIndexConst::new(1.0).unwrap()
         )
         .is_err());
         assert!(Wedge::new(
             "test",
             millimeter!(0.0),
-            degree!(180.0),
+            degree!(-90.01),
+            &RefrIndexConst::new(1.0).unwrap()
+        )
+        .is_err());
+        assert!(Wedge::new(
+            "test",
+            millimeter!(0.0),
+            degree!(89.99),
             &RefrIndexConst::new(1.0).unwrap()
         )
         .is_ok());
-
+        assert!(Wedge::new(
+            "test",
+            millimeter!(0.0),
+            degree!(-89.99),
+            &RefrIndexConst::new(1.0).unwrap()
+        )
+        .is_ok());
         let n = Wedge::new(
             "test",
             millimeter!(0.0),

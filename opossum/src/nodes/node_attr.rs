@@ -16,11 +16,12 @@ use crate::{
 /// Struct for sotring common attributes of optical nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeAttr {
+    #[serde(skip)]
     node_type: String,
     props: Properties,
+    isometry: Option<Isometry>,
     #[serde(skip)]
     global_conf: Option<Rc<RefCell<SceneryResources>>>,
-    isometry: Option<Isometry>,
 }
 impl NodeAttr {
     /// Creates new node attributes ([`NodeAttr`]).

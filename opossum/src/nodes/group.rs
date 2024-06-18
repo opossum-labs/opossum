@@ -4,6 +4,7 @@ use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    lightdata::LightData,
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -404,7 +405,8 @@ impl NodeGroup {
         }
         let g_clone = self.g.clone();
         let group_name = self.name();
-        if !&self.g.is_single_tree() {
+        let is_single_tree = &self.g.is_single_tree();
+        if !is_single_tree {
             warn!(
                 "Group {group_name} contains unconnected sub-trees. Analysis might not be complete."
             );
@@ -417,13 +419,14 @@ impl NodeGroup {
             if self.is_stale_node(idx) {
                 warn!("Group {group_name} contains stale (completely unconnected) node {node_name}. Skipping.");
             } else {
-                // calc isometry for node if not already set.
+                // check if node has isometry, otherwise place @ origin.
                 if node.optical_ref.borrow().isometry().is_none() {
-                    if let Some(iso) = self.g.calc_node_isometry(idx) {
-                        node.optical_ref.borrow_mut().set_isometry(iso);
-                    } else {
-                        warn!("could not assign node isometry to {} because predecessor node has no isometry defined.", node_name);
-                    }
+                    warn!(
+                        "node {node_name} has not isometry defined, setting to coordinate origin"
+                    );
+                    node.optical_ref
+                        .borrow_mut()
+                        .set_isometry(Isometry::identity());
                 }
                 // Check if node is group src node
                 let incoming_edges = self.get_incoming(idx, incoming_data);
@@ -431,6 +434,15 @@ impl NodeGroup {
                     .optical_ref
                     .borrow_mut()
                     .analyze(incoming_edges, analyzer_type)?;
+                // Warn, if empty output LightResult but node has output ports defined.
+                if *is_single_tree {
+                    if outgoing_edges.len() == node.optical_ref.borrow().ports().outputs().len() {
+                        self.g
+                            .set_position_of_successor_nodes(idx, &outgoing_edges)?;
+                    } else {
+                        warn!("analysis of node {node_name} did not result in output data for all ports. This might come from wrong / empty input data.");
+                    }
+                }
                 // Check if node is group sink node
                 if self.g.is_sink_node(idx) {
                     let portmap = if is_inverted {
@@ -636,7 +648,7 @@ impl Optical for NodeGroup {
             }
         }
     }
-    fn output_port_isometry(&self, output_port_name: &str) -> Option<Isometry> {
+    fn output_port_isometry(&self, output_port_name: &str, light: &LightData) -> Option<Isometry> {
         self.output_port_map().get(output_port_name).map_or_else(
             || {
                 warn!("output port name {} not found", output_port_name);
@@ -646,7 +658,7 @@ impl Optical for NodeGroup {
                 if let Ok(node) = self.g.node_by_idx(output_port.0) {
                     node.optical_ref
                         .borrow()
-                        .output_port_isometry(&output_port.1)
+                        .output_port_isometry(&output_port.1, light)
                 } else {
                     warn!("node not found");
                     None
@@ -1005,9 +1017,9 @@ mod test {
         let mut d = Dummy::default();
         d.set_isometry(Isometry::identity());
         let d1 = group.add_node(d.clone()).unwrap();
-        let d2 = group.add_node(Dummy::default()).unwrap();
-        let d3 = group.add_node(d).unwrap();
-        let d4 = group.add_node(Dummy::default()).unwrap();
+        let d2 = group.add_node(d.clone()).unwrap();
+        let d3 = group.add_node(d.clone()).unwrap();
+        let d4 = group.add_node(d).unwrap();
         group
             .connect_nodes(d1, "rear", d2, "front", Length::zero())
             .unwrap();
@@ -1016,8 +1028,7 @@ mod test {
             .unwrap();
         group.map_input_port(d1, "front", "input").unwrap();
         let input = LightResult::default();
-        let output = group.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
+        group.analyze(input, &AnalyzerType::Energy).unwrap();
         testing_logger::validate(|captured_logs| {
             assert_eq!(captured_logs.len(), 1);
             assert_eq!(
