@@ -120,6 +120,16 @@ impl Ray {
     ) -> OpmResult<Self> {
         Self::new(position, Vector3::z(), wave_length, energy)
     }
+    /// Create a ray with a position at the global coordinate origin pointing along the positive z-axis.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///  - the wavelength is <= 0.0 nm or not finite
+    ///  - the energy is < 0.0 or not finite
+    pub fn origin_along_z(wave_length: Length, energy: Energy) -> OpmResult<Self> {
+        Self::new_collimated(Point3::origin(), wave_length, energy)
+    }
     /// Returns the position of this [`Ray`].
     #[must_use]
     pub fn position(&self) -> Point3<Length> {
@@ -204,6 +214,29 @@ impl Ray {
         }
         self.refractive_index = refractive_index;
         Ok(())
+    }
+    /// Propagate a ray freely along its direction by the given length.
+    ///
+    /// This function also respects the refractive index stored in the ray while calculating the optical path length.
+    ///
+    /// # Errors
+    /// This functions returns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
+    pub fn propagate(&mut self, length: Length) -> OpmResult<()> {
+        self.pos_hist.push(self.pos);
+        self.pos += Vector3::new(
+            length * self.dir.x,
+            length * self.dir.y,
+            length * self.dir.z,
+        );
+        self.path_length += length * self.refractive_index * self.dir.norm();
+        Ok(())
+    }
+    /// Create an [`Isometry`] from this [`Ray`].
+    ///
+    /// This function creates an [`Isometry`] with its position based on the ray position and the orientation (rotation) baed on the ray direction.
+    #[must_use]
+    pub fn to_isometry(&self) -> Isometry {
+        Isometry::new_from_view(self.position(), self.direction(), Vector3::y())
     }
     /// Propagate a ray freely along its direction. The length is given as the projection on the z-axis (=optical axis).
     ///

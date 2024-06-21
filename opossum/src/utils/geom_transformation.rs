@@ -1,5 +1,8 @@
 //!for all the functions, structs or trait that may be used for geometrical transformations
 #![warn(missing_docs)]
+use std::fmt::Display;
+
+use super::EnumProxy;
 use crate::{
     degree,
     error::{OpmResult, OpossumError},
@@ -21,8 +24,6 @@ use uom::si::{
     f64::{Angle, Length},
     length::meter,
 };
-
-use super::EnumProxy;
 
 /// Struct to store the isometric transofmeation matrix and its inverse
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -315,6 +316,25 @@ impl Isometry {
             .collect::<Vec<Vector3<f64>>>()
     }
 }
+
+impl Display for Isometry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let m = Length::format_args(meter, uom::fmt::DisplayStyle::Abbreviation);
+        let deg = Angle::format_args(uom::si::angle::degree, uom::fmt::DisplayStyle::Abbreviation);
+        let trans = self.translation();
+        let rot = self.rotation();
+        write!(
+            f,
+            "translation: ({:.3}, {:.3}, {:.3}), rotation: ({:.3}, {:.3}, {:.3})",
+            m.with(trans[0]),
+            m.with(trans[1]),
+            m.with(trans[2]),
+            deg.with(rot[0]),
+            deg.with(rot[1]),
+            deg.with(rot[2]),
+        )
+    }
+}
 impl From<EnumProxy<Option<Isometry>>> for Proptype {
     fn from(value: EnumProxy<Option<Isometry>>) -> Self {
         Self::Isometry(value)
@@ -526,6 +546,14 @@ mod test {
     use super::*;
     use crate::millimeter;
     use approx::assert_relative_eq;
+    #[test]
+    fn display() {
+        let i = Isometry::identity();
+        assert_eq!(
+            format!("{i}"),
+            "translation: (0.000 m, 0.000 m, 0.000 m), rotation: (0.000 °, -0.000 °, 0.000 °)"
+        );
+    }
     #[test]
     fn new_along_z() {
         assert!(Isometry::new_along_z(millimeter!(f64::NAN)).is_err());

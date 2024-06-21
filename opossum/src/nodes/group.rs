@@ -4,7 +4,6 @@ use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    lightdata::LightData,
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
@@ -302,7 +301,7 @@ impl NodeGroup {
         }
         let mut input_port_map = self.input_port_map();
         if let Some(iso) = self.isometry() {
-            node.optical_ref.borrow_mut().set_isometry(iso.clone());
+            node.optical_ref.borrow_mut().set_isometry(iso);
         }
         input_port_map.insert(
             external_name.to_string(),
@@ -435,14 +434,14 @@ impl NodeGroup {
                     .borrow_mut()
                     .analyze(incoming_edges, analyzer_type)?;
                 // Warn, if empty output LightResult but node has output ports defined.
-                if *is_single_tree {
-                    if outgoing_edges.len() == node.optical_ref.borrow().ports().outputs().len() {
-                        self.g
-                            .set_position_of_successor_nodes(idx, &outgoing_edges)?;
-                    } else {
-                        warn!("analysis of node {node_name} did not result in output data for all ports. This might come from wrong / empty input data.");
-                    }
-                }
+                // if *is_single_tree {
+                //     if outgoing_edges.len() == node.optical_ref.borrow().ports().outputs().len() {
+                //         self.g
+                //             .set_position_of_successor_nodes(idx, &outgoing_edges)?;
+                //     } else {
+                //         warn!("analysis of node {node_name} did not result in output data for all ports. This might come from wrong / empty input data.");
+                //     }
+                // }
                 // Check if node is group sink node
                 if self.g.is_sink_node(idx) {
                     let portmap = if is_inverted {
@@ -647,24 +646,6 @@ impl Optical for NodeGroup {
                 node.optical_ref.borrow_mut().set_isometry(isometry.clone());
             }
         }
-    }
-    fn output_port_isometry(&self, output_port_name: &str, light: &LightData) -> Option<Isometry> {
-        self.output_port_map().get(output_port_name).map_or_else(
-            || {
-                warn!("output port name {} not found", output_port_name);
-                None
-            },
-            |output_port| {
-                if let Ok(node) = self.g.node_by_idx(output_port.0) {
-                    node.optical_ref
-                        .borrow()
-                        .output_port_isometry(&output_port.1, light)
-                } else {
-                    warn!("node not found");
-                    None
-                }
-            },
-        )
     }
     fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
         let node_attr = self.node_attr_mut();

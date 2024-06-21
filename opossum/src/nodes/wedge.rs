@@ -3,19 +3,16 @@ use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    joule,
     lightdata::LightData,
-    millimeter, nanometer,
+    millimeter,
     optic_ports::OpticPorts,
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
-    ray::Ray,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::Plane,
     utils::{geom_transformation::Isometry, EnumProxy},
 };
-use log::warn;
-use nalgebra::{Point3, Vector3};
+use nalgebra::Point3;
 use num::Zero;
 use uom::si::{
     angle::degree,
@@ -198,68 +195,6 @@ impl Optical for Wedge {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn output_port_isometry(&self, _output_port_name: &str, light: &LightData) -> Option<Isometry> {
-        // if wedge is aligned (tilted, decentered), calculate single ray on incoming optical axis
-        // todo: use central wavelength
-        let alignment_iso = self
-            .node_attr
-            .alignment()
-            .clone()
-            .unwrap_or_else(Isometry::identity);
-        let wavelength = match light {
-            LightData::Energy(e) => e.spectrum.center_wavelength(),
-            LightData::Geometric(r) => {
-                let Some(wavelength) = r.central_wavelength() else {
-                    warn!("could not dertemine centeral wavelength for output isometry");
-                    return None;
-                };
-                wavelength
-            }
-            LightData::Fourier => {
-                warn!("no average wavelength defined using 1000 nm as default");
-                nanometer!(1000.0)
-            }
-        };
-        let mut ray =
-            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), wavelength, joule!(1.0)).unwrap();
-        let front_plane = Plane::new(&alignment_iso);
-        let Ok(Proptype::RefractiveIndex(index_model)) =
-            self.node_attr.get_property("refractive index")
-        else {
-            return None;
-        };
-        let n2 = index_model
-            .value
-            .get_refractive_index(ray.wavelength())
-            .unwrap();
-        ray.refract_on_surface(&front_plane, n2).unwrap();
-        let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        else {
-            return None;
-        };
-        let Ok(Proptype::Angle(angle)) = self.node_attr.get_property("wedge") else {
-            return None;
-        };
-        let thickness_iso = Isometry::new_along_z(*center_thickness).unwrap();
-        let wedge_iso = Isometry::new(
-            Point3::origin(),
-            Point3::new(*angle, Angle::zero(), Angle::zero()),
-        )
-        .unwrap();
-        let isometry = alignment_iso.append(&thickness_iso).append(&wedge_iso);
-        let back_plane = Plane::new(&isometry);
-        let n2 = self
-            .ambient_idx()
-            .get_refractive_index(ray.wavelength())
-            .unwrap();
-        ray.refract_on_surface(&back_plane, n2).unwrap();
-        let alignment_iso = Isometry::new_from_view(ray.position(), ray.direction(), Vector3::y());
-        self.node_attr
-            .isometry()
-            .as_ref()
-            .map(|iso| iso.append(&alignment_iso))
-    }
 }
 
 impl Alignable for Wedge {}
@@ -272,10 +207,13 @@ impl Dottable for Wedge {
 
 #[cfg(test)]
 mod test {
+    use nalgebra::Vector3;
+
     use super::*;
     use crate::{
-        analyzer::RayTraceConfig, degree, lightdata::DataEnergy,
-        nodes::test_helper::test_helper::*, rays::Rays, spectrum_helper::create_he_ne_spec,
+        analyzer::RayTraceConfig, degree, joule, lightdata::DataEnergy, nanometer,
+        nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
+        spectrum_helper::create_he_ne_spec,
     };
 
     #[test]
@@ -475,10 +413,7 @@ mod test {
         );
         let mut input = LightResult::default();
         let mut rays = Rays::default();
-        rays.add_ray(
-            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap(),
-        );
+        rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
         let input_light = LightData::Geometric(rays);
         input.insert("front".into(), input_light.clone());
         let output = node

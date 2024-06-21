@@ -24,7 +24,6 @@ pub struct OpticRef {
     pub optical_ref: Rc<RefCell<dyn Optical>>,
     uuid: Uuid,
 }
-
 impl OpticRef {
     /// Creates a new [`OpticRef`].
     ///

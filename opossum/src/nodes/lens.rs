@@ -1,17 +1,14 @@
 #![warn(missing_docs)]
 //! Lens with spherical or flat surfaces
-
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    joule,
     lightdata::LightData,
-    millimeter, nanometer,
+    millimeter,
     optic_ports::OpticPorts,
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
-    ray::Ray,
     refractive_index::{refr_index_vaccuum, RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
@@ -19,7 +16,6 @@ use crate::{
 #[cfg(feature = "bevy")]
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
-use nalgebra::Point3;
 use num::Zero;
 use uom::si::f64::Length;
 
@@ -244,79 +240,6 @@ impl Optical for Lens {
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
-    }
-    fn output_port_isometry(&self, _output_port_name: &str, light: &LightData) -> Option<Isometry> {
-        // if wedge is aligned (tilted, decentered), calculate single ray on incoming optical axis
-        // todo: use central wavelength
-        let alignment_iso = self
-            .node_attr
-            .alignment()
-            .clone()
-            .unwrap_or_else(Isometry::identity);
-        let wavelength = match light {
-            LightData::Energy(e) => e.spectrum.center_wavelength(),
-            LightData::Geometric(r) => {
-                let Some(wavelength) = r.central_wavelength() else {
-                    warn!("could not dertemine centeral wavelength for output isometry");
-                    return None;
-                };
-                wavelength
-            }
-            LightData::Fourier => {
-                warn!("no average wavelength defined using 1000 nm as default");
-                nanometer!(1000.0)
-            }
-        };
-        let mut ray =
-            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), wavelength, joule!(1.0)).unwrap();
-        let front_plane = Plane::new(&alignment_iso);
-        let Ok(Proptype::RefractiveIndex(index_model)) =
-            self.node_attr.get_property("refractive index")
-        else {
-            return None;
-        };
-        let n2 = index_model
-            .value
-            .get_refractive_index(ray.wavelength())
-            .unwrap();
-        ray.refract_on_surface(&front_plane, n2).unwrap();
-        let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        else {
-            return None;
-        };
-        let thickness_iso = Isometry::new_along_z(*center_thickness).unwrap();
-        let back_plane = Plane::new(&alignment_iso.append(&thickness_iso));
-        let n2 = self
-            .ambient_idx()
-            .get_refractive_index(ray.wavelength())
-            .unwrap();
-        ray.refract_on_surface(&back_plane, n2).unwrap();
-        let ray_pos_after_lens = ray.position();
-        let alignment_iso = Isometry::new(ray_pos_after_lens, Point3::origin()).unwrap();
-        self.node_attr
-            .isometry()
-            .as_ref()
-            .map(|iso| iso.append(&alignment_iso))
-    }
-    #[cfg(feature = "bevy")]
-    fn mesh(&self) -> Mesh {
-        #[allow(clippy::cast_possible_truncation)]
-        let thickness = if let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        {
-            center_thickness.value as f32
-        } else {
-            warn!("could not read center thickness. using 0.001 as default");
-            0.001_f32
-        };
-        let mesh: Mesh = Cuboid::new(0.3, 0.3, thickness).into();
-        if let Some(iso) = self.effective_iso() {
-            mesh.transformed_by(iso.into())
-        } else {
-            warn!("Node has no isometry defined. Mesh will be located at origin.");
-            mesh
-        }
     }
 }
 

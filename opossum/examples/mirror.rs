@@ -22,9 +22,10 @@ fn main() -> OpmResult<()> {
             .with_tilt(degree!(22.5, 0.0, 0.0))?,
     );
     let i_sd3 = scenery.add_node(RayPropagationVisualizer::default());
+
     scenery.connect_nodes(i_src, "out1", i_m1, "input", millimeter!(100.0))?;
     scenery.connect_nodes(i_m1, "reflected", i_m2, "input", millimeter!(100.0))?;
-    scenery.connect_nodes(i_m2, "reflected", i_sd3, "in1", millimeter!(100.0))?;
+    scenery.connect_nodes(i_m2, "reflected", i_sd3, "in1", millimeter!(150.0))?;
 
     scenery.save_to_file(Path::new("./opossum/playground/mirror.opm"))?;
     Ok(())
