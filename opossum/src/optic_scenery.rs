@@ -279,7 +279,10 @@ impl OpticScenery {
                 let mut new_outgoing_edges = LightResult::new();
                 for outgoing_edge in &outgoing_edges {
                     if let LightData::Geometric(rays) = outgoing_edge.1 {
-                        let axis_ray = rays.get_optical_axis_ray()?;
+                        let mut axis_ray = rays.get_optical_axis_ray()?;
+                        if let Some(iso) = node.borrow().effective_iso() {
+                            axis_ray = axis_ray.transformed_ray(&iso);
+                        }
                         let mut new_rays = Rays::default();
                         new_rays.add_ray(axis_ray);
                         new_outgoing_edges

@@ -6,7 +6,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optical::{Alignable, LightResult, Optical},
     properties::Proptype,
     utils::{geom_transformation::Isometry, EnumProxy},
 };
@@ -109,6 +109,8 @@ impl Source {
     }
 }
 
+impl Alignable for Source {}
+
 impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let light_prop = self.node_attr.get_property("light data").unwrap();
@@ -136,6 +138,9 @@ impl Optical for Source {
                 ));
             };
             if let LightData::Geometric(rays) = &mut data {
+                if let Some(iso) = self.effective_iso() {
+                    *rays = rays.transformed_rays(&iso);
+                }
                 if let Some(aperture) = self.ports().output_aperture("out1") {
                     rays.apodize(aperture)?;
                     if let AnalyzerType::RayTrace(config) = analyzer_type {
