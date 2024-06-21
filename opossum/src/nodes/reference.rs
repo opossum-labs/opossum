@@ -2,7 +2,6 @@ use std::{
     cell::RefCell,
     rc::{Rc, Weak},
 };
-
 use uuid::Uuid;
 
 use crate::{
@@ -13,6 +12,7 @@ use crate::{
     optic_ref::OpticRef,
     optical::{LightResult, Optical},
     properties::Proptype,
+    utils::geom_transformation::Isometry,
 };
 
 use super::node_attr::NodeAttr;
@@ -150,6 +150,13 @@ impl Optical for NodeReference {
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
+    }
+    fn isometry(&self) -> Option<Isometry> {
+        self.reference.as_ref().and_then(|rf| {
+            let ref_node = rf.upgrade().unwrap();
+            let node = ref_node.borrow();
+            node.isometry()
+        })
     }
     fn set_isometry(&mut self, _isometry: crate::utils::geom_transformation::Isometry) {
         // setting an isometry is silently ignored. Isometry is defined by the refrenced node.

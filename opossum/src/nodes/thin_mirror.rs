@@ -5,18 +5,14 @@ use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    joule,
     lightdata::LightData,
-    millimeter, nanometer,
+    millimeter,
     optic_ports::OpticPorts,
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
-    ray::Ray,
     refractive_index::refr_index_vaccuum,
     surface::{Plane, Sphere},
-    utils::geom_transformation::Isometry,
 };
-use nalgebra::Vector3;
 use num::Zero;
 use uom::si::f64::Length;
 
@@ -99,7 +95,12 @@ impl Optical for ThinMirror {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let Some(data) = incoming_data.get("input") else {
+        let (inport, outport) = if self.properties().inverted()? {
+            ("reflected", "input")
+        } else {
+            ("input", "reflected")
+        };
+        let Some(data) = incoming_data.get(inport) else {
             return Ok(LightResult::default());
         };
         let light_data = match analyzer_type {
@@ -141,7 +142,7 @@ impl Optical for ThinMirror {
                 }
             }
         };
-        let light_result = LightResult::from([("reflected".into(), light_data)]);
+        let light_result = LightResult::from([(outport.into(), light_data)]);
         Ok(light_result)
     }
     fn node_attr(&self) -> &NodeAttr {
@@ -149,36 +150,6 @@ impl Optical for ThinMirror {
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
-    }
-    fn output_port_isometry(
-        &self,
-        _output_port_name: &str,
-        _light: &LightData,
-    ) -> Option<Isometry> {
-        // if mirror is aligned (tilted, decentered), calculate single ray on incoming optical axis
-        // Note: light information is not (yet) necessary here since the reflection does not depend on the wavelength
-        let alignment_iso = self
-            .node_attr
-            .alignment()
-            .clone()
-            .unwrap_or_else(Isometry::identity);
-        let mut ray =
-            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap();
-        let front_plane = Plane::new(&alignment_iso);
-        ray.refract_on_surface(&front_plane, 1.0)
-            .unwrap()
-            .and_then(|reflected_ray| {
-                let alignment_iso = Isometry::new_from_view(
-                    ray.position(),
-                    reflected_ray.direction(),
-                    Vector3::y(),
-                );
-                self.node_attr
-                    .isometry()
-                    .as_ref()
-                    .map(|iso| iso.append(&alignment_iso))
-            })
     }
     #[cfg(feature = "bevy")]
     fn mesh(&self) -> Mesh {
@@ -212,11 +183,11 @@ impl Dottable for ThinMirror {
 mod test {
     use super::*;
     use crate::{
-        analyzer::RayTraceConfig, degree, lightdata::DataEnergy, meter,
-        nodes::test_helper::test_helper::*, rays::Rays, spectrum_helper::create_he_ne_spec,
+        analyzer::RayTraceConfig, degree, joule, lightdata::DataEnergy, nanometer,
+        nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
+        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
-    use approx::assert_relative_eq;
-
+    use nalgebra::Vector3;
     #[test]
     fn default() {
         let m = ThinMirror::default();
@@ -328,10 +299,7 @@ mod test {
         );
         let mut input = LightResult::default();
         let mut rays = Rays::default();
-        rays.add_ray(
-            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
-                .unwrap(),
-        );
+        rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
         let input_light = LightData::Geometric(rays);
         input.insert("input".into(), input_light.clone());
         let output = node
@@ -346,27 +314,5 @@ mod test {
         } else {
             assert!(false, "could not get LightData");
         }
-    }
-    #[test]
-    fn output_port_isometry() {
-        let mut m = ThinMirror::default();
-        assert!(m
-            .output_port_isometry("input", &LightData::Fourier)
-            .is_none());
-        m.set_isometry(Isometry::identity());
-        let i = m
-            .output_port_isometry("input", &LightData::Fourier)
-            .unwrap();
-        let after_pos = i.transform_point(&meter!(0.0, 0.0, 0.0));
-        assert_eq!(after_pos, meter!(0.0, 0.0, 0.0));
-        let after_reflection = i.transform_vector_f64(&Vector3::z());
-        assert_relative_eq!(after_reflection, Vector3::new(0.0, 0.0, -1.0));
-        m.set_alignment(meter!(0.0, 0.0, 0.0), degree!(45.0, 0.0, 0.0))
-            .unwrap();
-        let i = m
-            .output_port_isometry("input", &LightData::Fourier)
-            .unwrap();
-        let after_reflection = i.transform_vector_f64(&Vector3::z());
-        assert_relative_eq!(after_reflection, Vector3::new(0.0, 1.0, 0.0));
     }
 }

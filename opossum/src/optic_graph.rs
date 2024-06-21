@@ -8,7 +8,6 @@ use crate::{
     optic_senery_rsc::SceneryResources,
     optical::{LightResult, Optical},
     properties::Proptype,
-    utils::geom_transformation::Isometry,
 };
 use log::warn;
 use petgraph::{
@@ -302,48 +301,55 @@ impl OpticGraph {
         dot_string.push_str("}\n");
         Ok(dot_string)
     }
-
-    pub fn set_position_of_successor_nodes(
-        &mut self,
-        idx: NodeIndex,
-        outgoing: &LightResult,
-    ) -> OpmResult<()> {
-        let node = self.node_by_idx(idx)?;
+    pub fn length_to_successor(&self, idx: NodeIndex, port_name: &str) -> OpmResult<Length> {
         let neighbors = self
             .g
             .neighbors_directed(idx, petgraph::Direction::Outgoing);
+        let mut length = None;
         for neighbor in neighbors {
-            let neighbor_node_ref = self.g.node_weight(neighbor).unwrap();
-            let mut neighbor_node = neighbor_node_ref.optical_ref.borrow_mut();
-            if neighbor_node.isometry().is_some() {
-                warn!("node has already an isometry set. leaving untouched.");
-                return Ok(());
-            }
-            let Some(connecting_edge) = self.g.edges_connecting(idx, neighbor).next() else {
+            let Some(connecting_edge_ref) = self.g.edges_connecting(idx, neighbor).next() else {
                 return Err(OpossumError::Analysis(
-                    "could not find connecting edge".into(),
+                    "could not find connecting edge to successor".into(),
                 ));
             };
-            let port_name_to_neighbor = connecting_edge.weight().src_port();
-            let distance = connecting_edge.weight().distance();
-            let connecting_isometry = Isometry::new_along_z(*distance).unwrap();
-            let Some(light_data_at_port) = outgoing.get(port_name_to_neighbor) else {
-                return Err(OpossumError::Analysis(
-                    format!("could not find light data for port name {port_name_to_neighbor} of node {} for isometry calculation", node.optical_ref.borrow().name()),
-                ));
-            };
-            if let Some(output_port_iso) = node
-                .optical_ref
-                .borrow()
-                .output_port_isometry(port_name_to_neighbor, light_data_at_port)
-            {
-                let neighbor_node_iso = output_port_iso.append(&connecting_isometry);
-                neighbor_node.set_isometry(neighbor_node_iso);
-            } else if let Some(iso) = node.optical_ref.borrow().isometry() {
-                neighbor_node.set_isometry(iso.clone());
+            let connecting_edge = connecting_edge_ref.weight();
+            if connecting_edge.target_port() == port_name {
+                length = Some(connecting_edge.distance());
             }
         }
-        Ok(())
+        length.map_or_else(
+            || {
+                Err(OpossumError::Analysis(
+                    "did not find distance to target port".into(),
+                ))
+            },
+            |length| Ok(*length),
+        )
+    }
+    pub fn distance_from_predecessor(&self, idx: NodeIndex, port_name: &str) -> OpmResult<Length> {
+        let neighbors = self
+            .g
+            .neighbors_directed(idx, petgraph::Direction::Incoming);
+        let mut length = None;
+        for neighbor in neighbors {
+            let Some(connecting_edge_ref) = self.g.edges_connecting(neighbor, idx).next() else {
+                return Err(OpossumError::Analysis(
+                    "could not find connecting edge from predecessor".into(),
+                ));
+            };
+            let connecting_edge = connecting_edge_ref.weight();
+            if connecting_edge.target_port() == port_name {
+                length = Some(connecting_edge.distance());
+            }
+        }
+        length.map_or_else(
+            || {
+                Err(OpossumError::Analysis(
+                    "did not find distance from predecessor to target port".into(),
+                ))
+            },
+            |length| Ok(*length),
+        )
     }
 }
 impl Serialize for OpticGraph {

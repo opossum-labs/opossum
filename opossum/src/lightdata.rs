@@ -1,11 +1,10 @@
 #![warn(missing_docs)]
 //! Data structures containing the light information flowing between [`Opticals`](crate::optical::Optical).
+use crate::{error::OpmResult, joule, nodes::FilterType, rays::Rays, spectrum::Spectrum};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
-
-use crate::{error::OpmResult, joule, nodes::FilterType, rays::Rays, spectrum::Spectrum};
 
 /// Data structure defining the light properties. The actuals data type used depends on the
 /// [`AnalyzerType`](crate::analyzer::AnalyzerType). For example, an energy analysis ([`LightData::Energy`]) only
@@ -20,31 +19,7 @@ pub enum LightData {
     /// placeholder value for future Fourier optics analysis, nothing implementd yet.
     Fourier,
 }
-// impl LightData {
-/// Export [`LightData`] to a specific file format
-/// # Attributes
-/// * `f_path`: path to the file destination
-///
-/// # Errors
-/// This function will return an error if
-///  - `to_svg_plot` fails for [`LightData::Energy`] the case that the plot area cannot be filled with a background colour.
-///  - no export function ist defined for the conrecte type of [`LightData`]
-// pub fn export(&self, f_path: &Path) -> OpmResult<()> {
-//     match self {
-//         Self::Energy(d) => {
-//             d.to_svg_plot(f_path)?;
-//             Ok(())
-//         }
-//         Self::Geometric(d) => {
-//             d.to_svg_plot(f_path)?;
-//             Ok(())
-//         }
-//         Self::Fourier => Err(OpossumError::Other(
-//             "export: no export function defined for this type of LightData".into(),
-//         )),
-//     }
-// }
-// }
+
 impl Display for LightData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

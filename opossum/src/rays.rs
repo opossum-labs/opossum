@@ -965,6 +965,23 @@ impl Rays {
             ray.set_invalid();
         }
     }
+    /// Returns a ray representing the optical axis of this [`Rays`].
+    ///
+    /// This function returns a single [`Ray`], which represents the optical axis of the bundle.
+    /// **Note**: Currently, it simply generates a ray a the coordinate origin, pointing along the z-axis with
+    /// an energy-weigthed mean wavelength of the individual rays in the ray bundle.
+    /// # Errors
+    ///
+    /// This function will return an error if the central wavelength could not be determined. This might be the case
+    /// if [`Rays`] is empty.
+    pub fn get_optical_axis_ray(&self) -> OpmResult<Ray> {
+        let Some(wvl) = self.central_wavelength() else {
+            return Err(OpossumError::Other(
+                "could not determine wavelength for axis ray".into(),
+            ));
+        };
+        Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), wvl, joule!(1.0))
+    }
 }
 
 impl Display for Rays {
