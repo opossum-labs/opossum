@@ -13,7 +13,7 @@ use crate::{
     lightdata::LightData,
     nanometer,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optical::{Alignable, LightResult, Optical},
     plottable::{
         AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
     },
@@ -77,6 +77,8 @@ impl WaveFront {
         wf
     }
 }
+
+impl Alignable for WaveFront {}
 
 /// This [`WaveFrontData`] struct holds a vector of wavefront-error maps.
 /// The vector of [`WaveFrontErrorMap`] is necessary, e.g., to store the wavefront data for each spectral component of a pulse

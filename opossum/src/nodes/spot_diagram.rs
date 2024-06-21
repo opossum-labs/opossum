@@ -14,7 +14,7 @@ use crate::{
     lightdata::LightData,
     nanometer,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optical::{Alignable, LightResult, Optical},
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
     rays::Rays,
@@ -75,6 +75,9 @@ impl SpotDiagram {
         sd
     }
 }
+
+impl Alignable for SpotDiagram {}
+
 impl Optical for SpotDiagram {
     fn analyze(
         &mut self,
