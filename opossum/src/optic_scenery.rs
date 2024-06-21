@@ -244,7 +244,7 @@ impl OpticScenery {
                         let node_iso = ray.to_isometry();
                         // if a node with more than one input was already placed (in an earlier loop cycle),
                         // check, if the resulting isometry is consistent
-                        let mut node_borrow=node.borrow_mut();
+                        let mut node_borrow = node.borrow_mut();
                         if let Some(iso) = node_borrow.isometry() {
                             if iso != node_iso {
                                 warn!("node {node_name} cannot be consistently positioned.");
