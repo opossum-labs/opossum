@@ -74,6 +74,7 @@ impl RayPropagationVisualizer {
     pub fn new(name: &str) -> Self {
         let mut rpv = Self::default();
         rpv.node_attr.set_property("name", name.into()).unwrap();
+        rpv.node_attr.set_property("plot_aperture", name.into()).unwrap();
         rpv
     }
 }
