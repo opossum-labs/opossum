@@ -72,6 +72,9 @@ impl SpotDiagram {
     pub fn new(name: &str) -> Self {
         let mut sd = Self::default();
         sd.node_attr.set_property("name", name.into()).unwrap();
+        sd.node_attr
+            .set_property("plot_aperture", false.into())
+            .unwrap();
         sd
     }
 }
@@ -266,6 +269,7 @@ impl Plottable for SpotDiagram {
                     (wavelengths[num_series - 1] * 2. - wavelengths[0] * 2.).get::<nanometer>()
                 };
 
+                //ray plot series
                 for (ray_bundle, wvl) in izip!(split_rays_bundles.iter(), wavelengths.iter()) {
                     let grad_val = 0.42 + (*wvl - wavelengths[0]).get::<nanometer>() / wvl_range;
                     let rgbcolor = color_grad.eval_continuous(grad_val);
@@ -283,6 +287,19 @@ impl Plottable for SpotDiagram {
                         RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.),
                         Some(series_label),
                     ));
+                }
+
+                //aperture / shape plot series
+                if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot_aperture") {
+                    if *plot_aperture {
+                        if let Some(aperture) = self.ports().input_aperture("in1") {
+                            let plt_series_opt = aperture
+                                .get_plot_series(&PlotType::Line2D(PlotParameters::default()))?;
+                            if let Some(aperture_plt_series) = plt_series_opt {
+                                plt_series.extend(aperture_plt_series);
+                            }
+                        }
+                    }
                 }
 
                 match plt_type {
