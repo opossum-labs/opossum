@@ -1,6 +1,9 @@
 #![warn(missing_docs)]
 //!distribution functions which can be applied, for example, for disitributing energies in rays
+use std::f64::consts::PI;
+
 use nalgebra::Point2;
+use num::ToPrimitive;
 use uom::si::{angle::radian, f64::Angle};
 
 /// Generate a generalized 2-dimension Gaussian distribution from a vector of input `points`
@@ -55,4 +58,29 @@ pub fn general_2d_gaussian(
         }
     }
     gaussian
+}
+
+/// Creates Points that lie on a circle with given radius and center
+///
+/// # Panics
+///
+/// Panics if the argument `num_points` can not be casted to f64.
+#[must_use]
+pub fn ellipse(
+    radius_x: f64,
+    radius_y: f64,
+    center_x: f64,
+    center_y: f64,
+    num_points: usize,
+) -> Vec<Point2<f64>> {
+    let mut xy_data = Vec::<Point2<f64>>::with_capacity(num_points);
+    let angle_step = 2. * PI / num_points.to_f64().unwrap();
+    for point_num in 0..num_points {
+        let angle = point_num.to_f64().unwrap() * angle_step;
+        xy_data.push(Point2::new(
+            radius_x.mul_add(f64::cos(angle), center_x),
+            radius_y.mul_add(f64::sin(angle), center_y),
+        ));
+    }
+    xy_data
 }

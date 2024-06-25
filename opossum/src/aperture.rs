@@ -31,17 +31,26 @@
 //! assert_eq!(ap.apodization_factor(&millimeter!(1.0, 1.0)), 0.0);
 //! assert_eq!(ap.apodization_factor(&millimeter!(0.0, 0.0)), 1.0);
 //! ```
+
 use crate::{
     error::{OpmResult, OpossumError},
+    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
+    utils::math_distribution_functions::ellipse,
 };
-use nalgebra::{Isometry2, Point2, Vector2};
+use itertools::Itertools;
+use nalgebra::{Isometry2, Matrix2xX, MatrixXx2, Point2, Vector2};
 use ncollide2d::{
     query::PointQuery,
     shape::{Ball, Cuboid, Polyline},
 };
+use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use uom::si::{f64::Length, length::meter, ratio::ratio};
+use uom::si::{
+    f64::Length,
+    length::{meter, millimeter},
+    ratio::ratio,
+};
 
 /// The apodization type of an [`Aperture`].
 ///
@@ -353,6 +362,124 @@ impl Apodize for StackConfig {
             transmission = 1.0 - transmission;
         }
         transmission
+    }
+}
+
+impl Plottable for Aperture {
+    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+        let plt_series_opt = match plt_type {
+            PlotType::Line2D(_) | PlotType::Scatter2D(_) => match self {
+                Self::None => None,
+                Self::BinaryCircle(conf) => {
+                    let circle_points = ellipse(
+                        conf.radius.get::<millimeter>(),
+                        conf.radius.get::<millimeter>(),
+                        conf.center.x.get::<millimeter>(),
+                        conf.center.y.get::<millimeter>(),
+                        100,
+                    );
+                    let plt_dat = PlotData::Dim2 {
+                        xy_data: Matrix2xX::from_vec(
+                            circle_points
+                                .iter()
+                                .flat_map(|p| vec![p.x, p.y])
+                                .collect_vec(),
+                        )
+                        .transpose(),
+                    };
+                    Some(vec![PlotSeries::new(
+                        &plt_dat,
+                        RGBAColor(0, 0, 0, 1.),
+                        Some("Aperture".to_owned()),
+                    )])
+                }
+                Self::BinaryRectangle(conf) => {
+                    let center_x = conf.center.x.get::<millimeter>();
+                    let center_y = conf.center.y.get::<millimeter>();
+                    let half_width = conf.width.get::<millimeter>() / 2.;
+                    let half_height = conf.height.get::<millimeter>() / 2.;
+                    let plt_dat = PlotData::Dim2 {
+                        xy_data: Matrix2xX::<f64>::from_vec(vec![
+                            center_x - half_width,
+                            center_y + half_height,
+                            center_x - half_width,
+                            center_y - half_height,
+                            center_x + half_width,
+                            center_y - half_height,
+                            center_x + half_width,
+                            center_y + half_height,
+                        ])
+                        .transpose(),
+                    };
+
+                    Some(vec![PlotSeries::new(
+                        &plt_dat,
+                        RGBAColor(0, 0, 0, 1.),
+                        Some("Aperture".to_owned()),
+                    )])
+                }
+
+                Self::BinaryPolygon(conf) => {
+                    let mut xy_data = MatrixXx2::from_element(conf.points.len(), 0.);
+                    for (row, p) in conf.points.iter().enumerate() {
+                        xy_data[(row, 0)] = p.x.get::<millimeter>();
+                        xy_data[(row, 1)] = p.y.get::<millimeter>();
+                    }
+                    Some(vec![PlotSeries::new(
+                        &PlotData::Dim2 { xy_data },
+                        RGBAColor(0, 0, 0, 1.),
+                        Some("Aperture".to_owned()),
+                    )])
+                }
+                Self::Gaussian(conf) => {
+                    let circle_points = ellipse(
+                        conf.sigma.0.get::<millimeter>() * 2.,
+                        conf.sigma.1.get::<millimeter>() * 2.,
+                        conf.center.x.get::<millimeter>(),
+                        conf.center.y.get::<millimeter>(),
+                        100,
+                    );
+                    let xy_data = Matrix2xX::from_vec(
+                        circle_points
+                            .iter()
+                            .flat_map(|p| vec![p.x, p.y])
+                            .collect_vec(),
+                    )
+                    .transpose();
+                    Some(vec![PlotSeries::new(
+                        &PlotData::Dim2 { xy_data },
+                        RGBAColor(0, 0, 0, 1.),
+                        Some("Gaussian Aperture 2-sigma".to_owned()),
+                    )])
+                }
+                Self::Stack(conf) => {
+                    let mut aperture_series_vec =
+                        Vec::<PlotSeries>::with_capacity(conf.apertures.len());
+                    for aperture in &conf.apertures {
+                        if let Some(plt_series_vec) = aperture.get_plot_series(plt_type)? {
+                            aperture_series_vec.extend(plt_series_vec);
+                        }
+                    }
+                    Some(aperture_series_vec)
+                }
+            },
+            _ => None,
+        };
+
+        Ok(plt_series_opt)
+    }
+
+    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
+        plt_params
+            .set(&PlotArgs::XLabel("distance in mm".into()))?
+            .set(&PlotArgs::YLabel("distance in mm".into()))?
+            .set(&PlotArgs::AxisEqual(true))?
+            .set(&PlotArgs::PlotSize((800, 800)))?;
+        Ok(())
+    }
+
+    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
+        PlotType::Line2D(plt_params.clone())
     }
 }
 
