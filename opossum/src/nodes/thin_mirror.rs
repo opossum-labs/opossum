@@ -187,7 +187,7 @@ mod test {
         nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
         spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
-    use nalgebra::Vector3;
+    use nalgebra::vector;
     #[test]
     fn default() {
         let m = ThinMirror::default();
@@ -309,7 +309,7 @@ mod test {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
             assert_eq!(ray.position(), millimeter!(0.0, 0.0, 10.0));
-            let dir = Vector3::new(0.0, 0.0, -1.0);
+            let dir = vector![0.0, 0.0, -1.0];
             assert_eq!(ray.direction(), dir);
         } else {
             assert!(false, "could not get LightData");
