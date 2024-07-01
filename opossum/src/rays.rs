@@ -32,9 +32,7 @@ use approx::relative_eq;
 use itertools::{izip, Itertools};
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::{
-    distance, DMatrix, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3,
-};
+use nalgebra::{distance, vector, DMatrix, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2};
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -174,11 +172,11 @@ impl Rays {
         let energy_per_ray = energy / nr_of_rays as f64;
         let mut rays: Vec<Ray> = Vec::new();
         for point in points {
-            let direction = Vector3::new(
+            let direction = vector![
                 point.x.get::<millimeter>(),
                 point.y.get::<millimeter>(),
-                1.0,
-            );
+                1.0
+            ];
             let ray = Ray::new(position, direction, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
@@ -1048,6 +1046,7 @@ mod test {
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use itertools::izip;
     use log::Level;
+    use nalgebra::Vector3;
     use testing_logger;
     use uom::si::{
         energy::joule, length::nanometer, radiant_exposure::joule_per_square_centimeter,
@@ -1544,7 +1543,7 @@ mod test {
         assert_eq!(rays.rays[0].position(), ray0.position());
         assert_eq!(rays.rays[0].direction(), ray0.direction());
         assert_eq!(rays.rays[1].position(), ray1.position());
-        let new_dir = Vector3::new(0.0, -1.0, 100.0) / 100.0;
+        let new_dir = vector![0.0, -1.0, 100.0] / 100.0;
         assert_abs_diff_eq!(rays.rays[1].direction().x, new_dir.x);
         assert_abs_diff_eq!(rays.rays[1].direction().y, new_dir.y);
         assert_abs_diff_eq!(rays.rays[1].direction().z, new_dir.z);
@@ -1751,7 +1750,7 @@ mod test {
     fn get_rays_position_history_in_mm() {
         let ray_vec = vec![Ray::new(
             Point3::origin(),
-            Vector3::new(0., 1., 2.),
+            vector![0., 1., 2.],
             nanometer!(1053.),
             joule!(1.),
         )
@@ -1798,7 +1797,7 @@ mod test {
         rays.add_ray(
             Ray::new(
                 Point3::origin(),
-                Vector3::new(0., 1., 0.),
+                Vector3::y(),
                 nanometer!(1005.),
                 joule!(1.),
             )
@@ -1818,7 +1817,7 @@ mod test {
         rays.add_ray(
             Ray::new(
                 Point3::origin(),
-                Vector3::new(0., 1., 0.),
+                Vector3::y(),
                 nanometer!(1007.),
                 joule!(1.),
             )
@@ -1894,28 +1893,28 @@ mod test {
         let ray_vec = vec![
             Ray::new(
                 meter!(1.0, 1.0, 0.),
-                Vector3::new(0., 1., 0.),
+                Vector3::y(),
                 nanometer!(1000.),
                 joule!(1.),
             )
             .unwrap(),
             Ray::new(
                 meter!(2.0, 2.0, 0.),
-                Vector3::new(0., 1., 0.),
+                Vector3::y(),
                 nanometer!(1000.),
                 joule!(1.),
             )
             .unwrap(),
             Ray::new(
                 meter!(-10.0, -10.0, 0.),
-                Vector3::new(0., 1., 0.),
+                Vector3::y(),
                 nanometer!(1000.),
                 joule!(1.),
             )
             .unwrap(),
             Ray::new(
                 meter!(-2000.0, -2000.0, 0.),
-                Vector3::new(0., 1., 0.),
+                Vector3::y(),
                 nanometer!(1000.),
                 joule!(1.),
             )
@@ -1976,42 +1975,18 @@ mod test {
     #[test]
     fn energy_centroid_test() {
         let rays = Rays::from(vec![
-            Ray::new(
-                millimeter!(-1., 0., 0.),
-                Vector3::new(0., 0., 1.),
-                nanometer!(1054.),
-                joule!(1.),
-            )
-            .unwrap(),
-            Ray::new(
-                millimeter!(1., 0., 0.),
-                Vector3::new(0., 0., 1.),
-                nanometer!(1054.),
-                joule!(1.),
-            )
-            .unwrap(),
+            Ray::new_collimated(millimeter!(-1., 0., 0.), nanometer!(1054.), joule!(1.)).unwrap(),
+            Ray::new_collimated(millimeter!(1., 0., 0.), nanometer!(1054.), joule!(1.)).unwrap(),
         ]);
         let centroid = rays.energy_weighted_centroid();
         assert!(centroid.is_some());
-        assert_relative_eq!(centroid.unwrap().x.get::<millimeter>(), 0.);
-        assert_relative_eq!(centroid.unwrap().y.get::<millimeter>(), 0.);
-        assert_relative_eq!(centroid.unwrap().z.get::<millimeter>(), 0.);
+        assert_relative_eq!(centroid.unwrap().x.value, 0.);
+        assert_relative_eq!(centroid.unwrap().y.value, 0.);
+        assert_relative_eq!(centroid.unwrap().z.value, 0.);
 
         let rays = Rays::from(vec![
-            Ray::new(
-                millimeter!(-1., 0., 0.),
-                Vector3::new(0., 0., 1.),
-                nanometer!(1054.),
-                joule!(1.),
-            )
-            .unwrap(),
-            Ray::new(
-                millimeter!(1., 0., 0.),
-                Vector3::new(0., 0., 1.),
-                nanometer!(1054.),
-                joule!(0.5),
-            )
-            .unwrap(),
+            Ray::new_collimated(millimeter!(-1., 0., 0.), nanometer!(1054.), joule!(1.)).unwrap(),
+            Ray::new_collimated(millimeter!(1., 0., 0.), nanometer!(1054.), joule!(0.5)).unwrap(),
         ]);
         let centroid = rays.energy_weighted_centroid();
         assert!(centroid.is_some());
@@ -2020,20 +1995,8 @@ mod test {
         assert_relative_eq!(centroid.unwrap().z.get::<millimeter>(), 0.);
 
         let mut rays = Rays::from(vec![
-            Ray::new(
-                millimeter!(-1., 0., 0.),
-                Vector3::new(0., 0., 1.),
-                nanometer!(1054.),
-                joule!(1.),
-            )
-            .unwrap(),
-            Ray::new(
-                millimeter!(1., 0., 0.),
-                Vector3::new(0., 0., 1.),
-                nanometer!(1054.),
-                joule!(0.5),
-            )
-            .unwrap(),
+            Ray::new_collimated(millimeter!(-1., 0., 0.), nanometer!(1054.), joule!(1.)).unwrap(),
+            Ray::new_collimated(millimeter!(1., 0., 0.), nanometer!(1054.), joule!(0.5)).unwrap(),
         ]);
 
         rays.rays[1].set_invalid();

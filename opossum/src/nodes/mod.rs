@@ -2,6 +2,7 @@
 //! This module contains the concrete node types (lenses, filters, etc...)
 
 mod beam_splitter;
+mod cylindric_lens;
 mod detector;
 mod dummy;
 mod energy_meter;
@@ -23,6 +24,7 @@ mod wavefront;
 mod wedge;
 
 pub use beam_splitter::BeamSplitter;
+pub use cylindric_lens::CylindricLens;
 pub use detector::Detector;
 pub use dummy::Dummy;
 pub use group::{NodeGroup, PortMap};
@@ -98,6 +100,11 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         )),
         "lens" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Lens::default())),
+            uuid,
+            None,
+        )),
+        "cylindric lens" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(CylindricLens::default())),
             uuid,
             None,
         )),
