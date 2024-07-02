@@ -9,8 +9,9 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
-    refractive_index::{refr_index_vaccuum, RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{Cylinder, Plane},
+    rays::Rays,
+    refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
+    surface::{Cylinder, Plane, Surface},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -141,6 +142,97 @@ impl CylindricLens {
         )?;
         Ok(lens)
     }
+    #[allow(clippy::too_many_arguments)]
+    fn analyze_forward(
+        &self,
+        incoming_rays: Rays,
+        front_roc: Length,
+        thickness: Length,
+        rear_roc: Length,
+        refri: &RefractiveIndexType,
+        iso: &Isometry,
+        analyzer_type: &AnalyzerType,
+    ) -> OpmResult<Rays> {
+        let mut rays = incoming_rays;
+        let front_surf: Box<dyn Surface> = if front_roc.is_infinite() {
+            Box::new(Plane::new(iso))
+        } else {
+            Box::new(Cylinder::new(front_roc, iso)?)
+        };
+        let thickness_iso = Isometry::new_along_z(thickness)?;
+        let isometry = iso.append(&thickness_iso);
+        let rear_surf: Box<dyn Surface> = if rear_roc.is_infinite() {
+            Box::new(Plane::new(&isometry))
+        } else {
+            Box::new(Cylinder::new(rear_roc, &isometry)?)
+        };
+        if let Some(aperture) = self.ports().input_aperture("front") {
+            rays.apodize(aperture)?;
+            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            }
+        } else {
+            return Err(OpossumError::OpticPort("input aperture not found".into()));
+        };
+        rays.refract_on_surface(&(*front_surf), refri)?;
+        rays.set_refractive_index(refri)?;
+        rays.refract_on_surface(&(*rear_surf), &self.ambient_idx())?;
+        if let Some(aperture) = self.ports().output_aperture("rear") {
+            rays.apodize(aperture)?;
+            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            }
+        } else {
+            return Err(OpossumError::OpticPort("output aperture not found".into()));
+        };
+        Ok(rays)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn analyze_inverse(
+        &self,
+        incoming_rays: Rays,
+        front_roc: Length,
+        thickness: Length,
+        rear_roc: Length,
+        refri: &RefractiveIndexType,
+        iso: &Isometry,
+        analyzer_type: &AnalyzerType,
+    ) -> OpmResult<Rays> {
+        let mut rays = incoming_rays;
+
+        let front_surf: Box<dyn Surface> = if front_roc.is_infinite() {
+            Box::new(Plane::new(iso))
+        } else {
+            Box::new(Cylinder::new(front_roc, iso)?)
+        };
+        let thickness_iso = Isometry::new_along_z(thickness)?;
+        let isometry = iso.append(&thickness_iso);
+        let rear_surf: Box<dyn Surface> = if rear_roc.is_infinite() {
+            Box::new(Plane::new(&isometry))
+        } else {
+            Box::new(Cylinder::new(rear_roc, &isometry)?)
+        };
+        if let Some(aperture) = self.ports().output_aperture("rear") {
+            rays.apodize(aperture)?;
+            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            }
+        } else {
+            return Err(OpossumError::OpticPort("output aperture not found".into()));
+        };
+        rays.refract_on_surface(&(*rear_surf), refri)?;
+        rays.set_refractive_index(refri)?;
+        rays.refract_on_surface(&(*front_surf), &self.ambient_idx())?;
+        if let Some(aperture) = self.ports().input_aperture("front") {
+            rays.apodize(aperture)?;
+            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            }
+        } else {
+            return Err(OpossumError::OpticPort("input aperture not found".into()));
+        };
+        Ok(rays)
+    }
 }
 
 impl Optical for CylindricLens {
@@ -149,91 +241,75 @@ impl Optical for CylindricLens {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let Some(data) = incoming_data.get("front") else {
+        let (in_port, out_port) = if self.properties().inverted()? {
+            ("rear", "front")
+        } else {
+            ("front", "rear")
+        };
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
         let light_data = match analyzer_type {
             AnalyzerType::Energy => data.clone(),
             AnalyzerType::RayTrace(_) => {
-                if let LightData::Geometric(mut rays) = data.clone() {
-                    let Ok(Proptype::Length(front_roc)) =
-                        self.node_attr.get_property("front curvature")
-                    else {
-                        return Err(OpossumError::Analysis("cannot read front curvature".into()));
-                    };
-                    let Ok(Proptype::RefractiveIndex(index_model)) =
-                        self.node_attr.get_property("refractive index")
-                    else {
-                        return Err(OpossumError::Analysis(
-                            "cannot read refractive index".into(),
-                        ));
-                    };
-                    if let Some(iso) = self.effective_iso() {
-                        if (*front_roc).is_infinite() {
-                            let plane = Plane::new(&iso);
-                            rays.refract_on_surface(&plane, &index_model.value)?;
-                        } else {
-                            rays.refract_on_surface(
-                                &Cylinder::new(*front_roc, &iso)?,
-                                &index_model.value,
-                            )?;
-                        };
-                        if let Some(aperture) = self.ports().input_aperture("front") {
-                            rays.apodize(aperture)?;
-                            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                            }
-                        } else {
-                            return Err(OpossumError::OpticPort("input aperture not found".into()));
-                        };
-                        let Ok(Proptype::Length(center_thickness)) =
-                            self.node_attr.get_property("center thickness")
-                        else {
-                            return Err(OpossumError::Analysis(
-                                "cannot read center thickness".into(),
-                            ));
-                        };
-                        let thickness_iso = Isometry::new_along_z(*center_thickness)?;
-                        let Ok(Proptype::Length(rear_roc)) =
-                            self.node_attr.get_property("rear curvature")
-                        else {
-                            return Err(OpossumError::Analysis(
-                                "cannot read rear curvature".into(),
-                            ));
-                        };
-                        let isometry = iso.append(&thickness_iso);
-                        rays.set_refractive_index(&index_model.value)?;
-                        if (*rear_roc).is_infinite() {
-                            let plane = Plane::new(&isometry);
-                            rays.refract_on_surface(&plane, &self.ambient_idx())?;
-                        } else {
-                            rays.refract_on_surface(
-                                &Cylinder::new(*rear_roc, &isometry)?,
-                                &refr_index_vaccuum(),
-                            )?;
-                        };
-                    } else {
-                        return Err(OpossumError::Analysis(
-                            "no location for surface defined. Aborting".into(),
-                        ));
-                    }
-                    if let Some(aperture) = self.ports().output_aperture("rear") {
-                        rays.apodize(aperture)?;
-                        if let AnalyzerType::RayTrace(config) = analyzer_type {
-                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        }
-                    } else {
-                        return Err(OpossumError::OpticPort("output aperture not found".into()));
-                    };
-                    LightData::Geometric(rays)
-                } else {
+                let LightData::Geometric(rays) = data.clone() else {
                     return Err(OpossumError::Analysis(
                         "expected ray data at input port".into(),
                     ));
-                }
+                };
+                let Some(eff_iso) = self.effective_iso() else {
+                    return Err(OpossumError::Analysis(
+                        "no location for surface defined".into(),
+                    ));
+                };
+                let Ok(Proptype::Length(front_roc)) =
+                    self.node_attr.get_property("front curvature")
+                else {
+                    return Err(OpossumError::Analysis("cannot read front curvature".into()));
+                };
+                let Ok(Proptype::RefractiveIndex(index_model)) =
+                    self.node_attr.get_property("refractive index")
+                else {
+                    return Err(OpossumError::Analysis(
+                        "cannot read refractive index".into(),
+                    ));
+                };
+                let Ok(Proptype::Length(center_thickness)) =
+                    self.node_attr.get_property("center thickness")
+                else {
+                    return Err(OpossumError::Analysis(
+                        "cannot read center thickness".into(),
+                    ));
+                };
+                let Ok(Proptype::Length(rear_roc)) = self.node_attr.get_property("rear curvature")
+                else {
+                    return Err(OpossumError::Analysis("cannot read rear curvature".into()));
+                };
+                let output = if self.properties().inverted()? {
+                    self.analyze_inverse(
+                        rays,
+                        *front_roc,
+                        *center_thickness,
+                        *rear_roc,
+                        &index_model.value,
+                        &eff_iso,
+                        analyzer_type,
+                    )?
+                } else {
+                    self.analyze_forward(
+                        rays,
+                        *front_roc,
+                        *center_thickness,
+                        *rear_roc,
+                        &index_model.value,
+                        &eff_iso,
+                        analyzer_type,
+                    )?
+                };
+                LightData::Geometric(output)
             }
         };
-        let light_result = LightResult::from([("rear".into(), light_data)]);
+        let light_result = LightResult::from([(out_port.into(), light_data)]);
         Ok(light_result)
     }
     fn node_attr(&self) -> &NodeAttr {
