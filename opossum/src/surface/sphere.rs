@@ -10,8 +10,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     meter,
 };
-use nalgebra::Point3;
 use nalgebra::Vector3;
+use nalgebra::{vector, Point3};
 use num::Zero;
 use roots::find_roots_quadratic;
 use roots::Roots;
@@ -31,7 +31,7 @@ impl Sphere {
     /// # Errors
     ///
     /// This function will return an error if any components of the `pos` are not finite or if the radius is not normal.
-    pub fn new_from_position(radius: Length, pos: Point3<Length>) -> OpmResult<Self> {
+    pub fn new_at_position(radius: Length, pos: Point3<Length>) -> OpmResult<Self> {
         if !radius.is_normal() {
             return Err(OpossumError::Other(
                 "radius of curvature must be != 0.0 and finite".into(),
@@ -75,12 +75,13 @@ impl Renderable<'_> for Sphere {}
 impl Surface for Sphere {
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let dir = ray.direction();
-        let pos = Vector3::new(
+        let pos = vector![
             ray.position().x.value,
             ray.position().y.value,
-            ray.position().z.value,
-        );
+            ray.position().z.value
+        ];
         let radius = self.radius.value;
+        let is_back_propagating = dir.z.is_sign_negative();
         // sphere formula (at origin)
         // x^2 + y^2 + z^2 = r^2
         //
@@ -111,10 +112,18 @@ impl Surface for Sphere {
             Roots::Two(t) => {
                 let real_t = if self.radius.is_sign_positive() {
                     // convex surface => use min t
-                    f64::min(t[0], t[1])
+                    if is_back_propagating {
+                        f64::max(t[0], t[1])
+                    } else {
+                        f64::min(t[0], t[1])
+                    }
                 } else {
                     // concave surface => use max t
-                    f64::max(t[0], t[1])
+                    if is_back_propagating {
+                        f64::min(t[0], t[1])
+                    } else {
+                        f64::max(t[0], t[1])
+                    }
                 };
                 if real_t.is_sign_negative() {
                     // surface behind beam
@@ -126,6 +135,12 @@ impl Surface for Sphere {
         };
         let mut normal_vector = intersection_point.normalize();
         if self.radius.is_sign_negative() {
+            if is_back_propagating {
+            } else {
+                normal_vector *= -1.0;
+            }
+        }
+        if self.radius.is_sign_positive() && is_back_propagating {
             normal_vector *= -1.0;
         }
         Some((
@@ -162,12 +177,10 @@ impl SDF for Sphere {
 }
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::{joule, millimeter, nanometer};
     use approx::assert_abs_diff_eq;
-    use num::Zero;
-    use uom::si::f64::Length;
 
-    use super::*;
     #[test]
     fn new() {
         let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
@@ -184,71 +197,216 @@ mod test {
         assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, -1.0));
     }
     #[test]
-    fn intersect_positive_on_axis() {
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Sphere::new(millimeter!(1.0), &iso).unwrap();
+    fn new_at_position() {
+        assert!(
+            Sphere::new_at_position(millimeter!(f64::NAN), millimeter!(0.0, 0.0, 0.0)).is_err()
+        );
+        assert!(
+            Sphere::new_at_position(millimeter!(f64::INFINITY), millimeter!(0.0, 0.0, 0.0))
+                .is_err()
+        );
+        assert!(Sphere::new_at_position(
+            millimeter!(f64::NEG_INFINITY),
+            millimeter!(0.0, 0.0, 0.0)
+        )
+        .is_err());
+        assert!(
+            Sphere::new_at_position(millimeter!(1.0), millimeter!(f64::NAN, 0.0, 0.0)).is_err()
+        );
+        assert!(
+            Sphere::new_at_position(millimeter!(1.0), millimeter!(f64::INFINITY, 0.0, 0.0))
+                .is_err()
+        );
+        assert!(Sphere::new_at_position(
+            millimeter!(1.0),
+            millimeter!(f64::NEG_INFINITY, 0.0, 0.0)
+        )
+        .is_err());
+
+        let s = Sphere::new_at_position(millimeter!(2.0), millimeter!(1.0, 2.0, 3.0)).unwrap();
+        assert_eq!(s.radius, millimeter!(2.0));
+        assert_eq!(s.get_pos(), millimeter!(1.0, 2.0, 5.0));
+    }
+    #[test]
+    fn intersect_positive_on_axis_forward() {
+        let sphere_position = millimeter!(0.0, 0.0, 0.0);
+        let s = Sphere::new_at_position(millimeter!(10.0), sphere_position).unwrap();
+
+        // start "within" the sphere (not really)...
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, -5.0), nanometer!(1053.0), joule!(1.0))
+            .unwrap();
+        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_eq!(intersection_point, sphere_position);
+        assert_eq!(normal, vector![0.0, 0.0, -1.0]);
+
+        // start "outside" the sphere
+        let ray = Ray::new_collimated(
+            millimeter!(0.0, 0.0, -15.0),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        let (intersection_point, _) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_abs_diff_eq!(intersection_point.x.value, sphere_position.x.value);
+        assert_abs_diff_eq!(intersection_point.y.value, sphere_position.y.value);
+        assert_abs_diff_eq!(intersection_point.z.value, sphere_position.z.value);
+
+        // non-intersecting
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 5.0), nanometer!(1053.0), joule!(1.0))
+            .unwrap();
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 15.0), nanometer!(1053.0), joule!(1.0))
+            .unwrap();
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
+    }
+    #[test]
+    fn intersect_negative_on_axis_forward() {
+        let sphere_position = millimeter!(0.0, 0.0, 0.0);
+        let s = Sphere::new_at_position(millimeter!(-10.0), sphere_position).unwrap();
+
+        // start "within" the sphere (not really)...
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, -5.0), nanometer!(1053.0), joule!(1.0))
+            .unwrap();
+        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_eq!(intersection_point, sphere_position);
+        assert_eq!(normal, vector![0.0, 0.0, -1.0]);
+
+        // start "outside" the sphere
+        let ray = Ray::new_collimated(
+            millimeter!(0.0, 0.0, -15.0),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        let (intersection_point, _) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_abs_diff_eq!(intersection_point.x.value, sphere_position.x.value);
+        assert_abs_diff_eq!(intersection_point.y.value, sphere_position.y.value);
+        assert_abs_diff_eq!(intersection_point.z.value, sphere_position.z.value);
+
+        // non-intersecting
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 5.0), nanometer!(1053.0), joule!(1.0))
+            .unwrap();
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 15.0), nanometer!(1053.0), joule!(1.0))
+            .unwrap();
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
+    }
+    #[test]
+    fn intersect_positive_on_axis_backward() {
+        let sphere_position = millimeter!(0.0, 0.0, 0.0);
+        let s = Sphere::new_at_position(millimeter!(10.0), sphere_position).unwrap();
+
+        // start "within" the sphere (not really)...
         let ray = Ray::new(
-            millimeter!(0.0, 0.0, 0.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            millimeter!(0.0, 0.0, 5.0),
+            vector![0.0, 0.0, -1.0],
             nanometer!(1053.0),
             joule!(1.0),
         )
         .unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
-        assert_abs_diff_eq!(intersection_point.x.value, 0.0);
-        assert_abs_diff_eq!(intersection_point.y.value, 0.0);
-        assert_abs_diff_eq!(intersection_point.z.value, 0.01);
-        assert_abs_diff_eq!(normal.x, 0.0);
-        assert_abs_diff_eq!(normal.y, 0.0);
-        assert_abs_diff_eq!(normal.z, -1.0);
-    }
-    #[test]
-    fn intersect_positive_on_axis_behind() {
+        assert_eq!(intersection_point, sphere_position);
+        assert_eq!(normal, vector![0.0, 0.0, 1.0]);
+
+        // start "outside" the sphere
         let ray = Ray::new(
-            millimeter!(0.0, 0.0, 0.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            millimeter!(0.0, 0.0, 15.0),
+            vector![0.0, 0.0, -1.0],
             nanometer!(1053.0),
             joule!(1.0),
         )
         .unwrap();
-        let iso = Isometry::new_along_z(millimeter!(-10.0)).unwrap();
-        let s = Sphere::new(millimeter!(1.0), &iso).unwrap();
-        assert_eq!(s.calc_intersect_and_normal(&ray), None);
-        let s = Sphere::new(millimeter!(-1.0), &iso).unwrap();
-        assert_eq!(s.calc_intersect_and_normal(&ray), None);
+        let (intersection_point, _) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_abs_diff_eq!(intersection_point.x.value, sphere_position.x.value);
+        assert_abs_diff_eq!(intersection_point.y.value, sphere_position.y.value);
+        assert_abs_diff_eq!(intersection_point.z.value, sphere_position.z.value);
+
+        // non-intersecting
+        let ray = Ray::new(
+            millimeter!(0.0, 0.0, -5.0),
+            vector![0.0, 0.0, -1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
+        let ray = Ray::new(
+            millimeter!(0.0, 0.0, -15.0),
+            vector![0.0, 0.0, -1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
+    }
+    #[test]
+    fn intersect_negative_on_axis_backward() {
+        let sphere_position = millimeter!(0.0, 0.0, 0.0);
+        let s = Sphere::new_at_position(millimeter!(-10.0), sphere_position).unwrap();
+
+        // start "within" the sphere (not really)...
+        let ray = Ray::new(
+            millimeter!(0.0, 0.0, 5.0),
+            vector![0.0, 0.0, -1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_eq!(intersection_point, sphere_position);
+        assert_eq!(normal, vector![0.0, 0.0, 1.0]);
+
+        // start "outside" the sphere
+        let ray = Ray::new(
+            millimeter!(0.0, 0.0, 15.0),
+            vector![0.0, 0.0, -1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        let (intersection_point, _) = s.calc_intersect_and_normal(&ray).unwrap();
+        assert_abs_diff_eq!(intersection_point.x.value, sphere_position.x.value);
+        assert_abs_diff_eq!(intersection_point.y.value, sphere_position.y.value);
+        assert_abs_diff_eq!(intersection_point.z.value, sphere_position.z.value);
+
+        // non-intersecting
+        let ray = Ray::new(
+            millimeter!(0.0, 0.0, -5.0),
+            vector![0.0, 0.0, -1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
+        let ray = Ray::new(
+            millimeter!(0.0, 0.0, -15.0),
+            vector![0.0, 0.0, -1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
     }
     #[test]
     fn intersect_positive_collinear_no_intersect() {
-        let ray = Ray::new(
-            millimeter!(0.0, 1.1, 0.0),
-            Vector3::new(0.0, 0.0, 1.0),
-            nanometer!(1053.0),
-            joule!(1.0),
-        )
-        .unwrap();
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Sphere::new(millimeter!(1.0), &iso).unwrap();
-        assert_eq!(s.calc_intersect_and_normal(&ray), None);
-        let ray = Ray::new(
-            millimeter!(0.0, -1.1, 0.0),
-            Vector3::new(0.0, 0.0, 1.0),
-            nanometer!(1053.0),
-            joule!(1.0),
-        )
-        .unwrap();
-        assert_eq!(s.calc_intersect_and_normal(&ray), None);
+        let ray = Ray::new_collimated(millimeter!(0.0, 1.1, 0.0), nanometer!(1053.0), joule!(1.0))
+            .unwrap();
+        let s = Sphere::new_at_position(millimeter!(1.0), millimeter!(0.0, 0.0, 10.0)).unwrap();
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
+        let ray = Ray::new_collimated(millimeter!(0.0, -1.1, 0.0), nanometer!(1053.0), joule!(1.0))
+            .unwrap();
+        assert!(s.calc_intersect_and_normal(&ray).is_none());
     }
     #[test]
     fn intersect_positive_collinear_touch() {
         let wvl = nanometer!(1053.0);
-        let ray = Ray::new(millimeter!(0.0, 1.0, 0.0), Vector3::z(), wvl, joule!(1.0)).unwrap();
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Sphere::new(millimeter!(1.0), &iso).unwrap();
+        let ray = Ray::new_collimated(millimeter!(0.0, 1.0, 0.0), wvl, joule!(1.0)).unwrap();
+        let s = Sphere::new_at_position(millimeter!(1.0), millimeter!(0.0, 0.0, 10.0)).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(0.0, 1.0, 11.0), Vector3::y()))
         );
-        let ray = Ray::new(millimeter!(0.0, -1.0, -1.0), Vector3::z(), wvl, joule!(1.0)).unwrap();
+        let ray = Ray::new_collimated(millimeter!(0.0, -1.0, -1.0), wvl, joule!(1.0)).unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
         assert_eq!(intersection_point.x, Length::zero());
         assert_abs_diff_eq!(intersection_point.y.value, -0.001);
@@ -257,27 +415,6 @@ mod test {
             0.011,
             epsilon = 1000.0 * f64::EPSILON
         );
-        assert_abs_diff_eq!(normal.x, 0.0);
-        assert_abs_diff_eq!(normal.y, -1.0);
-        assert_abs_diff_eq!(normal.z, 0.0);
-    }
-    #[test]
-    fn intersect_negative_on_axis() {
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Sphere::new(millimeter!(-1.0), &iso).unwrap();
-        let ray = Ray::new(
-            millimeter!(0.0, 0.0, 0.0),
-            Vector3::new(0.0, 0.0, 1.0),
-            nanometer!(1053.0),
-            joule!(1.0),
-        )
-        .unwrap();
-        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
-        assert_abs_diff_eq!(intersection_point.x.value, 0.0);
-        assert_abs_diff_eq!(intersection_point.y.value, 0.0);
-        assert_abs_diff_eq!(intersection_point.z.value, 0.01);
-        assert_abs_diff_eq!(normal.x, 0.0);
-        assert_abs_diff_eq!(normal.y, 0.0);
-        assert_abs_diff_eq!(normal.z, -1.0);
+        assert_abs_diff_eq!(normal, vector![0.0, -1.0, 0.0]);
     }
 }

@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Lens with spherical or flat surfaces
+//! Cylindric lens with spherical or flat surfaces.
 use crate::{
     analyzer::AnalyzerType,
     dottable::Dottable,
@@ -11,18 +11,19 @@ use crate::{
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{Plane, Sphere, Surface},
+    surface::{Cylinder, Plane, Surface},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
+
+use super::node_attr::NodeAttr;
+use log::warn;
 use num::Zero;
 use uom::si::f64::Length;
 
-use super::node_attr::NodeAttr;
-
 #[derive(Debug)]
-/// A real lens with spherical (or flat) surfaces.
+/// A real cylindric lens with spherical (or flat) surfaces. By default, the curvature is aligned along the (local) y axis.
 ///
 ///
 /// ## Optical Ports
@@ -38,14 +39,14 @@ use super::node_attr::NodeAttr;
 ///   - `rear curvature`
 ///   - `center thickness`
 ///   - `refractive index`
-pub struct Lens {
+pub struct CylindricLens {
     node_attr: NodeAttr,
 }
 
-impl Default for Lens {
-    /// Create a lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
+impl Default for CylindricLens {
+    /// Create a cylindric lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("lens");
+        let mut node_attr = NodeAttr::new("cylindric lens");
         node_attr
             .create_property(
                 "front curvature",
@@ -89,10 +90,11 @@ impl Default for Lens {
         Self { node_attr }
     }
 }
-impl Lens {
-    /// Creates a new [`Lens`].
+impl CylindricLens {
+    /// Creates a new [`CylindricLens`].
     ///
-    /// This function creates a lens with spherical front and back surfaces, a given center thickness and refractive index.
+    /// This function creates a cylindric lens with spherical front and back surfaces, a given center thickness and refractive index.
+    /// By default, the curvature aligned along the y axis.
     /// The radii of curvature must not be zero. The given refractive index must not be < 1.0. A radius of curvature of +/- infinity
     /// corresponds to a flat surface.
     ///
@@ -155,14 +157,14 @@ impl Lens {
         let front_surf: Box<dyn Surface> = if front_roc.is_infinite() {
             Box::new(Plane::new(iso))
         } else {
-            Box::new(Sphere::new(front_roc, iso)?)
+            Box::new(Cylinder::new(front_roc, iso)?)
         };
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
         let rear_surf: Box<dyn Surface> = if rear_roc.is_infinite() {
             Box::new(Plane::new(&isometry))
         } else {
-            Box::new(Sphere::new(rear_roc, &isometry)?)
+            Box::new(Cylinder::new(rear_roc, &isometry)?)
         };
         if let Some(aperture) = self.ports().input_aperture("front") {
             rays.apodize(aperture)?;
@@ -201,14 +203,14 @@ impl Lens {
         let front_surf: Box<dyn Surface> = if front_roc.is_infinite() {
             Box::new(Plane::new(iso))
         } else {
-            Box::new(Sphere::new(front_roc, iso)?)
+            Box::new(Cylinder::new(front_roc, iso)?)
         };
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
         let rear_surf: Box<dyn Surface> = if rear_roc.is_infinite() {
             Box::new(Plane::new(&isometry))
         } else {
-            Box::new(Sphere::new(rear_roc, &isometry)?)
+            Box::new(Cylinder::new(rear_roc, &isometry)?)
         };
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
@@ -233,7 +235,7 @@ impl Lens {
     }
 }
 
-impl Optical for Lens {
+impl Optical for CylindricLens {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -318,107 +320,9 @@ impl Optical for Lens {
     }
 }
 
-// impl Plottable for Lens{
-//     fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
-//         if let Some(iso) = self.effective_iso(){
+impl Alignable for CylindricLens {}
 
-//             let Ok(Proptype::Length(front_radius))
-//             = self.properties().get("front curvature")
-//             else{
-//                 return Err(OpossumError::Analysis(
-//                     "cannot read front curvature".into(),
-//                 ));
-//             };
-
-//             let Ok(Proptype::Length(rear_radius))
-//             = self.properties().get("rear curvature")
-//             else{
-//                 return Err(OpossumError::Analysis(
-//                     "cannot read rear curvature".into(),
-//                 ));
-//             };
-
-//             let Ok(Proptype::Length(center_thickness))
-//             = self.properties().get("center thickness")
-//             else{
-//                 return Err(OpossumError::Analysis(
-//                     "cannot read center thickness".into(),
-//                 ));
-//             };
-
-//             let sphere1 = Sphere::new(*front_radius, &iso)?;
-
-//             let iso = iso.append(&Isometry::new_along_z(*center_thickness)?);
-//             let sphere2 = Sphere::new(*rear_radius, &iso)?;
-
-//             let cylinder = if let Ok(Proptype::Aperture(aperture))         = self.properties().get("aperture")
-//             {
-//                 match aperture{
-//                     Aperture::BinaryCircle(conf) =>{
-//                         let radius = conf.radius();
-//                         Cylinder::new(*center_thickness*10., radius, millimeter!(0., 0., 0.),
-//                         Vector3::z())
-//                     },
-//                     _ => Err(OpossumError::Analysis(
-//                         "ApertureType not yet usable for displaying nodes".into(),
-//                     ))
-
-//                 }?
-//             }
-//             else{
-//                 return Err(OpossumError::Analysis(
-//                     "cannot read aperture".into(),
-//                 ));
-//             };
-
-//             let sdf_collection = SDFCollection::new(
-//                 vec![&cylinder, &sphere1, &sphere2],
-//                 Some(SDFOperation::Intersection),
-//             )
-//             .unwrap();
-
-//             Ok(None)
-//         }
-//         Ok(None)
-
-//     }
-
-//     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-//         todo!()
-//     }
-
-//     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-//         todo!()
-//     }
-// }
-
-// impl SDF for Lens
-// {
-//     fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
-
-//         if let Some(iso) = self.isometry(){
-//             if let Ok(Proptype::Length(radius)) = self.properties().get("radius"){
-//                 let p_out = iso.inverse_transform_point_f64(p);
-//                 (p_out.x.mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z*p_out.z)) ).sqrt() - radius.get::<millimeter>()
-//             }
-//             else{
-//                 0.
-//             }
-//         }
-//         else{
-//             0.
-//         }
-
-//     }
-// }
-// impl Color for Lens{
-//     fn get_color(&self, p: &Point3<f64>) -> Vector3<f64> {
-//         Vector3::<f64>::new(0.8, 0.8, 0.8)
-//     }
-// }
-impl Alignable for Lens {}
-
-impl Dottable for Lens {
+impl Dottable for CylindricLens {
     fn node_color(&self) -> &str {
         "aqua"
     }
@@ -429,14 +333,15 @@ mod test {
         analyzer::RayTraceConfig, joule, millimeter, nanometer, nodes::test_helper::test_helper::*,
         position_distributions::Hexapolar, rays::Rays,
     };
+    use approx::assert_relative_eq;
     use nalgebra::Vector3;
 
     use super::*;
     #[test]
     fn default() {
-        let node = Lens::default();
-        assert_eq!(node.name(), "lens");
-        assert_eq!(node.node_type(), "lens");
+        let node = CylindricLens::default();
+        assert_eq!(node.name(), "cylindric lens");
+        assert_eq!(node.node_type(), "cylindric lens");
         assert_eq!(node.is_detector(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "aqua");
@@ -468,21 +373,31 @@ mod test {
         let ct = millimeter!(11.0);
         let ref_index = RefrIndexConst::new(1.5).unwrap();
 
-        assert!(Lens::new("test", roc, roc, millimeter!(-0.1), &ref_index).is_err());
-        assert!(Lens::new("test", roc, roc, millimeter!(f64::NAN), &ref_index).is_err());
-        assert!(Lens::new("test", roc, roc, millimeter!(f64::INFINITY), &ref_index).is_err());
+        assert!(CylindricLens::new("test", roc, roc, millimeter!(-0.1), &ref_index).is_err());
+        assert!(CylindricLens::new("test", roc, roc, millimeter!(f64::NAN), &ref_index).is_err());
+        assert!(
+            CylindricLens::new("test", roc, roc, millimeter!(f64::INFINITY), &ref_index).is_err()
+        );
 
-        assert!(Lens::new("test", roc, Length::zero(), ct, &ref_index).is_err());
-        assert!(Lens::new("test", roc, millimeter!(f64::NAN), ct, &ref_index).is_err());
-        assert!(Lens::new("test", roc, millimeter!(f64::INFINITY), ct, &ref_index).is_ok());
-        assert!(Lens::new("test", roc, millimeter!(f64::NEG_INFINITY), ct, &ref_index).is_ok());
+        assert!(CylindricLens::new("test", roc, Length::zero(), ct, &ref_index).is_err());
+        assert!(CylindricLens::new("test", roc, millimeter!(f64::NAN), ct, &ref_index).is_err());
+        assert!(
+            CylindricLens::new("test", roc, millimeter!(f64::INFINITY), ct, &ref_index).is_ok()
+        );
+        assert!(
+            CylindricLens::new("test", roc, millimeter!(f64::NEG_INFINITY), ct, &ref_index).is_ok()
+        );
 
-        assert!(Lens::new("test", Length::zero(), roc, ct, &ref_index).is_err());
-        assert!(Lens::new("test", millimeter!(f64::NAN), roc, ct, &ref_index).is_err());
-        assert!(Lens::new("test", millimeter!(f64::INFINITY), roc, ct, &ref_index).is_ok());
-        assert!(Lens::new("test", millimeter!(f64::NEG_INFINITY), roc, ct, &ref_index).is_ok());
+        assert!(CylindricLens::new("test", Length::zero(), roc, ct, &ref_index).is_err());
+        assert!(CylindricLens::new("test", millimeter!(f64::NAN), roc, ct, &ref_index).is_err());
+        assert!(
+            CylindricLens::new("test", millimeter!(f64::INFINITY), roc, ct, &ref_index).is_ok()
+        );
+        assert!(
+            CylindricLens::new("test", millimeter!(f64::NEG_INFINITY), roc, ct, &ref_index).is_ok()
+        );
         let ref_index = RefrIndexConst::new(2.0).unwrap();
-        let node = Lens::new("test", roc, roc, ct, &ref_index).unwrap();
+        let node = CylindricLens::new("test", roc, roc, ct, &ref_index).unwrap();
         assert_eq!(node.name(), "test");
         let Ok(Proptype::Length(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
@@ -511,15 +426,15 @@ mod test {
     }
     #[test]
     fn inverted() {
-        test_inverted::<Lens>()
+        test_inverted::<CylindricLens>()
     }
     #[test]
     fn analyze_empty() {
-        test_analyze_empty::<Lens>()
+        test_analyze_empty::<CylindricLens>()
     }
     #[test]
     fn analyze_wrong_port() {
-        let mut node = Lens::default();
+        let mut node = CylindricLens::default();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("rear".into(), input_light.clone());
@@ -528,11 +443,11 @@ mod test {
     }
     #[test]
     fn analyze_geometric_wrong_data_type() {
-        test_analyze_wrong_data_type::<Lens>("front");
+        test_analyze_wrong_data_type::<CylindricLens>("front");
     }
     #[test]
     fn analyze_flatflat() {
-        let mut node = Lens::new(
+        let mut node = CylindricLens::new(
             "test",
             millimeter!(f64::INFINITY),
             millimeter!(f64::NEG_INFINITY),
@@ -567,7 +482,7 @@ mod test {
     #[test]
     fn analyze_biconvex() {
         // biconvex lens with index of 1.0 (="neutral" lens)
-        let mut node = Lens::new(
+        let mut node = CylindricLens::new(
             "test",
             millimeter!(100.0),
             millimeter!(-100.0),
@@ -582,7 +497,6 @@ mod test {
             &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
         )
         .unwrap();
-        // rays.set_dist_to_next_surface(millimeter!(10.0));
         let mut incoming_data = LightResult::default();
         incoming_data.insert("front".into(), LightData::Geometric(rays));
         let output = node
@@ -593,7 +507,9 @@ mod test {
             .unwrap();
         if let Some(LightData::Geometric(rays)) = output.get("rear") {
             for ray in rays {
-                assert_eq!(ray.direction(), Vector3::z());
+                assert_eq!(ray.direction().x, 0.0);
+                assert_eq!(ray.direction().y, 0.0);
+                assert_relative_eq!(ray.direction().z, 1.0);
             }
         } else {
             assert!(false);

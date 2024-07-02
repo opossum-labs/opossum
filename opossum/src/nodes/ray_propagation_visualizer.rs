@@ -289,23 +289,22 @@ impl RayPositionHistorySpectrum {
         //define an axis on the plane.
         //Do this by projection of one of the main coordinate axes onto that plane
         //Beforehand check, if these axes are not parallel to the normal vec
-        let (co_ax_1, co_ax_2) =
-            if plane_normal_vec.cross(&Vector3::new(1., 0., 0.)).norm() < f64::EPSILON {
-                //parallel to the x-axis
-                (Vector3::new(0., 0., 1.), Vector3::new(0., 1., 0.))
-            } else if plane_normal_vec.cross(&Vector3::new(0., 1., 0.)).norm() < f64::EPSILON {
-                (Vector3::new(0., 0., 1.), Vector3::new(1., 0., 0.))
-            } else if plane_normal_vec.cross(&Vector3::new(0., 0., 1.)).norm() < f64::EPSILON {
-                (Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.))
-            } else {
-                //arbitrarily project x-axis onto that plane
-                let x_vec = Vector3::new(1., 0., 0.);
-                let mut proj_x = x_vec - x_vec.dot(&normed_normal_vec) * plane_normal_vec;
-                proj_x /= proj_x.norm();
+        let (co_ax_1, co_ax_2) = if plane_normal_vec.cross(&Vector3::x()).norm() < f64::EPSILON {
+            //parallel to the x-axis
+            (Vector3::z(), Vector3::y())
+        } else if plane_normal_vec.cross(&Vector3::y()).norm() < f64::EPSILON {
+            (Vector3::z(), Vector3::x())
+        } else if plane_normal_vec.cross(&Vector3::z()).norm() < f64::EPSILON {
+            (Vector3::x(), Vector3::y())
+        } else {
+            //arbitrarily project x-axis onto that plane
+            let x_vec = Vector3::x();
+            let mut proj_x = x_vec - x_vec.dot(&normed_normal_vec) * plane_normal_vec;
+            proj_x /= proj_x.norm();
 
-                //second axis defined by cross product of x-axis projection and plane normal, which yields another vector that is perpendicular to both others
-                (proj_x, proj_x.cross(&normed_normal_vec))
-            };
+            //second axis defined by cross product of x-axis projection and plane normal, which yields another vector that is perpendicular to both others
+            (proj_x, proj_x.cross(&normed_normal_vec))
+        };
 
         let mut rays_pos_projection = Vec::<MatrixXx2<Length>>::with_capacity(self.history.len());
         for ray_pos in &self.history {
@@ -385,8 +384,7 @@ impl Plottable for RayPositionHistories {
                 let wvl = ray_pos_hist.get_center_wavelength().get::<nanometer>();
                 let grad_val = 0.42 + (wvl - wavelengths[0]) / wvl_range;
                 let rgbcolor = color_grad.eval_continuous(grad_val);
-                let projected_positions =
-                    ray_pos_hist.project_to_plane(Vector3::new(1., 0., 0.))?;
+                let projected_positions = ray_pos_hist.project_to_plane(Vector3::x())?;
                 let mut proj_pos_mm =
                     Vec::<MatrixXx2<f64>>::with_capacity(projected_positions.len());
                 for ray_pos in &projected_positions {
@@ -708,7 +706,7 @@ mod test {
             wavelength_bin_size: nanometer!(1.),
         };
 
-        let projected_rays = pos_hist.project_to_plane(Vector3::new(1., 0., 0.)).unwrap();
+        let projected_rays = pos_hist.project_to_plane(Vector3::x()).unwrap();
         assert_eq!(projected_rays[0][(0, 0)].get::<millimeter>(), 0.);
         assert_eq!(projected_rays[0][(0, 1)].get::<millimeter>(), 0.);
         assert_eq!(projected_rays[1][(0, 0)].get::<millimeter>(), 0.);
@@ -716,7 +714,7 @@ mod test {
         assert_eq!(projected_rays[2][(0, 0)].get::<millimeter>(), 1.);
         assert_eq!(projected_rays[2][(0, 1)].get::<millimeter>(), 0.);
 
-        let projected_rays = pos_hist.project_to_plane(Vector3::new(0., 1., 0.)).unwrap();
+        let projected_rays = pos_hist.project_to_plane(Vector3::y()).unwrap();
         assert_eq!(projected_rays[0][(0, 0)].get::<millimeter>(), 0.);
         assert_eq!(projected_rays[0][(0, 1)].get::<millimeter>(), 1.);
         assert_eq!(projected_rays[1][(0, 0)].get::<millimeter>(), 0.);
@@ -724,7 +722,7 @@ mod test {
         assert_eq!(projected_rays[2][(0, 0)].get::<millimeter>(), 1.);
         assert_eq!(projected_rays[2][(0, 1)].get::<millimeter>(), 0.);
 
-        let projected_rays = pos_hist.project_to_plane(Vector3::new(0., 0., 1.)).unwrap();
+        let projected_rays = pos_hist.project_to_plane(Vector3::z()).unwrap();
         assert_eq!(projected_rays[0][(0, 0)].get::<millimeter>(), 1.);
         assert_eq!(projected_rays[0][(0, 1)].get::<millimeter>(), 0.);
         assert_eq!(projected_rays[1][(0, 0)].get::<millimeter>(), 0.);

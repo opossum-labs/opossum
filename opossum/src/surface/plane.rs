@@ -81,13 +81,7 @@ mod test {
     fn intersect_on_axis() {
         let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
         let s = Plane::new(&iso);
-        let ray = Ray::new(
-            millimeter!(0.0, 0.0, 0.0),
-            Vector3::new(0.0, 0.0, 1.0),
-            nanometer!(1053.0),
-            joule!(1.0),
-        )
-        .unwrap();
+        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(0.0, 0.0, 10.0), Vector3::new(0.0, 0.0, -1.0)))
@@ -97,26 +91,14 @@ mod test {
     fn intersect_on_axis_behind() {
         let iso = Isometry::new_along_z(millimeter!(-10.0)).unwrap();
         let s = Plane::new(&iso);
-        let ray = Ray::new(
-            millimeter!(0.0, 0.0, 0.0),
-            Vector3::z(),
-            nanometer!(1053.0),
-            joule!(1.0),
-        )
-        .unwrap();
+        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
     fn intersect_zero_dist() {
         let iso = Isometry::new_along_z(millimeter!(0.0)).unwrap();
         let s = Plane::new(&iso);
-        let ray = Ray::new(
-            millimeter!(0.0, 0.0, 0.0),
-            Vector3::z(),
-            nanometer!(1053.0),
-            joule!(1.0),
-        )
-        .unwrap();
+        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(0.0, 0.0, 0.0), Vector3::new(0.0, 0.0, -1.0)))
@@ -126,13 +108,8 @@ mod test {
     fn intersect_off_axis() {
         let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
         let s = Plane::new(&iso);
-        let ray = Ray::new(
-            millimeter!(0.0, 1.0, 1.0),
-            Vector3::z(),
-            nanometer!(1053.0),
-            joule!(1.0),
-        )
-        .unwrap();
+        let ray = Ray::new_collimated(millimeter!(0.0, 1.0, 1.0), nanometer!(1053.0), joule!(1.0))
+            .unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(0.0, 1.0, 10.0), Vector3::new(0.0, 0.0, -1.0)))
