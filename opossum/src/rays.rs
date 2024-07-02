@@ -7,7 +7,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule, micrometer, millimeter, nanometer,
     nodes::{
-        ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum}, FilterType, FluenceData, NodeReference, WaveFrontData, WaveFrontErrorMap
+        ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
+        FilterType, FluenceData, WaveFrontData, WaveFrontErrorMap,
     },
     plottable::AxLims,
     position_distributions::{Hexapolar, PositionDistribution},
@@ -55,7 +56,7 @@ use uom::{
 pub struct Rays {
     /// vector containing the individual rays
     rays: Vec<Ray>,
-    node_history : Option<Vec<Aperture>>
+    node_history: Option<Vec<Aperture>>,
 }
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis) with uniform energy distribution.
@@ -85,7 +86,10 @@ impl Rays {
             let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
-        Ok(Self { rays, node_history:None })
+        Ok(Self {
+            rays,
+            node_history: None,
+        })
     }
 
     /// Generate a set of collimated rays (collinear with optical axis) with specified energy distribution and position distribution.
@@ -138,7 +142,10 @@ impl Rays {
                 rays.push(ray);
             }
         }
-        Ok(Self { rays, node_history:None })
+        Ok(Self {
+            rays,
+            node_history: None,
+        })
     }
     /// Generate a ray cone (= point source)
     ///
@@ -182,7 +189,10 @@ impl Rays {
             let ray = Ray::new(position, direction, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
-        Ok(Self { rays, node_history: None })
+        Ok(Self {
+            rays,
+            node_history: None,
+        })
     }
     /// Returns the total energy of this [`Rays`].
     ///
@@ -1004,7 +1014,10 @@ impl Display for Rays {
 
 impl From<Vec<Ray>> for Rays {
     fn from(value: Vec<Ray>) -> Self {
-        Self { rays: value, node_history:None}
+        Self {
+            rays: value,
+            node_history: None,
+        }
     }
 }
 

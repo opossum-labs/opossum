@@ -243,12 +243,102 @@ impl Optical for Lens {
     }
 }
 
+// impl Plottable for Lens{
+//     fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+//         if let Some(iso) = self.effective_iso(){
+
+//             let Ok(Proptype::Length(front_radius))
+//             = self.properties().get("front curvature")
+//             else{
+//                 return Err(OpossumError::Analysis(
+//                     "cannot read front curvature".into(),
+//                 ));
+//             };
+
+//             let Ok(Proptype::Length(rear_radius))
+//             = self.properties().get("rear curvature")
+//             else{
+//                 return Err(OpossumError::Analysis(
+//                     "cannot read rear curvature".into(),
+//                 ));
+//             };
+
+//             let Ok(Proptype::Length(center_thickness))
+//             = self.properties().get("center thickness")
+//             else{
+//                 return Err(OpossumError::Analysis(
+//                     "cannot read center thickness".into(),
+//                 ));
+//             };
+
+//             let sphere1 = Sphere::new(*front_radius, &iso)?;
+
+//             let iso = iso.append(&Isometry::new_along_z(*center_thickness)?);
+//             let sphere2 = Sphere::new(*rear_radius, &iso)?;
+
+//             let cylinder = if let Ok(Proptype::Aperture(aperture))         = self.properties().get("aperture")
+//             {
+//                 match aperture{
+//                     Aperture::BinaryCircle(conf) =>{
+//                         let radius = conf.radius();
+//                         Cylinder::new(*center_thickness*10., radius, millimeter!(0., 0., 0.),
+//                         Vector3::z())
+//                     },
+//                     _ => Err(OpossumError::Analysis(
+//                         "ApertureType not yet usable for displaying nodes".into(),
+//                     ))
+
+//                 }?
+//             }
+//             else{
+//                 return Err(OpossumError::Analysis(
+//                     "cannot read aperture".into(),
+//                 ));
+//             };
+
+//             let sdf_collection = SDFCollection::new(
+//                 vec![&cylinder, &sphere1, &sphere2],
+//                 Some(SDFOperation::Intersection),
+//             )
+//             .unwrap();
+
+//             Ok(None)
+//         }
+//         Ok(None)
+
+//     }
+
+//     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
+//         todo!()
+//     }
+
+//     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
+//         todo!()
+//     }
+// }
+
 // impl SDF for Lens
 // {
-//     fn sdf_eval_point(&self, p: &nalgebra::Point3<f64>, p_out: &mut nalgebra::Point3<f64>) -> f64 {
-//         self.isometry.inverse_transform_point_mut_f64(&p, p_out);
-//         // (p.x * p.x + p.y * p.y + p.z * p.z).sqrt() - self.radius.value
-//         (p_out.x.mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z*p_out.z)) ).sqrt() - self.radius.value
+//     fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+
+//         if let Some(iso) = self.isometry(){
+//             if let Ok(Proptype::Length(radius)) = self.properties().get("radius"){
+//                 let p_out = iso.inverse_transform_point_f64(p);
+//                 (p_out.x.mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z*p_out.z)) ).sqrt() - radius.get::<millimeter>()
+//             }
+//             else{
+//                 0.
+//             }
+//         }
+//         else{
+//             0.
+//         }
+
+//     }
+// }
+// impl Color for Lens{
+//     fn get_color(&self, p: &Point3<f64>) -> Vector3<f64> {
+//         Vector3::<f64>::new(0.8, 0.8, 0.8)
 //     }
 // }
 impl Alignable for Lens {}

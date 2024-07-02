@@ -24,6 +24,7 @@ pub enum SDFOperation {
 pub struct SDFCollection<'a> {
     sdf_objs: Vec<&'a dyn Renderable<'a>>,
     sdf_op: SDFOperation,
+    bbox: tessellation::BoundingBox<f64>,
 }
 
 impl<'a> Render<'_> for SDFCollection<'a> {}
@@ -54,17 +55,28 @@ impl<'a> SDFCollection<'a> {
     pub fn new(
         sdf_objs: Vec<&'a dyn Renderable<'a>>,
         sdf_op_opt: Option<SDFOperation>,
+        bbox: tessellation::BoundingBox<f64>,
     ) -> Option<Self> {
         if sdf_objs.is_empty() {
             None
         } else if let Some(sdf_op) = sdf_op_opt {
-            Some(Self { sdf_objs, sdf_op })
+            Some(Self {
+                sdf_objs,
+                sdf_op,
+                bbox,
+            })
         } else {
             Some(Self {
                 sdf_objs,
                 sdf_op: SDFOperation::Union,
+                bbox,
             })
         }
+    }
+    /// Returns the bounding box of this collection
+    #[must_use]
+    pub const fn bounding_box(&self) -> &tessellation::BoundingBox<f64> {
+        &self.bbox
     }
     /// Add and sdf object (must implement Renderable) to this [`SDFCollection`]
     pub fn add_sdf_obj(&mut self, sdf_obj: &'a dyn Renderable<'a>) {
@@ -174,3 +186,15 @@ pub trait SDF: Color {
         sdf_out
     }
 }
+
+// impl tessellation::ImplicitFunction<f64> for SDFCollection<'_> {
+//     fn bbox(&self) -> &tessellation::BoundingBox<f64> {
+//       &self.bbox
+//     }
+//    fn value(&self, p: &Point3<f64>) -> f64 {
+//      return self.sdf_eval_point(p);
+//    }
+//    fn normal(&self, p: &nalgebra::Point3<f64>) -> nalgebra::Vector3<f64> {
+//      return nalgebra::Vector3::new(p.x, p.y, p.z).normalize();
+//    }
+//  }

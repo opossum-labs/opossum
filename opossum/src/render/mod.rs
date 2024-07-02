@@ -91,8 +91,8 @@ pub trait Render<'a>: SDF + Sync {
         let x_half_width = (opening_angle.x.get::<radian>() / 2.).tan() * view_plane_z_dist_m;
         let y_half_width = (opening_angle.y.get::<radian>() / 2.).tan() * view_plane_z_dist_m;
 
-        let x_origin = linspace(-x_half_width, x_half_width, f64::from(x_pixels))?;
-        let y_origin = linspace(-y_half_width, y_half_width, f64::from(y_pixels))?;
+        let x_origin = linspace(-x_half_width, x_half_width, x_pixels as usize)?;
+        let y_origin = linspace(-y_half_width, y_half_width, y_pixels as usize)?;
 
         let len_color_vals = (x_pixels * y_pixels * 3) as usize;
         let mut image = vec![1.; len_color_vals];
@@ -142,7 +142,7 @@ pub trait Render<'a>: SDF + Sync {
             let normal = self.approx_normal_fast(p, p_sdf);
 
             if !normal[0].is_finite() || !normal[1].is_finite() || !normal[2].is_finite() {
-                color.iter_mut().enumerate().for_each(|(_, x)| *x = 0.);
+                color.iter_mut().for_each(|x| *x = 0.);
             }
 
             color.iter_mut().enumerate().for_each(|(i, x)| *x = c[i]);
@@ -162,7 +162,7 @@ pub trait Render<'a>: SDF + Sync {
                 self.march_ray(&mut shadow_pos, &shadow_dir, dist_to_light_source)
             {
                 if dist < dist_to_light_source {
-                    color.iter_mut().enumerate().for_each(|(_, x)| *x *= 0.25);
+                    color.iter_mut().for_each(|x| *x *= 0.25);
                 }
             }
             for x in color.iter_mut() {
@@ -170,7 +170,7 @@ pub trait Render<'a>: SDF + Sync {
                     (*x * diffuse_strength.mul_add(0.75, specular_strength * 0.25)).powf(1.0 / 2.2);
             }
         } else {
-            color.iter_mut().enumerate().for_each(|(_, x)| *x = 0.);
+            color.iter_mut().for_each(|x| *x = 0.);
         }
     }
 

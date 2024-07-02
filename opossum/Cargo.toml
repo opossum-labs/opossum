@@ -50,8 +50,8 @@ tempfile="3"
 rand="0"
 sobol="1"
 itertools = "0.12.0"
-nalgebra = "0.30"
-ncollide2d = { version = "0.33.0", features = ["serde-serialize"] }
+nalgebra = {version = "0.33", features = ["serde-serialize"]}
+# ncollide2d = { version = "0.33.0", features = ["serde-serialize"] }
 colorous = "1.0.12"
 strum_macros = "0.26"
 delaunator = "1.0.2"
@@ -68,6 +68,8 @@ tinytemplate = "1"
 
 bevy={ version="0", optional=true }
 bevy_flycam = { version= "0", optional =true }
+tessellation = "0.8.2"
+triangulate = "0.2.0"
 
 [lints.rust]
 # missing_docs = "warn"

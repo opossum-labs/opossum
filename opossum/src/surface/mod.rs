@@ -2,12 +2,12 @@
 //! Module for handling optical surfaces
 
 //mod cuboid;
-//mod cylinder;
+mod cylinder;
 //mod optical_table;
 mod plane;
 mod sphere;
 //pub use cuboid::Cuboid;
-//pub use cylinder::Cylinder;
+pub use cylinder::Cylinder;
 //pub use optical_table::OpticalTable;
 pub use plane::Plane;
 pub use sphere::Sphere;

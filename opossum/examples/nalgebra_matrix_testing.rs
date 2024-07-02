@@ -17,7 +17,7 @@ fn pairwise_sumation(input: &[f64]) -> f64 {
     }
 }
 
-// fn pairwise_sum_matrix(input: &DVectorSlice<f64>) -> f64 {
+// fn pairwise_sum_matrix(input: &DVectorView<f64>) -> f64 {
 //     let vec_len = input.len();
 //     if vec_len < 64 {
 //         input.sum()
