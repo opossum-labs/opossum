@@ -268,6 +268,7 @@ mod test {
         assert_eq!(node.name(), "ideal filter");
         assert_eq!(node.node_type(), "ideal filter");
         assert_eq!(node.is_detector(), false);
+        assert_eq!(node.is_source(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "darkgray");
         assert!(node.as_group().is_err());
@@ -326,7 +327,7 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut node = IdealFilter::default();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         assert_eq!(node.ports().input_names(), vec!["rear"]);
         assert_eq!(node.ports().output_names(), vec!["front"]);
     }
@@ -407,7 +408,7 @@ mod test {
     #[test]
     fn analyze_inverse() {
         let mut node = IdealFilter::new("test", &FilterType::Constant(0.5)).unwrap();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),

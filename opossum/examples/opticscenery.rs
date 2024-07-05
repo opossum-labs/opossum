@@ -4,7 +4,7 @@ use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     scenery.set_description("OpticScenery demo")?;
     let node1 = scenery.add_node(Dummy::new("dummy1"));
     let node2 = scenery.add_node(Dummy::new("dummy2"));

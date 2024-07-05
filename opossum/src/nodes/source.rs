@@ -219,6 +219,7 @@ mod test {
             panic!("cannot unpack light data property");
         };
         assert_eq!(node.is_detector(), false);
+        assert!(Source::default().is_source());
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "slateblue");
         assert!(node.as_group().is_err());
@@ -231,8 +232,8 @@ mod test {
     #[test]
     fn not_invertable() {
         let mut node = Source::default();
-        assert!(node.set_property("inverted", false.into()).is_ok());
-        assert!(node.set_property("inverted", true.into()).is_err());
+        assert!(node.set_inverted(false).is_ok());
+        assert!(node.set_inverted(true).is_err());
         assert!(node.set_property("name", "blah".into()).is_ok());
     }
     #[test]

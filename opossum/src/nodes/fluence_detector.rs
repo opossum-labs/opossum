@@ -104,7 +104,7 @@ impl Optical for FluenceDetector {
             if let Some(aperture) = self.ports().input_aperture("in1") {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
-                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", self.node_attr.name(), self.node_attr.node_type());
+                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn Optical);
                     self.apodization_warning = true;
                 }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -386,7 +386,7 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut meter = FluenceDetector::default();
-        meter.set_property("inverted", true.into()).unwrap();
+        meter.set_inverted(true).unwrap();
         assert_eq!(meter.ports().input_names(), vec!["out1"]);
         assert_eq!(meter.ports().output_names(), vec!["in1"]);
     }
@@ -434,7 +434,7 @@ mod test {
     #[test]
     fn analyze_inverse() {
         let mut node = FluenceDetector::default();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),

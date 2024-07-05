@@ -163,7 +163,7 @@ fn main() -> OpmResult<()> {
     group_t1.map_input_port(t1_l1a, "front", "input")?;
     group_t1.map_output_port(t1_l2c, "rear", "output")?;
 
-    group_t1.expand_view(false)?;
+    group_t1.set_expand_view(false)?;
     let t1 = scenery.add_node(group_t1);
 
     scenery.connect_nodes(input_group, "output", t1, "input", millimeter!(100.0))?;

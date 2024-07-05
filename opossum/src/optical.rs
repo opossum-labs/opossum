@@ -6,7 +6,7 @@ use log::warn;
 use nalgebra::Point3;
 use uom::si::f64::{Angle, Length};
 
-use crate::analyzer::AnalyzerType;
+use crate::analyzer::{AnalyzerType, RayTraceConfig};
 use crate::aperture::Aperture;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
@@ -21,6 +21,7 @@ use crate::utils::geom_transformation::Isometry;
 use core::fmt::Debug;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -96,6 +97,21 @@ pub trait Optical: Dottable {
     ) -> OpmResult<LightResult> {
         warn!("{}: No analyze function defined.", self.node_type());
         Ok(LightResult::default())
+    }
+    /// Calculate the position of this [`Optical`] element.
+    ///
+    /// This function calculates the position of this [`Optical`] element in 3D space. This is based on the analysis of a single,
+    /// central [`Ray`](crate::ray::Ray) representing the optical axis. The default implementation is to use the normal `analyze`
+    /// function. For a [`NodeGroup`] however, this must be separately implemented in order to allow nesting.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if internal element-specific errors occur and the analysis cannot be performed.
+    fn calc_node_position(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        self.analyze(
+            incoming_data,
+            &AnalyzerType::RayTrace(RayTraceConfig::default()),
+        )
     }
     /// Export analysis data to file(s) within the given directory path.
     ///
@@ -189,6 +205,19 @@ pub trait Optical: Dottable {
             }
         }
         Ok(())
+    }
+    /// Set this [`Optical`] as inverted.
+    ///
+    /// This flag signifies that the [`Optical`] should be propagated in reverse order. This function normally simply sets the
+    /// `inverted` property. For [`NodeGroup`] it also sets the `inverted` flag of the underlying [`OpticGraph`].
+    ///
+    /// ## Errors
+    ///
+    /// This function returns an error, if the node cannot be inverted. This is the case, if
+    ///   - it is a source node
+    ///   - it is a group node containing a non-invertable node (e.g. a source)
+    fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
+        self.set_property("inverted", inverted.into())
     }
     /// Return a YAML representation of the current state of this [`Optical`].
     ///
@@ -314,6 +343,11 @@ pub trait Alignable: Optical + Sized {
 }
 impl Debug for dyn Optical {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.name(), self.node_type())
+        write!(f, "'{}' ({})", self.name(), self.node_type())
+    }
+}
+impl Display for dyn Optical {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}' ({})", self.name(), self.node_type())
     }
 }

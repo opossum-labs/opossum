@@ -12,7 +12,7 @@ use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     let src = scenery.add_node(round_collimated_ray_source(
         millimeter!(5.0),
         joule!(1.0),

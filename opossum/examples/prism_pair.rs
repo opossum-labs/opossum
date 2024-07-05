@@ -10,7 +10,7 @@ use opossum::{
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     scenery.set_description("Prism Pair test".into())?;
 
     let src = scenery.add_node(collimated_line_ray_source(

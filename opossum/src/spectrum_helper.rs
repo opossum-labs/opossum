@@ -196,8 +196,7 @@ pub fn generate_filter_spectrum(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::micrometer;
-    use log::Level;
+    use crate::{micrometer, utils::test_helper::test_helper::check_warnings};
     use num::Zero;
     use testing_logger;
 
@@ -212,15 +211,7 @@ mod test {
             }
         )
         .is_ok());
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            assert_eq!(
-                captured_logs[0].body,
-                "cut-off wavelength must be inside the spectrum range"
-            );
-            assert_eq!(captured_logs[0].level, Level::Warn);
-        });
-
+        check_warnings(vec!["cut-off wavelength must be inside the spectrum range"]);
         let s = generate_filter_spectrum(
             micrometer!(1.0)..micrometer!(5.0),
             micrometer!(1.0),
@@ -246,14 +237,7 @@ mod test {
             }
         )
         .is_ok());
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            assert_eq!(
-                captured_logs[0].body,
-                "cut-off wavelength must be inside the spectrum range"
-            );
-            assert_eq!(captured_logs[0].level, Level::Warn);
-        });
+        check_warnings(vec!["cut-off wavelength must be inside the spectrum range"]);
         let s = generate_filter_spectrum(
             micrometer!(1.0)..micrometer!(5.0),
             micrometer!(1.0),

@@ -9,7 +9,7 @@ use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
 
     let d0 = scenery.add_node(collimated_line_ray_source(
         millimeter!(20.0),
@@ -17,7 +17,7 @@ fn main() -> OpmResult<()> {
         6,
     )?);
     let mut group1 = NodeGroup::new("group 1");
-    group1.expand_view(true)?;
+    group1.set_expand_view(true)?;
     let g1_n1 = group1.add_node(Lens::default())?;
     let g1_n2 = group1.add_node(BeamSplitter::default())?;
     group1.connect_nodes(g1_n1, "rear", g1_n2, "input1", Length::zero())?;

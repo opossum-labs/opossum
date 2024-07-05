@@ -13,7 +13,7 @@ use opossum::{
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     scenery.set_description("filter system demo")?;
 
     let i_s = scenery.add_node(Source::new(

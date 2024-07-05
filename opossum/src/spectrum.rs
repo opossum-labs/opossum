@@ -599,11 +599,13 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::spectrum_helper::{
-        create_he_ne_spec, create_nd_glass_spec, create_nir_spec, create_visible_spec,
+    use crate::{
+        spectrum_helper::{
+            create_he_ne_spec, create_nd_glass_spec, create_nir_spec, create_visible_spec,
+        },
+        utils::test_helper::test_helper::check_warnings,
     };
     use approx::{assert_abs_diff_eq, AbsDiffEq};
-    use log::Level;
     use testing_logger;
     fn prep() -> Spectrum {
         Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5)).unwrap()
@@ -728,23 +730,13 @@ mod test {
         testing_logger::setup();
         let mut s = prep();
         assert!(s.add_single_peak(micrometer!(0.5), 1.0).is_ok());
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            assert_eq!(
-                captured_logs[0].body,
-                "peak wavelength is not in spectrum range. Spectrum unmodified."
-            );
-            assert_eq!(captured_logs[0].level, Level::Warn);
-        });
+        check_warnings(vec![
+            "peak wavelength is not in spectrum range. Spectrum unmodified.",
+        ]);
         assert!(s.add_single_peak(micrometer!(4.0), 1.0).is_ok());
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            assert_eq!(
-                captured_logs[0].body,
-                "peak wavelength is not in spectrum range. Spectrum unmodified."
-            );
-            assert_eq!(captured_logs[0].level, Level::Warn);
-        });
+        check_warnings(vec![
+            "peak wavelength is not in spectrum range. Spectrum unmodified.",
+        ]);
         assert!(s.add_single_peak(micrometer!(1.5), -1.0).is_err());
     }
     #[test]

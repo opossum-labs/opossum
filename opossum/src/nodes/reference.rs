@@ -109,19 +109,13 @@ impl Optical for NodeReference {
         let ref_node = rf.upgrade().unwrap();
         let mut ref_node = ref_node.borrow_mut();
         if self.properties().inverted()? {
-            ref_node
-                .set_property("inverted", true.into())
-                .map_err(|_e| {
-                    OpossumError::Analysis(format!(
-                        "referenced node {} <{}> cannot be inverted",
-                        ref_node.name(),
-                        ref_node.node_type()
-                    ))
-                })?;
+            ref_node.set_inverted(true).map_err(|_e| {
+                OpossumError::Analysis(format!("referenced node {ref_node} cannot be inverted"))
+            })?;
         }
         let output = ref_node.analyze(incoming_data, analyzer_type);
         if self.properties().inverted()? {
-            ref_node.set_property("inverted", false.into())?;
+            ref_node.set_inverted(false)?;
         }
         output
     }
@@ -186,6 +180,7 @@ mod test {
         assert_eq!(node.name(), "reference");
         assert_eq!(node.node_type(), "reference");
         assert_eq!(node.is_detector(), false);
+        assert_eq!(node.is_source(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "lightsalmon3");
         assert!(node.as_group().is_err());
@@ -219,6 +214,20 @@ mod test {
         assert!(node.reference.is_some());
     }
     #[test]
+    fn is_source_test() {
+        let mut scenery = OpticScenery::default();
+        let idx = scenery.add_node(Source::default());
+
+        let node_ref = scenery.node(idx).unwrap();
+        let src_ref = NodeReference::from_node(&node_ref);
+        assert_eq!(src_ref.is_source(), true);
+
+        let idx2 = scenery.add_node(Dummy::default());
+        let node_ref = scenery.node(idx2).unwrap();
+        let not_src_ref = NodeReference::from_node(&node_ref);
+        assert_eq!(not_src_ref.is_source(), false);
+    }
+    #[test]
     fn inverted() {
         test_inverted::<NodeReference>()
     }
@@ -241,7 +250,7 @@ mod test {
         let mut scenery = OpticScenery::default();
         let idx = scenery.add_node(Dummy::default());
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true.into()).unwrap();
         assert_eq!(node.ports().input_names(), vec!["rear"]);
         assert_eq!(node.ports().output_names(), vec!["front"]);
     }
@@ -287,7 +296,7 @@ mod test {
         let mut scenery = OpticScenery::default();
         let idx = scenery.add_node(Dummy::default());
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
@@ -309,7 +318,7 @@ mod test {
         let mut scenery = OpticScenery::default();
         let idx = scenery.add_node(Source::default());
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),

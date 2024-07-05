@@ -44,7 +44,7 @@ fn main() -> OpmResult<()> {
 
     rays_1w.add_rays(&mut rays_2w);
 
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     let light = LightData::Geometric(rays_1w);
     let mut light_src = Source::new("collimated ray source", &light);
     light_src.set_isometry(Isometry::identity());

@@ -2456,9 +2456,10 @@ pub enum PlotArgs {
 
 #[cfg(test)]
 mod test {
+    use crate::utils::test_helper::test_helper::check_warnings;
+
     use super::*;
     use approx::{assert_relative_eq, relative_eq};
-    use log::Level;
     use tempfile::NamedTempFile;
     #[test]
     fn add_plot_series() {
@@ -3347,15 +3348,7 @@ mod test {
         let mut plot = Plot::try_from(&PlotParameters::default()).unwrap();
         testing_logger::setup();
         plot.define_axes_bounds();
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            assert_eq!(
-                captured_logs[0].body,
-                "No plot series defined! Cannot define axes bounds!"
-            );
-            assert_eq!(captured_logs[0].level, Level::Warn);
-        });
-
+        check_warnings(vec!["No plot series defined! Cannot define axes bounds!"]);
         let mut plot = Plot::new(&vec![plt_series_dim2], &PlotParameters::default());
         let _ = plot.define_axes_bounds();
         assert_relative_eq!(plot.bounds.x.unwrap().min, -0.1);
@@ -3461,18 +3454,12 @@ mod test {
         axlim.expand_lim_range_by_factor(f64::INFINITY);
         axlim.expand_lim_range_by_factor(0.);
 
-        let warning = "Cannot expand ax limits! Expansion factor must be normal and positive!";
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 4);
-            assert_eq!(captured_logs[0].body, warning);
-            assert_eq!(captured_logs[0].level, Level::Warn);
-            assert_eq!(captured_logs[1].body, warning);
-            assert_eq!(captured_logs[1].level, Level::Warn);
-            assert_eq!(captured_logs[2].body, warning);
-            assert_eq!(captured_logs[2].level, Level::Warn);
-            assert_eq!(captured_logs[3].body, warning);
-            assert_eq!(captured_logs[3].level, Level::Warn);
-        });
+        check_warnings(vec![
+            "Cannot expand ax limits! Expansion factor must be normal and positive!",
+            "Cannot expand ax limits! Expansion factor must be normal and positive!",
+            "Cannot expand ax limits! Expansion factor must be normal and positive!",
+            "Cannot expand ax limits! Expansion factor must be normal and positive!",
+        ]);
     }
     #[test]
     fn create_useful_axlims_test() {
