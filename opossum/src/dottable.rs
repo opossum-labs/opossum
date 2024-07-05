@@ -338,7 +338,7 @@ mod test {
         let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_empty_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_empty_LR.dot");
 
-        let mut scenery = OpticScenery::new();
+        let mut scenery = OpticScenery::default();
         scenery.set_description("Test".into()).unwrap();
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
@@ -353,7 +353,7 @@ mod test {
         let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_w_node_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_w_node_LR.dot");
 
-        let mut scenery = OpticScenery::new();
+        let mut scenery = OpticScenery::default();
         scenery.add_node(Dummy::new("Test"));
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
@@ -368,7 +368,7 @@ mod test {
         let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_full_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_full_LR.dot");
 
-        let mut scenery = OpticScenery::new();
+        let mut scenery = OpticScenery::default();
         scenery.set_description("SceneryTest".into()).unwrap();
         let i_s = scenery.add_node(Source::new("Source", &LightData::Fourier));
         let mut bs = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
@@ -402,13 +402,13 @@ mod test {
     #[test]
     #[ignore]
     fn to_dot_group() {
-        let mut scenery = OpticScenery::new();
+        let mut scenery = OpticScenery::default();
         scenery
             .set_description("Node Group test section".into())
             .unwrap();
 
         let mut group1 = NodeGroup::new("group 1");
-        group1.expand_view(true).unwrap();
+        group1.set_expand_view(true).unwrap();
         let g1_n1 = group1.add_node(Dummy::new("node1")).unwrap();
         let g1_n2 = group1.add_node(BeamSplitter::default()).unwrap();
         group1
@@ -421,7 +421,7 @@ mod test {
         let mut nested_group = NodeGroup::new("group 1_1");
         let nested_g_n1 = nested_group.add_node(Dummy::new("node1_1")).unwrap();
         let nested_g_n2 = nested_group.add_node(Dummy::new("node1_2")).unwrap();
-        nested_group.expand_view(true).unwrap();
+        nested_group.set_expand_view(true).unwrap();
 
         nested_group
             .connect_nodes(nested_g_n1, "rear", nested_g_n2, "front", Length::zero())
@@ -439,7 +439,7 @@ mod test {
             .unwrap();
 
         let mut group2: NodeGroup = NodeGroup::new("group 2");
-        group2.expand_view(false).unwrap();
+        group2.set_expand_view(false).unwrap();
         let g2_n1 = group2.add_node(Dummy::new("node2_1")).unwrap();
         let g2_n2 = group2.add_node(Dummy::new("node2_2")).unwrap();
         group2.map_input_port(g2_n1, "front", "in1").unwrap();

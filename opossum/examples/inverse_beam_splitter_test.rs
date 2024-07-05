@@ -12,7 +12,7 @@ use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     scenery.set_description("inverse beam splitter test")?;
 
     let i_s = scenery.add_node(Source::new(
@@ -22,7 +22,7 @@ fn main() -> OpmResult<()> {
         }),
     ));
     let mut bs = BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap();
-    bs.set_property("inverted", true.into()).unwrap();
+    bs.set_inverted(true)?;
     let i_bs = scenery.add_node(bs);
     let i_d1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",

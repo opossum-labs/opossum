@@ -191,9 +191,7 @@ impl Optical for WaveFront {
             if let Some(aperture) = self.ports().input_aperture("in1") {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
-                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.",
-                        self.node_attr.name(),
-                        self.node_attr.node_type());
+                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn Optical);
                     self.apodization_warning = true;
                 }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -379,19 +377,11 @@ impl Plottable for WaveFrontErrorMap {
 }
 
 #[cfg(test)]
-mod test {
+mod test_wavefront_error_map {
     use super::*;
-    use crate::utils::geom_transformation::Isometry;
-    use crate::{
-        analyzer::AnalyzerType, analyzer::RayTraceConfig, joule, lightdata::DataEnergy, millimeter,
-        nanometer, nodes::test_helper::test_helper::*, position_distributions::Hexapolar, ray::Ray,
-        rays::Rays, spectrum_helper::create_he_ne_spec,
-    };
+    use crate::{joule, nanometer, ray::Ray, rays::Rays};
     use approx::assert_abs_diff_eq;
     use nalgebra::Point3;
-    use tempfile::NamedTempFile;
-    use uom::num_traits::Zero;
-    use uom::si::f64::Length;
     #[test]
     fn calc_wavefront_statistics() {
         let wvl = nanometer!(1000.);
@@ -408,19 +398,29 @@ mod test {
         assert_eq!(wvf_map.ptv, 1.0);
         assert_abs_diff_eq!(wvf_map.rms, 0.5);
     }
-
     #[test]
     fn new_empty_wf_error_map() {
         let wf_dat = MatrixXx3::from_vec(Vec::<f64>::new());
         assert!(WaveFrontErrorMap::new(&wf_dat, nanometer!(1000.)).is_err());
     }
-
     #[test]
     fn calc_wf_stats_empty_wf_error_map() {
         let wf_dat = DVector::from_vec(Vec::<f64>::new());
         assert!(WaveFrontErrorMap::calc_wavefront_statistics(&wf_dat).is_err());
     }
-
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::utils::geom_transformation::Isometry;
+    use crate::{
+        analyzer::AnalyzerType, analyzer::RayTraceConfig, joule, lightdata::DataEnergy, millimeter,
+        nanometer, nodes::test_helper::test_helper::*, position_distributions::Hexapolar,
+        rays::Rays, spectrum_helper::create_he_ne_spec,
+    };
+    use tempfile::NamedTempFile;
+    use uom::num_traits::Zero;
+    use uom::si::f64::Length;
     #[test]
     fn default() {
         let node = WaveFront::default();
@@ -428,6 +428,7 @@ mod test {
         assert_eq!(node.name(), "wavefront monitor");
         assert_eq!(node.node_type(), "wavefront monitor");
         assert_eq!(node.is_detector(), true);
+        assert_eq!(node.is_source(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "goldenrod1");
         assert!(node.as_group().is_err());
@@ -447,7 +448,7 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut meter = WaveFront::default();
-        meter.set_property("inverted", true.into()).unwrap();
+        meter.set_inverted(true).unwrap();
         assert_eq!(meter.ports().input_names(), vec!["out1"]);
         assert_eq!(meter.ports().output_names(), vec!["in1"]);
     }
@@ -499,7 +500,7 @@ mod test {
     #[test]
     fn analyze_inverse() {
         let mut node = WaveFront::default();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),

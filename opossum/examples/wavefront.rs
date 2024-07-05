@@ -12,7 +12,7 @@ use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     scenery.set_description("Wavefont Demo")?;
     let source = round_collimated_ray_source(meter!(5e-3), joule!(1.), 15)?;
     let i_s = scenery.add_node(source);

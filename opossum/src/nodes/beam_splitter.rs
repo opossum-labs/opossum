@@ -337,6 +337,7 @@ mod test {
         assert_eq!(node.name(), "beam splitter");
         assert_eq!(node.node_type(), "beam splitter");
         assert_eq!(node.is_detector(), false);
+        assert_eq!(node.is_source(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "lightpink");
         assert!(node.as_group().is_err());
@@ -367,7 +368,7 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut node = BeamSplitter::default();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input_ports = node.ports().input_names();
         input_ports.sort();
         assert_eq!(input_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
@@ -521,7 +522,7 @@ mod test {
     #[test]
     fn analyze_inverse() {
         let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         input.insert(
             "out1_trans1_refl2".into(),

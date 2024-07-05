@@ -4,8 +4,7 @@ use crate::{
     lightdata::LightData,
     nodes::{
         fluence_detector::Fluence, ray_propagation_visualizer::RayPositionHistories, FilterType,
-        FluenceData, Metertype, PortMap, Spectrometer, SpectrometerType, SpotDiagram,
-        WaveFrontData,
+        FluenceData, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
@@ -13,6 +12,7 @@ use crate::{
     refractive_index::RefractiveIndexType,
     reporter::{HtmlNodeReport, NodeReport},
     utils::{geom_transformation::Isometry, EnumProxy},
+    PortMap,
 };
 use num::Float;
 use serde::{Deserialize, Serialize};

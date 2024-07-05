@@ -8,7 +8,7 @@ use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
 
     scenery.set_description("PHELIX uOPA")?;
 
@@ -81,7 +81,7 @@ fn main() -> OpmResult<()> {
         Length::zero(),
     )?;
 
-    let mut scenery_2 = OpticScenery::new();
+    let mut scenery_2 = OpticScenery::default();
     scenery_2.set_description("PHELIX uOPA Pump Pre-Amplifier".into())?;
 
     let spm_node = scenery_2.add_node(Dummy::new("SPM"));
@@ -136,7 +136,7 @@ fn main() -> OpmResult<()> {
     // scenery_2.connect_nodes(dichroic_node, "rear", dichroic_node, "front")?;
     scenery_2.connect_nodes(diode2_node, "rear", dichroic_node, "front", Length::zero())?;
 
-    let mut scenery_3 = OpticScenery::new();
+    let mut scenery_3 = OpticScenery::default();
     scenery_3.set_description("PHELIX uOPA Pump Regenerative Main-Amplifier".into())?;
 
     let _pol1_node = scenery_2.add_node(Dummy::new("Picker Polarizer"));

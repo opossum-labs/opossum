@@ -1042,10 +1042,10 @@ mod test {
         ray::SplittingConfig,
         refractive_index::{refr_index_vaccuum, RefrIndexConst},
         surface::Plane,
+        utils::test_helper::test_helper::check_warnings,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use itertools::izip;
-    use log::Level;
     use nalgebra::Vector3;
     use testing_logger;
     use uom::si::{
@@ -1404,14 +1404,9 @@ mod test {
             RefrIndexConst::new(1.5).unwrap(),
         ))
         .unwrap();
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            assert_eq!(
-                captured_logs[0].body,
-                "ray bundle contains no valid rays for setting the refractive index"
-            );
-            assert_eq!(captured_logs[0].level, Level::Warn);
-        });
+        check_warnings(vec![
+            "ray bundle contains no valid rays for setting the refractive index",
+        ]);
         let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
         rays.add_ray(ray);
         let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
@@ -1555,14 +1550,7 @@ mod test {
         let reflected = rays
             .refract_on_surface(&Plane::new(&Isometry::identity()), &refr_index_vaccuum())
             .unwrap();
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            assert_eq!(
-                captured_logs[0].body,
-                "ray bundle contains no valid rays - not propagating"
-            );
-            assert_eq!(captured_logs[0].level, Level::Warn);
-        });
+        check_warnings(vec!["ray bundle contains no valid rays - not propagating"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
     }
     #[test]
@@ -1576,14 +1564,7 @@ mod test {
         let reflected = rays
             .refract_on_surface(&Plane::new(&Isometry::identity()), &refr_index_vaccuum())
             .unwrap();
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            assert_eq!(
-                captured_logs[0].body,
-                "rays totally reflected or missed a surface"
-            );
-            assert_eq!(captured_logs[0].level, Level::Warn);
-        });
+        check_warnings(vec!["rays totally reflected or missed a surface"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
     }
     #[test]
@@ -1616,14 +1597,9 @@ mod test {
             .invalidate_by_threshold_energy(joule!(f64::INFINITY))
             .is_err());
         assert!(rays.invalidate_by_threshold_energy(joule!(-0.1)).is_ok());
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            assert_eq!(
-                captured_logs[0].body,
-                "negative threshold energy given. Ray bundle unmodified."
-            );
-            assert_eq!(captured_logs[0].level, Level::Warn);
-        });
+        check_warnings(vec![
+            "negative threshold energy given. Ray bundle unmodified.",
+        ]);
         assert!(rays.invalidate_by_threshold_energy(joule!(0.0)).is_ok());
         let ray =
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();

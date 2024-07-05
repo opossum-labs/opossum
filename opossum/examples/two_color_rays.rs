@@ -36,7 +36,7 @@ fn main() -> OpmResult<()> {
     rays_1w.add_rays(&mut rays_2w);
     rays_1w.add_rays(&mut rays_3w);
 
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     let light = LightData::Geometric(rays_1w);
     let src = scenery.add_node(Source::new("collimated ray source", &light));
     let l1 = scenery.add_node(Lens::new(

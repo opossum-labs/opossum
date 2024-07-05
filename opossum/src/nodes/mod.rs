@@ -27,7 +27,7 @@ pub use beam_splitter::BeamSplitter;
 pub use cylindric_lens::CylindricLens;
 pub use detector::Detector;
 pub use dummy::Dummy;
-pub use group::{NodeGroup, PortMap};
+pub use group::NodeGroup;
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::Lens;
 pub use paraxial_surface::ParaxialSurface;
