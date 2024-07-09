@@ -131,7 +131,7 @@ mod test {
     };
     #[test]
     fn default() {
-        let node = Dummy::default();
+        let mut node = Dummy::default();
         assert_eq!(node.name(), "dummy");
         assert_eq!(node.node_type(), "dummy");
         assert_eq!(node.is_detector(), false);

@@ -261,7 +261,7 @@ mod test {
     };
     #[test]
     fn default() {
-        let node = EnergyMeter::default();
+        let mut node = EnergyMeter::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.meter_type(), Metertype::IdealEnergyMeter);
         assert_eq!(node.name(), "energy meter");

@@ -168,7 +168,7 @@ mod test {
     use nalgebra::Vector3;
     #[test]
     fn default() {
-        let node = ParaxialSurface::default();
+        let mut node = ParaxialSurface::default();
         assert_eq!(node.name(), "paraxial surface");
         assert_eq!(node.node_type(), "paraxial surface");
         assert_eq!(node.is_detector(), false);

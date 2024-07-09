@@ -263,7 +263,7 @@ mod test {
     use super::*;
     #[test]
     fn default() {
-        let node = IdealFilter::default();
+        let mut node = IdealFilter::default();
         assert_eq!(node.filter_type(), FilterType::Constant(1.0));
         assert_eq!(node.name(), "ideal filter");
         assert_eq!(node.node_type(), "ideal filter");

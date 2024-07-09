@@ -59,7 +59,7 @@ fn create_dot_file(dot_path: &Path, scenery: &OpticScenery) -> OpmResult<()> {
 fn create_report_and_data_files(report_directory: &Path, scenery: &OpticScenery) -> OpmResult<()> {
     let data_dir = report_directory.join("data/");
     if data_dir.exists() {
-        info!("deleting old report data dir");
+        info!("Delete old report data dir");
         remove_dir_all(&data_dir)
             .map_err(|e| OpossumError::Other(format!("removing old data directory failed: {e}")))?;
     }

@@ -12,7 +12,7 @@ use crate::{
 };
 use chrono::Local;
 use image::{io::Reader, DynamicImage};
-use log::{info, warn};
+use log::warn;
 
 use petgraph::prelude::NodeIndex;
 use serde::{
@@ -205,13 +205,14 @@ impl OpticScenery {
     /// # Errors
     /// This function returns an error if an underlying node-specific analysis function returns an error.
     pub fn analyze(&mut self, analyzer_type: &AnalyzerType) -> OpmResult<()> {
-        if let AnalyzerType::RayTrace(_) = analyzer_type {
-            info!("calculate node positions");
-            self.g.calc_node_positions()?;
-        }
         let description = self.description().to_string();
+        if let AnalyzerType::RayTrace(_) = analyzer_type {
+            let name = format!("scenery '{description}'");
+            self.g.calc_node_positions(&name, &LightResult::default())?;
+        }
+        let name = format!("Scenery '{description}'");
         self.g
-            .analyze(&description, &LightResult::default(), analyzer_type)?;
+            .analyze(&name, &LightResult::default(), analyzer_type)?;
         Ok(())
     }
     /// Sets the description of this [`OpticScenery`].

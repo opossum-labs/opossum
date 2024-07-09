@@ -19,16 +19,16 @@ fn main() -> OpmResult<()> {
     let mut group1 = NodeGroup::new("group 1");
     group1.set_expand_view(true)?;
     let g1_n1 = group1.add_node(Lens::default())?;
-    let g1_n2 = group1.add_node(BeamSplitter::default())?;
-    group1.connect_nodes(g1_n1, "rear", g1_n2, "input1", Length::zero())?;
+    //let g1_n2 = group1.add_node(BeamSplitter::default())?;
+    // group1.connect_nodes(g1_n1, "rear", g1_n2, "input1", Length::zero())?;
     group1.map_input_port(g1_n1, "front", "input")?;
-    group1.map_output_port(g1_n2, "out1_trans1_refl2", "output")?;
+    // group1.map_output_port(g1_n2, "out1_trans1_refl2", "output")?;
     let scene_g1 = scenery.add_node(group1);
 
     scenery.connect_nodes(d0, "out1", scene_g1, "input", Length::zero())?;
 
-    let d2 = scenery.add_node(Dummy::new("node2"));
-    scenery.connect_nodes(scene_g1, "output", d2, "front", Length::zero())?;
+    // let d2 = scenery.add_node(Dummy::new("node2"));
+    // scenery.connect_nodes(scene_g1, "output", d2, "front", Length::zero())?;
     // let mut nested_group = NodeGroup::new("group 1_1");
     // let nested_g_n1 = nested_group.add_node(Dummy::new("node1_1"))?;
     // let nested_g_n2 = nested_group.add_node(Dummy::new("node1_2"))?;

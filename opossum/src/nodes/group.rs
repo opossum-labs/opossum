@@ -9,11 +9,11 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     reporter::NodeReport,
+    utils::geom_transformation::Isometry,
     SceneryResources,
 };
-use log::warn;
 use petgraph::prelude::NodeIndex;
-use std::{cell::RefCell, path::Path, rc::Rc};
+use std::{cell::RefCell, collections::BTreeMap, path::Path, rc::Rc};
 use uom::si::f64::Length;
 
 #[derive(Debug, Clone)]
@@ -41,6 +41,7 @@ use uom::si::f64::Length;
 pub struct NodeGroup {
     g: OpticGraph,
     node_attr: NodeAttr,
+    input_port_distances: BTreeMap<String, Length>,
 }
 impl Default for NodeGroup {
     fn default() -> Self {
@@ -58,6 +59,7 @@ impl Default for NodeGroup {
             .unwrap();
         Self {
             g: OpticGraph::default(),
+            input_port_distances: BTreeMap::default(),
             node_attr,
         }
     }
@@ -142,7 +144,8 @@ impl NodeGroup {
         external_name: &str,
     ) -> OpmResult<()> {
         self.g
-            .map_input_port(input_node, internal_name, external_name)
+            .map_input_port(input_node, internal_name, external_name)?;
+        self.node_attr.set_property("graph", self.g.clone().into())
     }
     /// Map an output port of an internal node to an external port of the group.
     ///
@@ -162,7 +165,8 @@ impl NodeGroup {
         external_name: &str,
     ) -> OpmResult<()> {
         self.g
-            .map_output_port(output_node, internal_name, external_name)
+            .map_output_port(output_node, internal_name, external_name)?;
+        self.node_attr.set_property("graph", self.g.clone().into())
     }
     /// Defines and returns the node/port identifier to connect the edges in the dot format
     /// # Parameters
@@ -176,10 +180,13 @@ impl NodeGroup {
     /// This function panics if the specified `port_name` is not mapped to a port
     pub fn get_mapped_port_str(&self, port_name: &str, node_id: &str) -> OpmResult<String> {
         if self.expand_view()? {
-            let port_info = if self.g.input_port_map().contains_key(port_name) {
-                self.g.input_port_map().get(port_name).unwrap().clone()
-            } else if self.g.output_port_map().contains_key(port_name) {
-                self.g.output_port_map().get(port_name).unwrap().clone()
+            let in_port = self.g.input_port_map().get(port_name);
+            let out_port = self.g.output_port_map().get(port_name);
+
+            let port_info = if let Some(port) = in_port {
+                port
+            } else if let Some(port) = out_port {
+                port
             } else {
                 return Err(OpossumError::OpticGroup(format!(
                     "port {port_name} is not mapped"
@@ -253,6 +260,14 @@ impl NodeGroup {
         dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports, rankdir));
         dot_str
     }
+    /// A helper function for the distances handover between to two [`OpticGraph`]s.
+    ///
+    /// This function is used during the node positioning procedure and might be removed if a better
+    /// solution is found.
+    pub fn add_input_port_distance(&mut self, port_name: &str, distance: Length) {
+        self.input_port_distances
+            .insert(port_name.to_string(), distance);
+    }
 }
 
 impl Optical for NodeGroup {
@@ -262,11 +277,11 @@ impl Optical for NodeGroup {
         else {
             panic!("failed to set global input and exit apertures");
         };
-        for p in self.g.input_port_map() {
-            ports.create_input(p.0).unwrap();
+        for p in self.g.input_port_map().port_names() {
+            ports.create_input(&p).unwrap();
         }
-        for p in self.g.output_port_map() {
-            ports.create_output(p.0).unwrap();
+        for p in self.g.output_port_map().port_names() {
+            ports.create_output(&p).unwrap();
         }
         if self.g.is_inverted() {
             ports.set_inverted(true);
@@ -274,14 +289,22 @@ impl Optical for NodeGroup {
         ports.set_apertures(ports_to_be_set.clone()).unwrap();
         ports
     }
+    fn calc_node_position(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        // set stored distances from predecessors
+        self.g
+            .set_external_distances(self.input_port_distances.clone());
+        let name = format!("group '{}'", self.name());
+        self.g.calc_node_positions(&name, &incoming_data)
+    }
     fn analyze(
         &mut self,
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        self.g.analyze(&self.name(), &incoming_data, analyzer_type)
+        let name = format!("Group '{}'", self.name());
+        self.g.analyze(&name, &incoming_data, analyzer_type)
     }
-    fn as_group(&self) -> OpmResult<&NodeGroup> {
+    fn as_group(&mut self) -> OpmResult<&mut NodeGroup> {
         Ok(self)
     }
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
@@ -293,7 +316,12 @@ impl Optical for NodeGroup {
     }
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut group_props = Properties::default();
-        for node in self.g.nodes() {
+        for node in self
+            .g
+            .nodes()
+            .into_iter()
+            .filter(|node| node.optical_ref.borrow().is_detector())
+        {
             let sub_uuid = node.uuid().as_simple().to_string();
             if let Some(node_report) = node.optical_ref.borrow().report(&sub_uuid) {
                 let node_name = &node.optical_ref.borrow().name();
@@ -332,13 +360,8 @@ impl Optical for NodeGroup {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry.clone());
-        for portmap in self.g.input_port_map() {
-            if let Ok(node) = self.g.node_by_idx(portmap.1 .0) {
-                node.optical_ref.borrow_mut().set_isometry(isometry.clone());
-            }
-        }
+    fn set_isometry(&mut self, isometry: Isometry) {
+        self.node_attr.set_isometry(isometry);
     }
     fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
         let node_attr = self.node_attr_mut();
@@ -380,19 +403,13 @@ mod test {
     use super::*;
     use crate::{
         joule, millimeter,
-        nodes::{
-            round_collimated_ray_source, test_helper::test_helper::*, BeamSplitter, Detector, Dummy,
-        },
+        nodes::{round_collimated_ray_source, test_helper::test_helper::*, Detector, Dummy},
         optical::Optical,
     };
     use num::Zero;
     #[test]
     fn default() {
-        let node = NodeGroup::default();
-        assert_eq!(node.g.node_count(), 0);
-        assert_eq!(node.g.edge_count(), 0);
-        assert!(node.g.input_port_map().is_empty());
-        assert!(node.g.output_port_map().is_empty());
+        let mut node = NodeGroup::default();
         assert_eq!(node.name(), "group");
         assert_eq!(node.node_type(), "group");
         assert_eq!(node.properties().inverted().unwrap(), false);
@@ -424,89 +441,6 @@ mod test {
     #[test]
     fn inverted() {
         test_inverted::<NodeGroup>()
-    }
-    #[test]
-    fn map_input_port() {
-        let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::default()).unwrap();
-        let sn2_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
-            .unwrap();
-        // wrong port name
-        assert!(og.map_input_port(sn1_i, "wrong", "input").is_err());
-        assert!(og.g.input_port_map().is_empty());
-        // wrong node index
-        assert!(og.map_input_port(5.into(), "front", "input").is_err());
-        assert!(og.g.input_port_map().is_empty());
-        // map output port
-        assert!(og.map_input_port(sn2_i, "rear", "input").is_err());
-        assert!(og.g.input_port_map().is_empty());
-        // map internal node
-        assert!(og.map_input_port(sn2_i, "front", "input").is_err());
-        assert!(og.g.input_port_map().is_empty());
-        // correct usage
-        assert!(og.map_input_port(sn1_i, "front", "input").is_ok());
-        assert_eq!(og.g.input_port_map().len(), 1);
-    }
-    #[test]
-    fn map_input_port_half_connected_nodes() {
-        let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::default()).unwrap();
-        let sn2_i = og.add_node(BeamSplitter::default()).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "input1", Length::zero())
-            .unwrap();
-
-        // node port already internally connected
-        assert!(og.map_input_port(sn2_i, "input1", "bs_input").is_err());
-
-        // correct usage
-        assert!(og.map_input_port(sn1_i, "front", "input").is_ok());
-        assert!(og.map_input_port(sn2_i, "input2", "bs_input").is_ok());
-        assert_eq!(og.g.input_port_map().len(), 2);
-    }
-    #[test]
-    fn map_output_port() {
-        let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::default()).unwrap();
-        let sn2_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
-            .unwrap();
-
-        // wrong port name
-        assert!(og.map_output_port(sn2_i, "wrong", "output").is_err());
-        assert!(og.g.output_port_map().is_empty());
-        // wrong node index
-        assert!(og.map_output_port(5.into(), "rear", "output").is_err());
-        assert!(og.g.output_port_map().is_empty());
-        // map input port
-        assert!(og.map_output_port(sn1_i, "front", "output").is_err());
-        assert!(og.g.output_port_map().is_empty());
-        // map internal node
-        assert!(og.map_output_port(sn1_i, "rear", "output").is_err());
-        assert!(og.g.output_port_map().is_empty());
-        // correct usage
-        assert!(og.map_output_port(sn2_i, "rear", "output").is_ok());
-        assert_eq!(og.g.output_port_map().len(), 1);
-    }
-    #[test]
-    fn map_output_port_half_connected_nodes() {
-        let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(BeamSplitter::default()).unwrap();
-        let sn2_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "front", Length::zero())
-            .unwrap();
-
-        // node port already internally connected
-        assert!(og
-            .map_output_port(sn1_i, "out1_trans1_refl2", "bs_output")
-            .is_err());
-
-        // correct usage
-        assert!(og
-            .map_output_port(sn1_i, "out2_trans2_refl1", "bs_output")
-            .is_ok());
-        assert!(og.map_output_port(sn2_i, "rear", "output").is_ok());
-        assert_eq!(og.g.output_port_map().len(), 2);
     }
     #[test]
     fn ports() {

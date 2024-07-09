@@ -423,7 +423,7 @@ mod test {
     use uom::si::f64::Length;
     #[test]
     fn default() {
-        let node = WaveFront::default();
+        let mut node = WaveFront::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "wavefront monitor");
         assert_eq!(node.node_type(), "wavefront monitor");
