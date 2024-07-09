@@ -308,6 +308,49 @@ impl Optical for BeamSplitter {
             Ok(LightResult::default())
         }
     }
+    fn calc_node_position(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let (input_port1, _input_port2) = if self.properties().inverted()? {
+            ("out1_trans1_refl2", "out2_trans2_refl1")
+        } else {
+            ("input1", "input2")
+        };
+        let in1 = incoming_data.get(input_port1);
+        // todo: do this also for in2 and check for position inconsistencies....
+        let out_rays = if let Some(input1) = in1 {
+            match input1 {
+                LightData::Geometric(r) => {
+                    let mut rays = r.clone();
+                    if let Some(iso) = self.effective_iso() {
+                        let plane = Plane::new(&iso);
+                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    } else {
+                        return Err(OpossumError::Analysis(
+                            "no location for surface defined. Aborting".into(),
+                        ));
+                    }
+                    rays
+                }
+                _ => {
+                    return Err(OpossumError::Analysis(
+                        "expected Rays value at `input1` port".into(),
+                    ))
+                }
+            }
+        } else {
+            return Err(OpossumError::Analysis(
+                "could not calc optical axis for beam splitter".into(),
+            ));
+        };
+        let (target1, target2) = if self.properties().inverted()? {
+            ("input1", "input2")
+        } else {
+            ("out1_trans1_refl2", "out2_trans2_refl1")
+        };
+        Ok(LightResult::from([
+            (target1.into(), LightData::Geometric(out_rays.clone())),
+            (target2.into(), LightData::Geometric(out_rays)),
+        ]))
+    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -332,7 +375,7 @@ mod test {
     use uom::si::energy::joule;
     #[test]
     fn default() {
-        let node = BeamSplitter::default();
+        let mut node = BeamSplitter::default();
         assert!(matches!(node.splitting_config(), SplittingConfig::Ratio(_)));
         assert_eq!(node.name(), "beam splitter");
         assert_eq!(node.node_type(), "beam splitter");

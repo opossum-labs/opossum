@@ -325,7 +325,7 @@ mod test {
     use uom::si::f64::Length;
     #[test]
     fn default() {
-        let node = SpotDiagram::default();
+        let mut node = SpotDiagram::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "spot diagram");
         assert_eq!(node.node_type(), "spot diagram");

@@ -424,7 +424,7 @@ mod test {
     use uom::si::{f64::Length, length::nanometer};
     #[test]
     fn default() {
-        let node = RayPropagationVisualizer::default();
+        let mut node = RayPropagationVisualizer::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "ray propagation");
         assert_eq!(node.node_type(), "ray propagation");

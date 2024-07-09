@@ -210,7 +210,7 @@ mod test {
 
     #[test]
     fn default() {
-        let node = Source::default();
+        let mut node = Source::default();
         assert_eq!(node.name(), "source");
         assert_eq!(node.node_type(), "source");
         if let Ok(Proptype::LightData(light_data)) = node.properties().get("light data") {

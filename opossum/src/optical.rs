@@ -140,7 +140,7 @@ pub trait Optical: Dottable {
     /// # Errors
     ///
     /// This function will return an error if the [`Optical`] does not have the `node_type` property "group".
-    fn as_group(&self) -> OpmResult<&NodeGroup> {
+    fn as_group(&mut self) -> OpmResult<&mut NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
     /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this

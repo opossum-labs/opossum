@@ -360,7 +360,7 @@ mod test {
     }
     #[test]
     fn default() {
-        let node = Spectrometer::default();
+        let mut node = Spectrometer::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.spectrometer_type(), SpectrometerType::Ideal);
         assert_eq!(node.name(), "spectrometer");

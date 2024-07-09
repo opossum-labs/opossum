@@ -175,7 +175,7 @@ mod test {
     };
     #[test]
     fn default() {
-        let node = NodeReference::default();
+        let mut node = NodeReference::default();
         assert!(node.reference.is_none());
         assert_eq!(node.name(), "reference");
         assert_eq!(node.node_type(), "reference");

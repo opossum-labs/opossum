@@ -36,6 +36,7 @@ mod optic_scenery;
 mod optic_senery_rsc;
 pub mod optical;
 pub mod plottable;
+mod port_map;
 pub mod position_distributions;
 pub mod properties;
 pub mod ray;
@@ -48,7 +49,6 @@ pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
 
-pub use optic_graph::PortMap;
 pub use optic_scenery::OpticScenery;
 pub use optic_senery_rsc::SceneryResources;
 

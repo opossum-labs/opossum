@@ -339,7 +339,7 @@ mod test {
     use super::*;
     #[test]
     fn default() {
-        let node = CylindricLens::default();
+        let mut node = CylindricLens::default();
         assert_eq!(node.name(), "cylindric lens");
         assert_eq!(node.node_type(), "cylindric lens");
         assert_eq!(node.is_detector(), false);

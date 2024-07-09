@@ -153,7 +153,7 @@ mod test {
     use super::*;
     #[test]
     fn default() {
-        let node = Detector::default();
+        let mut node = Detector::default();
         assert_eq!(node.name(), "detector");
         assert_eq!(node.node_type(), "detector");
         assert_eq!(node.is_detector(), true);

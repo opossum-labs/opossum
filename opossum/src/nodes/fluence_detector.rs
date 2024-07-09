@@ -362,7 +362,7 @@ mod test {
     use uom::si::f64::Length;
     #[test]
     fn default() {
-        let node = FluenceDetector::default();
+        let mut node = FluenceDetector::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "fluence detector");
         assert_eq!(node.node_type(), "fluence detector");
