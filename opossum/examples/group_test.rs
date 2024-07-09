@@ -52,7 +52,7 @@ fn main() -> OpmResult<()> {
 
     scenery.connect_nodes(i_src, "out1", scene_g1, "input", millimeter!(50.0))?;
 
-    let i_prop1=scenery.add_node(RayPropagationVisualizer::new("direct"));
+    let i_prop1 = scenery.add_node(RayPropagationVisualizer::new("direct"));
     let i_prop2 = scenery.add_node(RayPropagationVisualizer::new("mirrored"));
 
     scenery.connect_nodes(scene_g1, "output1", i_prop1, "in1", millimeter!(100.0))?;
