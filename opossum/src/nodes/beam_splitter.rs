@@ -1,4 +1,6 @@
 #![warn(missing_docs)]
+use log::info;
+
 use super::node_attr::NodeAttr;
 use crate::{
     analyzer::AnalyzerType,
@@ -346,10 +348,12 @@ impl Optical for BeamSplitter {
         } else {
             ("out1_trans1_refl2", "out2_trans2_refl1")
         };
-        Ok(LightResult::from([
+        let light_result=LightResult::from([
             (target1.into(), LightData::Geometric(out_rays.clone())),
             (target2.into(), LightData::Geometric(out_rays)),
-        ]))
+        ]);
+        //info!("result from beam splitter {:?}",light_result);
+        Ok(light_result)
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr

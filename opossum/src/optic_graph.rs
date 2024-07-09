@@ -575,8 +575,7 @@ impl OpticGraph {
             let mut node_borrow = node.optical_ref.borrow_mut();
             if self.is_stale_node(idx) {
                 warn!(
-                    "{graph_name} contains stale (completely unconnected) node {}. Skipping.",
-                    node_borrow
+                    "{graph_name} contains stale (completely unconnected) node {node_borrow}. Skipping."
                 );
             } else {
                 // check if node has isometry, otherwise place @ origin.
