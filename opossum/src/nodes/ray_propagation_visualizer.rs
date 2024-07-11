@@ -429,7 +429,6 @@ mod test {
         assert_eq!(node.name(), "ray propagation");
         assert_eq!(node.node_type(), "ray propagation");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.is_source(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "darkgreen");
         assert!(node.as_group().is_err());

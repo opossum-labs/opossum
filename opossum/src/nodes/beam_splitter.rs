@@ -382,7 +382,6 @@ mod test {
         assert_eq!(node.name(), "beam splitter");
         assert_eq!(node.node_type(), "beam splitter");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.is_source(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "lightpink");
         assert!(node.as_group().is_err());

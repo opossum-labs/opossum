@@ -402,8 +402,7 @@ impl Dottable for NodeGroup {
 mod test {
     use super::*;
     use crate::{
-        joule, millimeter,
-        nodes::{round_collimated_ray_source, test_helper::test_helper::*, Detector, Dummy},
+        nodes::{test_helper::test_helper::*, Detector, Dummy},
         optical::Optical,
     };
     use num::Zero;
@@ -427,16 +426,6 @@ mod test {
         assert_eq!(node.is_detector(), false);
         node.add_node(Detector::default()).unwrap();
         assert_eq!(node.is_detector(), true);
-    }
-    #[test]
-    #[ignore]
-    // todo: see #279
-    fn is_source() {
-        let mut node = NodeGroup::default();
-        assert_eq!(node.is_source(), false);
-        node.add_node(round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 1).unwrap())
-            .unwrap();
-        assert_eq!(node.is_source(), true);
     }
     #[test]
     fn inverted() {

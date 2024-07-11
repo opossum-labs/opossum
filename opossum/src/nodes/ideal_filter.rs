@@ -268,7 +268,6 @@ mod test {
         assert_eq!(node.name(), "ideal filter");
         assert_eq!(node.node_type(), "ideal filter");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.is_source(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "darkgray");
         assert!(node.as_group().is_err());

@@ -135,7 +135,6 @@ mod test {
         assert_eq!(node.name(), "dummy");
         assert_eq!(node.node_type(), "dummy");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.is_source(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert!(node.as_group().is_err());
     }

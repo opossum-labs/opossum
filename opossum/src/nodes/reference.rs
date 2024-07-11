@@ -122,23 +122,6 @@ impl Optical for NodeReference {
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Ok(self)
     }
-    fn is_source(&self) -> bool {
-        let rf = &self.reference.clone();
-
-        if rf.is_none() {
-            return false;
-        }
-
-        let ref_node = rf.as_ref().unwrap().upgrade();
-
-        if ref_node.is_some() {
-            let ref_node_unwrap = ref_node.unwrap();
-            let ref_node_borrow = ref_node_unwrap.borrow();
-            ref_node_borrow.is_source()
-        } else {
-            false
-        }
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -180,7 +163,6 @@ mod test {
         assert_eq!(node.name(), "reference");
         assert_eq!(node.node_type(), "reference");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.is_source(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "lightsalmon3");
         assert!(node.as_group().is_err());
@@ -212,20 +194,6 @@ mod test {
         assert!(node.reference.is_none());
         node.assign_reference(&node_ref);
         assert!(node.reference.is_some());
-    }
-    #[test]
-    fn is_source_test() {
-        let mut scenery = OpticScenery::default();
-        let idx = scenery.add_node(Source::default());
-
-        let node_ref = scenery.node(idx).unwrap();
-        let src_ref = NodeReference::from_node(&node_ref);
-        assert_eq!(src_ref.is_source(), true);
-
-        let idx2 = scenery.add_node(Dummy::default());
-        let node_ref = scenery.node(idx2).unwrap();
-        let not_src_ref = NodeReference::from_node(&node_ref);
-        assert_eq!(not_src_ref.is_source(), false);
     }
     #[test]
     fn inverted() {

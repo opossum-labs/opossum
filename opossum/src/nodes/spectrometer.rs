@@ -366,7 +366,6 @@ mod test {
         assert_eq!(node.name(), "spectrometer");
         assert_eq!(node.node_type(), "spectrometer");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.is_source(), false);
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "lightseagreen");
         assert!(node.as_group().is_err());

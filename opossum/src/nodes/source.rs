@@ -184,9 +184,6 @@ impl Optical for Source {
         }
         Ok(new_outgoing_edges)
     }
-    fn is_source(&self) -> bool {
-        true
-    }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         if name == "inverted" {
             if let Proptype::Bool(inverted) = prop {
@@ -246,7 +243,6 @@ mod test {
             panic!("cannot unpack light data property");
         };
         assert_eq!(node.is_detector(), false);
-        assert!(Source::default().is_source());
         assert_eq!(node.properties().inverted().unwrap(), false);
         assert_eq!(node.node_color(), "slateblue");
         assert!(node.as_group().is_err());
