@@ -52,6 +52,7 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let nf_bs = cb.add_node(BeamSplitter::new("nf bs", &SplittingConfig::Ratio(0.5))?)?;
     let mut node = SpotDiagram::new("NF cam");
     node.set_input_aperture("in1", &cam_aperture)?;
+    node.set_property("plot_aperture", true.into())?;
     let nf_cam = cb.add_node(node)?;
 
     let mut nf_fluence = FluenceDetector::new("NF fluence");

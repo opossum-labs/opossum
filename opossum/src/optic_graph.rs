@@ -242,9 +242,9 @@ impl OpticGraph {
         external_name: &str,
     ) -> OpmResult<()> {
         if self.output_port_map.contains_external_name(external_name) {
-            return Err(OpossumError::OpticGroup(
-                "external output port name already assigned".into(),
-            ));
+            return Err(OpossumError::OpticGroup(format!(
+                "external output port name '{external_name}' already assigned"
+            )));
         }
         let node = self.node_by_idx(output_node)?;
         if !node
@@ -254,9 +254,9 @@ impl OpticGraph {
             .output_names()
             .contains(&(internal_name.to_string()))
         {
-            return Err(OpossumError::OpticGroup(
-                "internal output port name not found".into(),
-            ));
+            return Err(OpossumError::OpticGroup(format!(
+                "internal output port name '{internal_name}' not found"
+            )));
         }
 
         if !self.output_nodes().contains(&output_node) {
@@ -279,20 +279,26 @@ impl OpticGraph {
         Ok(())
     }
     fn get_incoming(&self, idx: NodeIndex, incoming_data: &LightResult) -> LightResult {
-        if self.is_src_node(idx) {
+        if self.is_incoming_node(idx) {
             let portmap = if self.is_inverted {
                 self.output_port_map.clone()
             } else {
                 self.input_port_map.clone()
             };
-            let assigned_ports = portmap.assigned_ports_for_node(idx);
-            let mut incoming = LightResult::default();
-            for port in assigned_ports {
-                if let Some(input_data) = incoming_data.get(&port.0) {
-                    incoming.insert(port.1, input_data.clone());
+            let mut mapped_light_result = LightResult::default();
+            // map group-external data and add
+            for incoming in incoming_data {
+                if let Some(mapping) = portmap.get(incoming.0) {
+                    if idx == mapping.0 {
+                        mapped_light_result.insert(mapping.1.clone(), incoming.1.clone());
+                    }
                 }
             }
-            incoming
+            // add group internal data
+            for edge in self.incoming_edges(idx) {
+                mapped_light_result.insert(edge.0.clone(), edge.1.clone());
+            }
+            mapped_light_result
         } else {
             self.incoming_edges(idx)
         }
@@ -387,13 +393,46 @@ impl OpticGraph {
     pub fn edge_count(&self) -> usize {
         self.g.edge_count()
     }
-    fn is_src_node(&self, idx: NodeIndex) -> bool {
-        let group_srcs = self.g.externals(petgraph::Direction::Incoming);
-        group_srcs.into_iter().any(|gs| gs == idx)
+    fn is_incoming_node(&self, idx: NodeIndex) -> bool {
+        // let group_srcs = self.g.externals(petgraph::Direction::Incoming);
+        // group_srcs.into_iter().any(|gs| gs == idx)
+
+        let nr_of_input_ports = self
+            .node_by_idx(idx)
+            .unwrap()
+            .optical_ref
+            .borrow()
+            .ports()
+            .inputs()
+            .len();
+        let nr_of_incoming_edges = self
+            .g
+            .edges_directed(idx, petgraph::Direction::Incoming)
+            .count();
+        assert!(
+            nr_of_incoming_edges <= nr_of_input_ports,
+            "# of incoming edges > # of input ports ???"
+        );
+        nr_of_incoming_edges < nr_of_input_ports
     }
-    fn is_sink_node(&self, idx: NodeIndex) -> bool {
-        let group_sinks = self.g.externals(petgraph::Direction::Outgoing);
-        group_sinks.into_iter().any(|gs| gs == idx)
+    fn is_output_node(&self, idx: NodeIndex) -> bool {
+        let nr_of_output_ports = self
+            .node_by_idx(idx)
+            .unwrap()
+            .optical_ref
+            .borrow()
+            .ports()
+            .outputs()
+            .len();
+        let nr_of_outgoing_edges = self
+            .g
+            .edges_directed(idx, petgraph::Direction::Outgoing)
+            .count();
+        assert!(
+            nr_of_outgoing_edges <= nr_of_output_ports,
+            "# of outgoing edges > # of output ports ???"
+        );
+        nr_of_outgoing_edges < nr_of_output_ports
     }
     fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
         let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
@@ -468,15 +507,18 @@ impl OpticGraph {
         let mut light_result = LightResult::default();
         for idx in sorted {
             let node = self.node_by_idx(idx)?.optical_ref;
-            let mut node_borrow = node.borrow_mut();
-            let node_type = node_borrow.node_type();
+            let node_type = node.borrow().node_type();
             let incoming_edges: LightResult = self.get_incoming(idx, incoming);
-            if node_borrow.isometry().is_none() {
+            if node.borrow().isometry().is_none() {
+                if incoming_edges.is_empty() {
+                    warn!("{} has no incoming edges", node.borrow());
+                }
                 for incoming_edge in &incoming_edges {
                     let distance_from_predecessor =
                         self.distance_from_predecessor(idx, incoming_edge.0)?;
                     if node_type == "group" {
-                        let group = node_borrow.as_group()?;
+                        let mut node_borrow_mut = node.borrow_mut();
+                        let group = node_borrow_mut.as_group()?;
                         group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
                     }
                     if let LightData::Geometric(rays) = incoming_edge.1 {
@@ -485,15 +527,22 @@ impl OpticGraph {
                         let node_iso = ray.to_isometry();
                         // if a node with more than one input was already placed (in an earlier loop cycle),
                         // check, if the resulting isometry is consistent
-                        if let Some(iso) = node_borrow.isometry() {
-                            if iso != node_iso {
-                                warn!("Node {} cannot be consistently positioned.", node_borrow);
-                                warn!("Position based on previous input port is: {iso}");
-                                warn!("Posision based on this port would be:     {node_iso}");
-                                warn!("Keeping first position");
+                        {
+                            // borrow guard
+                            let mut node_borrow_mut = node.borrow_mut();
+                            if let Some(iso) = node_borrow_mut.isometry() {
+                                if iso != node_iso {
+                                    warn!(
+                                        "Node {} cannot be consistently positioned.",
+                                        node_borrow_mut
+                                    );
+                                    warn!("Position based on previous input port is: {iso}");
+                                    warn!("Posision based on this port would be:     {node_iso}");
+                                    warn!("Keeping first position");
+                                }
+                            } else {
+                                node_borrow_mut.set_isometry(node_iso);
                             }
-                        } else {
-                            node_borrow.set_isometry(node_iso);
                         }
                     } else {
                         return Err(OpossumError::Analysis(
@@ -504,23 +553,23 @@ impl OpticGraph {
             } else {
                 info!(
                     "Node {} has already been placed. Leaving untouched.",
-                    node_borrow
+                    node.borrow()
                 );
             }
-            let mut outgoing_edges =
-                node_borrow
-                    .calc_node_position(incoming_edges)
-                    .map_err(|e| {
-                        OpossumError::Analysis(format!(
-                            "calculation of optical axis for node {node_borrow} failed: {e}"
-                        ))
-                    })?;
+            let output = node.borrow_mut().calc_node_position(incoming_edges);
+
+            let mut outgoing_edges = output.map_err(|e| {
+                OpossumError::Analysis(format!(
+                    "calculation of optical axis for node {} failed: {e}",
+                    node.borrow()
+                ))
+            })?;
             if node_type == "source" {
                 let mut new_outgoing_edges = LightResult::new();
                 for outgoing_edge in &outgoing_edges {
                     if let LightData::Geometric(rays) = outgoing_edge.1 {
                         let mut axis_ray = rays.get_optical_axis_ray()?;
-                        if let Some(iso) = node_borrow.effective_iso() {
+                        if let Some(iso) = node.borrow().effective_iso() {
                             axis_ray = axis_ray.transformed_ray(&iso);
                         }
                         let mut new_rays = Rays::default();
@@ -534,7 +583,7 @@ impl OpticGraph {
                 outgoing_edges = new_outgoing_edges;
             }
             // If node is sink node, rewrite port names according to output mapping
-            if self.is_sink_node(idx) {
+            if self.is_output_node(idx) {
                 let portmap = if self.is_inverted {
                     self.input_port_map.clone()
                 } else {
@@ -546,10 +595,9 @@ impl OpticGraph {
                         light_result.insert(port.0, light_data.clone());
                     }
                 }
-            } else {
-                for outgoing_edge in outgoing_edges {
-                    self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
-                }
+            }
+            for outgoing_edge in outgoing_edges {
+                self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
             }
         }
         Ok(light_result)
@@ -571,34 +619,39 @@ impl OpticGraph {
         let sorted = self.topologically_sorted()?;
         let mut light_result = LightResult::default();
         for idx in sorted {
-            let node = g_clone.node_by_idx(idx)?;
-            let mut node_borrow = node.optical_ref.borrow_mut();
+            let node = g_clone.node_by_idx(idx)?.optical_ref;
             if self.is_stale_node(idx) {
                 warn!(
-                    "{graph_name} contains stale (completely unconnected) node {node_borrow}. Skipping."
+                    "{graph_name} contains stale (completely unconnected) node {}. Skipping.",
+                    node.borrow()
                 );
             } else {
                 // check if node has isometry, otherwise place @ origin.
-                if node_borrow.isometry().is_none() {
-                    warn!(
-                        "Node {} has not been placed yet. Using coordinate origin",
-                        node_borrow
-                    );
-                    node_borrow.set_isometry(Isometry::identity());
+                {
+                    let mut node_borrow_mut = node.borrow_mut();
+                    if node_borrow_mut.isometry().is_none() {
+                        warn!(
+                            "Node {} has not been placed yet. Using coordinate origin",
+                            node_borrow_mut
+                        );
+                        node_borrow_mut.set_isometry(Isometry::identity());
+                    }
                 }
                 let incoming_edges = self.get_incoming(idx, incoming_data);
-                let mut outgoing_edges: LightResult = node_borrow
+                let mut outgoing_edges: LightResult = node
+                    .borrow_mut()
                     .analyze(incoming_edges, analyzer_type)
                     .map_err(|e| {
                         OpossumError::Analysis(format!(
-                            "analysis of node {node_borrow} failed: {e}"
+                            "analysis of node {} failed: {e}",
+                            node.borrow()
                         ))
                     })?;
                 if let AnalyzerType::RayTrace(r_config) = analyzer_type {
                     Self::filter_ray_limits(&mut outgoing_edges, r_config);
                 }
                 // If node is sink node, rewrite port names according to output mapping
-                if self.is_sink_node(idx) {
+                if self.is_output_node(idx) {
                     let portmap = if self.is_inverted {
                         self.input_port_map.clone()
                     } else {
@@ -610,10 +663,9 @@ impl OpticGraph {
                             light_result.insert(port.0, light_data.clone());
                         }
                     }
-                } else {
-                    for outgoing_edge in outgoing_edges {
-                        self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
-                    }
+                }
+                for outgoing_edge in outgoing_edges {
+                    self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
                 }
             }
         }
@@ -672,17 +724,13 @@ impl OpticGraph {
         Ok(dot_string)
     }
     fn distance_from_predecessor(&self, idx: NodeIndex, port_name: &str) -> OpmResult<Length> {
-        if self.is_src_node(idx) {
-            self.input_port_map.external_port_name(idx, port_name).map_or_else(|| Err(OpossumError::Analysis(format!(
-                                     "did not find distance from predecessor to target port '{port_name}' because it is not mapped"
-                                 ))), |ext_port_name| self.external_distances.get(&ext_port_name).map_or_else(
-                                     || {
-                                         Err(OpossumError::Analysis(format!(
-                                             "did not find distance from predecessor to target port '{port_name}' because it's not in the list of external distances"
-                                         )))
-                                     },
-                                     |length| Ok(*length),
-                                 ))
+        let portmap = if self.is_inverted {
+            self.output_port_map.clone()
+        } else {
+            self.input_port_map.clone()
+        };
+        if let Some(external_port_name) = portmap.external_port_name(idx, port_name) {
+            self.external_distances.get(&external_port_name).map_or_else(|| Err(OpossumError::Analysis(format!("did not find distance from predecessor to target port '{port_name}' because it's not in the list of external distances"))), |length| Ok(*length))
         } else {
             let neighbors = self
                 .g

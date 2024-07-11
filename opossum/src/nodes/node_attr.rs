@@ -59,14 +59,6 @@ impl NodeAttr {
             .unwrap();
         properties
             .create(
-                "plot_aperture",
-                "flag that defines if the aperture is displayed in a plot",
-                None,
-                false.into(),
-            )
-            .unwrap();
-        properties
-            .create(
                 "alignment",
                 "local alignment (decenter, tilt) of the optical element",
                 None,
