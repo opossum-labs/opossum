@@ -1,13 +1,14 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzer::{AnalyzerType, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
+    rays::Rays,
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use std::fmt::Debug;
@@ -156,6 +157,32 @@ impl Optical for Source {
                 "source has no light data defined".into(),
             ))
         }
+    }
+    fn calc_node_position(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let outgoing_edges = self.analyze(
+            incoming_data,
+            &AnalyzerType::RayTrace(RayTraceConfig::default()),
+        )?;
+        // generate a single beam (= optical axis) from source
+        let mut new_outgoing_edges = LightResult::new();
+        for outgoing_edge in &outgoing_edges {
+            if let LightData::Geometric(rays) = outgoing_edge.1 {
+                let mut axis_ray = rays.get_optical_axis_ray()?;
+                if let Some(iso) = self.effective_iso() {
+                    axis_ray = axis_ray.transformed_ray(&iso);
+                }
+                let mut new_rays = Rays::default();
+                new_rays.add_ray(axis_ray);
+                new_outgoing_edges
+                    .insert(outgoing_edge.0.to_string(), LightData::Geometric(new_rays));
+            } else {
+                return Err(OpossumError::Analysis(
+                    "did not receive LightData:Geometric for conversion into OpticalAxis data"
+                        .into(),
+                ));
+            }
+        }
+        Ok(new_outgoing_edges)
     }
     fn is_source(&self) -> bool {
         true

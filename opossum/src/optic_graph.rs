@@ -10,7 +10,6 @@ use crate::{
     optical::{LightResult, Optical},
     port_map::PortMap,
     properties::Proptype,
-    rays::Rays,
     utils::geom_transformation::Isometry,
 };
 use log::{info, warn};
@@ -558,30 +557,12 @@ impl OpticGraph {
             }
             let output = node.borrow_mut().calc_node_position(incoming_edges);
 
-            let mut outgoing_edges = output.map_err(|e| {
+            let outgoing_edges = output.map_err(|e| {
                 OpossumError::Analysis(format!(
                     "calculation of optical axis for node {} failed: {e}",
                     node.borrow()
                 ))
             })?;
-            if node_type == "source" {
-                let mut new_outgoing_edges = LightResult::new();
-                for outgoing_edge in &outgoing_edges {
-                    if let LightData::Geometric(rays) = outgoing_edge.1 {
-                        let mut axis_ray = rays.get_optical_axis_ray()?;
-                        if let Some(iso) = node.borrow().effective_iso() {
-                            axis_ray = axis_ray.transformed_ray(&iso);
-                        }
-                        let mut new_rays = Rays::default();
-                        new_rays.add_ray(axis_ray);
-                        new_outgoing_edges
-                            .insert(outgoing_edge.0.to_string(), LightData::Geometric(new_rays));
-                    } else {
-                        return Err(OpossumError::Analysis("did not receive LightData:Geometric for conversion into OpticalAxis data".into()));
-                    }
-                }
-                outgoing_edges = new_outgoing_edges;
-            }
             // If node is sink node, rewrite port names according to output mapping
             if self.is_output_node(idx) {
                 let portmap = if self.is_inverted {
