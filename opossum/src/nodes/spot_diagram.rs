@@ -37,6 +37,7 @@ use std::path::{Path, PathBuf};
 ///
 /// ## Properties
 ///   - `name`
+///   - `plot_aperture`
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -50,6 +51,14 @@ impl Default for SpotDiagram {
     /// create a spot-diagram monitor.
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("spot diagram");
+        node_attr
+            .create_property(
+                "plot_aperture",
+                "flag that defines if the aperture is displayed in a plot",
+                None,
+                false.into(),
+            )
+            .unwrap();
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
@@ -72,9 +81,6 @@ impl SpotDiagram {
     pub fn new(name: &str) -> Self {
         let mut sd = Self::default();
         sd.node_attr.set_property("name", name.into()).unwrap();
-        sd.node_attr
-            .set_property("plot_aperture", false.into())
-            .unwrap();
         sd
     }
 }
