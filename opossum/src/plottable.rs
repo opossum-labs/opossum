@@ -81,6 +81,10 @@ impl PlotType {
         };
     }
 
+    // fn set_plot_auto_size<B: DrawingBackend>(&self, plot: &mut Plot, backend: &DrawingArea<B, Shift>) -> DrawingArea<B, Shift>{
+
+    // }
+
     ///This method sets a plot argument ([`PlotArgs`]) to [`PlotParameters`] which is stored in this [`PlotType`]
     /// # Attributes
     /// - `plt_arg`: plot argument [`PlotArgs`]
@@ -112,6 +116,9 @@ impl PlotType {
         params.check_backend_file_ext_compatibility()?;
         let path = params.get_fpath()?;
         let mut plot = Plot::new(plt_series, params);
+        if plot.plot_auto_size {
+            plot.plot_auto_size();
+        }
         plot.add_margin_to_figure_size(self);
 
         match params.get_backend()? {
@@ -1669,6 +1676,9 @@ impl Default for PlotParameters {
                 PlotArgs::YLim(_) => plt_params.set(&PlotArgs::YLim(None)).unwrap(),
                 PlotArgs::ZLim(_) => plt_params.set(&PlotArgs::ZLim(None)).unwrap(),
                 PlotArgs::AxisEqual(_) => plt_params.set(&PlotArgs::AxisEqual(true)).unwrap(),
+                PlotArgs::PlotAutoSize(_) => {
+                    plt_params.set(&PlotArgs::PlotAutoSize(false)).unwrap()
+                }
                 PlotArgs::ExpandBounds(_) => plt_params.set(&PlotArgs::ExpandBounds(true)).unwrap(),
                 PlotArgs::CMap(_) => plt_params
                     .set(&PlotArgs::CMap(CGradient::default()))
@@ -1951,6 +1961,21 @@ impl PlotParameters {
         }
     }
 
+    ///This method gets the flag which defines whether the plot size should be set automatically
+    /// # Returns
+    /// This method returns an [`OpmResult<bool>`] with the min and max of the z values as f64
+    /// # Errors
+    /// This method throws an error if the argument is not found
+    pub fn get_plot_auto_size_flag(&self) -> OpmResult<bool> {
+        if let Some(PlotArgs::PlotAutoSize(equal)) = self.params.get("plotautosize") {
+            Ok(*equal)
+        } else {
+            Err(OpossumError::Other(
+                "plotautosize argument not found!".into(),
+            ))
+        }
+    }
+
     ///This method gets the flag which defines whether the plot axis should expand, such that the values do not lie on the boundary
     /// # Returns
     /// This method returns an [`OpmResult<bool>`] with the min and max of the z values as f64
@@ -2041,6 +2066,7 @@ impl PlotParameters {
             PlotArgs::YLim(_) => "ylim".to_owned(),
             PlotArgs::ZLim(_) => "zlim".to_owned(),
             PlotArgs::AxisEqual(_) => "axisequal".to_owned(),
+            PlotArgs::PlotAutoSize(_) => "plotautosize".to_owned(),
             PlotArgs::ExpandBounds(_) => "expandbounds".to_owned(),
             PlotArgs::PlotSize(_) => "plotsize".to_owned(),
             PlotArgs::CBarLabelPos(_) => "cbarlabelpos".to_owned(),
@@ -2127,6 +2153,9 @@ impl PlotParameters {
             PlotArgs::YLim(_) => self.params.insert("ylim".to_owned(), plt_arg.clone()),
             PlotArgs::ZLim(_) => self.params.insert("zlim".to_owned(), plt_arg.clone()),
             PlotArgs::AxisEqual(_) => self.params.insert("axisequal".to_owned(), plt_arg.clone()),
+            PlotArgs::PlotAutoSize(_) => self
+                .params
+                .insert("plotautosize".to_owned(), plt_arg.clone()),
             PlotArgs::ExpandBounds(_) => self
                 .params
                 .insert("expandbounds".to_owned(), plt_arg.clone()),
@@ -2216,6 +2245,7 @@ pub struct Plot {
     cbar: ColorBar,
     bounds: PlotBounds,
     ax_equal: bool,
+    plot_auto_size: bool,
     expand_bounds: bool,
     plot_size: (u32, u32),
     fig_size: (u32, u32),
@@ -2313,23 +2343,19 @@ impl Plot {
     }
 
     fn set_xy_axes_ranges_equal(&mut self) {
-        let (plot_width, plot_height) = self.plot_size;
-        let plot_ratio_w_h = plot_width.to_f64().unwrap() / plot_height.to_f64().unwrap();
-
+        let (plot_width, plot_height) = &mut self.plot_size;
         let x_range = self.bounds.get_x_range();
         let y_range = self.bounds.get_y_range();
         if let (Some(x_range), Some(y_range), Some(x_bounds), Some(y_bounds)) =
             (x_range, y_range, &mut self.bounds.x, &mut self.bounds.y)
         {
+            let points_per_pixel_x = x_range / plot_width.to_f64().unwrap();
+            let points_per_pixel_y = y_range / plot_height.to_f64().unwrap();
+            let ratio_xy = points_per_pixel_x / points_per_pixel_y;
             if x_range > y_range {
-                y_bounds.expand_lim_range_by_factor(x_range / y_range);
+                y_bounds.expand_lim_range_by_factor(ratio_xy);
             } else {
-                x_bounds.expand_lim_range_by_factor(y_range / x_range);
-            }
-            if plot_width > plot_height {
-                x_bounds.expand_lim_range_by_factor(plot_ratio_w_h);
-            } else {
-                y_bounds.expand_lim_range_by_factor(1. / plot_ratio_w_h);
+                x_bounds.expand_lim_range_by_factor(1. / ratio_xy);
             }
         } else if x_range.is_some() {
             self.bounds.y = self.bounds.x;
@@ -2337,6 +2363,47 @@ impl Plot {
             self.bounds.x = self.bounds.y;
         }
     }
+
+    fn plot_auto_size(&mut self) {
+        let (plot_width, plot_height) = &mut self.plot_size;
+        let x_range = self.bounds.get_x_range();
+        let y_range = self.bounds.get_y_range();
+        if let (Some(x_range), Some(y_range)) = (x_range, y_range) {
+            let ratio_dat_xy = x_range / y_range;
+            let ratio_plot_xy = plot_width.to_f64().unwrap() / plot_height.to_f64().unwrap();
+            let ratio_dat_plot_xy = ratio_dat_xy / ratio_plot_xy;
+            if ratio_dat_plot_xy > 1. {
+                if x_range > y_range {
+                    *plot_height = (plot_height.to_f64().unwrap() * 1.2 / ratio_dat_plot_xy)
+                        .to_u32()
+                        .unwrap();
+                } else {
+                    *plot_width = (plot_width.to_f64().unwrap() * 1.2 * ratio_dat_plot_xy)
+                        .to_u32()
+                        .unwrap();
+                }
+            } else if x_range > y_range {
+                *plot_height = (plot_height.to_f64().unwrap() * 1.2 * ratio_dat_plot_xy)
+                    .to_u32()
+                    .unwrap();
+            } else {
+                *plot_width = (plot_width.to_f64().unwrap() * 1.2 / ratio_dat_plot_xy)
+                    .to_u32()
+                    .unwrap();
+            }
+            //minimum size
+            if *plot_width < 300 {
+                *plot_width = 300;
+            }
+            self.fig_size.0 = *plot_width;
+
+            if *plot_height < 300 {
+                *plot_height = 300;
+            }
+            self.fig_size.1 = *plot_height;
+        }
+    }
+
     /// Defines the axes bounds of this [`Plot`] if the limit is not already defined by the initial [`PlotParameters`].
     ///
     /// # Errors
@@ -2385,6 +2452,7 @@ impl TryFrom<&PlotParameters> for Plot {
         let y_lim = plt_params.get_ylim()?;
         let z_lim = plt_params.get_zlim()?;
         let ax_equal = plt_params.get_axis_equal_flag()?;
+        let plot_auto_size = plt_params.get_plot_auto_size_flag()?;
         let expand_bounds = plt_params.get_expand_bounds_flag()?;
         let x_label_str = plt_params.get_x_label()?;
         let y_label_str = plt_params.get_y_label()?;
@@ -2406,6 +2474,7 @@ impl TryFrom<&PlotParameters> for Plot {
             cbar,
             bounds: PlotBounds::new(x_lim, y_lim, z_lim),
             ax_equal,
+            plot_auto_size,
             expand_bounds,
             plot_size,
             fig_size: plot_size,
@@ -2440,6 +2509,8 @@ pub enum PlotArgs {
     ZLim(Option<AxLims>),
     ///defines wheter the axis bounds should be equal or not
     AxisEqual(bool),
+    ///defines wheter the plot size should be set automatically
+    PlotAutoSize(bool),
     ///defines wheter the axis bounds should expand or not
     ExpandBounds(bool),
     ///image size in pixels. Holds an `(usize, usize)` tuple
