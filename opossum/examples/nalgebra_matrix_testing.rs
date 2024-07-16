@@ -17,7 +17,7 @@ fn pairwise_sumation(input: &[f64]) -> f64 {
     }
 }
 
-// fn pairwise_sum_matrix(input: &DVectorSlice<f64>) -> f64 {
+// fn pairwise_sum_matrix(input: &DVectorView<f64>) -> f64 {
 //     let vec_len = input.len();
 //     if vec_len < 64 {
 //         input.sum()
@@ -147,7 +147,7 @@ fn main() {
     );
 
     let start = Instant::now();
-    let energy_vec1 = rays_vec2.iter().cloned().tree_fold1(|a, b| a + b); //sum_with_accumulator::<NaiveSum<f64>>();
+    let energy_vec1 = rays_vec2.iter().cloned().tree_reduce(|a, b| a + b); //sum_with_accumulator::<NaiveSum<f64>>();
     let duration = start.elapsed();
     println!(
         "Time elapsed in pariwise itertools summation() is: {:?}",

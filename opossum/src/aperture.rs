@@ -39,13 +39,10 @@ use crate::{
     utils::math_distribution_functions::ellipse,
 };
 use itertools::Itertools;
-use nalgebra::{Isometry2, Matrix2xX, MatrixXx2, Point2, Vector2};
-use ncollide2d::{
-    query::PointQuery,
-    shape::{Ball, Cuboid, Polyline},
-};
+use nalgebra::{Isometry2, Matrix2xX, Matrix3xX, MatrixXx2, Point2, Vector2};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
+use triangulate::{formats, ListFormat, Polygon};
 use uom::si::{
     f64::Length,
     length::{meter, millimeter},
@@ -148,17 +145,23 @@ impl Apodize for CircleConfig {
         self.aperture_type = aperture_type;
     }
     fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let ball = Ball::new(self.radius.get::<meter>());
         let translation = Isometry2::translation(
             self.center.coords[0].get::<meter>(),
             self.center.coords[1].get::<meter>(),
         );
+
         let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
-        let mut transmission = if ball.contains_point(&translation, &point_meter) {
+        let point_transformed = translation.inverse_transform_point(&point_meter);
+        let mut transmission = if point_transformed
+            .y
+            .mul_add(point_transformed.y, point_transformed.x.powi(2))
+            <= self.radius.get::<meter>().powi(2)
+        {
             1.0
         } else {
             0.0
         };
+
         if matches!(self.aperture_type, ApertureType::Obstruction) {
             transmission = 1.0 - transmission;
         }
@@ -206,22 +209,22 @@ impl Apodize for RectangleConfig {
         self.aperture_type = aperture_type;
     }
     fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let rectangle = Cuboid {
-            half_extents: Vector2::new(
-                self.width.get::<meter>() / 2.0,
-                self.height.get::<meter>() / 2.0,
-            ),
-        };
         let translation = Isometry2::translation(
             self.center.coords[0].get::<meter>(),
             self.center.coords[1].get::<meter>(),
         );
         let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
-        let mut transmission = if rectangle.contains_point(&translation, &point_meter) {
-            1.0
-        } else {
-            0.0
-        };
+        let point_transformed = translation.inverse_transform_point(&point_meter);
+
+        let q = Vector2::new(
+            point_transformed.x.abs() - self.width.get::<meter>() / 2.,
+            point_transformed.y.abs() - self.height.get::<meter>() / 2.,
+        );
+        let mut q_max = q;
+        q_max.iter_mut().for_each(|x: &mut f64| *x = x.max(0.0));
+        let sdf_val = q_max.x.mul_add(q_max.x, q_max.y.powi(2)).sqrt() + q.x.max(q.y).min(0.0);
+
+        let mut transmission = if sdf_val <= 0. { 1.0 } else { 0.0 };
         if matches!(self.aperture_type, ApertureType::Obstruction) {
             transmission = 1.0 - transmission;
         }
@@ -252,31 +255,66 @@ impl PolygonConfig {
             aperture_type: ApertureType::default(),
         })
     }
+
+    /// checks, if a point lies within this [`PolygonConfig`]
+    /// # Panics
+    /// This function panics if the triangulation fails
+    #[must_use]
+    pub fn in_polygon(&self, point: &Point2<Length>) -> bool {
+        let polygon: Vec<[f64; 2]> = self
+            .points
+            .iter()
+            .map(|p| [p.x.get::<meter>(), p.y.get::<meter>()])
+            .collect_vec();
+        let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
+
+        let mut triangulated_indices = Vec::<usize>::new();
+        polygon
+            .triangulate(
+                formats::IndexedListFormat::new(&mut triangulated_indices).into_fan_format(),
+            )
+            .expect("Triangulation failed");
+        let triangle_idx = Matrix3xX::from_vec(triangulated_indices.clone()).transpose();
+
+        let mut in_polygon = false;
+        for tri in triangle_idx.row_iter() {
+            let p1 = polygon[tri[0]];
+            let p2 = polygon[tri[1]];
+            let p3 = polygon[tri[2]];
+
+            let denominator =
+                (p2[1] - p3[1]).mul_add(p1[0] - p3[0], (p3[0] - p2[0]) * (p1[1] - p3[1]));
+            let a = ((p2[1] - p3[1]).mul_add(
+                point_meter.x - p3[0],
+                (p3[0] - p2[0]) * (point_meter.y - p3[1]),
+            )) / denominator;
+            let b = ((p3[1] - p1[1]).mul_add(
+                point_meter.x - p3[0],
+                (p1[0] - p3[0]) * (point_meter.y - p3[1]),
+            )) / denominator;
+            let c = 1. - a - b;
+
+            if (0. ..=1.).contains(&a) && (0. ..=1.).contains(&b) && (0. ..=1.).contains(&c) {
+                in_polygon = true;
+                break;
+            }
+        }
+        in_polygon
+    }
 }
 impl Apodize for PolygonConfig {
     fn set_aperture_type(&mut self, aperture_type: ApertureType) {
         self.aperture_type = aperture_type;
     }
     fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let polygon = Polyline::new(
-            self.points
-                .iter()
-                .map(|p| Point2::new(p.x.get::<meter>(), p.y.get::<meter>()))
-                .collect::<Vec<Point2<f64>>>(),
-            None,
-        );
-        let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
-        let mut transmission = if polygon.contains_point(&Isometry2::identity(), &point_meter) {
-            1.0
-        } else {
-            0.0
-        };
+        let mut transmission = if self.in_polygon(point) { 1.0 } else { 0.0 };
         if matches!(self.aperture_type, ApertureType::Obstruction) {
             transmission = 1.0 - transmission;
         }
         transmission
     }
 }
+
 /// Configuration data for a Gaussian aperture.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GaussianConfig {
