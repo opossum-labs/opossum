@@ -11,7 +11,7 @@ use itertools::{iproduct, izip, Itertools};
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{
-    DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3, Vector3,
+    DMatrix, DVector, DVectorView, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3, Vector3,
 };
 use num::ToPrimitive;
 use plotters::{
@@ -152,8 +152,8 @@ impl PlotType {
 
     fn draw_line_2d<'a, 'b, T: DrawingBackend + 'a + 'b>(
         chart: &'a mut ChartContext<'b, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
-        x: &DVectorSlice<'_, f64>,
-        y: &DVectorSlice<'_, f64>,
+        x: &DVectorView<'_, f64>,
+        y: &DVectorView<'_, f64>,
         line_color: RGBAColor,
         label: Option<String>,
     ) {
@@ -177,9 +177,9 @@ impl PlotType {
             T,
             Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>,
         >,
-        x: &DVectorSlice<'_, f64>,
-        y: &DVectorSlice<'_, f64>,
-        z: &DVectorSlice<'_, f64>,
+        x: &DVectorView<'_, f64>,
+        y: &DVectorView<'_, f64>,
+        z: &DVectorView<'_, f64>,
         line_color: RGBAColor,
         label: Option<String>,
     ) {
@@ -199,8 +199,8 @@ impl PlotType {
 
     fn draw_points<'a, 'b, T: DrawingBackend + 'a + 'b>(
         chart: &'a mut ChartContext<'b, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
-        x: &DVectorSlice<'_, f64>,
-        y: &DVectorSlice<'_, f64>,
+        x: &DVectorView<'_, f64>,
+        y: &DVectorView<'_, f64>,
         marker_color: RGBAColor,
         label: Option<String>,
     ) {
@@ -228,9 +228,9 @@ impl PlotType {
             Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>,
         >,
         triangle_index: &MatrixXx3<usize>,
-        x: &DVectorSlice<'_, f64>,
-        y: &DVectorSlice<'_, f64>,
-        z: &DVectorSlice<'_, f64>,
+        x: &DVectorView<'_, f64>,
+        y: &DVectorView<'_, f64>,
+        z: &DVectorView<'_, f64>,
         triangle_color: RGBAColor,
         _triangle_normals: &MatrixXx3<f64>,
     ) {
@@ -1082,8 +1082,8 @@ impl PlotData {
                 let z_flat =
                     DVector::from_vec(z_dat_nxm.into_iter().copied().collect::<Vec<f64>>());
                 vec![
-                    get_min_max_filter_nonfinite(DVectorSlice::from(x_dat_n).into()),
-                    get_min_max_filter_nonfinite(DVectorSlice::from(y_dat_m).into()),
+                    get_min_max_filter_nonfinite(DVectorView::from(x_dat_n).into()),
+                    get_min_max_filter_nonfinite(DVectorView::from(y_dat_m).into()),
                     get_min_max_filter_nonfinite(z_flat.column(0).into()),
                 ]
             }
@@ -1230,7 +1230,7 @@ impl AxLims {
     /// # Returns
     /// This function retuns Some([`AxLims`]) or None if non of the dvector entries is finite
     #[must_use]
-    pub fn finite_from_dvector(dat_vec: &DVectorSlice<'_, f64>) -> Option<Self> {
+    pub fn finite_from_dvector(dat_vec: &DVectorView<'_, f64>) -> Option<Self> {
         let filtered_data = DVector::from_vec(filter_nan_infinite(dat_vec.as_slice()));
         if filtered_data.len() < 2 {
             warn!("Length of input data after filtering out non-finite values is below 2! Useful Axlims cannot be returned! AxLimit is set to None!");
@@ -2571,9 +2571,9 @@ mod test {
         let plt_series_vec = plt_series_vec.unwrap();
         if let PlotData::Dim2 { xy_data } = &plt_series_vec[0].data {
             let datx = DVector::from_vec(vec![0., 1., 2.]);
-            assert_relative_eq!(xy_data.column(0), DVectorSlice::from(datx.as_slice()));
+            assert_relative_eq!(xy_data.column(0), DVectorView::from(datx.as_slice()));
             let daty = DVector::from_vec(vec![3., 4., 5.]);
-            assert_relative_eq!(xy_data.column(1), DVectorSlice::from(daty.as_slice()));
+            assert_relative_eq!(xy_data.column(1), DVectorView::from(daty.as_slice()));
         }
 
         assert_eq!(

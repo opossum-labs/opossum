@@ -8,7 +8,7 @@ use crate::{
 use approx::{abs_diff_eq, abs_diff_ne, relative_eq};
 use kahan::KahanSum;
 use log::warn;
-use nalgebra::{DMatrix, DVector, DVectorSlice, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Scalar};
+use nalgebra::{DMatrix, DVector, DVectorView, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Scalar};
 use num::{Float, NumCast, ToPrimitive};
 use voronator::{
     delaunator::{Coord, Point as VPoint},
@@ -50,7 +50,7 @@ impl VoronoiedData {
             };
             let mut z_data_voronoi = DVector::from_element(voronoi_diagram.sites.len(), f64::NAN);
             z_data_voronoi
-                .slice_mut((0, 0), (z_data.len(), 1))
+                .view_mut((0, 0), (z_data.len(), 1))
                 .set_column(0, &z_data);
 
             Some(z_data_voronoi)
@@ -279,7 +279,7 @@ pub fn linspace_f32(start: f32, end: f32, num: f32) -> OpmResult<DVector<f32>> {
 /// # Errors
 /// This function will return an error if `num_axes_points` is below 1 or if `linspace fails`.
 pub fn create_linspace_axes(
-    data: DVectorSlice<'_, f64>,
+    data: DVectorView<'_, f64>,
     num_axes_points: usize,
 ) -> OpmResult<(DVector<f64>, AxLims)> {
     let ax_lim = AxLims::finite_from_dvector(&data)
@@ -364,7 +364,7 @@ pub fn create_valued_voronoi_cells(
     let z_data = xyz_data.column(2);
     let mut z_data_voronoi = DVector::from_element(voronoi_diagram.sites.len(), f64::NAN);
     z_data_voronoi
-        .slice_mut((0, 0), (z_data.len(), 1))
+        .view_mut((0, 0), (z_data.len(), 1))
         .set_column(0, &z_data);
 
     VoronoiedData::combine_data_with_voronoi_diagram(voronoi_diagram, z_data_voronoi)
@@ -498,12 +498,12 @@ pub fn interpolate_3d_triangulated_scatter_data(
         let c32 = p3_y * p3p1_x;
 
         for (x_index, x) in x_interp
-            .slice((x_i, 0), (x_f - x_i + 1, 1))
+            .view((x_i, 0), (x_f - x_i + 1, 1))
             .iter()
             .enumerate()
         {
             for (y_index, y) in y_interp
-                .slice((y_i, 0), (y_f - y_i + 1, 1))
+                .view((y_i, 0), (y_f - y_i + 1, 1))
                 .iter()
                 .enumerate()
             {
@@ -908,7 +908,7 @@ mod test {
     fn create_linspace_axes_test() {
         let x_dat = DVector::from_vec(vec![0., -3., 10., 50.]);
         let num_axes_points = 100;
-        let (x, xlim) = create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).unwrap();
+        let (x, xlim) = create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).unwrap();
         assert_eq!(x.len(), 100);
         assert_abs_diff_eq!(xlim.min, -3.);
         assert_abs_diff_eq!(xlim.max, 50.);
@@ -916,32 +916,32 @@ mod test {
         assert_abs_diff_eq!(xlim.max, x[99]);
 
         let x_dat = DVector::from_vec(vec![0., -3., 10., f64::INFINITY]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_ok());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).is_ok());
         let x_dat = DVector::from_vec(vec![0., -3., 10., f64::NEG_INFINITY]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_ok());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).is_ok());
         let x_dat = DVector::from_vec(vec![0., -3., 10., f64::NAN]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_ok());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).is_ok());
         let x_dat = DVector::from_vec(vec![0., 0., f64::NAN, f64::INFINITY]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).is_err());
         let x_dat = DVector::from_vec(vec![0., f64::NAN, f64::INFINITY]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).is_err());
         let x_dat = DVector::from_vec(vec![0., 0.]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).is_err());
         let x_dat = DVector::from_vec(vec![0., f64::NAN]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).is_err());
         let x_dat = DVector::from_vec(vec![0., f64::INFINITY]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).is_err());
         let x_dat = DVector::from_vec(vec![0., f64::NEG_INFINITY]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).is_err());
         let x_dat = DVector::from_vec(vec![f64::NAN, f64::NAN, f64::NAN]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), num_axes_points).is_err());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), num_axes_points).is_err());
 
         let x_dat = DVector::from_vec(vec![0., -3., 10., f64::INFINITY]);
-        assert!(create_linspace_axes(DVectorSlice::from(&x_dat), 0).is_err());
-        // assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::NAN).is_err());
-        // assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::INFINITY).is_err());
-        // assert!(create_linspace_axes(DVectorSlice::from(&x_dat), f64::NEG_INFINITY).is_err());
-        // assert!(create_linspace_axes(DVectorSlice::from(&x_dat), -1.).is_err());
+        assert!(create_linspace_axes(DVectorView::from(&x_dat), 0).is_err());
+        // assert!(create_linspace_axes(DVectorView::from(&x_dat), f64::NAN).is_err());
+        // assert!(create_linspace_axes(DVectorView::from(&x_dat), f64::INFINITY).is_err());
+        // assert!(create_linspace_axes(DVectorView::from(&x_dat), f64::NEG_INFINITY).is_err());
+        // assert!(create_linspace_axes(DVectorView::from(&x_dat), -1.).is_err());
     }
     #[test]
     fn create_voronoi_cells_same_line_test() {
