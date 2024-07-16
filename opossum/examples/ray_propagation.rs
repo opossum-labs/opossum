@@ -8,6 +8,7 @@ use opossum::{
     OpticScenery,
 };
 use std::path::Path;
+
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
     let src = scenery.add_node(round_collimated_ray_source(
