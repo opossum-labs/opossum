@@ -2372,22 +2372,12 @@ impl Plot {
             let ratio_dat_xy = x_range / y_range;
             let ratio_plot_xy = plot_width.to_f64().unwrap() / plot_height.to_f64().unwrap();
             let ratio_dat_plot_xy = ratio_dat_xy / ratio_plot_xy;
-            if ratio_dat_plot_xy > 1. {
-                if x_range > y_range {
-                    *plot_height = (plot_height.to_f64().unwrap() * 1.2 / ratio_dat_plot_xy)
-                        .to_u32()
-                        .unwrap();
-                } else {
-                    *plot_width = (plot_width.to_f64().unwrap() * 1.2 * ratio_dat_plot_xy)
-                        .to_u32()
-                        .unwrap();
-                }
-            } else if x_range > y_range {
-                *plot_height = (plot_height.to_f64().unwrap() * 1.2 * ratio_dat_plot_xy)
+            if x_range > y_range {
+                *plot_height = (plot_height.to_f64().unwrap() * 1.1 / ratio_dat_plot_xy)
                     .to_u32()
                     .unwrap();
             } else {
-                *plot_width = (plot_width.to_f64().unwrap() * 1.2 / ratio_dat_plot_xy)
+                *plot_width = (plot_width.to_f64().unwrap() * 1.1 * ratio_dat_plot_xy)
                     .to_u32()
                     .unwrap();
             }
