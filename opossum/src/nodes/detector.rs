@@ -40,7 +40,7 @@ impl Default for Detector {
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
         let mut node_attr = NodeAttr::new("detector");
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self {
             light_data: Option::default(),
             node_attr,
@@ -60,10 +60,7 @@ impl Detector {
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut detector = Self::default();
-        detector
-            .node_attr
-            .set_property("name", name.into())
-            .unwrap();
+        detector.node_attr.set_name(name);
         detector
     }
 }
@@ -73,7 +70,7 @@ impl Optical for Detector {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.properties().inverted()? {
+        let (inport, outport) = if self.inverted() {
             ("out1", "in1")
         } else {
             ("in1", "out1")
@@ -157,7 +154,7 @@ mod test {
         assert_eq!(node.name(), "detector");
         assert_eq!(node.node_type(), "detector");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lemonchiffon");
         assert!(node.as_group().is_err());
     }

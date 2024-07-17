@@ -48,7 +48,7 @@ impl Default for ThinMirror {
         let mut ports = OpticPorts::new();
         ports.create_input("input").unwrap();
         ports.create_output("reflected").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self { node_attr }
     }
 }
@@ -57,18 +57,10 @@ impl ThinMirror {
     ///
     /// This function creates a infinitely thin mirror with a flat surface. A spherical mirror can be modelled by appending the
     /// function `with_curvature`.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the given parameters are not correct.
-    ///
-    /// # Panics
-    ///
-    /// This function could (only theoretically) panic if the name property could not be written.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut mirror = Self::default();
-        mirror.node_attr.set_property("name", name.into()).unwrap();
+        mirror.node_attr.set_name(name);
         mirror
     }
     /// Modifies a [`ThinMirror`]'s curvature.
@@ -78,7 +70,7 @@ impl ThinMirror {
     ///
     /// # Errors
     ///
-    /// This function will return an error if the given radius of curvature is zeor or not finite.
+    /// This function will return an error if the given radius of curvature is zero or not finite.
     pub fn with_curvature(mut self, curvature: Length) -> OpmResult<Self> {
         if curvature.is_zero() || curvature.is_nan() {
             return Err(OpossumError::Other(
@@ -95,7 +87,7 @@ impl Optical for ThinMirror {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.properties().inverted()? {
+        let (inport, outport) = if self.inverted() {
             ("reflected", "input")
         } else {
             ("input", "reflected")
@@ -190,13 +182,13 @@ mod test {
     use nalgebra::vector;
     #[test]
     fn default() {
-        let m = ThinMirror::default();
-        assert_eq!(m.name(), "mirror");
-        assert_eq!(m.node_type(), "mirror");
-        assert_eq!(m.is_detector(), false);
-        assert_eq!(m.node_color(), "aliceblue");
-        assert_eq!(m.properties().inverted().unwrap(), false);
-        if let Ok(Proptype::Length(r)) = m.properties().get("curvature") {
+        let node = ThinMirror::default();
+        assert_eq!(node.name(), "mirror");
+        assert_eq!(node.node_type(), "mirror");
+        assert_eq!(node.is_detector(), false);
+        assert_eq!(node.node_color(), "aliceblue");
+        assert_eq!(node.inverted(), false);
+        if let Ok(Proptype::Length(r)) = node.properties().get("curvature") {
             assert_eq!(r, &millimeter!(f64::INFINITY));
         } else {
             assert!(false, "property curvature was not a length.");

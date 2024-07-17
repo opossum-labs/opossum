@@ -55,7 +55,7 @@ impl Default for RayPropagationVisualizer {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self {
             light_data: None,
             node_attr,
@@ -73,7 +73,7 @@ impl RayPropagationVisualizer {
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut rpv = Self::default();
-        rpv.node_attr.set_property("name", name.into()).unwrap();
+        rpv.node_attr.set_name(name);
         rpv
     }
 }
@@ -83,7 +83,7 @@ impl Optical for RayPropagationVisualizer {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.properties().inverted()? {
+        let (inport, outport) = if self.inverted() {
             ("out1", "in1")
         } else {
             ("in1", "out1")
@@ -430,7 +430,7 @@ mod test {
         assert_eq!(node.name(), "ray propagation");
         assert_eq!(node.node_type(), "ray propagation");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkgreen");
         assert!(node.as_group().is_err());
     }

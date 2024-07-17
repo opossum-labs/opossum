@@ -55,7 +55,7 @@ impl Default for BeamSplitter {
         ports.create_input("input2").unwrap();
         ports.create_output("out1_trans1_refl2").unwrap();
         ports.create_output("out2_trans2_refl1").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self { node_attr }
     }
 }
@@ -78,7 +78,7 @@ impl BeamSplitter {
             }
             .into(),
         )?;
-        bs.node_attr.set_property("name", name.into())?;
+        bs.node_attr.set_name(name);
         Ok(bs)
     }
     /// Returns the splitting config of this [`BeamSplitter`].
@@ -283,7 +283,7 @@ impl Optical for BeamSplitter {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (input_port1, input_port2) = if self.properties().inverted()? {
+        let (input_port1, input_port2) = if self.inverted() {
             ("out1_trans1_refl2", "out2_trans2_refl1")
         } else {
             ("input1", "input2")
@@ -295,7 +295,7 @@ impl Optical for BeamSplitter {
             AnalyzerType::RayTrace(_) => self.analyze_raytrace(in1, in2, analyzer_type)?,
         };
         if out1_data.is_some() && out2_data.is_some() {
-            let (target1, target2) = if self.properties().inverted()? {
+            let (target1, target2) = if self.inverted() {
                 ("input1", "input2")
             } else {
                 ("out1_trans1_refl2", "out2_trans2_refl1")
@@ -309,7 +309,7 @@ impl Optical for BeamSplitter {
         }
     }
     fn calc_node_position(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let (input_port1, _input_port2) = if self.properties().inverted()? {
+        let (input_port1, _input_port2) = if self.inverted() {
             ("out1_trans1_refl2", "out2_trans2_refl1")
         } else {
             ("input1", "input2")
@@ -341,7 +341,7 @@ impl Optical for BeamSplitter {
                 "could not calc optical axis for beam splitter".into(),
             ));
         };
-        let (target1, target2) = if self.properties().inverted()? {
+        let (target1, target2) = if self.inverted() {
             ("input1", "input2")
         } else {
             ("out1_trans1_refl2", "out2_trans2_refl1")
@@ -382,7 +382,7 @@ mod test {
         assert_eq!(node.name(), "beam splitter");
         assert_eq!(node.node_type(), "beam splitter");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightpink");
         assert!(node.as_group().is_err());
     }

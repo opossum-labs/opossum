@@ -10,7 +10,7 @@ use crate::{
     optic_ports::OpticPorts,
     optic_senery_rsc::SceneryResources,
     properties::{PropCondition, Properties, Proptype},
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::geom_transformation::Isometry,
 };
 
 /// Struct for sotring common attributes of optical nodes.
@@ -18,8 +18,16 @@ use crate::{
 pub struct NodeAttr {
     #[serde(skip)]
     node_type: String,
+    name: String,
+    apertures: OpticPorts,
+    #[serde(default)]
     props: Properties,
+    #[serde(skip_serializing_if = "Option::is_none")]
     isometry: Option<Isometry>,
+    #[serde(default)]
+    inverted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    alignment: Option<Isometry>,
     #[serde(skip)]
     global_conf: Option<Rc<RefCell<SceneryResources>>>,
 }
@@ -37,40 +45,24 @@ impl NodeAttr {
     /// Panics theoretically if the standarnd properties could not be created.
     #[must_use]
     pub fn new(node_type: &str) -> Self {
-        let mut properties = Properties::default();
-        properties
-            .create(
-                "name",
-                "name of the optical element",
-                Some(vec![PropCondition::NonEmptyString]),
-                node_type.into(),
-            )
-            .unwrap();
-        properties
-            .create("inverted", "inverse propagation?", None, false.into())
-            .unwrap();
-        properties
-            .create(
-                "apertures",
-                "input and output apertures of the optical element",
-                None,
-                OpticPorts::default().into(),
-            )
-            .unwrap();
-        properties
-            .create(
-                "alignment",
-                "local alignment (decenter, tilt) of the optical element",
-                None,
-                EnumProxy::<Option<Isometry>> { value: None }.into(),
-            )
-            .unwrap();
-
+        // let mut properties = Properties::default();
+        // properties
+        //     .create(
+        //         "apertures",
+        //         "input and output apertures of the optical element",
+        //         None,
+        //         OpticPorts::default().into(),
+        //     )
+        //     .unwrap();
         Self {
             node_type: node_type.into(),
-            props: properties,
+            name: node_type.into(),
+            props: Properties::default(),
+            apertures: OpticPorts::default(),
             global_conf: None,
             isometry: None,
+            inverted: false,
+            alignment: None,
         }
     }
     /// Returns the name property of this node.
@@ -80,11 +72,7 @@ impl NodeAttr {
     /// This function will return an error if the property `name` and the property `node_type` does not exist.
     #[must_use]
     pub fn name(&self) -> String {
-        if let Ok(Proptype::String(name)) = &self.props.get("name") {
-            name.into()
-        } else {
-            self.node_type()
-        }
+        self.name.clone()
     }
     /// Returns the node-type property of this node.
     ///
@@ -100,8 +88,9 @@ impl NodeAttr {
     /// # Errors
     ///
     /// Returns an error if the underlying property `inverted` does not exist or has the wrong datatype.
-    pub fn inverted(&self) -> OpmResult<bool> {
-        self.props.get_bool("inverted")
+    #[must_use]
+    pub const fn inverted(&self) -> bool {
+        self.inverted
     }
     /// Sets a property of this [`NodeAttr`].
     ///
@@ -110,6 +99,10 @@ impl NodeAttr {
     /// This function will return an error if the property does not exist or has the wrong [`Proptype`].
     pub fn set_property(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
         self.props.set(name, value)
+    }
+    /// Update the [`Properties`] section of this [`NodeAttr`].
+    pub fn update_properties(&mut self, new_props: Properties) {
+        self.props.update(new_props);
     }
     /// Create a property within this [`NodeAttr`].
     ///
@@ -163,19 +156,15 @@ impl NodeAttr {
     }
     /// Returns the local alignment isometry of a node (if any).
     #[must_use]
-    pub fn alignment(&self) -> &Option<Isometry> {
-        if let Ok(Proptype::Isometry(prox)) = self.props.get("alignment") {
-            &prox.value
-        } else {
-            &None
-        }
+    pub const fn alignment(&self) -> &Option<Isometry> {
+        &self.alignment
     }
     /// Sets the local alignment isometry of this [`NodeAttr`].
     ///
     /// # Panics
     /// This function could theoretically panic if the property `alignment` is not defined.
     pub fn set_alignment(&mut self, isometry: Isometry) {
-        self.props.set("alignment", Some(isometry).into()).unwrap();
+        self.alignment = Some(isometry);
     }
     /// Returns a reference to the global config (if any) of this [`NodeAttr`].
     #[must_use]
@@ -185,5 +174,22 @@ impl NodeAttr {
     /// Sets the global conf of this [`NodeAttr`].
     pub fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
         self.global_conf = global_conf;
+    }
+    /// Sets the name of this [`NodeAttr`].
+    pub fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
+    }
+    /// Sets this [`NodeAttr`] as `inverted`.
+    pub fn set_inverted(&mut self, inverted: bool) {
+        self.inverted = inverted;
+    }
+    /// Returns a reference to the apertures of this [`NodeAttr`].
+    #[must_use]
+    pub const fn apertures(&self) -> &OpticPorts {
+        &self.apertures
+    }
+    /// Sets the apertures of this [`NodeAttr`].
+    pub fn set_apertures(&mut self, apertures: OpticPorts) {
+        self.apertures = apertures;
     }
 }

@@ -69,6 +69,15 @@ impl Properties {
         self.props.insert(name.into(), property);
         Ok(())
     }
+    /// Update [`Properties`] through another [`Properties`] input.
+    ///
+    /// This functions sets all [`Properties`] from `new_properties` that have already been created in `Self`. Properties not existent
+    /// in `Self` are silently ignored.
+    pub fn update(&mut self, new_properties: Self) {
+        for new_prop in new_properties.props {
+            let _ = self.set(&new_prop.0, (*new_prop.1.prop()).clone());
+        }
+    }
     /// Sets the unchecked value of this [`Properties`].
     ///
     /// # Errors
@@ -130,14 +139,6 @@ impl Properties {
                 }
             },
         )
-    }
-    /// Returns the inversion property of thie node.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the underlying property `inverted` does not exist or has the wrong datatype.
-    pub fn inverted(&self) -> OpmResult<bool> {
-        self.get_bool("inverted")
     }
     #[must_use]
     pub fn html_props(&self, node_name: &str, uuid: &str) -> Vec<HtmlProperty> {

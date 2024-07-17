@@ -85,7 +85,7 @@ impl Default for Lens {
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self { node_attr }
     }
 }
@@ -107,7 +107,7 @@ impl Lens {
         refractive_index: &dyn RefractiveIndex,
     ) -> OpmResult<Self> {
         let mut lens = Self::default();
-        lens.node_attr.set_property("name", name.into())?;
+        lens.node_attr.set_name(name);
 
         if front_curvature.is_zero() || front_curvature.is_nan() {
             return Err(OpossumError::Other(
@@ -239,7 +239,7 @@ impl Optical for Lens {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (in_port, out_port) = if self.properties().inverted()? {
+        let (in_port, out_port) = if self.inverted() {
             ("rear", "front")
         } else {
             ("front", "rear")
@@ -283,7 +283,7 @@ impl Optical for Lens {
                 else {
                     return Err(OpossumError::Analysis("cannot read rear curvature".into()));
                 };
-                let output = if self.properties().inverted()? {
+                let output = if self.inverted() {
                     self.analyze_inverse(
                         rays,
                         *front_roc,
@@ -348,7 +348,7 @@ mod test {
         assert_eq!(node.name(), "lens");
         assert_eq!(node.node_type(), "lens");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "aqua");
         assert!(node.as_group().is_err());
         let Ok(Proptype::Length(roc)) = node.node_attr.get_property("front curvature") else {

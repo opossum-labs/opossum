@@ -9,7 +9,7 @@ use crate::{
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
     rays::Rays,
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::EnumProxy,
 };
 use std::fmt::Debug;
 
@@ -42,17 +42,9 @@ impl Default for Source {
                 EnumProxy::<Option<LightData>> { value: None }.into(),
             )
             .unwrap();
-        node_attr
-            .create_property(
-                "isometry",
-                "absolute node location / orientation",
-                None,
-                EnumProxy::<Option<Isometry>> { value: None }.into(),
-            )
-            .unwrap();
         let mut ports = OpticPorts::new();
         ports.create_output("out1").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self { node_attr }
     }
 }
@@ -77,7 +69,7 @@ impl Source {
     #[must_use]
     pub fn new(name: &str, light: &LightData) -> Self {
         let mut source = Self::default();
-        source.node_attr.set_property("name", name.into()).unwrap();
+        source.node_attr.set_name(name);
         source
             .node_attr
             .set_property(
@@ -185,17 +177,16 @@ impl Optical for Source {
         Ok(new_outgoing_edges)
     }
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        if name == "inverted" {
-            if let Proptype::Bool(inverted) = prop {
-                if inverted {
-                    return Err(OpossumError::Properties(
-                        "Cannot change the inversion status of a source node!".into(),
-                    ));
-                }
-                return Ok(());
-            };
-        };
         self.node_attr.set_property(name, prop)
+    }
+    fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
+        if inverted {
+            Err(OpossumError::Properties(
+                "Cannot change the inversion status of a source node!".into(),
+            ))
+        } else {
+            Ok(())
+        }
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -203,20 +194,9 @@ impl Optical for Source {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn after_deserialization_hook(&mut self) -> OpmResult<()> {
-        // Synchronize iosmetry property.
-        if let Proptype::Isometry(prox_iso) = &self.node_attr.get_property("isometry")? {
-            if let Some(iso) = &prox_iso.value {
-                self.set_isometry(iso.clone());
-            }
-        }
-        Ok(())
-    }
-    fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-        self.node_attr.set_isometry(isometry.clone());
-        self.set_property("isometry", Some(isometry).into())
-            .unwrap();
-    }
+    // fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
+    //     self.node_attr.set_isometry(isometry.clone());
+    // }
 }
 
 impl Dottable for Source {
@@ -243,7 +223,7 @@ mod test {
             panic!("cannot unpack light data property");
         };
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.node_color(), "slateblue");
         assert!(node.as_group().is_err());
     }
@@ -257,7 +237,6 @@ mod test {
         let mut node = Source::default();
         assert!(node.set_inverted(false).is_ok());
         assert!(node.set_inverted(true).is_err());
-        assert!(node.set_property("name", "blah".into()).is_ok());
     }
     #[test]
     fn ports() {

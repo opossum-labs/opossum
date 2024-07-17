@@ -89,7 +89,7 @@ impl Default for Spectrometer {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self {
             light_data: None,
             node_attr,
@@ -114,7 +114,7 @@ impl Spectrometer {
             .node_attr
             .set_property("spectrometer type", spectrometer_type.into())
             .unwrap();
-        spect.node_attr.set_property("name", name.into()).unwrap();
+        spect.node_attr.set_name(name);
         spect
     }
     /// Returns the meter type of this [`Spectrometer`].
@@ -155,7 +155,7 @@ impl Optical for Spectrometer {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.properties().inverted()? {
+        let (inport, outport) = if self.inverted() {
             ("out1", "in1")
         } else {
             ("in1", "out1")
@@ -366,7 +366,7 @@ mod test {
         assert_eq!(node.name(), "spectrometer");
         assert_eq!(node.node_type(), "spectrometer");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightseagreen");
         assert!(node.as_group().is_err());
     }
