@@ -66,9 +66,6 @@ impl FluenceDetector {
     /// Creates a new [`FluenceDetector`].
     /// # Attributes
     /// * `name`: name of the fluence detector
-    ///
-    /// # Panics
-    /// This function may panic if the property "name" can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut fld = Self::default();

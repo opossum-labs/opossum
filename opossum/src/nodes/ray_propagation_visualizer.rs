@@ -67,9 +67,6 @@ impl RayPropagationVisualizer {
     /// Creates a new [`RayPropagationVisualizer`].
     /// # Attributes
     /// * `name`: name of the `RayPropagationVisualizer`
-    ///
-    /// # Panics
-    /// This function may panic if the property "name" can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut rpv = Self::default();

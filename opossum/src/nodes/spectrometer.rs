@@ -106,7 +106,6 @@ impl Spectrometer {
     /// # Panics
     /// This function panics if
     /// - the property "spectrometer" type can not be set.
-    /// - the property "name" type can not be set.
     #[must_use]
     pub fn new(name: &str, spectrometer_type: SpectrometerType) -> Self {
         let mut spect = Self::default();

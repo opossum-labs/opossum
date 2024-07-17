@@ -74,9 +74,6 @@ impl SpotDiagram {
     /// Creates a new [`SpotDiagram`].
     /// # Attributes
     /// * `name`: name of the spot diagram
-    ///
-    /// # Panics
-    /// This function may panic if the property "name" can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut sd = Self::default();

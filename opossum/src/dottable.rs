@@ -372,7 +372,7 @@ mod test {
         scenery.set_description("SceneryTest".into()).unwrap();
         let i_s = scenery.add_node(Source::new("Source", &LightData::Fourier));
         let mut bs = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
-        bs.set_property("name", "Beam splitter".into()).unwrap();
+        bs.node_attr_mut().set_name("Beam splitter");
         let i_bs = scenery.add_node(bs);
         let i_d1 = scenery.add_node(EnergyMeter::new(
             "Energy meter 1",

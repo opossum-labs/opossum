@@ -903,9 +903,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                             format!("ref ({})", reference_node.optical_ref.borrow().name());
                         refnode.assign_reference(&reference_node);
 
-                        refnode
-                            .set_property("name", Proptype::String(ref_name))
-                            .unwrap();
+                        refnode.node_attr_mut().set_name(&ref_name);
                     }
                 }
                 for edge in &edges {
