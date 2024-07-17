@@ -15,7 +15,7 @@ pub mod test_helper {
     pub fn test_inverted<T: Default + Optical>() {
         let mut node = T::default();
         node.set_inverted(true).unwrap();
-        assert_eq!(node.properties().inverted().unwrap(), true)
+        assert_eq!(node.inverted(), true)
     }
     pub fn test_set_aperture<T: Default + Optical>(input_port_name: &str, output_port_name: &str) {
         let mut node = T::default();

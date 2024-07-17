@@ -39,15 +39,11 @@ pub trait Optical: Dottable {
     // fn node_type(&self) -> &str;
     // /// Return the available (input & output) ports of this [`Optical`].
     fn ports(&self) -> OpticPorts {
-        if let Proptype::OpticPorts(ports) = self.properties().get("apertures").unwrap() {
-            let mut ports = ports.clone();
-            if self.properties().get_bool("inverted").unwrap() {
-                ports.set_inverted(true);
-            }
-            ports
-        } else {
-            panic!("property <apertures> not found")
+        let mut ports = self.node_attr().apertures().clone();
+        if self.node_attr().inverted() {
+            ports.set_inverted(true);
         }
+        ports
     }
     /// Set an [`Aperture`] for a given input port name.
     ///
@@ -58,7 +54,7 @@ pub trait Optical: Dottable {
         let mut ports = self.ports();
         if ports.inputs().contains_key(port_name) {
             ports.set_input_aperture(port_name, aperture)?;
-            self.set_property("apertures", ports.into())?;
+            self.node_attr_mut().set_apertures(ports);
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -75,7 +71,7 @@ pub trait Optical: Dottable {
         let mut ports = self.ports();
         if ports.outputs().contains_key(port_name) {
             ports.set_output_aperture(port_name, aperture)?;
-            self.set_property("apertures", ports.into())?;
+            self.node_attr_mut().set_apertures(ports);
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -189,10 +185,10 @@ pub trait Optical: Dottable {
                             if self.node_type() == "group" {
                                 // apertures cannot be set here for groups since no port mapping is defined yet.
                                 // this will be done later dynamically in group:ports() function.
-                                self.set_property("apertures", ports_to_be_set.into())?;
+                                self.node_attr_mut().set_apertures(ports_to_be_set);
                             } else {
                                 ports.set_apertures(ports_to_be_set)?;
-                                self.set_property("apertures", ports.into())?;
+                                self.node_attr_mut().set_apertures(ports);
                             }
                         }
                     }
@@ -213,7 +209,12 @@ pub trait Optical: Dottable {
     ///   - it is a source node
     ///   - it is a group node containing a non-invertable node (e.g. a source)
     fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
-        self.set_property("inverted", inverted.into())
+        self.node_attr_mut().set_inverted(inverted);
+        Ok(())
+    }
+    /// Returns `true` if the node should be analyzed in reverse direction.
+    fn inverted(&self) -> bool {
+        self.node_attr().inverted()
     }
     /// Return a YAML representation of the current state of this [`Optical`].
     ///
@@ -227,6 +228,20 @@ pub trait Optical: Dottable {
     /// Get the mutable[`NodeAttr`] (common attributes) of an [`Optical`].
     fn node_attr_mut(&mut self) -> &mut NodeAttr;
 
+    /// Update node attributes of this [`Optical`] from given [`NodeAttr`].
+    ///
+    fn set_node_attr(&mut self, node_attributes: NodeAttr) {
+        let node_attr_mut = self.node_attr_mut();
+        if let Some(iso) = node_attributes.isometry() {
+            node_attr_mut.set_isometry(iso);
+        }
+        if let Some(alignment) = node_attributes.alignment() {
+            node_attr_mut.set_alignment(alignment.clone());
+        }
+        node_attr_mut.set_name(&node_attributes.name());
+        node_attr_mut.set_inverted(node_attributes.inverted());
+        node_attr_mut.update_properties(node_attributes.properties().clone());
+    }
     /// Get the node type of this [`Optical`]
     fn node_type(&self) -> String {
         self.node_attr().node_type()
@@ -318,8 +333,8 @@ pub trait Alignable: Optical + Sized {
             .isometry()
             .as_ref()
             .map_or_else(Point3::origin, Isometry::rotation);
-        let translation_iso = Some(Isometry::new(decenter, old_rotation)?);
-        self.set_property("alignment", translation_iso.into())?;
+        let translation_iso = Isometry::new(decenter, old_rotation)?;
+        self.node_attr_mut().set_alignment(translation_iso);
         Ok(self)
     }
     /// Locally tilt an optical element.
@@ -332,8 +347,8 @@ pub trait Alignable: Optical + Sized {
             .isometry()
             .as_ref()
             .map_or_else(Point3::origin, Isometry::translation);
-        let rotation_iso = Some(Isometry::new(old_translation, tilt)?);
-        self.set_property("alignment", rotation_iso.into())?;
+        let rotation_iso = Isometry::new(old_translation, tilt)?;
+        self.node_attr_mut().set_alignment(rotation_iso);
         Ok(self)
     }
 }

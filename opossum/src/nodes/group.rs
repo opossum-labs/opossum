@@ -68,14 +68,10 @@ impl NodeGroup {
     /// Creates a new [`NodeGroup`].
     /// # Attributes
     /// * `name`: name of the  [`NodeGroup`]
-    ///
-    /// # Panics
-    /// This function panics if
-    /// - the property `name` can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut group = Self::default();
-        group.node_attr.set_property("name", name.into()).unwrap();
+        group.node_attr.set_name(name);
         group
     }
     /// Add a given [`Optical`] to the (sub-)graph of this [`NodeGroup`].
@@ -273,10 +269,7 @@ impl NodeGroup {
 impl Optical for NodeGroup {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
-        let Proptype::OpticPorts(ports_to_be_set) = self.properties().get("apertures").unwrap()
-        else {
-            panic!("failed to set global input and exit apertures");
-        };
+        let ports_to_be_set = self.node_attr.apertures();
         for p in self.g.input_port_map().port_names() {
             ports.create_input(&p).unwrap();
         }
@@ -370,8 +363,8 @@ impl Optical for NodeGroup {
     }
     fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
         self.g.set_is_inverted(true);
-        self.node_attr_mut()
-            .set_property("inverted", inverted.into())
+        self.node_attr_mut().set_inverted(inverted);
+        Ok(())
     }
 }
 
@@ -385,7 +378,7 @@ impl Dottable for NodeGroup {
         rankdir: &str,
     ) -> OpmResult<String> {
         let mut cloned_self = self.clone();
-        if self.node_attr.inverted()? {
+        if self.node_attr.inverted() {
             cloned_self.g.invert_graph()?;
         }
         if self.expand_view()? {
@@ -411,7 +404,7 @@ mod test {
         let mut node = NodeGroup::default();
         assert_eq!(node.name(), "group");
         assert_eq!(node.node_type(), "group");
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.node_color(), "yellow");
         assert!(node.as_group().is_ok());
     }

@@ -11,7 +11,6 @@ use crate::{
     optic_ports::OpticPorts,
     optic_ref::OpticRef,
     optical::{LightResult, Optical},
-    properties::Proptype,
     utils::geom_transformation::Isometry,
 };
 
@@ -70,9 +69,7 @@ impl NodeReference {
             .set_property("reference id", node.uuid().into())
             .unwrap();
         let ref_name = format!("ref ({})", node.optical_ref.borrow().name());
-        refr.node_attr
-            .set_property("name", Proptype::String(ref_name))
-            .unwrap();
+        refr.node_attr.set_name(&ref_name);
         refr.reference = Some(Rc::downgrade(&node.optical_ref));
         refr
     }
@@ -91,7 +88,7 @@ impl Optical for NodeReference {
             .as_ref()
             .map_or_else(OpticPorts::default, |rf| {
                 let mut ports = rf.upgrade().unwrap().borrow().ports();
-                if self.properties().inverted().unwrap() {
+                if self.inverted() {
                     ports.set_inverted(true);
                 }
                 ports
@@ -108,13 +105,13 @@ impl Optical for NodeReference {
             .ok_or_else(|| OpossumError::Analysis("no reference defined".into()))?;
         let ref_node = rf.upgrade().unwrap();
         let mut ref_node = ref_node.borrow_mut();
-        if self.properties().inverted()? {
+        if self.inverted() {
             ref_node.set_inverted(true).map_err(|_e| {
                 OpossumError::Analysis(format!("referenced node {ref_node} cannot be inverted"))
             })?;
         }
         let output = ref_node.analyze(incoming_data, analyzer_type);
-        if self.properties().inverted()? {
+        if self.inverted() {
             ref_node.set_inverted(false)?;
         }
         output
@@ -163,7 +160,7 @@ mod test {
         assert_eq!(node.name(), "reference");
         assert_eq!(node.node_type(), "reference");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightsalmon3");
         assert!(node.as_group().is_err());
     }

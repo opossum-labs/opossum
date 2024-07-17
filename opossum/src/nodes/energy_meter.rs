@@ -78,7 +78,7 @@ impl Default for EnergyMeter {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self {
             light_data: None,
             node_attr,
@@ -97,10 +97,7 @@ impl EnergyMeter {
     #[must_use]
     pub fn new(name: &str, meter_type: Metertype) -> Self {
         let mut energy_meter = Self::default();
-        energy_meter
-            .node_attr
-            .set_property("name", name.into())
-            .unwrap();
+        energy_meter.node_attr.set_name(name);
         energy_meter
             .node_attr
             .set_property("meter type", meter_type.into())
@@ -135,7 +132,7 @@ impl Optical for EnergyMeter {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.properties().inverted()? {
+        let (inport, outport) = if self.inverted() {
             ("out1", "in1")
         } else {
             ("in1", "out1")
@@ -267,7 +264,7 @@ mod test {
         assert_eq!(node.name(), "energy meter");
         assert_eq!(node.node_type(), "energy meter");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "whitesmoke");
         assert!(node.as_group().is_err());
     }

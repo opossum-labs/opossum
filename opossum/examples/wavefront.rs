@@ -18,16 +18,13 @@ fn main() -> OpmResult<()> {
     let i_s = scenery.add_node(source);
     let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));
     let i_l = scenery.add_node(ParaxialSurface::new("lens", meter!(0.1))?);
-    let i_wf2: petgraph::prelude::NodeIndex = scenery.add_node(WaveFront::new("wf_monitor 2"));
-    let i_sp: petgraph::prelude::NodeIndex = scenery.add_node(SpotDiagram::new("spot 3"));
+    let i_wf2 = scenery.add_node(WaveFront::new("wf_monitor 2"));
+    let i_sp = scenery.add_node(SpotDiagram::new("spot 3"));
     let i_l2 = scenery.add_node(ParaxialSurface::new("lens", meter!(0.1))?);
-    let i_wf3: petgraph::prelude::NodeIndex = scenery.add_node(WaveFront::new("wf_mon3"));
-    let i_r1: petgraph::prelude::NodeIndex =
-        scenery.add_node(RayPropagationVisualizer::new("ray_mon1"));
-    let i_s1: petgraph::prelude::NodeIndex =
-        scenery.add_node(Spectrometer::new("spec_mon", SpectrometerType::Ideal));
-    let i_fl1: petgraph::prelude::NodeIndex =
-        scenery.add_node(FluenceDetector::new("fluence monitor"));
+    let i_wf3 = scenery.add_node(WaveFront::new("wf_mon3"));
+    let i_r1 = scenery.add_node(RayPropagationVisualizer::new("ray_mon1"));
+    let i_s1 = scenery.add_node(Spectrometer::new("spec_mon", SpectrometerType::Ideal));
+    let i_fl1 = scenery.add_node(FluenceDetector::new("fluence monitor"));
 
     scenery.connect_nodes(i_s, "out1", i_wf1, "in1", meter!(0.1))?;
     scenery.connect_nodes(i_wf1, "out1", i_l, "front", Length::zero())?;

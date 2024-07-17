@@ -679,7 +679,7 @@ impl OpticGraph {
         let mut dot_string = String::default();
         for node in self.nodes() {
             let node_name = node.optical_ref.borrow().name();
-            let inverted = node.optical_ref.borrow().properties().inverted()?;
+            let inverted = node.optical_ref.borrow().node_attr().inverted();
             let ports = node.optical_ref.borrow().ports();
             dot_string += &node.optical_ref.borrow().to_dot(
                 &format!("{}", node.uuid().as_simple()),

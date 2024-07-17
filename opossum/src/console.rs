@@ -296,12 +296,12 @@ mod test {
     use super::*;
     #[test]
     fn file_path_is_valid_test() {
-        let path_valid = Path::new("./files_for_testing/CLI/opticscenery.opm");
-        let path_inexistent_file = Path::new("./files_for_testing/CLI/nonexistent.opm");
+        let path_valid = Path::new("./files_for_testing/opm/opticscenery.opm");
+        let path_inexistent_file = Path::new("./files_for_testing/opm/nonexistent.opm");
         let path_inexistent_dir =
             Path::new("./files_for_testing/this_dir_does_not_exist/empty.opm");
-        let path_not_yaml = Path::new("./files_for_testing/CLI/is_not_a_opm.txt");
-        let path_is_dir = Path::new("./files_for_testing/CLI/");
+        let path_not_yaml = Path::new("./files_for_testing/opm/is_not_a_opm.txt");
+        let path_is_dir = Path::new("./files_for_testing/opm/");
 
         assert_eq!(file_path_is_valid(path_valid), true);
         assert_eq!(file_path_is_valid(path_inexistent_file), false);
@@ -311,11 +311,11 @@ mod test {
     }
     #[test]
     fn eval_file_path_input_test() {
-        let path_valid = "./files_for_testing/CLI/opticscenery.opm";
-        let path_inexistent_file = "./files_for_testing/CLI/nonexistent.opm";
+        let path_valid = "./files_for_testing/opm/opticscenery.opm";
+        let path_inexistent_file = "./files_for_testing/opm/nonexistent.opm";
         let path_inexistent_dir = "./files_for_testing/this_dir_does_not_exist/empty.opm";
-        let path_not_yaml = "./files_for_testing/CLI/is_not_an_opm.txt";
-        let path_is_dir = "./files_for_testing/CLI/";
+        let path_not_yaml = "./files_for_testing/opm/is_not_an_opm.txt";
+        let path_is_dir = "./files_for_testing/opm/";
 
         assert_eq!(
             eval_file_path_input(path_valid),
@@ -337,7 +337,7 @@ mod test {
     }
     #[test]
     fn eval_report_directory_input_test() {
-        let dir_valid = "./files_for_testing/CLI";
+        let dir_valid = "./files_for_testing/opm";
 
         assert_eq!(eval_report_directory_input(""), Some(PathBuf::from("")));
         assert_eq!(
@@ -351,10 +351,10 @@ mod test {
     }
     #[test]
     fn get_parent_dir_test() {
-        let path_valid = "./files_for_testing/CLI/empty_yaml.yaml".to_owned();
+        let path_valid = "./files_for_testing/opm/empty_yaml.yaml".to_owned();
         assert_eq!(
             get_parent_dir(&PathBuf::from(path_valid)),
-            PathBuf::from("./files_for_testing/CLI")
+            PathBuf::from("./files_for_testing/opm")
         );
     }
     #[test]
@@ -417,7 +417,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
     }
     #[test]
     fn try_from_args_test() {
-        let path_valid = "./files_for_testing/CLI/opticscenery.opm".to_owned();
+        let path_valid = "./files_for_testing/opm/opticscenery.opm".to_owned();
         let part_args = PartialArgs {
             file_path: Some(path_valid.clone()),
             analyzer: Some("e".to_owned()),
@@ -453,7 +453,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
 
     #[test]
     fn get_args_test() {
-        let correct_file_path = b"./files_for_testing/CLI/opticscenery.opm\r\n";
+        let correct_file_path = b"./files_for_testing/opm/opticscenery.opm\r\n";
         let analyzer_energy_str = b"e\r\n";
         let analyzer_ray_str = b"r\r\n";
         let report_directory_path1 = b"./files_for_testing/\r\n";
@@ -462,19 +462,19 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         let mut reader = BufReader::new(&correct_file_path[..]);
         let file_path1 = get_args(
             eval_file_path_input,
-            Some("./files_for_testing/CLI/opticscenery.opm"),
+            Some("./files_for_testing/opm/opticscenery.opm"),
             "f",
             &mut reader,
             &mut writer,
         )
         .unwrap();
         let file_path_str1 = file_path1.to_str().unwrap();
-        assert_eq!(file_path_str1, "./files_for_testing/CLI/opticscenery.opm");
+        assert_eq!(file_path_str1, "./files_for_testing/opm/opticscenery.opm");
 
         let mut reader = BufReader::new(&correct_file_path[..]);
         get_args(
             eval_file_path_input,
-            Some("./files_for_testing/CLI/not_an_opticscenery.opm"),
+            Some("./files_for_testing/opm/not_an_opticscenery.opm"),
             "f",
             &mut reader,
             &mut writer,
@@ -484,7 +484,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         let file_path3 =
             get_args(eval_file_path_input, None, "f", &mut reader, &mut writer).unwrap();
         let file_path_str3 = file_path3.to_str().unwrap();
-        assert_eq!(file_path_str3, "./files_for_testing/CLI/opticscenery.opm");
+        assert_eq!(file_path_str3, "./files_for_testing/opm/opticscenery.opm");
 
         let mut reader = BufReader::new(&analyzer_energy_str[..]);
         let analyzer1 = get_args(
@@ -565,7 +565,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         let arg_vec = vec![
             "opossum",
             "-f",
-            "./files_for_testing/CLI/opticscenery.opm",
+            "./files_for_testing/opm/opticscenery.opm",
             "-a",
             "e",
             "-r",
@@ -576,7 +576,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         let analyzer = part_args.analyzer.unwrap();
         let r_dir = part_args.report_directory.unwrap();
 
-        assert_eq!(fpath, "./files_for_testing/CLI/opticscenery.opm");
+        assert_eq!(fpath, "./files_for_testing/opm/opticscenery.opm");
         assert_eq!(analyzer, "e");
         assert_eq!(r_dir, "./files_for_testing/");
     }

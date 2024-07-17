@@ -9,5 +9,4 @@ fn main() -> OpmResult<()> {
         &Random::new(millimeter!(1.0), millimeter!(1.0), 200)?,
     )?;
     Ok(())
-    // rays.to_svg_plot(Path::new("./opossum/playground/rays.svg"))?;
 }

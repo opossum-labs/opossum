@@ -85,7 +85,9 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
         energy,
     )?;
     let light = LightData::Geometric(rays);
-    Ok(Source::new("point ray source", &light))
+    let mut src = Source::new("point ray source", &light);
+    src.set_isometry(Isometry::identity());
+    Ok(src)
 }
 #[cfg(test)]
 mod test {
