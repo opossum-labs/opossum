@@ -1,5 +1,12 @@
 use opossum::{
-    degree, error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, RayPropagationVisualizer, SpotDiagram, Wedge}, optical::Optical, refractive_index::RefrIndexConst, utils::geom_transformation::Isometry, OpticScenery
+    degree,
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{collimated_line_ray_source, RayPropagationVisualizer, SpotDiagram, Wedge},
+    optical::Optical,
+    refractive_index::RefrIndexConst,
+    utils::geom_transformation::Isometry,
+    OpticScenery,
 };
 use std::path::Path;
 
@@ -26,7 +33,7 @@ fn main() -> OpmResult<()> {
         degree!(-30.0),
         &RefrIndexConst::new(1.5068)?,
     )?;
-    let iso=Isometry::new(millimeter!(0.0,20.0,110.0), degree!(30.0,0.0,0.0))?;
+    let iso = Isometry::new(millimeter!(0.0, 20.0, 110.0), degree!(30.0, 0.0, 0.0))?;
     prism2.set_isometry(iso);
     let p2 = scenery.add_node(prism2);
 
