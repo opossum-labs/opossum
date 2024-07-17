@@ -42,8 +42,8 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(src, "out1", p1, "front", millimeter!(10.0))?;
     scenery.connect_nodes(p1, "rear", p2, "front", millimeter!(100.0))?;
 
-    scenery.connect_nodes(p2, "rear", sd, "in1", millimeter!(150.0))?;
-    scenery.connect_nodes(sd, "out1", det, "in1", millimeter!(100.0))?;
+    scenery.connect_nodes(p2, "rear", sd, "in1", millimeter!(50.0))?;
+    scenery.connect_nodes(sd, "out1", det, "in1", millimeter!(0.1))?;
     //scenery.connect_nodes(l2, "rear", wf, "in1", millimeter!(50.0))?;
 
     scenery.save_to_file(Path::new("./opossum/playground/prism_pair.opm"))?;
