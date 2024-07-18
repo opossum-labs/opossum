@@ -1814,16 +1814,10 @@ mod test {
         let plane = Plane::new(&Isometry::new_along_z(millimeter!(10.0)).unwrap());
         rays.refract_on_surface(&plane, &refr_index_vaccuum())
             .unwrap();
-
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.));
-
         for (i, val) in wf_error.column(2).iter().enumerate() {
             if i != 0 {
-                println!(
-                    "{}",
-                    f64::EPSILON * val.abs() - (val - (1. - f64::sqrt(2.)) * 10000.).abs()
-                );
-                assert!((val - (1. - f64::sqrt(2.)) * 10000.).abs() < f64::EPSILON * val.abs())
+                assert_relative_eq!(val, &(10000. * (1. - f64::sqrt(2.))));
             } else {
                 assert_abs_diff_eq!(val, &0.0)
             }
@@ -1838,14 +1832,12 @@ mod test {
         .unwrap();
         rays.refract_on_surface(&plane, &refr_index_vaccuum())
             .unwrap();
-
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.));
-
         for (i, val) in wf_error.column(2).iter().enumerate() {
             if i != 0 {
-                assert!((val - (1. - f64::sqrt(2.)) * 20000.).abs() < f64::EPSILON * val.abs())
+                assert_relative_eq!(val, &(20000. * (1. - f64::sqrt(2.))));
             } else {
-                assert!(val.abs() < f64::EPSILON)
+                assert_abs_diff_eq!(val, &0.0)
             }
         }
     }
