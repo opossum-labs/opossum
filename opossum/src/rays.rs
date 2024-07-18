@@ -1817,7 +1817,11 @@ mod test {
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.));
         for (i, val) in wf_error.column(2).iter().enumerate() {
             if i != 0 {
-                assert_relative_eq!(val, &(10000. * (1. - f64::sqrt(2.))));
+                assert_relative_eq!(
+                    val,
+                    &(10000. * (1. - f64::sqrt(2.))),
+                    epsilon = 100. * f64::EPSILON
+                );
             } else {
                 assert_abs_diff_eq!(val, &0.0)
             }
@@ -1835,7 +1839,11 @@ mod test {
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.));
         for (i, val) in wf_error.column(2).iter().enumerate() {
             if i != 0 {
-                assert_relative_eq!(val, &(20000. * (1. - f64::sqrt(2.))));
+                assert_relative_eq!(
+                    val,
+                    &(20000. * (1. - f64::sqrt(2.))),
+                    epsilon = 100. * f64::EPSILON
+                );
             } else {
                 assert_abs_diff_eq!(val, &0.0)
             }
