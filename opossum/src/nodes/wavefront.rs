@@ -386,7 +386,7 @@ mod test_wavefront_error_map {
         let ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
         rays.add_ray(ray);
         let mut ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
-        ray.propagate_along_z(wvl).unwrap(); // generate a path difference of 1 lambda
+        ray.propagate(wvl).unwrap();
         rays.add_ray(ray);
         let wavefront_error = rays.wavefront_error_at_pos_in_units_of_wvl(wvl);
         let wvf_map = WaveFrontErrorMap::new(&wavefront_error, wvl).unwrap();

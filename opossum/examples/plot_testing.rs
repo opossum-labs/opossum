@@ -45,15 +45,6 @@ fn main() -> OpmResult<()> {
     let _ = plt_type.plot(&vec![plt_series]);
     println!("Time elapsed in plotting: {:?}", start.elapsed());
 
-    // // rays.set_dist_to_next_surface(millimeter!(10.));
-    // // rays.propagate_along_z()?;
-    // // rays.refract_paraxial(millimeter!(10.))?;
-    // // rays.set_dist_to_next_surface(millimeter!(30.));
-    // // rays.propagate_along_z()?;
-    // // rays.refract_paraxial(millimeter!(20.))?;
-    // // rays.set_dist_to_next_surface(millimeter!(10.));
-    // // rays.propagate_along_z()?;p
-
     let mut plt_params = PlotParameters::default();
     plt_params
         .set(&PlotArgs::FName("ray_fluence_test_random.png".into()))
