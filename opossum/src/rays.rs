@@ -1052,10 +1052,10 @@ mod test {
         energy::joule, length::nanometer, radiant_exposure::joule_per_square_centimeter,
     };
 
-    fn propagate_along_z(rays: &mut Rays, distance: Length) -> OpmResult<()> {
+    fn propagate(rays: &mut Rays, distance: Length) -> OpmResult<()> {
         for ray in rays {
             if ray.valid() {
-                ray.propagate_along_z(distance)?;
+                ray.propagate(distance)?;
             }
         }
         Ok(())
@@ -1336,11 +1336,17 @@ mod test {
         for ray in &rays.rays {
             assert_eq!(ray.position(), millimeter!(0., 0., 0.))
         }
-        propagate_along_z(&mut rays, millimeter!(1.0)).unwrap();
+        propagate(&mut rays, millimeter!(1.0)).unwrap();
         assert_eq!(rays.rays[0].position(), millimeter!(0., 0., 1.));
         assert_eq!(rays.rays[1].position()[0], Length::zero());
-        assert_abs_diff_eq!(rays.rays[1].position()[1].value, millimeter!(1.0).value);
-        assert_eq!(rays.rays[1].position()[2], millimeter!(1.0));
+        assert_abs_diff_eq!(
+            rays.rays[1].position()[1].value,
+            millimeter!(1.0).value / f64::sqrt(2.0)
+        );
+        assert_abs_diff_eq!(
+            rays.rays[1].position()[2].value,
+            millimeter!(1.0).value / f64::sqrt(2.0)
+        );
         assert!(Rays::new_hexapolar_point_source(
             position,
             degree!(-1.0),
@@ -1505,18 +1511,6 @@ mod test {
             rays.beam_radius_rms().unwrap(),
             millimeter!(f64::sqrt(2.0) / 2.0)
         );
-    }
-    #[test]
-    fn propagate_along_z_axis() {
-        let mut rays = Rays::default();
-        let ray0 = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
-        let ray1 =
-            Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
-        rays.add_ray(ray0);
-        rays.add_ray(ray1);
-        propagate_along_z(&mut rays, millimeter!(1.0)).unwrap();
-        assert_eq!(rays.rays[0].position(), millimeter!(0., 0., 1.));
-        assert_eq!(rays.rays[1].position(), millimeter!(0., 1., 1.));
     }
     #[test]
     fn refract_paraxial() {
@@ -1732,8 +1726,8 @@ mod test {
         )
         .unwrap()];
         let mut rays = Rays::from(ray_vec);
-        let _ = propagate_along_z(&mut rays, millimeter!(0.5));
-        let _ = propagate_along_z(&mut rays, millimeter!(1.0));
+        let _ = propagate(&mut rays, millimeter!(0.5));
+        let _ = propagate(&mut rays, millimeter!(1.0));
 
         let pos_hist_comp = vec![MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5])]; // 0., 1., 3.,
                                                                                        //])];
@@ -1765,7 +1759,7 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        let _ = propagate_along_z(&mut rays, millimeter!(1.0));
+        let _ = propagate(&mut rays, millimeter!(1.0));
         let wf_data = rays
             .get_wavefront_data_in_units_of_wvl(true, nanometer!(10.))
             .unwrap();
@@ -1816,15 +1810,22 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        let _ = propagate_along_z(&mut rays, millimeter!(10.0));
+
+        let plane = Plane::new(&Isometry::new_along_z(millimeter!(10.0)).unwrap());
+        rays.refract_on_surface(&plane, &refr_index_vaccuum())
+            .unwrap();
 
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.));
 
         for (i, val) in wf_error.column(2).iter().enumerate() {
             if i != 0 {
+                println!(
+                    "{}",
+                    f64::EPSILON * val.abs() - (val - (1. - f64::sqrt(2.)) * 10000.).abs()
+                );
                 assert!((val - (1. - f64::sqrt(2.)) * 10000.).abs() < f64::EPSILON * val.abs())
             } else {
-                assert!(val.abs() < f64::EPSILON)
+                assert_abs_diff_eq!(val, &0.0)
             }
         }
         let mut rays = Rays::new_hexapolar_point_source(
@@ -1835,7 +1836,8 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        let _ = propagate_along_z(&mut rays, millimeter!(10.0));
+        rays.refract_on_surface(&plane, &refr_index_vaccuum())
+            .unwrap();
 
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.));
 
