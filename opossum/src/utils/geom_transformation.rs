@@ -545,7 +545,8 @@ pub fn project_pos_to_plane_with_base_vectors(
 mod test {
     use super::*;
     use crate::millimeter;
-    use approx::assert_relative_eq;
+    use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use assert_matches::assert_matches;
     #[test]
     fn display() {
         let i = Isometry::identity();
@@ -553,6 +554,20 @@ mod test {
             format!("{i}"),
             "translation: (0.000 m, 0.000 m, 0.000 m), rotation: (0.000 °, -0.000 °, 0.000 °)"
         );
+    }
+    #[test]
+    fn new() {
+        let inf_vals = vec![f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
+
+        for val in &inf_vals {
+            assert!(Isometry::new(millimeter!(*val, 0., 0.), degree!(0., 0., 0.)).is_err());
+            assert!(Isometry::new(millimeter!(0., *val, 0.), degree!(0., 0., 0.)).is_err());
+            assert!(Isometry::new(millimeter!(0., 0., *val), degree!(0., 0., 0.)).is_err());
+
+            assert!(Isometry::new(millimeter!(0., 0., 0.), degree!(*val, 0., 0.)).is_err());
+            assert!(Isometry::new(millimeter!(0., 0., 0.), degree!(0., *val, 0.)).is_err());
+            assert!(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., *val)).is_err());
+        }
     }
     #[test]
     fn new_along_z() {
@@ -566,6 +581,33 @@ mod test {
         assert_eq!(i.transform.rotation.i, 0.0);
         assert_eq!(i.transform.rotation.j, 0.0);
         assert_eq!(i.transform.rotation.k, 0.0);
+    }
+    #[test]
+    fn translation_vec() {
+        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        assert_eq!(
+            i.translation_vec(),
+            vector![millimeter!(0.0), millimeter!(0.0), millimeter!(10.0)]
+        );
+    }
+    #[test]
+    fn translation() {
+        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        assert_eq!(i.translation(), millimeter!(0.0, 0.0, 10.0));
+    }
+    #[test]
+    fn rotation() {
+        let i = Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(10.0, 20.0, 30.0)).unwrap();
+        let rot = i.rotation();
+        assert_abs_diff_eq!(rot[0].value, degree!(10.0).value);
+        assert_abs_diff_eq!(rot[1].value, degree!(20.0).value);
+        assert_abs_diff_eq!(rot[2].value, degree!(30.0).value);
+    }
+    #[test]
+    fn identity() {
+        let i = Isometry::identity();
+        assert_eq!(i.transform, nalgebra::Isometry::identity());
+        assert_eq!(i.inverse, nalgebra::Isometry::identity());
     }
     #[test]
     fn append_z() {
@@ -813,5 +855,16 @@ mod test {
             &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
         )
         .is_err());
+    }
+    #[test]
+    fn from() {
+        assert_matches!(Some(Isometry::identity()).into(), Proptype::Isometry(_));
+        assert_matches!(
+            EnumProxy {
+                value: Some(Isometry::identity())
+            }
+            .into(),
+            Proptype::Isometry(_)
+        );
     }
 }
