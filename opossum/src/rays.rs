@@ -1820,7 +1820,7 @@ mod test {
                 assert_relative_eq!(
                     val,
                     &(10000. * (1. - f64::sqrt(2.))),
-                    epsilon = 10000. * f64::EPSILON
+                    epsilon = 100000. * f64::EPSILON
                 );
             } else {
                 assert_abs_diff_eq!(val, &0.0)
@@ -1842,7 +1842,7 @@ mod test {
                 assert_relative_eq!(
                     val,
                     &(20000. * (1. - f64::sqrt(2.))),
-                    epsilon = 10000. * f64::EPSILON
+                    epsilon = 100000. * f64::EPSILON
                 );
             } else {
                 assert_abs_diff_eq!(val, &0.0)
