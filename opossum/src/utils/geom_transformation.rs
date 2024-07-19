@@ -16,7 +16,7 @@ use bevy::{
     math::{Quat, Vec3, Vec4},
     transform::components::Transform,
 };
-use nalgebra::{vector, Isometry3, MatrixXx2, MatrixXx3, Point3, Vector3};
+use nalgebra::{vector, Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3};
 use num::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -36,19 +36,20 @@ impl Isometry {
     /// Internally, translation is handled in meter, rotation in radians
     /// # Attributes
     /// - `translation`: vector of translation for each axis as [`Length`]
-    /// - `axisangle`: vector of rotation for each axis as [`Angle`]
+    /// - `axes_angles`: rotation [`Angle`]s for each axis
+    ///    Note: the rotation is applied in the order x -> y -> z
     ///
     /// # Errors
     /// his function return an error if the
     ///  - the translation coordinates are not finite
     ///  - the axis angles are not finite
-    pub fn new(translation: Point3<Length>, axisangle: Point3<Angle>) -> OpmResult<Self> {
+    pub fn new(translation: Point3<Length>, axes_angles: Point3<Angle>) -> OpmResult<Self> {
         if translation.iter().any(|x| !x.is_finite()) {
             return Err(OpossumError::Other(
                 "translation coordinates must be finite".into(),
             ));
         }
-        if axisangle.iter().any(|x| !x.is_finite()) {
+        if axes_angles.iter().any(|x| !x.is_finite()) {
             return Err(OpossumError::Other("axis angles must be finite".into()));
         }
         let trans_in_m = Vector3::from_vec(
@@ -58,14 +59,17 @@ impl Isometry {
                 .collect::<Vec<f64>>(),
         );
         let rot_in_radian = Vector3::from_vec(
-            axisangle
+            axes_angles
                 .iter()
                 .map(Angle::get::<radian>)
                 .collect::<Vec<f64>>(),
         );
-        Ok(Self::new_from_transform(Isometry3::new(
-            trans_in_m,
-            rot_in_radian,
+        let translation_iso = Translation3::new(trans_in_m[0], trans_in_m[1], trans_in_m[2]);
+        let rotation_iso =
+            Rotation3::from_euler_angles(rot_in_radian[0], rot_in_radian[1], rot_in_radian[2]);
+        Ok(Self::new_from_transform(Isometry3::from_parts(
+            translation_iso,
+            rotation_iso.into(),
         )))
     }
     /// Create a "identiy" Isometry, which represents a zero translation and rotation.
