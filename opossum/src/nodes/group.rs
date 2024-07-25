@@ -9,7 +9,6 @@ use crate::{
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     reporter::NodeReport,
-    utils::geom_transformation::Isometry,
     SceneryResources,
 };
 use petgraph::prelude::NodeIndex;
@@ -170,10 +169,7 @@ impl NodeGroup {
     /// * `node_id`:    String containing the uuid of the parent node
     ///
     /// # Errors
-    /// Throws an [`OpossumError::OpticGroup`] if the specified port name is not mapped as input or output
-    ///
-    /// # Panics
-    /// This function panics if the specified `port_name` is not mapped to a port
+    /// Returns [`OpossumError::OpticGroup`], if the specified `port_name` is not mapped as input or output
     pub fn get_mapped_port_str(&self, port_name: &str, node_id: &str) -> OpmResult<String> {
         if self.expand_view()? {
             let in_port = self.g.input_port_map().get(port_name);
@@ -353,16 +349,13 @@ impl Optical for NodeGroup {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn set_isometry(&mut self, isometry: Isometry) {
-        self.node_attr.set_isometry(isometry);
-    }
     fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
         let node_attr = self.node_attr_mut();
         node_attr.set_global_conf(global_conf.clone());
         self.g.update_global_config(&global_conf);
     }
     fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
-        self.g.set_is_inverted(true);
+        self.g.set_is_inverted(inverted);
         self.node_attr_mut().set_inverted(inverted);
         Ok(())
     }
@@ -405,8 +398,17 @@ mod test {
         assert_eq!(node.name(), "group");
         assert_eq!(node.node_type(), "group");
         assert_eq!(node.node_attr().inverted(), false);
+        assert_eq!(node.expand_view().unwrap(), false);
         assert_eq!(node.node_color(), "yellow");
         assert!(node.as_group().is_ok());
+    }
+    #[test]
+    fn expand_view_property() {
+        let mut node = NodeGroup::default();
+        node.set_expand_view(true).unwrap();
+        assert_eq!(node.expand_view().unwrap(), true);
+        node.set_expand_view(false).unwrap();
+        assert_eq!(node.expand_view().unwrap(), false);
     }
     #[test]
     fn new() {

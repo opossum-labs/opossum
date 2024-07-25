@@ -3,8 +3,10 @@
 use std::f64::consts::PI;
 
 use nalgebra::Point2;
-use num::ToPrimitive;
+use num::Zero;
 use uom::si::{angle::radian, f64::Angle};
+
+use crate::error::OpmResult;
 
 /// Generate a generalized 2-dimension Gaussian distribution from a vector of input `points`
 /// Each point will be assigned the respective value of this Gaussian distribution
@@ -62,25 +64,76 @@ pub fn general_2d_gaussian(
 
 /// Creates Points that lie on a circle with given radius and center
 ///
-/// # Panics
-///
-/// Panics if the argument `num_points` can not be casted to f64.
-#[must_use]
+/// # Errors
+/// This function returns an error if
+///   - the `center_point` components are not finite.
+///   - the `radii` are not finite.
 pub fn ellipse(
-    radius_x: f64,
-    radius_y: f64,
-    center_x: f64,
-    center_y: f64,
-    num_points: usize,
-) -> Vec<Point2<f64>> {
-    let mut xy_data = Vec::<Point2<f64>>::with_capacity(num_points);
-    let angle_step = 2. * PI / num_points.to_f64().unwrap();
-    for point_num in 0..num_points {
-        let angle = point_num.to_f64().unwrap() * angle_step;
-        xy_data.push(Point2::new(
-            radius_x.mul_add(f64::cos(angle), center_x),
-            radius_y.mul_add(f64::sin(angle), center_y),
+    center_point: (f64, f64),
+    radii: (f64, f64),
+    num_points: u32,
+) -> OpmResult<Vec<Point2<f64>>> {
+    if !center_point.0.is_finite() || !center_point.1.is_finite() {
+        return Err(crate::error::OpossumError::Other(
+            "center point coordinates must be finite".into(),
         ));
     }
-    xy_data
+    if !radii.0.is_finite() || !radii.1.is_finite() {
+        return Err(crate::error::OpossumError::Other(
+            "radii must be finite".into(),
+        ));
+    }
+    if num_points.is_zero() {
+        return Err(crate::error::OpossumError::Other(
+            "num_points must be > 0".into(),
+        ));
+    }
+    let mut xy_data = Vec::<Point2<f64>>::with_capacity(num_points as usize);
+    let angle_step = 2. * PI / f64::from(num_points);
+    for point_num in 0..num_points {
+        let angle = f64::from(point_num) * angle_step;
+        xy_data.push(Point2::new(
+            radii.0.mul_add(f64::cos(angle), center_point.0),
+            radii.1.mul_add(f64::sin(angle), center_point.1),
+        ));
+    }
+    Ok(xy_data)
+}
+
+#[cfg(test)]
+mod test {
+    use approx::assert_abs_diff_eq;
+    use nalgebra::point;
+
+    use super::*;
+    #[test]
+    fn ellipse_wrong() {
+        for val in vec![f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(ellipse((val, 0.0), (0.0, 0.0), 1).is_err());
+            assert!(ellipse((val, 0.0), (0.0, 0.0), 1).is_err());
+            assert!(ellipse((val, 0.0), (0.0, 0.0), 1).is_err());
+
+            assert!(ellipse((0.0, val), (0.0, 0.0), 1).is_err());
+            assert!(ellipse((0.0, val), (0.0, 0.0), 1).is_err());
+            assert!(ellipse((0.0, val), (0.0, 0.0), 1).is_err());
+
+            assert!(ellipse((0.0, 0.0), (val, 0.0), 1).is_err());
+            assert!(ellipse((0.0, 0.0), (val, 0.0), 1).is_err());
+            assert!(ellipse((0.0, 0.0), (val, 0.0), 1).is_err());
+
+            assert!(ellipse((0.0, 0.0), (0.0, val), 1).is_err());
+            assert!(ellipse((0.0, 0.0), (0.0, val), 1).is_err());
+            assert!(ellipse((0.0, 0.0), (0.0, val), 1).is_err());
+        }
+        assert!(ellipse((0.0, 0.0), (0.0, 0.0), 0).is_err());
+    }
+    #[test]
+    fn ellipse_ok() {
+        let points = ellipse((1.0, 2.0), (1.0, 2.0), 4).unwrap();
+        assert_eq!(points.len(), 4);
+        assert_abs_diff_eq!(points[0], point![2.0, 2.0]);
+        assert_abs_diff_eq!(points[1], point![1.0, 4.0]);
+        assert_abs_diff_eq!(points[2], point![0.0, 2.0], epsilon = 2. * f64::EPSILON);
+        assert_abs_diff_eq!(points[3], point![1.0, 0.0]);
+    }
 }
