@@ -11,7 +11,7 @@ use crate::{
     reporter::AnalysisReport,
 };
 use chrono::Local;
-use image::{io::Reader, DynamicImage};
+use image::{DynamicImage, ImageReader};
 use log::warn;
 
 use petgraph::prelude::NodeIndex;
@@ -155,7 +155,7 @@ impl OpticScenery {
             .arg("-Tpng")
             .output()
             .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
-        let img = Reader::new(Cursor::new(r.stdout))
+        let img = ImageReader::new(Cursor::new(r.stdout))
             .with_guessed_format()
             .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?
             .decode()
