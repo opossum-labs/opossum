@@ -252,7 +252,7 @@ impl NodeGroup {
         dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports, rankdir));
         dot_str
     }
-    /// A helper function for the distances handover between to two [`OpticGraph`]s.
+    /// A helper function for the distances handover between to two `OpticGraph`s.
     ///
     /// This function is used during the node positioning procedure and might be removed if a better
     /// solution is found.

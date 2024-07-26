@@ -4,7 +4,7 @@ use petgraph::graph::NodeIndex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Mapping of the graph's internal [`OpticPorts`] to externally visible ports.
+/// Mapping of the graph's internal `OpticPorts` to externally visible ports.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct PortMap(BTreeMap<String, (NodeIndex, String)>);
 

@@ -201,7 +201,7 @@ pub trait Optical: Dottable {
     /// Set this [`Optical`] as inverted.
     ///
     /// This flag signifies that the [`Optical`] should be propagated in reverse order. This function normally simply sets the
-    /// `inverted` property. For [`NodeGroup`] it also sets the `inverted` flag of the underlying [`OpticGraph`].
+    /// `inverted` property. For [`NodeGroup`] it also sets the `inverted` flag of the underlying `OpticGraph`.
     ///
     /// ## Errors
     ///

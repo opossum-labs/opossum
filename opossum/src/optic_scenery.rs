@@ -98,7 +98,7 @@ impl OpticScenery {
     /// # Errors
     ///
     /// This function will return an error if
-    ///   - the [`NodeIndex`] of source or target node does not exist in the [`OpticGraph`]
+    ///   - the [`NodeIndex`] of source or target node does not exist in the `OpticGraph`
     ///   - a port name of the source or target node does not exist
     ///   - if a node/port combination was already connected earlier
     ///   - the connection of the nodes would form a loop in the network.

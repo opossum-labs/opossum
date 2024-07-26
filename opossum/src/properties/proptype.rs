@@ -59,7 +59,7 @@ pub enum Proptype {
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.
     Metertype(Metertype),
-    /// Property for storing the external port mapping ([`PortMap`]) of a [`Group`](crate::nodes::NodeGroup) node.
+    /// Property for storing the external port mapping (`PortMap`) of a [`Group`](crate::nodes::NodeGroup) node.
     //GroupPortMap(PortMap),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),

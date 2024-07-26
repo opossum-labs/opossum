@@ -488,7 +488,7 @@ impl OpticGraph {
             }
         }
     }
-    /// Calculate the node positions of this [`OpticScenery`].
+    /// Calculate the node positions of this `OpticScenery`.
     ///
     /// This function calculates the node positions (if not explicitly defined before) by propagating a single ray
     /// on the optical axis through the entire system.

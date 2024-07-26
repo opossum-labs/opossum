@@ -1,3 +1,4 @@
+//! Module for handling energy distributions
 use nalgebra::Point2;
 use uom::si::f64::Energy;
 

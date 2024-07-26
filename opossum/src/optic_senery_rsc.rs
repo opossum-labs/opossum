@@ -1,3 +1,4 @@
+//! Structure handling scenery wide resources (e.g. ambient medium)
 use crate::refractive_index::{refr_index_vaccuum, RefractiveIndexType};
 use serde::{Deserialize, Serialize};
 

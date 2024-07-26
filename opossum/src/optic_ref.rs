@@ -46,7 +46,7 @@ impl OpticRef {
         self.uuid
     }
     /// Update the reference to the global configuration.
-    /// **Note**: This functions is normally only called from [`OpticGraph`](crate::optic_graph::OpticGraph).
+    /// **Note**: This functions is normally only called from `OpticGraph`.
     pub fn update_global_config(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
         self.optical_ref.borrow_mut().set_global_conf(global_conf);
     }
