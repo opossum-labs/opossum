@@ -110,6 +110,7 @@ pub trait Dottable {
     ///
     /// # Returns
     /// Returns the String that describes the table cell of the node table.
+    #[allow(clippy::too_many_lines)]
     fn create_node_table_cells(
         &self,
         ports: (&Vec<String>, &Vec<String>),
@@ -136,11 +137,11 @@ pub trait Dottable {
                 (7, 5)
             };
             let mut single_cell_size = if 16 * (max_port_num * 2 + 1)
-                > (node_name_chars * 6.1).ceil().to_usize().unwrap()
+                > (node_name_chars * 6.5).ceil().to_usize().unwrap()
             {
                 (16 * (max_port_num * 2 + 1) + 20) / num_cells
             } else {
-                ((node_name_chars * 6.1).ceil().to_usize().unwrap() + 20) / num_cells
+                ((node_name_chars * 6.5).ceil().to_usize().unwrap() + 20) / num_cells
             };
             if single_cell_size < 80 / (num_cells - 2) {
                 single_cell_size = 80 / (num_cells - 2);
@@ -186,13 +187,23 @@ pub trait Dottable {
             ));
             *port_1_count += 1;
         } else if ax_nums.0 == 1 && ax_nums.1 == 1 {
-            dot_str.push_str(&format!(  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>\n", 
+            if rankdir == "LR" {
+                dot_str.push_str(&format!(  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>\n", 
                                                 row_col_span,
                                                 row_col_span,
                                                 self.node_color(),
                                                 node_cell_size,
                                                 node_cell_size,
                                                 node_name));
+            } else {
+                dot_str.push_str(&format!(  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>\n", 
+                row_col_span,
+                row_col_span,
+                self.node_color(),
+                node_cell_size,
+                16+row_col_span-1,
+                node_name));
+            }
         } else if (ax_nums.0 == 0 || ax_nums.0 == num_cells - 1)
             && (ax_nums.1 == 1 || ax_nums.1 == num_cells - 2)
         {
@@ -201,7 +212,7 @@ pub trait Dottable {
                 dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>\n"));
             } else {
                 dot_str.push_str(
-                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"16\"> </TD>\n",
+                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"1\"> </TD>\n",
                 );
             }
         } else if (ax_nums.1 == 0 || ax_nums.1 == num_cells - 1)
@@ -211,11 +222,15 @@ pub trait Dottable {
             if rankdir == "LR" {
                 dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>\n"));
             } else {
-                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"{size}\" HEIGHT=\"16\"> </TD>\n"));
+                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"{size}\" HEIGHT=\"1\"> </TD>\n"));
             }
-        } else {
+        } else if rankdir == "LR" {
             dot_str.push_str(
                 "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"16\"> </TD>\n",
+            );
+        } else {
+            dot_str.push_str(
+                "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"1\"> </TD>\n",
             );
         };
         dot_str

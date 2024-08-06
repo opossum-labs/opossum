@@ -179,7 +179,8 @@ impl OpticScenery {
             .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
         let r = std::process::Command::new("dot")
             .arg(f.path())
-            .arg("-Tsvg")
+            .arg("-Tsvg:cairo")
+            .arg("-Kdot")
             .output()
             .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
         let svg_string = String::from_utf8(r.stdout)
@@ -192,9 +193,9 @@ impl OpticScenery {
         dot_string.push_str("\tcompound = true;\n");
         dot_string.push_str(&format!("\trankdir = \"{rankdir}\";\n"));
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.description()));
-        dot_string.push_str("\tfontname=\"Courier\"\n");
-        dot_string.push_str("\tnode [fontname=\"Courier\" fontsize = 8]\n");
-        dot_string.push_str("\tedge [fontname=\"Courier\"]\n\n");
+        dot_string.push_str("\tfontname=\"Courier-monospace\"\n");
+        dot_string.push_str("\tnode [fontname=\"Courier-monospace\" fontsize = 8]\n");
+        dot_string.push_str("\tedge [fontname=\"Courier-monospace\"]\n\n");
         dot_string
     }
     /// Analyze this [`OpticScenery`] based on a given [`AnalyzerType`].

@@ -3,8 +3,8 @@ digraph {
 	compound = true;
 	rankdir = "TB";
 	label="Test"
-	fontname="Courier"
-	node [fontname="Courier" fontsize = 8]
-	edge [fontname="Courier"]
+	fontname="Courier-monospace"
+	node [fontname="Courier-monospace" fontsize = 8]
+	edge [fontname="Courier-monospace"]
 
 }
