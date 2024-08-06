@@ -17,7 +17,10 @@ fn main() -> OpmResult<()> {
         joule!(1.0),
         3,
     )?);
-    let i_m1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(22.5, 0.0, 0.0))?);
+    let i_m1 = scenery.add_node(
+        ThinMirror::new("mirror 1 mirrorrrobsyjhsdfskmdhfsdf")
+            .with_tilt(degree!(22.5, 0.0, 0.0))?,
+    );
     let i_m2 = scenery.add_node(
         ThinMirror::new("mirror 2")
             .with_curvature(millimeter!(-100.0))?

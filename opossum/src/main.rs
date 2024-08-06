@@ -48,12 +48,13 @@ fn create_dot_or_report_file_instance(
 fn create_dot_file(dot_path: &Path, scenery: &OpticScenery) -> OpmResult<()> {
     let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "dot", "diagram")?;
 
-    write!(output, "{}", scenery.to_dot("LR")?)
+    write!(output, "{}", scenery.to_dot("")?)
         .map_err(|e| OpossumError::Other(format!("writing diagram file (.dot) failed: {e}")))?;
 
     let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "svg", "diagram")?;
     write!(output, "{}", scenery.to_dot_svg()?)
         .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))?;
+
     Ok(())
 }
 fn create_report_and_data_files(report_directory: &Path, scenery: &OpticScenery) -> OpmResult<()> {
