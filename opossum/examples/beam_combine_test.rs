@@ -14,7 +14,7 @@ use opossum::{
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     scenery.set_description("beam combiner demo")?;
 
     let i_s1 = scenery.add_node(Source::new(

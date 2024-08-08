@@ -266,13 +266,13 @@ impl PolygonConfig {
             aperture_type: ApertureType::default(),
         })
     }
-}
-impl Apodize for PolygonConfig {
-    fn set_aperture_type(&mut self, aperture_type: ApertureType) {
-        self.aperture_type = aperture_type;
-    }
-    fn apodize(&self, point: &Point2<Length>) -> f64 {
-        let polygon = self
+
+    /// checks, if a point lies within this [`PolygonConfig`]
+    /// # Panics
+    /// This function panics if the triangulation fails
+    #[must_use]
+    pub fn in_polygon(&self, point: &Point2<Length>) -> bool {
+        let polygon: Vec<[f64; 2]> = self
             .points
             .iter()
             .map(|p| [p.x.get::<meter>(), p.y.get::<meter>()])
@@ -310,13 +310,22 @@ impl Apodize for PolygonConfig {
                 break;
             }
         }
-        let mut transmission = if in_polygon { 1.0 } else { 0.0 };
+        in_polygon
+    }
+}
+impl Apodize for PolygonConfig {
+    fn set_aperture_type(&mut self, aperture_type: ApertureType) {
+        self.aperture_type = aperture_type;
+    }
+    fn apodize(&self, point: &Point2<Length>) -> f64 {
+        let mut transmission = if self.in_polygon(point) { 1.0 } else { 0.0 };
         if matches!(self.aperture_type, ApertureType::Obstruction) {
             transmission = 1.0 - transmission;
         }
         transmission
     }
 }
+
 /// Configuration data for a Gaussian aperture.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GaussianConfig {
@@ -404,35 +413,40 @@ impl Apodize for StackConfig {
         transmission
     }
 }
-
+fn plot_circle(conf: &CircleConfig) -> Vec<PlotSeries> {
+    let circle_points = ellipse(
+        (
+            conf.center.x.get::<millimeter>(),
+            conf.center.y.get::<millimeter>(),
+        ),
+        (
+            conf.radius.get::<millimeter>(),
+            conf.radius.get::<millimeter>(),
+        ),
+        100,
+    )
+    .unwrap();
+    let plt_dat = PlotData::Dim2 {
+        xy_data: Matrix2xX::from_vec(
+            circle_points
+                .iter()
+                .flat_map(|p| vec![p.x, p.y])
+                .collect_vec(),
+        )
+        .transpose(),
+    };
+    vec![PlotSeries::new(
+        &plt_dat,
+        RGBAColor(0, 0, 0, 1.),
+        Some("Aperture".to_owned()),
+    )]
+}
 impl Plottable for Aperture {
     fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
         let plt_series_opt = match plt_type {
             PlotType::Line2D(_) | PlotType::Scatter2D(_) => match self {
                 Self::None => None,
-                Self::BinaryCircle(conf) => {
-                    let circle_points = ellipse(
-                        conf.radius.get::<millimeter>(),
-                        conf.radius.get::<millimeter>(),
-                        conf.center.x.get::<millimeter>(),
-                        conf.center.y.get::<millimeter>(),
-                        100,
-                    );
-                    let plt_dat = PlotData::Dim2 {
-                        xy_data: Matrix2xX::from_vec(
-                            circle_points
-                                .iter()
-                                .flat_map(|p| vec![p.x, p.y])
-                                .collect_vec(),
-                        )
-                        .transpose(),
-                    };
-                    Some(vec![PlotSeries::new(
-                        &plt_dat,
-                        RGBAColor(0, 0, 0, 1.),
-                        Some("Aperture".to_owned()),
-                    )])
-                }
+                Self::BinaryCircle(conf) => Some(plot_circle(conf)),
                 Self::BinaryRectangle(conf) => {
                     let center_x = conf.center.x.get::<millimeter>();
                     let center_y = conf.center.y.get::<millimeter>();
@@ -473,12 +487,16 @@ impl Plottable for Aperture {
                 }
                 Self::Gaussian(conf) => {
                     let circle_points = ellipse(
-                        conf.sigma.0.get::<millimeter>() * 2.,
-                        conf.sigma.1.get::<millimeter>() * 2.,
-                        conf.center.x.get::<millimeter>(),
-                        conf.center.y.get::<millimeter>(),
+                        (
+                            conf.center.x.get::<millimeter>(),
+                            conf.center.y.get::<millimeter>(),
+                        ),
+                        (
+                            conf.sigma.0.get::<millimeter>() * 2.,
+                            conf.sigma.1.get::<millimeter>() * 2.,
+                        ),
                         100,
-                    );
+                    )?;
                     let xy_data = Matrix2xX::from_vec(
                         circle_points
                             .iter()

@@ -220,8 +220,20 @@ impl Ray {
     /// This function also respects the refractive index stored in the ray while calculating the optical path length.
     ///
     /// # Errors
-    /// This functions returns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
+    /// This functions returns an error if
+    ///   - the initial ray direction vector is zero. (This should not happen at all.)
+    ///   - the propagation length is not finite.
     pub fn propagate(&mut self, length: Length) -> OpmResult<()> {
+        if self.dir.is_zero() {
+            return Err(OpossumError::Other(
+                "cannot propagate since length of direction vector must be >0".into(),
+            ));
+        }
+        if !length.is_finite() {
+            return Err(OpossumError::Other(
+                "propagation length must be finite".into(),
+            ));
+        }
         self.pos_hist.push(self.pos);
         self.pos += vector![
             length * self.dir.x,
@@ -244,22 +256,22 @@ impl Ray {
     ///
     /// # Errors
     /// This functions returns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
-    pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
-        if self.dir[2].abs() < f64::EPSILON {
-            return Err(OpossumError::Other(
-                "z-Axis of direction vector must be != 0.0".into(),
-            ));
-        }
-        self.pos_hist.push(self.pos);
-        let length_in_ray_dir = length_along_z / self.dir[2];
-        self.pos += vector![
-            length_in_ray_dir * self.dir.x,
-            length_in_ray_dir * self.dir.y,
-            length_in_ray_dir * self.dir.z
-        ];
-        self.path_length += length_in_ray_dir * self.refractive_index * self.dir.norm();
-        Ok(())
-    }
+    // pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
+    //     if self.dir[2].abs() < f64::EPSILON {
+    //         return Err(OpossumError::Other(
+    //             "z-Axis of direction vector must be != 0.0".into(),
+    //         ));
+    //     }
+    //     self.pos_hist.push(self.pos);
+    //     let length_in_ray_dir = length_along_z / self.dir[2];
+    //     self.pos += vector![
+    //         length_in_ray_dir * self.dir.x,
+    //         length_in_ray_dir * self.dir.y,
+    //         length_in_ray_dir * self.dir.z
+    //     ];
+    //     self.path_length += length_in_ray_dir * self.refractive_index * self.dir.norm();
+    //     Ok(())
+    // }
     /// Refract a ray on a paraxial surface of a given focal length.
     ///
     /// Modify the ray direction in order to simulate a perfect lens. **Note**: This function also
@@ -615,13 +627,16 @@ mod test {
         );
     }
     #[test]
-    fn propagate_along_z() {
+    fn propagate() {
         let wvl = nanometer!(1053.0);
         let energy = joule!(1.0);
         let mut ray = Ray::origin_along_z(wvl, energy).unwrap();
-        assert!(ray.propagate_along_z(millimeter!(1.0)).is_ok());
+        assert!(ray.propagate(millimeter!(f64::INFINITY)).is_err());
+        assert!(ray.propagate(millimeter!(f64::NEG_INFINITY)).is_err());
+        assert!(ray.propagate(millimeter!(f64::NAN)).is_err());
+        assert!(ray.propagate(millimeter!(1.0)).is_ok());
         assert_eq!(ray.pos_hist, vec![millimeter!(0., 0., 0.)]);
-        ray.propagate_along_z(millimeter!(1.0)).unwrap();
+        ray.propagate(millimeter!(1.0)).unwrap();
         assert_eq!(
             ray.pos_hist,
             vec![millimeter!(0., 0., 0.), millimeter!(0., 0., 1.0)]
@@ -633,7 +648,7 @@ mod test {
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.position(), millimeter!(0., 0., 2.0));
         assert_eq!(ray.path_length(), millimeter!(2.0));
-        ray.propagate_along_z(millimeter!(2.0)).unwrap();
+        ray.propagate(millimeter!(2.0)).unwrap();
 
         assert_eq!(ray.position(), millimeter!(0., 0., 4.0));
         assert_eq!(
@@ -644,7 +659,7 @@ mod test {
                 millimeter!(0., 0., 2.0)
             ]
         );
-        ray.propagate_along_z(millimeter!(-5.0)).unwrap();
+        ray.propagate(millimeter!(-5.0)).unwrap();
 
         assert_eq!(ray.position(), millimeter!(0., 0., -1.0));
         assert_eq!(
@@ -658,21 +673,25 @@ mod test {
         );
         let mut ray =
             Ray::new(millimeter!(0., 0., 0.), vector![0.0, 1.0, 1.0], wvl, energy).unwrap();
-        let _ = ray.propagate_along_z(millimeter!(1.0));
-        assert_eq!(ray.position(), millimeter!(0., 1., 1.));
-        let _ = ray.propagate_along_z(millimeter!(2.0));
+        ray.propagate(millimeter!(1.0)).unwrap();
+        assert_eq!(
+            ray.position(),
+            millimeter!(0., 1. / f64::sqrt(2.0), 1. / f64::sqrt(2.0))
+        );
+        ray.propagate(millimeter!(2.0)).unwrap();
 
-        assert_eq!(ray.position(), millimeter!(0., 3., 3.));
-        let mut ray = Ray::new(millimeter!(0., 0., 0.), Vector3::y(), wvl, energy).unwrap();
-        assert!(ray.propagate_along_z(millimeter!(1.0)).is_err());
+        assert_eq!(
+            ray.position(),
+            millimeter!(0., 3. / f64::sqrt(2.0), 3. / f64::sqrt(2.0))
+        );
     }
     #[test]
-    fn propagate_along_z_refractive_index() {
+    fn propagate_with_refractive_index() {
         let wvl = nanometer!(1053.0);
         let energy = joule!(1.0);
         let mut ray = Ray::new(millimeter!(0., 0., 0.), Vector3::z(), wvl, energy).unwrap();
         ray.set_refractive_index(2.0).unwrap();
-        ray.propagate_along_z(millimeter!(1.0)).unwrap();
+        ray.propagate(millimeter!(1.0)).unwrap();
         assert_eq!(ray.wavelength(), wvl);
         assert_eq!(ray.energy(), energy);
         assert_eq!(ray.dir, Vector3::z());
@@ -1007,30 +1026,34 @@ mod test {
         assert!(ray.split(&SplittingConfig::Spectrum(spectrum)).is_err());
     }
     #[test]
-    fn position_history_in_mm_test() {
-        let mut ray = Ray::new(
-            millimeter!(0., 0., 0.),
-            vector![0., 1., 2.],
-            nanometer!(1053.),
-            joule!(1.),
-        )
-        .unwrap();
-
-        let _ = ray.propagate_along_z(millimeter!(1.));
-        let _ = ray.propagate_along_z(millimeter!(2.));
-
+    fn position_history() {
+        let dir = vector![0., 1., 2.];
+        let mut ray =
+            Ray::new(millimeter!(0., 0., 0.), dir, nanometer!(1053.), joule!(1.)).unwrap();
+        ray.propagate(millimeter!(1.)).unwrap();
+        ray.propagate(millimeter!(2.)).unwrap();
+        let norm_dir = dir.normalize();
         let pos_hist_comp = MatrixXx3::from_vec(
-            vec![0., 0., 0., 0., 0.5, 1.5, 0., 1., 3.]
-                .iter()
-                .map(|x| millimeter!(*x))
-                .collect::<Vec<Length>>(),
+            vec![
+                0.,
+                0.,
+                0.,
+                0.,
+                1. * norm_dir[1],
+                3. * norm_dir[1],
+                0.0,
+                1. * norm_dir[2],
+                3. * norm_dir[2],
+            ]
+            .iter()
+            .map(|x| millimeter!(*x))
+            .collect::<Vec<Length>>(),
         );
-
         let pos_hist = ray.position_history();
         for (row, row_calc) in izip!(pos_hist_comp.row_iter(), pos_hist.row_iter()) {
-            assert_eq!(row[0], row_calc[0]);
-            assert_eq!(row[1], row_calc[1]);
-            assert_eq!(row[2], row_calc[2]);
+            assert_abs_diff_eq!(row[0].value, row_calc[0].value);
+            assert_abs_diff_eq!(row[1].value, row_calc[1].value);
+            assert_abs_diff_eq!(row[2].value, row_calc[2].value);
         }
     }
     #[test]

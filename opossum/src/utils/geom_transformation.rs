@@ -16,7 +16,7 @@ use bevy::{
     math::{Quat, Vec3, Vec4},
     transform::components::Transform,
 };
-use nalgebra::{vector, Isometry3, MatrixXx2, MatrixXx3, Point3, Vector3};
+use nalgebra::{vector, Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3};
 use num::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -36,19 +36,20 @@ impl Isometry {
     /// Internally, translation is handled in meter, rotation in radians
     /// # Attributes
     /// - `translation`: vector of translation for each axis as [`Length`]
-    /// - `axisangle`: vector of rotation for each axis as [`Angle`]
+    /// - `axes_angles`: rotation [`Angle`]s for each axis
+    ///    Note: the rotation is applied in the order x -> y -> z
     ///
     /// # Errors
     /// his function return an error if the
     ///  - the translation coordinates are not finite
     ///  - the axis angles are not finite
-    pub fn new(translation: Point3<Length>, axisangle: Point3<Angle>) -> OpmResult<Self> {
+    pub fn new(translation: Point3<Length>, axes_angles: Point3<Angle>) -> OpmResult<Self> {
         if translation.iter().any(|x| !x.is_finite()) {
             return Err(OpossumError::Other(
                 "translation coordinates must be finite".into(),
             ));
         }
-        if axisangle.iter().any(|x| !x.is_finite()) {
+        if axes_angles.iter().any(|x| !x.is_finite()) {
             return Err(OpossumError::Other("axis angles must be finite".into()));
         }
         let trans_in_m = Vector3::from_vec(
@@ -58,14 +59,17 @@ impl Isometry {
                 .collect::<Vec<f64>>(),
         );
         let rot_in_radian = Vector3::from_vec(
-            axisangle
+            axes_angles
                 .iter()
                 .map(Angle::get::<radian>)
                 .collect::<Vec<f64>>(),
         );
-        Ok(Self::new_from_transform(Isometry3::new(
-            trans_in_m,
-            rot_in_radian,
+        let translation_iso = Translation3::new(trans_in_m[0], trans_in_m[1], trans_in_m[2]);
+        let rotation_iso =
+            Rotation3::from_euler_angles(rot_in_radian[0], rot_in_radian[1], rot_in_radian[2]);
+        Ok(Self::new_from_transform(Isometry3::from_parts(
+            translation_iso,
+            rotation_iso.into(),
         )))
     }
     /// Create a "identiy" Isometry, which represents a zero translation and rotation.
@@ -541,7 +545,8 @@ pub fn project_pos_to_plane_with_base_vectors(
 mod test {
     use super::*;
     use crate::millimeter;
-    use approx::assert_relative_eq;
+    use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use assert_matches::assert_matches;
     #[test]
     fn display() {
         let i = Isometry::identity();
@@ -549,6 +554,20 @@ mod test {
             format!("{i}"),
             "translation: (0.000 m, 0.000 m, 0.000 m), rotation: (0.000 °, -0.000 °, 0.000 °)"
         );
+    }
+    #[test]
+    fn new() {
+        let inf_vals = vec![f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
+
+        for val in &inf_vals {
+            assert!(Isometry::new(millimeter!(*val, 0., 0.), degree!(0., 0., 0.)).is_err());
+            assert!(Isometry::new(millimeter!(0., *val, 0.), degree!(0., 0., 0.)).is_err());
+            assert!(Isometry::new(millimeter!(0., 0., *val), degree!(0., 0., 0.)).is_err());
+
+            assert!(Isometry::new(millimeter!(0., 0., 0.), degree!(*val, 0., 0.)).is_err());
+            assert!(Isometry::new(millimeter!(0., 0., 0.), degree!(0., *val, 0.)).is_err());
+            assert!(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., *val)).is_err());
+        }
     }
     #[test]
     fn new_along_z() {
@@ -562,6 +581,33 @@ mod test {
         assert_eq!(i.transform.rotation.i, 0.0);
         assert_eq!(i.transform.rotation.j, 0.0);
         assert_eq!(i.transform.rotation.k, 0.0);
+    }
+    #[test]
+    fn translation_vec() {
+        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        assert_eq!(
+            i.translation_vec(),
+            vector![millimeter!(0.0), millimeter!(0.0), millimeter!(10.0)]
+        );
+    }
+    #[test]
+    fn translation() {
+        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        assert_eq!(i.translation(), millimeter!(0.0, 0.0, 10.0));
+    }
+    #[test]
+    fn rotation() {
+        let i = Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(10.0, 20.0, 30.0)).unwrap();
+        let rot = i.rotation();
+        assert_abs_diff_eq!(rot[0].value, degree!(10.0).value);
+        assert_abs_diff_eq!(rot[1].value, degree!(20.0).value);
+        assert_abs_diff_eq!(rot[2].value, degree!(30.0).value);
+    }
+    #[test]
+    fn identity() {
+        let i = Isometry::identity();
+        assert_eq!(i.transform, nalgebra::Isometry::identity());
+        assert_eq!(i.inverse, nalgebra::Isometry::identity());
     }
     #[test]
     fn append_z() {
@@ -809,5 +855,16 @@ mod test {
             &[Vector3::new(0., 0., -4.), Vector3::new(10., 0., 3.)],
         )
         .is_err());
+    }
+    #[test]
+    fn from() {
+        assert_matches!(Some(Isometry::identity()).into(), Proptype::Isometry(_));
+        assert_matches!(
+            EnumProxy {
+                value: Some(Isometry::identity())
+            }
+            .into(),
+            Proptype::Isometry(_)
+        );
     }
 }

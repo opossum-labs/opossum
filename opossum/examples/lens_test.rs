@@ -10,7 +10,7 @@ use opossum::{
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     scenery.set_description("Lens Ray-trace test".into())?;
 
     let src = scenery.add_node(collimated_line_ray_source(
@@ -18,26 +18,6 @@ fn main() -> OpmResult<()> {
         joule!(1.0),
         6,
     )?);
-    // let src = scenery.add_node(round_collimated_ray_source(
-    //     millimeter!(5.0),
-    //     joule!(1.0),
-    //     10,
-    // )?);
-    // let mut lens1 = Lens::new(
-    //     "Lens 1",
-    //     millimeter!(205.55),
-    //     millimeter!(-205.55),
-    //     millimeter!(2.79),
-    //     &RefrIndexConst::new(1.5068)?,
-    // )?;
-    // let mut lens1 = Lens::new(
-    //     "Lens 1",
-    //     millimeter!(f64::INFINITY),
-    //     millimeter!(f64::INFINITY),
-    //     millimeter!(20.0),
-    //     &RefrIndexConst::new(1.5068)?,
-    // )?;
-
     let lens1 = Wedge::new(
         "Wedge",
         millimeter!(10.0),

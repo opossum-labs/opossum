@@ -36,6 +36,7 @@ mod optic_scenery;
 mod optic_senery_rsc;
 pub mod optical;
 pub mod plottable;
+mod port_map;
 pub mod position_distributions;
 pub mod properties;
 pub mod ray;

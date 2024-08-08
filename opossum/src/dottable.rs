@@ -110,6 +110,7 @@ pub trait Dottable {
     ///
     /// # Returns
     /// Returns the String that describes the table cell of the node table.
+    #[allow(clippy::too_many_lines)]
     fn create_node_table_cells(
         &self,
         ports: (&Vec<String>, &Vec<String>),
@@ -136,11 +137,11 @@ pub trait Dottable {
                 (7, 5)
             };
             let mut single_cell_size = if 16 * (max_port_num * 2 + 1)
-                > (node_name_chars * 6.1).ceil().to_usize().unwrap()
+                > (node_name_chars * 6.5).ceil().to_usize().unwrap()
             {
                 (16 * (max_port_num * 2 + 1) + 20) / num_cells
             } else {
-                ((node_name_chars * 6.1).ceil().to_usize().unwrap() + 20) / num_cells
+                ((node_name_chars * 6.5).ceil().to_usize().unwrap() + 20) / num_cells
             };
             if single_cell_size < 80 / (num_cells - 2) {
                 single_cell_size = 80 / (num_cells - 2);
@@ -186,13 +187,23 @@ pub trait Dottable {
             ));
             *port_1_count += 1;
         } else if ax_nums.0 == 1 && ax_nums.1 == 1 {
-            dot_str.push_str(&format!(  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>\n", 
+            if rankdir == "LR" {
+                dot_str.push_str(&format!(  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>\n", 
                                                 row_col_span,
                                                 row_col_span,
                                                 self.node_color(),
                                                 node_cell_size,
                                                 node_cell_size,
                                                 node_name));
+            } else {
+                dot_str.push_str(&format!(  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>\n", 
+                row_col_span,
+                row_col_span,
+                self.node_color(),
+                node_cell_size,
+                16+row_col_span-1,
+                node_name));
+            }
         } else if (ax_nums.0 == 0 || ax_nums.0 == num_cells - 1)
             && (ax_nums.1 == 1 || ax_nums.1 == num_cells - 2)
         {
@@ -201,7 +212,7 @@ pub trait Dottable {
                 dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>\n"));
             } else {
                 dot_str.push_str(
-                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"16\"> </TD>\n",
+                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"1\"> </TD>\n",
                 );
             }
         } else if (ax_nums.1 == 0 || ax_nums.1 == num_cells - 1)
@@ -211,11 +222,15 @@ pub trait Dottable {
             if rankdir == "LR" {
                 dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>\n"));
             } else {
-                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"{size}\" HEIGHT=\"16\"> </TD>\n"));
+                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"{size}\" HEIGHT=\"1\"> </TD>\n"));
             }
-        } else {
+        } else if rankdir == "LR" {
             dot_str.push_str(
                 "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"16\"> </TD>\n",
+            );
+        } else {
+            dot_str.push_str(
+                "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"1\"> </TD>\n",
             );
         };
         dot_str
@@ -338,7 +353,7 @@ mod test {
         let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_empty_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_empty_LR.dot");
 
-        let mut scenery = OpticScenery::new();
+        let mut scenery = OpticScenery::default();
         scenery.set_description("Test".into()).unwrap();
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
@@ -353,7 +368,7 @@ mod test {
         let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_w_node_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_w_node_LR.dot");
 
-        let mut scenery = OpticScenery::new();
+        let mut scenery = OpticScenery::default();
         scenery.add_node(Dummy::new("Test"));
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
@@ -368,11 +383,11 @@ mod test {
         let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_full_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_full_LR.dot");
 
-        let mut scenery = OpticScenery::new();
+        let mut scenery = OpticScenery::default();
         scenery.set_description("SceneryTest".into()).unwrap();
         let i_s = scenery.add_node(Source::new("Source", &LightData::Fourier));
         let mut bs = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
-        bs.set_property("name", "Beam splitter".into()).unwrap();
+        bs.node_attr_mut().set_name("Beam splitter");
         let i_bs = scenery.add_node(bs);
         let i_d1 = scenery.add_node(EnergyMeter::new(
             "Energy meter 1",
@@ -402,13 +417,13 @@ mod test {
     #[test]
     #[ignore]
     fn to_dot_group() {
-        let mut scenery = OpticScenery::new();
+        let mut scenery = OpticScenery::default();
         scenery
             .set_description("Node Group test section".into())
             .unwrap();
 
         let mut group1 = NodeGroup::new("group 1");
-        group1.expand_view(true).unwrap();
+        group1.set_expand_view(true).unwrap();
         let g1_n1 = group1.add_node(Dummy::new("node1")).unwrap();
         let g1_n2 = group1.add_node(BeamSplitter::default()).unwrap();
         group1
@@ -421,7 +436,7 @@ mod test {
         let mut nested_group = NodeGroup::new("group 1_1");
         let nested_g_n1 = nested_group.add_node(Dummy::new("node1_1")).unwrap();
         let nested_g_n2 = nested_group.add_node(Dummy::new("node1_2")).unwrap();
-        nested_group.expand_view(true).unwrap();
+        nested_group.set_expand_view(true).unwrap();
 
         nested_group
             .connect_nodes(nested_g_n1, "rear", nested_g_n2, "front", Length::zero())
@@ -439,7 +454,7 @@ mod test {
             .unwrap();
 
         let mut group2: NodeGroup = NodeGroup::new("group 2");
-        group2.expand_view(false).unwrap();
+        group2.set_expand_view(false).unwrap();
         let g2_n1 = group2.add_node(Dummy::new("node2_1")).unwrap();
         let g2_n2 = group2.add_node(Dummy::new("node2_2")).unwrap();
         group2.map_input_port(g2_n1, "front", "in1").unwrap();

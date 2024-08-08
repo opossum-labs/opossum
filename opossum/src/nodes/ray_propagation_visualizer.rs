@@ -55,7 +55,7 @@ impl Default for RayPropagationVisualizer {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self {
             light_data: None,
             node_attr,
@@ -67,13 +67,10 @@ impl RayPropagationVisualizer {
     /// Creates a new [`RayPropagationVisualizer`].
     /// # Attributes
     /// * `name`: name of the `RayPropagationVisualizer`
-    ///
-    /// # Panics
-    /// This function may panic if the property "name" can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut rpv = Self::default();
-        rpv.node_attr.set_property("name", name.into()).unwrap();
+        rpv.node_attr.set_name(name);
         rpv.node_attr
             .set_property("plot_aperture", true.into())
             .unwrap();
@@ -86,7 +83,7 @@ impl Optical for RayPropagationVisualizer {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.properties().inverted()? {
+        let (inport, outport) = if self.inverted() {
             ("out1", "in1")
         } else {
             ("in1", "out1")
@@ -107,7 +104,7 @@ impl Optical for RayPropagationVisualizer {
             if let Some(aperture) = self.ports().input_aperture("in1") {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
-                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", self.node_attr.name(), self.node_attr.node_type());
+                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn Optical);
                     self.apodization_warning = true;
                 }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -120,7 +117,7 @@ impl Optical for RayPropagationVisualizer {
             if let Some(aperture) = self.ports().output_aperture("out1") {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
-                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", self.node_attr.name(), self.node_attr.node_type());
+                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn Optical);
                 }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -349,8 +346,9 @@ impl Plottable for RayPositionHistories {
         plt_params
             .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
             .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?
-            .set(&PlotArgs::PlotSize((1400, 800)))?
-            .set(&PlotArgs::AxisEqual(true))?;
+            .set(&PlotArgs::PlotSize((1200, 1200)))?
+            .set(&PlotArgs::AxisEqual(true))?
+            .set(&PlotArgs::PlotAutoSize(true))?;
         Ok(())
     }
 
@@ -427,12 +425,12 @@ mod test {
     use uom::si::{f64::Length, length::nanometer};
     #[test]
     fn default() {
-        let node = RayPropagationVisualizer::default();
+        let mut node = RayPropagationVisualizer::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "ray propagation");
         assert_eq!(node.node_type(), "ray propagation");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkgreen");
         assert!(node.as_group().is_err());
     }
@@ -451,7 +449,7 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut meter = RayPropagationVisualizer::default();
-        meter.set_property("inverted", true.into()).unwrap();
+        meter.set_inverted(true).unwrap();
         assert_eq!(meter.ports().input_names(), vec!["out1"]);
         assert_eq!(meter.ports().output_names(), vec!["in1"]);
     }
@@ -497,7 +495,7 @@ mod test {
     #[test]
     fn analyze_inverse() {
         let mut node = RayPropagationVisualizer::default();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),

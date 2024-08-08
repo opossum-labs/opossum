@@ -48,7 +48,7 @@ impl Default for ParaxialSurface {
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
 
         node_attr
             .create_property(
@@ -77,7 +77,7 @@ impl ParaxialSurface {
             return Err(OpossumError::Other("focal length must be finite".into()));
         }
         let mut parsurf = Self::default();
-        parsurf.node_attr.set_property("name", name.into())?;
+        parsurf.node_attr.set_name(name);
         parsurf
             .node_attr
             .set_property("focal length", focal_length.into())?;
@@ -90,7 +90,7 @@ impl Optical for ParaxialSurface {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.properties().inverted()? {
+        let (src, target) = if self.inverted() {
             ("rear", "front")
         } else {
             ("front", "rear")
@@ -168,11 +168,11 @@ mod test {
     use nalgebra::Vector3;
     #[test]
     fn default() {
-        let node = ParaxialSurface::default();
+        let mut node = ParaxialSurface::default();
         assert_eq!(node.name(), "paraxial surface");
         assert_eq!(node.node_type(), "paraxial surface");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert!(node.properties().get("focal length").is_ok());
         assert_matches!(
             node.properties().get("focal length").unwrap(),
@@ -200,12 +200,6 @@ mod test {
         assert!(ParaxialSurface::new("Test", millimeter!(f64::NAN)).is_err());
         assert!(ParaxialSurface::new("Test", millimeter!(f64::INFINITY)).is_err());
         assert!(ParaxialSurface::new("Test", millimeter!(f64::NEG_INFINITY)).is_err());
-    }
-    #[test]
-    fn name_property() {
-        let mut node = ParaxialSurface::default();
-        node.set_property("name", "Test1".into()).unwrap();
-        assert_eq!(node.name(), "Test1")
     }
     #[test]
     fn node_type_readonly() {

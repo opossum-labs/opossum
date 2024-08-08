@@ -37,6 +37,7 @@ use std::path::{Path, PathBuf};
 ///
 /// ## Properties
 ///   - `name`
+///   - `plot_aperture`
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -50,10 +51,18 @@ impl Default for SpotDiagram {
     /// create a spot-diagram monitor.
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("spot diagram");
+        node_attr
+            .create_property(
+                "plot_aperture",
+                "flag that defines if the aperture is displayed in a plot",
+                None,
+                false.into(),
+            )
+            .unwrap();
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self {
             light_data: None,
             node_attr,
@@ -65,16 +74,10 @@ impl SpotDiagram {
     /// Creates a new [`SpotDiagram`].
     /// # Attributes
     /// * `name`: name of the spot diagram
-    ///
-    /// # Panics
-    /// This function may panic if the property "name" can not be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut sd = Self::default();
-        sd.node_attr.set_property("name", name.into()).unwrap();
-        sd.node_attr
-            .set_property("plot_aperture", false.into())
-            .unwrap();
+        sd.node_attr.set_name(name);
         sd
     }
 }
@@ -87,7 +90,7 @@ impl Optical for SpotDiagram {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.properties().inverted()? {
+        let (inport, outport) = if self.inverted() {
             ("out1", "in1")
         } else {
             ("in1", "out1")
@@ -108,7 +111,7 @@ impl Optical for SpotDiagram {
             if let Some(aperture) = self.ports().input_aperture("in1") {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
-                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", self.node_attr.name(), self.node_attr.node_type());
+                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn Optical);
                     self.apodization_warning = true;
                 }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -315,6 +318,7 @@ impl Plottable for SpotDiagram {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::utils::test_helper::test_helper::check_warnings;
     use crate::{
         analyzer::AnalyzerType, joule, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
         position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
@@ -324,12 +328,12 @@ mod test {
     use uom::si::f64::Length;
     #[test]
     fn default() {
-        let node = SpotDiagram::default();
+        let mut node = SpotDiagram::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "spot diagram");
         assert_eq!(node.node_type(), "spot diagram");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkorange");
         assert!(node.as_group().is_err());
     }
@@ -348,7 +352,7 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut meter = SpotDiagram::default();
-        meter.set_property("inverted", true.into()).unwrap();
+        meter.set_inverted(true).unwrap();
         assert_eq!(meter.ports().input_names(), vec!["out1"]);
         assert_eq!(meter.ports().output_names(), vec!["in1"]);
     }
@@ -392,7 +396,7 @@ mod test {
     #[test]
     fn analyze_inverse() {
         let mut node = SpotDiagram::default();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
@@ -414,13 +418,9 @@ mod test {
         testing_logger::setup();
         let mut sd = SpotDiagram::default();
         assert!(sd.export_data(Path::new(""), "").is_ok());
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            assert_eq!(
-                captured_logs[0].body,
-                "spot diagram: no light data for export available. Cannot create plot!"
-            );
-        });
+        check_warnings(vec![
+            "spot diagram: no light data for export available. Cannot create plot!",
+        ]);
         sd.light_data = Some(LightData::Geometric(Rays::default()));
         let path = NamedTempFile::new().unwrap();
         assert!(sd.export_data(path.path().parent().unwrap(), "").is_err());

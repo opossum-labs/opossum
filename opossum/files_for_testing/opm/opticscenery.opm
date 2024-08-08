@@ -3,24 +3,36 @@ graph:
   nodes:
   - type: dummy
     id: 180328fe-7ad4-4568-b501-183b88c4daee
-    properties:
-      apertures: !OpticPorts
+    attributes:
+      apertures:
         inputs:
           front: None
         outputs:
           rear: None
-      inverted: !Bool false
-      name: !String dummy1
+      name: dummy1
+      inverted: false
+      props:
+        apertures: !OpticPorts
+          inputs:
+            front: None
+          outputs:
+            rear: None
   - type: dummy
     id: 642ce76e-b071-43c0-a77e-1bdbb99b40d8
-    properties:
-      apertures: !OpticPorts
+    attributes:
+      apertures:
         inputs:
           front: None
         outputs:
           rear: None
-      inverted: !Bool false
-      name: !String dummy2
+      name: dummy2
+      inverted: false
+      props:
+        apertures: !OpticPorts
+          inputs:
+            front: None
+          outputs:
+            rear: None
   edges:
   - - 180328fe-7ad4-4568-b501-183b88c4daee
     - 642ce76e-b071-43c0-a77e-1bdbb99b40d8

@@ -1,10 +1,14 @@
 type: dummy
 id: 587ee70f-6f52-4420-89f6-e1618ff4dbdb
-properties:
-  name: !String test123
-  inverted: !Bool false
-  apertures: !OpticPorts
+attributes:
+  alignment: null
+  isometry: null
+  name: test123
+  apertures:
     inputs:
       front: None
     outputs:
       rear: None
+  inverted: false
+  props:
+      

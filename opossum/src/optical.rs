@@ -6,7 +6,7 @@ use log::warn;
 use nalgebra::Point3;
 use uom::si::f64::{Angle, Length};
 
-use crate::analyzer::AnalyzerType;
+use crate::analyzer::{AnalyzerType, RayTraceConfig};
 use crate::aperture::Aperture;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
@@ -21,6 +21,7 @@ use crate::utils::geom_transformation::Isometry;
 use core::fmt::Debug;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -38,15 +39,11 @@ pub trait Optical: Dottable {
     // fn node_type(&self) -> &str;
     // /// Return the available (input & output) ports of this [`Optical`].
     fn ports(&self) -> OpticPorts {
-        if let Proptype::OpticPorts(ports) = self.properties().get("apertures").unwrap() {
-            let mut ports = ports.clone();
-            if self.properties().get_bool("inverted").unwrap() {
-                ports.set_inverted(true);
-            }
-            ports
-        } else {
-            panic!("property <apertures> not found")
+        let mut ports = self.node_attr().apertures().clone();
+        if self.node_attr().inverted() {
+            ports.set_inverted(true);
         }
+        ports
     }
     /// Set an [`Aperture`] for a given input port name.
     ///
@@ -57,7 +54,7 @@ pub trait Optical: Dottable {
         let mut ports = self.ports();
         if ports.inputs().contains_key(port_name) {
             ports.set_input_aperture(port_name, aperture)?;
-            self.set_property("apertures", ports.into())?;
+            self.node_attr_mut().set_apertures(ports);
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -74,7 +71,7 @@ pub trait Optical: Dottable {
         let mut ports = self.ports();
         if ports.outputs().contains_key(port_name) {
             ports.set_output_aperture(port_name, aperture)?;
-            self.set_property("apertures", ports.into())?;
+            self.node_attr_mut().set_apertures(ports);
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -97,6 +94,21 @@ pub trait Optical: Dottable {
         warn!("{}: No analyze function defined.", self.node_type());
         Ok(LightResult::default())
     }
+    /// Calculate the position of this [`Optical`] element.
+    ///
+    /// This function calculates the position of this [`Optical`] element in 3D space. This is based on the analysis of a single,
+    /// central [`Ray`](crate::ray::Ray) representing the optical axis. The default implementation is to use the normal `analyze`
+    /// function. For a [`NodeGroup`] however, this must be separately implemented in order to allow nesting.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if internal element-specific errors occur and the analysis cannot be performed.
+    fn calc_node_position(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        self.analyze(
+            incoming_data,
+            &AnalyzerType::RayTrace(RayTraceConfig::default()),
+        )
+    }
     /// Export analysis data to file(s) within the given directory path.
     ///
     /// This function should be overridden by a node in order to export node-specific data into a file.
@@ -111,10 +123,6 @@ pub trait Optical: Dottable {
     fn is_detector(&self) -> bool {
         false
     }
-    /// Returns `true` if the [`Optical`] represents a detector that can report analysis data.
-    fn is_source(&self) -> bool {
-        false
-    }
     /// Returns `true` if this [`Optical`] is inverted. The default implementation returns `false`.
     // fn inverted(&self) -> bool {
     //     false
@@ -124,7 +132,7 @@ pub trait Optical: Dottable {
     /// # Errors
     ///
     /// This function will return an error if the [`Optical`] does not have the `node_type` property "group".
-    fn as_group(&self) -> OpmResult<&NodeGroup> {
+    fn as_group(&mut self) -> OpmResult<&mut NodeGroup> {
         Err(OpossumError::Other("cannot cast to group".into()))
     }
     /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
@@ -177,10 +185,10 @@ pub trait Optical: Dottable {
                             if self.node_type() == "group" {
                                 // apertures cannot be set here for groups since no port mapping is defined yet.
                                 // this will be done later dynamically in group:ports() function.
-                                self.set_property("apertures", ports_to_be_set.into())?;
+                                self.node_attr_mut().set_apertures(ports_to_be_set);
                             } else {
                                 ports.set_apertures(ports_to_be_set)?;
-                                self.set_property("apertures", ports.into())?;
+                                self.node_attr_mut().set_apertures(ports);
                             }
                         }
                     }
@@ -189,6 +197,24 @@ pub trait Optical: Dottable {
             }
         }
         Ok(())
+    }
+    /// Set this [`Optical`] as inverted.
+    ///
+    /// This flag signifies that the [`Optical`] should be propagated in reverse order. This function normally simply sets the
+    /// `inverted` property. For [`NodeGroup`] it also sets the `inverted` flag of the underlying `OpticGraph`.
+    ///
+    /// ## Errors
+    ///
+    /// This function returns an error, if the node cannot be inverted. This is the case, if
+    ///   - it is a source node
+    ///   - it is a group node containing a non-invertable node (e.g. a source)
+    fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
+        self.node_attr_mut().set_inverted(inverted);
+        Ok(())
+    }
+    /// Returns `true` if the node should be analyzed in reverse direction.
+    fn inverted(&self) -> bool {
+        self.node_attr().inverted()
     }
     /// Return a YAML representation of the current state of this [`Optical`].
     ///
@@ -202,6 +228,20 @@ pub trait Optical: Dottable {
     /// Get the mutable[`NodeAttr`] (common attributes) of an [`Optical`].
     fn node_attr_mut(&mut self) -> &mut NodeAttr;
 
+    /// Update node attributes of this [`Optical`] from given [`NodeAttr`].
+    ///
+    fn set_node_attr(&mut self, node_attributes: NodeAttr) {
+        let node_attr_mut = self.node_attr_mut();
+        if let Some(iso) = node_attributes.isometry() {
+            node_attr_mut.set_isometry(iso);
+        }
+        if let Some(alignment) = node_attributes.alignment() {
+            node_attr_mut.set_alignment(alignment.clone());
+        }
+        node_attr_mut.set_name(&node_attributes.name());
+        node_attr_mut.set_inverted(node_attributes.inverted());
+        node_attr_mut.update_properties(node_attributes.properties().clone());
+    }
     /// Get the node type of this [`Optical`]
     fn node_type(&self) -> String {
         self.node_attr().node_type()
@@ -293,8 +333,8 @@ pub trait Alignable: Optical + Sized {
             .isometry()
             .as_ref()
             .map_or_else(Point3::origin, Isometry::rotation);
-        let translation_iso = Some(Isometry::new(decenter, old_rotation)?);
-        self.set_property("alignment", translation_iso.into())?;
+        let translation_iso = Isometry::new(decenter, old_rotation)?;
+        self.node_attr_mut().set_alignment(translation_iso);
         Ok(self)
     }
     /// Locally tilt an optical element.
@@ -307,13 +347,18 @@ pub trait Alignable: Optical + Sized {
             .isometry()
             .as_ref()
             .map_or_else(Point3::origin, Isometry::translation);
-        let rotation_iso = Some(Isometry::new(old_translation, tilt)?);
-        self.set_property("alignment", rotation_iso.into())?;
+        let rotation_iso = Isometry::new(old_translation, tilt)?;
+        self.node_attr_mut().set_alignment(rotation_iso);
         Ok(self)
     }
 }
 impl Debug for dyn Optical {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.name(), self.node_type())
+        write!(f, "'{}' ({})", self.name(), self.node_type())
+    }
+}
+impl Display for dyn Optical {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}' ({})", self.name(), self.node_type())
     }
 }

@@ -11,14 +11,12 @@ use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::new();
+    let mut scenery = OpticScenery::default();
     scenery.set_description("Raysource demo")?;
     let mut source = round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 3)?;
     let aperture =
         Aperture::BinaryCircle(CircleConfig::new(millimeter!(1.0), millimeter![0.5, 0.5])?);
-    let mut ports = source.ports();
-    ports.set_output_aperture("out1", &aperture)?;
-    source.set_property("apertures", ports.into())?;
+    source.set_output_aperture("out1", &aperture)?;
     let i_s = scenery.add_node(source);
     let dummy = Dummy::default();
     let i_dummy = scenery.add_node(dummy);

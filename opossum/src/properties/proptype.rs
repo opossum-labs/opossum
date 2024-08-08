@@ -4,8 +4,7 @@ use crate::{
     lightdata::LightData,
     nodes::{
         fluence_detector::Fluence, ray_propagation_visualizer::RayPositionHistories, FilterType,
-        FluenceData, Metertype, PortMap, Spectrometer, SpectrometerType, SpotDiagram,
-        WaveFrontData,
+        FluenceData, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
@@ -60,8 +59,8 @@ pub enum Proptype {
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.
     Metertype(Metertype),
-    /// Property for storing the external port mapping ([`PortMap`]) of a [`Group`](crate::nodes::NodeGroup) node.
-    GroupPortMap(PortMap),
+    /// Property for storing the external port mapping (`PortMap`) of a [`Group`](crate::nodes::NodeGroup) node.
+    //GroupPortMap(PortMap),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
     /// A property for storing [`OpticPorts`].

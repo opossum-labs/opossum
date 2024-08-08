@@ -55,7 +55,7 @@ impl Default for BeamSplitter {
         ports.create_input("input2").unwrap();
         ports.create_output("out1_trans1_refl2").unwrap();
         ports.create_output("out2_trans2_refl1").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self { node_attr }
     }
 }
@@ -78,7 +78,7 @@ impl BeamSplitter {
             }
             .into(),
         )?;
-        bs.node_attr.set_property("name", name.into())?;
+        bs.node_attr.set_name(name);
         Ok(bs)
     }
     /// Returns the splitting config of this [`BeamSplitter`].
@@ -283,7 +283,7 @@ impl Optical for BeamSplitter {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (input_port1, input_port2) = if self.properties().inverted()? {
+        let (input_port1, input_port2) = if self.inverted() {
             ("out1_trans1_refl2", "out2_trans2_refl1")
         } else {
             ("input1", "input2")
@@ -295,7 +295,7 @@ impl Optical for BeamSplitter {
             AnalyzerType::RayTrace(_) => self.analyze_raytrace(in1, in2, analyzer_type)?,
         };
         if out1_data.is_some() && out2_data.is_some() {
-            let (target1, target2) = if self.properties().inverted()? {
+            let (target1, target2) = if self.inverted() {
                 ("input1", "input2")
             } else {
                 ("out1_trans1_refl2", "out2_trans2_refl1")
@@ -307,6 +307,51 @@ impl Optical for BeamSplitter {
         } else {
             Ok(LightResult::default())
         }
+    }
+    fn calc_node_position(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let (input_port1, _input_port2) = if self.inverted() {
+            ("out1_trans1_refl2", "out2_trans2_refl1")
+        } else {
+            ("input1", "input2")
+        };
+        let in1 = incoming_data.get(input_port1);
+        // todo: do this also for in2 and check for position inconsistencies....
+        let out_rays = if let Some(input1) = in1 {
+            match input1 {
+                LightData::Geometric(r) => {
+                    let mut rays = r.clone();
+                    if let Some(iso) = self.effective_iso() {
+                        let plane = Plane::new(&iso);
+                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    } else {
+                        return Err(OpossumError::Analysis(
+                            "no location for surface defined. Aborting".into(),
+                        ));
+                    }
+                    rays
+                }
+                _ => {
+                    return Err(OpossumError::Analysis(
+                        "expected Rays value at `input1` port".into(),
+                    ))
+                }
+            }
+        } else {
+            return Err(OpossumError::Analysis(
+                "could not calc optical axis for beam splitter".into(),
+            ));
+        };
+        let (target1, target2) = if self.inverted() {
+            ("input1", "input2")
+        } else {
+            ("out1_trans1_refl2", "out2_trans2_refl1")
+        };
+        let light_result = LightResult::from([
+            (target1.into(), LightData::Geometric(out_rays.clone())),
+            (target2.into(), LightData::Geometric(out_rays)),
+        ]);
+        //info!("result from beam splitter {:?}",light_result);
+        Ok(light_result)
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -332,12 +377,12 @@ mod test {
     use uom::si::energy::joule;
     #[test]
     fn default() {
-        let node = BeamSplitter::default();
+        let mut node = BeamSplitter::default();
         assert!(matches!(node.splitting_config(), SplittingConfig::Ratio(_)));
         assert_eq!(node.name(), "beam splitter");
         assert_eq!(node.node_type(), "beam splitter");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightpink");
         assert!(node.as_group().is_err());
     }
@@ -367,7 +412,7 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut node = BeamSplitter::default();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input_ports = node.ports().input_names();
         input_ports.sort();
         assert_eq!(input_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
@@ -521,7 +566,7 @@ mod test {
     #[test]
     fn analyze_inverse() {
         let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         input.insert(
             "out1_trans1_refl2".into(),

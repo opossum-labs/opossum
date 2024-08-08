@@ -9,8 +9,9 @@ use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
 
 use crate::{
-    nodes::create_node_ref, optic_senery_rsc::SceneryResources, optical::Optical,
-    properties::Properties,
+    nodes::{create_node_ref, NodeAttr},
+    optic_senery_rsc::SceneryResources,
+    optical::Optical,
 };
 
 #[derive(Debug, Clone)]
@@ -45,7 +46,7 @@ impl OpticRef {
         self.uuid
     }
     /// Update the reference to the global configuration.
-    /// **Note**: This functions is normally only called from [`OpticGraph`](crate::optic_graph::OpticGraph).
+    /// **Note**: This functions is normally only called from `OpticGraph`.
     pub fn update_global_config(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
         self.optical_ref.borrow_mut().set_global_conf(global_conf);
     }
@@ -58,8 +59,8 @@ impl Serialize for OpticRef {
         let mut node = serializer.serialize_struct("node", 3)?;
         node.serialize_field("type", &self.optical_ref.borrow().node_type())?;
         node.serialize_field("id", &self.uuid)?;
-        node.serialize_field("properties", &self.optical_ref.borrow().properties())?;
-        // node.serialize_field("attributes", &self.optical_ref.borrow().node_attr())?;
+        // node.serialize_field("properties", &self.optical_ref.borrow().properties())?;
+        node.serialize_field("attributes", &self.optical_ref.borrow().node_attr())?;
         node.end()
     }
 }
@@ -72,10 +73,10 @@ impl<'de> Deserialize<'de> for OpticRef {
     {
         enum Field {
             NodeType,
-            Properties,
+            Attributes,
             Id,
         }
-        const FIELDS: &[&str] = &["type", "properties", "id"];
+        const FIELDS: &[&str] = &["type", "attributes", "id"];
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -91,7 +92,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                         &self,
                         formatter: &mut std::fmt::Formatter<'_>,
                     ) -> std::fmt::Result {
-                        formatter.write_str("`type`, `properties`, or `id`")
+                        formatter.write_str("`type`, `attributes`, or `id`")
                     }
                     fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
                     where
@@ -99,7 +100,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                     {
                         match value {
                             "type" => Ok(Field::NodeType),
-                            "properties" => Ok(Field::Properties),
+                            "attributes" => Ok(Field::Attributes),
                             "id" => Ok(Field::Id),
                             _ => Err(de::Error::unknown_field(value, FIELDS)),
                         }
@@ -142,7 +143,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                 A: MapAccess<'de>,
             {
                 let mut node_type = None;
-                let mut properties = None;
+                let mut node_attributes = None;
                 let mut id: Option<Uuid> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -152,11 +153,11 @@ impl<'de> Deserialize<'de> for OpticRef {
                             }
                             node_type = Some(map.next_value()?);
                         }
-                        Field::Properties => {
-                            if properties.is_some() {
-                                return Err(de::Error::duplicate_field("properties"));
+                        Field::Attributes => {
+                            if node_attributes.is_some() {
+                                return Err(de::Error::duplicate_field("attributes"));
                             }
-                            properties = Some(map.next_value::<Properties>()?);
+                            node_attributes = Some(map.next_value::<NodeAttr>()?);
                         }
                         Field::Id => {
                             if id.is_some() {
@@ -167,15 +168,12 @@ impl<'de> Deserialize<'de> for OpticRef {
                     }
                 }
                 let node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
-                let properties =
-                    properties.ok_or_else(|| de::Error::missing_field("properties"))?;
+                let node_attributes =
+                    node_attributes.ok_or_else(|| de::Error::missing_field("attributes"))?;
                 let id = id.ok_or_else(|| de::Error::missing_field("id"))?;
                 let node = create_node_ref(node_type, Some(id))
                     .map_err(|e| de::Error::custom(e.to_string()))?;
-                node.optical_ref
-                    .borrow_mut()
-                    .set_properties(properties)
-                    .map_err(|e| de::Error::custom(e.to_string()))?;
+                node.optical_ref.borrow_mut().set_node_attr(node_attributes);
                 // group node: assign props to graph
                 node.optical_ref
                     .borrow_mut()
@@ -243,7 +241,7 @@ mod test {
                     Some(uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb")), None
                 )
             ),
-            "OpticRef { optical_ref: RefCell { value: dummy (dummy) }, uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb }"
+            "OpticRef { optical_ref: RefCell { value: 'dummy' (dummy) }, uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb }"
         );
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "opossum"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 authors = [
   "Udo Eisenbarth <u.eisenbarth@gsi.de>",
@@ -84,11 +84,7 @@ assert_matches = "1"
 testing_logger= "0"
 
 [build-dependencies]
-# All features enabled
-vergen = { version = "8", features = [
-  "git",
-  "gitcl",
-] } # get git version infos compiled in binary
+vergen-git2 = { version = "1" } # get git version infos compiled in binary
 
 [[example]]
 name = "hhts"

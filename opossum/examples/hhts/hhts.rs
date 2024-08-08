@@ -69,8 +69,8 @@ fn main() -> OpmResult<()> {
     )?;
 
     // apertures
-    let circle_config = CircleConfig::new(millimeter!(25.4), millimeter!(0., 0.))?;
-    let a_2inch = Aperture::BinaryCircle(circle_config);
+    // let circle_config = CircleConfig::new(millimeter!(25.4), millimeter!(0., 0.))?;
+    // let a_2inch = Aperture::BinaryCircle(circle_config);
     let circle_config = CircleConfig::new(millimeter!(12.7), millimeter!(0., 0.))?;
     let a_1inch = Aperture::BinaryCircle(circle_config);
 
@@ -130,15 +130,15 @@ fn main() -> OpmResult<()> {
         millimeter!(21.66602),
         &refr_index_hzf52,
     )?)?;
-    let mut node = Lens::new(
+    let node = Lens::new(
         "T1 L2a",
         millimeter!(-88.51496),
         millimeter!(f64::INFINITY),
         millimeter!(5.77736),
         &refr_index_hzf52,
     )?;
-    node.set_input_aperture("front", &a_2inch)?;
-    node.set_output_aperture("rear", &a_2inch)?;
+    // node.set_input_aperture("front", &a_2inch)?;
+    // node.set_output_aperture("rear", &a_2inch)?;
     let t1_l2a = group_t1.add_node(node)?;
     let t1_l2b = group_t1.add_node(Lens::new(
         "T1 L2b",
@@ -163,7 +163,7 @@ fn main() -> OpmResult<()> {
     group_t1.map_input_port(t1_l1a, "front", "input")?;
     group_t1.map_output_port(t1_l2c, "rear", "output")?;
 
-    group_t1.expand_view(false)?;
+    group_t1.set_expand_view(false)?;
     let t1 = scenery.add_node(group_t1);
 
     scenery.connect_nodes(input_group, "output", t1, "input", millimeter!(100.0))?;

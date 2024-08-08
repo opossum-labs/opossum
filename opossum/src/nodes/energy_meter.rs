@@ -78,7 +78,7 @@ impl Default for EnergyMeter {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self {
             light_data: None,
             node_attr,
@@ -97,10 +97,7 @@ impl EnergyMeter {
     #[must_use]
     pub fn new(name: &str, meter_type: Metertype) -> Self {
         let mut energy_meter = Self::default();
-        energy_meter
-            .node_attr
-            .set_property("name", name.into())
-            .unwrap();
+        energy_meter.node_attr.set_name(name);
         energy_meter
             .node_attr
             .set_property("meter type", meter_type.into())
@@ -135,7 +132,7 @@ impl Optical for EnergyMeter {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.properties().inverted()? {
+        let (inport, outport) = if self.inverted() {
             ("out1", "in1")
         } else {
             ("in1", "out1")
@@ -157,7 +154,7 @@ impl Optical for EnergyMeter {
             if let Some(aperture) = self.ports().input_aperture("in1") {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
-                    warn!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", self.node_attr.name(), self.node_attr.node_type());
+                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn Optical);
                     self.apodization_warning = true;
                 }
                 if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -261,13 +258,13 @@ mod test {
     };
     #[test]
     fn default() {
-        let node = EnergyMeter::default();
+        let mut node = EnergyMeter::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.meter_type(), Metertype::IdealEnergyMeter);
         assert_eq!(node.name(), "energy meter");
         assert_eq!(node.node_type(), "energy meter");
         assert_eq!(node.is_detector(), true);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "whitesmoke");
         assert!(node.as_group().is_err());
     }
@@ -297,7 +294,7 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut meter = EnergyMeter::default();
-        meter.set_property("inverted", true.into()).unwrap();
+        meter.set_inverted(true).unwrap();
         assert_eq!(meter.ports().input_names(), vec!["out1"]);
         assert_eq!(meter.ports().output_names(), vec!["in1"]);
     }
@@ -342,7 +339,7 @@ mod test {
     fn analyze_inverted() {
         let mut meter = EnergyMeter::default();
         let mut input = LightResult::default();
-        meter.set_property("inverted", true.into()).unwrap();
+        meter.set_inverted(true).unwrap();
         let input_data = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });

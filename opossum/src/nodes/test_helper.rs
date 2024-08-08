@@ -10,12 +10,12 @@ pub mod test_helper {
         position_distributions::Hexapolar,
         rays::Rays,
         spectrum_helper::create_he_ne_spec,
-        utils::geom_transformation::Isometry,
+        utils::{geom_transformation::Isometry, test_helper::test_helper::check_warnings},
     };
     pub fn test_inverted<T: Default + Optical>() {
         let mut node = T::default();
-        node.set_property("inverted", true.into()).unwrap();
-        assert_eq!(node.properties().inverted().unwrap(), true)
+        node.set_inverted(true).unwrap();
+        assert_eq!(node.inverted(), true)
     }
     pub fn test_set_aperture<T: Default + Optical>(input_port_name: &str, output_port_name: &str) {
         let mut node = T::default();
@@ -74,13 +74,10 @@ pub mod test_helper {
         let input_light = LightData::Geometric(rays);
         input.insert("in1".into(), input_light.clone());
         node.analyze(input, &AnalyzerType::Energy).unwrap();
-        testing_logger::validate(|captured_logs| {
-            assert_eq!(captured_logs.len(), 1);
-            let msg=format!("Rays have been apodized at input aperture of {} <{}>. Results might not be accurate.", 
+        let msg=format!("Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.", 
             node.node_attr().name(),
             node.node_attr().node_type());
-            assert_eq!(captured_logs[0].body, msg);
-        });
+        check_warnings(vec![&msg]);
     }
     pub fn test_analyze_geometric_no_isometry<T: Default + Optical>(input_port_name: &str) {
         let mut node = T::default();

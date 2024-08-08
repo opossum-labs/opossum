@@ -36,7 +36,7 @@ impl Default for Dummy {
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        node_attr.set_property("apertures", ports.into()).unwrap();
+        node_attr.set_apertures(ports);
         Self { node_attr }
     }
 }
@@ -47,11 +47,10 @@ impl Dummy {
     ///
     /// This function panics if
     ///   - the default [`Dummy`] could not be constructed.
-    ///   - the name property cannot be set.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut dummy = Self::default();
-        dummy.node_attr.set_property("name", name.into()).unwrap();
+        dummy.node_attr.set_name(name);
         dummy
     }
 }
@@ -61,7 +60,7 @@ impl Optical for Dummy {
         incoming_data: LightResult,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.properties().inverted()? {
+        let (inport, outport) = if self.inverted() {
             ("rear", "front")
         } else {
             ("front", "rear")
@@ -131,11 +130,11 @@ mod test {
     };
     #[test]
     fn default() {
-        let node = Dummy::default();
+        let mut node = Dummy::default();
         assert_eq!(node.name(), "dummy");
         assert_eq!(node.node_type(), "dummy");
         assert_eq!(node.is_detector(), false);
-        assert_eq!(node.properties().inverted().unwrap(), false);
+        assert_eq!(node.inverted(), false);
         assert!(node.as_group().is_err());
     }
     #[test]
@@ -146,7 +145,7 @@ mod test {
     #[test]
     fn name_property() {
         let mut node = Dummy::default();
-        node.set_property("name", "Test1".into()).unwrap();
+        node.node_attr.set_name("Test1");
         assert_eq!(node.name(), "Test1")
     }
     #[test]
@@ -181,7 +180,7 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut node = Dummy::default();
-        node.set_property("inverted", true.into()).unwrap();
+        node.set_inverted(true).unwrap();
         assert_eq!(node.ports().input_names(), vec!["rear"]);
         assert_eq!(node.ports().output_names(), vec!["front"]);
     }
@@ -227,7 +226,7 @@ mod test {
     #[test]
     fn analyze_inverse() {
         let mut dummy = Dummy::default();
-        dummy.set_property("inverted", true.into()).unwrap();
+        dummy.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
