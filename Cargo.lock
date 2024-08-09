@@ -56,7 +56,7 @@ checksum = "5d7f43d24b16b3e76bef248124fbfd2493c3a9860edb5aae1010c890e826de5e"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
- "paste",
+ "paste 1.0.15",
  "static_assertions",
  "windows 0.54.0",
 ]
@@ -473,6 +473,18 @@ name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
+name = "bbox"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9712ee319cd1ea1ec89883e9e6bf9439ccf89ab761ea1aacc6aad59724c5216c"
+dependencies = [
+ "alga",
+ "approx 0.3.2",
+ "nalgebra 0.22.1",
+ "num-traits",
+]
 
 [[package]]
 name = "bevy"
@@ -925,7 +937,7 @@ checksum = "51bd6ce2174d3237d30e0ab5b2508480cc7593ca4d96ffb3a3095f9fc6bbc34c"
 dependencies = [
  "bevy_reflect",
  "glam 0.27.0",
- "rand",
+ "rand 0.8.5",
  "smallvec",
  "thiserror",
 ]
@@ -1310,7 +1322,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2672,7 +2684,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e05e7e6723e3455f4818c7b26e855439f7546cf617ef669d1adedb8669e5cb9"
 dependencies = [
  "bytemuck",
- "rand",
+ "rand 0.8.5",
  "serde",
 ]
 
@@ -3082,15 +3094,6 @@ name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
 dependencies = [
  "either",
 ]
@@ -3511,9 +3514,9 @@ dependencies = [
 
 [[package]]
 name = "nalgebra"
-version = "0.33.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c4b5f057b303842cf3262c27e465f4c303572e7f6b0648f60e16248ac3397f4"
+checksum = "500430fe18b836c0099c22e716139eae37210ecf8e1ae3931b73078e9a2de7a9"
 dependencies = [
  "alga",
  "approx 0.3.2",
@@ -4098,10 +4101,10 @@ dependencies = [
  "env_logger",
  "fast-surface-nets",
  "image 0.25.2",
- "itertools 0.13.0",
+ "itertools",
  "kahan",
  "log",
- "nalgebra",
+ "nalgebra 0.33.0",
  "num",
  "petgraph",
  "plotters",
@@ -4202,6 +4205,16 @@ dependencies = [
  "redox_syscall 0.5.3",
  "smallvec",
  "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "paste"
+version = "0.1.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45ca20c77d80be666aef2b45486da86238fabe33e38306bd3118fe4af33fa880"
+dependencies = [
+ "paste-impl",
+ "proc-macro-hack",
 ]
 
 [[package]]
@@ -4434,6 +4447,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "proc-macro-hack"
+version = "0.5.20+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4591,7 +4610,7 @@ dependencies = [
  "built",
  "cfg-if",
  "interpolate_name",
- "itertools 0.12.1",
+ "itertools",
  "libc",
  "libfuzzer-sys",
  "log",
@@ -4991,9 +5010,9 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "simba"
-version = "0.9.0"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3a386a501cd104797982c15ae17aafe8b9261315b5d07e3ec803f2ea26be0fa"
+checksum = "051b345c9ec09734622cbb49e20dfcf72c9b55e473f0ca6a8025409e37c25fb8"
 dependencies = [
  "approx 0.3.2",
  "num-complex 0.2.4",
@@ -5480,7 +5499,7 @@ dependencies = [
  "backtrace",
  "num-traits",
  "ordered-float",
- "rand",
+ "rand 0.8.5",
  "smallvec",
  "zot",
 ]
