@@ -48,6 +48,7 @@ pub mod spectrum;
 pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
+pub mod coatings;
 
 pub use optic_scenery::OpticScenery;
 pub use optic_senery_rsc::SceneryResources;
