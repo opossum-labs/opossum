@@ -22,6 +22,7 @@ impl Coating for ConstantR {
         &self,
         _incoming_ray: crate::ray::Ray,
         _surface_normal: nalgebra::Vector3<f64>,
+        _n2: f64,
     ) -> f64 {
         self.reflectivity
     }

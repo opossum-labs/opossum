@@ -43,12 +43,12 @@ pub mod ray;
 pub mod rays;
 pub mod refractive_index;
 // pub mod render;
+pub mod coatings;
 pub mod reporter;
 pub mod spectrum;
 pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
-pub mod coatings;
 
 pub use optic_scenery::OpticScenery;
 pub use optic_senery_rsc::SceneryResources;
