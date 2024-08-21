@@ -303,11 +303,13 @@ impl Ray {
     }
     /// Refract the [`Ray`] on a given [`Surface`] using Snellius' law.
     ///
-    /// This function refracts an incoming [`Ray`] on a given [`Surface`] thereby changing its position (= intersection point) and
+    /// This function refracts an incoming [`Ray`] on a given [`OpticalSurface`] thereby changing its position (= intersection point) and
     /// its direction. The intial refractive index is (already) stored in the ray itself. The refractive index behind the surface is given
-    /// by the parameter `n2`. In addition, it returns a possible reflected [`Ray`], which is a copy of the refracted ray (same position,
-    /// wavelength, energy (!) etc.) but with the relection directions. If the [`Ray`] does not intersect with
-    /// the surface, the [`Ray`] is unmodified and `None` is returned (since there is no reflection).
+    /// by the parameter `n2`. In addition, it returns a possible reflected [`Ray`], which corresponds to the refracted ray (same position,
+    /// wavelength) but with the reflection direction.
+    /// 
+    /// This function also considers a possible surface coating which modifies the energy of the refracted and the reflected beam. If the 
+    /// [`Ray`] does not intersect with the surface, the [`Ray`] is unmodified and `None` is returned (since there is no reflection).
     ///
     /// This function also considers total reflection: If the n1 > n2 and the incoming angle is larger than Brewster's angle, the beam
     /// is totally reflected. In this case, this function also returns `None` (since there is no additional reflected ray).
