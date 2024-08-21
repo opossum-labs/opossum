@@ -14,6 +14,7 @@ mod node_attr;
 mod paraxial_surface;
 pub mod ray_propagation_visualizer;
 mod reference;
+pub mod reflective_grating;
 mod source;
 mod source_helper;
 mod spectrometer;
@@ -32,6 +33,7 @@ pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::Lens;
 pub use paraxial_surface::ParaxialSurface;
 pub use reference::NodeReference;
+pub use reflective_grating::ReflectiveGrating;
 pub use source::Source;
 pub use source_helper::{
     collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
@@ -90,6 +92,11 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         )),
         "ideal filter" => Ok(OpticRef::new(
             Rc::new(RefCell::new(IdealFilter::default())),
+            uuid,
+            None,
+        )),
+        "reflective grating" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(ReflectiveGrating::default())),
             uuid,
             None,
         )),

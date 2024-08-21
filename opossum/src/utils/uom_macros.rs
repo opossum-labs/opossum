@@ -489,6 +489,39 @@ macro_rules! microJ_per_mm2 {
     };
 }
 
+///macro to create a linear density in 1 per meter
+#[macro_export]
+macro_rules! num_per_m {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::LinearNumberDensity, linear_number_density::per_meter};
+        $crate::uom_unit_creator![per_meter, LinearNumberDensity, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a line density in 1 per centimeter
+#[macro_export]
+macro_rules! num_per_cm {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::LinearNumberDensity, linear_number_density::per_centimeter};
+        $crate::uom_unit_creator![per_centimeter, LinearNumberDensity, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a line density in 1 per millimeter
+#[macro_export]
+macro_rules! num_per_mm {
+    ($( $x:expr ),*) =>{
+        {
+        use uom::si::{f64::LinearNumberDensity, linear_number_density::per_millimeter};
+        $crate::uom_unit_creator![per_millimeter, LinearNumberDensity, $( $x ),*]
+        }
+    };
+}
+
 #[cfg(test)]
 mod test {
     use approx::assert_relative_eq;

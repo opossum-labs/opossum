@@ -1345,11 +1345,16 @@ pub trait Plottable {
     /// As the plot data may differ, the implementation must be done for each kind of plot type [`PlotType`]
     /// # Attributes
     /// - `plt_type`: plot type to be used. See [`PlotType`]
+    /// - `legend`: boolean to decide wether to show a legend or not
     /// # Returns
     /// This method returns an [`OpmResult<Option<PlotSeries>>`]. Whether Some(PlotData) or None is returned depends on the individual implementation
     /// # Errors
     /// Whether an error is thrown depends on the individual implementation of the method
-    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>>;
+    fn get_plot_series(
+        &self,
+        plt_type: &PlotType,
+        legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>>;
 
     /// This method handles the plot creation for a specific data type or node type
     /// # Attributes
@@ -1374,7 +1379,8 @@ pub trait Plottable {
 
         let plt_type = self.get_plot_type(&plt_params);
 
-        let mut plt_series_opt = self.get_plot_series(&plt_type)?;
+        let mut plt_series_opt =
+            self.get_plot_series(&plt_type, plt_params.get_legend_flag().unwrap_or(false))?;
 
         if let Some(plt_series) = &mut plt_series_opt {
             if plt_series.len() == 1 {
@@ -1697,6 +1703,7 @@ impl Default for PlotParameters {
                 PlotArgs::ViewDirection3D(_) => plt_params
                     .set(&PlotArgs::ViewDirection3D(Vector3::new(-1., -1., -1.)))
                     .unwrap(),
+                PlotArgs::Legend(_) => plt_params.set(&PlotArgs::Legend(true)).unwrap(),
             };
         }
 
@@ -2004,6 +2011,19 @@ impl PlotParameters {
         }
     }
 
+    ///This method gets the legend flag which is stored in the [`PlotParameters`]
+    /// # Returns
+    /// This method returns an [`OpmResult<bool>`] with the legend flag that decides if the legend is shown or not
+    /// # Errors
+    /// This method throws an error if the argument is not found
+    pub fn get_legend_flag(&self) -> OpmResult<bool> {
+        if let Some(PlotArgs::Legend(legend)) = self.params.get("legend") {
+            Ok(*legend)
+        } else {
+            Err(OpossumError::Other("legend argument not found!".into()))
+        }
+    }
+
     fn check_if_set(&self, plt_arg: &PlotArgs) -> bool {
         let mut found = false;
         for param_val in self.params.values() {
@@ -2075,6 +2095,7 @@ impl PlotParameters {
             PlotArgs::FName(_) => "fname".to_owned(),
             PlotArgs::Backend(_) => "backend".to_owned(),
             PlotArgs::ViewDirection3D(_) => "view3d".to_owned(),
+            PlotArgs::Legend(_) => "legend".to_owned(),
         }
     }
 
@@ -2170,6 +2191,7 @@ impl PlotParameters {
             PlotArgs::ViewDirection3D(_) => {
                 self.params.insert("view3d".to_owned(), plt_arg.clone())
             }
+            PlotArgs::Legend(_) => self.params.insert("legend".to_owned(), plt_arg.clone()),
         };
     }
 }
@@ -2513,6 +2535,8 @@ pub enum PlotArgs {
     Backend(PltBackEnd),
     ///Vector of the viewpoint for a 3d plot
     ViewDirection3D(Vector3<f64>),
+    ///Define to show the legend or not. default true
+    Legend(bool),
 }
 
 #[cfg(test)]

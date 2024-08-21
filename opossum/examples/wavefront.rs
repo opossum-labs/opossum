@@ -22,7 +22,7 @@ fn main() -> OpmResult<()> {
     let i_sp = scenery.add_node(SpotDiagram::new("spot 3"));
     let i_l2 = scenery.add_node(ParaxialSurface::new("lens", meter!(0.1))?);
     let i_wf3 = scenery.add_node(WaveFront::new("wf_mon3"));
-    let i_r1 = scenery.add_node(RayPropagationVisualizer::new("ray_mon1"));
+    let i_r1 = scenery.add_node(RayPropagationVisualizer::new("ray_mon1", None)?);
     let i_s1 = scenery.add_node(Spectrometer::new("spec_mon", SpectrometerType::Ideal));
     let i_fl1 = scenery.add_node(FluenceDetector::new("fluence monitor"));
 

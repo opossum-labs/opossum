@@ -62,6 +62,30 @@ pub fn general_2d_gaussian(
     gaussian
 }
 
+/// Generate a 1-dimensional Gaussian distribution from a vector of input `points`
+/// Each point will be assigned the respective value of this Gaussian distribution
+/// # Attributes
+/// - `points`: Vector of input-point pairs (x, y)
+/// - `mu`: the mean value -> Shifts the distribution to be centered at `mu`
+/// - `fwhm`: the full-width at half maximum of the distribution
+/// - `power`: the power of the distribution. A standard Gaussian distribution has a power of 1. Larger powers are so called super-Gaussians
+///
+/// # Remarks
+/// This function does not check the usefulness of the input arguments,
+/// meaning that passing values of NaN, Infinity, zero or negative numbers may result in an unexpected outcome of this function.
+#[must_use]
+pub fn gaussian(points: &[f64], mu: f64, fwhm: f64, power: f64) -> Vec<f64> {
+    let mut gaussian = Vec::<f64>::with_capacity(points.len());
+    let sigma = fwhm / (2. * (2. * (f64::ln(2.)).powf(1. / power)).sqrt());
+
+    for p in points {
+        let g = f64::exp(-(0.5 * ((p - mu) / sigma).powi(2)).powf(power));
+        gaussian.push(g);
+    }
+
+    gaussian
+}
+
 /// Creates Points that lie on a circle with given radius and center
 ///
 /// # Errors

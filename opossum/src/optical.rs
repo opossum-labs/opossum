@@ -4,6 +4,7 @@
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
 use nalgebra::Point3;
+use petgraph::stable_graph::NodeIndex;
 use uom::si::f64::{Angle, Length};
 
 use crate::analyzer::{AnalyzerType, RayTraceConfig};
@@ -240,8 +241,12 @@ pub trait Optical: Dottable {
         }
         node_attr_mut.set_name(&node_attributes.name());
         node_attr_mut.set_inverted(node_attributes.inverted());
+        if let Some((node_idx, distance)) = node_attributes.get_align_like_node_at_distance() {
+            node_attr_mut.set_align_like_node_at_distance(*node_idx, *distance);
+        }
         node_attr_mut.update_properties(node_attributes.properties().clone());
     }
+
     /// Get the node type of this [`Optical`]
     fn node_type(&self) -> String {
         self.node_attr().node_type()
@@ -350,6 +355,19 @@ pub trait Alignable: Optical + Sized {
         let rotation_iso = Isometry::new(old_translation, tilt)?;
         self.node_attr_mut().set_alignment(rotation_iso);
         Ok(self)
+    }
+
+    /// Aligns this optical element with respect to another optical element.
+    /// Specifically, the center (optical) axes of these to nodes are set on top of each other and the anchor points are separated by a given distance
+    /// This helper function allows, e.g., to build a folded telescope (lens + 0° mirror) when the alignment beams propagate off-center through the lens.
+    /// Remark: if this function is used, the distance specified at the `connect_nodes` function is ignored
+    /// # Returns
+    /// This function returns the original Node with updated alignment settings.
+    #[must_use]
+    fn align_like_node_at_distance(mut self, node_idx: NodeIndex, distance: Length) -> Self {
+        self.node_attr_mut()
+            .set_align_like_node_at_distance(node_idx, distance);
+        self
     }
 }
 impl Debug for dyn Optical {
