@@ -216,7 +216,7 @@ impl RayPositionHistorySpectrum {
     /// - `history`: position history of the ray bundle
     /// - `center_wavelength`: wavelength of this ray bundle
     /// - `wavelength_bin_size`: wavelength resolution of this ray bundle.
-    /// 
+    ///
     /// All rays positions in this struct correspond to rays with a wavelength in the bin:
     /// [`center_wavelength` - `wavelength_bin_size/2`; `center_wavelength` + `wavelength_bin_size/2`)
     /// # Errors

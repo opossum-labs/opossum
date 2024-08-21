@@ -1,6 +1,6 @@
 //! Module for handling optical surface coatings
 
-use crate::ray::Ray;
+use crate::{error::OpmResult, ray::Ray};
 use nalgebra::Vector3;
 
 mod constant_r;
@@ -20,6 +20,29 @@ pub enum CoatingType {
     ConstantR { reflectivity: f64 },
     /// Fesnel reflection (e.g. uncaoted surface)
     Fresnel,
+}
+impl CoatingType {
+    pub fn calc_reflectivity(
+        &self,
+        incoming_ray: Ray,
+        surface_normal: Vector3<f64>,
+        n2: f64,
+    ) -> OpmResult<f64> {
+        match self {
+            CoatingType::IdealAR => {
+                let c = IdealAR;
+                Ok(c.calc_reflectivity(incoming_ray, surface_normal, n2))
+            }
+            CoatingType::ConstantR { reflectivity } => {
+                let c = ConstantR::new(*reflectivity)?;
+                Ok(c.calc_reflectivity(incoming_ray, surface_normal, n2))
+            }
+            CoatingType::Fresnel => {
+                let c = Fresnel;
+                Ok(c.calc_reflectivity(incoming_ray, surface_normal, n2))
+            }
+        }
+    }
 }
 pub trait Coating {
     fn calc_reflectivity(&self, incoming_ray: Ray, surface_normal: Vector3<f64>, n2: f64) -> f64;

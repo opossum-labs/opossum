@@ -17,7 +17,10 @@
 //! ports.set_input_aperture("my input", &Aperture::BinaryCircle(circle_config)).unwrap();
 //! ```
 use crate::{
-    aperture::Aperture, error::{OpmResult, OpossumError}, optic_port::OpticPort, properties::Proptype
+    aperture::Aperture,
+    error::{OpmResult, OpossumError},
+    optic_port::OpticPort,
+    properties::Proptype,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
@@ -93,7 +96,11 @@ impl OpticPorts {
     ///
     /// This function will return an error if the input port name already exists.
     pub fn create_input(&mut self, name: &str) -> OpmResult<()> {
-        if self.inputs.insert(name.into(), OpticPort::default()).is_none() {
+        if self
+            .inputs
+            .insert(name.into(), OpticPort::default())
+            .is_none()
+        {
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -109,7 +116,11 @@ impl OpticPorts {
     ///
     /// This function will return an error if the output port name already exists.
     pub fn create_output(&mut self, name: &str) -> OpmResult<()> {
-        if self.outputs.insert(name.into(), OpticPort::default()).is_none() {
+        if self
+            .outputs
+            .insert(name.into(), OpticPort::default())
+            .is_none()
+        {
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -125,7 +136,7 @@ impl OpticPorts {
     ///
     /// This function will return an error if the port name does not exist.
     pub fn set_input_aperture(&mut self, port_name: &str, aperture: &Aperture) -> OpmResult<()> {
-        if let Some(optic_port)=self.inputs.get_mut(port_name) {
+        if let Some(optic_port) = self.inputs.get_mut(port_name) {
             optic_port.set_aperture(aperture.clone());
             Ok(())
         } else {
@@ -142,7 +153,7 @@ impl OpticPorts {
     ///
     /// This function will return an error if the port name does not exist.
     pub fn set_output_aperture(&mut self, port_name: &str, aperture: &Aperture) -> OpmResult<()> {
-        if let Some(optic_port)=self.outputs.get_mut(port_name) {
+        if let Some(optic_port) = self.outputs.get_mut(port_name) {
             optic_port.set_aperture(aperture.clone());
             Ok(())
         } else {
@@ -160,10 +171,10 @@ impl OpticPorts {
     /// This function will return an error if the port names in `set_ports` are not found.
     pub fn set_apertures(&mut self, set_ports: Self) -> OpmResult<()> {
         for set_port in set_ports.inputs {
-            self.set_input_aperture(&set_port.0, &set_port.1.aperture())?;
+            self.set_input_aperture(&set_port.0, set_port.1.aperture())?;
         }
         for set_port in set_ports.outputs {
-            self.set_output_aperture(&set_port.0, &set_port.1.aperture())?;
+            self.set_output_aperture(&set_port.0, set_port.1.aperture())?;
         }
         Ok(())
     }

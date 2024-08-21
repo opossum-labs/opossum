@@ -1,4 +1,3 @@
-
 use super::{Coating, CoatingType};
 
 pub struct IdealAR;
@@ -15,5 +14,28 @@ impl Coating for IdealAR {
 
     fn to_enum(&self) -> super::CoatingType {
         CoatingType::IdealAR
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use nalgebra::vector;
+    use crate::{joule, nanometer, ray::Ray};
+    use super::*;
+
+    #[test]
+    fn to_enum() {
+        let coating = IdealAR;
+        assert!(matches!(coating.to_enum(), CoatingType::IdealAR));
+    }
+    #[test]
+    fn calc_refl() {
+        let coating = IdealAR;
+        let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap();
+        let surface_normal = vector![0.0, 0.0, -1.0];
+        assert_eq!(
+            coating.calc_reflectivity(ray.clone(), surface_normal, 1.5),
+            0.0
+        );
     }
 }

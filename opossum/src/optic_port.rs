@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    aperture::Aperture,
-    coatings::CoatingType,
-};
+use crate::{aperture::Aperture, coatings::CoatingType};
 
 use core::fmt::Debug;
 
@@ -17,7 +14,7 @@ impl Default for OpticPort {
     fn default() -> Self {
         Self {
             aperture: Default::default(),
-            coating: CoatingType::Fresnel
+            coating: CoatingType::Fresnel,
         }
     }
 }
@@ -41,6 +38,9 @@ impl OpticPort {
 
 impl Debug for OpticPort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OpticPort").field("aperture", &self.aperture).field("coating", &self.coating).finish()
+        f.debug_struct("OpticPort")
+            .field("aperture", &self.aperture)
+            .field("coating", &self.coating)
+            .finish()
     }
 }
