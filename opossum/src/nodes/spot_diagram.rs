@@ -256,7 +256,11 @@ impl Plottable for SpotDiagram {
         PlotType::Scatter2D(plt_params.clone())
     }
 
-    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        plt_type: &PlotType,
+        legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = &self.light_data;
         match data {
             Some(LightData::Geometric(rays)) => {
@@ -276,7 +280,6 @@ impl Plottable for SpotDiagram {
                 for (ray_bundle, wvl) in izip!(split_rays_bundles.iter(), wavelengths.iter()) {
                     let grad_val = 0.42 + (*wvl - wavelengths[0]).get::<nanometer>() / wvl_range;
                     let rgbcolor = color_grad.eval_continuous(grad_val);
-                    let series_label = format!("{:.1} nm", wvl.get::<nanometer>());
                     let iso = self.effective_iso().unwrap_or_else(Isometry::identity);
                     let xy_pos = ray_bundle.get_xy_rays_pos(true, &iso);
                     let data = PlotData::Dim2 {
@@ -285,10 +288,15 @@ impl Plottable for SpotDiagram {
                             xy_pos.iter().map(uom::si::f64::Length::get::<millimeter>),
                         ),
                     };
+                    let series_label = if legend {
+                        Some(format!("{:.1} nm", wvl.get::<nanometer>()))
+                    } else {
+                        None
+                    };
                     plt_series.push(PlotSeries::new(
                         &data,
                         RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.),
-                        Some(series_label),
+                        series_label,
                     ));
                 }
 
@@ -296,8 +304,10 @@ impl Plottable for SpotDiagram {
                 if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot_aperture") {
                     if *plot_aperture {
                         if let Some(aperture) = self.ports().input_aperture("in1") {
-                            let plt_series_opt = aperture
-                                .get_plot_series(&PlotType::Line2D(PlotParameters::default()))?;
+                            let plt_series_opt = aperture.get_plot_series(
+                                &PlotType::Line2D(PlotParameters::default()),
+                                legend,
+                            )?;
                             if let Some(aperture_plt_series) = plt_series_opt {
                                 plt_series.extend(aperture_plt_series);
                             }

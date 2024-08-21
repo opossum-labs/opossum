@@ -312,7 +312,11 @@ impl Plottable for FluenceData {
         PlotType::ColorMesh(plt_params.clone())
     }
 
-    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        plt_type: &PlotType,
+        _legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let (nrows, ncols) = self.interp_distribution.shape();
 
         match plt_type {

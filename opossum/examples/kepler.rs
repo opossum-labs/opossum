@@ -20,7 +20,7 @@ fn main() -> OpmResult<()> {
     lens1.set_input_aperture("front", &Aperture::BinaryCircle(circle))?;
     let i_pl1 = scenery.add_node(lens1);
     let i_pl2 = scenery.add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0))?);
-    let i_sd3 = scenery.add_node(RayPropagationVisualizer::new("after telecope"));
+    let i_sd3 = scenery.add_node(RayPropagationVisualizer::new("after telecope", None)?);
     scenery.connect_nodes(i_src, "out1", i_pl1, "front", millimeter!(50.0))?;
     scenery.connect_nodes(i_pl1, "rear", i_pl2, "front", millimeter!(150.0))?;
     scenery.connect_nodes(i_pl2, "rear", i_sd3, "in1", millimeter!(50.0))?;

@@ -87,3 +87,7 @@ vergen-git2 = { version = "1" } # get git version infos compiled in binary
 [[example]]
 name = "hhts"
 path = "examples/hhts/hhts.rs"
+
+[[example]]
+name = "grating_examples"
+path = "examples/grating_examples/grating_examples.rs"

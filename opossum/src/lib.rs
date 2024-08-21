@@ -42,6 +42,7 @@ pub mod properties;
 pub mod ray;
 pub mod rays;
 pub mod refractive_index;
+pub mod spectral_distribution;
 // pub mod render;
 pub mod reporter;
 pub mod spectrum;

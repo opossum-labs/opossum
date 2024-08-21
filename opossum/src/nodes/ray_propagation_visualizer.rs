@@ -52,6 +52,11 @@ impl Default for RayPropagationVisualizer {
     /// create a spot-diagram monitor.
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("ray propagation");
+        node_attr.create_property("view_direction", 
+        "plane to project the ray positions onto, defined by the normal vector. default: y-z plane", 
+        None,
+        Proptype::Vec3(Vector3::x())).unwrap();
+
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
@@ -67,11 +72,19 @@ impl RayPropagationVisualizer {
     /// Creates a new [`RayPropagationVisualizer`].
     /// # Attributes
     /// * `name`: name of the `RayPropagationVisualizer`
-    #[must_use]
-    pub fn new(name: &str) -> Self {
+    /// # Errors
+    /// This function errors if the properties `view_direction` can not be set
+    pub fn new(name: &str, view_normal_vector: Option<Vector3<f64>>) -> OpmResult<Self> {
         let mut rpv = Self::default();
         rpv.node_attr.set_name(name);
-        rpv
+        if let Some(view_vec) = view_normal_vector {
+            rpv.node_attr
+                .set_property("view_direction", Proptype::Vec3(view_vec))?;
+        } else {
+            rpv.node_attr
+                .set_property("view_direction", Proptype::Vec3(Vector3::x()))?;
+        }
+        Ok(rpv)
     }
 }
 impl Optical for RayPropagationVisualizer {
@@ -133,7 +146,15 @@ impl Optical for RayPropagationVisualizer {
     fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
         if self.light_data.is_some() {
             if let Some(LightData::Geometric(rays)) = &self.light_data {
-                let ray_prop_data = rays.get_rays_position_history()?;
+                let mut ray_prop_data = rays.get_rays_position_history()?;
+                if let Ok(Proptype::Vec3(plot_view_direction)) =
+                    self.node_attr.get_property("view_direction")
+                {
+                    ray_prop_data.plot_view_direction = Some(*plot_view_direction);
+                } else {
+                    warn!("could not read 'view_direction' property. defaulted to yz-plane");
+                    ray_prop_data.plot_view_direction = Some(Vector3::x());
+                };
 
                 let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
                     "ray_propagation_{}_{}.svg",
@@ -324,8 +345,10 @@ impl RayPositionHistorySpectrum {
 /// struct that holds the history of the ray positions that is needed for report generation
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPositionHistories {
-    /// vector of ray positions for each raybundle at a specifc sptracl position
+    /// vector of ray positions for each raybundle at a specifc spectral position
     pub rays_pos_history: Vec<RayPositionHistorySpectrum>,
+    /// view direction if the rayposition thistory is plotted
+    pub plot_view_direction: Option<Vector3<f64>>,
 }
 
 impl RayPositionHistories {
@@ -345,7 +368,8 @@ impl Plottable for RayPositionHistories {
             .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?
             .set(&PlotArgs::PlotSize((1200, 1200)))?
             .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotAutoSize(true))?;
+            .set(&PlotArgs::PlotAutoSize(true))?
+            .set(&PlotArgs::Legend(false))?;
         Ok(())
     }
 
@@ -353,7 +377,11 @@ impl Plottable for RayPositionHistories {
         PlotType::MultiLine2D(plt_params.clone())
     }
 
-    fn get_plot_series(&self, _plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        _plt_type: &PlotType,
+        legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         if self.rays_pos_history.is_empty() {
             Ok(None)
         } else {
@@ -375,11 +403,15 @@ impl Plottable for RayPositionHistories {
                 (wavelengths[num_series - 1] - wavelengths[0]) * 2.
             };
 
+            let Some(plot_view_direction) = self.plot_view_direction else {
+                return Err(OpossumError::Other("cannot get plot series for raypropagationvisualizer, plot_view_direction not defined".into()));
+            };
+
             for ray_pos_hist in &self.rays_pos_history {
                 let wvl = ray_pos_hist.get_center_wavelength().get::<nanometer>();
                 let grad_val = 0.42 + (wvl - wavelengths[0]) / wvl_range;
                 let rgbcolor = color_grad.eval_continuous(grad_val);
-                let projected_positions = ray_pos_hist.project_to_plane(Vector3::x())?;
+                let projected_positions = ray_pos_hist.project_to_plane(plot_view_direction)?;
                 let mut proj_pos_mm =
                     Vec::<MatrixXx2<f64>>::with_capacity(projected_positions.len());
                 for ray_pos in &projected_positions {
@@ -394,11 +426,16 @@ impl Plottable for RayPositionHistories {
                 let plt_data = PlotData::MultiDim2 {
                     vec_of_xy_data: proj_pos_mm,
                 };
-                let series_label = format!("{wvl:.1} nm");
+
+                let series_label = if legend {
+                    Some(format!("{wvl:.1} nm"))
+                } else {
+                    None
+                };
                 plt_series.push(PlotSeries::new(
                     &plt_data,
                     RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.),
-                    Some(series_label),
+                    series_label,
                 ));
             }
 
@@ -433,7 +470,7 @@ mod test {
     }
     #[test]
     fn new() {
-        let meter = RayPropagationVisualizer::new("test");
+        let meter = RayPropagationVisualizer::new("test", None).unwrap();
         assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
     }

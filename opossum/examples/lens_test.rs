@@ -36,7 +36,7 @@ fn main() -> OpmResult<()> {
     )?
     .with_tilt(degree!(15.0, 0.0, 0.0))?;
     let l2 = scenery.add_node(lens2);
-    let det = scenery.add_node(RayPropagationVisualizer::new("Ray plot"));
+    let det = scenery.add_node(RayPropagationVisualizer::new("Ray plot", None)?);
     //let wf = scenery.add_node(WaveFront::new("Wavefront"));
     scenery.connect_nodes(src, "out1", l1, "front", millimeter!(50.0))?;
     // scenery.connect_nodes(l1, "rear", l2, "front", millimeter!(404.44560))?;
