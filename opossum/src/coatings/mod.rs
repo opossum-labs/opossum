@@ -24,20 +24,20 @@ pub enum CoatingType {
 impl CoatingType {
     pub fn calc_reflectivity(
         &self,
-        incoming_ray: Ray,
+        incoming_ray: &Ray,
         surface_normal: Vector3<f64>,
         n2: f64,
     ) -> OpmResult<f64> {
         match self {
-            CoatingType::IdealAR => {
+            Self::IdealAR => {
                 let c = IdealAR;
                 Ok(c.calc_reflectivity(incoming_ray, surface_normal, n2))
             }
-            CoatingType::ConstantR { reflectivity } => {
+            Self::ConstantR { reflectivity } => {
                 let c = ConstantR::new(*reflectivity)?;
                 Ok(c.calc_reflectivity(incoming_ray, surface_normal, n2))
             }
-            CoatingType::Fresnel => {
+            Self::Fresnel => {
                 let c = Fresnel;
                 Ok(c.calc_reflectivity(incoming_ray, surface_normal, n2))
             }
@@ -45,6 +45,6 @@ impl CoatingType {
     }
 }
 pub trait Coating {
-    fn calc_reflectivity(&self, incoming_ray: Ray, surface_normal: Vector3<f64>, n2: f64) -> f64;
+    fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: Vector3<f64>, n2: f64) -> f64;
     fn to_enum(&self) -> CoatingType;
 }

@@ -10,7 +10,7 @@ use crate::{
     optical::{LightResult, Optical},
     properties::Proptype,
     refractive_index::refr_index_vaccuum,
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
 };
 use uom::{num_traits::Zero, si::f64::Length};
 
@@ -108,7 +108,10 @@ impl Optical for ParaxialSurface {
                         return Err(OpossumError::Analysis("cannot read focal length".into()));
                     };
                     if let Some(iso) = self.effective_iso() {
-                        rays.refract_on_surface(&Plane::new(&iso), &refr_index_vaccuum())?;
+                        rays.refract_on_surface(
+                            &OpticalSurface::new(Box::new(Plane::new(&iso))),
+                            &refr_index_vaccuum(),
+                        )?;
                         rays.refract_paraxial(*focal_length)?;
                     } else {
                         return Err(OpossumError::Analysis(

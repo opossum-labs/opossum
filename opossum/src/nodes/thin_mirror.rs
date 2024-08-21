@@ -11,7 +11,7 @@ use crate::{
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
     refractive_index::refr_index_vaccuum,
-    surface::{Plane, Sphere},
+    surface::{OpticalSurface, Plane, Sphere},
 };
 use num::Zero;
 use uom::si::f64::Length;
@@ -103,14 +103,16 @@ impl Optical for ThinMirror {
                         return Err(OpossumError::Analysis("curvature".into()));
                     };
                     let reflected = if let Some(iso) = self.effective_iso() {
-                        let mut reflected_rays = if roc.is_infinite() {
-                            rays.refract_on_surface(&Plane::new(&iso), &refr_index_vaccuum())?
+                        let mut surface = if roc.is_infinite() {
+                            OpticalSurface::new(Box::new(Plane::new(&iso)))
                         } else {
-                            rays.refract_on_surface(
-                                &Sphere::new(*roc, &iso)?,
-                                &refr_index_vaccuum(),
-                            )?
+                            OpticalSurface::new(Box::new(Sphere::new(*roc, &iso)?))
                         };
+                        surface.set_coating(crate::coatings::CoatingType::ConstantR {
+                            reflectivity: 1.0,
+                        });
+                        let mut reflected_rays =
+                            rays.refract_on_surface(&surface, &refr_index_vaccuum())?;
                         if let Some(aperture) = self.ports().input_aperture("input") {
                             reflected_rays.apodize(aperture)?;
                             if let AnalyzerType::RayTrace(config) = analyzer_type {

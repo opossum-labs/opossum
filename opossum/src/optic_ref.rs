@@ -47,7 +47,7 @@ impl OpticRef {
     }
     /// Update the reference to the global configuration.
     /// **Note**: This functions is normally only called from `OpticGraph`.
-    pub fn update_global_config(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
+    pub fn update_global_config(&self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
         self.optical_ref.borrow_mut().set_global_conf(global_conf);
     }
 }

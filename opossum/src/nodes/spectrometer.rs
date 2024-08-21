@@ -16,7 +16,7 @@ use crate::{
     properties::{Properties, Proptype},
     refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
 };
 use std::{
     fmt::{Debug, Display},
@@ -64,7 +64,7 @@ impl From<Spectrometer> for Proptype {
 ///
 /// ## Properties
 ///   - `name`
-///   - `spectrometer type
+///   - `spectrometer type`
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -166,7 +166,7 @@ impl Optical for Spectrometer {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = Plane::new(&iso);
+                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
                 rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             } else {
                 return Err(OpossumError::Analysis(

@@ -136,14 +136,17 @@ impl OpticPorts {
     ///
     /// This function will return an error if the port name does not exist.
     pub fn set_input_aperture(&mut self, port_name: &str, aperture: &Aperture) -> OpmResult<()> {
-        if let Some(optic_port) = self.inputs.get_mut(port_name) {
-            optic_port.set_aperture(aperture.clone());
-            Ok(())
-        } else {
-            Err(OpossumError::OpticPort(format!(
-                "input port <{port_name}> does not exist",
-            )))
-        }
+        self.inputs.get_mut(port_name).map_or_else(
+            || {
+                Err(OpossumError::OpticPort(format!(
+                    "input port <{port_name}> does not exist",
+                )))
+            },
+            |optic_port| {
+                optic_port.set_aperture(aperture.clone());
+                Ok(())
+            },
+        )
     }
     /// Sets the aperture of an output port with the given name.
     ///
@@ -153,14 +156,17 @@ impl OpticPorts {
     ///
     /// This function will return an error if the port name does not exist.
     pub fn set_output_aperture(&mut self, port_name: &str, aperture: &Aperture) -> OpmResult<()> {
-        if let Some(optic_port) = self.outputs.get_mut(port_name) {
-            optic_port.set_aperture(aperture.clone());
-            Ok(())
-        } else {
-            Err(OpossumError::OpticPort(format!(
-                "input port <{port_name}> does not exist",
-            )))
-        }
+        self.inputs.get_mut(port_name).map_or_else(
+            || {
+                Err(OpossumError::OpticPort(format!(
+                    "output port <{port_name}> does not exist",
+                )))
+            },
+            |optic_port| {
+                optic_port.set_aperture(aperture.clone());
+                Ok(())
+            },
+        )
     }
     /// Sets the (input & ouput port) apertures of this [`OpticPorts`] from another [`OpticPorts`].
     ///
@@ -183,22 +189,18 @@ impl OpticPorts {
     /// This function returns `None` if the given port name was not found.
     #[must_use]
     pub fn input_aperture(&self, port_name: &str) -> Option<&Aperture> {
-        if let Some(p) = self.inputs.get(port_name) {
-            Some(p.aperture())
-        } else {
-            None
-        }
+        self.inputs
+            .get(port_name)
+            .map_or(None, |p| Some(p.aperture()))
     }
     /// Get the [`Aperture`] of the given ouput port.
     ///
     /// This function returns `None` if the given port name was not found.
     #[must_use]
     pub fn output_aperture(&self, port_name: &str) -> Option<&Aperture> {
-        if let Some(p) = self.outputs.get(port_name) {
-            Some(p.aperture())
-        } else {
-            None
-        }
+        self.outputs
+            .get(port_name)
+            .map_or(None, |p| Some(p.aperture()))
     }
     /// Mark the [`OpticPorts`] as `inverted`.
     ///

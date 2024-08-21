@@ -8,7 +8,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     refractive_index::refr_index_vaccuum,
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
 };
 use log::warn;
 use std::fmt::Debug;
@@ -81,7 +81,7 @@ impl Optical for Detector {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = Plane::new(&iso);
+                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
                 rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             } else {
                 return Err(OpossumError::Analysis(

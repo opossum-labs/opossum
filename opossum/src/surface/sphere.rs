@@ -1,7 +1,7 @@
 //! Spherical surface
 //!
 //! This module implements a spherical surface with a given radius of curvature and a given z position on the optical axis.
-use super::Surface;
+use super::GeoSurface;
 use crate::radian;
 use crate::ray::Ray;
 use crate::utils::geom_transformation::Isometry;
@@ -68,7 +68,7 @@ impl Sphere {
         self.isometry.transform_point(&Point3::origin())
     }
 }
-impl Surface for Sphere {
+impl GeoSurface for Sphere {
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let dir = ray.direction();
         let pos = vector![

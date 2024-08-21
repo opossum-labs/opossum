@@ -11,7 +11,7 @@ use crate::{
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{Plane, Sphere, Surface},
+    surface::{OpticalSurface, Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -152,17 +152,17 @@ impl Lens {
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
-        let front_surf: Box<dyn Surface> = if front_roc.is_infinite() {
-            Box::new(Plane::new(iso))
+        let front_surf = if front_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(iso)))
         } else {
-            Box::new(Sphere::new(front_roc, iso)?)
+            OpticalSurface::new(Box::new(Sphere::new(front_roc, iso)?))
         };
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
-        let rear_surf: Box<dyn Surface> = if rear_roc.is_infinite() {
-            Box::new(Plane::new(&isometry))
+        let rear_surf = if rear_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(&isometry)))
         } else {
-            Box::new(Sphere::new(rear_roc, &isometry)?)
+            OpticalSurface::new(Box::new(Sphere::new(rear_roc, &isometry)?))
         };
         if let Some(aperture) = self.ports().input_aperture("front") {
             rays.apodize(aperture)?;
@@ -172,9 +172,9 @@ impl Lens {
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
         };
-        rays.refract_on_surface(&(*front_surf), refri)?;
+        rays.refract_on_surface(&front_surf, refri)?;
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&(*rear_surf), &self.ambient_idx())?;
+        rays.refract_on_surface(&rear_surf, &self.ambient_idx())?;
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -198,17 +198,17 @@ impl Lens {
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
 
-        let front_surf: Box<dyn Surface> = if front_roc.is_infinite() {
-            Box::new(Plane::new(iso))
+        let front_surf = if front_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(iso)))
         } else {
-            Box::new(Sphere::new(front_roc, iso)?)
+            OpticalSurface::new(Box::new(Sphere::new(front_roc, iso)?))
         };
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
-        let rear_surf: Box<dyn Surface> = if rear_roc.is_infinite() {
-            Box::new(Plane::new(&isometry))
+        let rear_surf = if rear_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(&isometry)))
         } else {
-            Box::new(Sphere::new(rear_roc, &isometry)?)
+            OpticalSurface::new(Box::new(Sphere::new(rear_roc, &isometry)?))
         };
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
@@ -218,9 +218,9 @@ impl Lens {
         } else {
             return Err(OpossumError::OpticPort("output aperture not found".into()));
         };
-        rays.refract_on_surface(&(*rear_surf), refri)?;
+        rays.refract_on_surface(&rear_surf, refri)?;
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&(*front_surf), &self.ambient_idx())?;
+        rays.refract_on_surface(&front_surf, &self.ambient_idx())?;
         if let Some(aperture) = self.ports().input_aperture("front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {

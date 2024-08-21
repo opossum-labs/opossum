@@ -20,7 +20,7 @@ use crate::{
     properties::{Properties, Proptype},
     refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
     utils::griddata::{create_linspace_axes, interpolate_3d_scatter_data},
 };
 
@@ -176,7 +176,7 @@ impl Optical for WaveFront {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = Plane::new(&iso);
+                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
                 rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
             } else {
                 return Err(OpossumError::Analysis(

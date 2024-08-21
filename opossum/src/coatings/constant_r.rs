@@ -1,26 +1,30 @@
 use super::{Coating, CoatingType};
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    ray::Ray,
+};
+use nalgebra::Vector3;
 
 pub struct ConstantR {
     reflectivity: f64,
 }
 
 impl ConstantR {
-    pub fn new(reflectivity: f64) -> OpmResult<ConstantR> {
+    pub fn new(reflectivity: f64) -> OpmResult<Self> {
         if !(0.0..=1.0).contains(&reflectivity) || !reflectivity.is_normal() {
             return Err(OpossumError::Other(
                 "reflectivity must be within [0.0, 1.0] and finite.".into(),
             ));
         }
-        Ok(ConstantR { reflectivity })
+        Ok(Self { reflectivity })
     }
 }
 
 impl Coating for ConstantR {
     fn calc_reflectivity(
         &self,
-        _incoming_ray: crate::ray::Ray,
-        _surface_normal: nalgebra::Vector3<f64>,
+        _incoming_ray: &Ray,
+        _surface_normal: Vector3<f64>,
         _n2: f64,
     ) -> f64 {
         self.reflectivity
@@ -63,9 +67,6 @@ mod test {
         let coating = ConstantR::new(0.5).unwrap();
         let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap();
         let surface_normal = vector![0.0, 0.0, -1.0];
-        assert_eq!(
-            coating.calc_reflectivity(ray.clone(), surface_normal, 1.5),
-            0.5
-        );
+        assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.5), 0.5);
     }
 }

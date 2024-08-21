@@ -12,7 +12,7 @@ use crate::{
     rays::Rays,
     refractive_index::refr_index_vaccuum,
     spectrum::{merge_spectra, Spectrum},
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
     utils::EnumProxy,
 };
 
@@ -149,7 +149,7 @@ impl BeamSplitter {
         }
     }
     fn analyze_energy(
-        &mut self,
+        &self,
         in1: Option<&LightData>,
         in2: Option<&LightData>,
     ) -> OpmResult<(Option<LightData>, Option<LightData>)> {
@@ -173,7 +173,7 @@ impl BeamSplitter {
         Ok((out1_data, out2_data))
     }
     fn analyze_raytrace(
-        &mut self,
+        &self,
         in1: Option<&LightData>,
         in2: Option<&LightData>,
         analyzer_type: &AnalyzerType,
@@ -193,7 +193,7 @@ impl BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
-                        let plane = Plane::new(&iso);
+                        let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
                         rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     } else {
                         return Err(OpossumError::Analysis(
@@ -225,7 +225,7 @@ impl BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
-                        let plane = Plane::new(&iso);
+                        let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
                         rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     } else {
                         return Err(OpossumError::Analysis(
@@ -321,7 +321,7 @@ impl Optical for BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
-                        let plane = Plane::new(&iso);
+                        let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
                         rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                     } else {
                         return Err(OpossumError::Analysis(

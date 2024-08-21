@@ -16,7 +16,7 @@ use crate::{
     ray::{Ray, SplittingConfig},
     refractive_index::RefractiveIndexType,
     spectrum::Spectrum,
-    surface::Surface,
+    surface::OpticalSurface,
     utils::{
         filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
         geom_transformation::Isometry,
@@ -650,7 +650,7 @@ impl Rays {
     /// This function will return an error if .
     pub fn refract_on_surface(
         &mut self,
-        surface: &dyn Surface,
+        surface: &OpticalSurface,
         refractive_index: &RefractiveIndexType,
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
@@ -1542,7 +1542,10 @@ mod test {
         let mut rays = Rays::default();
         testing_logger::setup();
         let reflected = rays
-            .refract_on_surface(&Plane::new(&Isometry::identity()), &refr_index_vaccuum())
+            .refract_on_surface(
+                &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+                &refr_index_vaccuum(),
+            )
             .unwrap();
         check_warnings(vec!["ray bundle contains no valid rays - not propagating"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
@@ -1556,7 +1559,10 @@ mod test {
         );
         testing_logger::setup();
         let reflected = rays
-            .refract_on_surface(&Plane::new(&Isometry::identity()), &refr_index_vaccuum())
+            .refract_on_surface(
+                &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+                &refr_index_vaccuum(),
+            )
             .unwrap();
         check_warnings(vec!["rays totally reflected or missed a surface"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
@@ -1811,7 +1817,9 @@ mod test {
         )
         .unwrap();
 
-        let plane = Plane::new(&Isometry::new_along_z(millimeter!(10.0)).unwrap());
+        let plane = OpticalSurface::new(Box::new(Plane::new(
+            &Isometry::new_along_z(millimeter!(10.0)).unwrap(),
+        )));
         rays.refract_on_surface(&plane, &refr_index_vaccuum())
             .unwrap();
         let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.));

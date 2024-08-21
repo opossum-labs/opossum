@@ -16,7 +16,7 @@ use crate::{
     meter,
     nodes::FilterType,
     spectrum::Spectrum,
-    surface::Surface,
+    surface::OpticalSurface,
     utils::geom_transformation::Isometry,
 };
 
@@ -315,13 +315,15 @@ impl Ray {
     /// # Errors
     ///
     /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
-    pub fn refract_on_surface(&mut self, s: &dyn Surface, n2: f64) -> OpmResult<Option<Self>> {
+    pub fn refract_on_surface(&mut self, os: &OpticalSurface, n2: f64) -> OpmResult<Option<Self>> {
         if n2 < 1.0 || !n2.is_finite() {
             return Err(OpossumError::Other(
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        if let Some((intersection_point, surface_normal)) = s.calc_intersect_and_normal(self) {
+        if let Some((intersection_point, surface_normal)) =
+            os.geo_surface().calc_intersect_and_normal(self)
+        {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
             // s1: incoming direction (normalized??)
@@ -342,11 +344,15 @@ impl Ray {
             self.pos = intersection_point;
             // check, if total reflection
             if dis.is_sign_positive() {
+                let reflectivity = os.coating().calc_reflectivity(self, surface_normal, n2)?;
+                let input_enery = self.energy();
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
                     - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
                 self.dir = refract_dir;
+                self.e = input_enery * (1. - reflectivity);
                 let mut reflected_ray = self.clone();
                 reflected_ray.dir = reflected_dir;
+                reflected_ray.e = input_enery * reflectivity;
                 reflected_ray.number_of_bounces += 1;
                 self.refractive_index = n2;
                 self.number_of_refractions += 1;
@@ -812,7 +818,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = Plane::new(&isometry);
+        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -857,7 +863,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = Plane::new(&isometry);
+        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
         ray.refract_on_surface(&s, 1.5).unwrap();
         assert_eq!(ray.pos, millimeter!(0., 0., 0.));
         assert_eq!(ray.dir, direction);
@@ -879,7 +885,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = Plane::new(&isometry);
+        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -918,7 +924,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = Plane::new(&isometry);
+        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
         let reflected = ray.refract_on_surface(&s, 1.0).unwrap();
         assert!(reflected.is_none());
         assert_eq!(ray.pos, millimeter!(0., 20., 10.));

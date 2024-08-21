@@ -13,13 +13,13 @@ pub struct OpticPort {
 impl Default for OpticPort {
     fn default() -> Self {
         Self {
-            aperture: Default::default(),
+            aperture: Aperture::default(),
             coating: CoatingType::Fresnel,
         }
     }
 }
 impl OpticPort {
-    pub fn new(aperture: Aperture, coating: CoatingType) -> Self {
+    pub const fn new(aperture: Aperture, coating: CoatingType) -> Self {
         Self { aperture, coating }
     }
     pub fn set_aperture(&mut self, aperture: Aperture) {
@@ -28,10 +28,10 @@ impl OpticPort {
     pub fn set_coating(&mut self, coating: CoatingType) {
         self.coating = coating;
     }
-    pub fn aperture(&self) -> &Aperture {
+    pub const fn aperture(&self) -> &Aperture {
         &self.aperture
     }
-    pub fn coating(&self) -> &CoatingType {
+    pub const fn coating(&self) -> &CoatingType {
         &self.coating
     }
 }
