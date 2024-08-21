@@ -40,7 +40,7 @@ impl Default for Detector {
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
         let mut node_attr = NodeAttr::new("detector");
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self {
             light_data: Option::default(),
             node_attr,

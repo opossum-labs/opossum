@@ -30,6 +30,7 @@ mod light;
 pub mod lightdata;
 pub mod nodes;
 mod optic_graph;
+mod optic_port;
 pub mod optic_ports;
 pub mod optic_ref;
 mod optic_scenery;

@@ -1,5 +1,4 @@
 use crate::error::{OpmResult, OpossumError};
-
 use super::{Coating, CoatingType};
 
 pub struct ConstantR {

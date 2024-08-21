@@ -44,7 +44,7 @@ impl Default for Source {
             .unwrap();
         let mut ports = OpticPorts::new();
         ports.create_output("out1").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self { node_attr }
     }
 }

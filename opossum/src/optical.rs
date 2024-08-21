@@ -39,7 +39,7 @@ pub trait Optical: Dottable {
     // fn node_type(&self) -> &str;
     // /// Return the available (input & output) ports of this [`Optical`].
     fn ports(&self) -> OpticPorts {
-        let mut ports = self.node_attr().apertures().clone();
+        let mut ports = self.node_attr().ports().clone();
         if self.node_attr().inverted() {
             ports.set_inverted(true);
         }
@@ -54,7 +54,7 @@ pub trait Optical: Dottable {
         let mut ports = self.ports();
         if ports.inputs().contains_key(port_name) {
             ports.set_input_aperture(port_name, aperture)?;
-            self.node_attr_mut().set_apertures(ports);
+            self.node_attr_mut().set_ports(ports);
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -71,7 +71,7 @@ pub trait Optical: Dottable {
         let mut ports = self.ports();
         if ports.outputs().contains_key(port_name) {
             ports.set_output_aperture(port_name, aperture)?;
-            self.node_attr_mut().set_apertures(ports);
+            self.node_attr_mut().set_ports(ports);
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -185,10 +185,10 @@ pub trait Optical: Dottable {
                             if self.node_type() == "group" {
                                 // apertures cannot be set here for groups since no port mapping is defined yet.
                                 // this will be done later dynamically in group:ports() function.
-                                self.node_attr_mut().set_apertures(ports_to_be_set);
+                                self.node_attr_mut().set_ports(ports_to_be_set);
                             } else {
                                 ports.set_apertures(ports_to_be_set)?;
-                                self.node_attr_mut().set_apertures(ports);
+                                self.node_attr_mut().set_ports(ports);
                             }
                         }
                     }

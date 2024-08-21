@@ -48,7 +48,7 @@ impl Default for ThinMirror {
         let mut ports = OpticPorts::new();
         ports.create_input("input").unwrap();
         ports.create_output("reflected").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self { node_attr }
     }
 }

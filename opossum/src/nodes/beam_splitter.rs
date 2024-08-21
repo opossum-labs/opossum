@@ -55,7 +55,7 @@ impl Default for BeamSplitter {
         ports.create_input("input2").unwrap();
         ports.create_output("out1_trans1_refl2").unwrap();
         ports.create_output("out2_trans2_refl1").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self { node_attr }
     }
 }

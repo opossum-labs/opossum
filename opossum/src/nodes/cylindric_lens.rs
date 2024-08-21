@@ -86,7 +86,7 @@ impl Default for CylindricLens {
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self { node_attr }
     }
 }

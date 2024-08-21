@@ -265,7 +265,7 @@ impl NodeGroup {
 impl Optical for NodeGroup {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
-        let ports_to_be_set = self.node_attr.apertures();
+        let ports_to_be_set = self.node_attr.ports();
         for p in self.g.input_port_map().port_names() {
             ports.create_input(&p).unwrap();
         }

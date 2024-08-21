@@ -78,7 +78,7 @@ impl Default for EnergyMeter {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self {
             light_data: None,
             node_attr,

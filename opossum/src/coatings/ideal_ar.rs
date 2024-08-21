@@ -1,3 +1,4 @@
+
 use super::{Coating, CoatingType};
 
 pub struct IdealAR;

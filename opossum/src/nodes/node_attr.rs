@@ -19,7 +19,7 @@ pub struct NodeAttr {
     #[serde(skip)]
     node_type: String,
     name: String,
-    apertures: OpticPorts,
+    ports: OpticPorts,
     #[serde(default)]
     props: Properties,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,7 +58,7 @@ impl NodeAttr {
             node_type: node_type.into(),
             name: node_type.into(),
             props: Properties::default(),
-            apertures: OpticPorts::default(),
+            ports: OpticPorts::default(),
             global_conf: None,
             isometry: None,
             inverted: false,
@@ -183,13 +183,13 @@ impl NodeAttr {
     pub fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;
     }
-    /// Returns a reference to the apertures of this [`NodeAttr`].
+    /// Returns a reference to the optic ports of this [`NodeAttr`].
     #[must_use]
-    pub const fn apertures(&self) -> &OpticPorts {
-        &self.apertures
+    pub const fn ports(&self) -> &OpticPorts {
+        &self.ports
     }
     /// Sets the apertures of this [`NodeAttr`].
-    pub fn set_apertures(&mut self, apertures: OpticPorts) {
-        self.apertures = apertures;
+    pub fn set_ports(&mut self, ports: OpticPorts) {
+        self.ports = ports;
     }
 }
