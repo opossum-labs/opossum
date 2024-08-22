@@ -172,9 +172,11 @@ impl Lens {
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
         };
+
         rays.refract_on_surface(&(*front_surf), refri)?;
         rays.set_refractive_index(refri)?;
         rays.refract_on_surface(&(*rear_surf), &self.ambient_idx())?;
+
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {

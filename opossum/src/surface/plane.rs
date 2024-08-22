@@ -40,7 +40,7 @@ impl Surface for Plane {
         }
         Some((
             meter!(trans_pos_in_m.x, trans_pos_in_m.y, trans_pos_in_m.z),
-            Vector3::new(0.0, 0.0, -1.0),
+            Vector3::new(0.0, 0.0, -1.0 * trans_dir.z.signum()),
         ))
     }
     fn set_isometry(&mut self, isometry: &Isometry) {

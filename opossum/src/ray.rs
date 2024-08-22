@@ -326,6 +326,7 @@ impl Ray {
         }
         if let Some((intersection_point, surface_normal)) = s.calc_intersect_and_normal(self) {
             let surface_normal = surface_normal.normalize();
+
             // get correctly normalized k vector of ray
             let ray_dir_norm = self.dir.norm();
             let k0_n = 2. * PI * self.refractive_index / self.wavelength().value;

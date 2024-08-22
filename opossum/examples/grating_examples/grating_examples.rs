@@ -1,8 +1,5 @@
-use nalgebra::{vector, Vector3};
-use opossum::analyzer::{AnalyzerType, RayTraceConfig};
+use nalgebra::Vector3;
 use opossum::degree;
-use opossum::optical::LightResult;
-use opossum::ray::Ray;
 use opossum::{
     centimeter,
     energy_distributions::UniformDist,
@@ -21,7 +18,6 @@ use opossum::{
     OpticScenery,
 };
 use std::path::Path;
-mod stretcher_telescope;
 
 fn main() -> OpmResult<()> {
     ////////////////////////////////////
@@ -29,7 +25,7 @@ fn main() -> OpmResult<()> {
     ////////////////////////////////////
     let alignment_wvl = nanometer!(1054.);
     let mut scenery = OpticScenery::default();
-    let mut rays = Rays::new_collimated_with_spectrum(
+    let rays = Rays::new_collimated_with_spectrum(
         &Gaussian::new(
             (nanometer!(1040.), nanometer!(1068.)),
             50,
@@ -92,16 +88,16 @@ fn main() -> OpmResult<()> {
         nanometer!(300.)..nanometer!(1200.),
     )?;
     let mut scenery = OpticScenery::default();
-    let mut rays = Rays::new_collimated_with_spectrum(
+    let rays = Rays::new_collimated_with_spectrum(
         &Gaussian::new(
-            (nanometer!(1044.), nanometer!(1068.)),
-            50,
+            (nanometer!(1040.), nanometer!(1068.)),
+            20,
             nanometer!(1054.),
             nanometer!(8.),
             1.,
         )?,
         &UniformDist::new(joule!(1.))?,
-        &Hexapolar::new(millimeter!(1.), 3)?,
+        &Hexapolar::new(millimeter!(1.), 0)?,
     )?;
 
     let light = LightData::Geometric(rays);
@@ -120,7 +116,7 @@ fn main() -> OpmResult<()> {
             "Lens 1",
             millimeter!(515.1),
             millimeter!(f64::INFINITY),
-            millimeter!(3.6),
+            millimeter!(2.1),
             &nbk7,
         )?
         .with_decenter(centimeter!(0., 2., 0.))?,
@@ -131,28 +127,19 @@ fn main() -> OpmResult<()> {
     let mut lens_1_ref = NodeReference::from_node(&scenery.node(lens1)?);
     lens_1_ref.set_inverted(true)?;
     let lens_1_ref = scenery.add_node(lens_1_ref);
-    let mut g1ref = NodeReference::from_node(&scenery.node(i_g1)?);
-    g1ref.set_inverted(true)?;
-    let g1ref = scenery.add_node(g1ref);
+    let g1ref = scenery.add_node(NodeReference::from_node(&scenery.node(i_g1)?));
 
     let i_prop_vis = scenery.add_node(RayPropagationVisualizer::new(
         "Ray_positions",
-        Some(Vector3::x()),
+        Some(Vector3::y()),
     )?);
 
     scenery.connect_nodes(i_src, "out1", i_g1, "input", millimeter!(400.0))?;
-    scenery.connect_nodes(i_g1, "diffracted", lens1, "front", millimeter!(400.0))?;
+    scenery.connect_nodes(i_g1, "diffracted", lens1, "front", millimeter!(800.))?;
     scenery.connect_nodes(lens1, "rear", mir_1, "input", millimeter!(100.0))?;
-
     scenery.connect_nodes(mir_1, "reflected", lens_1_ref, "rear", millimeter!(100.0))?;
-    scenery.connect_nodes(lens_1_ref, "front", i_prop_vis, "in1", millimeter!(400.0))?;
-
-    // scenery.connect_nodes(lens_1_ref, "front", g1ref, "diffracted", millimeter!(100.0))?;
-    // scenery.connect_nodes(g1ref, "input", i_prop_vis, "in1", millimeter!(400.0))?;
-    // scenery.connect_nodes(i_g2, "diffracted", i_prop_vis, "in1", millimeter!(100.0))?;
-    // scenery.connect_nodes(i_g2, "diffracted", i_g3, "input", millimeter!(250.0))?;
-    // scenery.connect_nodes(i_g3, "diffracted", i_g4, "input", millimeter!(100.0))?;
-    // scenery.connect_nodes(i_g4, "diffracted", i_prop_vis, "in1", millimeter!(100.0))?;
+    scenery.connect_nodes(lens_1_ref, "front", g1ref, "input", millimeter!(100.0))?;
+    scenery.connect_nodes(g1ref, "diffracted", i_prop_vis, "in1", millimeter!(1500.0))?;
 
     scenery.save_to_file(Path::new("./opossum/playground/martinez.opm"))?;
     Ok(())
