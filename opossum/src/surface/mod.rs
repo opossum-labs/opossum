@@ -45,11 +45,11 @@ pub trait GeoSurface {
     ///
     /// This function returns `None` if the given ray does not intersect with the surface.
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)>;
-    /// Returns the [`Isometry`] of this [`Surface`].
+    /// Returns the [`Isometry`] of this [`GeoSurface`].
     fn isometry(&self) -> &Isometry;
-    /// Set the [`Isometry`] of this [`Surface`].
+    /// Set the [`Isometry`] of this [`GeoSurface`].
     ///
-    /// This function can be used to place and align the [`Surface`] in 3D space.
+    /// This function can be used to place and align the [`GeoSurface`] in 3D space.
     fn set_isometry(&mut self, isometry: &Isometry);
 }
 

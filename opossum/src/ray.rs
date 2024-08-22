@@ -302,7 +302,7 @@ impl Ray {
         Ok(())
     }
 
-    /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating.
+    /// Diffract a bundle of [`Rays`](crate::rays::Rays) on a periodic surface, e.g., a grating.
     /// All valid rays that hit this surface are diffracted according to the peridic structure,
     /// the diffraction order, the wavelength of the rays and there incoming k-vector
     /// The calculation follows the description of:
@@ -369,7 +369,7 @@ impl Ray {
         }
         Ok(None)
     }
-    /// Refract the [`Ray`] on a given [`Surface`] using Snellius' law.
+    /// Refract the [`Ray`] on a given [`GeoSurface`] using Snellius' law.
     ///
     /// This function refracts an incoming [`Ray`] on a given [`OpticalSurface`] thereby changing its position (= intersection point) and
     /// its direction. The intial refractive index is (already) stored in the ray itself. The refractive index behind the surface is given

@@ -674,7 +674,7 @@ impl Rays {
         }
         Ok(())
     }
-    /// Refract a ray bundle on a [`Surface`] and returns a reflected [`Ray`] bundle.
+    /// Refract a ray bundle on a [`GeoSurface`] and returns a reflected [`Ray`] bundle.
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
