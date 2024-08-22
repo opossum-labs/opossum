@@ -470,7 +470,11 @@ impl Spectrum {
 }
 
 impl Plottable for Spectrum {
-    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        plt_type: &PlotType,
+        _legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = self.data.clone();
         let mut spec_mat = MatrixXx2::zeros(data.len());
         for (i, s) in data.iter().enumerate() {

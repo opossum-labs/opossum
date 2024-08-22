@@ -311,13 +311,17 @@ impl Plottable for Spectrometer {
         PlotType::Line2D(plt_params.clone())
     }
 
-    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        plt_type: &PlotType,
+        legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = &self.light_data;
         match data {
             Some(LightData::Geometric(rays)) => rays
                 .to_spectrum(&nanometer!(0.2))?
-                .get_plot_series(plt_type),
-            Some(LightData::Energy(e)) => e.spectrum.get_plot_series(plt_type),
+                .get_plot_series(plt_type, legend),
+            Some(LightData::Energy(e)) => e.spectrum.get_plot_series(plt_type, legend),
             _ => Ok(None),
         }
     }

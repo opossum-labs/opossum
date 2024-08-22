@@ -3,8 +3,9 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
-        fluence_detector::Fluence, ray_propagation_visualizer::RayPositionHistories, FilterType,
-        FluenceData, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
+        fluence_detector::Fluence, ray_propagation_visualizer::RayPositionHistories,
+        reflective_grating::LinearDensity, FilterType, FluenceData, Metertype, Spectrometer,
+        SpectrometerType, SpotDiagram, WaveFrontData,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
@@ -13,6 +14,7 @@ use crate::{
     reporter::{HtmlNodeReport, NodeReport},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
+use nalgebra::Vector3;
 use num::Float;
 use serde::{Deserialize, Serialize};
 use tinytemplate::TinyTemplate;
@@ -79,6 +81,8 @@ pub enum Proptype {
     RayPositionHistory(RayPositionHistories),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
+    /// linear density in `1/length_unit`
+    LinearDensity(LinearDensity),
     /// Fluence in Units of J/cm²
     Fluence(Fluence),
     /// Unit of Wavelength
@@ -92,6 +96,10 @@ pub enum Proptype {
     RefractiveIndex(EnumProxy<RefractiveIndexType>),
     /// a (node) location / orientation
     Isometry(EnumProxy<Option<Isometry>>),
+    /// Three dimensional Vector
+    Vec3(Vector3<f64>),
+    /// an optional length parameter. used, e.g., for the alignment wavelength of the source
+    LengthOption(Option<Length>),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.

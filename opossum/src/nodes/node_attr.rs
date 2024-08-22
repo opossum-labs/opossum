@@ -3,7 +3,9 @@
 //! This module handles common attributes of optical nodes such as [`Properties`] or geometric data (isometries, etc.)
 use std::{cell::RefCell, rc::Rc};
 
+use petgraph::graph::NodeIndex;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::Length;
 
 use crate::{
     error::{OpmResult, OpossumError},
@@ -30,6 +32,8 @@ pub struct NodeAttr {
     alignment: Option<Isometry>,
     #[serde(skip)]
     global_conf: Option<Rc<RefCell<SceneryResources>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    align_like_node_at_distance: Option<(NodeIndex, Length)>,
 }
 impl NodeAttr {
     /// Creates new node attributes ([`NodeAttr`]).
@@ -63,6 +67,7 @@ impl NodeAttr {
             isometry: None,
             inverted: false,
             alignment: None,
+            align_like_node_at_distance: None,
         }
     }
     /// Returns the name property of this node.
@@ -191,5 +196,16 @@ impl NodeAttr {
     /// Sets the apertures of this [`NodeAttr`].
     pub fn set_ports(&mut self, ports: OpticPorts) {
         self.ports = ports;
+    }
+
+    /// set the nodeindex and distance of the node to which this node should be aligned to
+    pub fn set_align_like_node_at_distance(&mut self, node_idx: NodeIndex, distance: Length) {
+        self.align_like_node_at_distance = Some((node_idx, distance));
+    }
+
+    /// get the nodeindex and distance of the node to which this node should be aligned to
+    #[must_use]
+    pub const fn get_align_like_node_at_distance(&self) -> &Option<(NodeIndex, Length)> {
+        &self.align_like_node_at_distance
     }
 }

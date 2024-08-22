@@ -1,9 +1,9 @@
 #![warn(missing_docs)]
 //! Module for handling optical rays
-use std::fmt::Display;
+use std::{f64::consts::PI, fmt::Display};
 
 use nalgebra::{vector, MatrixXx3, Point3, Vector3};
-use num::Zero;
+use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::{
     energy::joule,
@@ -301,6 +301,74 @@ impl Ray {
         self.number_of_refractions += 1;
         Ok(())
     }
+
+    /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating.
+    /// All valid rays that hit this surface are diffracted according to the peridic structure,
+    /// the diffraction order, the wavelength of the rays and there incoming k-vector
+    /// The calculation follows the description of:
+    /// <https://doc.comsol.com/5.5/doc/com.comsol.help.roptics/roptics_ug_optics.6.58.html>
+    /// # Errors
+    ///
+    /// This function returns an error if the refractive index is invalid.
+    /// # Panics
+    /// This function panics if the diffraction order cannot be converted to f64
+    pub fn diffract_on_periodic_surface(
+        &mut self,
+        s: &dyn Surface,
+        n2: f64,
+        grating_vector: Vector3<f64>,
+        diffraction_order: &i32,
+    ) -> OpmResult<Option<Self>> {
+        if n2 < 1.0 || !n2.is_finite() {
+            return Err(OpossumError::Other(
+                "the refractive index must be >=1.0 and finite".into(),
+            ));
+        }
+        if let Some((intersection_point, surface_normal)) = s.calc_intersect_and_normal(self) {
+            let surface_normal = surface_normal.normalize();
+
+            // get correctly normalized k vector of ray
+            let ray_dir_norm = self.dir.norm();
+            let k0_n = 2. * PI * self.refractive_index / self.wavelength().value;
+            let k_vec = self.dir * k0_n / ray_dir_norm;
+
+            //split k vetor into components parallel and perpendicular to the surface
+            let k_para = surface_normal.cross(&(k_vec.cross(&surface_normal)));
+            let k_perp = surface_normal * k_vec.dot(&surface_normal);
+
+            //outgoing vector in-plane
+            let k_para_out = k_para + diffraction_order.to_f64().unwrap() * grating_vector;
+
+            //new ratio of the perpendicular part to the full k vector
+            let k_perp_norm_out = k0_n.mul_add(k0_n, -k_para_out.norm().powi(2)).sqrt();
+
+            let pos_in_m = self.pos.map(|c| c.value);
+            let intersection_in_m = intersection_point.map(|c| c.value);
+            //first add gemometrical path length
+            self.path_length +=
+                self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
+            //then add additional phase shift due to lateral displacement from the grating origin
+            let dist_from_origin = s
+                .isometry()
+                .inverse_transform_point_f64(&intersection_in_m)
+                .x;
+            self.path_length +=
+                diffraction_order.to_f64().unwrap() * grating_vector.norm() / 2. / PI
+                    * dist_from_origin
+                    * self.wavelength();
+
+            self.pos_hist.push(self.pos);
+            self.pos = intersection_point;
+            if k_perp_norm_out.is_finite() {
+                let k_perp_out = -k_perp.normalize() * k_perp_norm_out;
+                self.dir = (k_perp_out + k_para_out).normalize();
+                self.number_of_bounces += 1;
+            } else {
+                self.set_invalid();
+            }
+        }
+        Ok(None)
+    }
     /// Refract the [`Ray`] on a given [`Surface`] using Snellius' law.
     ///
     /// This function refracts an incoming [`Ray`] on a given [`OpticalSurface`] thereby changing its position (= intersection point) and
@@ -369,6 +437,7 @@ impl Ray {
             Ok(None)
         }
     }
+
     /// Attenuate a ray's energy by a given filter.
     ///
     /// This function attenuates the ray's energy by the given [`FilterType`]. For [`FilterType::Constant`] the energy is simply multiplied by the

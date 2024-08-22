@@ -10,9 +10,12 @@ use crate::{
     optical::{LightResult, Optical},
     port_map::PortMap,
     properties::Proptype,
+    radian,
     utils::geom_transformation::Isometry,
 };
 use log::{info, warn};
+use nalgebra::Point3;
+use num::Zero;
 use petgraph::{
     algo::{connected_components, is_cyclic_directed, toposort},
     graph::{EdgeIndex, Edges},
@@ -26,7 +29,11 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::{
+    cell::{RefCell, RefMut},
+    collections::BTreeMap,
+    rc::Rc,
+};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
@@ -507,48 +514,43 @@ impl OpticGraph {
         for idx in sorted {
             let node = self.node_by_idx(idx)?.optical_ref;
             let node_type = node.borrow().node_type();
+            let node_attr = node.borrow().node_attr().clone();
+
             let incoming_edges: LightResult = self.get_incoming(idx, incoming);
             if node.borrow().isometry().is_none() {
                 if incoming_edges.is_empty() {
                     warn!("{} has no incoming edges", node.borrow());
                 }
-                for incoming_edge in &incoming_edges {
-                    let distance_from_predecessor =
-                        self.distance_from_predecessor(idx, incoming_edge.0)?;
-                    if node_type == "group" {
+                if let Some((node_idx, distance)) = node_attr.get_align_like_node_at_distance() {
+                    println!("idx: {}, dist: {}", node_idx.index(), distance.value);
+
+                    if let Some(align_ref_iso) =
+                        self.node_by_idx(*node_idx)?.optical_ref.borrow().isometry()
+                    {
                         let mut node_borrow_mut = node.borrow_mut();
-                        let group = node_borrow_mut.as_group()?;
-                        group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
-                    }
-                    if let LightData::Geometric(rays) = incoming_edge.1 {
-                        let mut ray = rays.into_iter().next().unwrap().to_owned();
-                        ray.propagate(distance_from_predecessor)?;
-                        let node_iso = ray.to_isometry();
-                        // if a node with more than one input was already placed (in an earlier loop cycle),
-                        // check, if the resulting isometry is consistent
-                        {
-                            // borrow guard
-                            let mut node_borrow_mut = node.borrow_mut();
-                            if let Some(iso) = node_borrow_mut.isometry() {
-                                if iso != node_iso {
-                                    warn!(
-                                        "Node {} cannot be consistently positioned.",
-                                        node_borrow_mut
-                                    );
-                                    warn!("Position based on previous input port is: {iso}");
-                                    warn!("Posision based on this port would be:     {node_iso}");
-                                    warn!("Keeping first position");
-                                }
-                            } else {
-                                node_borrow_mut.set_isometry(node_iso);
-                            }
-                        }
+                        let align_iso = Isometry::new(
+                            Point3::new(Length::zero(), Length::zero(), *distance),
+                            radian!(0., 0., 0.),
+                        )?;
+                        let new_iso = align_ref_iso.append(&align_iso);
+                        node_borrow_mut.set_isometry(new_iso);
                     } else {
-                        return Err(OpossumError::Analysis(
-                            "expected LightData::Geometric at input port".into(),
-                        ));
+                        warn!("Cannot align node like NodeIdx:{}. Fall back to standard positioning method", node_idx.index());
+                        self.set_node_isometry(
+                            &incoming_edges,
+                            &mut node.borrow_mut(),
+                            &node_type,
+                            idx,
+                        )?;
                     }
-                }
+                } else {
+                    self.set_node_isometry(
+                        &incoming_edges,
+                        &mut node.borrow_mut(),
+                        &node_type,
+                        idx,
+                    )?;
+                };
             } else {
                 info!(
                     "Node {} has already been placed. Leaving untouched.",
@@ -582,6 +584,52 @@ impl OpticGraph {
             }
         }
         Ok(light_result)
+    }
+
+    fn set_node_isometry(
+        &self,
+        incoming_edges: &LightResult,
+        node_borrow_mut: &mut RefMut<'_, dyn Optical + 'static>,
+        node_type: &str,
+        idx: NodeIndex,
+    ) -> OpmResult<()> {
+        for incoming_edge in incoming_edges {
+            let distance_from_predecessor = self.distance_from_predecessor(idx, incoming_edge.0)?;
+            if node_type == "group" {
+                // let mut node_borrow_mut = node;
+                let group = node_borrow_mut.as_group()?;
+                group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
+            }
+            if let LightData::Geometric(rays) = incoming_edge.1 {
+                let mut ray = rays.into_iter().next().unwrap().to_owned();
+                ray.propagate(distance_from_predecessor)?;
+                let node_iso = ray.to_isometry();
+                // if a node with more than one input was already placed (in an earlier loop cycle),
+                // check, if the resulting isometry is consistent
+                {
+                    // borrow guard
+                    // let mut node_borrow_mut = node.borrow_mut();
+                    if let Some(iso) = node_borrow_mut.isometry() {
+                        if iso != node_iso {
+                            warn!(
+                                "Node {} cannot be consistently positioned.",
+                                node_borrow_mut.name()
+                            );
+                            warn!("Position based on previous input port is: {iso}");
+                            warn!("Position based on this port would be:     {node_iso}");
+                            warn!("Keeping first position");
+                        }
+                    } else {
+                        node_borrow_mut.set_isometry(node_iso);
+                    };
+                }
+            } else {
+                return Err(OpossumError::Analysis(
+                    "expected LightData::Geometric at input port".into(),
+                ));
+            }
+        }
+        Ok(())
     }
     pub fn analyze(
         &mut self,

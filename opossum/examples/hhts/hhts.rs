@@ -293,7 +293,7 @@ fn main() -> OpmResult<()> {
 
     let mut group_det_1w = NodeGroup::new("Detectors 1w");
 
-    let det_prop = group_det_1w.add_node(RayPropagationVisualizer::new("Propagation"))?;
+    let det_prop = group_det_1w.add_node(RayPropagationVisualizer::new("Propagation", None)?)?;
     let det_wavefront_1w = group_det_1w.add_node(WaveFront::new("Wavefront"))?;
     let cambox_1w = group_det_1w.add_node(cambox_1w()?)?;
     let det_energy_1w =
@@ -396,7 +396,7 @@ fn main() -> OpmResult<()> {
     // 2w detectors
     let mut group_det_2w = NodeGroup::new("Detectors 2w");
 
-    let det_prop_2w = group_det_2w.add_node(RayPropagationVisualizer::new("Propagation"))?;
+    let det_prop_2w = group_det_2w.add_node(RayPropagationVisualizer::new("Propagation", None)?)?;
     let det_wavefront_2w = group_det_2w.add_node(WaveFront::new("Wavefront"))?;
     let det_energy_2w =
         group_det_2w.add_node(EnergyMeter::new("Energy", Metertype::IdealEnergyMeter))?;
