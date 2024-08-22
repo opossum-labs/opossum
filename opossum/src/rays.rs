@@ -412,11 +412,13 @@ impl Rays {
         &self,
         center_wavelength_flag: bool,
         spec_res: Length,
+        monitor_isometry: &Isometry,
     ) -> OpmResult<WaveFrontData> {
         let spec = self.to_spectrum(&spec_res)?;
         if center_wavelength_flag {
             let center_wavelength = spec.center_wavelength();
-            let wf_err = self.wavefront_error_at_pos_in_units_of_wvl(center_wavelength);
+            let wf_err =
+                self.wavefront_error_at_pos_in_units_of_wvl(center_wavelength, monitor_isometry);
             Ok(WaveFrontData {
                 wavefront_error_maps: vec![WaveFrontErrorMap::new(&wf_err, center_wavelength)?],
             })
@@ -441,8 +443,10 @@ impl Rays {
                 if !rays.is_empty() {
                     let wvl = idx.to_f64().unwrap().mul_add(spec_res_micro, spec_start);
                     wf_error_maps.push(WaveFrontErrorMap::new(
-                        &Self::from(rays.clone())
-                            .wavefront_error_at_pos_in_units_of_wvl(micrometer!(wvl)),
+                        &Self::from(rays.clone()).wavefront_error_at_pos_in_units_of_wvl(
+                            micrometer!(wvl),
+                            monitor_isometry,
+                        ),
                         micrometer!(wvl),
                     )?);
                 }
@@ -460,15 +464,20 @@ impl Rays {
     /// # Returns
     /// This method returns a Matrix with 3 columns for the x(1) & y(2) axes and the negative optical path(3) and a dynamic number of rows. x & y referes to the transverse extend of the beam with reference to its the optical axis
     #[must_use]
-    pub fn wavefront_error_at_pos_in_units_of_wvl(&self, wavelength: Length) -> MatrixXx3<f64> {
+    pub fn wavefront_error_at_pos_in_units_of_wvl(
+        &self,
+        wavelength: Length,
+        monitor_isometry: &Isometry,
+    ) -> MatrixXx3<f64> {
         let wvl = wavelength.get::<nanometer>();
         let mut wave_front_err = MatrixXx3::from_element(self.nr_of_rays(true), 0.);
         let mut min_radius = f64::INFINITY;
         let mut path_length_at_center = 0.;
         for (i, ray) in self.rays.iter().filter(|r| r.valid()).enumerate() {
+            let pos_in_monitor_frame = monitor_isometry.inverse_transform_point(&ray.position());
             let position = Vector2::new(
-                ray.position().x.get::<millimeter>(),
-                ray.position().y.get::<millimeter>(),
+                pos_in_monitor_frame.x.get::<millimeter>(),
+                pos_in_monitor_frame.y.get::<millimeter>(),
             );
             wave_front_err[(i, 0)] = position.x;
             wave_front_err[(i, 1)] = position.y;
@@ -1822,7 +1831,8 @@ mod test {
     fn get_wavefront_data_in_units_of_wvl() {
         //empty rays vector
         let rays = Rays::from(Vec::<Ray>::new());
-        let wf_data = rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(10.));
+        let wf_data =
+            rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(10.), &Isometry::identity());
         assert!(wf_data.is_err());
 
         let mut rays = Rays::new_hexapolar_point_source(
@@ -1835,7 +1845,7 @@ mod test {
         .unwrap();
         let _ = propagate(&mut rays, millimeter!(1.0));
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(true, nanometer!(10.))
+            .get_wavefront_data_in_units_of_wvl(true, nanometer!(10.), &Isometry::identity())
             .unwrap();
         assert!(wf_data.wavefront_error_maps.len() == 1);
         rays.add_ray(
@@ -1848,13 +1858,13 @@ mod test {
             .unwrap(),
         );
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, nanometer!(10.))
+            .get_wavefront_data_in_units_of_wvl(false, nanometer!(10.), &Isometry::identity())
             .unwrap();
 
         assert!(wf_data.wavefront_error_maps.len() == 1);
 
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, nanometer!(3.))
+            .get_wavefront_data_in_units_of_wvl(false, nanometer!(3.), &Isometry::identity())
             .unwrap();
 
         assert!(wf_data.wavefront_error_maps.len() == 2);
@@ -1869,7 +1879,7 @@ mod test {
         );
 
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, nanometer!(3.))
+            .get_wavefront_data_in_units_of_wvl(false, nanometer!(3.), &Isometry::identity())
             .unwrap();
 
         assert!(wf_data.wavefront_error_maps.len() == 3);
@@ -1888,7 +1898,8 @@ mod test {
         let plane = Plane::new(&Isometry::new_along_z(millimeter!(10.0)).unwrap());
         rays.refract_on_surface(&plane, &refr_index_vaccuum())
             .unwrap();
-        let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.));
+        let wf_error =
+            rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.), &Isometry::identity());
         for (i, val) in wf_error.column(2).iter().enumerate() {
             if i != 0 {
                 assert_relative_eq!(
@@ -1910,7 +1921,8 @@ mod test {
         .unwrap();
         rays.refract_on_surface(&plane, &refr_index_vaccuum())
             .unwrap();
-        let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.));
+        let wf_error =
+            rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.), &Isometry::identity());
         for (i, val) in wf_error.column(2).iter().enumerate() {
             if i != 0 {
                 assert_relative_eq!(
