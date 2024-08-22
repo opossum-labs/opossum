@@ -21,7 +21,10 @@ use crate::{
     refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
     surface::Plane,
-    utils::griddata::{create_linspace_axes, interpolate_3d_scatter_data},
+    utils::{
+        geom_transformation::Isometry,
+        griddata::{create_linspace_axes, interpolate_3d_scatter_data},
+    },
 };
 
 use super::node_attr::NodeAttr;
@@ -215,7 +218,11 @@ impl Optical for WaveFront {
     fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
         if let Some(LightData::Geometric(rays)) = &self.light_data {
             let wf_data_opt = rays
-                .get_wavefront_data_in_units_of_wvl(true, nanometer!(1.))
+                .get_wavefront_data_in_units_of_wvl(
+                    true,
+                    nanometer!(1.),
+                    &self.effective_iso().map_or_else(Isometry::identity, |v| v),
+                )
                 .ok();
 
             let mut file_path = PathBuf::from(report_dir);
@@ -241,7 +248,8 @@ impl Optical for WaveFront {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
-            let wf_data_opt = rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(1.));
+            let iso = self.effective_iso().map_or_else(Isometry::identity, |v| v);
+            let wf_data_opt = rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(1.), &iso);
 
             if wf_data_opt.is_ok()
                 && !wf_data_opt
@@ -392,7 +400,8 @@ mod test_wavefront_error_map {
         let mut ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
         ray.propagate(wvl).unwrap();
         rays.add_ray(ray);
-        let wavefront_error = rays.wavefront_error_at_pos_in_units_of_wvl(wvl);
+        let wavefront_error =
+            rays.wavefront_error_at_pos_in_units_of_wvl(wvl, &Isometry::identity());
         let wvf_map = WaveFrontErrorMap::new(&wavefront_error, wvl).unwrap();
         assert_eq!(wvf_map.ptv, 1.0);
         assert_abs_diff_eq!(wvf_map.rms, 0.5);
