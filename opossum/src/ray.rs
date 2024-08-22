@@ -16,7 +16,7 @@ use crate::{
     meter,
     nodes::FilterType,
     spectrum::Spectrum,
-    surface::OpticalSurface,
+    surface::{GeoSurface, OpticalSurface},
     utils::geom_transformation::Isometry,
 };
 
@@ -314,7 +314,7 @@ impl Ray {
     /// This function panics if the diffraction order cannot be converted to f64
     pub fn diffract_on_periodic_surface(
         &mut self,
-        s: &dyn Surface,
+        s: &dyn GeoSurface,
         n2: f64,
         grating_vector: Vector3<f64>,
         diffraction_order: &i32,

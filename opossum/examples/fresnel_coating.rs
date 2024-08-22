@@ -1,5 +1,5 @@
 use opossum::{
-    coatings::CoatingType, error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, round_collimated_ray_source, EnergyMeter, FluenceDetector, Lens, RayPropagationVisualizer}, optical::Optical, refractive_index::RefrIndexConst, OpticScenery
+    coatings::CoatingType, error::OpmResult, joule, millimeter, nodes::{round_collimated_ray_source, EnergyMeter, FluenceDetector, Lens, RayPropagationVisualizer}, optical::Optical, refractive_index::RefrIndexConst, OpticScenery
 };
 use std::path::Path;
 
@@ -30,7 +30,7 @@ fn main() -> OpmResult<()> {
     let l1 = scenery.add_node(lens1);
     let fd2 = scenery.add_node(FluenceDetector::new("after lens"));
     let ed=scenery.add_node(EnergyMeter::default());
-    let det = scenery.add_node(RayPropagationVisualizer::new("Ray plot"));
+    let det = scenery.add_node(RayPropagationVisualizer::default());
 
     scenery.connect_nodes(src, "out1", fd1, "in1", millimeter!(10.0))?;
     scenery.connect_nodes(fd1, "out1", l1, "front", millimeter!(10.0))?;

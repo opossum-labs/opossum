@@ -17,7 +17,7 @@ use crate::{
     refractive_index::RefractiveIndexType,
     spectral_distribution::SpectralDistribution,
     spectrum::Spectrum,
-    surface::OpticalSurface,
+    surface::{GeoSurface, OpticalSurface},
     utils::{
         filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
         geom_transformation::Isometry,
@@ -725,7 +725,7 @@ impl Rays {
     /// This function only propagates errors of contained functions.
     pub fn diffract_on_periodic_surface(
         &mut self,
-        surface: &dyn Surface,
+        surface: &dyn GeoSurface,
         refractive_index: &RefractiveIndexType,
         grating_vector: Vector3<f64>,
         diffraction_order: &i32,
