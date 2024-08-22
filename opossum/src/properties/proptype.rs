@@ -98,6 +98,8 @@ pub enum Proptype {
     Isometry(EnumProxy<Option<Isometry>>),
     /// Three dimensional Vector
     Vec3(Vector3<f64>),
+    /// an optional length parameter. used, e.g., for the alignment wavelength of the source
+    LengthOption(Option<Length>),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.

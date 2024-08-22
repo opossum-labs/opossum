@@ -49,6 +49,15 @@ impl Default for Source {
             )
             .unwrap();
 
+        node_attr
+            .create_property(
+                "alignment wavelength",
+                "wavelength to be used for alignment. Necessary for, e.g., grating alignments",
+                None,
+                Proptype::LengthOption(None),
+            )
+            .unwrap();
+
         let mut ports = OpticPorts::new();
         ports.create_output("out1").unwrap();
         node_attr.set_apertures(ports);
@@ -96,17 +105,8 @@ impl Source {
     /// # Errors
     /// This function only propagates the errors of the contained functions
     pub fn set_alignment_wavelength(&mut self, wvl: Length) -> OpmResult<()> {
-        if let Ok(&Proptype::Length(_)) = self.node_attr.get_property("alignment wavelength") {
-            self.node_attr
-                .set_property("alignment wavelength", wvl.into())
-        } else {
-            self.node_attr.create_property(
-                "alignment wavelength",
-                "wavelength to be used for alignment. Necessary for, e.g., grating alignments",
-                None,
-                wvl.into(),
-            )
-        }
+        self.node_attr
+            .set_property("alignment wavelength", Proptype::LengthOption(Some(wvl)))
     }
 
     /// Sets the light data of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
@@ -185,7 +185,7 @@ impl Optical for Source {
         let mut new_outgoing_edges = LightResult::new();
         for outgoing_edge in &outgoing_edges {
             if let LightData::Geometric(rays) = outgoing_edge.1 {
-                let mut axis_ray = if let Ok(Proptype::Length(alignment_wvl)) =
+                let mut axis_ray = if let Ok(Proptype::LengthOption(Some(alignment_wvl))) =
                     self.node_attr.get_property("alignment wavelength")
                 {
                     Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), *alignment_wvl, joule!(1.0))
