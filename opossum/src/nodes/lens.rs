@@ -152,18 +152,32 @@ impl Lens {
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
-        let front_surf = if front_roc.is_infinite() {
+        let mut front_surf = if front_roc.is_infinite() {
             OpticalSurface::new(Box::new(Plane::new(iso)))
         } else {
             OpticalSurface::new(Box::new(Sphere::new(front_roc, iso)?))
         };
+        front_surf.set_coating(
+            self.node_attr()
+                .ports()
+                .input_coating("front")
+                .unwrap()
+                .clone(),
+        );
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
-        let rear_surf = if rear_roc.is_infinite() {
+        let mut rear_surf = if rear_roc.is_infinite() {
             OpticalSurface::new(Box::new(Plane::new(&isometry)))
         } else {
             OpticalSurface::new(Box::new(Sphere::new(rear_roc, &isometry)?))
         };
+        rear_surf.set_coating(
+            self.node_attr()
+                .ports()
+                .output_coating("rear")
+                .unwrap()
+                .clone(),
+        );
         if let Some(aperture) = self.ports().input_aperture("front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -198,18 +212,32 @@ impl Lens {
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
 
-        let front_surf = if front_roc.is_infinite() {
+        let mut front_surf = if front_roc.is_infinite() {
             OpticalSurface::new(Box::new(Plane::new(iso)))
         } else {
             OpticalSurface::new(Box::new(Sphere::new(front_roc, iso)?))
         };
+        front_surf.set_coating(
+            self.node_attr()
+                .ports()
+                .input_coating("front")
+                .unwrap()
+                .clone(),
+        );
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
-        let rear_surf = if rear_roc.is_infinite() {
+        let mut rear_surf = if rear_roc.is_infinite() {
             OpticalSurface::new(Box::new(Plane::new(&isometry)))
         } else {
             OpticalSurface::new(Box::new(Sphere::new(rear_roc, &isometry)?))
         };
+        rear_surf.set_coating(
+            self.node_attr()
+                .ports()
+                .output_coating("rear")
+                .unwrap()
+                .clone(),
+        );
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {

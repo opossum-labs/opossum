@@ -212,7 +212,7 @@ impl Optical for FluenceDetector {
 
 impl Dottable for FluenceDetector {
     fn node_color(&self) -> &str {
-        "lightpurple"
+        "hotpink"
     }
 }
 
@@ -365,7 +365,7 @@ mod test {
         assert_eq!(node.node_type(), "fluence detector");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.inverted(), false);
-        assert_eq!(node.node_color(), "lightpurple");
+        assert_eq!(node.node_color(), "hotpink");
         assert!(node.as_group().is_err());
     }
     #[test]
