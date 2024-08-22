@@ -25,7 +25,6 @@ pub mod test_helper {
             .set_input_aperture(output_port_name, &aperture)
             .is_err());
         assert!(node.set_input_aperture("no port", &aperture).is_err());
-
         assert!(node
             .set_output_aperture(input_port_name, &aperture)
             .is_err());

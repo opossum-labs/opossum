@@ -307,8 +307,8 @@ impl Ray {
     /// its direction. The intial refractive index is (already) stored in the ray itself. The refractive index behind the surface is given
     /// by the parameter `n2`. In addition, it returns a possible reflected [`Ray`], which corresponds to the refracted ray (same position,
     /// wavelength) but with the reflection direction.
-    /// 
-    /// This function also considers a possible surface coating which modifies the energy of the refracted and the reflected beam. If the 
+    ///
+    /// This function also considers a possible surface coating which modifies the energy of the refracted and the reflected beam. If the
     /// [`Ray`] does not intersect with the surface, the [`Ray`] is unmodified and `None` is returned (since there is no reflection).
     ///
     /// This function also considers total reflection: If the n1 > n2 and the incoming angle is larger than Brewster's angle, the beam
@@ -346,6 +346,7 @@ impl Ray {
             self.pos = intersection_point;
             // check, if total reflection
             if dis.is_sign_positive() {
+                // handle energy (due to coating)
                 let reflectivity = os.coating().calc_reflectivity(self, surface_normal, n2)?;
                 let input_enery = self.energy();
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
@@ -513,6 +514,7 @@ impl Display for Ray {
 mod test {
     use super::*;
     use crate::{
+        coatings::CoatingType,
         degree, joule, millimeter, nanometer,
         spectrum_helper::{self, generate_filter_spectrum},
         surface::Plane,
@@ -813,6 +815,7 @@ mod test {
         let position = Point3::origin();
         let wvl = nanometer!(1054.0);
         let e = joule!(1.0);
+        let reflectivity = 0.2;
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
         let plane_z_pos = millimeter!(10.0);
         let isometry = Isometry::new(
@@ -820,7 +823,8 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        s.set_coating(CoatingType::ConstantR { reflectivity });
         assert!(ray.refract_on_surface(&s, 0.9).is_err());
         assert!(ray.refract_on_surface(&s, f64::NAN).is_err());
         assert!(ray.refract_on_surface(&s, f64::INFINITY).is_err());
@@ -834,6 +838,7 @@ mod test {
         assert_eq!(ray.path_length(), plane_z_pos);
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.number_of_refractions(), 1);
+        assert_eq!(ray.energy(), (1. - reflectivity) * e);
 
         // reflected ray
         assert_eq!(reflected_ray.pos, millimeter!(0., 0., 10.));
@@ -843,6 +848,7 @@ mod test {
         assert_eq!(reflected_ray.path_length(), plane_z_pos);
         assert_eq!(reflected_ray.number_of_bounces(), 1);
         assert_eq!(reflected_ray.number_of_refractions(), 0);
+        assert_eq!(reflected_ray.energy(), reflectivity * e);
 
         let position = millimeter!(0., 1., 0.);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();

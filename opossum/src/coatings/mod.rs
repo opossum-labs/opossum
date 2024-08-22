@@ -22,6 +22,12 @@ pub enum CoatingType {
     Fresnel,
 }
 impl CoatingType {
+    /// Calculate the reflectivity of a coating hit by a given [`Ray`] on a [`GeoSurface`](crate::surface::GeoSurface)
+    /// characterized by the given surface normal at the intersection point.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the underlying concrete implementation returns an error.
     pub fn calc_reflectivity(
         &self,
         incoming_ray: &Ray,

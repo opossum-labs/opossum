@@ -3,6 +3,7 @@
 use super::NodeAttr;
 use crate::{
     analyzer::AnalyzerType,
+    coatings::CoatingType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -47,6 +48,9 @@ impl Default for ThinMirror {
             .unwrap();
         let mut ports = OpticPorts::new();
         ports.create_input("input").unwrap();
+        ports
+            .set_input_coating("input", &CoatingType::ConstantR { reflectivity: 1.0 })
+            .unwrap();
         ports.create_output("reflected").unwrap();
         node_attr.set_ports(ports);
         Self { node_attr }
@@ -108,9 +112,13 @@ impl Optical for ThinMirror {
                         } else {
                             OpticalSurface::new(Box::new(Sphere::new(*roc, &iso)?))
                         };
-                        surface.set_coating(crate::coatings::CoatingType::ConstantR {
-                            reflectivity: 1.0,
-                        });
+                        surface.set_coating(
+                            self.node_attr()
+                                .ports()
+                                .input_coating("input")
+                                .unwrap()
+                                .clone(),
+                        );
                         let mut reflected_rays =
                             rays.refract_on_surface(&surface, &refr_index_vaccuum())?;
                         if let Some(aperture) = self.ports().input_aperture("input") {

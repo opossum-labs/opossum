@@ -197,7 +197,8 @@ impl Optical for IdealFilter {
                 }
                 let mut rays = r.clone();
                 if let Some(iso) = self.effective_iso() {
-                    let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                    let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                    plane.set_coating(self.ports().input_coating("front").unwrap().clone());
                     rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
                 } else {
                     return Err(OpossumError::Analysis(

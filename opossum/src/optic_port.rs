@@ -14,7 +14,7 @@ impl Default for OpticPort {
     fn default() -> Self {
         Self {
             aperture: Aperture::default(),
-            coating: CoatingType::Fresnel,
+            coating: CoatingType::IdealAR,
         }
     }
 }

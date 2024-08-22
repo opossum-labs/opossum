@@ -8,6 +8,7 @@ use uom::si::f64::{Angle, Length};
 
 use crate::analyzer::{AnalyzerType, RayTraceConfig};
 use crate::aperture::Aperture;
+use crate::coatings::CoatingType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
@@ -76,6 +77,23 @@ pub trait Optical: Dottable {
         } else {
             Err(OpossumError::OpticPort(format!(
                 "output port name <{port_name}> does not exist"
+            )))
+        }
+    }
+    /// Set an coating for a given input port name.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the port name does not exist.
+    fn set_input_coating(&mut self, port_name: &str, coating: &CoatingType) -> OpmResult<()> {
+        let mut ports = self.ports();
+        if ports.inputs().contains_key(port_name) {
+            ports.set_input_coating(port_name, coating)?;
+            self.node_attr_mut().set_ports(ports);
+            Ok(())
+        } else {
+            Err(OpossumError::OpticPort(format!(
+                "input port name <{port_name}> does not exist"
             )))
         }
     }
@@ -241,6 +259,7 @@ pub trait Optical: Dottable {
         node_attr_mut.set_name(&node_attributes.name());
         node_attr_mut.set_inverted(node_attributes.inverted());
         node_attr_mut.update_properties(node_attributes.properties().clone());
+        node_attr_mut.set_ports(node_attributes.ports().clone());
     }
     /// Get the node type of this [`Optical`]
     fn node_type(&self) -> String {

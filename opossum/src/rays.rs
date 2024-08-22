@@ -1035,6 +1035,7 @@ mod test {
     use crate::{
         aperture::CircleConfig,
         centimeter,
+        coatings::CoatingType,
         energy_distributions::General2DGaussian,
         joule, meter, millimeter, nanometer,
         position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
@@ -1566,6 +1567,19 @@ mod test {
             .unwrap();
         check_warnings(vec!["rays totally reflected or missed a surface"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
+    }
+    #[test]
+    fn refract_on_surface_energy() {
+        let mut rays = Rays::default();
+        rays.add_ray(
+            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
+                .unwrap(),
+        );
+        let mut s = OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())));
+        s.set_coating(CoatingType::ConstantR { reflectivity: 0.2 });
+        let reflected = rays.refract_on_surface(&s, &refr_index_vaccuum()).unwrap();
+        assert_eq!(rays.total_energy(), joule!(0.8));
+        assert_eq!(reflected.total_energy(), joule!(0.2));
     }
     #[test]
     fn filter_energy() {

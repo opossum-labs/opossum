@@ -12,15 +12,20 @@ impl Coating for Fresnel {
         // Note: invert surface normal, since it is the "reflected" direction.
         let alpha = incoming_ray.direction().angle(&(-1.0 * surface_normal));
         let n1 = incoming_ray.refractive_index();
-        let beta = f64::acos(f64::sqrt(n2 * n2 - n1 * n1 * f64::powi(f64::sin(alpha), 2)) / n2);
+        let beta = f64::acos(
+            f64::sqrt(
+                n1.powi(2)
+                    .mul_add(-f64::powi(f64::sin(alpha), 2), n2.powi(2)),
+            ) / n2,
+        );
         // s-polarization
-        let r_s = (n1 * f64::cos(alpha) - n2 * f64::cos(beta))
-            / (n1 * f64::cos(alpha) + n2 * f64::cos(beta));
+        let r_s = n1.mul_add(f64::cos(alpha), -(n2 * f64::cos(beta)))
+            / n1.mul_add(f64::cos(alpha), n2 * f64::cos(beta));
         // p-polarization
-        let r_p = (n2 * f64::cos(alpha) - n1 * f64::cos(beta))
-            / (n2 * f64::cos(alpha) + n1 * f64::cos(beta));
+        let r_p = n2.mul_add(f64::cos(alpha), -(n1 * f64::cos(beta)))
+            / n2.mul_add(f64::cos(alpha), n1 * f64::cos(beta));
         // so far, we assume unpolarized (50/50) rays -> take average
-        (r_s * r_s + r_p * r_p) / 2.
+        r_p.mul_add(r_p, r_s.powi(2)) / 2.
     }
     fn to_enum(&self) -> super::CoatingType {
         CoatingType::Fresnel

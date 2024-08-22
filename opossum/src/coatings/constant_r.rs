@@ -10,6 +10,11 @@ pub struct ConstantR {
 }
 
 impl ConstantR {
+    /// Create a new ideal coating with a given constant reflectivity.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given reflectivity is outside the interval [0.0,1.0] or not finite.
     pub fn new(reflectivity: f64) -> OpmResult<Self> {
         if !(0.0..=1.0).contains(&reflectivity) || !reflectivity.is_normal() {
             return Err(OpossumError::Other(
