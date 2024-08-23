@@ -21,12 +21,14 @@ use uom::si::f64::Length;
 
 mod fibonacci;
 mod grid;
+mod hexagonal_tiling;
 mod hexapolar;
 mod random;
 mod sobol;
 
 pub use fibonacci::{FibonacciEllipse, FibonacciRectangle};
 pub use grid::Grid;
+pub use hexagonal_tiling::HexagonalTiling;
 pub use hexapolar::Hexapolar;
 pub use random::Random;
 pub use sobol::SobolDist;

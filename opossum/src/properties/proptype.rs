@@ -150,7 +150,11 @@ impl Proptype {
             }
             Self::Fluence(value) => tt.render(
                 "simple",
-                &format_quantity(joule_per_square_centimeter, *value),
+                &format!(
+                    "{}{}",
+                    format_value_with_prefix(value.get::<joule_per_square_centimeter>()),
+                    joule_per_square_centimeter::abbreviation()
+                ),
             ),
             Self::WfLambda(value, wvl) => tt.render(
                 "simple",

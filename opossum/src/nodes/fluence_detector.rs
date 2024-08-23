@@ -290,7 +290,7 @@ impl FluenceData {
         self.y_data.len()
     }
 
-    /// Returns the peak fluence value
+    /// Returns the shape of the interpolation distribution in pixels
     #[must_use]
     pub fn shape(&self) -> (usize, usize) {
         self.interp_distribution.shape()

@@ -7,6 +7,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule, micrometer, millimeter, nanometer,
     nodes::{
+        fluence_detector::Fluence,
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
         FilterType, FluenceData, WaveFrontData, WaveFrontErrorMap,
     },
@@ -38,10 +39,7 @@ use nalgebra::{
 };
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Display,
-    ops::{Add, Range},
-};
+use std::{fmt::Display, ops::Range};
 use uom::{
     num_traits::Zero,
     si::f64::Area,
@@ -520,7 +518,7 @@ impl Rays {
     fn calc_ray_fluence_in_voronoi_cells(
         &self,
         // projected_ray_pos: &MatrixXx2<Length>,
-    ) -> OpmResult<(OpmResult<VoronoiedData>, AxLims, AxLims)> {
+    ) -> OpmResult<(VoronoiedData, AxLims, AxLims, Fluence)> {
         let valid_rays = Self::from(
             self.rays
                 .iter()
@@ -548,8 +546,8 @@ impl Rays {
             )
         })?;
 
-        let voronoi =
-            create_voronoi_cells(&ray_pos_cm, &proj_ax1_lim, &proj_ax2_lim).map_err(|_| {
+        let (voronoi, beam_area) = create_voronoi_cells(&ray_pos_cm, &proj_ax1_lim, &proj_ax2_lim)
+            .map_err(|_| {
                 OpossumError::Other(
                     "Voronoi diagram for fluence estimation could not be created!".into(),
                 )
@@ -559,6 +557,7 @@ impl Rays {
         let v_cells = voronoi.cells();
 
         let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), 0.);
+        let mut energy_in_beam = 0.;
 
         for (idx, ray) in valid_rays.iter().enumerate() {
             //} in 0..self.nr_of_rays(true) {
@@ -569,6 +568,8 @@ impl Rays {
                 .collect::<Vec<Point2<f64>>>();
             if v_neighbours.len() >= 3 {
                 let poly_area = calc_closed_poly_area(&v_neighbours)?;
+                // beam_area += poly_area;
+                energy_in_beam += ray.energy().get::<joule>();
                 fluence_scatter[idx] = ray.energy().get::<joule>() / poly_area;
             } else {
                 warn!(
@@ -578,9 +579,10 @@ impl Rays {
             }
         }
         Ok((
-            VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter),
+            VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)?,
             proj_ax1_lim,
             proj_ax2_lim,
+            J_per_cm2!(energy_in_beam / beam_area),
         ))
     }
 
@@ -595,7 +597,7 @@ impl Rays {
         let num_axes_points = 100;
 
         // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
-        let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim) =
+        let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim, average_fluence) =
             self.calc_ray_fluence_in_voronoi_cells()?;
 
         //axes definition
@@ -603,32 +605,20 @@ impl Rays {
         let co_ax2 = linspace(co_ax2_lim.min, co_ax2_lim.max, num_axes_points)?;
 
         //currently only interpolation. voronoid data for plotting must still be implemented
-        let (interp_fluence, interp_mask) =
-            interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter?, &co_ax1, &co_ax2)?;
+        let (interp_fluence, _) =
+            interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter, &co_ax1, &co_ax2)?;
 
-        let (peak_fluence, mut average) = izip!(
-            interp_fluence.into_iter(),
-            interp_mask.into_iter()
-        )
-        .fold((f64::NEG_INFINITY, 0.), |arg0, v| {
-            let max_val = if v.0.is_nan() {
-                arg0.0
+        let peak_fluence = interp_fluence.iter().fold(f64::NEG_INFINITY, |arg0, v| {
+            if v.is_finite() {
+                f64::max(arg0, *v)
             } else {
-                f64::max(arg0.0, *v.0)
-            };
-            let average_val = if v.1 > &f64::EPSILON {
-                f64::add(arg0.1, *v.0)
-            } else {
-                arg0.1
-            };
-            (max_val, average_val)
+                arg0
+            }
         });
-
-        average /= interp_mask.sum();
 
         Ok(FluenceData::new(
             J_per_cm2!(peak_fluence),
-            J_per_cm2!(average),
+            average_fluence,
             DMatrix::from_iterator(
                 co_ax1.len(),
                 co_ax2.len(),
@@ -2026,11 +2016,17 @@ mod test {
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
-            &FibonacciRectangle::new(centimeter!(1.), centimeter!(1.), 1000).unwrap(),
+            &FibonacciRectangle::new(centimeter!(1.), centimeter!(1.), 2000).unwrap(),
         )
         .unwrap();
 
         let fluence = rays.calc_fluence_at_position().unwrap();
+        println!(
+            "{:?}",
+            fluence
+                .get_average_fluence()
+                .get::<joule_per_square_centimeter>()
+        );
         assert!(approx::RelativeEq::relative_eq(
             &fluence
                 .get_average_fluence()

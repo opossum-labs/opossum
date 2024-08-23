@@ -1,21 +1,23 @@
 //! Module for gridding data
 
 #![warn(missing_docs)]
+use super::filter_data::{filter_nan_infinite, get_min_max_filter_nonfinite};
 use crate::{
     error::{OpmResult, OpossumError},
     plottable::AxLims,
 };
 use approx::{abs_diff_eq, abs_diff_ne, relative_eq};
+use itertools::Itertools;
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{DMatrix, DVector, DVectorView, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Scalar};
 use num::{Float, NumCast, ToPrimitive};
+use std::ops::Add;
+use triangulate::Mappable;
 use voronator::{
     delaunator::{Coord, Point as VPoint},
-    VoronoiDiagram,
+    polygon, VoronoiDiagram,
 };
-
-use super::filter_data::{filter_nan_infinite, get_min_max_filter_nonfinite};
 
 /// Storage struct for voronoi diagram cells and associated values of its vertices
 #[derive(Clone, Debug)]
@@ -42,7 +44,7 @@ impl VoronoiedData {
             xy_coordinates.column(1).into(),
         ))?;
 
-        let voronoi_diagram = create_voronoi_cells(xy_coordinates, &x_bounds, &y_bounds)?;
+        let (voronoi_diagram, _) = create_voronoi_cells(xy_coordinates, &x_bounds, &y_bounds)?;
 
         let z_data = if let Some(z_data) = z_data_opt {
             if xy_coordinates.shape().0 != z_data.len() {
@@ -305,24 +307,24 @@ pub fn create_linspace_axes(
 /// - boundary values are non-finite or NAN
 /// - all points are on the same line and can therefore not be triangulated properly
 /// - the generation of the voronoi diagram fails
+/// # Panics
+/// This function panics if the number of triangles cannot be converted to f64
 pub fn create_voronoi_cells(
     xy_coord: &MatrixXx2<f64>,
     x_bounds: &AxLims,
     y_bounds: &AxLims,
-) -> OpmResult<VoronoiDiagram<VPoint>> {
+) -> OpmResult<(VoronoiDiagram<VPoint>, f64)> {
     //collect data to a vector of Points that can be used to create the triangulation
-    let points = xy_coord
-        .row_iter()
-        .map(|c| {
-            if c[0].is_finite() && c[1].is_finite() {
-                Ok(VPoint::from_xy(c[0], c[1]))
-            } else {
-                Err(OpossumError::Other(
-                    "Coordinate values for voronoi-diagram generation must be finite!".into(),
-                ))
-            }
-        })
-        .collect::<OpmResult<Vec<VPoint>>>()?;
+    let points = Iterator::map(xy_coord.row_iter(), |c| {
+        if c[0].is_finite() && c[1].is_finite() {
+            Ok(VPoint::from_xy(c[0], c[1]))
+        } else {
+            Err(OpossumError::Other(
+                "Coordinate values for voronoi-diagram generation must be finite!".into(),
+            ))
+        }
+    })
+    .collect::<OpmResult<Vec<VPoint>>>()?;
 
     if !x_bounds.check_validity() || !y_bounds.check_validity() {
         Err(OpossumError::Other(
@@ -334,12 +336,71 @@ pub fn create_voronoi_cells(
         ))
     } else {
         //create the voronoi diagram with the minimum and maximum values of the axes as bounds
-        VoronoiDiagram::<VPoint>::new(
-            &VPoint::from_xy(x_bounds.min, y_bounds.min),
-            &VPoint::from_xy(x_bounds.max, y_bounds.max),
-            &points,
-        )
-        .ok_or_else(|| OpossumError::Other("Could not create voronoi diagram!".into()))
+        // let convex_hull_points =
+        let triangulation = voronator::delaunator::triangulate(&points);
+        let (convex_hull_points, num_triangles) = triangulation
+            .ok_or_else(|| OpossumError::Other("Could not create voronoi diagram!".into()))?
+            .map(|triag| {
+                let convex_hull = triag.hull;
+                (
+                    Iterator::map(convex_hull.iter().rev(), |idx| {
+                        Point2::new(points[*idx].x, points[*idx].y)
+                    })
+                    .collect_vec(),
+                    triag.triangles.len() / 3,
+                )
+            });
+
+        let area_hull = calc_closed_poly_area(convex_hull_points.as_slice())?;
+        let area_triangle = area_hull / num_triangles.to_f64().unwrap();
+        let side_length_triangle = (area_triangle * 4. / (3.).sqrt()).sqrt();
+        let base_height = (side_length_triangle / 2.)
+            .mul_add(-(side_length_triangle / 2.), side_length_triangle.powi(2))
+            .sqrt();
+
+        let num_points = convex_hull_points.len();
+        let mut shifted_hull = Vec::<VPoint>::with_capacity(num_points * 2);
+        //shoose points in between the scaled ones
+        for i in 0..num_points {
+            let j = (i + 1) % num_points;
+            let new_point = VPoint {
+                x: convex_hull_points[i].x
+                    + (convex_hull_points[j].x - convex_hull_points[i].x) / 2.,
+                y: convex_hull_points[i].y
+                    + (convex_hull_points[j].y - convex_hull_points[i].y) / 2.,
+            };
+            shifted_hull.push(VPoint::from_xy(
+                convex_hull_points[i].x,
+                convex_hull_points[i].y,
+            ));
+            shifted_hull.push(new_point);
+        }
+
+        let num_points_in_hull = shifted_hull.len().to_f64().unwrap();
+        let mut hull_centroid = shifted_hull.iter().fold(Point2::new(0., 0.), |arg0, p| {
+            let average_val_x = f64::add(arg0.x, p.x);
+            let average_val_y = f64::add(arg0.y, p.y);
+            Point2::new(average_val_x, average_val_y)
+        });
+        hull_centroid.x /= num_points_in_hull;
+        hull_centroid.y /= num_points_in_hull;
+
+        let scaled_convex_hull = Iterator::map(shifted_hull.iter(), |p| {
+            let centroid_vec = Point2::new(p.x, p.y) - hull_centroid;
+            let dist_from_centroid = centroid_vec.norm();
+            let scale_factor = (dist_from_centroid + base_height / 2.) / dist_from_centroid;
+            VPoint::from_xy(
+                scale_factor.mul_add(centroid_vec.x, hull_centroid.x),
+                scale_factor.mul_add(centroid_vec.y, hull_centroid.y),
+            )
+        })
+        .collect_vec();
+        let convex_hull_polygon = polygon::Polygon::from_points(scaled_convex_hull);
+        Ok((
+            VoronoiDiagram::<VPoint>::with_bounding_polygon(points, &convex_hull_polygon)
+                .ok_or_else(|| OpossumError::Other("Could not create voronoi diagram!".into()))?,
+            area_hull,
+        ))
     }
 }
 
@@ -355,7 +416,7 @@ pub fn create_valued_voronoi_cells(
     x_bounds: &AxLims,
     y_bounds: &AxLims,
 ) -> OpmResult<VoronoiedData> {
-    let voronoi_diagram = create_voronoi_cells(
+    let (voronoi_diagram, _) = create_voronoi_cells(
         &MatrixXx2::from_columns(&[xyz_data.column(0), xyz_data.column(1)]),
         x_bounds,
         y_bounds,
@@ -449,25 +510,25 @@ pub fn interpolate_3d_triangulated_scatter_data(
 
         let tri_area = (-p1p2_x).mul_add(p3p1_y, p1p2_y * p3p1_x).abs();
 
-        let (x_min, x_max, y_min, y_max) = tri_idxs
-            .iter()
-            .map(|p_id| (v_cell_sites[*p_id].x, v_cell_sites[*p_id].y))
-            .fold(
+        let (x_min, x_max, y_min, y_max) = Iterator::map(tri_idxs.iter(), |p_id| {
+            (v_cell_sites[*p_id].x, v_cell_sites[*p_id].y)
+        })
+        .fold(
+            (
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            ),
+            |arg, v: (f64, f64)| {
                 (
-                    f64::INFINITY,
-                    f64::NEG_INFINITY,
-                    f64::INFINITY,
-                    f64::NEG_INFINITY,
-                ),
-                |arg, v: (f64, f64)| {
-                    (
-                        f64::min(arg.0, v.0),
-                        f64::max(arg.1, v.0),
-                        f64::min(arg.2, v.1),
-                        f64::max(arg.3, v.1),
-                    )
-                },
-            );
+                    f64::min(arg.0, v.0),
+                    f64::max(arg.1, v.0),
+                    f64::min(arg.2, v.1),
+                    f64::max(arg.3, v.1),
+                )
+            },
+        );
 
         let (x_i, x_f) = if relative_eq!(num_axes_points_x, 1.0) {
             (0, 0)
@@ -605,7 +666,7 @@ mod test {
         let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
         let x_bounds = AxLims { min: 0., max: 3. };
         let y_bounds = AxLims { min: 1.5, max: 15. };
-        let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds).unwrap();
+        let (voronoi, _) = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds).unwrap();
 
         let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
         let z_data = DVector::from_vec(vec![-10., 0., 500.]);
@@ -965,7 +1026,7 @@ mod test {
         let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
         assert!(voronoi.is_ok());
 
-        let unwrapped_voronoi = voronoi.unwrap();
+        let (unwrapped_voronoi, _) = voronoi.unwrap();
         assert_relative_eq!(unwrapped_voronoi.sites[0].x, 1.0);
         assert_relative_eq!(unwrapped_voronoi.sites[0].y, 1.5);
         assert_relative_eq!(unwrapped_voronoi.sites[1].x, 0.0);
