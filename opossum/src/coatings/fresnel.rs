@@ -4,10 +4,16 @@ use crate::ray::Ray;
 
 use super::{Coating, CoatingType};
 
+/// Simulation of a Fresnel reflection (e.g. uncaoted surface)
+/// 
+/// This coating model simulates the Fresnel reflection of an (uncoated) surface. The reflectivity thereby depends on
+/// the angle of incidence and the refractive index of the following medium. 
+/// For further information check the corresponding [Wikipedia article](https://en.wikipedia.org/wiki/Fresnel_equations).
+/// Currently, an (50/50) unpolarized beam is assumed.
 pub struct Fresnel;
 
 impl Coating for Fresnel {
-    /// Formulas taken from `https://de.wikipedia.org/wiki/Fresnelsche_Formeln`
+    /// Formulas taken from [german wikipedia](https://de.wikipedia.org/wiki/Fresnelsche_Formeln).
     fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: Vector3<f64>, n2: f64) -> f64 {
         // Note: invert surface normal, since it is the "reflected" direction.
         let alpha = incoming_ray.direction().angle(&(-1.0 * surface_normal));

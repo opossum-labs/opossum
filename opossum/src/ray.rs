@@ -301,7 +301,6 @@ impl Ray {
         self.number_of_refractions += 1;
         Ok(())
     }
-
     /// Diffract a bundle of [`Rays`](crate::rays::Rays) on a periodic surface, e.g., a grating.
     /// All valid rays that hit this surface are diffracted according to the peridic structure,
     /// the diffraction order, the wavelength of the rays and there incoming k-vector
