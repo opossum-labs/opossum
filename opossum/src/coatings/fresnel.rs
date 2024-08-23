@@ -5,9 +5,9 @@ use crate::ray::Ray;
 use super::{Coating, CoatingType};
 
 /// Simulation of a Fresnel reflection (e.g. uncaoted surface)
-/// 
+///
 /// This coating model simulates the Fresnel reflection of an (uncoated) surface. The reflectivity thereby depends on
-/// the angle of incidence and the refractive index of the following medium. 
+/// the angle of incidence and the refractive index of the following medium.
 /// For further information check the corresponding [Wikipedia article](https://en.wikipedia.org/wiki/Fresnel_equations).
 /// Currently, an (50/50) unpolarized beam is assumed.
 pub struct Fresnel;

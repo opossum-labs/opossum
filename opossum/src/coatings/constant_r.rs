@@ -5,8 +5,8 @@ use crate::{
 };
 use nalgebra::Vector3;
 /// Ideal coating with constant reflectivity
-/// 
-/// The simple model represents an ideal coating with a given constant reflectivity independent from 
+///
+/// The simple model represents an ideal coating with a given constant reflectivity independent from
 /// the incoming wavelength, angle of incidence, or refractive index of the following medium.
 pub struct ConstantR {
     reflectivity: f64,

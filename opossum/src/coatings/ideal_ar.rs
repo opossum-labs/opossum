@@ -3,7 +3,7 @@ use crate::ray::Ray;
 use nalgebra::Vector3;
 
 /// Ideal coating with zero reflectivity
-/// 
+///
 /// This model represents a perfect antireflective coating with zero reflectivity and
 /// full transmission independent of wavelength, angle of incidence, or refractive index of the
 /// following medium.
