@@ -668,24 +668,34 @@ impl Rays {
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
+    /// The refractive index of the surface is given by the `refractive_index` parameter. If this parameter is
+    /// set to `None`, the refractive index of the incoming individual beam is used. This way it is possibe to model
+    /// a "passive" surface, which does not change the direction of the [`Ray`].
+    ///
     /// # Warnings
     ///
     /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if
+    ///   - the refractive index of the surface for a given ray cannot be determined (e.g. wavelength out of range, etc.).
+    ///   - the underlying function for refraction of a single [`Ray`] on the surface fails.
     pub fn refract_on_surface(
         &mut self,
         surface: &OpticalSurface,
-        refractive_index: &RefractiveIndexType,
+        refractive_index: Option<&RefractiveIndexType>,
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
         let mut reflected_rays = Self::default();
         for ray in &mut self.rays {
             if ray.valid() {
-                let n2 = refractive_index.get_refractive_index(ray.wavelength())?;
+                let n2 = if let Some(refractive_index) = refractive_index {
+                    Some(refractive_index.get_refractive_index(ray.wavelength())?)
+                } else {
+                    None
+                };
                 if let Some(reflected) = ray.refract_on_surface(surface, n2)? {
                     reflected_rays.add_ray(reflected);
                 } else {
@@ -702,7 +712,6 @@ impl Rays {
         }
         Ok(reflected_rays)
     }
-
     /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating
     /// All valid rays that hit this surface are diffracted according to the peridic structure,
     /// the diffraction order, the wavelength of the rays and there incoming k-vector
@@ -1618,11 +1627,41 @@ mod test {
         let reflected = rays
             .refract_on_surface(
                 &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-                &refr_index_vaccuum(),
+                Some(&refr_index_vaccuum()),
             )
             .unwrap();
         check_warnings(vec!["ray bundle contains no valid rays - not propagating"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
+    }
+    #[test]
+    fn refract_on_surface_same_index() {
+        let mut rays = Rays::default();
+        let mut ray0 = Ray::new(
+            millimeter!(0., 0., -10.),
+            vector![0.0, 1.0, 1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        ray0.set_refractive_index(1.5).unwrap();
+        let mut ray1 = Ray::new(
+            millimeter!(0., 1., -10.),
+            vector![0.0, 1.0, 1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        ray1.set_refractive_index(2.0).unwrap();
+        rays.add_ray(ray0);
+        rays.add_ray(ray1);
+        rays.refract_on_surface(
+            &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+            None,
+        )
+        .unwrap();
+        for ray in rays.iter() {
+            assert_abs_diff_eq!(ray.direction(), vector![0.0, 1.0, 1.0].normalize())
+        }
     }
     #[test]
     fn refract_on_surface_missed() {
@@ -1635,7 +1674,7 @@ mod test {
         let reflected = rays
             .refract_on_surface(
                 &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-                &refr_index_vaccuum(),
+                Some(&refr_index_vaccuum()),
             )
             .unwrap();
         check_warnings(vec!["rays totally reflected or missed a surface"]);
@@ -1650,7 +1689,9 @@ mod test {
         );
         let mut s = OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())));
         s.set_coating(CoatingType::ConstantR { reflectivity: 0.2 });
-        let reflected = rays.refract_on_surface(&s, &refr_index_vaccuum()).unwrap();
+        let reflected = rays
+            .refract_on_surface(&s, Some(&refr_index_vaccuum()))
+            .unwrap();
         assert_eq!(rays.total_energy(), joule!(0.8));
         assert_eq!(reflected.total_energy(), joule!(0.2));
     }
@@ -1908,7 +1949,7 @@ mod test {
         let plane = OpticalSurface::new(Box::new(Plane::new(
             &Isometry::new_along_z(millimeter!(10.0)).unwrap(),
         )));
-        rays.refract_on_surface(&plane, &refr_index_vaccuum())
+        rays.refract_on_surface(&plane, Some(&refr_index_vaccuum()))
             .unwrap();
         let wf_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.), &Isometry::identity());
@@ -1931,7 +1972,7 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        rays.refract_on_surface(&plane, &refr_index_vaccuum())
+        rays.refract_on_surface(&plane, Some(&refr_index_vaccuum()))
             .unwrap();
         let wf_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.), &Isometry::identity());

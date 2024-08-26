@@ -8,7 +8,6 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::Proptype,
-    refractive_index::refr_index_vaccuum,
     spectrum::Spectrum,
     surface::{OpticalSurface, Plane},
     utils::EnumProxy,
@@ -199,7 +198,7 @@ impl Optical for IdealFilter {
                 if let Some(iso) = self.effective_iso() {
                     let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
                     plane.set_coating(self.ports().input_coating("front").unwrap().clone());
-                    rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                    rays.refract_on_surface(&plane, None)?;
                 } else {
                     return Err(OpossumError::Analysis(
                         "no location for surface defined. Aborting".into(),

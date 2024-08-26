@@ -9,7 +9,6 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
     properties::Proptype,
-    refractive_index::refr_index_vaccuum,
     surface::{OpticalSurface, Plane},
 };
 use uom::{num_traits::Zero, si::f64::Length};
@@ -110,7 +109,7 @@ impl Optical for ParaxialSurface {
                     if let Some(iso) = self.effective_iso() {
                         rays.refract_on_surface(
                             &OpticalSurface::new(Box::new(Plane::new(&iso))),
-                            &refr_index_vaccuum(),
+                            None,
                         )?;
                         rays.refract_paraxial(*focal_length)?;
                     } else {

@@ -11,7 +11,6 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
-    refractive_index::refr_index_vaccuum,
     surface::{OpticalSurface, Plane, Sphere},
 };
 use num::Zero;
@@ -119,8 +118,7 @@ impl Optical for ThinMirror {
                                 .unwrap()
                                 .clone(),
                         );
-                        let mut reflected_rays =
-                            rays.refract_on_surface(&surface, &refr_index_vaccuum())?;
+                        let mut reflected_rays = rays.refract_on_surface(&surface, None)?;
                         if let Some(aperture) = self.ports().input_aperture("input") {
                             reflected_rays.apodize(aperture)?;
                             if let AnalyzerType::RayTrace(config) = analyzer_type {
