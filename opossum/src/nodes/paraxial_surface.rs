@@ -140,6 +140,11 @@ impl Optical for ParaxialSurface {
                     ));
                 }
             }
+            _ => {
+                return Err(OpossumError::Analysis(
+                    "analysis mode not yet implemented for paraxial surface".into(),
+                ))
+            }
         };
         let mut light_result = LightResult::default();
         light_result.insert(target.into(), light_data);

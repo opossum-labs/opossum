@@ -3,7 +3,7 @@
 //!
 //! This module handles the command line parsing as well as basic information (e.g. help dialog, version information, etc.).
 use crate::{
-    analyzer::{AnalyzerType, RayTraceConfig},
+    analyzer::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
     error::{OpmResult, OpossumError},
     get_version,
 };
@@ -82,6 +82,7 @@ fn eval_analyzer_input(analyzer_input: &str) -> Option<AnalyzerType> {
     match analyzer_input {
         "e" => Some(AnalyzerType::Energy),
         "r" => Some(AnalyzerType::RayTrace(RayTraceConfig::default())),
+        "g" => Some(AnalyzerType::GhostFocus(GhostFocusConfig::default())),
         _ => None,
     }
 }
@@ -120,7 +121,8 @@ fn create_prompt_str(flag: &str, init_str: &str) -> OpmResult<String> {
             for a_type in AnalyzerType::iter(){
                 prompt_str += match a_type {
                     AnalyzerType::Energy => "e for energy analysis\n",
-                    AnalyzerType::RayTrace(_) => "r for ray-tracing analysis\n", 
+                    AnalyzerType::RayTrace(_) => "r for ray-tracing analysis\n",
+                    AnalyzerType::GhostFocus(_) => "g for ghost focus analysis\n", 
                 };
             }
             Ok(prompt_str)

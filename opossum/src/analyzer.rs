@@ -25,6 +25,10 @@ pub enum AnalyzerType {
     ///
     /// This mode simulates a bundle of optical ray propagating through a scenery.
     RayTrace(RayTraceConfig),
+    /// Ghost focus analysis.
+    ///
+    /// This mode also performs ray tracing but considers parasitic back reflections from surfaces wtih a given number of bounces.
+    GhostFocus(GhostFocusConfig),
 }
 
 /// enum to define the mode of the raytracing analysis.
@@ -123,11 +127,16 @@ impl Default for RayTraceConfig {
         }
     }
 }
+
+#[derive(PartialEq, Debug, Default)]
+pub struct GhostFocusConfig;
+
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = match self {
             Self::Energy => "energy",
             Self::RayTrace(_) => "ray tracing",
+            Self::GhostFocus(_) => "ghost focus analysis",
         };
         write!(f, "{msg}")
     }

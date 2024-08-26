@@ -260,6 +260,11 @@ impl Optical for Wedge {
                 };
                 LightData::Geometric(output)
             }
+            _ => {
+                return Err(OpossumError::Analysis(
+                    "analysis mode not yet implemented for wedge".into(),
+                ))
+            }
         };
         let light_result = LightResult::from([(out_port.into(), light_data)]);
         Ok(light_result)

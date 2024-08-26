@@ -141,6 +141,11 @@ impl Optical for ThinMirror {
                     ));
                 }
             }
+            _ => {
+                return Err(OpossumError::Analysis(
+                    "analysis mode not yet implemented for thin mirror".into(),
+                ))
+            }
         };
         let light_result = LightResult::from([(outport.into(), light_data)]);
         Ok(light_result)

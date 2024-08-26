@@ -308,6 +308,11 @@ impl Optical for CylindricLens {
                 };
                 LightData::Geometric(output)
             }
+            _ => {
+                return Err(OpossumError::Analysis(
+                    "analysis mode not yet implemented for cylindric lens".into(),
+                ))
+            }
         };
         let light_result = LightResult::from([(out_port.into(), light_data)]);
         Ok(light_result)

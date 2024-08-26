@@ -220,6 +220,11 @@ impl Optical for ReflectiveGrating {
                     ));
                 }
             }
+            _ => {
+                return Err(OpossumError::Analysis(
+                    "analysis mode not yet implemented for reflective grating".into(),
+                ))
+            }
         };
         let light_result = LightResult::from([(outport.into(), light_data)]);
         Ok(light_result)

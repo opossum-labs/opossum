@@ -292,6 +292,11 @@ impl Optical for BeamSplitter {
         let (out1_data, out2_data) = match analyzer_type {
             AnalyzerType::Energy => self.analyze_energy(in1, in2)?,
             AnalyzerType::RayTrace(_) => self.analyze_raytrace(in1, in2, analyzer_type)?,
+            _ => {
+                return Err(OpossumError::Analysis(
+                    "analysis mode not yet implemented for beam splitter".into(),
+                ))
+            }
         };
         if out1_data.is_some() && out2_data.is_some() {
             let (target1, target2) = if self.inverted() {
