@@ -10,7 +10,6 @@ use crate::{
     properties::Proptype,
     ray::SplittingConfig,
     rays::Rays,
-    refractive_index::refr_index_vaccuum,
     spectrum::{merge_spectra, Spectrum},
     surface::{OpticalSurface, Plane},
     utils::EnumProxy,
@@ -194,7 +193,7 @@ impl BeamSplitter {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
                         let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                        rays.refract_on_surface(&plane, None)?;
                     } else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
@@ -226,7 +225,7 @@ impl BeamSplitter {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
                         let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                        rays.refract_on_surface(&plane, None)?;
                     } else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
@@ -322,7 +321,7 @@ impl Optical for BeamSplitter {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
                         let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                        rays.refract_on_surface(&plane, None)?;
                     } else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),

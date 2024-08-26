@@ -186,9 +186,9 @@ impl Lens {
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
         };
-        rays.refract_on_surface(&front_surf, refri)?;
+        rays.refract_on_surface(&front_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&rear_surf, &self.ambient_idx())?;
+        rays.refract_on_surface(&rear_surf, Some(&self.ambient_idx()))?;
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -246,9 +246,9 @@ impl Lens {
         } else {
             return Err(OpossumError::OpticPort("output aperture not found".into()));
         };
-        rays.refract_on_surface(&rear_surf, refri)?;
+        rays.refract_on_surface(&rear_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&front_surf, &self.ambient_idx())?;
+        rays.refract_on_surface(&front_surf, Some(&self.ambient_idx()))?;
         if let Some(aperture) = self.ports().input_aperture("front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {

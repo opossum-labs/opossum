@@ -18,7 +18,6 @@ use crate::{
         AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
     },
     properties::{Properties, Proptype},
-    refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
     surface::{OpticalSurface, Plane},
     utils::{
@@ -180,7 +179,7 @@ impl Optical for WaveFront {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
                 let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                rays.refract_on_surface(&plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
