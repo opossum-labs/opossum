@@ -7,7 +7,7 @@ use crate::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace
 use approx::{abs_diff_ne, relative_ne, RelativeEq};
 use colorous::Gradient;
 use image::RgbImage;
-use itertools::{iproduct, izip, Itertools};
+use itertools::{izip, Itertools};
 use kahan::KahanSum;
 use log::warn;
 use nalgebra::{
@@ -269,6 +269,7 @@ impl PlotType {
         chart.draw_series(series).unwrap();
     }
 
+    #[allow(dead_code)]
     fn check_equistancy_of_mesh(ax_vals: &MatrixXx1<f64>) -> bool {
         let len_ax = ax_vals.len();
         let mut equi = true;
@@ -279,7 +280,7 @@ impl PlotType {
                 let mut diff = KahanSum::new_with_value(ax_vals[idx]);
                 diff += -ax_vals[idx - 1];
                 diff += -distance.sum();
-                if (diff.sum() / distance.sum()).abs() > 100. * f64::EPSILON {
+                if (diff.sum() / distance.sum()).abs() > 1e5 * f64::EPSILON {
                     equi = false;
                     break;
                 }
@@ -288,6 +289,7 @@ impl PlotType {
         equi
     }
 
+    #[allow(dead_code)]
     fn get_ax_val_distance_if_equidistant(ax_vals: &MatrixXx1<f64>) -> f64 {
         let mut dist = ax_vals[1] - ax_vals[0]; // / 2.;
         if Self::check_equistancy_of_mesh(ax_vals) {
@@ -310,31 +312,47 @@ impl PlotType {
         cmap: &Gradient,
         cbounds: AxLims,
     ) {
-        let x_dist = Self::get_ax_val_distance_if_equidistant(x_ax);
-        let y_dist = Self::get_ax_val_distance_if_equidistant(y_ax);
-
         let (z_shape_rows, z_shape_cols) = z_dat.shape();
         if z_shape_rows != y_ax.len() || z_shape_cols != x_ax.len() {
             warn!("Shapes of x,y and z do not match!");
             return;
         }
 
-        //there will probably be a more direct way to achieve the series without this conversion to a vec<f64> when we can use nalgebra >=v0.32.
-        //currently, clone is not implemented for matrix_iter in v0.30 which we use due to ncollide2d. Therefore, we go this way
-        let a: Vec<f64> = x_ax.data.clone().into();
-        let b: Vec<f64> = y_ax.data.clone().into();
         let z_min = cbounds.min;
 
-        let z_max: f64 = cbounds.max - z_min; //z.max();
-        let series = izip!(iproduct!(a, b), z_dat).map(|((x, y), z)| {
-            Rectangle::new([(x - x_dist, y + y_dist), (x + x_dist, y - y_dist)], {
-                let cor = cmap.eval_continuous((z - z_min) / z_max);
-                let color = RGBAColor(cor.r, cor.g, cor.b, 1.);
-                Into::<ShapeStyle>::into(color).filled()
-            })
-        });
+        let yy_points = y_ax.len();
+        let xx_points = x_ax.len();
+        let mut rect_vec = Vec::<Rectangle<(f64, f64)>>::with_capacity(yy_points * xx_points);
 
-        chart.draw_series(series).unwrap();
+        let z_max: f64 = cbounds.max - z_min; //z.max();
+        for y_idx in 0..yy_points {
+            let y_center = y_ax[y_idx];
+            let y_dist = if y_idx == yy_points - 1 {
+                y_ax[y_idx] - y_ax[y_idx - 1]
+            } else {
+                y_ax[(y_idx + 1) % yy_points] - y_center
+            };
+            for x_idx in 0..xx_points {
+                let x_center = x_ax[x_idx];
+                let x_dist = if x_idx == xx_points - 1 {
+                    x_ax[x_idx] - x_ax[x_idx - 1]
+                } else {
+                    x_ax[(x_idx + 1) % xx_points] - x_center
+                };
+                rect_vec.push(Rectangle::new(
+                    [
+                        (x_center - x_dist / 2., y_center + y_dist / 2.),
+                        (x_center + x_dist / 2., y_center - y_dist / 2.),
+                    ],
+                    {
+                        let cor = cmap.eval_continuous((z_dat[(y_idx, x_idx)] - z_min) / z_max);
+                        let color = RGBAColor(cor.r, cor.g, cor.b, 1.);
+                        Into::<ShapeStyle>::into(color).filled()
+                    },
+                ));
+            }
+        }
+        chart.draw_series(rect_vec).unwrap();
     }
 
     fn config_series_label_2d<'a, 'b, T: DrawingBackend + 'a + 'b>(
@@ -596,11 +614,27 @@ impl PlotType {
                     plt.bounds.z.unwrap(),
                 );
 
+                // update bounds to display correct pixels
+                let x_ax_len = x_dat_n.len();
+                let x_dist1 = x_dat_n[1] - x_dat_n[0];
+                let x_dist2 = x_dat_n[x_ax_len - 1] - x_dat_n[x_ax_len - 2];
+                let x_bounds = AxLims::new(
+                    x_dat_n[0] + x_dist1 / 2.,
+                    x_dat_n[x_ax_len - 1] - x_dist2 / 2.,
+                );
+                let y_ax_len = y_dat_m.len();
+                let y_dist1 = y_dat_m[1] - y_dat_m[0];
+                let y_dist2 = y_dat_m[y_ax_len - 1] - y_dat_m[y_ax_len - 2];
+                let y_bounds = AxLims::new(
+                    y_dat_m[0] + y_dist1 / 2.,
+                    y_dat_m[y_ax_len - 1] - y_dist2 / 2.,
+                );
+
                 //main plot
                 let mut chart = Self::create_2d_plot_chart(
                     &main_root,
-                    plt.bounds.x.unwrap(),
-                    plt.bounds.y.unwrap(),
+                    x_bounds.unwrap(),
+                    y_bounds.unwrap(),
                     &plt.label,
                     true,
                     true,
@@ -765,24 +799,6 @@ impl PlotType {
         digits_max += i32::from(bounds.max.is_sign_negative());
 
         let digits = digits_max.max(digits_min).to_u32().unwrap();
-
-        // //absolutely ugly "automation" of margin. not done nicely and not accurate, works only for sans serif with 30 pt
-        // let mut digits_max =
-        //     bounds.max.abs().log10().abs().floor() + 2. + f64::from(bounds.max.is_sign_negative());
-        // if digits_max.is_infinite() {
-        //     digits_max = 4.;
-        // }
-        // let mut digits_min =
-        //     bounds.min.abs().log10().abs().floor() + 2. + f64::from(bounds.min.is_sign_negative());
-        // if digits_min.is_infinite() {
-        //     digits_min = 4.;
-        // }
-        // let digits = if digits_max >= digits_min {
-        //     digits_max.to_u32()
-        // } else {
-        //     digits_min.to_u32()
-        // }
-        // .unwrap();
 
         digits * 13 + 20
     }
@@ -985,28 +1001,7 @@ impl PlotData {
                 })
             }
         } else {
-            let min_max_x = get_min_max_filter_nonfinite(
-            xyz_dat
-            .column(0)
-            .as_slice())
-            .ok_or_else(|| OpossumError::Other("Axes bounds could not be determined! Cannot create `PlotData::TriangulatedSurface`!"        .into()))?;
-            let min_max_y = get_min_max_filter_nonfinite(
-            xyz_dat
-            .column(1)
-            .as_slice())
-            .ok_or_else(|| OpossumError::Other("Axes bounds could not be determined! Cannot create `PlotData::TriangulatedSurface`!"        .into()))?;
-
-            let voronoi = create_valued_voronoi_cells(
-            xyz_dat,
-            &AxLims::new(min_max_x.0, min_max_x.1).ok_or_else(|| OpossumError::Other(
-                    "Cannot voronoi data with None-valued axis limits! Cannot create `PlotData::TriangulatedSurface`!"
-                        .into()
-                ))?,
-            &AxLims::new(min_max_y.0, min_max_y.1).ok_or_else(|| OpossumError::Other(
-                    "Cannot voronoi data with None-valued axis limits! Cannot create `PlotData::TriangulatedSurface`!"
-                        .into()
-                ))?,
-        )?;
+            let voronoi = create_valued_voronoi_cells(xyz_dat)?;
             let z_data = voronoi.get_z_data().as_ref().map_or_else(
             || {
                 Err(OpossumError::Other(

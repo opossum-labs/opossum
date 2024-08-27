@@ -546,17 +546,16 @@ impl Rays {
             )
         })?;
 
-        let (voronoi, beam_area) = create_voronoi_cells(&ray_pos_cm, &proj_ax1_lim, &proj_ax2_lim)
-            .map_err(|_| {
-                OpossumError::Other(
-                    "Voronoi diagram for fluence estimation could not be created!".into(),
-                )
-            })?;
+        let (voronoi, beam_area) = create_voronoi_cells(&ray_pos_cm).map_err(|_| {
+            OpossumError::Other(
+                "Voronoi diagram for fluence estimation could not be created!".into(),
+            )
+        })?;
 
         //get the voronoi cells
         let v_cells = voronoi.cells();
 
-        let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), 0.);
+        let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), f64::NAN);
         let mut energy_in_beam = 0.;
 
         for (idx, ray) in valid_rays.iter().enumerate() {
