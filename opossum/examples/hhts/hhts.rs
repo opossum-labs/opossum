@@ -19,7 +19,7 @@ use opossum::{
         RayPropagationVisualizer, Source, WaveFront,
     },
     optical::Optical,
-    position_distributions::HexagonalTiling,
+    position_distributions::{Grid, HexagonalTiling, Hexapolar},
     ray::SplittingConfig,
     rays::Rays,
     refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
@@ -37,8 +37,7 @@ fn main() -> OpmResult<()> {
     let energy_1w = joule!(100.0);
     let energy_2w = joule!(50.0);
 
-    let beam_dist_1w = HexagonalTiling::new(millimeter!(76.05493), 15)?;
-    // let beam_dist_1w = Grid::new((millimeter!(2.*76.05493), millimeter!(2.*76.05493)) , (30,30))?;
+    let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
     let beam_dist_2w = beam_dist_1w.clone();
 
     let refr_index_hk9l = RefrIndexSellmeier1::new(
