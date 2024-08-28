@@ -6,6 +6,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
+    optic_ref::OpticRef,
     optical::{LightResult, Optical},
     properties::{Properties, Proptype},
     reporter::NodeReport,
@@ -89,6 +90,16 @@ impl NodeGroup {
             .set_property("graph", self.g.clone().into())
             .unwrap();
         idx
+    }
+    /// Return a reference to the optical node specified by its [`NodeIndex`].
+    ///
+    /// This function is mainly useful for setting up a [reference node](crate::nodes::NodeReference).
+    ///
+    /// # Errors
+    ///
+    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
+    pub fn node(&self, node_idx: NodeIndex) -> OpmResult<OpticRef> {
+        self.g.node_by_idx(node_idx)
     }
     /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
     ///

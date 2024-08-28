@@ -192,7 +192,7 @@ impl Optical for ReflectiveGrating {
                     let diffracted = if let Some(iso) = self.effective_iso() {
                         let grating_vector =
                             2. * PI * line_density.value * iso.transform_vector_f64(&Vector3::x());
-                        let _ = rays.diffract_on_periodic_surface(
+                        let mut diffracted_rays = rays.diffract_on_periodic_surface(
                             &Plane::new(&iso),
                             &refr_index_vaccuum(),
                             grating_vector,
@@ -200,11 +200,12 @@ impl Optical for ReflectiveGrating {
                         )?;
 
                         if let Some(aperture) = self.ports().input_aperture("input") {
-                            rays.apodize(aperture)?;
+                            diffracted_rays.apodize(aperture)?;
                             if let AnalyzerType::RayTrace(config) = analyzer_type {
-                                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                                diffracted_rays
+                                    .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                             }
-                            rays
+                            diffracted_rays
                         } else {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
                         }
