@@ -367,7 +367,7 @@ impl Plottable for RayPositionHistories {
             .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
             .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?
             .set(&PlotArgs::PlotSize((1200, 1200)))?
-            .set(&PlotArgs::AxisEqual(true))?
+            .set(&PlotArgs::AxisEqual(false))?
             .set(&PlotArgs::PlotAutoSize(true))?
             .set(&PlotArgs::Legend(false))?;
         Ok(())
