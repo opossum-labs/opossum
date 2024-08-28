@@ -1,11 +1,14 @@
 use opossum::{
     coatings::CoatingType,
+    energy_distributions::UniformDist,
     error::OpmResult,
-    joule, millimeter,
-    nodes::{
-        round_collimated_ray_source, EnergyMeter, FluenceDetector, Lens, RayPropagationVisualizer,
-    },
+    joule,
+    lightdata::LightData,
+    millimeter, nanometer,
+    nodes::{EnergyMeter, FluenceDetector, Lens, RayPropagationVisualizer, Source},
     optical::Optical,
+    position_distributions::{Grid, Hexapolar},
+    rays::Rays,
     refractive_index::RefrIndexConst,
     OpticScenery,
 };
@@ -15,16 +18,13 @@ fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
     scenery.set_description("Fresnel coating example".into())?;
 
-    let src = scenery.add_node(round_collimated_ray_source(
-        millimeter!(9.0),
-        joule!(1.0),
-        6,
-    )?);
-    // let src = scenery.add_node(collimated_line_ray_source(
-    //     millimeter!(18.0),
-    //     joule!(1.0),
-    //     30,
-    // )?);
+    let rays = Rays::new_collimated(
+        nanometer!(1000.),
+        &UniformDist::new(joule!(1.))?,
+        &Grid::new((millimeter!(9.),millimeter!(9.)), (100,100))?,
+    )?;
+    let source = Source::new("src", &LightData::Geometric(rays));
+    let src = scenery.add_node(source);
     let fd1 = scenery.add_node(FluenceDetector::new("before lens"));
 
     let mut lens1 = Lens::new(
