@@ -16,7 +16,6 @@ use log::warn;
 use petgraph::prelude::NodeIndex;
 use serde::{
     de::{self, MapAccess, Visitor},
-    ser::SerializeStruct,
     Deserialize, Serialize,
 };
 use std::{
@@ -52,16 +51,17 @@ use uom::si::f64::Length;
 /// }
 ///
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct OpticScenery {
-    g: OpticGraph,
+    graph: OpticGraph,
     description: String,
+    #[serde(rename = "global")]
     global_conf: Rc<RefCell<SceneryResources>>,
 }
 impl Default for OpticScenery {
     fn default() -> Self {
         Self {
-            g: OpticGraph::default(),
+            graph: OpticGraph::default(),
             description: String::new(),
             global_conf: Rc::new(RefCell::new(SceneryResources::default())),
         }
@@ -84,7 +84,7 @@ impl OpticScenery {
     ///
     /// This function might panic, if the underlying graph is set to `inverted`
     pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> NodeIndex {
-        self.g.add_node(node).unwrap()
+        self.graph.add_node(node).unwrap()
     }
     /// Connect (already existing) optical nodes within this [`OpticScenery`].
     ///
@@ -106,7 +106,7 @@ impl OpticScenery {
         target_port: &str,
         distance: Length,
     ) -> OpmResult<()> {
-        self.g
+        self.graph
             .connect_nodes(src_node, src_port, target_node, target_port, distance)
     }
     /// Return a reference to the optical node specified by its [`NodeIndex`].
@@ -117,12 +117,12 @@ impl OpticScenery {
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node_idx: NodeIndex) -> OpmResult<OpticRef> {
-        self.g.node_by_idx(node_idx)
+        self.graph.node_by_idx(node_idx)
     }
     /// Returns a vector of node references of this [`OpticScenery`].
     #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
-        self.g.nodes()
+        self.graph.nodes()
     }
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with
     /// the [`graphviz`](https://graphviz.org/) software.
@@ -131,7 +131,7 @@ impl OpticScenery {
     /// This function returns an error if nodes do not return a proper value for their `name` property.
     pub fn to_dot(&self, rankdir: &str) -> OpmResult<String> {
         let mut dot_string = self.add_dot_header(rankdir);
-        dot_string += &self.g.create_dot_string(rankdir)?;
+        dot_string += &self.graph.create_dot_string(rankdir)?;
         Ok(dot_string)
     }
     /// Generate a [`DynamicImage`] of the [`OpticScenery`] diagram.
@@ -204,10 +204,11 @@ impl OpticScenery {
         let description = self.description().to_string();
         if let AnalyzerType::RayTrace(_) = analyzer_type {
             let name = format!("scenery '{description}'");
-            self.g.calc_node_positions(&name, &LightResult::default())?;
+            self.graph
+                .calc_node_positions(&name, &LightResult::default())?;
         }
         let name = format!("Scenery '{description}'");
-        self.g
+        self.graph
             .analyze(&name, &LightResult::default(), analyzer_type)?;
         Ok(())
     }
@@ -232,7 +233,7 @@ impl OpticScenery {
         let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
         analysis_report.add_scenery(self);
         let detector_nodes = self
-            .g
+            .graph
             .nodes()
             .into_iter()
             .filter(|node| node.optical_ref.borrow().is_detector());
@@ -251,7 +252,7 @@ impl OpticScenery {
     /// This function will return an error if the underlying `export_data` function of the corresponding
     /// node returns an error.
     pub fn export_node_data(&self, data_dir: &Path) -> OpmResult<()> {
-        for node in self.g.nodes() {
+        for node in self.graph.nodes() {
             let uuid = node.uuid().as_simple().to_string();
             node.optical_ref.borrow().export_data(data_dir, &uuid)?;
         }
@@ -288,22 +289,8 @@ impl OpticScenery {
     }
     pub fn set_global_conf(&mut self, rsrc: SceneryResources) {
         self.global_conf = Rc::new(RefCell::new(rsrc));
-        self.g.update_global_config(&Some(self.global_conf.clone()));
-    }
-}
-
-impl Serialize for OpticScenery {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut scene = serializer.serialize_struct("scenery", 4)?;
-        scene.serialize_field("opm version", &env!("OPM_FILE_VERSION"))?;
-        scene.serialize_field("graph", &self.g)?;
-        scene.serialize_field("description", &self.description)?;
-        let global_conf = self.global_conf.borrow().to_owned();
-        scene.serialize_field("global", &global_conf)?;
-        scene.end()
+        self.graph
+            .update_global_config(&Some(self.global_conf.clone()));
     }
 }
 impl<'de> Deserialize<'de> for OpticScenery {
@@ -414,7 +401,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
                 });
 
                 let mut s = OpticScenery {
-                    g: graph,
+                    graph,
                     description,
                     global_conf: Rc::new(RefCell::new(SceneryResources::default())),
                 };
@@ -449,15 +436,15 @@ mod test {
     fn default() {
         let scenery = OpticScenery::default();
         assert_eq!(scenery.description(), "");
-        assert_eq!(scenery.g.edge_count(), 0);
-        assert_eq!(scenery.g.node_count(), 0);
+        assert_eq!(scenery.graph.edge_count(), 0);
+        assert_eq!(scenery.graph.node_count(), 0);
     }
     #[test]
     fn new() {
         let scenery = OpticScenery::new();
         assert_eq!(scenery.description(), "");
-        assert_eq!(scenery.g.edge_count(), 0);
-        assert_eq!(scenery.g.node_count(), 0);
+        assert_eq!(scenery.graph.edge_count(), 0);
+        assert_eq!(scenery.graph.node_count(), 0);
     }
     #[test]
     fn set_description() {

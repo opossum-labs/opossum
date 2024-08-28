@@ -12,7 +12,8 @@ pub struct RayTrace {
     config: RayTraceConfig,
 }
 impl RayTrace {
-    pub fn new(config: RayTraceConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: RayTraceConfig) -> Self {
         Self { config }
     }
 }
