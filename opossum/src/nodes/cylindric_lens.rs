@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Cylindric lens with spherical or flat surfaces.
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -335,8 +335,8 @@ impl Dottable for CylindricLens {
 #[cfg(test)]
 mod test {
     use crate::{
-        analyzer::RayTraceConfig, joule, millimeter, nanometer, nodes::test_helper::test_helper::*,
-        position_distributions::Hexapolar, rays::Rays,
+        analyzers::RayTraceConfig, joule, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;

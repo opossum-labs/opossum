@@ -2,7 +2,7 @@
 //! Infinitely thin mirror with spherical or flat surface
 use super::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     coatings::CoatingType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
@@ -188,7 +188,7 @@ impl Dottable for ThinMirror {
 mod test {
     use super::*;
     use crate::{
-        analyzer::RayTraceConfig, degree, joule, lightdata::DataEnergy, nanometer,
+        analyzers::RayTraceConfig, degree, joule, lightdata::DataEnergy, nanometer,
         nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
         spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };

@@ -11,7 +11,7 @@ use uom::si::{
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -448,7 +448,7 @@ impl Plottable for RayPositionHistories {
 mod test {
     use super::*;
     use crate::{
-        analyzer::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
+        analyzers::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
         nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };

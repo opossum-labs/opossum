@@ -4,7 +4,7 @@ use std::f64::consts::PI;
 
 use super::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -243,7 +243,7 @@ mod test {
 
     use super::*;
     use crate::{
-        analyzer::RayTraceConfig, degree, joule, lightdata::DataEnergy, millimeter, nanometer,
+        analyzers::RayTraceConfig, degree, joule, lightdata::DataEnergy, millimeter, nanometer,
         nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
         spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };

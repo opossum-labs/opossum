@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     joule,
@@ -252,7 +252,7 @@ impl Dottable for EnergyMeter {
 mod test {
     use super::*;
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
+        analyzers::AnalyzerType, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
         spectrum_helper::create_he_ne_spec,
     };
     #[test]

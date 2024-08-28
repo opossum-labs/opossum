@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -142,7 +142,7 @@ impl Dottable for Detector {
 #[cfg(test)]
 mod test {
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
+        analyzers::AnalyzerType, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
         spectrum_helper::create_he_ne_spec,
     };
 

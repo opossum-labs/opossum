@@ -4,7 +4,7 @@ use uom::si::f64::Length;
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::{AnalyzerType, RayTraceConfig},
+    analyzers::{AnalyzerType, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     joule,
@@ -241,7 +241,7 @@ impl Dottable for Source {
 mod test {
     use super::*;
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
+        analyzers::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
     };
     use assert_matches::assert_matches;
 

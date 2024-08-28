@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -421,9 +421,9 @@ mod test {
     use super::*;
     use crate::utils::geom_transformation::Isometry;
     use crate::{
-        analyzer::AnalyzerType, analyzer::RayTraceConfig, joule, lightdata::DataEnergy, millimeter,
-        nanometer, nodes::test_helper::test_helper::*, position_distributions::Hexapolar,
-        rays::Rays, spectrum_helper::create_he_ne_spec,
+        analyzers::AnalyzerType, analyzers::RayTraceConfig, joule, lightdata::DataEnergy,
+        millimeter, nanometer, nodes::test_helper::test_helper::*,
+        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
     };
     use tempfile::NamedTempFile;
     use uom::num_traits::Zero;

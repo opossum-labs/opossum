@@ -7,7 +7,7 @@ use uom::fmt::DisplayStyle::Abbreviation;
 use uom::si::{energy::joule, f64::Energy};
 
 /// Data structure defining the light properties. The actuals data type used depends on the
-/// [`AnalyzerType`](crate::analyzer::AnalyzerType). For example, an energy analysis ([`LightData::Energy`]) only
+/// [`AnalyzerType`](crate::analyzers::AnalyzerType). For example, an energy analysis ([`LightData::Energy`]) only
 /// contains a [`Spectrum`] information, while a geometric analysis ([`LightData::Geometric`]) constains a set of optical
 /// ray data.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

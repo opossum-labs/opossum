@@ -1,35 +1,9 @@
-#![warn(missing_docs)]
-//! Optical Analyzers
-//!
-//! An analyzer of a certain [`AnalyzerType`] determines how an (`OpticScenery`)[`crate::OpticScenery`] is analyzed. For example, the energy flow for a scenery can be
-//! calculated as a simple analysis. On the other hand, a full Fourier propagation could be performed. The result of an analysis run can be written to a JSON structure
-//! and / or exported as a PDF report.
-use std::fmt::Display;
-use strum::EnumIter;
-use uom::si::f64::Energy;
-
+//! Analyzer for sequential ray tracing
 use crate::{
     error::{OpmResult, OpossumError},
     picojoule,
 };
-
-/// Type of analysis to be performed.
-#[non_exhaustive]
-#[derive(EnumIter, PartialEq, Debug)]
-pub enum AnalyzerType {
-    /// Simple energy flow of an optical spectrum.
-    ///
-    /// **Note**: This mode does consider any geometric aspects of an optical setup. In particular, possible apertures of optical elements are ignored.
-    Energy,
-    /// Ray tracing analysis.
-    ///
-    /// This mode simulates a bundle of optical ray propagating through a scenery.
-    RayTrace(RayTraceConfig),
-    /// Ghost focus analysis.
-    ///
-    /// This mode also performs ray tracing but considers parasitic back reflections from surfaces wtih a given number of bounces.
-    GhostFocus(GhostFocusConfig),
-}
+use uom::si::f64::Energy;
 
 /// enum to define the mode of the raytracing analysis.
 /// Currently only sequential mode
@@ -66,7 +40,21 @@ pub struct RayTraceConfig {
     max_number_of_bounces: usize,
     max_number_of_refractions: usize,
 }
-
+impl Default for RayTraceConfig {
+    /// Create a default config for a ray tracing analysis with the following parameters:
+    ///   - ray tracing mode: [`RayTracingMode::Sequential`]
+    ///   - mininum energy / ray: `1 p`
+    ///   - maximum number of bounces / ray: `1000`
+    ///   - maximum number od refractions / ray: `1000`
+    fn default() -> Self {
+        Self {
+            mode: RayTracingMode::default(),
+            min_energy_per_ray: picojoule!(1.0),
+            max_number_of_bounces: 1000,
+            max_number_of_refractions: 1000,
+        }
+    }
+}
 impl RayTraceConfig {
     /// Returns the lower limit for ray energies during analysis. Rays with energies lower than this limit will be dropped.
     #[must_use]
@@ -112,54 +100,16 @@ impl RayTraceConfig {
         self.max_number_of_refractions
     }
 }
-impl Default for RayTraceConfig {
-    /// Create a default config for a ray tracing analysis with the following parameters:
-    ///   - ray tracing mode: [`RayTracingMode::Sequential`]
-    ///   - mininum energy / ray: `1 p`
-    ///   - maximum number of bounces / ray: `1000`
-    ///   - maximum number od refractions / ray: `1000`
-    fn default() -> Self {
-        Self {
-            mode: RayTracingMode::default(),
-            min_energy_per_ray: picojoule!(1.0),
-            max_number_of_bounces: 1000,
-            max_number_of_refractions: 1000,
-        }
-    }
-}
 
-#[derive(PartialEq, Debug, Default)]
-pub struct GhostFocusConfig;
-
-impl Display for AnalyzerType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::Energy => "energy",
-            Self::RayTrace(_) => "ray tracing",
-            Self::GhostFocus(_) => "ghost focus analysis",
-        };
-        write!(f, "{msg}")
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;
-    use assert_matches::assert_matches;
-    #[test]
-    fn display() {
-        assert_eq!(format!("{}", AnalyzerType::Energy), "energy");
-        assert_eq!(
-            format!("{}", AnalyzerType::RayTrace(RayTraceConfig::default())),
-            "ray tracing"
-        );
-    }
-    #[test]
-    fn debug() {
-        assert_eq!(format!("{:?}", AnalyzerType::Energy), "Energy");
-    }
     #[test]
     fn ray_tracing_mode_default() {
-        assert_matches!(RayTracingMode::default(), RayTracingMode::Sequential);
+        assert!(matches!(
+            RayTracingMode::default(),
+            RayTracingMode::Sequential
+        ));
     }
     #[test]
     fn ray_tracing_mode_debug() {
@@ -168,13 +118,9 @@ mod test {
     #[test]
     fn ray_tracing_config_default() {
         let rt_conf = RayTraceConfig::default();
-        assert_matches!(rt_conf.mode, RayTracingMode::Sequential);
-        assert_matches!(rt_conf.mode(), RayTracingMode::Sequential);
-        assert_eq!(rt_conf.max_number_of_bounces, 1000);
+        assert!(matches!(rt_conf.mode(), RayTracingMode::Sequential));
         assert_eq!(rt_conf.max_number_of_bounces(), 1000);
-        assert_eq!(rt_conf.max_number_of_refractions, 1000);
         assert_eq!(rt_conf.max_number_of_refractions(), 1000);
-        assert_eq!(rt_conf.min_energy_per_ray, picojoule!(1.0));
         assert_eq!(rt_conf.min_energy_per_ray(), picojoule!(1.0));
     }
     #[test]

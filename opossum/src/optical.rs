@@ -7,7 +7,7 @@ use nalgebra::Point3;
 use petgraph::stable_graph::NodeIndex;
 use uom::si::f64::{Angle, Length};
 
-use crate::analyzer::{AnalyzerType, RayTraceConfig};
+use crate::analyzers::{AnalyzerType, RayTraceConfig};
 use crate::aperture::Aperture;
 use crate::coatings::CoatingType;
 use crate::dottable::Dottable;

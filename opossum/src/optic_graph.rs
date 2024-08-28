@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 use crate::{
-    analyzer::{AnalyzerType, RayTraceConfig},
+    analyzers::{AnalyzerType, RayTraceConfig},
     error::{OpmResult, OpossumError},
     light::Light,
     lightdata::LightData,
@@ -667,14 +667,12 @@ impl OpticGraph {
                     }
                 }
                 let incoming_edges = self.get_incoming(idx, incoming_data);
+                let node_name = format!("{}", node.borrow());
                 let mut outgoing_edges: LightResult = node
                     .borrow_mut()
                     .analyze(incoming_edges, analyzer_type)
                     .map_err(|e| {
-                        OpossumError::Analysis(format!(
-                            "analysis of node {} failed: {e}",
-                            node.borrow()
-                        ))
+                        OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
                     })?;
                 if let AnalyzerType::RayTrace(r_config) = analyzer_type {
                     Self::filter_ray_limits(&mut outgoing_edges, r_config);

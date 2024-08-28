@@ -5,7 +5,7 @@ use uom::si::length::nanometer;
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -330,7 +330,7 @@ impl Plottable for Spectrometer {
 mod test {
     use super::*;
     use crate::{
-        analyzer::AnalyzerType,
+        analyzers::AnalyzerType,
         joule,
         lightdata::DataEnergy,
         nodes::{test_helper::test_helper::*, EnergyMeter},

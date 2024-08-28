@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{DataEnergy, LightData},
@@ -374,8 +374,9 @@ impl Dottable for BeamSplitter {
 mod test {
     use super::*;
     use crate::{
-        analyzer::RayTraceConfig, joule, millimeter, nanometer, nodes::test_helper::test_helper::*,
-        ray::Ray, spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
+        analyzers::RayTraceConfig, joule, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, ray::Ray, spectrum_helper::create_he_ne_spec,
+        utils::geom_transformation::Isometry,
     };
     use approx::{assert_abs_diff_eq, AbsDiffEq};
     use uom::si::energy::joule;

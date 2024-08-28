@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -353,7 +353,7 @@ impl Plottable for FluenceData {
 mod test {
     use super::*;
     use crate::{
-        analyzer::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
+        analyzers::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
         nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };

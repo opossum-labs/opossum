@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -248,7 +248,7 @@ mod test {
     use uom::si::energy::joule;
 
     use crate::{
-        analyzer::{AnalyzerType, RayTraceConfig},
+        analyzers::{AnalyzerType, RayTraceConfig},
         joule,
         lightdata::DataEnergy,
         millimeter, nanometer,

@@ -3,7 +3,7 @@
 //!
 //! This module handles the command line parsing as well as basic information (e.g. help dialog, version information, etc.).
 use crate::{
-    analyzer::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
+    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
     error::{OpmResult, OpossumError},
     get_version,
 };
@@ -82,7 +82,7 @@ fn eval_analyzer_input(analyzer_input: &str) -> Option<AnalyzerType> {
     match analyzer_input {
         "e" => Some(AnalyzerType::Energy),
         "r" => Some(AnalyzerType::RayTrace(RayTraceConfig::default())),
-        "g" => Some(AnalyzerType::GhostFocus(GhostFocusConfig::default())),
+        "g" => Some(AnalyzerType::GhostFocus(GhostFocusConfig)),
         _ => None,
     }
 }
@@ -292,10 +292,8 @@ pub fn show_intro() {
 
 #[cfg(test)]
 mod test {
-    use crate::analyzer::RayTraceConfig;
-    use std::io::BufReader;
-
     use super::*;
+    use std::io::BufReader;
     #[test]
     fn file_path_is_valid_test() {
         let path_valid = Path::new("./files_for_testing/opm/opticscenery.opm");
@@ -367,7 +365,7 @@ mod test {
         );
         assert_eq!(
             create_prompt_str("a", "test_str\r\n").unwrap(),
-            "test_str\r\ne for energy analysis\nr for ray-tracing analysis\n"
+            "test_str\r\ne for energy analysis\nr for ray-tracing analysis\ng for ghost focus analysis\n"
         );
         assert_eq!(create_prompt_str("r", "test_str\r\n").unwrap(), "test_str\r\nPlease insert a report directory or nothing to select the same directory as the optical-setup file\n");
         assert!(create_prompt_str("invalid_flag", "").is_err());

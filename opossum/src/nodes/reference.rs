@@ -5,7 +5,7 @@ use std::{
 use uuid::Uuid;
 
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,

@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     optic_graph::OpticGraph,

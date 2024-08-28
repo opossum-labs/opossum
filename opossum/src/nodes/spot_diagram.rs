@@ -8,7 +8,7 @@ use uom::si::length::{millimeter, nanometer};
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -329,7 +329,7 @@ mod test {
     use super::*;
     use crate::utils::test_helper::test_helper::check_warnings;
     use crate::{
-        analyzer::AnalyzerType, joule, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
+        analyzers::AnalyzerType, joule, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
         position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
     };
     use tempfile::NamedTempFile;

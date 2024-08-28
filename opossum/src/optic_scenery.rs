@@ -1,6 +1,6 @@
 //! The basic structure containing the entire optical model
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     error::{OpmResult, OpossumError},
     get_version,
     optic_graph::OpticGraph,
@@ -444,7 +444,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
 #[cfg(test)]
 mod test {
     use crate::{
-        analyzer::{AnalyzerType, RayTraceConfig},
+        analyzers::{AnalyzerType, RayTraceConfig},
         joule,
         lightdata::LightData,
         millimeter, nanometer,

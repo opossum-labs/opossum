@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! A paraxial surface (ideal lens)
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -167,7 +167,7 @@ impl Dottable for ParaxialSurface {
 mod test {
     use super::*;
     use crate::{
-        analyzer::RayTraceConfig, degree, joule, millimeter, nanometer,
+        analyzers::RayTraceConfig, degree, joule, millimeter, nanometer,
         nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
         utils::geom_transformation::Isometry,
     };
