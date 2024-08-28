@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! The basic structure containing the entire optical model
 use crate::{
     analyzers::AnalyzerType,
@@ -283,14 +284,20 @@ impl OpticScenery {
         })?;
         Ok(())
     }
+    /// Returns a reference to the global config of this [`OpticScenery`].
     #[must_use]
     pub fn global_conf(&self) -> &RefCell<SceneryResources> {
         &self.global_conf
     }
+    /// Sets the global config of this [`OpticScenery`].
     pub fn set_global_conf(&mut self, rsrc: SceneryResources) {
         self.global_conf = Rc::new(RefCell::new(rsrc));
         self.graph
             .update_global_config(&Some(self.global_conf.clone()));
+    }
+    /// Returns a mutable reference to the graph of this [`OpticScenery`].
+    pub fn graph_mut(&mut self) -> &mut OpticGraph {
+        &mut self.graph
     }
 }
 impl<'de> Deserialize<'de> for OpticScenery {

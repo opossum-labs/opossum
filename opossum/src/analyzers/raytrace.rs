@@ -1,6 +1,8 @@
 //! Analyzer for sequential ray tracing
 use crate::{
+    analyzers::AnalyzerType,
     error::{OpmResult, OpossumError},
+    optical::LightResult,
     picojoule, OpticScenery,
 };
 use log::info;
@@ -8,18 +10,33 @@ use uom::si::f64::Energy;
 
 use super::Analyzer;
 
-pub struct RayTrace {
+#[derive(Default, Debug)]
+pub struct RayTracingAnalyzer {
     config: RayTraceConfig,
 }
-impl RayTrace {
+impl RayTracingAnalyzer {
     #[must_use]
     pub const fn new(config: RayTraceConfig) -> Self {
         Self { config }
     }
 }
-impl Analyzer for RayTrace {
+impl Analyzer for RayTracingAnalyzer {
     fn analyze(&self, scenery: &mut OpticScenery) -> OpmResult<()> {
-        info!("Performing ray tracing analysis");
+        let scenery_name = if scenery.description().is_empty() {
+            String::new()
+        } else {
+            format!(" '{}'", scenery.description())
+        };
+        info!("Performing ray tracing analysis of scenery{scenery_name}.");
+        let graph = scenery.graph_mut();
+        let name = format!("scenery{scenery_name}");
+        graph.calc_node_positions(&name, &LightResult::default())?;
+        let name = format!("Scenery{scenery_name}");
+        graph.analyze(
+            &name,
+            &LightResult::default(),
+            &AnalyzerType::RayTrace(self.config.clone()),
+        )?;
         Ok(())
     }
 }
@@ -45,7 +62,7 @@ pub enum RayTracingMode {
     // NonSequential
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 /// Configuration data for a rays tracing analysis.
 ///
 /// The config contains the following info

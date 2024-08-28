@@ -37,5 +37,4 @@ graph:
     - rear
     - front
     - 0.0
-properties:
-  description: !String OpticScenery demo
+description: OpticScenery demo

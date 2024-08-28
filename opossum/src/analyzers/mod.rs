@@ -7,6 +7,7 @@
 use std::fmt::Display;
 
 use strum::EnumIter;
+pub mod energy;
 pub mod ghostfocus;
 pub mod raytrace;
 
@@ -64,8 +65,8 @@ mod test {
 }
 
 /// Marker trait for all Analyzers
-trait Analyzer {
-    fn analyze(&self, scenery: &mut OpticScenery) -> OpmResult<()> {
+pub trait Analyzer {
+    fn analyze(&self, _scenery: &mut OpticScenery) -> OpmResult<()> {
         Err(OpossumError::Analysis(
             "no analysis function defined for given analyzer".into(),
         ))
