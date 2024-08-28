@@ -1,23 +1,39 @@
 //! Module for gridding data
 
 #![warn(missing_docs)]
-use super::filter_data::{filter_nan_infinite, get_min_max_filter_nonfinite};
+use super::filter_data::filter_nan_infinite;
 use crate::{
     error::{OpmResult, OpossumError},
     plottable::AxLims,
 };
-use approx::{abs_diff_eq, abs_diff_ne, relative_eq};
+use approx::abs_diff_ne;
 use itertools::Itertools;
 use kahan::KahanSum;
 use log::warn;
-use nalgebra::{DMatrix, DVector, DVectorView, Matrix3xX, MatrixXx2, MatrixXx3, Point2, Scalar};
+use nalgebra::{DMatrix, DVector, DVectorView, MatrixXx2, MatrixXx3, Point2, Scalar};
 use num::{Float, NumCast, ToPrimitive};
+use spade::{
+    DelaunayTriangulation, FloatTriangulation, HasPosition, Point2 as SpadeP, Triangulation,
+};
 use std::ops::Add;
 use triangulate::Mappable;
 use voronator::{
     delaunator::{Coord, Point as VPoint},
     polygon, VoronoiDiagram,
 };
+
+struct PointWithHeight {
+    position: SpadeP<f64>,
+    height: f64,
+}
+
+impl HasPosition for PointWithHeight {
+    type Scalar = f64;
+
+    fn position(&self) -> SpadeP<f64> {
+        self.position
+    }
+}
 
 /// Storage struct for voronoi diagram cells and associated values of its vertices
 #[derive(Clone, Debug)]
@@ -37,14 +53,7 @@ impl VoronoiedData {
         xy_coordinates: &MatrixXx2<f64>,
         z_data_opt: Option<DVector<f64>>,
     ) -> OpmResult<Self> {
-        let x_bounds = AxLims::try_from(get_min_max_filter_nonfinite(
-            xy_coordinates.column(0).into(),
-        ))?;
-        let y_bounds = AxLims::try_from(get_min_max_filter_nonfinite(
-            xy_coordinates.column(1).into(),
-        ))?;
-
-        let (voronoi_diagram, _) = create_voronoi_cells(xy_coordinates, &x_bounds, &y_bounds)?;
+        let (voronoi_diagram, _) = create_voronoi_cells(xy_coordinates)?;
 
         let z_data = if let Some(z_data) = z_data_opt {
             if xy_coordinates.shape().0 != z_data.len() {
@@ -153,15 +162,7 @@ pub fn interpolate_3d_scatter_data(
             "Number of scattered data points must be at least 3 to define a triangle, which is necessary to interpolate!".into(),
         ));
     }
-    let x_bounds =
-        AxLims::new(x_interp_filtered.min(), x_interp_filtered.max()).ok_or_else(|| {
-            OpossumError::Other("Can not voronoi the data with Axlimits of None!".into())
-        })?;
-    let y_bounds =
-        AxLims::new(y_interp_filtered.min(), y_interp_filtered.max()).ok_or_else(|| {
-            OpossumError::Other("Can not voronoi the data with Axlimits of None!".into())
-        })?;
-    let voronoi_data = create_valued_voronoi_cells(scattered_data, &x_bounds, &y_bounds)?;
+    let voronoi_data = create_valued_voronoi_cells(scattered_data)?;
 
     interpolate_3d_triangulated_scatter_data(&voronoi_data, &x_interp_filtered, &y_interp_filtered)
 }
@@ -299,21 +300,14 @@ pub fn create_linspace_axes(
 /// Creates a set of voronoi cells from scattered 2d-coordinates
 /// # Attributes
 /// - `xy_coord`: Matrix of x-y coordinates of scattered points with the first column being the x coordinates and the second column being the y coordinates of these points
-/// - `x_bounds`: Boundary x-coordinates of the scattered data points.
-/// - `y_bounds`: Boundary y-coordinates of the scattered data points.
 /// # Errors
 /// This function errors if
 /// - coordinate values are non-finite or NAN
-/// - boundary values are non-finite or NAN
 /// - all points are on the same line and can therefore not be triangulated properly
 /// - the generation of the voronoi diagram fails
 /// # Panics
 /// This function panics if the number of triangles cannot be converted to f64
-pub fn create_voronoi_cells(
-    xy_coord: &MatrixXx2<f64>,
-    x_bounds: &AxLims,
-    y_bounds: &AxLims,
-) -> OpmResult<(VoronoiDiagram<VPoint>, f64)> {
+pub fn create_voronoi_cells(xy_coord: &MatrixXx2<f64>) -> OpmResult<(VoronoiDiagram<VPoint>, f64)> {
     //collect data to a vector of Points that can be used to create the triangulation
     let points = Iterator::map(xy_coord.row_iter(), |c| {
         if c[0].is_finite() && c[1].is_finite() {
@@ -326,11 +320,7 @@ pub fn create_voronoi_cells(
     })
     .collect::<OpmResult<Vec<VPoint>>>()?;
 
-    if !x_bounds.check_validity() || !y_bounds.check_validity() {
-        Err(OpossumError::Other(
-            "Boundary values for voronoi-diagram generation must be finite!".into(),
-        ))
-    } else if all_points_on_same_line(xy_coord) {
+    if all_points_on_same_line(xy_coord) {
         Err(OpossumError::Other(
             "All passed points lie on the same line! Triangulation not possible!".into(),
         ))
@@ -407,20 +397,13 @@ pub fn create_voronoi_cells(
 /// Creates a set of voronoi cells from scattered 2d-coordinates with associated values
 /// # Attributes
 /// - `xyz_data`: Matrix of x-y-z coordinates of scattered points with the first column being the x coordinates and the second column being the y coordinates of these points and the third column being the z valus at these points
-/// - `x_bounds`: Boundary x-coordinates of the scattered data points.
-/// - `y_bounds`: Boundary y-coordinates of the scattered data points.
 /// # Errors
 /// This function errors if the voronoir-diagram generation fails
-pub fn create_valued_voronoi_cells(
-    xyz_data: &MatrixXx3<f64>,
-    x_bounds: &AxLims,
-    y_bounds: &AxLims,
-) -> OpmResult<VoronoiedData> {
-    let (voronoi_diagram, _) = create_voronoi_cells(
-        &MatrixXx2::from_columns(&[xyz_data.column(0), xyz_data.column(1)]),
-        x_bounds,
-        y_bounds,
-    )?;
+pub fn create_valued_voronoi_cells(xyz_data: &MatrixXx3<f64>) -> OpmResult<VoronoiedData> {
+    let (voronoi_diagram, _) = create_voronoi_cells(&MatrixXx2::from_columns(&[
+        xyz_data.column(0),
+        xyz_data.column(1),
+    ]))?;
 
     let z_data = xyz_data.column(2);
     let mut z_data_voronoi = DVector::from_element(voronoi_diagram.sites.len(), f64::NAN);
@@ -462,147 +445,38 @@ pub fn interpolate_3d_triangulated_scatter_data(
             "Cannot interpolate data, as one of the interpolation vectors have zero length".into(),
         ));
     };
+
+    let mut triangulation: DelaunayTriangulation<PointWithHeight> = DelaunayTriangulation::new();
+    //copy points of voronoi diag into spade triangulation
+    for (p, z) in voronoi.voronoi_diagram.sites.iter().zip(z_data.iter()) {
+        if z.is_finite() {
+            triangulation
+                .insert(PointWithHeight {
+                    position: SpadeP::new(p.x, p.y),
+                    height: *z,
+                })
+                .map_err(|_| {
+                    OpossumError::Other("Inserting Point into Spade triangulation failed".into())
+                })?;
+        }
+    }
+
     let mut interp_data =
         DMatrix::<f64>::from_element(num_axes_points_x, num_axes_points_y, f64::NAN);
-    let tri_index_mat =
-        Matrix3xX::from_vec(voronoi.voronoi_diagram.delaunay.triangles.clone()).transpose();
     let mut mask = DMatrix::from_element(num_axes_points_x, num_axes_points_y, 0.);
 
-    let x_interp_min = x_interp.min();
-    let y_interp_min = y_interp.min();
-
-    let x_binning = if num_axes_points_x == 1 {
-        f64::INFINITY
-    } else {
-        x_interp[1] - x_interp[0]
-    };
-    let y_binning = if num_axes_points_y == 1 {
-        f64::INFINITY
-    } else {
-        y_interp[1] - y_interp[0]
-    };
-
-    let num_axes_points_x = num_axes_points_x.to_f64().unwrap();
-    let num_axes_points_y = num_axes_points_x.to_f64().unwrap();
-
-    let v_cell_sites = &voronoi.voronoi_diagram.sites;
-
-    for tri_idxs in tri_index_mat.row_iter() {
-        if z_data[tri_idxs[0]].is_nan()
-            || z_data[tri_idxs[1]].is_nan()
-            || z_data[tri_idxs[2]].is_nan()
-        {
-            continue;
-        }
-        let p1_x = &v_cell_sites[tri_idxs[0]].x;
-        let p1_y = &v_cell_sites[tri_idxs[0]].y;
-        let p2_x = &v_cell_sites[tri_idxs[1]].x;
-        let p2_y = &v_cell_sites[tri_idxs[1]].y;
-        let p3_x = &v_cell_sites[tri_idxs[2]].x;
-        let p3_y = &v_cell_sites[tri_idxs[2]].y;
-
-        let p1p2_x = p2_x - p1_x;
-        let p1p2_y = p2_y - p1_y;
-        let p2p3_x = p3_x - p2_x;
-        let p2p3_y = p3_y - p2_y;
-        let p3p1_x = p1_x - p3_x;
-        let p3p1_y = p1_y - p3_y;
-
-        let tri_area = (-p1p2_x).mul_add(p3p1_y, p1p2_y * p3p1_x).abs();
-
-        let (x_min, x_max, y_min, y_max) = Iterator::map(tri_idxs.iter(), |p_id| {
-            (v_cell_sites[*p_id].x, v_cell_sites[*p_id].y)
-        })
-        .fold(
-            (
-                f64::INFINITY,
-                f64::NEG_INFINITY,
-                f64::INFINITY,
-                f64::NEG_INFINITY,
-            ),
-            |arg, v: (f64, f64)| {
-                (
-                    f64::min(arg.0, v.0),
-                    f64::max(arg.1, v.0),
-                    f64::min(arg.2, v.1),
-                    f64::max(arg.3, v.1),
-                )
-            },
-        );
-
-        let (x_i, x_f) = if relative_eq!(num_axes_points_x, 1.0) {
-            (0, 0)
-        } else {
-            let x_i = (x_min - x_interp_min) / x_binning;
-            let x_f = (x_max - x_interp_min) / x_binning;
-            if x_i.is_sign_negative() || x_f >= num_axes_points_x {
-                continue;
-            };
-            (x_i.to_usize().unwrap(), x_f.to_usize().unwrap())
-        };
-        let (y_i, y_f) = if relative_eq!(num_axes_points_y, 1.0) {
-            (0, 0)
-        } else {
-            let y_i = (y_min - y_interp_min) / y_binning;
-            let y_f = (y_max - y_interp_min) / y_binning;
-            if y_i.is_sign_negative() || y_f >= num_axes_points_y {
-                continue;
-            };
-            (y_i.to_usize().unwrap(), y_f.to_usize().unwrap())
-        };
-
-        let c11 = p1_x * p1p2_y;
-        let c12 = p1_y * p1p2_x;
-        let c21 = p2_x * p2p3_y;
-        let c22 = p2_y * p2p3_x;
-        let c31 = p3_x * p3p1_y;
-        let c32 = p3_y * p3p1_x;
-
-        for (x_index, x) in x_interp
-            .view((x_i, 0), (x_f - x_i + 1, 1))
-            .iter()
-            .enumerate()
-        {
-            for (y_index, y) in y_interp
-                .view((y_i, 0), (y_f - y_i + 1, 1))
-                .iter()
-                .enumerate()
-            {
-                let cross_1 = c11 - x * p1p2_y - (c12 - y * p1p2_x);
-                let cross_2 = c21 - x * p2p3_y - (c22 - y * p2p3_x);
-                let cross_3 = c31 - x * p3p1_y - (c32 - y * p3p1_x);
-
-                let in_tri = (cross_1.is_sign_negative()
-                    && cross_2.is_sign_negative()
-                    && cross_3.is_sign_negative())
-                    || (cross_1.is_sign_positive()
-                        && cross_2.is_sign_positive()
-                        && cross_3.is_sign_positive())
-                    || abs_diff_eq!(cross_1, 0.)
-                    || abs_diff_eq!(cross_2, 0.)
-                    || abs_diff_eq!(cross_3, 0.);
-
-                if in_tri {
-                    let p1xpx = p1_x - x;
-                    let p1ypy = p1_y - y;
-                    let p2xpx = p2_x - x;
-                    let p2ypy = p2_y - y;
-                    let p3xpx = p3_x - x;
-                    let p3ypy = p3_y - y;
-
-                    let area1 = p2xpx.mul_add(p3ypy, -(p2ypy * p3xpx)).abs();
-                    let area2 = p3xpx.mul_add(p1ypy, -(p3ypy * p1xpx)).abs();
-                    let area3 = p1xpx.mul_add(p2ypy, -(p1ypy * p2xpx)).abs();
-                    interp_data[(y_index + y_i, x_index + x_i)] = area1 * z_data[tri_idxs[0]];
-                    interp_data[(y_index + y_i, x_index + x_i)] += area2 * z_data[tri_idxs[1]];
-                    interp_data[(y_index + y_i, x_index + x_i)] += area3 * z_data[tri_idxs[2]];
-                    interp_data[(y_index + y_i, x_index + x_i)] /= tri_area;
-
-                    mask[(y_index + y_i, x_index + x_i)] = 1.;
-                }
+    // let nn = triangulation.natural_neighbor();
+    let nn = triangulation.barycentric();
+    for (x_index, x) in x_interp.iter().enumerate() {
+        for (y_index, y) in y_interp.iter().enumerate() {
+            let interp_point = nn.interpolate(|v| v.data().height, SpadeP::new(*x, *y));
+            if let Some(p) = interp_point {
+                interp_data[(y_index, x_index)] = p;
+                mask[(y_index, x_index)] = 1.;
             }
         }
     }
+
     Ok((interp_data, mask))
 }
 
@@ -628,7 +502,7 @@ fn all_points_on_same_line(point_coords: &MatrixXx2<f64>) -> bool {
 #[cfg(test)]
 mod test {
     use approx::{assert_abs_diff_eq, assert_relative_eq};
-    use nalgebra::Matrix2xX;
+    use nalgebra::{Matrix2xX, Matrix3xX};
 
     use super::*;
     #[test]
@@ -664,9 +538,7 @@ mod test {
     #[test]
     fn get_voronoi_diagram_test() {
         let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
-        let x_bounds = AxLims { min: 0., max: 3. };
-        let y_bounds = AxLims { min: 1.5, max: 15. };
-        let (voronoi, _) = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds).unwrap();
+        let (voronoi, _) = create_voronoi_cells(&xy_coord).unwrap();
 
         let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
         let z_data = DVector::from_vec(vec![-10., 0., 500.]);
@@ -787,7 +659,7 @@ mod test {
     fn interpolate_3d_scatter_data_mask_test() {
         let scattered_data =
             Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 1., 1., 1., 1.]).transpose();
-
+        println!("{}", scattered_data);
         let x_interp = linspace(-0.5, 1., 4).unwrap();
         let y_interp = linspace(-0.5, 1., 4).unwrap();
         let (_data, mask) =
@@ -1007,23 +879,13 @@ mod test {
     #[test]
     fn create_voronoi_cells_same_line_test() {
         let xy_coord = Matrix2xX::from_vec(vec![0., 0., 1., 1., 2., 2., 1000., 1000.]).transpose();
-        let x_bounds = AxLims {
-            min: 0.,
-            max: 1000.,
-        };
-        let y_bounds = AxLims {
-            min: 0.,
-            max: 1000.,
-        };
-        let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
+        let voronoi = create_voronoi_cells(&xy_coord);
         assert!(voronoi.is_err());
     }
     #[test]
     fn create_voronoi_cells_site_coordinates_test() {
         let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
-        let x_bounds = AxLims { min: 0., max: 2. };
-        let y_bounds = AxLims { min: 0., max: 2. };
-        let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
+        let voronoi = create_voronoi_cells(&xy_coord);
         assert!(voronoi.is_ok());
 
         let (unwrapped_voronoi, _) = voronoi.unwrap();
@@ -1035,73 +897,24 @@ mod test {
         assert_relative_eq!(unwrapped_voronoi.sites[2].y, 15.);
     }
     #[test]
-    fn create_voronoi_cells_invalid_bounds_test() {
-        let xy_coord = MatrixXx2::<f64>::zeros(0);
-        let x_bounds = AxLims { min: 0., max: 0. };
-        let y_bounds = AxLims { min: 0., max: 0. };
-        let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
-        assert!(voronoi.is_err());
-
-        let xy_coord = MatrixXx2::<f64>::zeros(0);
-        let x_bounds = AxLims {
-            min: f64::NAN,
-            max: 0.,
-        };
-        let y_bounds = AxLims {
-            min: f64::NAN,
-            max: 0.,
-        };
-        let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
-        assert!(voronoi.is_err());
-
-        let xy_coord = MatrixXx2::<f64>::zeros(0);
-        let x_bounds = AxLims {
-            min: f64::INFINITY,
-            max: 0.,
-        };
-        let y_bounds = AxLims { min: 0., max: 0. };
-        let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
-        assert!(voronoi.is_err());
-
-        let xy_coord = MatrixXx2::<f64>::zeros(0);
-        let x_bounds = AxLims {
-            min: f64::NEG_INFINITY,
-            max: 0.,
-        };
-        let y_bounds = AxLims { min: 0., max: 0. };
-        let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
-        assert!(voronoi.is_err());
-    }
-    #[test]
     fn create_voronoi_cells_invalid_site_coordinates_test() {
         let xy_coord = Matrix2xX::from_vec(vec![1.0, f64::NAN]).transpose();
-        let x_bounds = AxLims { min: 0., max: 2. };
-        let y_bounds = AxLims { min: 0., max: 2. };
-        let voronoi = create_voronoi_cells(&xy_coord, &x_bounds, &y_bounds);
+        let voronoi = create_voronoi_cells(&xy_coord);
         assert!(voronoi.is_err());
     }
     #[test]
     fn create_valued_voronoi_cells_test() {
         let xyz_coord = MatrixXx3::<f64>::zeros(0);
-        let x_bounds = AxLims { min: 0., max: 0. };
-        let y_bounds = AxLims { min: 0., max: 0. };
-        let voronoi = create_valued_voronoi_cells(&xyz_coord, &x_bounds, &y_bounds);
+        let voronoi = create_valued_voronoi_cells(&xyz_coord);
         assert!(voronoi.is_err());
 
         let xyz_coord = Matrix3xX::from_vec(vec![1.0, 1.5, 10.]).transpose();
-        let x_bounds = AxLims { min: 0., max: 2. };
-        let y_bounds = AxLims { min: 0., max: 2. };
-        let voronoi = create_valued_voronoi_cells(&xyz_coord, &x_bounds, &y_bounds);
+        let voronoi = create_valued_voronoi_cells(&xyz_coord);
         assert!(voronoi.is_err());
 
         let xyz_coord =
             Matrix3xX::from_vec(vec![1.0, 1.5, 10., 2.0, 2.5, 20., -1.0, -3.5, 30.]).transpose();
-        let x_bounds = AxLims { min: -1., max: 2. };
-        let y_bounds = AxLims {
-            min: -3.5,
-            max: 2.5,
-        };
-        let voronoi = create_valued_voronoi_cells(&xyz_coord, &x_bounds, &y_bounds);
+        let voronoi = create_valued_voronoi_cells(&xyz_coord);
         assert!(voronoi.is_ok());
 
         let unwrapped_voronoi = voronoi.unwrap();
