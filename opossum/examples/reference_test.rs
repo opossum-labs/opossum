@@ -11,7 +11,7 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
-    scenery.set_description("Reference node demo")?;
+    scenery.set_description("Reference node demo");
     let src = scenery.add_node(Source::new(
         "source",
         &LightData::Energy(DataEnergy {

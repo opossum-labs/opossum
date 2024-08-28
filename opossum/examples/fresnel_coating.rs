@@ -7,7 +7,7 @@ use opossum::{
     millimeter, nanometer,
     nodes::{EnergyMeter, FluenceDetector, Lens, RayPropagationVisualizer, Source},
     optical::Optical,
-    position_distributions::{Grid, Hexapolar},
+    position_distributions::Grid,
     rays::Rays,
     refractive_index::RefrIndexConst,
     OpticScenery,
@@ -16,12 +16,12 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
-    scenery.set_description("Fresnel coating example".into())?;
+    scenery.set_description("Fresnel coating example".into());
 
     let rays = Rays::new_collimated(
         nanometer!(1000.),
         &UniformDist::new(joule!(1.))?,
-        &Grid::new((millimeter!(9.),millimeter!(9.)), (100,100))?,
+        &Grid::new((millimeter!(9.), millimeter!(9.)), (100, 100))?,
     )?;
     let source = Source::new("src", &LightData::Geometric(rays));
     let src = scenery.add_node(source);
@@ -41,7 +41,7 @@ fn main() -> OpmResult<()> {
     let det = scenery.add_node(RayPropagationVisualizer::default());
 
     scenery.connect_nodes(src, "out1", fd1, "in1", millimeter!(10.0))?;
-    scenery.connect_nodes(fd1, "out1", l1, "front", millimeter!(10.0))?;
+    scenery.connect_nodes(fd1, "out1", l1, "front", millimeter!(1.0))?;
     scenery.connect_nodes(l1, "rear", fd2, "in1", millimeter!(1.0))?;
     scenery.connect_nodes(fd2, "out1", ed, "in1", millimeter!(1.0))?;
     scenery.connect_nodes(ed, "out1", det, "in1", millimeter!(10.0))?;

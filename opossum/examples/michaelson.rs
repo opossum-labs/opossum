@@ -11,7 +11,7 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
-    scenery.set_description("Michaelson interferomater")?;
+    scenery.set_description("Michaelson interferomater");
     let src = scenery.add_node(Source::new(
         "Source",
         &LightData::Energy(DataEnergy {

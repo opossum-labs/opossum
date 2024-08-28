@@ -354,7 +354,7 @@ mod test {
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_empty_LR.dot");
 
         let mut scenery = OpticScenery::default();
-        scenery.set_description("Test".into()).unwrap();
+        scenery.set_description("Test");
 
         let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
         let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
@@ -384,7 +384,7 @@ mod test {
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_full_LR.dot");
 
         let mut scenery = OpticScenery::default();
-        scenery.set_description("SceneryTest".into()).unwrap();
+        scenery.set_description("SceneryTest");
         let i_s = scenery.add_node(Source::new("Source", &LightData::Fourier));
         let mut bs = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
         bs.node_attr_mut().set_name("Beam splitter");
@@ -418,10 +418,7 @@ mod test {
     #[ignore]
     fn to_dot_group() {
         let mut scenery = OpticScenery::default();
-        scenery
-            .set_description("Node Group test section".into())
-            .unwrap();
-
+        scenery.set_description("Node Group test section");
         let mut group1 = NodeGroup::new("group 1");
         group1.set_expand_view(true).unwrap();
         let g1_n1 = group1.add_node(Dummy::new("node1")).unwrap();

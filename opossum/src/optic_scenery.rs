@@ -7,7 +7,6 @@ use crate::{
     optic_ref::OpticRef,
     optic_senery_rsc::SceneryResources,
     optical::{LightResult, Optical},
-    properties::{Properties, Proptype},
     reporter::AnalysisReport,
 };
 use chrono::Local;
@@ -56,18 +55,14 @@ use uom::si::f64::Length;
 #[derive(Debug, Clone)]
 pub struct OpticScenery {
     g: OpticGraph,
-    props: Properties,
+    description: String,
     global_conf: Rc<RefCell<SceneryResources>>,
 }
 impl Default for OpticScenery {
     fn default() -> Self {
-        let mut props = Properties::default();
-        props
-            .create("description", "title of the scenery", None, "".into())
-            .unwrap();
         Self {
             g: OpticGraph::default(),
-            props,
+            description: String::new(),
             global_conf: Rc::new(RefCell::new(SceneryResources::default())),
         }
     }
@@ -217,24 +212,13 @@ impl OpticScenery {
         Ok(())
     }
     /// Sets the description of this [`OpticScenery`].
-    ///
-    /// # Attributes
-    /// `description`: Description of the [`OpticScenery`]
-    ///
-    /// # Errors
-    /// This function will return an [`OpossumError`] if the property "description" can not be set via the
-    /// method [`set()`](./properties/struct.Properties.html#method.set).
-    pub fn set_description(&mut self, description: &str) -> OpmResult<()> {
-        self.props.set("description", description.into())
+    pub fn set_description(&mut self, description: &str) {
+        description.clone_into(&mut self.description);
     }
     /// Returns a reference to the description of this [`OpticScenery`].
     #[must_use]
     pub fn description(&self) -> &str {
-        if let Ok(Proptype::String(dsc)) = self.props.get("description") {
-            dsc
-        } else {
-            ""
-        }
+        &self.description
     }
     /// Generate an [`AnalysisReport`] containing the result of an analysis.
     ///
@@ -316,7 +300,7 @@ impl Serialize for OpticScenery {
         let mut scene = serializer.serialize_struct("scenery", 4)?;
         scene.serialize_field("opm version", &env!("OPM_FILE_VERSION"))?;
         scene.serialize_field("graph", &self.g)?;
-        scene.serialize_field("properties", &self.props)?;
+        scene.serialize_field("description", &self.description)?;
         let global_conf = self.global_conf.borrow().to_owned();
         scene.serialize_field("global", &global_conf)?;
         scene.end()
@@ -331,7 +315,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
         enum Field {
             OpmVersion,
             Graph,
-            Properties,
+            Description,
             Global,
         }
         const FIELDS: &[&str] = &["opm version", "graph", "properties", "global"];
@@ -350,7 +334,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
                         &self,
                         formatter: &mut std::fmt::Formatter<'_>,
                     ) -> std::fmt::Result {
-                        formatter.write_str("`opm version`, `graph`, `properties`, or `global`")
+                        formatter.write_str("`opm version`, `graph`, `description`, or `global`")
                     }
                     fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
                     where
@@ -359,7 +343,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
                         match value {
                             "opm version" => Ok(Field::OpmVersion),
                             "graph" => Ok(Field::Graph),
-                            "properties" => Ok(Field::Properties),
+                            "description" => Ok(Field::Description),
                             "global" => Ok(Field::Global),
                             _ => Err(de::Error::unknown_field(value, FIELDS)),
                         }
@@ -383,7 +367,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
             {
                 let mut opm_version: Option<String> = None;
                 let mut graph: Option<OpticGraph> = None;
-                let mut properties: Option<Properties> = None;
+                let mut description: Option<String> = None;
                 let mut global_conf: Option<SceneryResources> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -399,11 +383,11 @@ impl<'de> Deserialize<'de> for OpticScenery {
                             }
                             graph = Some(map.next_value()?);
                         }
-                        Field::Properties => {
-                            if properties.is_some() {
-                                return Err(de::Error::duplicate_field("properties"));
+                        Field::Description => {
+                            if description.is_some() {
+                                return Err(de::Error::duplicate_field("description"));
                             }
-                            properties = Some(map.next_value()?);
+                            description = Some(map.next_value()?);
                         }
                         Field::Global => {
                             if global_conf.is_some() {
@@ -423,7 +407,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
                     }
                 }
                 let graph = graph.ok_or_else(|| de::Error::missing_field("graph"))?;
-                let properties = properties.unwrap_or_default();
+                let description = description.unwrap_or_default();
                 let global_conf = global_conf.unwrap_or_else(|| {
                     warn!("no global resources found, using default");
                     SceneryResources::default()
@@ -431,7 +415,7 @@ impl<'de> Deserialize<'de> for OpticScenery {
 
                 let mut s = OpticScenery {
                     g: graph,
-                    props: properties,
+                    description,
                     global_conf: Rc::new(RefCell::new(SceneryResources::default())),
                 };
                 s.set_global_conf(global_conf);
@@ -479,7 +463,7 @@ mod test {
     fn set_description() {
         let mut scenery = OpticScenery::default();
         assert_eq!(scenery.description(), "");
-        scenery.set_description("Test".into()).unwrap();
+        scenery.set_description("Test");
         assert_eq!(scenery.description(), "Test")
     }
     #[test]

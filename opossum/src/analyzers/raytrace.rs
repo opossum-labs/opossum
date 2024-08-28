@@ -1,9 +1,27 @@
 //! Analyzer for sequential ray tracing
 use crate::{
     error::{OpmResult, OpossumError},
-    picojoule,
+    picojoule, OpticScenery,
 };
+use log::info;
 use uom::si::f64::Energy;
+
+use super::Analyzer;
+
+pub struct RayTrace {
+    config: RayTraceConfig,
+}
+impl RayTrace {
+    pub fn new(config: RayTraceConfig) -> Self {
+        Self { config }
+    }
+}
+impl Analyzer for RayTrace {
+    fn analyze(&self, scenery: &mut OpticScenery) -> OpmResult<()> {
+        info!("Performing ray tracing analysis");
+        Ok(())
+    }
+}
 
 /// enum to define the mode of the raytracing analysis.
 /// Currently only sequential mode

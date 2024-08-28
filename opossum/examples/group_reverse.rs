@@ -13,7 +13,7 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
-    scenery.set_description("Inverse Group test".into())?;
+    scenery.set_description("Inverse Group test".into());
 
     let i_s = scenery.add_node(Source::new(
         "Source",

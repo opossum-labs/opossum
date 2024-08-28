@@ -11,7 +11,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
-    scenery.set_description("Lens Ray-trace test".into())?;
+    scenery.set_description("Lens Ray-trace test");
 
     let src = scenery.add_node(collimated_line_ray_source(
         millimeter!(20.0),

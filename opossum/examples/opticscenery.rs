@@ -5,7 +5,7 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
-    scenery.set_description("OpticScenery demo")?;
+    scenery.set_description("OpticScenery demo");
     let node1 = scenery.add_node(Dummy::new("dummy1"));
     let node2 = scenery.add_node(Dummy::new("dummy2"));
     scenery.connect_nodes(node1, "rear", node2, "front", Length::zero())?;

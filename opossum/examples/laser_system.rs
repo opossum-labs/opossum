@@ -15,7 +15,7 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
-    scenery.set_description("laser system")?;
+    scenery.set_description("laser system");
 
     // Main beam line
     let i_src = scenery.add_node(round_collimated_ray_source(

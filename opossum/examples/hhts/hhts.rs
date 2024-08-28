@@ -19,7 +19,7 @@ use opossum::{
         RayPropagationVisualizer, Source, WaveFront,
     },
     optical::Optical,
-    position_distributions::{Grid, HexagonalTiling, Hexapolar},
+    position_distributions::Hexapolar,
     ray::SplittingConfig,
     rays::Rays,
     refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
@@ -107,7 +107,7 @@ fn main() -> OpmResult<()> {
     rays.add_rays(&mut rays_2w);
 
     let mut scenery = OpticScenery::default();
-    scenery.set_description("HHT Sensor")?;
+    scenery.set_description("HHT Sensor");
     let mut src = Source::new("Source", &LightData::Geometric(rays));
     src.set_isometry(Isometry::identity());
     let src = scenery.add_node(src);

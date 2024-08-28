@@ -13,7 +13,7 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
-    scenery.set_description("Wavefont Demo")?;
+    scenery.set_description("Wavefont Demo");
     let source = round_collimated_ray_source(meter!(5e-3), joule!(1.), 15)?;
     let i_s = scenery.add_node(source);
     let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));

@@ -11,7 +11,7 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = OpticScenery::default();
-    scenery.set_description("Lens Ray-trace test".into())?;
+    scenery.set_description("Lens Ray-trace test".into());
     let src =
         scenery.add_node(round_collimated_ray_source(millimeter!(5.0), joule!(1.0), 30).unwrap());
     let lens = scenery.add_node(ParaxialSurface::new("f=100 mm", millimeter!(100.0))?);

@@ -13,6 +13,11 @@ pub mod raytrace;
 pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;
 
+use crate::{
+    error::{OpmResult, OpossumError},
+    OpticScenery,
+};
+
 /// Type of analysis to be performed.
 #[non_exhaustive]
 #[derive(EnumIter, PartialEq, Debug)]
@@ -58,7 +63,11 @@ mod test {
     }
 }
 
-// Marker trait for all Analyzers
-// trait Analyzer{
-//     fn analyze() {}
-// }
+/// Marker trait for all Analyzers
+trait Analyzer {
+    fn analyze(&self, scenery: &mut OpticScenery) -> OpmResult<()> {
+        Err(OpossumError::Analysis(
+            "no analysis function defined for given analyzer".into(),
+        ))
+    }
+}
