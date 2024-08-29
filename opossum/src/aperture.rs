@@ -139,6 +139,12 @@ impl CircleConfig {
             Err(OpossumError::Other("radius must be positive".into()))
         }
     }
+
+    ///return the radius of this [`CircleConfig`]
+    #[must_use]
+    pub fn radius(&self) -> &Length {
+        &self.radius
+    }
 }
 impl Apodize for CircleConfig {
     fn set_aperture_type(&mut self, aperture_type: ApertureType) {
