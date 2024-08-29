@@ -439,7 +439,7 @@ fn plot_circle(conf: &CircleConfig) -> Vec<PlotSeries> {
 impl Plottable for Aperture {
     fn get_plot_series(
         &self,
-        plt_type: &PlotType,
+        plt_type: &mut PlotType,
         legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let plt_series_opt = match plt_type {

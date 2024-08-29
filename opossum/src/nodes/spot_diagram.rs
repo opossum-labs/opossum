@@ -15,7 +15,9 @@ use crate::{
     nanometer,
     optic_ports::OpticPorts,
     optical::{Alignable, LightResult, Optical},
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
+    plottable::{
+        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
+    },
     properties::{Properties, Proptype},
     rays::Rays,
     reporter::NodeReport,
@@ -257,7 +259,7 @@ impl Plottable for SpotDiagram {
 
     fn get_plot_series(
         &self,
-        plt_type: &PlotType,
+        plt_type: &mut PlotType,
         legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = &self.light_data;
@@ -266,6 +268,17 @@ impl Plottable for SpotDiagram {
                 let (split_rays_bundles, wavelengths) =
                     rays.split_ray_bundle_by_wavelength(nanometer!(1.), true)?;
                 let num_series = split_rays_bundles.len();
+                let use_colorbar = if num_series > 5 {
+                    plt_type.set_plot_param(&PlotArgs::CBarLabel("wavelength in nm".into()))?;
+                    plt_type.set_plot_param(&PlotArgs::PlotSize((970, 800)))?;
+                    plt_type.set_plot_param(&PlotArgs::ZLim(AxLims::new(
+                        wavelengths[0].get::<nanometer>(),
+                        wavelengths[num_series - 1].get::<nanometer>(),
+                    )))?;
+                    true
+                } else {
+                    false
+                };
                 let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
 
                 let color_grad = colorous::TURBO;
@@ -287,7 +300,7 @@ impl Plottable for SpotDiagram {
                             xy_pos.iter().map(uom::si::f64::Length::get::<millimeter>),
                         ),
                     };
-                    let series_label = if legend {
+                    let series_label = if legend && !use_colorbar {
                         Some(format!("{:.1} nm", wvl.get::<nanometer>()))
                     } else {
                         None
@@ -304,7 +317,7 @@ impl Plottable for SpotDiagram {
                     if *plot_aperture {
                         if let Some(aperture) = self.ports().input_aperture("in1") {
                             let plt_series_opt = aperture.get_plot_series(
-                                &PlotType::Line2D(PlotParameters::default()),
+                                &mut PlotType::Line2D(PlotParameters::default()),
                                 legend,
                             )?;
                             if let Some(aperture_plt_series) = plt_series_opt {
