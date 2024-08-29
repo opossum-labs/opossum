@@ -9,11 +9,13 @@ use super::Analyzer;
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig;
 
+/// Analyzer for ghost focus simulation
 #[derive(Default, Debug)]
 pub struct GhostFocusAnalyzer {
     config: GhostFocusConfig,
 }
 impl GhostFocusAnalyzer {
+    /// Creates a new [`GhostFocusAnalyzer`].
     #[must_use]
     pub const fn new(config: GhostFocusConfig) -> Self {
         Self { config }

@@ -5,6 +5,7 @@ use crate::{analyzers::AnalyzerType, error::OpmResult, optical::LightResult, Opt
 
 use super::Analyzer;
 
+/// Analyzer for simulating a simple energy flow
 #[derive(Debug, Default)]
 pub struct EnergyAnalyzer {}
 

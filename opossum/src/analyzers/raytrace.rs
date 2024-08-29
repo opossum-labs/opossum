@@ -10,11 +10,13 @@ use uom::si::f64::Energy;
 
 use super::Analyzer;
 
+/// Analyzer for (sequential) ray tracing
 #[derive(Default, Debug)]
 pub struct RayTracingAnalyzer {
     config: RayTraceConfig,
 }
 impl RayTracingAnalyzer {
+    /// Creates a new [`RayTracingAnalyzer`].
     #[must_use]
     pub const fn new(config: RayTraceConfig) -> Self {
         Self { config }
