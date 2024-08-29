@@ -2,7 +2,7 @@
 //! Lens with spherical or flat surfaces
 use crate::{
     analyzer::AnalyzerType,
-    aperture::{Aperture, CircleConfig},
+    // aperture::{Aperture, CircleConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -141,15 +141,15 @@ impl Lens {
             .into(),
         )?;
 
-        if let Some(radius) = Self::get_minimum_logical_aperture_radius(
-            front_curvature,
-            rear_curvature,
-            center_thickness,
-        ) {
-            let circle = CircleConfig::new(radius, millimeter!(0., 0.))?;
-            lens.set_input_aperture("front", &Aperture::BinaryCircle(circle.clone()))?;
-            lens.set_output_aperture("rear", &Aperture::BinaryCircle(circle))?;
-        };
+        // if let Some(radius) = Self::get_minimum_logical_aperture_radius(
+        //     front_curvature,
+        //     rear_curvature,
+        //     center_thickness,
+        // ) {
+        //     let circle = CircleConfig::new(radius, millimeter!(0., 0.))?;
+        //     lens.set_input_aperture("front", &Aperture::BinaryCircle(circle.clone()))?;
+        //     lens.set_output_aperture("rear", &Aperture::BinaryCircle(circle))?;
+        // };
 
         Ok(lens)
     }
@@ -157,6 +157,7 @@ impl Lens {
     ///  - intersection of two spheres
     ///  - intersection of sphere and plane
     ///  - the minimum radius of the spheres if there is no intersection
+    #[allow(dead_code)]
     fn get_minimum_logical_aperture_radius(
         front_curvature: Length,
         rear_curvature: Length,
@@ -464,8 +465,12 @@ mod test {
     use core::f64;
 
     use crate::{
-        analyzer::RayTraceConfig, joule, millimeter, nanometer, nodes::test_helper::test_helper::*,
-        position_distributions::Hexapolar, rays::Rays,
+        analyzer::RayTraceConfig,
+        aperture::{Aperture, CircleConfig},
+        joule, millimeter, nanometer,
+        nodes::test_helper::test_helper::*,
+        position_distributions::Hexapolar,
+        rays::Rays,
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
