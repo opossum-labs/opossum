@@ -2,10 +2,9 @@ use opossum::{
     centimeter, degree,
     error::OpmResult,
     millimeter,
-    nodes::{Lens, NodeGroup, NodeReference, ParaxialSurface, ReflectiveGrating, ThinMirror},
+    nodes::{NodeGroup, NodeReference, ParaxialSurface, ReflectiveGrating, ThinMirror},
     num_per_mm,
     optical::{Alignable, Optical},
-    refractive_index::RefractiveIndex,
 };
 use uom::si::f64::Length;
 

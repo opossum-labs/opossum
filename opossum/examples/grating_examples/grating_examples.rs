@@ -2,15 +2,13 @@ use nalgebra::Vector3;
 use opossum::nodes::{ParaxialSurface, SpotDiagram};
 use opossum::refractive_index::{RefrIndexConst, RefractiveIndex};
 use opossum::{
-    centimeter,
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
     lightdata::LightData,
     millimeter, nanometer,
-    nodes::{Lens, NodeReference, RayPropagationVisualizer, ReflectiveGrating, Source, ThinMirror},
-    num_per_mm,
-    optical::{Alignable, Optical},
+    nodes::{Lens, RayPropagationVisualizer, Source},
+    optical::Optical,
     position_distributions::Hexapolar,
     rays::Rays,
     refractive_index::RefrIndexSellmeier1,
@@ -18,7 +16,6 @@ use opossum::{
     utils::geom_transformation::Isometry,
     OpticScenery,
 };
-use opossum::{degree, meter};
 
 mod folded_martinez;
 use folded_martinez::folded_martinez;

@@ -19,7 +19,7 @@ use opossum::{
         RayPropagationVisualizer, Source, WaveFront,
     },
     optical::Optical,
-    position_distributions::{Grid, HexagonalTiling, Hexapolar},
+    position_distributions::Hexapolar,
     ray::SplittingConfig,
     rays::Rays,
     refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
