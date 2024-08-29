@@ -1,5 +1,6 @@
 use nalgebra::Vector3;
-use opossum::degree;
+use opossum::nodes::{ParaxialSurface, SpotDiagram};
+use opossum::refractive_index::{RefrIndexConst, RefractiveIndex};
 use opossum::{
     centimeter,
     energy_distributions::UniformDist,
@@ -17,18 +18,191 @@ use opossum::{
     utils::geom_transformation::Isometry,
     OpticScenery,
 };
+use opossum::{degree, meter};
+
+mod folded_martinez;
+use folded_martinez::folded_martinez;
+mod detector_group;
+use detector_group::detector_group;
+mod treacy_compressor;
+use treacy_compressor::treacy_compressor;
+mod folded_martinez_paraxial_lens;
+use folded_martinez_paraxial_lens::folded_martinez_paraxial_lens;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
-    ////////////////////////////////////
-    //  4 grating compressor example  //
-    ////////////////////////////////////
     let alignment_wvl = nanometer!(1054.);
-    let mut scenery = OpticScenery::default();
+    let nbk7 = RefrIndexSellmeier1::new(
+        1.039612120,
+        0.231792344,
+        1.010469450,
+        0.00600069867,
+        0.0200179144,
+        103.5606530,
+        nanometer!(300.)..nanometer!(1200.),
+    )?;
+
     let rays = Rays::new_collimated_with_spectrum(
         &Gaussian::new(
             (nanometer!(1040.), nanometer!(1068.)),
             50,
+            nanometer!(1054.),
+            nanometer!(8.),
+            1.,
+        )?,
+        &UniformDist::new(joule!(1.))?,
+        &Hexapolar::new(millimeter!(1.), 3)?,
+    )?;
+    let light = LightData::Geometric(rays);
+
+    let mut src = Source::new("collimated ray source", &light);
+    src.set_alignment_wavelength(alignment_wvl)?;
+    src.set_isometry(Isometry::identity());
+    ////////////////////////////////////
+    //  4 grating compressor example  //
+    ////////////////////////////////////
+    let mut scenery = OpticScenery::default();
+
+    let i_src = scenery.add_node(src.clone());
+    let compressor_node = scenery.add_node(treacy_compressor(alignment_wvl)?);
+    let detectors = scenery.add_node(detector_group()?);
+
+    scenery.connect_nodes(i_src, "out1", compressor_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        compressor_node,
+        "output",
+        detectors,
+        "input",
+        millimeter!(400.),
+    )?;
+
+    scenery.save_to_file(Path::new("./opossum/playground/treacy_compressor.opm"))?;
+
+    //////////////////////////////////////////////////////////////////////
+    //       Martinez Stretcher with folded telescope                   //
+    //       Lenses are spherical + chromatic lens                      //
+    //       Telescope length slightly misaligned (0.5% from ideal)     //
+    //////////////////////////////////////////////////////////////////////
+    let telescope_distance = millimeter!(1010.0);
+    let mut scenery = OpticScenery::default();
+
+    let i_src = scenery.add_node(src.clone());
+    let stretcher_node =
+        scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?);
+    let detectors = scenery.add_node(detector_group()?);
+
+    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        stretcher_node,
+        "output",
+        detectors,
+        "input",
+        millimeter!(1500.),
+    )?;
+
+    scenery.save_to_file(Path::new(
+        "./opossum/playground/nonideal_folded_martinez.opm",
+    ))?;
+
+    //////////////////////////////////////////////////////////
+    //       Martinez Stretcher with folded telescope       //
+    //       Lenses are spherical + chromatic lens          //
+    //       Telescope length perfectly aligned             //
+    //////////////////////////////////////////////////////////
+    let telescope_distance = millimeter!(1015.049);
+    let mut scenery = OpticScenery::default();
+
+    let i_src = scenery.add_node(src.clone());
+    let stretcher_node =
+        scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?);
+    let detectors = scenery.add_node(detector_group()?);
+
+    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        stretcher_node,
+        "output",
+        detectors,
+        "input",
+        millimeter!(1500.),
+    )?;
+
+    scenery.save_to_file(Path::new("./opossum/playground/ideal_folded_martinez.opm"))?;
+
+    //////////////////////////////////////////////////////////
+    //       Martinez Stretcher with folded telescope       //
+    //       Lenses are spherical + achromatic lens         //
+    //       Telescope length perfectly aligned             //
+    //////////////////////////////////////////////////////////
+    let telescope_distance = millimeter!(1015.049);
+    let mut scenery = OpticScenery::default();
+
+    let i_src = scenery.add_node(src.clone());
+    let stretcher_node = scenery.add_node(folded_martinez(
+        telescope_distance,
+        &RefrIndexConst::new(nbk7.get_refractive_index(nanometer!(1054.))?)?,
+        alignment_wvl,
+    )?);
+    let detectors = scenery.add_node(detector_group()?);
+
+    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        stretcher_node,
+        "output",
+        detectors,
+        "input",
+        millimeter!(1500.),
+    )?;
+
+    scenery.save_to_file(Path::new(
+        "./opossum/playground/achromat_ideal_folded_martinez.opm",
+    ))?;
+
+    //////////////////////////////////////////////////////////
+    //       Martinez Stretcher with folded telescope       //
+    //       Lenses are perfectly paraxial lenses           //
+    //       Telescope length perfectly aligned             //
+    //////////////////////////////////////////////////////////
+    let telescope_distance = millimeter!(1015.049);
+    let mut scenery = OpticScenery::default();
+
+    let i_src = scenery.add_node(src.clone());
+    let stretcher_node = scenery.add_node(folded_martinez_paraxial_lens(
+        telescope_distance,
+        alignment_wvl,
+    )?);
+    let detectors = scenery.add_node(detector_group()?);
+
+    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        stretcher_node,
+        "output",
+        detectors,
+        "input",
+        millimeter!(1500.),
+    )?;
+
+    scenery.save_to_file(Path::new(
+        "./opossum/playground/paraxial_folded_martinez.opm",
+    ))?;
+
+    ////////////////////////////
+    //       Telescope        //
+    ////////////////////////////
+    let alignment_wvl = nanometer!(1054.);
+    let nbk7 = RefrIndexSellmeier1::new(
+        1.039612120,
+        0.231792344,
+        1.010469450,
+        0.00600069867,
+        0.0200179144,
+        103.5606530,
+        nanometer!(300.)..nanometer!(1200.),
+    )?;
+    let mut scenery = OpticScenery::default();
+    let rays = Rays::new_collimated_with_spectrum(
+        &Gaussian::new(
+            (nanometer!(1054.), nanometer!(1068.)),
+            1,
             nanometer!(1054.),
             nanometer!(8.),
             1.,
@@ -43,104 +217,34 @@ fn main() -> OpmResult<()> {
     src.set_isometry(Isometry::identity());
 
     let i_src = scenery.add_node(src);
-    let i_g1 = scenery.add_node(
-        ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
-            .with_rot_from_littrow(alignment_wvl, degree!(-4.))?,
-    );
-
-    let i_g2 = scenery.add_node(
-        ReflectiveGrating::new("grating 2", num_per_mm!(1740.), -1)?
-            .to_rot_from_littrow(alignment_wvl, degree!(-4.))?,
-    );
-
-    let i_g3 = scenery.add_node(
-        ReflectiveGrating::new("grating 3", num_per_mm!(1740.), 1)?
-            .with_rot_from_littrow(alignment_wvl, degree!(4.))?,
-    );
-
-    let i_g4 = scenery.add_node(
-        ReflectiveGrating::new("grating 4", num_per_mm!(1740.), 1)?
-            .to_rot_from_littrow(alignment_wvl, degree!(4.))?,
-    );
-    let i_prop_vis = scenery.add_node(RayPropagationVisualizer::new(
-        "Ray_positions",
-        Some(Vector3::y()),
-    )?);
-
-    scenery.connect_nodes(i_src, "out1", i_g1, "input", millimeter!(100.0))?;
-    scenery.connect_nodes(i_g1, "diffracted", i_g2, "input", millimeter!(100.0))?;
-    scenery.connect_nodes(i_g2, "diffracted", i_g3, "input", millimeter!(250.0))?;
-    scenery.connect_nodes(i_g3, "diffracted", i_g4, "input", millimeter!(100.0))?;
-    scenery.connect_nodes(i_g4, "diffracted", i_prop_vis, "in1", millimeter!(100.0))?;
-    scenery.save_to_file(Path::new("./opossum/playground/compressor.opm"))?;
-
-    ////////////////////////////////////
-    //       Martinez Stretcher       //
-    ////////////////////////////////////
-    let alignment_wvl = nanometer!(1054.);
-    let nbk7 = RefrIndexSellmeier1::new(
-        1.039612120,
-        0.231792344,
-        1.010469450,
-        0.00600069867,
-        0.0200179144,
-        103.5606530,
-        nanometer!(300.)..nanometer!(1200.),
-    )?;
-    let mut scenery = OpticScenery::default();
-    let rays = Rays::new_collimated_with_spectrum(
-        &Gaussian::new(
-            (nanometer!(1040.), nanometer!(1068.)),
-            20,
-            nanometer!(1054.),
-            nanometer!(8.),
-            1.,
-        )?,
-        &UniformDist::new(joule!(1.))?,
-        &Hexapolar::new(millimeter!(1.), 0)?,
-    )?;
-
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("collimated ray source", &light);
-    src.set_alignment_wavelength(alignment_wvl)?;
-    src.set_isometry(Isometry::identity());
-
-    let i_src = scenery.add_node(src);
-    let i_g1 = scenery.add_node(
-        ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
-            .with_rot_from_littrow(alignment_wvl, degree!(-4.))?,
-    );
     // focal length = 996.7 mm (Thorlabs LA1779-B)
-    let lens1 = scenery.add_node(
-        Lens::new(
-            "Lens 1",
-            millimeter!(515.1),
-            millimeter!(f64::INFINITY),
-            millimeter!(2.1),
-            &nbk7,
-        )?
-        .with_decenter(centimeter!(0., 2., 0.))?,
-    );
-
-    let mir_1 = ThinMirror::new("mirr").align_like_node_at_distance(lens1, millimeter!(996.7));
-    let mir_1 = scenery.add_node(mir_1);
-    let mut lens_1_ref = NodeReference::from_node(&scenery.node(lens1)?);
-    lens_1_ref.set_inverted(true)?;
-    let lens_1_ref = scenery.add_node(lens_1_ref);
-    let g1ref = scenery.add_node(NodeReference::from_node(&scenery.node(i_g1)?));
-
+    let lens1 = scenery.add_node(Lens::new(
+        "Lens 1",
+        millimeter!(515.1),
+        millimeter!(f64::INFINITY),
+        millimeter!(2.1),
+        &nbk7,
+    )?);
+    let lens2 = scenery.add_node(Lens::new(
+        "Lens 2",
+        millimeter!(f64::INFINITY),
+        millimeter!(-515.1),
+        millimeter!(2.1),
+        &nbk7,
+    )?);
+    let paraxial_lens = scenery.add_node(ParaxialSurface::new("ideal lens", millimeter!(500.))?);
+    let spot_diag = scenery.add_node(SpotDiagram::new("spot diagram"));
     let i_prop_vis = scenery.add_node(RayPropagationVisualizer::new(
         "Ray_positions",
         Some(Vector3::y()),
     )?);
+    scenery.connect_nodes(i_src, "out1", lens1, "front", millimeter!(100.0))?;
+    scenery.connect_nodes(lens1, "rear", lens2, "front", millimeter!(2. * 1015.049))?;
+    scenery.connect_nodes(lens2, "rear", paraxial_lens, "front", millimeter!(100.0))?;
+    scenery.connect_nodes(paraxial_lens, "rear", spot_diag, "in1", millimeter!(500.0))?;
+    scenery.connect_nodes(spot_diag, "out1", i_prop_vis, "in1", millimeter!(0.0))?;
 
-    scenery.connect_nodes(i_src, "out1", i_g1, "input", millimeter!(400.0))?;
-    scenery.connect_nodes(i_g1, "diffracted", lens1, "front", millimeter!(800.))?;
-    scenery.connect_nodes(lens1, "rear", mir_1, "input", millimeter!(100.0))?;
-    scenery.connect_nodes(mir_1, "reflected", lens_1_ref, "rear", millimeter!(100.0))?;
-    scenery.connect_nodes(lens_1_ref, "front", g1ref, "input", millimeter!(100.0))?;
-    scenery.connect_nodes(g1ref, "diffracted", i_prop_vis, "in1", millimeter!(1500.0))?;
+    scenery.save_to_file(Path::new("./opossum/playground/telescope.opm"))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/martinez.opm"))?;
     Ok(())
 }

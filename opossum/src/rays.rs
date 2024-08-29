@@ -650,7 +650,7 @@ impl Rays {
     /// This function returns an error if
     ///  - the z component of a ray direction is zero.
     ///  - the focal length is zero or not finite.
-    pub fn refract_paraxial(&mut self, focal_length: Length) -> OpmResult<()> {
+    pub fn refract_paraxial(&mut self, focal_length: Length, iso: &Isometry) -> OpmResult<()> {
         if focal_length.is_zero() || !focal_length.is_finite() {
             return Err(OpossumError::Other(
                 "focal length must be !=0.0 and finite".into(),
@@ -658,7 +658,7 @@ impl Rays {
         }
         for ray in &mut self.rays {
             if ray.valid() {
-                ray.refract_paraxial(focal_length)?;
+                ray.refract_paraxial(focal_length, iso)?;
             }
         }
         Ok(())
@@ -1597,20 +1597,29 @@ mod test {
     #[test]
     fn refract_paraxial() {
         let mut rays = Rays::default();
-        assert!(rays.refract_paraxial(millimeter!(0.0)).is_err());
-        assert!(rays.refract_paraxial(millimeter!(f64::NAN)).is_err());
-        assert!(rays.refract_paraxial(millimeter!(f64::INFINITY)).is_err());
         assert!(rays
-            .refract_paraxial(millimeter!(f64::NEG_INFINITY))
+            .refract_paraxial(millimeter!(0.0), &Isometry::identity())
             .is_err());
-        assert!(rays.refract_paraxial(millimeter!(100.0)).is_ok());
+        assert!(rays
+            .refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
+            .is_err());
+        assert!(rays
+            .refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
+            .is_err());
+        assert!(rays
+            .refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
+            .is_err());
+        assert!(rays
+            .refract_paraxial(millimeter!(100.0), &Isometry::identity())
+            .is_ok());
         let ray0 =
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
         let ray1 =
             Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
         rays.add_ray(ray0.clone());
         rays.add_ray(ray1.clone());
-        rays.refract_paraxial(millimeter!(100.0)).unwrap();
+        rays.refract_paraxial(millimeter!(100.0), &Isometry::identity())
+            .unwrap();
         assert_eq!(rays.rays[0].position(), ray0.position());
         assert_eq!(rays.rays[0].direction(), ray0.direction());
         assert_eq!(rays.rays[1].position(), ray1.position());

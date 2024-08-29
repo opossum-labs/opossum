@@ -34,6 +34,7 @@ use std::fmt::Debug;
 ///   - `light data`
 ///
 /// **Note**: This node does not have the `inverted` property since it has only one output port.
+#[derive(Clone)]
 pub struct Source {
     node_attr: NodeAttr,
 }

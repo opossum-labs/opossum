@@ -7,7 +7,7 @@ use crate::{
     lightdata::LightData,
     millimeter,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optical::{Alignable, LightResult, Optical},
     properties::Proptype,
     surface::{OpticalSurface, Plane},
 };
@@ -17,7 +17,7 @@ use super::node_attr::NodeAttr;
 
 /// Paraxial surface (=ideal lens)
 ///
-/// This node models a (flat) paraxial surface with a given `focal leength`. This corresponds to an ideal lens which is aberration free
+/// This node models a (flat) paraxial surface with a given `focal length`. This corresponds to an ideal lens which is aberration free
 /// and achromatic. A positive `focal length` corresponds to a focussing (convex) lens while a negative `focal length` represents a
 /// defocussing (concave) lens.
 ///
@@ -111,7 +111,7 @@ impl Optical for ParaxialSurface {
                             &OpticalSurface::new(Box::new(Plane::new(&iso))),
                             None,
                         )?;
-                        rays.refract_paraxial(*focal_length)?;
+                        rays.refract_paraxial(*focal_length, &iso)?;
                     } else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
@@ -157,6 +157,8 @@ impl Optical for ParaxialSurface {
         &mut self.node_attr
     }
 }
+
+impl Alignable for ParaxialSurface {}
 
 impl Dottable for ParaxialSurface {
     fn node_color(&self) -> &str {

@@ -13,7 +13,7 @@ use uom::si::{
 
 use crate::{
     error::{OpmResult, OpossumError},
-    meter,
+    joule, meter,
     nodes::FilterType,
     spectrum::Spectrum,
     surface::{GeoSurface, OpticalSurface},
@@ -279,14 +279,17 @@ impl Ray {
     /// # Errors
     ///
     /// This function will return an error if the given focal length is zero or not finite
-    pub fn refract_paraxial(&mut self, focal_length: Length) -> OpmResult<()> {
+    pub fn refract_paraxial(&mut self, focal_length: Length, iso: &Isometry) -> OpmResult<()> {
         if focal_length.is_zero() || !focal_length.is_finite() {
             return Err(OpossumError::Other(
                 "focal length must be != 0.0 & finite".into(),
             ));
         }
+        //to origin of paraxial surface
+        self.pos = iso.inverse_transform_point(&self.pos);
+        self.dir = iso.inverse_transform_vector_f64(&self.dir);
         let optical_power = 1.0 / focal_length;
-        self.dir /= self.dir.z;
+        self.dir /= self.dir.z.abs();
         self.dir.x -= (optical_power * self.pos.x).value;
         self.dir.y -= (optical_power * self.pos.y).value;
 
@@ -299,6 +302,9 @@ impl Ray {
         let f_square = (focal_length * focal_length).value;
         self.path_length -= meter!((r_square + f_square).sqrt()) - focal_length.abs();
         self.number_of_refractions += 1;
+        //back to original position
+        self.pos = iso.transform_point(&self.pos);
+        self.dir = iso.transform_vector_f64(&self.dir);
         Ok(())
     }
     /// Diffract a bundle of [`Rays`](crate::rays::Rays) on a periodic surface, e.g., a grating.
@@ -362,11 +368,18 @@ impl Ray {
                 let k_perp_out = -k_perp.normalize() * k_perp_norm_out;
                 self.dir = (k_perp_out + k_para_out).normalize();
                 self.number_of_bounces += 1;
+                //currently only reflection
+                let reflected_ray = self.clone();
+                self.e = joule!(0.);
+                Ok(Some(reflected_ray))
             } else {
+                // diffraction order is not supported
                 self.set_invalid();
+                Ok(None)
             }
+        } else {
+            Ok(None)
         }
-        Ok(None)
     }
     /// Refract the [`Ray`] on a given [`GeoSurface`] using Snellius' law.
     ///
@@ -441,6 +454,7 @@ impl Ray {
                 Ok(None)
             }
         } else {
+            // self.set_invalid();
             Ok(None)
         }
     }
@@ -791,11 +805,17 @@ mod test {
         let wvl = nanometer!(1053.0);
         let e = joule!(1.0);
         let mut ray = Ray::new_collimated(millimeter!(0., 0., 0.), wvl, e).unwrap();
-        assert!(ray.refract_paraxial(millimeter!(0.0)).is_err());
-        assert!(ray.refract_paraxial(millimeter!(f64::NAN)).is_err());
-        assert!(ray.refract_paraxial(millimeter!(f64::INFINITY)).is_err());
         assert!(ray
-            .refract_paraxial(millimeter!(f64::NEG_INFINITY))
+            .refract_paraxial(millimeter!(0.0), &Isometry::identity())
+            .is_err());
+        assert!(ray
+            .refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
+            .is_err());
+        assert!(ray
+            .refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
+            .is_err());
+        assert!(ray
+            .refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
             .is_err());
     }
     #[test]
@@ -806,7 +826,9 @@ mod test {
         let ray = Ray::new_collimated(pos, wvl, e).unwrap();
         let ray_dir = ray.dir;
         let mut refracted_ray = ray.clone();
-        refracted_ray.refract_paraxial(millimeter!(100.0)).unwrap();
+        refracted_ray
+            .refract_paraxial(millimeter!(100.0), &Isometry::identity())
+            .unwrap();
         assert_eq!(refracted_ray.pos, pos);
         assert_eq!(refracted_ray.dir, ray.dir);
         assert_eq!(refracted_ray.e, e);
@@ -819,7 +841,9 @@ mod test {
         assert_eq!(refracted_ray.path_length, Length::zero());
 
         let mut refracted_ray = ray.clone();
-        refracted_ray.refract_paraxial(millimeter!(-100.0)).unwrap();
+        refracted_ray
+            .refract_paraxial(millimeter!(-100.0), &Isometry::identity())
+            .unwrap();
         assert_eq!(refracted_ray.pos, pos);
         assert_eq!(refracted_ray.dir, ray_dir);
         assert_eq!(refracted_ray.e, e);
@@ -838,7 +862,8 @@ mod test {
         let pos = millimeter!(1., 2., 0.);
 
         let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
-        ray.refract_paraxial(millimeter!(100.0)).unwrap();
+        ray.refract_paraxial(millimeter!(100.0), &Isometry::identity())
+            .unwrap();
         assert_eq!(ray.pos, pos);
         let test_ray_dir = vector![-1.0, -2.0, 100.0] / 100.0;
         assert_abs_diff_eq!(ray.dir.x, test_ray_dir.x);
@@ -846,7 +871,8 @@ mod test {
         assert_abs_diff_eq!(ray.dir.z, test_ray_dir.z);
 
         let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
-        ray.refract_paraxial(millimeter!(-100.0)).unwrap();
+        ray.refract_paraxial(millimeter!(-100.0), &Isometry::identity())
+            .unwrap();
         assert_eq!(ray.pos, pos);
         let test_ray_dir = vector![1.0, 2.0, 100.0] / 100.0;
         assert_abs_diff_eq!(ray.dir.x, test_ray_dir.x);
@@ -855,7 +881,8 @@ mod test {
 
         let pos = millimeter!(0., 10., 0.);
         let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
-        ray.refract_paraxial(millimeter!(10.0)).unwrap();
+        ray.refract_paraxial(millimeter!(10.0), &Isometry::identity())
+            .unwrap();
         assert_abs_diff_eq!(
             ray.path_length.get::<millimeter>(),
             -1.0 * (f64::sqrt(200.0) - 10.0),
@@ -863,7 +890,8 @@ mod test {
         );
         let pos = millimeter!(0., 100., 0.);
         let mut ray = Ray::new_collimated(pos, wvl, e).unwrap();
-        ray.refract_paraxial(millimeter!(100.0)).unwrap();
+        ray.refract_paraxial(millimeter!(100.0), &Isometry::identity())
+            .unwrap();
         assert_eq!(ray.pos, pos);
         let test_ray_dir = vector![0.0, -100.0, 100.0] / 100.0;
         assert_abs_diff_eq!(ray.dir, test_ray_dir);
@@ -876,13 +904,15 @@ mod test {
         let dir = vector![0.0, 1.0, 1.0];
         let mut ray = Ray::new(pos, dir, wvl, e).unwrap();
 
-        ray.refract_paraxial(millimeter!(100.0)).unwrap();
+        ray.refract_paraxial(millimeter!(100.0), &Isometry::identity())
+            .unwrap();
         assert_eq!(ray.pos, pos);
         assert_eq!(ray.dir, Vector3::z());
 
         let dir = vector![0.0, -1.0, 1.0];
         let mut ray = Ray::new(pos, dir, wvl, e).unwrap();
-        ray.refract_paraxial(millimeter!(-100.0)).unwrap();
+        ray.refract_paraxial(millimeter!(-100.0), &Isometry::identity())
+            .unwrap();
         assert_eq!(ray.pos, pos);
         assert_eq!(ray.dir, Vector3::z());
     }
