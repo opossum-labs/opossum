@@ -340,7 +340,7 @@ impl Plottable for WaveFrontErrorMap {
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
         let mut plt_type = PlotType::ColorMesh(plt_params.clone());
         let legend = plt_params.get_legend_flag().unwrap_or(false);
-        if let Some(plt_series) = &self.get_plot_series(&plt_type, legend).unwrap_or(None) {
+        if let Some(plt_series) = &self.get_plot_series(&mut plt_type, legend).unwrap_or(None) {
             let ranges = plt_series[0].define_data_based_axes_bounds(false);
             let z_bounds = ranges
                 .get_z_bounds()
@@ -358,7 +358,7 @@ impl Plottable for WaveFrontErrorMap {
 
     fn get_plot_series(
         &self,
-        _plt_type: &PlotType,
+        _plt_type: &mut PlotType,
         _legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let (x_interp, _) =

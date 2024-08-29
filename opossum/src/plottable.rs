@@ -424,8 +424,51 @@ impl PlotType {
 
     fn plot_2d_scatter<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
         if let Some(plt_series_vec) = plt.get_plot_series_vec() {
+            let root = if plt_series_vec.len() > 5 {
+                let split_pixel = plt.fig_size.0 - 170;
+                //split root for main plot and colorbar
+                let (main_root, cbar_root) = root.split_horizontally(split_pixel);
+
+                //colorbar. first because otherwise the xlabel of the main plot is cropped
+                let mut chart = Self::create_2d_plot_chart(
+                    &cbar_root,
+                    AxLims { min: 0., max: 1. },
+                    plt.bounds.z.unwrap(),
+                    &[
+                        LabelDescription::new("", plt.label[0].label_pos),
+                        plt.cbar.label.clone(),
+                    ],
+                    true,
+                    false,
+                );
+
+                let c_dat = linspace(
+                    plt.bounds.z.unwrap().min,
+                    plt.bounds.z.unwrap().max,
+                    plt_series_vec.len(),
+                )
+                .unwrap();
+                let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
+                let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
+                Self::draw_2d_colormesh(
+                    &mut chart,
+                    &xxx,
+                    &linspace(
+                        plt.bounds.z.unwrap().min,
+                        plt.bounds.z.unwrap().max,
+                        plt_series_vec.len(),
+                    )
+                    .unwrap(),
+                    &d_mat,
+                    &plt.cbar.cmap,
+                    plt.bounds.z.unwrap(),
+                );
+                main_root
+            } else {
+                root.clone()
+            };
             let mut chart = Self::create_2d_plot_chart(
-                root,
+                &root,
                 plt.bounds.x.unwrap(),
                 plt.bounds.y.unwrap(),
                 &plt.label,
@@ -1347,7 +1390,7 @@ pub trait Plottable {
     /// Whether an error is thrown depends on the individual implementation of the method
     fn get_plot_series(
         &self,
-        plt_type: &PlotType,
+        plt_type: &mut PlotType,
         legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>>;
 
@@ -1372,10 +1415,10 @@ pub trait Plottable {
 
         let _ = self.add_plot_specific_params(&mut plt_params);
 
-        let plt_type = self.get_plot_type(&plt_params);
+        let mut plt_type = self.get_plot_type(&plt_params);
 
         let mut plt_series_opt =
-            self.get_plot_series(&plt_type, plt_params.get_legend_flag().unwrap_or(false))?;
+            self.get_plot_series(&mut plt_type, plt_params.get_legend_flag().unwrap_or(false))?;
 
         if let Some(plt_series) = &mut plt_series_opt {
             if plt_series.len() == 1 {
