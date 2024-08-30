@@ -6,6 +6,7 @@
 //! and / or exported as a PDF report.
 use std::fmt::Display;
 
+use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 pub mod energy;
 pub mod ghostfocus;
@@ -18,7 +19,7 @@ use crate::{error::OpmResult, OpticScenery};
 
 /// Type of analysis to be performed.
 #[non_exhaustive]
-#[derive(EnumIter, PartialEq, Debug)]
+#[derive(EnumIter, PartialEq, Debug, Serialize, Deserialize)]
 pub enum AnalyzerType {
     /// Simple energy flow of an optical spectrum.
     ///

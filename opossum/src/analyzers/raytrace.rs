@@ -6,6 +6,7 @@ use crate::{
     picojoule, OpticScenery,
 };
 use log::info;
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Energy;
 
 use super::Analyzer;
@@ -45,7 +46,7 @@ impl Analyzer for RayTracingAnalyzer {
 
 /// enum to define the mode of the raytracing analysis.
 /// Currently only sequential mode
-#[derive(Default, Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RayTracingMode {
     #[default]
     /// Sequential mode
@@ -64,7 +65,7 @@ pub enum RayTracingMode {
     // NonSequential
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration data for a rays tracing analysis.
 ///
 /// The config contains the following info

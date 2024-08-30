@@ -29,6 +29,7 @@ pub mod error;
 mod light;
 pub mod lightdata;
 pub mod nodes;
+pub mod opm_document;
 mod optic_graph;
 mod optic_port;
 pub mod optic_ports;
@@ -52,6 +53,7 @@ pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
 
+pub use opm_document::OpmDocument;
 pub use optic_scenery::OpticScenery;
 pub use optic_senery_rsc::SceneryResources;
 

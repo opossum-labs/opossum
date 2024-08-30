@@ -307,12 +307,11 @@ impl<'de> Deserialize<'de> for OpticScenery {
         D: serde::Deserializer<'de>,
     {
         enum Field {
-            OpmVersion,
             Graph,
             Description,
             Global,
         }
-        const FIELDS: &[&str] = &["opm version", "graph", "properties", "global"];
+        const FIELDS: &[&str] = &["graph", "properties", "global"];
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -328,14 +327,13 @@ impl<'de> Deserialize<'de> for OpticScenery {
                         &self,
                         formatter: &mut std::fmt::Formatter<'_>,
                     ) -> std::fmt::Result {
-                        formatter.write_str("`opm version`, `graph`, `description`, or `global`")
+                        formatter.write_str("`graph`, `description`, or `global`")
                     }
                     fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
                     where
                         E: de::Error,
                     {
                         match value {
-                            "opm version" => Ok(Field::OpmVersion),
                             "graph" => Ok(Field::Graph),
                             "description" => Ok(Field::Description),
                             "global" => Ok(Field::Global),
@@ -359,18 +357,11 @@ impl<'de> Deserialize<'de> for OpticScenery {
             where
                 A: MapAccess<'de>,
             {
-                let mut opm_version: Option<String> = None;
                 let mut graph: Option<OpticGraph> = None;
                 let mut description: Option<String> = None;
                 let mut global_conf: Option<SceneryResources> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
-                        Field::OpmVersion => {
-                            if opm_version.is_some() {
-                                return Err(de::Error::duplicate_field("opm version"));
-                            }
-                            opm_version = Some(map.next_value()?);
-                        }
                         Field::Graph => {
                             if graph.is_some() {
                                 return Err(de::Error::duplicate_field("graph"));
@@ -391,15 +382,15 @@ impl<'de> Deserialize<'de> for OpticScenery {
                         }
                     }
                 }
-                if let Some(opm_version) = opm_version {
-                    if opm_version != env!("OPM_FILE_VERSION") {
-                        warn!(
-                            "model file version mismatch! File version {}, Appplication version {}",
-                            opm_version,
-                            env!("OPM_FILE_VERSION")
-                        );
-                    }
-                }
+                // if let Some(opm_version) = opm_version {
+                //     if opm_version != env!("OPM_FILE_VERSION") {
+                //         warn!(
+                //             "model file version mismatch! File version {}, Appplication version {}",
+                //             opm_version,
+                //             env!("OPM_FILE_VERSION")
+                //         );
+                //     }
+                // }
                 let graph = graph.ok_or_else(|| de::Error::missing_field("graph"))?;
                 let description = description.unwrap_or_default();
                 let global_conf = global_conf.unwrap_or_else(|| {

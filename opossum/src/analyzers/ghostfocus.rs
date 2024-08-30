@@ -1,14 +1,15 @@
 //! Analyzer performing a ghost focus analysis using ray tracing
 
 use log::info;
+use serde::{Deserialize, Serialize};
 
 use crate::{analyzers::AnalyzerType, error::OpmResult, optical::LightResult, OpticScenery};
 
 use super::Analyzer;
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration for performing a ghost focus analysis
-pub struct GhostFocusConfig{
-    max_bounces: usize
+pub struct GhostFocusConfig {
+    max_bounces: usize,
 }
 impl Default for GhostFocusConfig {
     fn default() -> Self {

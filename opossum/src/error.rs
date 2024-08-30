@@ -7,6 +7,8 @@ pub type OpmResult<T> = std::result::Result<T, OpossumError>;
 /// Errors that can be returned by various OPOSSUM functions.
 #[derive(Debug, PartialEq, Eq)]
 pub enum OpossumError {
+    /// error while handling an `OpmDocument`
+    OpmDocument(String),
     /// error while setting up an `OpticScenery`
     OpticScenery(String),
     /// error while setting up an `OpticGroup`. The reasons are similar to [`OpossumError::OpticScenery`]
@@ -28,6 +30,9 @@ pub enum OpossumError {
 impl Display for OpossumError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::OpmDocument(m) => {
+                write!(f, "OpmDocument:{m}")
+            }
             Self::OpticScenery(m) => {
                 write!(f, "OpticScenery:{m}")
             }

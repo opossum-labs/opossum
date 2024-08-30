@@ -470,12 +470,8 @@ mod test {
     use core::f64;
 
     use crate::{
-        analyzers::RayTraceConfig,
-        aperture::Aperture,
-        joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
-        position_distributions::Hexapolar,
-        rays::Rays,
+        analyzers::RayTraceConfig, aperture::Aperture, joule, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;

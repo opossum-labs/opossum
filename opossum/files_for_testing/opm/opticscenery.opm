@@ -1,4 +1,3 @@
-opm version: '0'
 graph:
   nodes:
   - type: dummy
