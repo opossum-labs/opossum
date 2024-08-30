@@ -139,6 +139,12 @@ impl CircleConfig {
             Err(OpossumError::Other("radius must be positive".into()))
         }
     }
+
+    ///return the radius of this [`CircleConfig`]
+    #[must_use]
+    pub fn radius(&self) -> &Length {
+        &self.radius
+    }
 }
 impl Apodize for CircleConfig {
     fn set_aperture_type(&mut self, aperture_type: ApertureType) {
@@ -433,7 +439,7 @@ fn plot_circle(conf: &CircleConfig) -> Vec<PlotSeries> {
 impl Plottable for Aperture {
     fn get_plot_series(
         &self,
-        plt_type: &PlotType,
+        plt_type: &mut PlotType,
         legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let plt_series_opt = match plt_type {

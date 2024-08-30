@@ -312,7 +312,7 @@ impl Plottable for Spectrometer {
 
     fn get_plot_series(
         &self,
-        plt_type: &PlotType,
+        plt_type: &mut PlotType,
         legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = &self.light_data;

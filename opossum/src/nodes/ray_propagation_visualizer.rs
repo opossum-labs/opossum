@@ -379,7 +379,7 @@ impl Plottable for RayPositionHistories {
 
     fn get_plot_series(
         &self,
-        _plt_type: &PlotType,
+        _plt_type: &mut PlotType,
         legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         if self.rays_pos_history.is_empty() {

@@ -313,7 +313,7 @@ impl Plottable for FluenceData {
 
     fn get_plot_series(
         &self,
-        plt_type: &PlotType,
+        plt_type: &mut PlotType,
         _legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let (nrows, ncols) = self.interp_distribution.shape();
