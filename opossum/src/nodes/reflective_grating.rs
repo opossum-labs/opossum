@@ -148,7 +148,7 @@ impl ReflectiveGrating {
         let rot_angle = (diffraction_order.to_f64().unwrap() * wavelength.value)
             .mul_add(line_density.value, -(littrow + angle_in_rad).sin())
             .asin();
-        self.with_tilt(radian!(0., rot_angle, 0.0))
+        self.with_tilt(radian!(0.0, rot_angle, 0.0))
     }
 }
 impl Alignable for ReflectiveGrating {}
