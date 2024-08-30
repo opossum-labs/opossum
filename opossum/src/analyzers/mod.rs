@@ -69,4 +69,6 @@ pub trait Analyzer {
     ///
     /// This function will return an error if the concrete implementation of the [`Analyzer`] returns an error.
     fn analyze(&self, _scenery: &mut OpticScenery) -> OpmResult<()>;
+    /// Generate an analysis report
+    fn report(&self) {}
 }
