@@ -1,5 +1,6 @@
 use nalgebra::Vector3;
-use opossum::nodes::{ParaxialSurface, SpotDiagram};
+use opossum::nodes::{NodeReference, ParaxialSurface, SpotDiagram, ThinMirror};
+use opossum::optical::Alignable;
 use opossum::refractive_index::{RefrIndexConst, RefractiveIndex};
 use opossum::{
     energy_distributions::UniformDist,
@@ -19,6 +20,8 @@ use opossum::{
 
 mod folded_martinez;
 use folded_martinez::folded_martinez;
+mod folded_martinez_longer_f;
+use folded_martinez_longer_f::folded_martinez_longer_f;
 mod detector_group;
 use detector_group::detector_group;
 mod treacy_compressor;
@@ -28,6 +31,8 @@ use folded_martinez_paraxial_lens::folded_martinez_paraxial_lens;
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
+    // let tel_dist = millimeter!(2467.96162);
+    let tel_dist = millimeter!(1015.515);
     let alignment_wvl = nanometer!(1054.);
     let nbk7 = RefrIndexSellmeier1::new(
         1.039612120,
@@ -42,13 +47,13 @@ fn main() -> OpmResult<()> {
     let rays = Rays::new_collimated_with_spectrum(
         &Gaussian::new(
             (nanometer!(1040.), nanometer!(1068.)),
-            50,
+            30,
             nanometer!(1054.),
             nanometer!(8.),
             1.,
         )?,
         &UniformDist::new(joule!(1.))?,
-        &Hexapolar::new(millimeter!(1.), 3)?,
+        &Hexapolar::new(millimeter!(1.), 4)?,
     )?;
     let light = LightData::Geometric(rays);
 
@@ -80,7 +85,7 @@ fn main() -> OpmResult<()> {
     //       Lenses are spherical + chromatic lens                      //
     //       Telescope length slightly misaligned (0.5% from ideal)     //
     //////////////////////////////////////////////////////////////////////
-    let telescope_distance = millimeter!(1010.0);
+    let telescope_distance = millimeter!(1015.515 * 0.995);
     let mut scenery = OpticScenery::default();
 
     let i_src = scenery.add_node(src.clone());
@@ -106,7 +111,7 @@ fn main() -> OpmResult<()> {
     //       Lenses are spherical + chromatic lens          //
     //       Telescope length perfectly aligned             //
     //////////////////////////////////////////////////////////
-    let telescope_distance = millimeter!(1015.049);
+    let telescope_distance = millimeter!(1017.14885);
     let mut scenery = OpticScenery::default();
 
     let i_src = scenery.add_node(src.clone());
@@ -127,10 +132,65 @@ fn main() -> OpmResult<()> {
 
     //////////////////////////////////////////////////////////
     //       Martinez Stretcher with folded telescope       //
+    //       Lenses are spherical + chromatic lens          //
+    //       Telescope length perfectly aligned             //
+    //////////////////////////////////////////////////////////
+    let telescope_distance = millimeter!(1015.515);
+    let mut scenery = OpticScenery::default();
+
+    let i_src = scenery.add_node(src.clone());
+    let stretcher_node =
+        scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?);
+    let detectors = scenery.add_node(detector_group()?);
+
+    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        stretcher_node,
+        "output",
+        detectors,
+        "input",
+        millimeter!(1500.),
+    )?;
+
+    scenery.save_to_file(Path::new(
+        "./opossum/playground/ideal_folded_martinez_circle_of_least_conf.opm",
+    ))?;
+
+    //////////////////////////////////////////////////////////
+    //       Martinez Stretcher with folded telescope       //
+    //       Lenses are spherical + chromatic lens          //
+    //       Telescope length perfectly aligned but longer f             //
+    //////////////////////////////////////////////////////////
+    let telescope_distance = millimeter!(2467.1);
+    let mut scenery = OpticScenery::default();
+
+    let i_src = scenery.add_node(src.clone());
+    let stretcher_node = scenery.add_node(folded_martinez_longer_f(
+        telescope_distance,
+        &nbk7,
+        alignment_wvl,
+    )?);
+    let detectors = scenery.add_node(detector_group()?);
+
+    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        stretcher_node,
+        "output",
+        detectors,
+        "input",
+        millimeter!(1500.),
+    )?;
+
+    scenery.save_to_file(Path::new(
+        "./opossum/playground/ideal_folded_martinez_longer_f.opm",
+    ))?;
+
+    //////////////////////////////////////////////////////////
+    //       Martinez Stretcher with folded telescope       //
     //       Lenses are spherical + achromatic lens         //
     //       Telescope length perfectly aligned             //
     //////////////////////////////////////////////////////////
-    let telescope_distance = millimeter!(1015.049);
+    let telescope_distance = millimeter!(1017.14885);
     let mut scenery = OpticScenery::default();
 
     let i_src = scenery.add_node(src.clone());
@@ -159,7 +219,7 @@ fn main() -> OpmResult<()> {
     //       Lenses are perfectly paraxial lenses           //
     //       Telescope length perfectly aligned             //
     //////////////////////////////////////////////////////////
-    let telescope_distance = millimeter!(1015.049);
+    let telescope_distance = millimeter!(1017.14885);
     let mut scenery = OpticScenery::default();
 
     let i_src = scenery.add_node(src.clone());
@@ -205,7 +265,7 @@ fn main() -> OpmResult<()> {
             1.,
         )?,
         &UniformDist::new(joule!(1.))?,
-        &Hexapolar::new(millimeter!(1.), 3)?,
+        &Hexapolar::new(millimeter!(50.), 8)?,
     )?;
 
     let light = LightData::Geometric(rays);
@@ -222,13 +282,12 @@ fn main() -> OpmResult<()> {
         millimeter!(2.1),
         &nbk7,
     )?);
-    let lens2 = scenery.add_node(Lens::new(
-        "Lens 2",
-        millimeter!(f64::INFINITY),
-        millimeter!(-515.1),
-        millimeter!(2.1),
-        &nbk7,
-    )?);
+    let mir_1 =
+        scenery.add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, tel_dist));
+    let mut lens_1_ref1 = NodeReference::from_node(&scenery.node(lens1)?);
+    lens_1_ref1.set_inverted(true)?;
+    let lens_1_ref1 = scenery.add_node(lens_1_ref1);
+
     let paraxial_lens = scenery.add_node(ParaxialSurface::new("ideal lens", millimeter!(500.))?);
     let spot_diag = scenery.add_node(SpotDiagram::new("spot diagram"));
     let i_prop_vis = scenery.add_node(RayPropagationVisualizer::new(
@@ -236,8 +295,21 @@ fn main() -> OpmResult<()> {
         Some(Vector3::y()),
     )?);
     scenery.connect_nodes(i_src, "out1", lens1, "front", millimeter!(100.0))?;
-    scenery.connect_nodes(lens1, "rear", lens2, "front", millimeter!(2. * 1015.049))?;
-    scenery.connect_nodes(lens2, "rear", paraxial_lens, "front", millimeter!(100.0))?;
+    scenery.connect_nodes(lens1, "rear", mir_1, "input", millimeter!(1017.14885))?;
+    scenery.connect_nodes(
+        mir_1,
+        "reflected",
+        lens_1_ref1,
+        "rear",
+        millimeter!(1017.14885),
+    )?;
+    scenery.connect_nodes(
+        lens_1_ref1,
+        "front",
+        paraxial_lens,
+        "front",
+        millimeter!(500.0),
+    )?;
     scenery.connect_nodes(paraxial_lens, "rear", spot_diag, "in1", millimeter!(500.0))?;
     scenery.connect_nodes(spot_diag, "out1", i_prop_vis, "in1", millimeter!(0.0))?;
 

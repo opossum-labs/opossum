@@ -454,7 +454,7 @@ impl Ray {
                 Ok(None)
             }
         } else {
-            // self.set_invalid();
+            self.set_invalid();
             Ok(None)
         }
     }

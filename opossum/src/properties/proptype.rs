@@ -12,7 +12,11 @@ use crate::{
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporter::{HtmlNodeReport, NodeReport},
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::{
+        geom_transformation::Isometry,
+        unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
+        EnumProxy,
+    },
 };
 use nalgebra::Vector3;
 use num::Float;
@@ -235,29 +239,9 @@ fn format_value_with_prefix(value: f64) -> String {
         return String::from("   0.000 ");
     }
     #[allow(clippy::cast_possible_truncation)]
-    let mut exponent = (f64::log10(value.abs()).floor()) as i32;
-    if exponent.is_negative() {
-        exponent -= 2;
-    }
-    let exponent = (exponent / 3) * 3;
-    let prefix = match exponent {
-        -21 => "z",
-        -18 => "a",
-        -15 => "f",
-        -12 => "p",
-        -9 => "n",
-        -6 => "μ",
-        -3 => "m",
-        0 => "",
-        3 => "k",
-        6 => "M",
-        9 => "G",
-        12 => "T",
-        15 => "P",
-        18 => "E",
-        21 => "Z",
-        _ => "?",
-    };
+    let prefix = get_prefix_for_base_unit(value);
+    let exponent = get_exponent_for_base_unit_in_e3_steps(value);
+
     format!("{:8.3} {prefix}", value / f64::powi(10.0, exponent))
 }
 fn format_quantity<D, U, V, N>(_: N, q: Quantity<D, U, V>) -> String

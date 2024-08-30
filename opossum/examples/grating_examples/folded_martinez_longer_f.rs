@@ -9,7 +9,7 @@ use opossum::{
 };
 use uom::si::f64::Length;
 
-pub fn folded_martinez(
+pub fn folded_martinez_longer_f(
     telescope_distance: Length,
     refr_index: &dyn RefractiveIndex,
     alignment_wvl: Length,
@@ -27,9 +27,9 @@ pub fn folded_martinez(
     let lens1 = cb.add_node(
         Lens::new(
             "Lens 1",
-            millimeter!(515.1),
+            millimeter!(1250.),
             millimeter!(f64::INFINITY),
-            millimeter!(2.1),
+            millimeter!(4.),
             refr_index,
         )?
         .with_decenter(centimeter!(0., 0., 0.))?,
