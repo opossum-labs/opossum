@@ -5,10 +5,16 @@ use log::info;
 use crate::{analyzers::AnalyzerType, error::OpmResult, optical::LightResult, OpticScenery};
 
 use super::Analyzer;
-#[derive(PartialEq, Eq, Debug, Default, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 /// Configuration for performing a ghost focus analysis
-pub struct GhostFocusConfig;
-
+pub struct GhostFocusConfig{
+    max_bounces: usize
+}
+impl Default for GhostFocusConfig {
+    fn default() -> Self {
+        Self { max_bounces: 1 }
+    }
+}
 /// Analyzer for ghost focus simulation
 #[derive(Default, Debug)]
 pub struct GhostFocusAnalyzer {

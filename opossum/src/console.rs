@@ -82,7 +82,7 @@ fn eval_analyzer_input(analyzer_input: &str) -> Option<AnalyzerType> {
     match analyzer_input {
         "e" => Some(AnalyzerType::Energy),
         "r" => Some(AnalyzerType::RayTrace(RayTraceConfig::default())),
-        "g" => Some(AnalyzerType::GhostFocus(GhostFocusConfig)),
+        "g" => Some(AnalyzerType::GhostFocus(GhostFocusConfig::default())),
         _ => None,
     }
 }
