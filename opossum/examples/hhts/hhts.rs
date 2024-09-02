@@ -7,12 +7,29 @@ use cambox_1w::cambox_1w;
 use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
+use nalgebra::Point2;
 use num::Zero;
 use opossum::{
-    aperture::{Aperture, CircleConfig}, error::OpmResult, joule, lightdata::LightData, millimeter, nanometer, nodes::{
+    aperture::{Aperture, CircleConfig},
+    energy_distributions::General2DGaussian,
+    error::OpmResult,
+    joule,
+    lightdata::LightData,
+    millimeter, nanometer,
+    nodes::{
         BeamSplitter, Dummy, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
         RayPropagationVisualizer, Source, WaveFront,
-    }, optical::Optical, position_distributions::Hexapolar, ray::SplittingConfig, rays::Rays, refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1}, spectrum::Spectrum, spectrum_helper::generate_filter_spectrum, utils::geom_transformation::Isometry, OpmDocument, OpticScenery
+    },
+    optical::Optical,
+    position_distributions::HexagonalTiling,
+    radian,
+    ray::SplittingConfig,
+    rays::Rays,
+    refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
+    spectrum::Spectrum,
+    spectrum_helper::generate_filter_spectrum,
+    utils::geom_transformation::Isometry,
+    OpmDocument, OpticScenery,
 };
 use uom::si::f64::Length;
 
@@ -23,7 +40,8 @@ fn main() -> OpmResult<()> {
     let energy_1w = joule!(100.0);
     let energy_2w = joule!(50.0);
 
-    let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
+    // let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
+    let beam_dist_1w = HexagonalTiling::new(millimeter!(100.), 25)?;
     let beam_dist_2w = beam_dist_1w.clone();
 
     let refr_index_hk9l = RefrIndexSellmeier1::new(
@@ -61,8 +79,33 @@ fn main() -> OpmResult<()> {
     let a_1inch = Aperture::BinaryCircle(circle_config);
 
     // collimated source
-    let rays_1w = Rays::new_uniform_collimated(wvl_1w, energy_1w, &beam_dist_1w)?;
-    let mut rays_2w = Rays::new_uniform_collimated(wvl_2w, energy_2w, &beam_dist_2w)?;
+
+    let rays_1w = Rays::new_collimated(
+        wvl_1w,
+        &General2DGaussian::new(
+            energy_1w,
+            Point2::new(0., 0.),
+            Point2::new(60.6389113608, 60.6389113608),
+            5.,
+            radian!(0.),
+            false,
+        )?,
+        &beam_dist_1w,
+    )?;
+    let mut rays_2w = Rays::new_collimated(
+        wvl_2w,
+        &General2DGaussian::new(
+            energy_2w,
+            Point2::new(0., 0.),
+            Point2::new(60.6389113608, 60.6389113608),
+            5.,
+            radian!(0.),
+            false,
+        )?,
+        &beam_dist_2w,
+    )?;
+    // let rays_1w = Rays::new_uniform_collimated(wvl_1w, energy_1w, &beam_dist_1w)?;
+    // let mut rays_2w = Rays::new_uniform_collimated(wvl_2w, energy_2w, &beam_dist_2w)?;
 
     // point source
 

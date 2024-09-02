@@ -3,7 +3,13 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    error::OpmResult, lightdata::{DataEnergy, LightData}, nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source}, ray::SplittingConfig, spectrum::Spectrum, spectrum_helper::{create_he_ne_spec, create_nd_glass_spec}, OpmDocument, OpticScenery
+    error::OpmResult,
+    lightdata::{DataEnergy, LightData},
+    nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source},
+    ray::SplittingConfig,
+    spectrum::Spectrum,
+    spectrum_helper::{create_he_ne_spec, create_nd_glass_spec},
+    OpmDocument, OpticScenery,
 };
 use uom::si::f64::Length;
 

@@ -1,7 +1,13 @@
 use opossum::{
-    degree, error::OpmResult, joule, millimeter, nodes::{
+    degree,
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{
         collimated_line_ray_source, Lens, NodeReference, RayPropagationVisualizer, ThinMirror,
-    }, optical::{Alignable, Optical}, refractive_index::RefrIndexConst, OpmDocument, OpticScenery
+    },
+    optical::{Alignable, Optical},
+    refractive_index::RefrIndexConst,
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 

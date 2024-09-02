@@ -86,6 +86,7 @@ impl OpmDocument {
     pub fn scenery_mut(&mut self) -> &mut OpticScenery {
         &mut self.scenery
     }
+    #[must_use]
     pub fn analyzers(&self) -> &[AnalyzerType] {
         &self.analyzers
     }
@@ -162,6 +163,6 @@ mod test {
         let mut document = OpmDocument::default();
         document.add_analyzer(AnalyzerType::Energy);
         document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-        assert_eq!(document.analyzers().len(),2);
+        assert_eq!(document.analyzers().len(), 2);
     }
 }

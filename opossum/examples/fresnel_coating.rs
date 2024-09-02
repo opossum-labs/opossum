@@ -1,5 +1,16 @@
 use opossum::{
-    coatings::CoatingType, energy_distributions::UniformDist, error::OpmResult, joule, lightdata::LightData, millimeter, nanometer, nodes::{EnergyMeter, FluenceDetector, Lens, RayPropagationVisualizer, Source}, optical::Optical, position_distributions::Grid, rays::Rays, refractive_index::RefrIndexConst, OpmDocument, OpticScenery
+    coatings::CoatingType,
+    energy_distributions::UniformDist,
+    error::OpmResult,
+    joule,
+    lightdata::LightData,
+    millimeter, nanometer,
+    nodes::{EnergyMeter, FluenceDetector, Lens, RayPropagationVisualizer, Source},
+    optical::Optical,
+    position_distributions::Grid,
+    rays::Rays,
+    refractive_index::RefrIndexConst,
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 

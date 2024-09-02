@@ -3,7 +3,20 @@ use std::path::Path;
 
 use nalgebra::Vector3;
 use opossum::{
-    centimeter, energy_distributions::UniformDist, error::OpmResult, joule, lightdata::LightData, millimeter, nanometer, nodes::{Lens, NodeReference, RayPropagationVisualizer, Source, ThinMirror}, optical::{Alignable, Optical}, position_distributions::Hexapolar, rays::Rays, refractive_index::RefrIndexSellmeier1, spectral_distribution::Gaussian, utils::geom_transformation::Isometry, OpmDocument, OpticScenery
+    centimeter,
+    energy_distributions::UniformDist,
+    error::OpmResult,
+    joule,
+    lightdata::LightData,
+    millimeter, nanometer,
+    nodes::{Lens, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
+    optical::{Alignable, Optical},
+    position_distributions::Hexapolar,
+    rays::Rays,
+    refractive_index::RefrIndexSellmeier1,
+    spectral_distribution::Gaussian,
+    utils::geom_transformation::Isometry,
+    OpmDocument, OpticScenery,
 };
 
 pub fn main() -> OpmResult<()> {

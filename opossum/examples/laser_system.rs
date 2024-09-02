@@ -2,10 +2,14 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    error::OpmResult, joule, millimeter, nodes::{
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{
         round_collimated_ray_source, BeamSplitter, EnergyMeter, IdealFilter, NodeGroup,
         ParaxialSurface, SpotDiagram,
-    }, ray::SplittingConfig, OpmDocument, OpticScenery
+    },
+    ray::SplittingConfig,
+    OpmDocument, OpticScenery,
 };
 use uom::si::f64::Length;
 

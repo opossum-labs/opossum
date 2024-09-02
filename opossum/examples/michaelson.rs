@@ -1,6 +1,10 @@
 use num::Zero;
 use opossum::{
-    error::OpmResult, lightdata::{DataEnergy, LightData}, nodes::{BeamSplitter, Detector, Dummy, NodeReference, Source}, spectrum_helper::create_he_ne_spec, OpmDocument, OpticScenery
+    error::OpmResult,
+    lightdata::{DataEnergy, LightData},
+    nodes::{BeamSplitter, Detector, Dummy, NodeReference, Source},
+    spectrum_helper::create_he_ne_spec,
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 use uom::si::f64::Length;

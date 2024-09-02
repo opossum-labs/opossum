@@ -1,5 +1,10 @@
 use opossum::{
-    degree, error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, NodeReference, RayPropagationVisualizer, ThinMirror}, optical::Alignable, OpmDocument, OpticScenery
+    degree,
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{collimated_line_ray_source, NodeReference, RayPropagationVisualizer, ThinMirror},
+    optical::Alignable,
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 

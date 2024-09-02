@@ -5,5 +5,6 @@ pub mod geom_transformation;
 pub mod griddata;
 pub mod math_distribution_functions;
 pub mod test_helper;
+pub mod unit_format;
 pub mod uom_macros;
 pub use enum_proxy::EnumProxy;

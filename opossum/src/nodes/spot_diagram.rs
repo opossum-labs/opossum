@@ -1,10 +1,12 @@
 #![warn(missing_docs)]
-use itertools::izip;
 use log::warn;
-use nalgebra::MatrixXx2;
+use nalgebra::{DVector, MatrixXx2};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use uom::si::length::{millimeter, nanometer};
+use uom::si::{
+    f64::Length,
+    length::{meter, nanometer},
+};
 
 use super::node_attr::NodeAttr;
 use crate::{
@@ -22,8 +24,15 @@ use crate::{
     rays::Rays,
     reporter::NodeReport,
     surface::{OpticalSurface, Plane},
-    utils::geom_transformation::Isometry,
+    utils::{
+        geom_transformation::Isometry,
+        unit_format::{
+            get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit,
+            get_unit_value_as_length_with_format_by_exponent,
+        },
+    },
 };
+use core::f64;
 use std::path::{Path, PathBuf};
 
 /// A spot-diagram monitor
@@ -247,8 +256,10 @@ impl From<SpotDiagram> for Proptype {
 impl Plottable for SpotDiagram {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
-            .set(&PlotArgs::XLabel("distance in mm".into()))?
-            .set(&PlotArgs::YLabel("distance in mm".into()))?
+            .set(&PlotArgs::XLabel("distance in m".into()))?
+            .set(&PlotArgs::YLabel("distance in m".into()))?
+            .set(&PlotArgs::AxisEqual(true))?
+            .set(&PlotArgs::PlotAutoSize(true))?
             .set(&PlotArgs::PlotSize((800, 800)))?;
         Ok(())
     }
@@ -257,6 +268,7 @@ impl Plottable for SpotDiagram {
         PlotType::Scatter2D(plt_params.clone())
     }
 
+    #[allow(clippy::too_many_lines)]
     fn get_plot_series(
         &self,
         plt_type: &mut PlotType,
@@ -266,7 +278,7 @@ impl Plottable for SpotDiagram {
         match data {
             Some(LightData::Geometric(rays)) => {
                 let (split_rays_bundles, wavelengths) =
-                    rays.split_ray_bundle_by_wavelength(nanometer!(1.), true)?;
+                    rays.split_ray_bundle_by_wavelength(nanometer!(0.2), true)?;
                 let num_series = split_rays_bundles.len();
                 let use_colorbar = if num_series > 5 {
                     plt_type.set_plot_param(&PlotArgs::CBarLabel("wavelength in nm".into()))?;
@@ -289,19 +301,65 @@ impl Plottable for SpotDiagram {
                 };
 
                 //ray plot series
-                for (ray_bundle, wvl) in izip!(split_rays_bundles.iter(), wavelengths.iter()) {
-                    let grad_val = 0.42 + (*wvl - wavelengths[0]).get::<nanometer>() / wvl_range;
-                    let rgbcolor = color_grad.eval_continuous(grad_val);
+                let mut x_max = f64::NEG_INFINITY;
+                let mut y_max = f64::NEG_INFINITY;
+
+                let mut xy_pos_series = Vec::<MatrixXx2<Length>>::with_capacity(num_series);
+                for ray_bundle in &split_rays_bundles {
                     let iso = self.effective_iso().unwrap_or_else(Isometry::identity);
                     let xy_pos = ray_bundle.get_xy_rays_pos(true, &iso);
+                    x_max = xy_pos
+                        .column(0)
+                        .iter()
+                        .map(uom::si::f64::Length::get::<meter>)
+                        .fold(x_max, |arg0, x| if x.abs() > arg0 { x.abs() } else { arg0 });
+                    y_max = xy_pos
+                        .column(1)
+                        .iter()
+                        .map(uom::si::f64::Length::get::<meter>)
+                        .fold(y_max, |arg0, y| if y.abs() > arg0 { y.abs() } else { arg0 });
+                    xy_pos_series.push(xy_pos);
+                }
+
+                let min_window = wavelengths[0].get::<meter>() / 2.;
+                if x_max < min_window {
+                    x_max = min_window;
+                }
+                if y_max < min_window {
+                    y_max = min_window;
+                }
+
+                let x_exponent = get_exponent_for_base_unit_in_e3_steps(x_max);
+                let y_exponent = get_exponent_for_base_unit_in_e3_steps(y_max);
+                let y_prefix = get_prefix_for_base_unit(y_max);
+                let x_prefix = get_prefix_for_base_unit(x_max);
+
+                plt_type.set_plot_param(&PlotArgs::YLabel(format!("distance in {y_prefix}m")))?;
+                plt_type.set_plot_param(&PlotArgs::XLabel(format!("distance in {x_prefix}m")))?;
+
+                for (idx, xy_pos) in xy_pos_series.iter().enumerate() {
+                    let grad_val =
+                        0.42 + (wavelengths[idx] - wavelengths[0]).get::<nanometer>() / wvl_range;
+                    let rgbcolor = color_grad.eval_continuous(grad_val);
+                    let x_vals = xy_pos
+                        .column(0)
+                        .iter()
+                        .map(|x| get_unit_value_as_length_with_format_by_exponent(*x, x_exponent))
+                        .collect::<Vec<f64>>();
+                    let y_vals = xy_pos
+                        .column(1)
+                        .iter()
+                        .map(|y| get_unit_value_as_length_with_format_by_exponent(*y, y_exponent))
+                        .collect::<Vec<f64>>();
+
                     let data = PlotData::Dim2 {
-                        xy_data: MatrixXx2::from_iterator(
-                            xy_pos.nrows(),
-                            xy_pos.iter().map(uom::si::f64::Length::get::<millimeter>),
-                        ),
+                        xy_data: MatrixXx2::from_columns(&[
+                            DVector::from_vec(x_vals),
+                            DVector::from_vec(y_vals),
+                        ]),
                     };
                     let series_label = if legend && !use_colorbar {
-                        Some(format!("{:.1} nm", wvl.get::<nanometer>()))
+                        Some(format!("{:.1} nm", wavelengths[idx].get::<nanometer>()))
                     } else {
                         None
                     };
@@ -311,6 +369,11 @@ impl Plottable for SpotDiagram {
                         series_label,
                     ));
                 }
+                x_max *= f64::powi(10., -x_exponent);
+                y_max *= f64::powi(10., -y_exponent);
+
+                plt_type.set_plot_param(&PlotArgs::XLim(AxLims::new(-x_max * 1.1, 1.1 * x_max)))?;
+                plt_type.set_plot_param(&PlotArgs::YLim(AxLims::new(-y_max * 1.1, 1.1 * y_max)))?;
 
                 //aperture / shape plot series
                 if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot_aperture") {
@@ -326,7 +389,6 @@ impl Plottable for SpotDiagram {
                         }
                     }
                 }
-
                 match plt_type {
                     PlotType::Scatter2D(_) => Ok(Some(plt_series)),
                     _ => Ok(None),
@@ -361,22 +423,22 @@ mod test {
     }
     #[test]
     fn new() {
-        let meter = SpotDiagram::new("test");
-        assert_eq!(meter.name(), "test");
-        assert!(meter.light_data.is_none());
+        let spot = SpotDiagram::new("test");
+        assert_eq!(spot.name(), "test");
+        assert!(spot.light_data.is_none());
     }
     #[test]
     fn ports() {
-        let meter = SpotDiagram::default();
-        assert_eq!(meter.ports().input_names(), vec!["in1"]);
-        assert_eq!(meter.ports().output_names(), vec!["out1"]);
+        let spot = SpotDiagram::default();
+        assert_eq!(spot.ports().input_names(), vec!["in1"]);
+        assert_eq!(spot.ports().output_names(), vec!["out1"]);
     }
     #[test]
     fn ports_inverted() {
-        let mut meter = SpotDiagram::default();
-        meter.set_inverted(true).unwrap();
-        assert_eq!(meter.ports().input_names(), vec!["out1"]);
-        assert_eq!(meter.ports().output_names(), vec!["in1"]);
+        let mut spot = SpotDiagram::default();
+        spot.set_inverted(true).unwrap();
+        assert_eq!(spot.ports().input_names(), vec!["out1"]);
+        assert_eq!(spot.ports().output_names(), vec!["in1"]);
     }
     #[test]
     fn inverted() {

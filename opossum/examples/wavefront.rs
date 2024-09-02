@@ -1,9 +1,12 @@
 use num::Zero;
 use opossum::{
-    error::OpmResult, joule, meter, nodes::{
+    error::OpmResult,
+    joule, meter,
+    nodes::{
         round_collimated_ray_source, FluenceDetector, ParaxialSurface, RayPropagationVisualizer,
         Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
-    }, OpmDocument, OpticScenery
+    },
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 use uom::si::f64::Length;

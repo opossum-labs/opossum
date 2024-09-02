@@ -1,8 +1,14 @@
 use opossum::{
-    coatings::CoatingType, degree, error::OpmResult, joule, millimeter, nodes::{
+    coatings::CoatingType,
+    degree,
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{
         round_collimated_ray_source, EnergyMeter, RayPropagationVisualizer, SpotDiagram,
         ThinMirror, WaveFront,
-    }, optical::{Alignable, Optical}, OpmDocument, OpticScenery
+    },
+    optical::{Alignable, Optical},
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 

@@ -1,5 +1,10 @@
 use opossum::{
-    aperture::{Aperture, CircleConfig}, error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, ParaxialSurface, RayPropagationVisualizer}, optical::Optical, OpmDocument, OpticScenery
+    aperture::{Aperture, CircleConfig},
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{collimated_line_ray_source, ParaxialSurface, RayPropagationVisualizer},
+    optical::Optical,
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 

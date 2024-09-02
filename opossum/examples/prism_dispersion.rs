@@ -2,7 +2,18 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    degree, error::OpmResult, joule, lightdata::LightData, millimeter, nanometer, nodes::{RayPropagationVisualizer, Source, SpotDiagram, Wedge}, optical::{Alignable, Optical}, position_distributions::Grid, rays::Rays, refractive_index::RefrIndexSellmeier1, utils::geom_transformation::Isometry, OpmDocument, OpticScenery
+    degree,
+    error::OpmResult,
+    joule,
+    lightdata::LightData,
+    millimeter, nanometer,
+    nodes::{RayPropagationVisualizer, Source, SpotDiagram, Wedge},
+    optical::{Alignable, Optical},
+    position_distributions::Grid,
+    rays::Rays,
+    refractive_index::RefrIndexSellmeier1,
+    utils::geom_transformation::Isometry,
+    OpmDocument, OpticScenery,
 };
 use uom::si::f64::Length;
 

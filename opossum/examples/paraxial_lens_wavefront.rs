@@ -20,7 +20,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(src, "out1", lens, "front", Length::zero())?;
     scenery.connect_nodes(lens, "rear", wf, "in1", millimeter!(90.0))?;
     scenery.connect_nodes(wf, "out1", det, "in1", Length::zero())?;
-    
+
     OpmDocument::new(scenery).save_to_file(Path::new(
         "./opossum/playground/paraxial_lens_wavefront.opm",
     ))

@@ -1,5 +1,9 @@
 use opossum::{
-    degree, error::OpmResult, joule, meter, nodes::{point_ray_source, WaveFront}, OpmDocument, OpticScenery
+    degree,
+    error::OpmResult,
+    joule, meter,
+    nodes::{point_ray_source, WaveFront},
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 
@@ -10,5 +14,6 @@ fn main() -> OpmResult<()> {
     let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"));
 
     scenery.connect_nodes(i_s, "out1", i_wf1, "in1", meter!(0.1))?;
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/point_src_wavefront.opm"))
+    OpmDocument::new(scenery)
+        .save_to_file(Path::new("./opossum/playground/point_src_wavefront.opm"))
 }

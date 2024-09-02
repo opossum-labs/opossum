@@ -2,7 +2,12 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    error::OpmResult, lightdata::{DataEnergy, LightData}, nodes::{Dummy, EnergyMeter, NodeGroup, Source}, optical::Optical, spectrum_helper::create_he_ne_spec, OpmDocument, OpticScenery
+    error::OpmResult,
+    lightdata::{DataEnergy, LightData},
+    nodes::{Dummy, EnergyMeter, NodeGroup, Source},
+    optical::Optical,
+    spectrum_helper::create_he_ne_spec,
+    OpmDocument, OpticScenery,
 };
 use uom::si::f64::Length;
 

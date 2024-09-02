@@ -1,5 +1,8 @@
 use opossum::{
-    error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, BeamSplitter, RayPropagationVisualizer}, OpmDocument, OpticScenery
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{collimated_line_ray_source, BeamSplitter, RayPropagationVisualizer},
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 

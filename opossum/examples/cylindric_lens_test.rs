@@ -1,5 +1,11 @@
 use opossum::{
-    degree, error::OpmResult, joule, millimeter, nodes::{round_collimated_ray_source, CylindricLens, RayPropagationVisualizer, SpotDiagram}, optical::Alignable, refractive_index::RefrIndexConst, OpmDocument, OpticScenery
+    degree,
+    error::OpmResult,
+    joule, millimeter,
+    nodes::{round_collimated_ray_source, CylindricLens, RayPropagationVisualizer, SpotDiagram},
+    optical::Alignable,
+    refractive_index::RefrIndexConst,
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 
@@ -26,5 +32,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(l1, "rear", det, "in1", millimeter!(100.0))?;
     scenery.connect_nodes(det, "out1", det2, "in1", millimeter!(0.0))?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/cylindric_lens_test.opm"))
+    OpmDocument::new(scenery)
+        .save_to_file(Path::new("./opossum/playground/cylindric_lens_test.opm"))
 }

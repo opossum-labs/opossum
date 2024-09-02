@@ -49,7 +49,7 @@ fn create_dot_or_report_file_instance(
     let _ = io::stdout().flush();
 
     File::create(f_path)
-        .map_err(|e| OpossumError::Other(format!("{f_name} file creation failed: {e}")))
+        .map_err(|e| OpossumError::Other(format!("{f_name} fdile creation failed: {e}")))
 }
 
 fn create_dot_file(dot_path: &Path, scenery: &OpticScenery) -> OpmResult<()> {
