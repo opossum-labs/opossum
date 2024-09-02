@@ -1,4 +1,5 @@
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     aperture::{Aperture, CircleConfig},
     error::OpmResult,
     joule, millimeter,
@@ -40,5 +41,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(l1, "rear", l2, "front", millimeter!(197.22992))?;
     scenery.connect_nodes(l2, "rear", det, "in1", millimeter!(30.0))?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/ray_propagation.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/ray_propagation.opm"))
 }

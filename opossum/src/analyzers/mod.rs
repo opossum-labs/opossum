@@ -19,7 +19,7 @@ use crate::{error::OpmResult, OpticScenery};
 
 /// Type of analysis to be performed.
 #[non_exhaustive]
-#[derive(EnumIter, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(EnumIter, PartialEq, Debug, Serialize, Deserialize, Clone)]
 pub enum AnalyzerType {
     /// Simple energy flow of an optical spectrum.
     ///

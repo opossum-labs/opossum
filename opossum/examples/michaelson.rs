@@ -1,5 +1,6 @@
 use num::Zero;
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, Detector, Dummy, NodeReference, Source},
@@ -37,5 +38,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(m2, "rear", r_bs, "input2", Length::zero())?;
     scenery.connect_nodes(r_bs, "out1_trans1_refl2", det, "in1", Length::zero())?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/michaelson.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/michaelson.opm"))
 }

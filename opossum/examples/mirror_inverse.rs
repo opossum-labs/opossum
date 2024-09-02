@@ -1,4 +1,5 @@
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
@@ -25,5 +26,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_m2, "reflected", i_m1_ref, "input", millimeter!(0.0))?;
     scenery.connect_nodes(i_m1_ref, "reflected", i_sd3, "in1", millimeter!(50.0))?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/mirror_inverse.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/mirror_inverse.opm"))
 }

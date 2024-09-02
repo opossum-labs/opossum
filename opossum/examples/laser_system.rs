@@ -2,6 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     joule, millimeter,
     nodes::{
@@ -79,5 +80,7 @@ fn main() -> OpmResult<()> {
     let i_cam_box = scenery.add_node(cam_box);
     scenery.connect_nodes(i_f, "rear", i_cam_box, "input", Length::zero())?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/laser_system.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/laser_system.opm"))
 }

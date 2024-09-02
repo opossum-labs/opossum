@@ -1,4 +1,5 @@
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
@@ -46,5 +47,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(p2, "rear", sd, "in1", millimeter!(50.0))?;
     scenery.connect_nodes(sd, "out1", det, "in1", millimeter!(0.1))?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/prism_pair.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/prism_pair.opm"))
 }

@@ -1,4 +1,5 @@
 use nalgebra::Vector3;
+use opossum::analyzers::{AnalyzerType, RayTraceConfig};
 use opossum::nodes::{NodeReference, ParaxialSurface, SpotDiagram, ThinMirror};
 use opossum::optical::Alignable;
 use opossum::refractive_index::{RefrIndexConst, RefractiveIndex};
@@ -79,8 +80,9 @@ fn main() -> OpmResult<()> {
         millimeter!(400.),
     )?;
 
-    OpmDocument::new(scenery)
-        .save_to_file(Path::new("./opossum/playground/treacy_compressor.opm"))?;
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/treacy_compressor.opm"))?;
 
     //////////////////////////////////////////////////////////////////////
     //       Martinez Stretcher with folded telescope                   //
@@ -104,7 +106,9 @@ fn main() -> OpmResult<()> {
         millimeter!(1500.),
     )?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new(
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new(
         "./opossum/playground/nonideal_folded_martinez.opm",
     ))?;
 
@@ -130,8 +134,9 @@ fn main() -> OpmResult<()> {
         millimeter!(1500.),
     )?;
 
-    OpmDocument::new(scenery)
-        .save_to_file(Path::new("./opossum/playground/ideal_folded_martinez.opm"))?;
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/ideal_folded_martinez.opm"))?;
 
     //////////////////////////////////////////////////////////
     //       Martinez Stretcher with folded telescope       //
@@ -155,7 +160,9 @@ fn main() -> OpmResult<()> {
         millimeter!(1500.),
     )?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new(
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new(
         "./opossum/playground/ideal_folded_martinez_circle_of_least_conf.opm",
     ))?;
 
@@ -184,7 +191,9 @@ fn main() -> OpmResult<()> {
         millimeter!(1500.),
     )?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new(
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new(
         "./opossum/playground/ideal_folded_martinez_longer_f.opm",
     ))?;
 
@@ -213,7 +222,9 @@ fn main() -> OpmResult<()> {
         millimeter!(1500.),
     )?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new(
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new(
         "./opossum/playground/achromat_ideal_folded_martinez.opm",
     ))?;
 
@@ -241,7 +252,9 @@ fn main() -> OpmResult<()> {
         millimeter!(1500.),
     )?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new(
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new(
         "./opossum/playground/paraxial_folded_martinez.opm",
     ))?;
 
@@ -316,5 +329,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(paraxial_lens, "rear", spot_diag, "in1", millimeter!(500.0))?;
     scenery.connect_nodes(spot_diag, "out1", i_prop_vis, "in1", millimeter!(0.0))?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/telescope.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/telescope.opm"))
 }

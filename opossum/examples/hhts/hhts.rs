@@ -10,6 +10,7 @@ use hhts_input::hhts_input;
 use nalgebra::Point2;
 use num::Zero;
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     aperture::{Aperture, CircleConfig},
     energy_distributions::General2DGaussian,
     error::OpmResult,
@@ -446,5 +447,7 @@ fn main() -> OpmResult<()> {
 
     scenery.connect_nodes(t3_2w, "output", det_2w, "input", Length::zero())?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/hhts.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/hhts.opm"))
 }

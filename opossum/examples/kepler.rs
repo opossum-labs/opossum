@@ -1,4 +1,5 @@
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     aperture::{Aperture, CircleConfig},
     error::OpmResult,
     joule, millimeter,
@@ -24,5 +25,8 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_src, "out1", i_pl1, "front", millimeter!(50.0))?;
     scenery.connect_nodes(i_pl1, "rear", i_pl2, "front", millimeter!(150.0))?;
     scenery.connect_nodes(i_pl2, "rear", i_sd3, "in1", millimeter!(50.0))?;
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/kepler.opm"))
+
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/kepler.opm"))
 }

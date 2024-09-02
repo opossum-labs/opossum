@@ -1,4 +1,5 @@
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
@@ -45,5 +46,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(scene_g1, "output1", i_prop1, "in1", millimeter!(100.0))?;
     scenery.connect_nodes(scene_g1, "output2", i_prop2, "in1", millimeter!(150.0))?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/group_test.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/group_test.opm"))
 }

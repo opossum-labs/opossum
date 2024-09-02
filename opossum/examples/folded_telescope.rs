@@ -3,6 +3,7 @@ use std::path::Path;
 
 use nalgebra::Vector3;
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     centimeter,
     energy_distributions::UniformDist,
     error::OpmResult,
@@ -75,8 +76,9 @@ pub fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_src, "out1", lens1, "front", millimeter!(400.0))?;
     scenery.connect_nodes(lens1, "rear", mir_1, "input", millimeter!(400.0))?;
     scenery.connect_nodes(mir_1, "reflected", lens_1_ref, "rear", millimeter!(100.0))?;
-
     scenery.connect_nodes(lens_1_ref, "front", i_prop_vis, "in1", millimeter!(400.0))?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/folded_telescope.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/folded_telescope.opm"))
 }

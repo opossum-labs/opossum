@@ -1,4 +1,5 @@
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
@@ -18,7 +19,9 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(wf, "out1", sd, "in1", millimeter!(20.0))?;
     scenery.connect_nodes(sd, "out1", det, "in1", millimeter!(20.0))?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new(
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new(
         "./opossum/playground/tilted_wavefront_sensor.opm",
     ))
 }

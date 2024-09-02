@@ -2,6 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, EnergyMeter, FilterType, IdealFilter, Source, Spectrometer},
@@ -44,5 +45,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_f, "rear", i_d2, "in1", Length::zero())?;
     scenery.connect_nodes(i_d2, "out1", i_d3, "in1", Length::zero())?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/filter_test.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/filter_test.opm"))
 }

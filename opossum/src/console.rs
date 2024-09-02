@@ -3,7 +3,6 @@
 //!
 //! This module handles the command line parsing as well as basic information (e.g. help dialog, version information, etc.).
 use crate::{
-    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
     error::{OpmResult, OpossumError},
     get_version,
 };
@@ -18,20 +17,13 @@ use std::{
     io::{stdin, stdout, BufRead},
     path::{Path, PathBuf},
 };
-use strum::IntoEnumIterator;
-
 /// Command line arguments for the OPOSSUM application.
 pub struct Args {
     /// file path of the optical setup, which should be read in
     pub file_path: PathBuf,
-
-    /// analyzer type that should be used to analyze the optical setup
-    pub analyzer: AnalyzerType,
-
     /// destination directory of the report. if not defined, same directory as the filepath for the optical setup is used
     pub report_directory: PathBuf,
 }
-
 #[derive(Parser)]
 #[command(author, version = Str::from(&get_version()), about, long_about = None)]
 /// Structure for handling the OPOOSUM CLI command line arguments.
@@ -71,22 +63,6 @@ fn eval_file_path_input(file_path: &str) -> Option<PathBuf> {
         None
     }
 }
-
-/// Evaluates if the passed analyzer string is valid.
-/// # Attributes
-/// * `analyzer_input`: String description of the analyzer
-/// # Returns
-/// * [`Option<AnalyzerType>`] as [`AnalyzerType::Energy`] or [`AnalyzerType::RayTrace`] depeneding on the input
-/// * None if the analyzer string is invalid
-fn eval_analyzer_input(analyzer_input: &str) -> Option<AnalyzerType> {
-    match analyzer_input {
-        "e" => Some(AnalyzerType::Energy),
-        "r" => Some(AnalyzerType::RayTrace(RayTraceConfig::default())),
-        "g" => Some(AnalyzerType::GhostFocus(GhostFocusConfig::default())),
-        _ => None,
-    }
-}
-
 /// Evaluates if the passed report-directory string is valid.
 /// # Attributes
 /// * `report_path`: String description of the directory to the report
@@ -112,20 +88,10 @@ fn eval_report_directory_input(report_path: &str) -> Option<PathBuf> {
 /// # Errors
 /// Errors if an invalid flag type has been used
 fn create_prompt_str(flag: &str, init_str: &str) -> OpmResult<String> {
-    let mut prompt_str = init_str.to_owned();
+    let prompt_str = init_str.to_owned();
     match flag{
         "f" =>{
             Ok(prompt_str + "Please insert path to optical-setup-description file:\n")
-        },
-        "a" =>{
-            for a_type in AnalyzerType::iter(){
-                prompt_str += match a_type {
-                    AnalyzerType::Energy => "e for energy analysis\n",
-                    AnalyzerType::RayTrace(_) => "r for ray-tracing analysis\n",
-                    AnalyzerType::GhostFocus(_) => "g for ghost focus analysis\n", 
-                };
-            }
-            Ok(prompt_str)
         },
         "r" =>{
             Ok(prompt_str + "Please insert a report directory or nothing to select the same directory as the optical-setup file\n")
@@ -167,7 +133,6 @@ fn get_args<T>(
         get_args(func, Some(input.as_str()), arg_flag, reader, writer)
     }
 }
-
 /// Gets the parent directory of the passed file path
 /// # Arguments
 /// * `path`: Path to a file.
@@ -178,16 +143,13 @@ fn get_parent_dir(path: &Path) -> PathBuf {
     let parent_dir = Path::parent(path).unwrap();
     PathBuf::from(parent_dir)
 }
-
 impl TryFrom<PartialArgs> for Args {
     type Error = OpossumError;
-
     fn try_from(part_args: PartialArgs) -> OpmResult<Self> {
         let mut reader = BufReader::new(stdin().lock());
         let mut writer = BufWriter::new(stdout().lock());
         //intro only shown when neither the help, nor the version flag is specified
         show_intro();
-
         let file_path = get_args(
             eval_file_path_input,
             part_args.file_path.as_deref(),
@@ -196,15 +158,6 @@ impl TryFrom<PartialArgs> for Args {
             &mut writer,
         )?;
         info!("Path to optical-setup file: {}", file_path.display());
-
-        let analyzer = get_args(
-            eval_analyzer_input,
-            part_args.analyzer.as_deref(),
-            "a",
-            &mut reader,
-            &mut writer,
-        )?;
-        info!("Analyzer: {analyzer}");
 
         let report_directory = get_args(
             eval_report_directory_input,
@@ -223,7 +176,6 @@ impl TryFrom<PartialArgs> for Args {
 
         Ok(Self {
             file_path,
-            analyzer,
             report_directory,
         })
     }
@@ -327,15 +279,6 @@ mod test {
         assert_eq!(eval_file_path_input(path_is_dir), None);
     }
     #[test]
-    fn eval_analyzer_input_test() {
-        assert_eq!(eval_analyzer_input("e").unwrap(), AnalyzerType::Energy);
-        assert_eq!(eval_analyzer_input("nothing_available"), None);
-        assert_eq!(
-            eval_analyzer_input("r").unwrap(),
-            AnalyzerType::RayTrace(RayTraceConfig::default())
-        );
-    }
-    #[test]
     fn eval_report_directory_input_test() {
         let dir_valid = "./files_for_testing/opm";
 
@@ -362,10 +305,6 @@ mod test {
         assert_eq!(
             create_prompt_str("f", "test_str\r\n").unwrap(),
             "test_str\r\nPlease insert path to optical-setup-description file:\n"
-        );
-        assert_eq!(
-            create_prompt_str("a", "test_str\r\n").unwrap(),
-            "test_str\r\ne for energy analysis\nr for ray-tracing analysis\ng for ghost focus analysis\n"
         );
         assert_eq!(create_prompt_str("r", "test_str\r\n").unwrap(), "test_str\r\nPlease insert a report directory or nothing to select the same directory as the optical-setup file\n");
         assert!(create_prompt_str("invalid_flag", "").is_err());
@@ -426,14 +365,12 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
 
         let args = Args {
             file_path: PathBuf::from(path_valid.clone()),
-            analyzer: AnalyzerType::Energy,
             report_directory: PathBuf::from(get_parent_dir(&PathBuf::from(path_valid.clone()))),
         };
 
         let args_from = Args::try_from(part_args).unwrap();
 
         assert_eq!(args.file_path, args_from.file_path);
-        assert_eq!(args.analyzer, args_from.analyzer);
         assert_eq!(args.report_directory, args_from.report_directory);
 
         let part_args = PartialArgs {
@@ -444,7 +381,6 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
 
         let args = Args {
             file_path: PathBuf::from(path_valid.clone()),
-            analyzer: AnalyzerType::Energy,
             report_directory: PathBuf::from("./files_for_testing/"),
         };
         let args_from = Args::try_from(part_args).unwrap();
@@ -454,8 +390,6 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
     #[test]
     fn get_args_test() {
         let correct_file_path = b"./files_for_testing/opm/opticscenery.opm\r\n";
-        let analyzer_energy_str = b"e\r\n";
-        let analyzer_ray_str = b"r\r\n";
         let report_directory_path1 = b"./files_for_testing/\r\n";
 
         let mut writer = Vec::new();
@@ -486,48 +420,11 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         let file_path_str3 = file_path3.to_str().unwrap();
         assert_eq!(file_path_str3, "./files_for_testing/opm/opticscenery.opm");
 
-        let mut reader = BufReader::new(&analyzer_energy_str[..]);
-        let analyzer1 = get_args(
-            eval_analyzer_input,
-            Some("e"),
-            "a",
-            &mut reader,
-            &mut writer,
-        )
-        .unwrap();
-        assert_eq!(analyzer1, AnalyzerType::Energy);
-
-        let mut reader = BufReader::new(&analyzer_ray_str[..]);
-        let analyzer2 = get_args(
-            eval_analyzer_input,
-            Some("r"),
-            "a",
-            &mut reader,
-            &mut writer,
-        )
-        .unwrap();
-        assert_eq!(analyzer2, AnalyzerType::RayTrace(RayTraceConfig::default()));
-
-        let mut reader = BufReader::new(&analyzer_ray_str[..]);
-        let analyzer2 = get_args(
-            eval_analyzer_input,
-            Some("not_an_analyzer"),
-            "a",
-            &mut reader,
-            &mut writer,
-        )
-        .unwrap();
-        assert_eq!(analyzer2, AnalyzerType::RayTrace(RayTraceConfig::default()));
-
-        let mut reader = BufReader::new(&analyzer_ray_str[..]);
-        let analyzer3 = get_args(eval_analyzer_input, None, "a", &mut reader, &mut writer).unwrap();
-        assert_eq!(analyzer3, AnalyzerType::RayTrace(RayTraceConfig::default()));
-
         let mut reader = BufReader::new(&report_directory_path1[..]);
         let report_path1 = get_args(
             eval_report_directory_input,
             None,
-            "a",
+            "r",
             &mut reader,
             &mut writer,
         )
@@ -539,7 +436,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         let report_path2 = get_args(
             eval_report_directory_input,
             Some("./files_for_testing/"),
-            "a",
+            "r",
             &mut reader,
             &mut writer,
         )
@@ -551,7 +448,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         let report_path3 = get_args(
             eval_report_directory_input,
             Some("./files_for_not_testing/"),
-            "a",
+            "r",
             &mut reader,
             &mut writer,
         )
@@ -566,18 +463,14 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             "opossum",
             "-f",
             "./files_for_testing/opm/opticscenery.opm",
-            "-a",
-            "e",
             "-r",
             "./files_for_testing/",
         ];
         let part_args = PartialArgs::parse_from(arg_vec);
         let fpath = part_args.file_path.unwrap();
-        let analyzer = part_args.analyzer.unwrap();
         let r_dir = part_args.report_directory.unwrap();
 
         assert_eq!(fpath, "./files_for_testing/opm/opticscenery.opm");
-        assert_eq!(analyzer, "e");
         assert_eq!(r_dir, "./files_for_testing/");
     }
 }

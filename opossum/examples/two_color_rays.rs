@@ -2,6 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     joule,
     lightdata::LightData,
@@ -61,6 +62,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(l2, "rear", det, "in1", millimeter!(30.0))?;
     scenery.connect_nodes(det, "out1", sd, "in1", Length::zero())?;
 
-    OpmDocument::new(scenery)
-        .save_to_file(Path::new("./opossum/playground/two_color_spot_diagram.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/two_color_spot_diagram.opm"))
 }

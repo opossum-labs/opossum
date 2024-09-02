@@ -2,6 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule,
@@ -94,5 +95,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(w4, "rear", det, "in1", millimeter!(50.0))?;
     scenery.connect_nodes(det, "out1", sd, "in1", Length::zero())?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/prism_dispersion.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/prism_dispersion.opm"))
 }

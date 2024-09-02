@@ -3,6 +3,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
+    analyzers::AnalyzerType,
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, Detector, FilterType, IdealFilter, Source},
@@ -42,5 +43,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_f, "front", Length::zero())?;
     scenery.connect_nodes(i_f, "rear", i_d1, "in1", Length::zero())?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/beam_combiner_test.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::Energy);
+    doc.save_to_file(Path::new("./opossum/playground/beam_combiner_test.opm"))
 }

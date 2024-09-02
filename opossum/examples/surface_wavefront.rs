@@ -1,5 +1,6 @@
 use num::Zero;
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     aperture::{Aperture, CircleConfig},
     error::OpmResult,
     joule, millimeter,
@@ -44,5 +45,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(wf, "out1", det, "in1", Length::zero())?;
     scenery.connect_nodes(det, "out1", sd, "in1", Length::zero())?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/surface_wavefront.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/surface_wavefront.opm"))
 }

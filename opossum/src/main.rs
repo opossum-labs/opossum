@@ -101,38 +101,41 @@ fn opossum() -> OpmResult<()> {
 
     //read scenery model from file and deserialize it
     let mut document = read_and_parse_model(&opossum_args.file_path)?;
-
+    let analyzers = document.analyzers();
     let scenery = document.scenery_mut();
     //create the dot file of the scenery
     create_dot_file(&opossum_args.report_directory, scenery)?;
-    //analyze the scenery
-    info!("Analyzing...");
-    let analyzer: &dyn Analyzer = match opossum_args.analyzer {
-        AnalyzerType::Energy => &EnergyAnalyzer::default(),
-        AnalyzerType::RayTrace(_) => &RayTracingAnalyzer::default(),
-        AnalyzerType::GhostFocus(_) => &GhostFocusAnalyzer::default(),
-        _ => {
-            return Err(OpossumError::Analysis(
-                "specified analyzer not found".into(),
-            ))
+    if analyzers.is_empty() {
+        info!("No analyzer defined in document. Stopping here.");
+    } else {
+        info!("Analyzing...");
+        for ana in &analyzers {
+            let analyzer: &dyn Analyzer = match ana {
+                AnalyzerType::Energy => &EnergyAnalyzer::default(),
+                AnalyzerType::RayTrace(_) => &RayTracingAnalyzer::default(),
+                AnalyzerType::GhostFocus(_) => &GhostFocusAnalyzer::default(),
+                _ => {
+                    return Err(OpossumError::Analysis(
+                        "specified analyzer not found".into(),
+                    ))
+                }
+            };
+            analyzer.analyze(scenery)?;
+            #[cfg(feature = "bevy")]
+            let analysis_report = create_report_and_data_files(
+                &opossum_args.report_directory,
+                base_file_name,
+                &scenery,
+                &opossum_args.analyzer,
+            )?;
+            #[cfg(not(feature = "bevy"))]
+            create_report_and_data_files(&opossum_args.report_directory, scenery)?;
+            #[cfg(feature = "bevy")]
+            bevy_main::bevy_main(SceneryBevyData::from_report(&analysis_report));
         }
-    };
-    analyzer.analyze(scenery)?;
-    //scenery.analyze(&opossum_args.analyzer)?;
-    #[cfg(feature = "bevy")]
-    let analysis_report = create_report_and_data_files(
-        &opossum_args.report_directory,
-        base_file_name,
-        &scenery,
-        &opossum_args.analyzer,
-    )?;
-    #[cfg(not(feature = "bevy"))]
-    create_report_and_data_files(&opossum_args.report_directory, scenery)?;
-    #[cfg(feature = "bevy")]
-    bevy_main::bevy_main(SceneryBevyData::from_report(&analysis_report));
+    }
     Ok(())
 }
-
 /// OPOSSUM main function
 ///
 /// This function is only a wrapper for the `opossum()` function and does general error handling.

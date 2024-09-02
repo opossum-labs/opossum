@@ -1,5 +1,6 @@
 use num::Zero;
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{EnergyMeter, IdealFilter, NodeReference, Source},
@@ -27,5 +28,8 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(src, "out1", filt, "front", Length::zero())?;
     scenery.connect_nodes(filt, "rear", reference, "front", Length::zero())?;
     scenery.connect_nodes(reference, "rear", detector, "in1", Length::zero())?;
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/reference_test.opm"))
+
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/reference_test.opm"))
 }

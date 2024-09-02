@@ -87,8 +87,8 @@ impl OpmDocument {
         &mut self.scenery
     }
     #[must_use]
-    pub fn analyzers(&self) -> &[AnalyzerType] {
-        &self.analyzers
+    pub fn analyzers(&self) -> Vec<AnalyzerType> {
+        self.analyzers.clone()
     }
 }
 

@@ -1,4 +1,5 @@
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     coatings::CoatingType,
     degree,
     error::OpmResult,
@@ -38,5 +39,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_sd, "out1", i_wf, "in1", millimeter!(0.1))?;
     scenery.connect_nodes(i_wf, "out1", i_pm, "in1", millimeter!(0.1))?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/mirror.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/mirror.opm"))
 }

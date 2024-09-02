@@ -1,4 +1,5 @@
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
@@ -32,6 +33,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(l1, "rear", det, "in1", millimeter!(100.0))?;
     scenery.connect_nodes(det, "out1", det2, "in1", millimeter!(0.0))?;
 
-    OpmDocument::new(scenery)
-        .save_to_file(Path::new("./opossum/playground/cylindric_lens_test.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/cylindric_lens_test.opm"))
 }

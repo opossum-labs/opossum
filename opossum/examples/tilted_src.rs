@@ -1,4 +1,5 @@
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
@@ -25,5 +26,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_m1, "reflected", i_m2, "input", millimeter!(100.0))?;
     scenery.connect_nodes(i_m2, "reflected", i_sd3, "in1", millimeter!(100.0))?;
 
-    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/tilted_src.opm"))
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/tilted_src.opm"))
 }
