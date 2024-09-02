@@ -1,10 +1,5 @@
 use opossum::{
-    degree,
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{collimated_line_ray_source, NodeReference, RayPropagationVisualizer, ThinMirror},
-    optical::Alignable,
-    OpticScenery,
+    degree, error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, NodeReference, RayPropagationVisualizer, ThinMirror}, optical::Alignable, OpmDocument, OpticScenery
 };
 use std::path::Path;
 
@@ -25,6 +20,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_m2, "reflected", i_m1_ref, "input", millimeter!(0.0))?;
     scenery.connect_nodes(i_m1_ref, "reflected", i_sd3, "in1", millimeter!(50.0))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/mirror_inverse.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/mirror_inverse.opm"))
 }

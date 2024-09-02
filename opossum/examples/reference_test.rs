@@ -1,10 +1,6 @@
 use num::Zero;
 use opossum::{
-    error::OpmResult,
-    lightdata::{DataEnergy, LightData},
-    nodes::{EnergyMeter, IdealFilter, NodeReference, Source},
-    spectrum_helper::create_he_ne_spec,
-    OpticScenery,
+    error::OpmResult, lightdata::{DataEnergy, LightData}, nodes::{EnergyMeter, IdealFilter, NodeReference, Source}, spectrum_helper::create_he_ne_spec, OpmDocument, OpticScenery
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -27,6 +23,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(src, "out1", filt, "front", Length::zero())?;
     scenery.connect_nodes(filt, "rear", reference, "front", Length::zero())?;
     scenery.connect_nodes(reference, "rear", detector, "in1", Length::zero())?;
-    scenery.save_to_file(Path::new("./opossum/playground/reference_test.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/reference_test.opm"))
 }

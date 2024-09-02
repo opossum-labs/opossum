@@ -1,10 +1,6 @@
 use num::Zero;
 use opossum::{
-    error::OpmResult,
-    lightdata::{DataEnergy, LightData},
-    nodes::{BeamSplitter, Detector, Dummy, NodeReference, Source},
-    spectrum_helper::create_he_ne_spec,
-    OpticScenery,
+    error::OpmResult, lightdata::{DataEnergy, LightData}, nodes::{BeamSplitter, Detector, Dummy, NodeReference, Source}, spectrum_helper::create_he_ne_spec, OpmDocument, OpticScenery
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -37,6 +33,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(m2, "rear", r_bs, "input2", Length::zero())?;
     scenery.connect_nodes(r_bs, "out1_trans1_refl2", det, "in1", Length::zero())?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/michaelson.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/michaelson.opm"))
 }

@@ -1,39 +1,43 @@
-graph:
-  nodes:
-  - type: dummy
-    id: 180328fe-7ad4-4568-b501-183b88c4daee
-    attributes:
-      ports:
-        inputs:
-          front: 
-            aperture: None
-            coating: Fresnel
-        outputs:
-          rear:
-            aperture: None
-            coating: Fresnel
-      name: dummy1
-      inverted: false
-      props:
-  - type: dummy
-    id: 642ce76e-b071-43c0-a77e-1bdbb99b40d8
-    attributes:
-      ports:
-        inputs:
-          front:
-            aperture: None
-            coating: Fresnel
-        outputs:
-          rear:
-            aperture: None
-            coating: Fresnel
-      name: dummy2
-      inverted: false
-      props:
-  edges:
-  - - 180328fe-7ad4-4568-b501-183b88c4daee
-    - 642ce76e-b071-43c0-a77e-1bdbb99b40d8
-    - rear
-    - front
-    - 0.0
-description: OpticScenery demo
+opm file version: '0'
+scenery:
+  graph:
+    nodes:
+    - type: dummy
+      id: 180328fe-7ad4-4568-b501-183b88c4daee
+      attributes:
+        ports:
+          inputs:
+            front: 
+              aperture: None
+              coating: Fresnel
+          outputs:
+            rear:
+              aperture: None
+              coating: Fresnel
+        name: dummy1
+        inverted: false
+        props:
+    - type: dummy
+      id: 642ce76e-b071-43c0-a77e-1bdbb99b40d8
+      attributes:
+        ports:
+          inputs:
+            front:
+              aperture: None
+              coating: Fresnel
+          outputs:
+            rear:
+              aperture: None
+              coating: Fresnel
+        name: dummy2
+        inverted: false
+        props:
+    edges:
+    - - 180328fe-7ad4-4568-b501-183b88c4daee
+      - 642ce76e-b071-43c0-a77e-1bdbb99b40d8
+      - rear
+      - front
+      - 0.0
+  description: OpticScenery demo
+analyzers: []
+

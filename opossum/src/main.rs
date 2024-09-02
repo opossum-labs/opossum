@@ -10,6 +10,7 @@ use opossum::analyzers::Analyzer;
 use opossum::analyzers::AnalyzerType;
 #[cfg(feature = "bevy")]
 use opossum::bevy_main;
+use opossum::OpmDocument;
 #[cfg(feature = "bevy")]
 use opossum::SceneryBevyData;
 use opossum::{
@@ -20,18 +21,19 @@ use opossum::{
 use std::env;
 use std::fs::create_dir;
 use std::fs::remove_dir_all;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
 
-fn read_and_parse_model(path: &Path) -> OpmResult<OpticScenery> {
+fn read_and_parse_model(path: &Path) -> OpmResult<OpmDocument> {
     info!("Reading model...");
-    let contents = fs::read_to_string(path).map_err(|e| {
-        OpossumError::Console(format!("cannot read file {} : {}", path.display(), e))
-    })?;
-    let scenery: OpticScenery = serde_yaml::from_str(&contents)
-        .map_err(|e| OpossumError::OpticScenery(format!("parsing of model failed: {e}")))?;
-    Ok(scenery)
+    OpmDocument::from_file(path)
+    // let contents = fs::read_to_string(path).map_err(|e| {
+    //     OpossumError::Console(format!("cannot read file {} : {}", path.display(), e))
+    // })?;
+    // let scenery: OpticScenery = serde_yaml::from_str(&contents)
+    //     .map_err(|e| OpossumError::OpticScenery(format!("parsing of model failed: {e}")))?;
+    // Ok(scenery)
 }
 
 fn create_dot_or_report_file_instance(
@@ -98,10 +100,11 @@ fn opossum() -> OpmResult<()> {
     let opossum_args = Args::try_from(PartialArgs::parse())?;
 
     //read scenery model from file and deserialize it
-    let mut scenery = read_and_parse_model(&opossum_args.file_path)?;
+    let mut document = read_and_parse_model(&opossum_args.file_path)?;
 
+    let scenery = document.scenery_mut();
     //create the dot file of the scenery
-    create_dot_file(&opossum_args.report_directory, &scenery)?;
+    create_dot_file(&opossum_args.report_directory, scenery)?;
     //analyze the scenery
     info!("Analyzing...");
     let analyzer: &dyn Analyzer = match opossum_args.analyzer {
@@ -114,7 +117,7 @@ fn opossum() -> OpmResult<()> {
             ))
         }
     };
-    analyzer.analyze(&mut scenery)?;
+    analyzer.analyze(scenery)?;
     //scenery.analyze(&opossum_args.analyzer)?;
     #[cfg(feature = "bevy")]
     let analysis_report = create_report_and_data_files(
@@ -124,7 +127,7 @@ fn opossum() -> OpmResult<()> {
         &opossum_args.analyzer,
     )?;
     #[cfg(not(feature = "bevy"))]
-    create_report_and_data_files(&opossum_args.report_directory, &scenery)?;
+    create_report_and_data_files(&opossum_args.report_directory, scenery)?;
     #[cfg(feature = "bevy")]
     bevy_main::bevy_main(SceneryBevyData::from_report(&analysis_report));
     Ok(())
@@ -132,7 +135,7 @@ fn opossum() -> OpmResult<()> {
 
 /// OPOSSUM main function
 ///
-/// This function is only a wrapper for the `opossum()` function and does general erro handling.
+/// This function is only a wrapper for the `opossum()` function and does general error handling.
 fn main() {
     if let Err(e) = opossum() {
         error!("{e}");
@@ -141,56 +144,26 @@ fn main() {
 #[cfg(test)]
 mod test {
     use super::*;
-    use petgraph::adj::NodeIndex;
-    use std::path::PathBuf;
+    use std::fs;
 
-    #[test]
-    fn read_and_parse_model_test() {
-        assert!(read_and_parse_model(&PathBuf::from(
-            "./invalid_file_path/invalid_file.invalid_ext"
-        ))
-        .is_err());
-        assert!(
-            read_and_parse_model(&PathBuf::from("./files_for_testing/opm/incorrect_opm.opm"))
-                .is_err()
-        );
-
-        let scenery =
-            read_and_parse_model(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
-                .unwrap();
-        let node1 = scenery.node(NodeIndex::from(0)).unwrap();
-        let node2 = scenery.node(NodeIndex::from(1)).unwrap();
-        assert_eq!(
-            "180328fe-7ad4-4568-b501-183b88c4daee",
-            node1.uuid().to_string()
-        );
-        assert_eq!(
-            "642ce76e-b071-43c0-a77e-1bdbb99b40d8",
-            node2.uuid().to_string()
-        );
-    }
     #[test]
     fn create_dot_file_test() {
-        let scenery =
-            read_and_parse_model(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
-                .unwrap();
-        let dot_file = create_dot_file(
-            &PathBuf::from("./files_for_testing/dot/_not_valid/"),
-            &scenery,
-        );
+        let mut document =
+            read_and_parse_model(&Path::new("./files_for_testing/opm/opticscenery.opm")).unwrap();
+        let scenery = document.scenery_mut();
+        let dot_file = create_dot_file(&Path::new("./files_for_testing/dot/_not_valid/"), &scenery);
         assert!(dot_file.is_err());
-        let _ = create_dot_file(&PathBuf::from("./files_for_testing/dot/"), &scenery).unwrap();
+        let _ = create_dot_file(&Path::new("./files_for_testing/dot/"), &scenery).unwrap();
         fs::remove_file("./files_for_testing/dot/scenery.dot").unwrap();
         fs::remove_file("./files_for_testing/dot/scenery.svg").unwrap();
     }
     #[test]
     fn create_report_file_test() {
-        let scenery =
-            read_and_parse_model(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
-                .unwrap();
-
+        let mut document =
+            read_and_parse_model(&Path::new("./files_for_testing/opm/opticscenery.opm")).unwrap();
+        let scenery = document.scenery_mut();
         let report_file = create_report_and_data_files(
-            &PathBuf::from("./files_for_testing/report/_not_valid/"),
+            &Path::new("./files_for_testing/report/_not_valid/"),
             &scenery,
         );
         assert!(report_file.is_err());

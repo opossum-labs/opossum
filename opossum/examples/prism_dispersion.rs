@@ -2,18 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    degree,
-    error::OpmResult,
-    joule,
-    lightdata::LightData,
-    millimeter, nanometer,
-    nodes::{RayPropagationVisualizer, Source, SpotDiagram, Wedge},
-    optical::{Alignable, Optical},
-    position_distributions::Grid,
-    rays::Rays,
-    refractive_index::RefrIndexSellmeier1,
-    utils::geom_transformation::Isometry,
-    OpticScenery,
+    degree, error::OpmResult, joule, lightdata::LightData, millimeter, nanometer, nodes::{RayPropagationVisualizer, Source, SpotDiagram, Wedge}, optical::{Alignable, Optical}, position_distributions::Grid, rays::Rays, refractive_index::RefrIndexSellmeier1, utils::geom_transformation::Isometry, OpmDocument, OpticScenery
 };
 use uom::si::f64::Length;
 
@@ -94,6 +83,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(w4, "rear", det, "in1", millimeter!(50.0))?;
     scenery.connect_nodes(det, "out1", sd, "in1", Length::zero())?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/prism_dispersion.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/prism_dispersion.opm"))
 }

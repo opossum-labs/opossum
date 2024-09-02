@@ -1,10 +1,5 @@
 use opossum::{
-    aperture::{Aperture, CircleConfig},
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{collimated_line_ray_source, ParaxialSurface, RayPropagationVisualizer},
-    optical::Optical,
-    OpticScenery,
+    aperture::{Aperture, CircleConfig}, error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, ParaxialSurface, RayPropagationVisualizer}, optical::Optical, OpmDocument, OpticScenery
 };
 use std::path::Path;
 
@@ -24,6 +19,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_src, "out1", i_pl1, "front", millimeter!(50.0))?;
     scenery.connect_nodes(i_pl1, "rear", i_pl2, "front", millimeter!(150.0))?;
     scenery.connect_nodes(i_pl2, "rear", i_sd3, "in1", millimeter!(50.0))?;
-    scenery.save_to_file(Path::new("./opossum/playground/kepler.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/kepler.opm"))
 }

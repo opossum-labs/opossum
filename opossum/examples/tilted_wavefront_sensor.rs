@@ -4,7 +4,7 @@ use opossum::{
     joule, millimeter,
     nodes::{round_collimated_ray_source, RayPropagationVisualizer, SpotDiagram, WaveFront},
     optical::Alignable,
-    OpticScenery,
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 fn main() -> OpmResult<()> {
@@ -17,8 +17,8 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(src, "out1", wf, "in1", millimeter!(20.0))?;
     scenery.connect_nodes(wf, "out1", sd, "in1", millimeter!(20.0))?;
     scenery.connect_nodes(sd, "out1", det, "in1", millimeter!(20.0))?;
-    scenery.save_to_file(Path::new(
+
+    OpmDocument::new(scenery).save_to_file(Path::new(
         "./opossum/playground/tilted_wavefront_sensor.opm",
-    ))?;
-    Ok(())
+    ))
 }

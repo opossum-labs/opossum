@@ -1,13 +1,8 @@
 use opossum::{
-    degree,
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{
+    degree, error::OpmResult, joule, millimeter, nodes::{
         collimated_line_ray_source, BeamSplitter, Lens, NodeGroup, RayPropagationVisualizer,
         ThinMirror,
-    },
-    optical::Alignable,
-    OpticScenery,
+    }, optical::Alignable, OpmDocument, OpticScenery
 };
 use std::path::Path;
 fn main() -> OpmResult<()> {
@@ -45,6 +40,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(scene_g1, "output1", i_prop1, "in1", millimeter!(100.0))?;
     scenery.connect_nodes(scene_g1, "output2", i_prop2, "in1", millimeter!(150.0))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/group_test.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/group_test.opm"))
 }

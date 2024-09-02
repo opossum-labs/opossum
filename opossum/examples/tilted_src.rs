@@ -4,7 +4,7 @@ use opossum::{
     joule, millimeter,
     nodes::{collimated_line_ray_source, RayPropagationVisualizer, ThinMirror},
     optical::Alignable,
-    OpticScenery,
+    OpmDocument, OpticScenery,
 };
 use std::path::Path;
 
@@ -25,6 +25,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_m1, "reflected", i_m2, "input", millimeter!(100.0))?;
     scenery.connect_nodes(i_m2, "reflected", i_sd3, "in1", millimeter!(100.0))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/tilted_src.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/tilted_src.opm"))
 }

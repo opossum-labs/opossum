@@ -3,20 +3,7 @@ use std::path::Path;
 
 use nalgebra::Vector3;
 use opossum::{
-    centimeter,
-    energy_distributions::UniformDist,
-    error::OpmResult,
-    joule,
-    lightdata::LightData,
-    millimeter, nanometer,
-    nodes::{Lens, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
-    optical::{Alignable, Optical},
-    position_distributions::Hexapolar,
-    rays::Rays,
-    refractive_index::RefrIndexSellmeier1,
-    spectral_distribution::Gaussian,
-    utils::geom_transformation::Isometry,
-    OpticScenery,
+    centimeter, energy_distributions::UniformDist, error::OpmResult, joule, lightdata::LightData, millimeter, nanometer, nodes::{Lens, NodeReference, RayPropagationVisualizer, Source, ThinMirror}, optical::{Alignable, Optical}, position_distributions::Hexapolar, rays::Rays, refractive_index::RefrIndexSellmeier1, spectral_distribution::Gaussian, utils::geom_transformation::Isometry, OpmDocument, OpticScenery
 };
 
 pub fn main() -> OpmResult<()> {
@@ -77,7 +64,6 @@ pub fn main() -> OpmResult<()> {
     scenery.connect_nodes(mir_1, "reflected", lens_1_ref, "rear", millimeter!(100.0))?;
 
     scenery.connect_nodes(lens_1_ref, "front", i_prop_vis, "in1", millimeter!(400.0))?;
-    scenery.save_to_file(Path::new("./opossum/playground/folded_telescope.opm"))?;
 
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/folded_telescope.opm"))
 }

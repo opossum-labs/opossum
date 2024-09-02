@@ -1,6 +1,7 @@
 use nalgebra::Vector3;
 use opossum::nodes::{ParaxialSurface, SpotDiagram};
 use opossum::refractive_index::{RefrIndexConst, RefractiveIndex};
+use opossum::OpmDocument;
 use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
@@ -73,7 +74,7 @@ fn main() -> OpmResult<()> {
         millimeter!(400.),
     )?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/treacy_compressor.opm"))?;
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/treacy_compressor.opm"))?;
 
     //////////////////////////////////////////////////////////////////////
     //       Martinez Stretcher with folded telescope                   //
@@ -97,7 +98,7 @@ fn main() -> OpmResult<()> {
         millimeter!(1500.),
     )?;
 
-    scenery.save_to_file(Path::new(
+    OpmDocument::new(scenery).save_to_file(Path::new(
         "./opossum/playground/nonideal_folded_martinez.opm",
     ))?;
 
@@ -123,7 +124,7 @@ fn main() -> OpmResult<()> {
         millimeter!(1500.),
     )?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/ideal_folded_martinez.opm"))?;
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/ideal_folded_martinez.opm"))?;
 
     //////////////////////////////////////////////////////////
     //       Martinez Stretcher with folded telescope       //
@@ -150,7 +151,7 @@ fn main() -> OpmResult<()> {
         millimeter!(1500.),
     )?;
 
-    scenery.save_to_file(Path::new(
+    OpmDocument::new(scenery).save_to_file(Path::new(
         "./opossum/playground/achromat_ideal_folded_martinez.opm",
     ))?;
 
@@ -178,7 +179,7 @@ fn main() -> OpmResult<()> {
         millimeter!(1500.),
     )?;
 
-    scenery.save_to_file(Path::new(
+    OpmDocument::new(scenery).save_to_file(Path::new(
         "./opossum/playground/paraxial_folded_martinez.opm",
     ))?;
 
@@ -241,7 +242,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(paraxial_lens, "rear", spot_diag, "in1", millimeter!(500.0))?;
     scenery.connect_nodes(spot_diag, "out1", i_prop_vis, "in1", millimeter!(0.0))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/telescope.opm"))?;
-
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/telescope.opm"))
 }

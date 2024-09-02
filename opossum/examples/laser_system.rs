@@ -2,14 +2,10 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{
+    error::OpmResult, joule, millimeter, nodes::{
         round_collimated_ray_source, BeamSplitter, EnergyMeter, IdealFilter, NodeGroup,
         ParaxialSurface, SpotDiagram,
-    },
-    ray::SplittingConfig,
-    OpticScenery,
+    }, ray::SplittingConfig, OpmDocument, OpticScenery
 };
 use uom::si::f64::Length;
 
@@ -79,6 +75,5 @@ fn main() -> OpmResult<()> {
     let i_cam_box = scenery.add_node(cam_box);
     scenery.connect_nodes(i_f, "rear", i_cam_box, "input", Length::zero())?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/laser_system.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/laser_system.opm"))
 }

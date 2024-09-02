@@ -1,8 +1,5 @@
 use opossum::{
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{collimated_line_ray_source, BeamSplitter, RayPropagationVisualizer},
-    OpticScenery,
+    error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, BeamSplitter, RayPropagationVisualizer}, OpmDocument, OpticScenery
 };
 use std::path::Path;
 
@@ -25,6 +22,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_src2, "out1", i_bs, "input2", millimeter!(110.0))?;
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_sd, "in1", millimeter!(150.0))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/two_srcs.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/two_srcs.opm"))
 }

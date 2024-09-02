@@ -1,12 +1,6 @@
 use num::Zero;
 use opossum::{
-    error::OpmResult,
-    lightdata::{DataEnergy, LightData},
-    nodes::{BeamSplitter, EnergyMeter, Source},
-    optical::Optical,
-    ray::SplittingConfig,
-    spectrum_helper::create_he_ne_spec,
-    OpticScenery,
+    error::OpmResult, lightdata::{DataEnergy, LightData}, nodes::{BeamSplitter, EnergyMeter, Source}, optical::Optical, ray::SplittingConfig, spectrum_helper::create_he_ne_spec, OpmDocument, OpticScenery
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -37,7 +31,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_bs, "input1", i_d1, "in1", Length::zero())?;
     scenery.connect_nodes(i_bs, "input2", i_d2, "in1", Length::zero())?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/inverse_beam_splitter.opm"))?;
-
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/inverse_beam_splitter.opm"))
 }

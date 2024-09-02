@@ -1,16 +1,5 @@
 use opossum::{
-    coatings::CoatingType,
-    energy_distributions::UniformDist,
-    error::OpmResult,
-    joule,
-    lightdata::LightData,
-    millimeter, nanometer,
-    nodes::{EnergyMeter, FluenceDetector, Lens, RayPropagationVisualizer, Source},
-    optical::Optical,
-    position_distributions::Grid,
-    rays::Rays,
-    refractive_index::RefrIndexConst,
-    OpticScenery,
+    coatings::CoatingType, energy_distributions::UniformDist, error::OpmResult, joule, lightdata::LightData, millimeter, nanometer, nodes::{EnergyMeter, FluenceDetector, Lens, RayPropagationVisualizer, Source}, optical::Optical, position_distributions::Grid, rays::Rays, refractive_index::RefrIndexConst, OpmDocument, OpticScenery
 };
 use std::path::Path;
 
@@ -45,6 +34,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(l1, "rear", fd2, "in1", millimeter!(1.0))?;
     scenery.connect_nodes(fd2, "out1", ed, "in1", millimeter!(1.0))?;
     scenery.connect_nodes(ed, "out1", det, "in1", millimeter!(10.0))?;
-    scenery.save_to_file(Path::new("./opossum/playground/fresnel_coating.opm"))?;
-    Ok(())
+
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/fresnel_coating.opm"))
 }

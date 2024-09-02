@@ -1,11 +1,6 @@
 use num::Zero;
 use opossum::{
-    aperture::{Aperture, CircleConfig},
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{round_collimated_ray_source, Dummy, EnergyMeter, SpotDiagram},
-    optical::Optical,
-    OpticScenery,
+    aperture::{Aperture, CircleConfig}, error::OpmResult, joule, millimeter, nodes::{round_collimated_ray_source, Dummy, EnergyMeter, SpotDiagram}, optical::Optical, OpmDocument, OpticScenery
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -25,6 +20,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_s, "out1", i_dummy, "front", Length::zero())?;
     scenery.connect_nodes(i_dummy, "rear", i_d, "in1", Length::zero())?;
     scenery.connect_nodes(i_d, "out1", i_sd, "in1", Length::zero())?;
-    scenery.save_to_file(Path::new("./opossum/playground/ray_source.opm"))?;
-    Ok(())
+
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/ray_source.opm"))
 }

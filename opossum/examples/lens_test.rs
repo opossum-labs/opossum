@@ -1,11 +1,5 @@
 use opossum::{
-    degree,
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{collimated_line_ray_source, Lens, RayPropagationVisualizer, Wedge},
-    optical::Alignable,
-    refractive_index::RefrIndexConst,
-    OpticScenery,
+    degree, error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, Lens, RayPropagationVisualizer, Wedge}, optical::Alignable, refractive_index::RefrIndexConst, OpmDocument, OpticScenery
 };
 use std::path::Path;
 
@@ -45,6 +39,5 @@ fn main() -> OpmResult<()> {
     //scenery.connect_nodes(l2, "rear", wf, "in1", millimeter!(50.0))?;
     // scenery.connect_nodes(l2, "rear", det, "in1", millimeter!(100.0))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/lens_test.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/lens_test.opm"))
 }

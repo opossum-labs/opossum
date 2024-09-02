@@ -1,12 +1,6 @@
 use num::Zero;
 use opossum::{
-    aperture::{Aperture, CircleConfig},
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{round_collimated_ray_source, Lens, RayPropagationVisualizer, SpotDiagram, WaveFront},
-    optical::Optical,
-    refractive_index::RefrIndexConst,
-    OpticScenery,
+    aperture::{Aperture, CircleConfig}, error::OpmResult, joule, millimeter, nodes::{round_collimated_ray_source, Lens, RayPropagationVisualizer, SpotDiagram, WaveFront}, optical::Optical, refractive_index::RefrIndexConst, OpmDocument, OpticScenery
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -44,6 +38,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(wf, "out1", det, "in1", Length::zero())?;
     scenery.connect_nodes(det, "out1", sd, "in1", Length::zero())?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/surface_wavefront.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/surface_wavefront.opm"))
 }

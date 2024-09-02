@@ -1,12 +1,5 @@
 use opossum::{
-    degree,
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{collimated_line_ray_source, RayPropagationVisualizer, SpotDiagram, Wedge},
-    optical::Optical,
-    refractive_index::RefrIndexConst,
-    utils::geom_transformation::Isometry,
-    OpticScenery,
+    degree, error::OpmResult, joule, millimeter, nodes::{collimated_line_ray_source, RayPropagationVisualizer, SpotDiagram, Wedge}, optical::Optical, refractive_index::RefrIndexConst, utils::geom_transformation::Isometry, OpmDocument, OpticScenery
 };
 use std::path::Path;
 
@@ -46,6 +39,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(p2, "rear", sd, "in1", millimeter!(50.0))?;
     scenery.connect_nodes(sd, "out1", det, "in1", millimeter!(0.1))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/prism_pair.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/prism_pair.opm"))
 }

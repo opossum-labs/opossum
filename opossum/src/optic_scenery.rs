@@ -21,7 +21,6 @@ use serde::{
 };
 use std::{
     cell::RefCell,
-    fs::File,
     io::{Cursor, Write},
     path::Path,
     rc::Rc,
@@ -259,31 +258,6 @@ impl OpticScenery {
         }
         Ok(())
     }
-    /// Save this [`OpticScenery`] to an .opm file with the given path
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the file path cannot be created or it cannot write into the file (e.g. no space).
-    pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
-        let serialized = serde_yaml::to_string(&self).map_err(|e| {
-            OpossumError::OpticScenery(format!("deserialization of OpticScenery failed: {e}"))
-        })?;
-        let mut output = File::create(path).map_err(|e| {
-            OpossumError::OpticScenery(format!(
-                "could not create file path: {}: {}",
-                path.display(),
-                e
-            ))
-        })?;
-        write!(output, "{serialized}").map_err(|e| {
-            OpossumError::OpticScenery(format!(
-                "writing to file path {} failed: {}",
-                path.display(),
-                e
-            ))
-        })?;
-        Ok(())
-    }
     /// Returns a reference to the global config of this [`OpticScenery`].
     #[must_use]
     pub fn global_conf(&self) -> &RefCell<SceneryResources> {
@@ -426,8 +400,6 @@ mod test {
         OpticScenery,
     };
     use num::Zero;
-    use std::path::{Path, PathBuf};
-    use tempfile::NamedTempFile;
     use uom::si::f64::Length;
 
     #[test]
@@ -450,22 +422,6 @@ mod test {
         assert_eq!(scenery.description(), "");
         scenery.set_description("Test");
         assert_eq!(scenery.description(), "Test")
-    }
-    #[test]
-    fn save_to_file() {
-        let scenery = OpticScenery::default();
-        assert!(scenery.save_to_file(Path::new("")).is_err());
-        let path = NamedTempFile::new().unwrap();
-        assert!(scenery.save_to_file(path.path()).is_ok());
-    }
-    #[test]
-    fn save_to_file_invalid_path() {
-        let scenery = OpticScenery::default();
-        assert!(scenery
-            .save_to_file(&PathBuf::from(
-                "./invalid_file_path/invalid_file.invalid_ext"
-            ))
-            .is_err());
     }
     #[test]
     fn analyze_dummy() {

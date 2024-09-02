@@ -2,15 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    error::OpmResult,
-    joule,
-    lightdata::LightData,
-    millimeter, nanometer,
-    nodes::{Lens, RayPropagationVisualizer, Source, SpotDiagram},
-    position_distributions::{FibonacciEllipse, Hexapolar},
-    rays::Rays,
-    refractive_index::RefrIndexConst,
-    OpticScenery,
+    error::OpmResult, joule, lightdata::LightData, millimeter, nanometer, nodes::{Lens, RayPropagationVisualizer, Source, SpotDiagram}, position_distributions::{FibonacciEllipse, Hexapolar}, rays::Rays, refractive_index::RefrIndexConst, OpmDocument, OpticScenery
 };
 use uom::si::f64::Length;
 
@@ -61,6 +53,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(l2, "rear", det, "in1", millimeter!(30.0))?;
     scenery.connect_nodes(det, "out1", sd, "in1", Length::zero())?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/two_color_spot_diagram.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/two_color_spot_diagram.opm"))
 }

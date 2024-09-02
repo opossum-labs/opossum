@@ -1,14 +1,8 @@
 use opossum::{
-    coatings::CoatingType,
-    degree,
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{
+    coatings::CoatingType, degree, error::OpmResult, joule, millimeter, nodes::{
         round_collimated_ray_source, EnergyMeter, RayPropagationVisualizer, SpotDiagram,
         ThinMirror, WaveFront,
-    },
-    optical::{Alignable, Optical},
-    OpticScenery,
+    }, optical::{Alignable, Optical}, OpmDocument, OpticScenery
 };
 use std::path::Path;
 
@@ -38,6 +32,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_sd, "out1", i_wf, "in1", millimeter!(0.1))?;
     scenery.connect_nodes(i_wf, "out1", i_pm, "in1", millimeter!(0.1))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/mirror.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/mirror.opm"))
 }

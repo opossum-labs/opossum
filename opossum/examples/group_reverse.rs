@@ -2,12 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    error::OpmResult,
-    lightdata::{DataEnergy, LightData},
-    nodes::{Dummy, EnergyMeter, NodeGroup, Source},
-    optical::Optical,
-    spectrum_helper::create_he_ne_spec,
-    OpticScenery,
+    error::OpmResult, lightdata::{DataEnergy, LightData}, nodes::{Dummy, EnergyMeter, NodeGroup, Source}, optical::Optical, spectrum_helper::create_he_ne_spec, OpmDocument, OpticScenery
 };
 use uom::si::f64::Length;
 
@@ -38,6 +33,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_s, "out1", i_g, "out1", Length::zero())?;
     scenery.connect_nodes(i_g, "in1", i_d, "in1", Length::zero())?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/group_reverse.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/group_reverse.opm"))
 }

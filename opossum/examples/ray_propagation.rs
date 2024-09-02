@@ -1,11 +1,5 @@
 use opossum::{
-    aperture::{Aperture, CircleConfig},
-    error::OpmResult,
-    joule, millimeter,
-    nodes::{round_collimated_ray_source, Lens, RayPropagationVisualizer},
-    optical::Optical,
-    refractive_index::RefrIndexConst,
-    OpticScenery,
+    aperture::{Aperture, CircleConfig}, error::OpmResult, joule, millimeter, nodes::{round_collimated_ray_source, Lens, RayPropagationVisualizer}, optical::Optical, refractive_index::RefrIndexConst, OpmDocument, OpticScenery
 };
 use std::path::Path;
 
@@ -40,6 +34,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(l1, "rear", l2, "front", millimeter!(197.22992))?;
     scenery.connect_nodes(l2, "rear", det, "in1", millimeter!(30.0))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/ray_propagation.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/ray_propagation.opm"))
 }

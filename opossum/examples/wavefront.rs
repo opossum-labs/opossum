@@ -1,12 +1,9 @@
 use num::Zero;
 use opossum::{
-    error::OpmResult,
-    joule, meter,
-    nodes::{
+    error::OpmResult, joule, meter, nodes::{
         round_collimated_ray_source, FluenceDetector, ParaxialSurface, RayPropagationVisualizer,
         Spectrometer, SpectrometerType, SpotDiagram, WaveFront,
-    },
-    OpticScenery,
+    }, OpmDocument, OpticScenery
 };
 use std::path::Path;
 use uom::si::f64::Length;
@@ -36,6 +33,5 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_r1, "out1", i_s1, "in1", Length::zero())?;
     scenery.connect_nodes(i_s1, "out1", i_fl1, "in1", Length::zero())?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/wavefront.opm"))?;
-    Ok(())
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/wavefront.opm"))
 }

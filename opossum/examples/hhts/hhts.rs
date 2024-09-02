@@ -9,24 +9,10 @@ use hhts_input::hhts_input;
 
 use num::Zero;
 use opossum::{
-    aperture::{Aperture, CircleConfig},
-    error::OpmResult,
-    joule,
-    lightdata::LightData,
-    millimeter, nanometer,
-    nodes::{
+    aperture::{Aperture, CircleConfig}, error::OpmResult, joule, lightdata::LightData, millimeter, nanometer, nodes::{
         BeamSplitter, Dummy, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
         RayPropagationVisualizer, Source, WaveFront,
-    },
-    optical::Optical,
-    position_distributions::Hexapolar,
-    ray::SplittingConfig,
-    rays::Rays,
-    refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
-    spectrum::Spectrum,
-    spectrum_helper::generate_filter_spectrum,
-    utils::geom_transformation::Isometry,
-    OpticScenery,
+    }, optical::Optical, position_distributions::Hexapolar, ray::SplittingConfig, rays::Rays, refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1}, spectrum::Spectrum, spectrum_helper::generate_filter_spectrum, utils::geom_transformation::Isometry, OpmDocument, OpticScenery
 };
 use uom::si::f64::Length;
 
@@ -416,6 +402,6 @@ fn main() -> OpmResult<()> {
     let det_2w = scenery.add_node(group_det_2w);
 
     scenery.connect_nodes(t3_2w, "output", det_2w, "input", Length::zero())?;
-    scenery.save_to_file(Path::new("./opossum/playground/hhts.opm"))?;
-    Ok(())
+
+    OpmDocument::new(scenery).save_to_file(Path::new("./opossum/playground/hhts.opm"))
 }
