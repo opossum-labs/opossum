@@ -14,7 +14,7 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use log::{info, warn};
-use nalgebra::Point3;
+use nalgebra::{Point3, Vector3};
 use num::Zero;
 use petgraph::{
     algo::{connected_components, is_cyclic_directed, toposort},
@@ -511,19 +511,17 @@ impl OpticGraph {
         info!("Calculate node positions for {graph_name}");
         let sorted = self.topologically_sorted()?;
         let mut light_result = LightResult::default();
+        let mut up_direction = Vector3::<f64>::y();
         for idx in sorted {
             let node = self.node_by_idx(idx)?.optical_ref;
             let node_type = node.borrow().node_type();
             let node_attr = node.borrow().node_attr().clone();
-
             let incoming_edges: LightResult = self.get_incoming(idx, incoming);
             if node.borrow().isometry().is_none() {
                 if incoming_edges.is_empty() {
                     warn!("{} has no incoming edges", node.borrow());
                 }
                 if let Some((node_idx, distance)) = node_attr.get_align_like_node_at_distance() {
-                    println!("idx: {}, dist: {}", node_idx.index(), distance.value);
-
                     if let Some(align_ref_iso) =
                         self.node_by_idx(*node_idx)?.optical_ref.borrow().isometry()
                     {
@@ -541,6 +539,7 @@ impl OpticGraph {
                             &mut node.borrow_mut(),
                             &node_type,
                             idx,
+                            up_direction,
                         )?;
                     }
                 } else {
@@ -549,6 +548,7 @@ impl OpticGraph {
                         &mut node.borrow_mut(),
                         &node_type,
                         idx,
+                        up_direction,
                     )?;
                 };
             } else {
@@ -580,6 +580,13 @@ impl OpticGraph {
                 }
             }
             for outgoing_edge in outgoing_edges {
+                if node_type == "source" {
+                    up_direction = node.borrow().define_up_direction(&outgoing_edge.1)?;
+                } else {
+                    node.borrow_mut()
+                        .calc_new_up_direction(&outgoing_edge.1, &mut up_direction)?;
+                }
+
                 self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
             }
         }
@@ -592,6 +599,7 @@ impl OpticGraph {
         node_borrow_mut: &mut RefMut<'_, dyn Optical + 'static>,
         node_type: &str,
         idx: NodeIndex,
+        up_direction: Vector3<f64>,
     ) -> OpmResult<()> {
         for incoming_edge in incoming_edges {
             let distance_from_predecessor = self.distance_from_predecessor(idx, incoming_edge.0)?;
@@ -603,7 +611,7 @@ impl OpticGraph {
             if let LightData::Geometric(rays) = incoming_edge.1 {
                 let mut ray = rays.into_iter().next().unwrap().to_owned();
                 ray.propagate(distance_from_predecessor)?;
-                let node_iso = ray.to_isometry();
+                let node_iso = ray.to_isometry(up_direction);
                 // if a node with more than one input was already placed (in an earlier loop cycle),
                 // check, if the resulting isometry is consistent
                 {

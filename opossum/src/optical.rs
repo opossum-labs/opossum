@@ -3,7 +3,7 @@
 #[cfg(feature = "bevy")]
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
-use nalgebra::Point3;
+use nalgebra::{Point3, Vector3};
 use petgraph::stable_graph::NodeIndex;
 use uom::si::f64::{Angle, Length};
 
@@ -127,6 +127,39 @@ pub trait Optical: Dottable {
             incoming_data,
             &AnalyzerType::RayTrace(RayTraceConfig::default()),
         )
+    }
+
+    /// define the up-direction of this lightdata's first ray which is needed to create an isometry from this ray.
+    /// This function should only be used during the node positioning process, and only for source nodes
+    /// # Errors
+    /// This function errors if the the lightdata is not geometric
+    fn define_up_direction(&self, ray_data: &LightData) -> OpmResult<Vector3<f64>> {
+        if let LightData::Geometric(rays) = ray_data {
+            rays.define_up_direction()
+        } else {
+            Err(OpossumError::Other(
+                "Wrong light data for \"up-direction\" definition".into(),
+            ))
+        }
+    }
+
+    /// Modifies the current up-direction of a ray, stored in lightdata, which is needed to create an isometry from this ray.
+    /// This function should only be used during the node positioning process
+    /// # Errors
+    /// This function errors if the the lightdata is not geometric
+    fn calc_new_up_direction(
+        &self,
+        ray_data: &LightData,
+        up_direction: &mut Vector3<f64>,
+    ) -> OpmResult<()> {
+        if let LightData::Geometric(rays) = ray_data {
+            rays.calc_new_up_direction(up_direction)?;
+        } else {
+            return Err(OpossumError::Other(
+                "Wrong light data for \"up-direction\" calculation".into(),
+            ));
+        }
+        Ok(())
     }
     /// Export analysis data to file(s) within the given directory path.
     ///
