@@ -18,7 +18,7 @@ use crate::{
 /// Structure for storing an optical node.
 ///
 /// This structure stores a reference to an optical node (a structure implementing the [`Optical`] trait). This [`OpticRef`]
-/// is then stored as a node in an `OpticGraph` (i.e. (`OpticScenery`)[`crate::OpticScenery`] or (`NodeGroup`)[`crate::nodes::NodeGroup`]).
+/// is then stored as a node in a `NodeGroup`)[`crate::nodes::NodeGroup`].
 /// In addition, it contains a unique id ([`Uuid`]) in order to unambiguously identify a node within a scene.
 pub struct OpticRef {
     /// The underlying optical reference.

@@ -21,8 +21,25 @@ use tempfile::NamedTempFile;
 use uom::si::f64::Length;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-/// A node that represents a group of other [`Optical`]s arranges in a subgraph.
+/// The basic building block of an optical system. It represents a group of other optical
+/// nodes ([`Optical`]s) arranged in a (sub)graph.
 ///
+/// # Example
+///
+/// ```rust
+/// use opossum::nodes::{NodeGroup, Dummy};
+/// use opossum::error::OpmResult;
+/// use opossum::millimeter;
+///
+/// fn main() -> OpmResult<()> {
+///   let mut scenery = NodeGroup::new("OpticScenery demo");
+///   let node1 = scenery.add_node(Dummy::new("dummy1"))?;
+///   let node2 = scenery.add_node(Dummy::new("dummy2"))?;
+///   scenery.connect_nodes(node1, "rear", node2, "front", millimeter!(100.0))?;
+///   Ok(())
+/// }
+///
+/// ```
 /// All unconnected input and output ports of this subgraph could be used as ports of
 /// this [`NodeGroup`]. For this, port mapping is neccessary (see below).
 ///
@@ -82,7 +99,8 @@ impl NodeGroup {
     /// Add a given [`Optical`] to the (sub-)graph of this [`NodeGroup`].
     ///
     /// This command just adds an [`Optical`] but does not connect it to existing nodes in the (sub-)graph. The given node is
-    /// consumed (owned) by the [`NodeGroup`].
+    /// consumed (owned) by the [`NodeGroup`]. This function returns a reference to the element in the scenery as [`NodeIndex`].
+    /// This reference must be used later on for connecting nodes (see `connect_nodes` function).
     ///
     /// # Errors
     /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
@@ -106,22 +124,21 @@ impl NodeGroup {
     pub fn node(&self, node_idx: NodeIndex) -> OpmResult<OpticRef> {
         self.graph.node_by_idx(node_idx)
     }
-    /// Connect (already existing) nodes denoted by the respective `NodeIndex`.
+    ///  Connect (already existing) optical nodes within this [`NodeGroup`].
     ///
-    /// Both node indices must exist. Otherwise an [`OpossumError::OpticScenery`] is returned. In addition, connections are
-    /// rejected and an [`OpossumError::OpticScenery`] is returned, if the graph would form a cycle (loop in the graph). **Note**:
-    /// The connection of two internal nodes might affect external port mappings (see [`map_input_port`](NodeGroup::map_input_port())
+    /// This function connects two optical nodes (referenced by their [`NodeIndex`]) with their respective port names
+    /// and their geometrical distance (= propagation length) to each other thus extending the optical network.
+    /// **Note**: The connection of two internal nodes might affect external port mappings (see [`map_input_port`](NodeGroup::map_input_port())
     /// & [`map_output_port`](NodeGroup::map_output_port()) functions). In this case no longer valid mappings will be deleted.
     ///
     /// # Errors
-    /// This function returns an [`OpossumError`] if
+    /// This function returns an [`OpossumError::OpticScenery`] if
     ///   - the group is set as `inverted`. Connectiing subnodes of an inverted group node would result in strange behaviour.
     ///   - the source node / port or target node / port does not exist.
     ///   - the source node / port or target node / port is already connected.
     ///   - the node connection would form a loop in the graph.
     ///
-    /// # Panics
-    /// This function panics if the property "graph" can not be unchecked. Produces an error of type [`OpossumError::Properties`]
+    /// In addition this function returns an [`OpossumError::Properties`] if the (internal) property "graph" cannot be set.
     pub fn connect_nodes(
         &mut self,
         src_node: NodeIndex,
@@ -133,8 +150,7 @@ impl NodeGroup {
         self.graph
             .connect_nodes(src_node, src_port, target_node, target_port, distance)?;
         self.node_attr
-            .set_property("graph", self.graph.clone().into())
-            .unwrap();
+            .set_property("graph", self.graph.clone().into())?;
         Ok(())
     }
     /// Map an input port of an internal node to an external port of the group.
@@ -278,7 +294,7 @@ impl NodeGroup {
         self.input_port_distances
             .insert(port_name.to_string(), distance);
     }
-    /// Returns a mutable reference to the graph of this [`OpticScenery`].
+    /// Returns a mutable reference to the underlying [`OpticGraph`] of this [`NodeGroup`].
     pub fn graph_mut(&mut self) -> &mut OpticGraph {
         &mut self.graph
     }
@@ -295,7 +311,7 @@ impl NodeGroup {
         }
         Ok(())
     }
-    /// Generate an [`AnalysisReport`] containing the result of an analysis.
+    /// Generate a (top level) [`AnalysisReport`] containing the result of a previously preformed analysis.
     ///
     /// This [`AnalysisReport`] can then be used to either save it to disk or produce an HTML document from. In addition,
     /// the given report folder is used for the individual nodes to export specific result files.
@@ -491,8 +507,15 @@ impl Dottable for NodeGroup {
 mod test {
     use super::*;
     use crate::{
-        nodes::{test_helper::test_helper::*, Detector, Dummy},
+        analyzers::RayTraceConfig,
+        joule,
+        lightdata::LightData,
+        millimeter, nanometer,
+        nodes::{test_helper::test_helper::*, Detector, Dummy, EnergyMeter, Source},
         optical::Optical,
+        ray::Ray,
+        rays::Rays,
+        utils::geom_transformation::Isometry,
     };
     use num::Zero;
     #[test]
@@ -504,6 +527,8 @@ mod test {
         assert_eq!(node.expand_view().unwrap(), false);
         assert_eq!(node.node_color(), "yellow");
         assert!(node.as_group().is_ok());
+        assert_eq!(node.graph.edge_count(), 0);
+        assert_eq!(node.graph.node_count(), 0);
     }
     #[test]
     fn expand_view_property() {
@@ -557,12 +582,84 @@ mod test {
         assert!(og.ports().input_names().contains(&("output".to_string())));
     }
     #[test]
-    fn report_default() {
-        // let group = NodeGroup::default();
-        // assert!(group.report("").is_some());
-        // let report = group.report("").unwrap();
-        // let nr_of_props = report.properties().iter().fold(0, |s: usize, _| s + 1);
-        // assert_eq!(nr_of_props, 0);
-        todo!();
+    fn report() {
+        let mut scenery = NodeGroup::default();
+        scenery.add_node(Detector::default()).unwrap();
+        let report = scenery.toplevel_report().unwrap();
+        assert!(serde_yaml::to_string(&report).is_ok());
+        // How shall we further parse the output?
+    }
+    #[test]
+    fn report_empty() {
+        let mut scenery = NodeGroup::default();
+        scenery
+            .graph
+            .analyze("", &LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+        scenery.toplevel_report().unwrap();
+    }
+    #[test]
+    fn analyze_dummy() {
+        let mut scenery = NodeGroup::default();
+        let node1 = scenery.add_node(Dummy::default()).unwrap();
+        let node2 = scenery.add_node(Dummy::default()).unwrap();
+        scenery
+            .connect_nodes(node1, "rear", node2, "front", Length::zero())
+            .unwrap();
+        scenery
+            .graph
+            .analyze("", &LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+    }
+    #[test]
+    fn analyze_empty() {
+        let mut scenery = NodeGroup::default();
+        scenery
+            .graph
+            .analyze("", &LightResult::default(), &AnalyzerType::Energy)
+            .unwrap();
+    }
+    #[test]
+    fn analyze_energy_threshold() {
+        let mut rays = Rays::default();
+        rays.add_ray(
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap(),
+        );
+        rays.add_ray(
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.1)).unwrap(),
+        );
+        let mut scenery = NodeGroup::default();
+        let i_s = scenery
+            .add_node(Source::new("src", &LightData::Geometric(rays)))
+            .unwrap();
+        let mut em = EnergyMeter::default();
+        em.set_isometry(Isometry::identity());
+        let i_e = scenery.add_node(em).unwrap();
+        scenery
+            .connect_nodes(i_s, "out1", i_e, "in1", Length::zero())
+            .unwrap();
+        let mut raytrace_config = RayTraceConfig::default();
+        raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();
+        scenery
+            .graph
+            .analyze(
+                "",
+                &LightResult::default(),
+                &AnalyzerType::RayTrace(raytrace_config),
+            )
+            .unwrap();
+        let uuid = scenery.node(i_e).unwrap().uuid().as_simple().to_string();
+        let report = scenery
+            .node(i_e)
+            .unwrap()
+            .optical_ref
+            .borrow()
+            .report(&uuid)
+            .unwrap();
+        if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {
+            assert_eq!(*e, joule!(1.0));
+        } else {
+            assert!(false)
+        }
     }
 }

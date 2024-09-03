@@ -1,11 +1,12 @@
 #![warn(missing_docs)]
-//! Module handling the export of an [`OpticScenery`](crate::optic_scenery::OpticScenery) into the Graphviz `.dot` format.
+//! Module handling the export of a [`NodeGroup`](crate::nodes::NodeGroup) into the Graphviz `.dot` format.
 use num::ToPrimitive;
 
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 
-/// This trait deals with the translation of the OpticScenery-graph structure to the dot-file format which is needed to visualize the graphs
+/// This trait deals with the translation of the [`OpticGraph`](crate::optic_graph::OpticGraph) structure to the dot-file 
+/// format which is needed to visualize the graphs
 pub trait Dottable {
     /// Return component type specific code in 'dot' format for `graphviz` visualization.
     ///
@@ -339,7 +340,6 @@ mod test {
         nodes::{BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, Source},
         optical::Optical,
         ray::SplittingConfig,
-        OpticScenery,
     };
 
     fn get_file_content(f_path: &str) -> String {
@@ -353,11 +353,10 @@ mod test {
         let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_empty_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_empty_LR.dot");
 
-        let mut scenery = OpticScenery::default();
-        scenery.set_description("Test");
+        let scenery = NodeGroup::new("Test");
 
-        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+        let scenery_dot_str_tb = scenery.to_toplevel_dot("TB").unwrap();
+        let scenery_dot_str_lr = scenery.to_toplevel_dot("LR").unwrap();
 
         assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
@@ -368,11 +367,11 @@ mod test {
         let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_w_node_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_w_node_LR.dot");
 
-        let mut scenery = OpticScenery::default();
-        scenery.add_node(Dummy::new("Test"));
+        let mut scenery = NodeGroup::default();
+        scenery.add_node(Dummy::new("Test")).unwrap();
 
-        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+        let scenery_dot_str_tb = scenery.to_toplevel_dot("TB").unwrap();
+        let scenery_dot_str_lr = scenery.to_toplevel_dot("LR").unwrap();
 
         assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
@@ -383,20 +382,25 @@ mod test {
         let file_content_tb = get_file_content("./files_for_testing/dot/to_dot_full_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/to_dot_full_LR.dot");
 
-        let mut scenery = OpticScenery::default();
-        scenery.set_description("SceneryTest");
-        let i_s = scenery.add_node(Source::new("Source", &LightData::Fourier));
+        let mut scenery = NodeGroup::default();
+        let i_s = scenery
+            .add_node(Source::new("Source", &LightData::Fourier))
+            .unwrap();
         let mut bs = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
         bs.node_attr_mut().set_name("Beam splitter");
-        let i_bs = scenery.add_node(bs);
-        let i_d1 = scenery.add_node(EnergyMeter::new(
-            "Energy meter 1",
-            Metertype::IdealEnergyMeter,
-        ));
-        let i_d2 = scenery.add_node(EnergyMeter::new(
-            "Energy meter 2",
-            Metertype::IdealEnergyMeter,
-        ));
+        let i_bs = scenery.add_node(bs).unwrap();
+        let i_d1 = scenery
+            .add_node(EnergyMeter::new(
+                "Energy meter 1",
+                Metertype::IdealEnergyMeter,
+            ))
+            .unwrap();
+        let i_d2 = scenery
+            .add_node(EnergyMeter::new(
+                "Energy meter 2",
+                Metertype::IdealEnergyMeter,
+            ))
+            .unwrap();
 
         scenery
             .connect_nodes(i_s, "out1", i_bs, "input1", Length::zero())
@@ -408,8 +412,8 @@ mod test {
             .connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1", Length::zero())
             .unwrap();
 
-        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+        let scenery_dot_str_tb = scenery.to_toplevel_dot("TB").unwrap();
+        let scenery_dot_str_lr = scenery.to_toplevel_dot("LR").unwrap();
 
         assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);
@@ -417,8 +421,7 @@ mod test {
     #[test]
     #[ignore]
     fn to_dot_group() {
-        let mut scenery = OpticScenery::default();
-        scenery.set_description("Node Group test section");
+        let mut scenery = NodeGroup::default();
         let mut group1 = NodeGroup::new("group 1");
         group1.set_expand_view(true).unwrap();
         let g1_n1 = group1.add_node(Dummy::new("node1")).unwrap();
@@ -460,8 +463,8 @@ mod test {
             .connect_nodes(g2_n1, "rear", g2_n2, "front", Length::zero())
             .unwrap();
 
-        let scene_g1 = scenery.add_node(group1);
-        let scene_g2 = scenery.add_node(group2);
+        let scene_g1 = scenery.add_node(group1).unwrap();
+        let scene_g2 = scenery.add_node(group2).unwrap();
 
         // set_output_port
         scenery
@@ -469,8 +472,8 @@ mod test {
             .unwrap();
         let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot");
-        let scenery_dot_str_tb = scenery.to_dot("TB").unwrap();
-        let scenery_dot_str_lr = scenery.to_dot("LR").unwrap();
+        let scenery_dot_str_tb = scenery.to_toplevel_dot("TB").unwrap();
+        let scenery_dot_str_lr = scenery.to_toplevel_dot("LR").unwrap();
 
         assert_eq!(file_content_tb.clone(), scenery_dot_str_tb);
         assert_eq!(file_content_lr.clone(), scenery_dot_str_lr);

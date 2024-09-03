@@ -100,7 +100,7 @@ pub trait Optical: Dottable {
     }
     /// Perform an analysis of this element. The type of analysis is given by an [`AnalyzerType`].
     ///
-    /// This function is normally only called by [`OpticScenery::analyze()`](crate::optic_scenery::OpticScenery::analyze()).
+    /// This function is normally only called by [`NodeGroup::analyze()`](crate::nodes::NodeGroup::analyze()).
     ///
     /// # Errors
     ///

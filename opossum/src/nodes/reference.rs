@@ -148,10 +148,8 @@ mod test {
     use super::*;
     use crate::{
         lightdata::{DataEnergy, LightData},
-        nodes::test_helper::test_helper::*,
-        nodes::{Dummy, Source},
+        nodes::{test_helper::test_helper::*, Dummy, NodeGroup, Source},
         spectrum_helper::create_he_ne_spec,
-        OpticScenery,
     };
     #[test]
     fn default() {
@@ -166,16 +164,16 @@ mod test {
     }
     #[test]
     fn from_node() {
-        let mut scenery = OpticScenery::default();
-        let idx = scenery.add_node(Dummy::default());
+        let mut scenery = NodeGroup::default();
+        let idx = scenery.add_node(Dummy::default()).unwrap();
         let node_ref = scenery.node(idx).unwrap();
         let node = NodeReference::from_node(&node_ref);
         assert!(node.reference.is_some());
     }
     #[test]
     fn from_node_name() {
-        let mut scenery = OpticScenery::default();
-        let idx = scenery.add_node(Dummy::default());
+        let mut scenery = NodeGroup::default();
+        let idx = scenery.add_node(Dummy::default()).unwrap();
         let node_ref = scenery.node(idx).unwrap();
         let node_name = format!("ref ({})", node_ref.optical_ref.borrow().name());
         let node = NodeReference::from_node(&node_ref);
@@ -184,8 +182,8 @@ mod test {
     }
     #[test]
     fn assign_reference() {
-        let mut scenery = OpticScenery::default();
-        let idx = scenery.add_node(Dummy::default());
+        let mut scenery = NodeGroup::default();
+        let idx = scenery.add_node(Dummy::default()).unwrap();
         let node_ref = scenery.node(idx).unwrap();
         let mut node = NodeReference::default();
         assert!(node.reference.is_none());
@@ -204,16 +202,16 @@ mod test {
     }
     #[test]
     fn ports_non_empty() {
-        let mut scenery = OpticScenery::default();
-        let idx = scenery.add_node(Dummy::default());
+        let mut scenery = NodeGroup::default();
+        let idx = scenery.add_node(Dummy::default()).unwrap();
         let node = NodeReference::from_node(&scenery.node(idx).unwrap());
         assert_eq!(node.ports().input_names(), vec!["front"]);
         assert_eq!(node.ports().output_names(), vec!["rear"]);
     }
     #[test]
     fn ports_inverted() {
-        let mut scenery = OpticScenery::default();
-        let idx = scenery.add_node(Dummy::default());
+        let mut scenery = NodeGroup::default();
+        let idx = scenery.add_node(Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
         node.set_inverted(true.into()).unwrap();
         assert_eq!(node.ports().input_names(), vec!["rear"]);
@@ -221,8 +219,8 @@ mod test {
     }
     #[test]
     fn analyze_empty() {
-        let mut scenery = OpticScenery::default();
-        let idx = scenery.add_node(Dummy::default());
+        let mut scenery = NodeGroup::default();
+        let idx = scenery.add_node(Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
         let output = node
             .analyze(LightResult::default(), &AnalyzerType::Energy)
@@ -237,8 +235,8 @@ mod test {
     }
     #[test]
     fn analyze() {
-        let mut scenery = OpticScenery::default();
-        let idx = scenery.add_node(Dummy::default());
+        let mut scenery = NodeGroup::default();
+        let idx = scenery.add_node(Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
 
         let mut input = LightResult::default();
@@ -258,8 +256,8 @@ mod test {
     }
     #[test]
     fn analyze_inverse() {
-        let mut scenery = OpticScenery::default();
-        let idx = scenery.add_node(Dummy::default());
+        let mut scenery = NodeGroup::default();
+        let idx = scenery.add_node(Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
@@ -280,8 +278,8 @@ mod test {
     }
     #[test]
     fn analyze_non_invertible_ref() {
-        let mut scenery = OpticScenery::default();
-        let idx = scenery.add_node(Source::default());
+        let mut scenery = NodeGroup::default();
+        let idx = scenery.add_node(Source::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();

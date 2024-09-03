@@ -34,7 +34,6 @@ mod optic_graph;
 mod optic_port;
 pub mod optic_ports;
 pub mod optic_ref;
-mod optic_scenery;
 mod optic_senery_rsc;
 pub mod optical;
 pub mod plottable;
@@ -54,7 +53,6 @@ pub mod surface;
 pub mod utils;
 
 pub use opm_document::OpmDocument;
-pub use optic_scenery::OpticScenery;
 pub use optic_senery_rsc::SceneryResources;
 
 #[cfg(feature = "bevy")]

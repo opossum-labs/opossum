@@ -3,12 +3,15 @@ use crate::{
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     optical::Optical,
+    SceneryResources,
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    cell::RefCell,
     fs::{self, File},
     io::Write,
     path::Path,
+    rc::Rc,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -17,6 +20,8 @@ pub struct OpmDocument {
     opm_file_version: String,
     #[serde(default)]
     scenery: NodeGroup,
+    #[serde(default, rename = "global")]
+    global_conf: Rc<RefCell<SceneryResources>>,
     #[serde(default)]
     analyzers: Vec<AnalyzerType>,
 }
@@ -25,6 +30,7 @@ impl Default for OpmDocument {
         Self {
             opm_file_version: env!("OPM_FILE_VERSION").to_string(),
             scenery: NodeGroup::default(),
+            global_conf: Rc::new(RefCell::new(SceneryResources::default())),
             analyzers: vec![],
         }
     }
@@ -91,6 +97,18 @@ impl OpmDocument {
     #[must_use]
     pub fn analyzers(&self) -> Vec<AnalyzerType> {
         self.analyzers.clone()
+    }
+    /// Returns a reference to the global config of this [`OpmDocument`].
+    #[must_use]
+    pub fn global_conf(&self) -> &RefCell<SceneryResources> {
+        &self.global_conf
+    }
+    /// Sets the global config of this [`OpmDocument`].
+    pub fn set_global_conf(&mut self, rsrc: SceneryResources) {
+        self.global_conf = Rc::new(RefCell::new(rsrc));
+        self.scenery
+            .graph_mut()
+            .update_global_config(&Some(self.global_conf.clone()));
     }
 }
 
