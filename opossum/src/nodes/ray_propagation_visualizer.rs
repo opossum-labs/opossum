@@ -443,7 +443,7 @@ impl Plottable for RayPositionHistories {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::spectrum::{self, Spectrum};
+    use crate::spectrum::Spectrum;
     use crate::utils::test_helper::test_helper::check_warnings;
     use crate::{
         analyzers::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
