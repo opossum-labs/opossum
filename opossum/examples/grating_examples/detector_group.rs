@@ -42,6 +42,11 @@ pub fn detector_group() -> OpmResult<NodeGroup> {
         millimeter!(0.0),
     )?;
 
+    let asd = cb.add_node(RayPropagationVisualizer::new(
+        "stale visualizer",
+        Some(Vector3::x()),
+    )?)?;
+
     cb.map_input_port(paraxial_lens, "front", "input")?;
     // cb.map_input_port(i_prop_vis_top_view, "in1", "input")?;
     cb.map_output_port(i_prop_vis_side_view, "out1", "output")?;
