@@ -356,7 +356,7 @@ impl NodeGroup {
         dot_string.push_str("\tedge [fontname=\"Courier-monospace\"]\n\n");
         dot_string
     }
-    /// Generate an SVG of the [`OpticScenery`] diagram.
+    /// Generate an SVG of the (top level) [`NodeGroup`] diagram.
     ///
     /// This function returns a string of a SVG image (scalable vector graphics). This string can be directly written to a
     /// `*.svg` file.

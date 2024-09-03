@@ -5,7 +5,7 @@ use num::ToPrimitive;
 use crate::error::OpmResult;
 use crate::optic_ports::OpticPorts;
 
-/// This trait deals with the translation of the [`OpticGraph`](crate::optic_graph::OpticGraph) structure to the dot-file 
+/// This trait deals with the translation of the [`NodeGroup`](crate::nodes::NodeGroup) structure to the dot-file
 /// format which is needed to visualize the graphs
 pub trait Dottable {
     /// Return component type specific code in 'dot' format for `graphviz` visualization.

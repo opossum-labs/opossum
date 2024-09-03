@@ -55,15 +55,15 @@ impl AnalysisReport {
             node_reports: Vec::default(),
         }
     }
-    /// Add an [`OpticScenery`] to this [`AnalysisReport`].
+    /// Add an [`NodeGroup`] to this [`AnalysisReport`].
     ///
-    /// This function is called internally [`OpticScenery`] for adding itself to the report.
+    /// This function is called internally by the top level [`NodeGroup`] for adding itself to the report.
     pub fn add_scenery(&mut self, scenery: &NodeGroup) {
         self.scenery = Some(scenery.clone());
     }
     /// Add an (detector) [`NodeReport`] to this [`AnalysisReport`].
     ///
-    /// After analysis of an [`OpticScenery`], ech node can generate a [`NodeReport`] using the `Optical::report` trait function.
+    /// After analysis of a [`NodeGroup`], each node can generate a [`NodeReport`] using the `Optical::report` trait function.
     /// While assembling a report this function adds the node data to it. This is mostly interesting for detector nodes which deliver
     /// their particular analysis result.
     pub fn add_detector(&mut self, report: NodeReport) {

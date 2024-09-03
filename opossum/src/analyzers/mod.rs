@@ -1,8 +1,9 @@
 #![warn(missing_docs)]
 //! Optical Analyzers
 //!
-//! An analyzer of a certain [`AnalyzerType`] determines how an (`OpticScenery`)[`crate::OpticScenery`] is analyzed. For example, the energy flow for a scenery can be
-//! calculated as a simple analysis. On the other hand, a full Fourier propagation could be performed. The result of an analysis run can be written to a JSON structure
+//! An analyzer of a certain [`AnalyzerType`] determines how a [`NodeGroup`](`crate::nodes::NodeGroup`) is analyzed.
+//! For example, the energy flow for a scenery can be calculated as a simple analysis. On the other hand, a full
+//! Fourier propagation could be performed. The result of an analysis run can be written to a JSON structure
 //! and / or exported as a PDF report.
 use std::fmt::Display;
 
@@ -64,7 +65,7 @@ mod test {
 
 /// Marker trait for all Analyzers
 pub trait Analyzer {
-    /// Analyze an [`OpticScenery`].
+    /// Analyze a [`NodeGroup`].
     ///
     /// # Errors
     ///

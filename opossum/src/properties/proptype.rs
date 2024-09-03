@@ -55,7 +55,7 @@ pub enum Proptype {
     Bool(bool),
     /// An optional [`LightData`] property
     LightData(EnumProxy<Option<LightData>>),
-    /// A property for storing a complete `OpticGraph` to be used by [`OpticScenery`](crate::OpticScenery).
+    /// A property for storing a complete `OpticGraph` to be used by [`NodeGroup`](crate::nodes::NodeGroup).
     OpticGraph(OpticGraph),
     /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterType(EnumProxy<FilterType>),

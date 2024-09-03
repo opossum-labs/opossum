@@ -21,7 +21,8 @@ use std::fmt::Debug;
 
 /// A general light source
 ///
-/// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an [`OpticScenery`](crate::OpticScenery).
+/// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first
+/// nodes of a [`NodeGroup`](crate::nodes::NodeGroup).
 ///
 /// ## Optical Ports
 ///   - Inputs
