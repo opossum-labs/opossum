@@ -161,17 +161,13 @@ impl Optical for RayPropagationVisualizer {
                     uuid
                 )));
                 ray_prop_data.to_plot(&file_path, PltBackEnd::SVG)?;
-                Ok(())
             } else {
-                Err(OpossumError::Other(
-                    "ray-propagation visualizer: wrong light data".into(),
-                ))
+                warn!("ray-propagation visualizer: wrong light data. Cannot create plot!");
             }
         } else {
-            Err(OpossumError::Other(
-                "ray-propagation visualizer: no light data for export available".into(),
-            ))
+            warn!("ray-propagation visualizer: no light data for export available. Cannot create plot!");
         }
+        Ok(())
     }
     fn is_detector(&self) -> bool {
         true
@@ -447,6 +443,8 @@ impl Plottable for RayPositionHistories {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::spectrum::{self, Spectrum};
+    use crate::utils::test_helper::test_helper::check_warnings;
     use crate::{
         analyzers::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
         nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
@@ -548,8 +546,19 @@ mod test {
     }
     #[test]
     fn export_data() {
+        testing_logger::setup();
         let mut rpv = RayPropagationVisualizer::default();
-        assert!(rpv.export_data(Path::new(""), "").is_err());
+        assert!(rpv.export_data(Path::new(""), "").is_ok());
+        check_warnings(vec![
+            "ray-propagation visualizer: no light data for export available. Cannot create plot!",
+        ]);
+        rpv.light_data = Some(LightData::Energy(DataEnergy {
+            spectrum: Spectrum::new(nanometer!(1000.)..nanometer!(1100.), nanometer!(1.)).unwrap(),
+        }));
+        assert!(rpv.export_data(Path::new(""), "").is_ok());
+        check_warnings(vec![
+            "ray-propagation visualizer: wrong light data. Cannot create plot!",
+        ]);
         rpv.light_data = Some(LightData::Geometric(Rays::default()));
         let path = NamedTempFile::new().unwrap();
         assert!(rpv.export_data(path.path().parent().unwrap(), "").is_err());
