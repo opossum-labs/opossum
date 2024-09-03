@@ -1,7 +1,8 @@
 use crate::{
     analyzers::AnalyzerType,
     error::{OpmResult, OpossumError},
-    OpticScenery,
+    nodes::NodeGroup,
+    optical::Optical,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -15,7 +16,7 @@ pub struct OpmDocument {
     #[serde(rename = "opm file version")]
     opm_file_version: String,
     #[serde(default)]
-    scenery: OpticScenery,
+    scenery: NodeGroup,
     #[serde(default)]
     analyzers: Vec<AnalyzerType>,
 }
@@ -23,7 +24,7 @@ impl Default for OpmDocument {
     fn default() -> Self {
         Self {
             opm_file_version: env!("OPM_FILE_VERSION").to_string(),
-            scenery: OpticScenery::default(),
+            scenery: NodeGroup::default(),
             analyzers: vec![],
         }
     }
@@ -31,7 +32,7 @@ impl Default for OpmDocument {
 impl OpmDocument {
     /// Creates a new [`OpmDocument`].
     #[must_use]
-    pub fn new(scenery: OpticScenery) -> Self {
+    pub fn new(scenery: NodeGroup) -> Self {
         Self {
             scenery,
             ..Default::default()
@@ -48,8 +49,9 @@ impl OpmDocument {
         let contents = fs::read_to_string(path).map_err(|e| {
             OpossumError::OpmDocument(format!("cannot read file {} : {}", path.display(), e))
         })?;
-        let document: Self = serde_yaml::from_str(&contents)
+        let mut document: Self = serde_yaml::from_str(&contents)
             .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
+        document.scenery.after_deserialization_hook()?;
         Ok(document)
     }
     /// Save this [`OpmDocument`] to an `.opm` file with the given path
@@ -83,7 +85,7 @@ impl OpmDocument {
     pub fn add_analyzer(&mut self, analyzer: AnalyzerType) {
         self.analyzers.push(analyzer);
     }
-    pub fn scenery_mut(&mut self) -> &mut OpticScenery {
+    pub fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
     }
     #[must_use]
@@ -94,19 +96,18 @@ impl OpmDocument {
 
 #[cfg(test)]
 mod test {
-    use crate::analyzers::RayTraceConfig;
-
     use super::*;
+    use crate::{analyzers::RayTraceConfig, optical::Optical};
     use petgraph::adj::NodeIndex;
     use std::path::PathBuf;
     use tempfile::NamedTempFile;
 
     #[test]
     fn new() {
-        let mut scenery = OpticScenery::default();
-        scenery.set_description("MyTest");
+        let mut scenery = NodeGroup::default();
+        scenery.node_attr_mut().set_name("MyTest");
         let document = OpmDocument::new(scenery);
-        assert_eq!(document.scenery.description(), "MyTest");
+        assert_eq!(document.scenery.node_attr().name(), "MyTest");
         assert!(document.analyzers.is_empty());
     }
     #[test]

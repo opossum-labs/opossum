@@ -1,7 +1,12 @@
 //! Performing a (simple) energy flow analysis
 use log::info;
 
-use crate::{analyzers::AnalyzerType, error::OpmResult, optical::LightResult, OpticScenery};
+use crate::{
+    analyzers::AnalyzerType,
+    error::OpmResult,
+    nodes::NodeGroup,
+    optical::{LightResult, Optical},
+};
 
 use super::Analyzer;
 
@@ -10,11 +15,11 @@ use super::Analyzer;
 pub struct EnergyAnalyzer {}
 
 impl Analyzer for EnergyAnalyzer {
-    fn analyze(&self, scenery: &mut OpticScenery) -> OpmResult<()> {
-        let scenery_name = if scenery.description().is_empty() {
+    fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()> {
+        let scenery_name = if scenery.node_attr().name().is_empty() {
             String::new()
         } else {
-            format!(" '{}'", scenery.description())
+            format!(" '{}'", scenery.node_attr().name())
         };
         info!("Performing energy analysis of scenery{scenery_name}.");
         let graph = scenery.graph_mut();

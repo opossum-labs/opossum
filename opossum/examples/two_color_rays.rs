@@ -7,11 +7,11 @@ use opossum::{
     joule,
     lightdata::LightData,
     millimeter, nanometer,
-    nodes::{Lens, RayPropagationVisualizer, Source, SpotDiagram},
+    nodes::{Lens, NodeGroup, RayPropagationVisualizer, Source, SpotDiagram},
     position_distributions::{FibonacciEllipse, Hexapolar},
     rays::Rays,
     refractive_index::RefrIndexConst,
-    OpmDocument, OpticScenery,
+    OpmDocument,
 };
 use uom::si::f64::Length;
 
@@ -37,26 +37,26 @@ fn main() -> OpmResult<()> {
     rays_1w.add_rays(&mut rays_2w);
     rays_1w.add_rays(&mut rays_3w);
 
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::default();
     let light = LightData::Geometric(rays_1w);
-    let src = scenery.add_node(Source::new("collimated ray source", &light));
+    let src = scenery.add_node(Source::new("collimated ray source", &light))?;
     let l1 = scenery.add_node(Lens::new(
         "l1",
         millimeter!(200.0),
         millimeter!(-200.0),
         millimeter!(10.0),
         &RefrIndexConst::new(2.0).unwrap(),
-    )?);
+    )?)?;
     let l2 = scenery.add_node(Lens::new(
         "l1",
         millimeter!(200.0),
         millimeter!(-200.0),
         millimeter!(10.0),
         &RefrIndexConst::new(2.0).unwrap(),
-    )?);
-    let det = scenery.add_node(RayPropagationVisualizer::default());
+    )?)?;
+    let det = scenery.add_node(RayPropagationVisualizer::default())?;
     // let wf = scenery.add_node(WaveFront::default());
-    let sd = scenery.add_node(SpotDiagram::default());
+    let sd = scenery.add_node(SpotDiagram::default())?;
     scenery.connect_nodes(src, "out1", l1, "front", millimeter!(30.0))?;
     scenery.connect_nodes(l1, "rear", l2, "front", millimeter!(197.22992))?;
     scenery.connect_nodes(l2, "rear", det, "in1", millimeter!(30.0))?;

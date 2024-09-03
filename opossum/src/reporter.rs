@@ -3,9 +3,9 @@
 
 use crate::{
     error::{OpmResult, OpossumError},
-    nodes::ray_propagation_visualizer::RayPositionHistories,
+    nodes::{ray_propagation_visualizer::RayPositionHistories, NodeGroup},
+    optical::Optical,
     properties::{property::HtmlProperty, Properties, Proptype},
-    OpticScenery,
 };
 use chrono::{DateTime, Local};
 use log::{info, warn};
@@ -41,7 +41,7 @@ pub struct HtmlNodeReport {
 pub struct AnalysisReport {
     opossum_version: String,
     analysis_timestamp: DateTime<Local>,
-    scenery: Option<OpticScenery>,
+    scenery: Option<NodeGroup>,
     node_reports: Vec<NodeReport>,
 }
 impl AnalysisReport {
@@ -58,7 +58,7 @@ impl AnalysisReport {
     /// Add an [`OpticScenery`] to this [`AnalysisReport`].
     ///
     /// This function is called internally [`OpticScenery`] for adding itself to the report.
-    pub fn add_scenery(&mut self, scenery: &OpticScenery) {
+    pub fn add_scenery(&mut self, scenery: &NodeGroup) {
         self.scenery = Some(scenery.clone());
     }
     /// Add an (detector) [`NodeReport`] to this [`AnalysisReport`].
@@ -92,7 +92,7 @@ impl AnalysisReport {
         Ok(HtmlReport {
             opossum_version: self.opossum_version.clone(),
             analysis_timestamp: self.analysis_timestamp.format("%Y/%m/%d %H:%M").to_string(),
-            description: scenery.description().to_string(),
+            description: scenery.node_attr().name(),
             node_reports: html_node_reports,
         })
     }
@@ -212,7 +212,7 @@ mod test {
     #[test]
     fn analysis_report_add_scenery() {
         let mut report = AnalysisReport::new(String::from("test"), DateTime::default());
-        report.add_scenery(&OpticScenery::default());
+        report.add_scenery(&NodeGroup::default());
         assert!(report.scenery.is_some());
     }
     #[test]

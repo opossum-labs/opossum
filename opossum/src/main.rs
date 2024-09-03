@@ -10,13 +10,13 @@ use opossum::analyzers::Analyzer;
 use opossum::analyzers::AnalyzerType;
 #[cfg(feature = "bevy")]
 use opossum::bevy_main;
+use opossum::nodes::NodeGroup;
 use opossum::OpmDocument;
 #[cfg(feature = "bevy")]
 use opossum::SceneryBevyData;
 use opossum::{
     console::{Args, PartialArgs},
     error::{OpmResult, OpossumError},
-    OpticScenery,
 };
 use std::env;
 use std::fs::create_dir;
@@ -28,12 +28,6 @@ use std::path::Path;
 fn read_and_parse_model(path: &Path) -> OpmResult<OpmDocument> {
     info!("Reading model...");
     OpmDocument::from_file(path)
-    // let contents = fs::read_to_string(path).map_err(|e| {
-    //     OpossumError::Console(format!("cannot read file {} : {}", path.display(), e))
-    // })?;
-    // let scenery: OpticScenery = serde_yaml::from_str(&contents)
-    //     .map_err(|e| OpossumError::OpticScenery(format!("parsing of model failed: {e}")))?;
-    // Ok(scenery)
 }
 
 fn create_dot_or_report_file_instance(
@@ -52,19 +46,18 @@ fn create_dot_or_report_file_instance(
         .map_err(|e| OpossumError::Other(format!("{f_name} fdile creation failed: {e}")))
 }
 
-fn create_dot_file(dot_path: &Path, scenery: &OpticScenery) -> OpmResult<()> {
+fn create_dot_file(dot_path: &Path, scenery: &NodeGroup) -> OpmResult<()> {
     let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "dot", "diagram")?;
 
-    write!(output, "{}", scenery.to_dot("")?)
+    write!(output, "{}", scenery.to_toplevel_dot("")?)
         .map_err(|e| OpossumError::Other(format!("writing diagram file (.dot) failed: {e}")))?;
 
     let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "svg", "diagram")?;
-    write!(output, "{}", scenery.to_dot_svg()?)
+    write!(output, "{}", scenery.to_toplevel_dot_svg()?)
         .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))?;
-
     Ok(())
 }
-fn create_report_and_data_files(report_directory: &Path, scenery: &OpticScenery) -> OpmResult<()> {
+fn create_report_and_data_files(report_directory: &Path, scenery: &NodeGroup) -> OpmResult<()> {
     let data_dir = report_directory.join("data/");
     if data_dir.exists() {
         info!("Delete old report data dir");
@@ -76,7 +69,7 @@ fn create_report_and_data_files(report_directory: &Path, scenery: &OpticScenery)
     scenery.export_node_data(&data_dir)?;
     let mut output =
         create_dot_or_report_file_instance(report_directory, "report", "yaml", "detector report")?;
-    let analysis_report = scenery.report()?;
+    let analysis_report = scenery.toplevel_report()?;
     write!(
         output,
         "{}",

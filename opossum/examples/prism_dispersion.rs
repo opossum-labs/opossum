@@ -8,13 +8,13 @@ use opossum::{
     joule,
     lightdata::LightData,
     millimeter, nanometer,
-    nodes::{RayPropagationVisualizer, Source, SpotDiagram, Wedge},
+    nodes::{NodeGroup, RayPropagationVisualizer, Source, SpotDiagram, Wedge},
     optical::{Alignable, Optical},
     position_distributions::Grid,
     rays::Rays,
     refractive_index::RefrIndexSellmeier1,
     utils::geom_transformation::Isometry,
-    OpmDocument, OpticScenery,
+    OpmDocument,
 };
 use uom::si::f64::Length;
 
@@ -45,11 +45,11 @@ fn main() -> OpmResult<()> {
 
     rays_1w.add_rays(&mut rays_2w);
 
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::default();
     let light = LightData::Geometric(rays_1w);
     let mut light_src = Source::new("collimated ray source", &light);
     light_src.set_isometry(Isometry::identity());
-    let src = scenery.add_node(light_src);
+    let src = scenery.add_node(light_src)?;
 
     let w1 = scenery.add_node(
         Wedge::new(
@@ -59,7 +59,7 @@ fn main() -> OpmResult<()> {
             &refr_index_hk9l,
         )?
         .with_tilt(degree!(wedge_angle_in_degree / -2.0, 0.0, 0.0))?,
-    );
+    )?;
     let wedge2 = Wedge::new(
         "prism 2",
         millimeter!(20.0),
@@ -67,7 +67,7 @@ fn main() -> OpmResult<()> {
         &refr_index_hk9l,
     )?
     .with_tilt(degree!(wedge_angle_in_degree / 2.0, 0.0, 0.0))?;
-    let w2 = scenery.add_node(wedge2);
+    let w2 = scenery.add_node(wedge2)?;
     let w3 = scenery.add_node(
         Wedge::new(
             "prism 3",
@@ -76,7 +76,7 @@ fn main() -> OpmResult<()> {
             &refr_index_hk9l,
         )?
         .with_tilt(degree!(wedge_angle_in_degree / 2.0, 0.0, 0.0))?,
-    );
+    )?;
     let w4 = scenery.add_node(
         Wedge::new(
             "prism 4",
@@ -85,9 +85,9 @@ fn main() -> OpmResult<()> {
             &refr_index_hk9l,
         )?
         .with_tilt(degree!(wedge_angle_in_degree / -2.0, 0.0, 0.0))?,
-    );
-    let det = scenery.add_node(RayPropagationVisualizer::default());
-    let sd = scenery.add_node(SpotDiagram::default());
+    )?;
+    let det = scenery.add_node(RayPropagationVisualizer::default())?;
+    let sd = scenery.add_node(SpotDiagram::default())?;
     scenery.connect_nodes(src, "out1", w1, "front", millimeter!(50.0))?;
     scenery.connect_nodes(w1, "rear", w2, "front", millimeter!(100.0))?;
     scenery.connect_nodes(w2, "rear", w3, "front", millimeter!(150.0))?;

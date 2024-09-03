@@ -15,7 +15,7 @@ pub mod raytrace;
 pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;
 
-use crate::{error::OpmResult, OpticScenery};
+use crate::{error::OpmResult, nodes::NodeGroup};
 
 /// Type of analysis to be performed.
 #[non_exhaustive]
@@ -69,7 +69,7 @@ pub trait Analyzer {
     /// # Errors
     ///
     /// This function will return an error if the concrete implementation of the [`Analyzer`] returns an error.
-    fn analyze(&self, _scenery: &mut OpticScenery) -> OpmResult<()>;
+    fn analyze(&self, _scenery: &mut NodeGroup) -> OpmResult<()>;
     /// Generate an analysis report
     fn report(&self) {}
 }

@@ -10,28 +10,26 @@ use opossum::{
         ParaxialSurface, SpotDiagram,
     },
     ray::SplittingConfig,
-    OpmDocument, OpticScenery,
+    OpmDocument,
 };
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::default();
-    scenery.set_description("laser system");
-
+    let mut scenery = NodeGroup::new("laser system");
     // Main beam line
     let i_src = scenery.add_node(round_collimated_ray_source(
         millimeter!(1.0),
         joule!(1.0),
         3,
-    )?);
-    let i_l1 = scenery.add_node(ParaxialSurface::new("f=100", millimeter!(100.0))?);
-    let i_l2 = scenery.add_node(ParaxialSurface::new("f=200", millimeter!(200.0))?);
-    let i_bs = scenery.add_node(BeamSplitter::new("1% BS", &SplittingConfig::Ratio(0.99))?);
+    )?)?;
+    let i_l1 = scenery.add_node(ParaxialSurface::new("f=100", millimeter!(100.0))?)?;
+    let i_l2 = scenery.add_node(ParaxialSurface::new("f=200", millimeter!(200.0))?)?;
+    let i_bs = scenery.add_node(BeamSplitter::new("1% BS", &SplittingConfig::Ratio(0.99))?)?;
     let i_e1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
         opossum::nodes::Metertype::IdealEnergyMeter,
-    ));
-    let i_sd1 = scenery.add_node(SpotDiagram::new("Output"));
+    ))?;
+    let i_sd1 = scenery.add_node(SpotDiagram::new("Output"))?;
 
     scenery.connect_nodes(i_src, "out1", i_l1, "front", Length::zero())?;
     scenery.connect_nodes(i_l1, "rear", i_l2, "front", millimeter!(300.0))?;
@@ -43,7 +41,7 @@ fn main() -> OpmResult<()> {
     let i_f = scenery.add_node(IdealFilter::new(
         "OD1 filter",
         &opossum::nodes::FilterType::Constant(0.1),
-    )?);
+    )?)?;
     scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front", Length::zero())?;
 
     // Cam Box
@@ -77,7 +75,7 @@ fn main() -> OpmResult<()> {
     cam_box.connect_nodes(i_cb_sd1, "out1", i_cb_e, "in1", Length::zero())?;
 
     cam_box.map_input_port(i_cb_bs, "input1", "input")?;
-    let i_cam_box = scenery.add_node(cam_box);
+    let i_cam_box = scenery.add_node(cam_box)?;
     scenery.connect_nodes(i_f, "rear", i_cam_box, "input", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);

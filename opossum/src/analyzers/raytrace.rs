@@ -2,8 +2,9 @@
 use crate::{
     analyzers::AnalyzerType,
     error::{OpmResult, OpossumError},
-    optical::LightResult,
-    picojoule, OpticScenery,
+    nodes::NodeGroup,
+    optical::{LightResult, Optical},
+    picojoule,
 };
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -24,11 +25,11 @@ impl RayTracingAnalyzer {
     }
 }
 impl Analyzer for RayTracingAnalyzer {
-    fn analyze(&self, scenery: &mut OpticScenery) -> OpmResult<()> {
-        let scenery_name = if scenery.description().is_empty() {
+    fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()> {
+        let scenery_name = if scenery.node_attr().name().is_empty() {
             String::new()
         } else {
-            format!(" '{}'", scenery.description())
+            format!(" '{}'", scenery.node_attr().name())
         };
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
         let graph = scenery.graph_mut();

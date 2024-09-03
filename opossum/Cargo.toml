@@ -60,7 +60,7 @@ log = "0.4"
 env_logger= "0.11"
 roots = "0.0.8"
 voronator = "0.2.1"
-fast-surface-nets = "0.2.0"
+# fast-surface-nets = "0.2.0"
 rayon = "1.10.0"
 
 tinytemplate = "1"

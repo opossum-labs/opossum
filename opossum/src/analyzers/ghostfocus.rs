@@ -1,9 +1,8 @@
 //! Analyzer performing a ghost focus analysis using ray tracing
 
-use log::info;
 use serde::{Deserialize, Serialize};
 
-use crate::{analyzers::AnalyzerType, error::OpmResult, optical::LightResult, OpticScenery};
+use crate::{error::OpmResult, nodes::NodeGroup};
 
 use super::Analyzer;
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
@@ -27,24 +26,29 @@ impl GhostFocusAnalyzer {
     pub const fn new(config: GhostFocusConfig) -> Self {
         Self { config }
     }
+    /// Returns a reference to the config of this [`GhostFocusAnalyzer`].
+    #[must_use]
+    pub const fn config(&self) -> &GhostFocusConfig {
+        &self.config
+    }
 }
 impl Analyzer for GhostFocusAnalyzer {
-    fn analyze(&self, scenery: &mut OpticScenery) -> OpmResult<()> {
-        let scenery_name = if scenery.description().is_empty() {
-            String::new()
-        } else {
-            format!(" '{}'", scenery.description())
-        };
-        info!("Performing ghost focus analysis of scenery{scenery_name}.");
-        let graph = scenery.graph_mut();
-        let name = format!("scenery{scenery_name}");
-        graph.calc_node_positions(&name, &LightResult::default())?;
-        let name = format!("Scenery{scenery_name}");
-        graph.analyze(
-            &name,
-            &LightResult::default(),
-            &AnalyzerType::GhostFocus(self.config.clone()),
-        )?;
+    fn analyze(&self, _scenery: &mut NodeGroup) -> OpmResult<()> {
+        // let scenery_name = if scenery.description().is_empty() {
+        //     String::new()
+        // } else {
+        //     format!(" '{}'", scenery.description())
+        // };
+        // info!("Performing ghost focus analysis of scenery{scenery_name}.");
+        // let graph = scenery.graph_mut();
+        // let name = format!("scenery{scenery_name}");
+        // graph.calc_node_positions(&name, &LightResult::default())?;
+        // let name = format!("Scenery{scenery_name}");
+        // graph.analyze(
+        //     &name,
+        //     &LightResult::default(),
+        //     &AnalyzerType::GhostFocus(self.config.clone()),
+        // )?;
         Ok(())
     }
 }

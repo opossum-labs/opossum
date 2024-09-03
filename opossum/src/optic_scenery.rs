@@ -231,7 +231,7 @@ impl OpticScenery {
     /// This function will return an error if the individual export function of a node fails.
     pub fn report(&self) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
-        analysis_report.add_scenery(self);
+        //analysis_report.add_scenery(self);
         let detector_nodes = self
             .graph
             .nodes()

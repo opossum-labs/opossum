@@ -10,14 +10,14 @@ use opossum::{
     joule,
     lightdata::LightData,
     millimeter, nanometer,
-    nodes::{Lens, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
+    nodes::{Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
     optical::{Alignable, Optical},
     position_distributions::Hexapolar,
     rays::Rays,
     refractive_index::RefrIndexSellmeier1,
     spectral_distribution::Gaussian,
     utils::geom_transformation::Isometry,
-    OpmDocument, OpticScenery,
+    OpmDocument,
 };
 
 pub fn main() -> OpmResult<()> {
@@ -31,7 +31,7 @@ pub fn main() -> OpmResult<()> {
         103.5606530,
         nanometer!(300.)..nanometer!(1200.),
     )?;
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::default();
     let rays = Rays::new_collimated_with_spectrum(
         &Gaussian::new(
             (nanometer!(1054.), nanometer!(1068.)),
@@ -49,7 +49,7 @@ pub fn main() -> OpmResult<()> {
     src.set_alignment_wavelength(alignment_wvl)?;
     src.set_isometry(Isometry::identity());
 
-    let i_src = scenery.add_node(src);
+    let i_src = scenery.add_node(src)?;
     // focal length = 996.7 mm (Thorlabs LA1779-B)
     let lens1 = scenery.add_node(
         Lens::new(
@@ -60,18 +60,18 @@ pub fn main() -> OpmResult<()> {
             &nbk7,
         )?
         .with_decenter(centimeter!(2., 0., 0.))?,
-    );
+    )?;
 
     let mir_1 = ThinMirror::new("mirr").align_like_node_at_distance(lens1, millimeter!(996.7));
-    let mir_1 = scenery.add_node(mir_1);
+    let mir_1 = scenery.add_node(mir_1)?;
     let mut lens_1_ref = NodeReference::from_node(&scenery.node(lens1)?);
     lens_1_ref.set_inverted(true)?;
-    let lens_1_ref = scenery.add_node(lens_1_ref);
+    let lens_1_ref = scenery.add_node(lens_1_ref)?;
 
     let i_prop_vis = scenery.add_node(RayPropagationVisualizer::new(
         "Ray_positions",
         Some(Vector3::y()),
-    )?);
+    )?)?;
 
     scenery.connect_nodes(i_src, "out1", lens1, "front", millimeter!(400.0))?;
     scenery.connect_nodes(lens1, "rear", mir_1, "input", millimeter!(400.0))?;

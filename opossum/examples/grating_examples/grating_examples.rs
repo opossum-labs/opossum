@@ -1,6 +1,6 @@
 use nalgebra::Vector3;
 use opossum::analyzers::{AnalyzerType, RayTraceConfig};
-use opossum::nodes::{NodeReference, ParaxialSurface, SpotDiagram, ThinMirror};
+use opossum::nodes::{NodeGroup, NodeReference, ParaxialSurface, SpotDiagram, ThinMirror};
 use opossum::optical::Alignable;
 use opossum::refractive_index::{RefrIndexConst, RefractiveIndex};
 use opossum::OpmDocument;
@@ -17,7 +17,6 @@ use opossum::{
     refractive_index::RefrIndexSellmeier1,
     spectral_distribution::Gaussian,
     utils::geom_transformation::Isometry,
-    OpticScenery,
 };
 
 mod folded_martinez;
@@ -65,11 +64,11 @@ fn main() -> OpmResult<()> {
     ////////////////////////////////////
     //  4 grating compressor example  //
     ////////////////////////////////////
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::new("treacy compressor");
 
-    let i_src = scenery.add_node(src.clone());
-    let compressor_node = scenery.add_node(treacy_compressor(alignment_wvl)?);
-    let detectors = scenery.add_node(detector_group()?);
+    let i_src = scenery.add_node(src.clone())?;
+    let compressor_node = scenery.add_node(treacy_compressor(alignment_wvl)?)?;
+    let detectors = scenery.add_node(detector_group()?)?;
 
     scenery.connect_nodes(i_src, "out1", compressor_node, "input", millimeter!(400.0))?;
     scenery.connect_nodes(
@@ -90,12 +89,12 @@ fn main() -> OpmResult<()> {
     //       Telescope length slightly misaligned (0.5% from ideal)     //
     //////////////////////////////////////////////////////////////////////
     let telescope_distance = millimeter!(1015.515 * 0.995);
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::new("non-ideal folded Martinez stretcher");
 
-    let i_src = scenery.add_node(src.clone());
+    let i_src = scenery.add_node(src.clone())?;
     let stretcher_node =
-        scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?);
-    let detectors = scenery.add_node(detector_group()?);
+        scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
+    let detectors = scenery.add_node(detector_group()?)?;
 
     scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
     scenery.connect_nodes(
@@ -118,12 +117,12 @@ fn main() -> OpmResult<()> {
     //       Telescope length perfectly aligned             //
     //////////////////////////////////////////////////////////
     let telescope_distance = millimeter!(1017.14885);
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::new("ideal folded Martinez stretcher");
 
-    let i_src = scenery.add_node(src.clone());
+    let i_src = scenery.add_node(src.clone())?;
     let stretcher_node =
-        scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?);
-    let detectors = scenery.add_node(detector_group()?);
+        scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
+    let detectors = scenery.add_node(detector_group()?)?;
 
     scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
     scenery.connect_nodes(
@@ -144,12 +143,12 @@ fn main() -> OpmResult<()> {
     //       Telescope length perfectly aligned             //
     //////////////////////////////////////////////////////////
     let telescope_distance = millimeter!(1015.515);
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::new("ideal folded Martinez stretcher circle of least conf");
 
-    let i_src = scenery.add_node(src.clone());
+    let i_src = scenery.add_node(src.clone())?;
     let stretcher_node =
-        scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?);
-    let detectors = scenery.add_node(detector_group()?);
+        scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
+    let detectors = scenery.add_node(detector_group()?)?;
 
     scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
     scenery.connect_nodes(
@@ -172,15 +171,15 @@ fn main() -> OpmResult<()> {
     //       Telescope length perfectly aligned but longer f             //
     //////////////////////////////////////////////////////////
     let telescope_distance = millimeter!(2467.1);
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::new("ideal folded Martinez stretcher longer f");
 
-    let i_src = scenery.add_node(src.clone());
+    let i_src = scenery.add_node(src.clone())?;
     let stretcher_node = scenery.add_node(folded_martinez_longer_f(
         telescope_distance,
         &nbk7,
         alignment_wvl,
-    )?);
-    let detectors = scenery.add_node(detector_group()?);
+    )?)?;
+    let detectors = scenery.add_node(detector_group()?)?;
 
     scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
     scenery.connect_nodes(
@@ -203,15 +202,15 @@ fn main() -> OpmResult<()> {
     //       Telescope length perfectly aligned             //
     //////////////////////////////////////////////////////////
     let telescope_distance = millimeter!(1017.14885);
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::new("achromatic ideal folded Martinez stretcher");
 
-    let i_src = scenery.add_node(src.clone());
+    let i_src = scenery.add_node(src.clone())?;
     let stretcher_node = scenery.add_node(folded_martinez(
         telescope_distance,
         &RefrIndexConst::new(nbk7.get_refractive_index(nanometer!(1054.))?)?,
         alignment_wvl,
-    )?);
-    let detectors = scenery.add_node(detector_group()?);
+    )?)?;
+    let detectors = scenery.add_node(detector_group()?)?;
 
     scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
     scenery.connect_nodes(
@@ -234,14 +233,14 @@ fn main() -> OpmResult<()> {
     //       Telescope length perfectly aligned             //
     //////////////////////////////////////////////////////////
     let telescope_distance = millimeter!(1017.14885);
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::new("paraxial folded Martinez stretcher");
 
-    let i_src = scenery.add_node(src.clone());
+    let i_src = scenery.add_node(src.clone())?;
     let stretcher_node = scenery.add_node(folded_martinez_paraxial_lens(
         telescope_distance,
         alignment_wvl,
-    )?);
-    let detectors = scenery.add_node(detector_group()?);
+    )?)?;
+    let detectors = scenery.add_node(detector_group()?)?;
 
     scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
     scenery.connect_nodes(
@@ -271,7 +270,7 @@ fn main() -> OpmResult<()> {
         103.5606530,
         nanometer!(300.)..nanometer!(1200.),
     )?;
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::new("telescope");
     let rays = Rays::new_collimated_with_spectrum(
         &Gaussian::new(
             (nanometer!(1054.), nanometer!(1068.)),
@@ -289,7 +288,7 @@ fn main() -> OpmResult<()> {
     src.set_alignment_wavelength(alignment_wvl)?;
     src.set_isometry(Isometry::identity());
 
-    let i_src = scenery.add_node(src);
+    let i_src = scenery.add_node(src)?;
     // focal length = 996.7 mm (Thorlabs LA1779-B)
     let lens1 = scenery.add_node(Lens::new(
         "Lens 1",
@@ -297,19 +296,19 @@ fn main() -> OpmResult<()> {
         millimeter!(f64::INFINITY),
         millimeter!(2.1),
         &nbk7,
-    )?);
+    )?)?;
     let mir_1 =
-        scenery.add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, tel_dist));
+        scenery.add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, tel_dist))?;
     let mut lens_1_ref1 = NodeReference::from_node(&scenery.node(lens1)?);
     lens_1_ref1.set_inverted(true)?;
-    let lens_1_ref1 = scenery.add_node(lens_1_ref1);
+    let lens_1_ref1 = scenery.add_node(lens_1_ref1)?;
 
-    let paraxial_lens = scenery.add_node(ParaxialSurface::new("ideal lens", millimeter!(500.))?);
-    let spot_diag = scenery.add_node(SpotDiagram::new("spot diagram"));
+    let paraxial_lens = scenery.add_node(ParaxialSurface::new("ideal lens", millimeter!(500.))?)?;
+    let spot_diag = scenery.add_node(SpotDiagram::new("spot diagram"))?;
     let i_prop_vis = scenery.add_node(RayPropagationVisualizer::new(
         "Ray_positions",
         Some(Vector3::y()),
-    )?);
+    )?)?;
     scenery.connect_nodes(i_src, "out1", lens1, "front", millimeter!(100.0))?;
     scenery.connect_nodes(lens1, "rear", mir_1, "input", millimeter!(1017.14885))?;
     scenery.connect_nodes(
