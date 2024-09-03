@@ -2,13 +2,13 @@
 //! Module for handling optical rays
 use std::{f64::consts::PI, fmt::Display};
 
-use nalgebra::{vector, MatrixXx3, Point3, Vector3};
+use nalgebra::{vector, MatrixXx3, Point3, Rotation3, Vector3};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
-    length::{meter, nanometer},
+    length::{meter, millimeter, nanometer},
 };
 
 use crate::{
@@ -247,8 +247,8 @@ impl Ray {
     ///
     /// This function creates an [`Isometry`] with its position based on the ray position and the orientation (rotation) baed on the ray direction.
     #[must_use]
-    pub fn to_isometry(&self) -> Isometry {
-        Isometry::new_from_view(self.position(), self.direction(), Vector3::y())
+    pub fn to_isometry(&self, up_direction: Vector3<f64>) -> Isometry {
+        Isometry::new_from_view(self.position(), self.direction(), up_direction)
     }
     /// Propagate a ray freely along its direction. The length is given as the projection on the z-axis (=optical axis).
     ///
@@ -579,6 +579,57 @@ impl Ray {
     pub const fn number_of_refractions(&self) -> usize {
         self.number_of_refractions
     }
+    /// define the up-direction of a ray which is needed to create an isometry from this ray.
+    /// This function should only be used during the node positioning process, and only for source nodes
+    #[must_use]
+    pub fn define_up_direction(&self) -> Vector3<f64> {
+        let dir = self.dir.normalize();
+        if dir.cross(&Vector3::x()).norm() < f64::EPSILON
+            || dir.cross(&Vector3::z()).norm() < f64::EPSILON
+        {
+            //ray is parallel to the x-axis or the z-axis
+            //set up direction to y()
+            Vector3::y()
+        } else if dir.cross(&Vector3::y()).norm() < f64::EPSILON {
+            //set up direction to x()
+            Vector3::x()
+        } else {
+            //arbitrarily project y-axis onto the plane that is define by the propagation direction
+            let y_vec = Vector3::y();
+            let proj_y = y_vec - y_vec.dot(&dir) * dir;
+            proj_y.normalize()
+        }
+    }
+    /// Modifies the current up-direction of a ray which is needed to create an isometry from this ray.
+    /// This function should only be used during the node positioning process
+    /// # Errors
+    /// This function errors
+    /// - if the position history is empty and therefore, the last direction cannot be calulated
+    /// - if the last postion cannot be unwrapped
+    pub fn calc_new_up_direction(&self, up_direction: &mut Vector3<f64>) -> OpmResult<()> {
+        if self.pos_hist.is_empty() {
+            return Err(OpossumError::Other(
+                "not enough positions to calculate new up-direction!".into(),
+            ));
+        }
+        let old_dir = if let Some(last_pos) = self.pos_hist.last() {
+            Vector3::from_vec(
+                (self.pos - last_pos)
+                    .iter()
+                    .map(uom::si::f64::Length::get::<millimeter>)
+                    .collect::<Vec<f64>>(),
+            )
+        } else {
+            return Err(OpossumError::Other(
+                "cannot extract last position to calculate new up-direction!".into(),
+            ));
+        };
+        if let Some(rotation_mat) = Rotation3::rotation_between(&old_dir, &self.dir) {
+            *up_direction = rotation_mat * *up_direction;
+        }
+
+        Ok(())
+    }
 }
 impl Display for Ray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -609,7 +660,8 @@ mod test {
         spectrum_helper::{self, generate_filter_spectrum},
         surface::Plane,
     };
-    use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq};
+    use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
+    use core::f64;
     use itertools::izip;
     use std::path::PathBuf;
     use uom::si::{energy::joule, length::millimeter};
@@ -1265,5 +1317,141 @@ mod test {
         assert_relative_eq!(new_ray.dir, vector![0.0, 0.0, 1.0]);
         assert_eq!(new_ray.wvl, ray.wvl);
         assert_eq!(new_ray.e, ray.e);
+    }
+    #[test]
+    fn define_up_direction_test() {
+        assert_relative_eq!(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::x(),
+                nanometer!(1000.),
+                joule!(1.)
+            )
+            .unwrap()
+            .define_up_direction(),
+            Vector3::y()
+        );
+        assert_relative_eq!(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::y(),
+                nanometer!(1000.),
+                joule!(1.)
+            )
+            .unwrap()
+            .define_up_direction(),
+            Vector3::x()
+        );
+        assert_relative_eq!(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::z(),
+                nanometer!(1000.),
+                joule!(1.)
+            )
+            .unwrap()
+            .define_up_direction(),
+            Vector3::y()
+        );
+        assert_relative_eq!(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::new(0., 1., 1.),
+                nanometer!(1000.),
+                joule!(1.)
+            )
+            .unwrap()
+            .define_up_direction(),
+            Vector3::new(0., 1., -1.).normalize()
+        );
+        assert_relative_eq!(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::new(1., 0., 1.),
+                nanometer!(1000.),
+                joule!(1.)
+            )
+            .unwrap()
+            .define_up_direction(),
+            Vector3::y()
+        );
+        assert_relative_eq!(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::new(1., 1., 0.),
+                nanometer!(1000.),
+                joule!(1.)
+            )
+            .unwrap()
+            .define_up_direction(),
+            Vector3::new(-1., 1., 0.).normalize()
+        );
+        assert_relative_eq!(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::new(-1., 0., 3.),
+                nanometer!(1000.),
+                joule!(1.)
+            )
+            .unwrap()
+            .define_up_direction(),
+            Vector3::y()
+        );
+        assert!(relative_eq!(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::new(1., 1., 1.),
+                nanometer!(1000.),
+                joule!(1.)
+            )
+            .unwrap()
+            .define_up_direction(),
+            Vector3::new(-1., 2., -1.).normalize(),
+            epsilon = f64::EPSILON * 10.
+        ));
+        assert!(relative_eq!(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::new(-1., -1., -1.),
+                nanometer!(1000.),
+                joule!(1.)
+            )
+            .unwrap()
+            .define_up_direction(),
+            Vector3::new(-1., 2., -1.).normalize(),
+            epsilon = f64::EPSILON * 10.
+        ));
+    }
+    #[test]
+    fn calc_new_up_direction_test() {
+        //emulate reflection or refraction
+        let mut ray = Ray::new(
+            meter!(0., 0., 0.),
+            Vector3::z(),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        let mut up_direction = Vector3::y();
+        assert!(ray.calc_new_up_direction(&mut up_direction).is_err());
+        //propagation
+        ray.propagate(meter!(1.)).unwrap();
+        //45° reflection to y
+        ray.dir = Vector3::y();
+
+        ray.calc_new_up_direction(&mut up_direction).unwrap();
+        assert_relative_eq!(up_direction, -Vector3::z());
+
+        ray.propagate(meter!(1.)).unwrap();
+        ray.dir = Vector3::new(0., 0., 1.);
+
+        ray.calc_new_up_direction(&mut up_direction).unwrap();
+        assert_relative_eq!(up_direction, Vector3::y());
+
+        ray.propagate(meter!(1.)).unwrap();
+        ray.dir = Vector3::new(1., 0., 0.);
+
+        ray.calc_new_up_direction(&mut up_direction).unwrap();
+        assert_relative_eq!(up_direction, Vector3::y());
     }
 }

@@ -1070,6 +1070,36 @@ impl Rays {
         }
         rays
     }
+    /// define the up-direction of a ray bundle's first ray which is needed to create an isometry from this ray.
+    /// This function should only be used during the node positioning process, and only for source nodes
+    /// # Errors
+    /// This function errors if there are no rays
+    pub fn define_up_direction(&self) -> OpmResult<Vector3<f64>> {
+        if self.rays.is_empty() {
+            return Err(OpossumError::Other(
+                "empty ray bundle, cannot define up-direction".into(),
+            ));
+        }
+        if self.nr_of_rays(true) > 1 {
+            warn!("Ray bundle not used for alignment, use first ray for up-direction calculation");
+        }
+        Ok(self.rays[0].define_up_direction())
+    }
+    /// Modifies the current up-direction of a ray which is needed to create an isometry from this ray.
+    /// This function should only be used during the node positioning process
+    /// # Errors
+    /// This function errors if there are no rays
+    pub fn calc_new_up_direction(&self, up_direction: &mut Vector3<f64>) -> OpmResult<()> {
+        if self.rays.is_empty() {
+            return Err(OpossumError::Other(
+                "empty ray bundle, cannot define up-direction".into(),
+            ));
+        }
+        if self.nr_of_rays(true) > 1 {
+            warn!("Ray bundle not used for alignment, use first ray for up-direction calculation");
+        }
+        self.rays[0].calc_new_up_direction(up_direction)
+    }
 }
 
 impl Display for Rays {
@@ -2140,5 +2170,63 @@ mod test {
         let rays = Rays::default();
         let centroid = rays.energy_weighted_centroid();
         assert!(centroid.is_none());
+    }
+
+    #[test]
+    fn define_up_direction_test() {
+        let mut rays = Rays::default();
+        assert!(rays.define_up_direction().is_err());
+        rays.add_ray(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::x(),
+                nanometer!(1000.),
+                joule!(1.),
+            )
+            .unwrap(),
+        );
+        rays.add_ray(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::x(),
+                nanometer!(1000.),
+                joule!(1.),
+            )
+            .unwrap(),
+        );
+        testing_logger::setup();
+        assert!(rays.define_up_direction().is_ok());
+        check_warnings(vec![
+            "Ray bundle not used for alignment, use first ray for up-direction calculation",
+        ]);
+    }
+    #[test]
+    fn calc_new_up_direction_test() {
+        let mut rays = Rays::default();
+        assert!(rays.calc_new_up_direction(&mut Vector3::y()).is_err());
+        rays.add_ray(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::x(),
+                nanometer!(1000.),
+                joule!(1.),
+            )
+            .unwrap(),
+        );
+        rays.add_ray(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::x(),
+                nanometer!(1000.),
+                joule!(1.),
+            )
+            .unwrap(),
+        );
+        testing_logger::setup();
+        //error because underlying function return error
+        assert!(rays.calc_new_up_direction(&mut Vector3::y()).is_err());
+        check_warnings(vec![
+            "Ray bundle not used for alignment, use first ray for up-direction calculation",
+        ]);
     }
 }
