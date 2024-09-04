@@ -17,6 +17,7 @@ use crate::{
 };
 #[cfg(feature = "bevy")]
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
+use nalgebra::Point3;
 use num::Zero;
 use uom::si::f64::Length;
 
@@ -254,7 +255,7 @@ impl Lens {
         let mut front_surf = if front_roc.is_infinite() {
             OpticalSurface::new(Box::new(Plane::new(iso)))
         } else {
-            OpticalSurface::new(Box::new(Sphere::new(front_roc, iso)?))
+            OpticalSurface::new(Box::new(Sphere::new_at_position(front_roc.abs(), iso.transform_point(&Point3::new(Length::zero(), Length::zero(), front_roc)))?))
         };
         front_surf.set_coating(
             self.node_attr()
@@ -268,7 +269,7 @@ impl Lens {
         let mut rear_surf = if rear_roc.is_infinite() {
             OpticalSurface::new(Box::new(Plane::new(&isometry)))
         } else {
-            OpticalSurface::new(Box::new(Sphere::new(rear_roc, &isometry)?))
+            OpticalSurface::new(Box::new(Sphere::new_at_position(rear_roc.abs(), isometry.transform_point(&Point3::new(Length::zero(), Length::zero(), rear_roc)))?))
         };
         rear_surf.set_coating(
             self.node_attr()

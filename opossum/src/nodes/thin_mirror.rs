@@ -13,6 +13,7 @@ use crate::{
     properties::Proptype,
     surface::{OpticalSurface, Plane, Sphere},
 };
+use nalgebra::Point3;
 use num::Zero;
 use uom::si::f64::Length;
 
@@ -109,7 +110,7 @@ impl Optical for ThinMirror {
                         let mut surface = if roc.is_infinite() {
                             OpticalSurface::new(Box::new(Plane::new(&iso)))
                         } else {
-                            OpticalSurface::new(Box::new(Sphere::new(*roc, &iso)?))
+                            OpticalSurface::new(Box::new(Sphere::new_at_position(roc.abs(), iso.transform_point(&Point3::new(Length::zero(), Length::zero(), *roc)))?))
                         };
                         surface.set_coating(
                             self.node_attr()
