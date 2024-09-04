@@ -155,6 +155,10 @@ impl GeoSurface for Cylinder {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
+    
+    fn calc_intersections(&self, ray: &Ray) -> Vec<Point3<Length>> {
+        todo!()
+    }
 }
 
 #[cfg(test)]

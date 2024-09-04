@@ -1,5 +1,6 @@
 mod sdf;
 
+use itertools::Itertools;
 pub use sdf::{SDFOperation, SDF};
 
 
@@ -37,6 +38,11 @@ impl GeoSurface for OpticalVolume{
 
     fn set_isometry(&mut self, isometry: &Isometry) {
         self.isometry = isometry.clone()
+    }
+    
+    fn calc_intersections(&self, ray: &Ray) -> Vec<Point3<Length>> {
+        let transformed_ray = ray.inverse_transformed_ray(self.isometry());
+        self.surf_objs.iter().map(|s| s.geo_surface().calc_intersections(&transformed_ray)).flatten().collect_vec()
     }
 }
 

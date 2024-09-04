@@ -10,6 +10,7 @@ mod optical_surface;
 
 
 pub use cylinder::Cylinder;
+use delaunator::Point;
 pub use optical_surface::OpticalSurface;
 pub use plane::Plane;
 pub use sphere::Sphere;
@@ -38,6 +39,19 @@ pub trait GeoSurface: SDF + Clone {
             None
         }
     }
+    fn calc_intersections(&self, ray: &Ray) -> Vec<Point3<Length>>;
+    fn get_closest_from_intersections(&self, ray:&Ray, intersections: &Vec<Point3<Length>>) -> Point3<Length>;
+    fn get_normal(&self, intersection: &Point3<Length>) -> Vector3<Length>;
+    fn get_closest_intersection_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<Length>)>{
+        let intersections = self.calc_intersections(ray);
+        if intersections.is_empty(){
+            return None
+        }
+        let closest_intersection = self.get_closest_from_intersections(ray, &intersections);
+        let normal = self.get_normal(&closest_intersection);
+        Some((closest_intersection, normal))
+    }
+
     /// This fucntion must be implemented by all [`GeoSurface`]s for calculating the intersection point and
     /// its normal vector of a [`Ray`]. **Note**: Do not call this functions directly but rather
     /// `calc_intersect_and_normal` which is a wrapper handling all isometric transformations. The implemented function
@@ -75,6 +89,7 @@ pub enum GeoSurf{
 }
 
 
+
 impl GeoSurface for GeoSurf{
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         todo!();
@@ -93,6 +108,30 @@ impl GeoSurface for GeoSurf{
             GeoSurf::Spherical { s, .. } => s.set_isometry(isometry),
             GeoSurf::Flat { s } => s.set_isometry(isometry),
             GeoSurf::SurfaceCombination { s } => s.set_isometry(isometry),
+        }
+    }
+    
+    fn calc_intersections(&self, ray: &Ray) -> Vec<Point3<Length>> {
+        match self {
+            GeoSurf::Spherical { s, .. } => s.calc_intersections(ray),
+            GeoSurf::Flat { s } => s.calc_intersections(ray),
+            GeoSurf::SurfaceCombination { s } => s.calc_intersections(ray),
+        }
+    }
+    
+    fn get_closest_from_intersections(&self, ray:&Ray, intersections: &Vec<Point3<Length>>) -> Point3<Length> {
+        match self {
+            GeoSurf::Spherical { s, .. } => s.get_closest_from_intersections(ray, intersections),
+            GeoSurf::Flat { s } => s.get_closest_from_intersections(ray, intersections),
+            GeoSurf::SurfaceCombination { s } => s.get_closest_from_intersections(ray, intersections),
+        }
+    }
+    
+    fn get_normal(&self, intersection: &Point3<Length>) -> Vector3<Length> {
+        match self {
+            GeoSurf::Spherical { s, .. } => s.get_normal(intersection),
+            GeoSurf::Flat { s } => s.get_normal(intersection),
+            GeoSurf::SurfaceCombination { s } => s.get_normal(intersection),
         }
     }
 }

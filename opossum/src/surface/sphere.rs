@@ -161,6 +161,72 @@ impl GeoSurface for Sphere {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
+    
+    fn calc_intersections(&self, ray: &Ray) -> Vec<Point3<Length>> {
+        let mut intersection = Vec::<Point3<Length>>::with_capacity(2);
+
+        let transformed_ray = ray.inverse_transformed_ray(self.isometry());
+        let dir = transformed_ray.direction();
+        let pos = vector![
+            transformed_ray.position().x.value,
+            transformed_ray.position().y.value,
+            transformed_ray.position().z.value
+        ];
+        let radius = self.radius.value;
+        // sphere formula (at origin)
+        // x^2 + y^2 + z^2 = r^2
+        //
+        // insert ray (p: position, d: direction):
+        // (p_x+t*d_x)^2 + (p_y+t*d_y)^2 + (p_z+t*d_z)^2 - r^2 = 0
+        // This translates into the qudratic equation
+        // at^2 + bt + c = 0 with
+        // a = d_x^2 + d_y^2 + d_z^2
+        // b = 2 (d_x * p_x + d_y * p_y + d_z *p_z )
+        // c = p_x^2 + p_y^2 + p_z^2 - r^2
+        let a = dir.norm_squared();
+        let b = 2.0 * dir.z.mul_add(0.0, dir.dot(&pos));
+        let c = radius.mul_add(-radius, pos.norm_squared());
+        // Solve t of qudaratic equation
+        let roots = find_roots_quadratic(a, b, c);
+        match roots {
+            Roots::No(_) => (),
+            // "just touching" intersection
+            Roots::One(t) => {
+                if t[0] >= 0.0 {
+                    let new_pos = pos + t[0] * dir;
+                    intersection.push(meter!(new_pos.x, new_pos.y, new_pos.z));
+            };
+        }
+            // "regular" intersection
+            Roots::Two(t) => {
+                //only take the positive t's --> in direction of the ray
+                Iterator::map(t.iter().filter(|t| t.is_sign_positive()), |t|{
+                    let new_pos = pos + *t * dir;
+                    intersection.push(meter!(new_pos.x, new_pos.y, new_pos.z));
+                });
+            }
+            _ => unreachable!(),
+        };    
+        self.isometry.transform_points(&intersection)
+    }
+    
+    fn get_closest_from_intersections(&self, ray:&Ray, intersections: &Vec<Point3<Length>>) -> Point3<Length> {
+        let (index, _) = intersections.iter().enumerate().fold((0, f64::INFINITY), |arg0, i|{
+            let dist_vec = i.1 - ray.position();
+            let dist = dist_vec.x*dist_vec.x + dist_vec.y*dist_vec.y+dist_vec.z*dist_vec.z;
+            if dist.value < arg0.1{
+                (i.0, dist.value)
+            }
+            else{
+                (arg0.0, arg0.1)
+            }
+        });
+        intersections[index]
+    }
+    
+    fn get_normal(&self, intersection: &Point3<Length>) -> Vector3<Length> {
+        intersection - self.isometry().transform_point(&meter!(0.,0.,0.))
+    }
 }
 
 impl Color for Sphere {

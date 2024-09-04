@@ -319,6 +319,53 @@ impl Isometry {
             .map(|p| self.inverse_transform_vector_f64(p))
             .collect::<Vec<Vector3<f64>>>()
     }
+    /// Transforms a single `Vector3<Length>` by the defined isometry
+    /// # Attributes
+    /// - `v`: Vector3 dfining a direction
+    /// # Returns
+    /// Returns the transformed `Vector3`
+    #[must_use]
+    pub fn transform_vector(&self, v: &Vector3<Length>) -> Vector3<Length> {
+        let v_in_m = Vector3::new(v.x.value, v.y.value, v.z.value);
+        let v_iso_trans = self.transform.transform_vector(&v_in_m);
+        vector!(meter!(v_iso_trans.x), meter!(v_iso_trans.y), meter!(v_iso_trans.z))    
+    
+    }
+    /// Transforms a vector of `Vector3<Length>` by the defined isometry
+    /// # Attributes
+    /// - `v_vec`: Vec of `Vector3`
+    /// # Returns
+    /// Returns the transformed `Vector3` as Vec
+    #[must_use]
+    pub fn transform_vectors(&self, v_vec: &[Vector3<Length>]) -> Vec<Vector3<Length>> {
+        v_vec
+            .iter()
+            .map(|p| self.transform_vector(p))
+            .collect::<Vec<Vector3<Length>>>()
+    }
+    /// Inverse transforms a single `Vector3<Length>` by the defined isometry
+    /// # Attributes
+    /// - `v`: `Vector3` defining a direction
+    /// # Returns
+    /// Returns the inverse-transformed `Vector3`
+    #[must_use]
+    pub fn inverse_transform_vector(&self, v: &Vector3<Length>) -> Vector3<Length> {
+        let v_in_m = Vector3::new(v.x.value, v.y.value, v.z.value);
+        let v_iso_trans = self.inverse.transform_vector(&v_in_m);
+        vector!(meter!(v_iso_trans.x), meter!(v_iso_trans.y), meter!(v_iso_trans.z))    
+    }
+    /// Inverse transforms a vector of `Vector3<Length>` by the defined isometry
+    /// # Attributes
+    /// - `v_vec`: Vec of `Vector3`
+    /// # Returns
+    /// Returns the inverse-transformed `Vector3` as Vec
+    #[must_use]
+    pub fn inverse_transform_vectors(&self, v_vec: &[Vector3<Length>]) -> Vec<Vector3<Length>> {
+        v_vec
+            .iter()
+            .map(|p| self.inverse_transform_vector(p))
+            .collect::<Vec<Vector3<Length>>>()
+    }
 }
 
 impl Display for Isometry {

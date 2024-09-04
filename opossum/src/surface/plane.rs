@@ -4,7 +4,7 @@
 
 use super::GeoSurface;
 use crate::{meter, physical_optic_component::SDF, ray::Ray, render::Render, utils::geom_transformation::Isometry};
-use nalgebra::{Point3, Vector3};
+use nalgebra::{vector, Point3, Vector3};
 use num::Zero;
 use uom::si::f64::Length;
 
@@ -48,6 +48,31 @@ impl GeoSurface for Plane {
     }
     fn isometry(&self) -> &Isometry {
         &self.isometry
+    }
+    
+    fn calc_intersections(&self, ray: &Ray) -> Vec<Point3<Length>> {
+        let mut intersection = Vec::<Point3<Length>>::with_capacity(1);
+        let transformed_ray = ray.inverse_transformed_ray(self.isometry());
+        let mut trans_pos_in_m = transformed_ray.position().map(|c| c.value);
+        let trans_dir = transformed_ray.direction();
+        // Check, if ray position is on the surface, then directly return position as intersection point
+        if !trans_pos_in_m.z.is_zero() {
+            let distance_in_z_direction = -trans_pos_in_m.z;
+            if distance_in_z_direction.signum() == trans_dir.z.signum() {
+                let length_in_ray_dir = distance_in_z_direction / trans_dir.z;
+                trans_pos_in_m += length_in_ray_dir * trans_dir;
+                intersection.push(meter!(trans_pos_in_m.x, trans_pos_in_m.y, trans_pos_in_m.z));
+            }
+        }
+        self.isometry.transform_points(&intersection)
+    }
+    
+    fn get_closest_from_intersections(&self, _ray:&Ray, intersections: &Vec<Point3<Length>>) -> Point3<Length> {
+        intersections[0]
+    }
+    
+    fn get_normal(&self, _intersection: &Point3<Length>) -> Vector3<Length> {
+        self.isometry().transform_vector(&vector![meter!(0.),meter!(0.),meter!(1.)])
     }
 }
 // impl Color for Plane {
