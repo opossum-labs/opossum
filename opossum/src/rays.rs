@@ -128,7 +128,7 @@ impl Rays {
                 rays.push(ray);
             }
         }
-        Ok(Self { rays })
+        Ok(Self { rays, node_history: None })
     }
 
     /// Generate a set of collimated rays (collinear with optical axis) with specified energy distribution and position distribution.

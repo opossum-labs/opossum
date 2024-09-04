@@ -55,7 +55,10 @@ impl Default for RayPropagationVisualizer {
         "plane to project the ray positions onto, defined by the normal vector. default: y-z plane", 
         None,
         Proptype::Vec3(Vector3::x())).unwrap();
-
+        node_attr.create_property("plot_aperture", 
+        "Decides whether the aPertures of optics are shown or not", 
+        None,
+        Proptype::Bool(false)).unwrap();
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();

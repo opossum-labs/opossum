@@ -147,7 +147,7 @@ fn main() {
     );
 
     let start = Instant::now();
-    let energy_vec1 = rays_vec2.iter().cloned().tree_reduce(|a, b| a + b); //sum_with_accumulator::<NaiveSum<f64>>();
+    let energy_vec1 = rays_vec2.iter().cloned().reduce(|a, b| a + b); //sum_with_accumulator::<NaiveSum<f64>>();
     let duration = start.elapsed();
     println!(
         "Time elapsed in pariwise itertools summation() is: {:?}",

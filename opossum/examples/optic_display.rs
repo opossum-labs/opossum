@@ -8,7 +8,7 @@ use opossum::{
     refractive_index::RefrIndexConst,
     render::{SDFCollection, SDFOperation},
     surface::{Cylinder, Sphere},
-    OpticScenery,
+    // OpticScenery,
 };
 use std::path::Path;
 
@@ -17,16 +17,17 @@ fn main() -> OpmResult<()> {
     let r2 = 2000.;
     let thickness = 8.;
     let diameter = 25.;
-    let cylinder = Cylinder::new(
-        millimeter!(100.),
-        millimeter!(diameter / 2.),
-        millimeter!(0., 0., 0.),
-        Vector3::z(),
-    )?;
-    let sphere1 =
-        Sphere::new_from_position(centimeter!(r1), centimeter!(-r1 + thickness / 20., 0., 0.))?;
-    let sphere2 =
-        Sphere::new_from_position(centimeter!(r2), centimeter!(r2 - thickness / 20., 0., 0.))?;
+    todo!();
+    // let cylinder = Cylinder::new(
+    //     millimeter!(100.),
+    //     millimeter!(diameter / 2.),
+    //     millimeter!(0., 0., 0.),
+    //     Vector3::z(),
+    // )?;
+    // let sphere1 =
+    //     Sphere::new_from_position(centimeter!(r1), centimeter!(-r1 + thickness / 20., 0., 0.))?;
+    // let sphere2 =
+    //     Sphere::new_from_position(centimeter!(r2), centimeter!(r2 - thickness / 20., 0., 0.))?;
 
     // let sdf_collection = SDFCollection::new(
     //     vec![&cylinder, &sphere1, &sphere2],
