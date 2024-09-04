@@ -11,7 +11,7 @@ use crate::{
     optic_ports::OpticPorts,
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
-    surface::{OpticalSurface, Plane, Sphere},
+    surface::{GeoSurf, OpticalSurface, Plane, Sphere},
 };
 use nalgebra::Point3;
 use num::Zero;
@@ -108,9 +108,9 @@ impl Optical for ThinMirror {
                     };
                     let reflected = if let Some(iso) = self.effective_iso() {
                         let mut surface = if roc.is_infinite() {
-                            OpticalSurface::new(Box::new(Plane::new(&iso)))
+                            OpticalSurface::new(GeoSurf::Flat{s: Plane::new(&iso)})
                         } else {
-                            OpticalSurface::new(Box::new(Sphere::new_at_position(roc.abs(), iso.transform_point(&Point3::new(Length::zero(), Length::zero(), *roc)))?))
+                            OpticalSurface::new(GeoSurf::Spherical{s: Sphere::new_at_position(roc.abs(), iso.transform_point(&Point3::new(Length::zero(), Length::zero(), *roc)))?})
                         };
                         surface.set_coating(
                             self.node_attr()

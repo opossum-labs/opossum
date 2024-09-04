@@ -6,7 +6,6 @@ use opossum::{
     nodes::{collimated_line_ray_source, Lens, RayPropagationVisualizer, SpotDiagram, Wedge},
     optical::Alignable,
     refractive_index::RefrIndexConst,
-    render::{SDFCollection, SDFOperation},
     surface::{Cylinder, Sphere},
     // OpticScenery,
 };

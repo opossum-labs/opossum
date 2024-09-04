@@ -16,7 +16,7 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
     reporter::NodeReport,
-    surface::{OpticalSurface, Plane},
+    surface::{GeoSurf, OpticalSurface, Plane},
 };
 use std::path::{Path, PathBuf};
 
@@ -90,7 +90,7 @@ impl Optical for FluenceDetector {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                let plane = OpticalSurface::new(GeoSurf::Flat{s: Plane::new(&iso)});
                 rays.refract_on_surface(&plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(

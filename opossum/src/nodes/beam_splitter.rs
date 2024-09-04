@@ -11,7 +11,7 @@ use crate::{
     ray::SplittingConfig,
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
-    surface::{OpticalSurface, Plane},
+    surface::{GeoSurf, OpticalSurface, Plane},
     utils::EnumProxy,
 };
 
@@ -192,7 +192,7 @@ impl BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
-                        let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                        let plane = OpticalSurface::new(GeoSurf::Flat{s: Plane::new(&iso)});
                         rays.refract_on_surface(&plane, None)?;
                     } else {
                         return Err(OpossumError::Analysis(
@@ -224,7 +224,7 @@ impl BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
-                        let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                        let plane = OpticalSurface::new(GeoSurf::Flat{s: Plane::new(&iso)});
                         rays.refract_on_surface(&plane, None)?;
                     } else {
                         return Err(OpossumError::Analysis(
@@ -325,7 +325,7 @@ impl Optical for BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
-                        let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                        let plane = OpticalSurface::new(GeoSurf::Flat{s: Plane::new(&iso)});
                         rays.refract_on_surface(&plane, None)?;
                     } else {
                         return Err(OpossumError::Analysis(

@@ -16,7 +16,7 @@ use crate::{
     joule, meter,
     nodes::FilterType,
     spectrum::Spectrum,
-    surface::{GeoSurface, OpticalSurface},
+    surface::{GeoSurf, GeoSurface, OpticalSurface},
     utils::geom_transformation::Isometry,
 };
 
@@ -319,7 +319,7 @@ impl Ray {
     /// This function panics if the diffraction order cannot be converted to f64
     pub fn diffract_on_periodic_surface(
         &mut self,
-        s: &dyn GeoSurface,
+        s: &GeoSurf,
         n2: f64,
         grating_vector: Vector3<f64>,
         diffraction_order: &i32,
@@ -981,7 +981,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let mut s = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&isometry)});
         s.set_coating(CoatingType::ConstantR { reflectivity });
         assert!(ray.refract_on_surface(&s, Some(0.9)).is_err());
         assert!(ray.refract_on_surface(&s, Some(f64::NAN)).is_err());
@@ -1032,7 +1032,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let s = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&isometry)});
         ray.refract_on_surface(&s, None).unwrap();
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
@@ -1055,7 +1055,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let s = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&isometry)});
         ray.refract_on_surface(&s, Some(1.5)).unwrap();
         assert_eq!(ray.pos, millimeter!(0., 0., 0.));
         assert_eq!(ray.dir, direction);
@@ -1077,7 +1077,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let s = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&isometry)});
         assert!(ray.refract_on_surface(&s, Some(0.9)).is_err());
         assert!(ray.refract_on_surface(&s, Some(f64::NAN)).is_err());
         assert!(ray.refract_on_surface(&s, Some(f64::INFINITY)).is_err());
@@ -1116,7 +1116,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let s = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&isometry)});
         let reflected = ray.refract_on_surface(&s, Some(1.0)).unwrap();
         assert!(reflected.is_none());
         assert_eq!(ray.pos, millimeter!(0., 20., 10.));

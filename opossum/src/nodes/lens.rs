@@ -12,7 +12,7 @@ use crate::{
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{OpticalSurface, Plane, Sphere},
+    surface::{GeoSurf, OpticalSurface, Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -253,9 +253,9 @@ impl Lens {
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
         let mut front_surf = if front_roc.is_infinite() {
-            OpticalSurface::new(Box::new(Plane::new(iso)))
+            OpticalSurface::new(GeoSurf::Flat{s:Plane::new(iso)})
         } else {
-            OpticalSurface::new(Box::new(Sphere::new_at_position(front_roc.abs(), iso.transform_point(&Point3::new(Length::zero(), Length::zero(), front_roc)))?))
+            OpticalSurface::new(GeoSurf::Spherical{s: Sphere::new_at_position(front_roc.abs(), iso.transform_point(&Point3::new(Length::zero(), Length::zero(), front_roc)))?})
         };
         front_surf.set_coating(
             self.node_attr()
@@ -267,9 +267,9 @@ impl Lens {
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
         let mut rear_surf = if rear_roc.is_infinite() {
-            OpticalSurface::new(Box::new(Plane::new(&isometry)))
+            OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&isometry)})
         } else {
-            OpticalSurface::new(Box::new(Sphere::new_at_position(rear_roc.abs(), isometry.transform_point(&Point3::new(Length::zero(), Length::zero(), rear_roc)))?))
+            OpticalSurface::new(GeoSurf::Spherical{s: Sphere::new_at_position(rear_roc.abs(), isometry.transform_point(&Point3::new(Length::zero(), Length::zero(), rear_roc)))?})
         };
         rear_surf.set_coating(
             self.node_attr()
@@ -313,9 +313,9 @@ impl Lens {
         let mut rays = incoming_rays;
 
         let mut front_surf = if front_roc.is_infinite() {
-            OpticalSurface::new(Box::new(Plane::new(iso)))
+            OpticalSurface::new(GeoSurf::Flat{s:Plane::new(iso)})
         } else {
-            OpticalSurface::new(Box::new(Sphere::new(front_roc, iso)?))
+            OpticalSurface::new(GeoSurf::Spherical{s: Sphere::new_at_position(front_roc.abs(), iso.transform_point(&Point3::new(Length::zero(), Length::zero(), front_roc)))?})
         };
         front_surf.set_coating(
             self.node_attr()
@@ -327,9 +327,9 @@ impl Lens {
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
         let mut rear_surf = if rear_roc.is_infinite() {
-            OpticalSurface::new(Box::new(Plane::new(&isometry)))
+            OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&isometry)})
         } else {
-            OpticalSurface::new(Box::new(Sphere::new(rear_roc, &isometry)?))
+            OpticalSurface::new(GeoSurf::Spherical{s: Sphere::new_at_position(rear_roc.abs(), isometry.transform_point(&Point3::new(Length::zero(), Length::zero(), rear_roc)))?})
         };
         rear_surf.set_coating(
             self.node_attr()

@@ -6,15 +6,16 @@ use roots::{find_roots_quadratic, Roots};
 use uom::si::f64::Length;
 
 use super::GeoSurface;
+use crate::physical_optic_component::SDF;
 use crate::{meter, radian};
 use crate::ray::Ray;
 use crate::utils::geom_transformation::Isometry;
 use crate::{
     error::{OpmResult, OpossumError},
-    render::{Color, Render, Renderable, SDF},
+    render::{Color, Render,},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A spherical surface with its anchor point on the optical axis.
 pub struct Cylinder {
     radius: Length,
@@ -74,7 +75,11 @@ impl Cylinder {
         })
     }
 }
-
+impl SDF for Cylinder {
+    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+        todo!()
+    }
+}
 impl GeoSurface for Cylinder {
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let dir = ray.direction();

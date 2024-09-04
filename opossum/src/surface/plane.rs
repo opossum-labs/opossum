@@ -3,7 +3,7 @@
 //! An infinitely large flat 2D surface oriented perpendicular to the optical axis (xy plane) and positioned a the given z position.
 
 use super::GeoSurface;
-use crate::{meter, ray::Ray, render::{Render, Renderable, SDF}, utils::geom_transformation::Isometry};
+use crate::{meter, physical_optic_component::SDF, ray::Ray, render::Render, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use num::Zero;
 use uom::si::f64::Length;
@@ -61,8 +61,8 @@ impl SDF for Plane {
         p_out.z
     }
 }
-impl Render<'_> for Plane {}
-impl Renderable<'_> for Plane {}
+// impl Render<'_> for Plane {}
+// impl Renderable<'_> for Plane {}
 #[cfg(test)]
 mod test {
     use super::*;

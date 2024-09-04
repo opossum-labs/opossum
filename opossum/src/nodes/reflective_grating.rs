@@ -14,7 +14,7 @@ use crate::{
     properties::Proptype,
     radian,
     refractive_index::refr_index_vaccuum,
-    surface::Plane,
+    surface::{GeoSurf, Plane},
 };
 use approx::relative_eq;
 use nalgebra::Vector3;
@@ -193,7 +193,7 @@ impl Optical for ReflectiveGrating {
                         let grating_vector =
                             2. * PI * line_density.value * iso.transform_vector_f64(&Vector3::x());
                         let mut diffracted_rays = rays.diffract_on_periodic_surface(
-                            &Plane::new(&iso),
+                            &GeoSurf::Flat{s:Plane::new(&iso)},
                             &refr_index_vaccuum(),
                             grating_vector,
                             diffraction_order,

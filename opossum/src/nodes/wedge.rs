@@ -10,7 +10,7 @@ use crate::{
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{OpticalSurface, Plane},
+    surface::{GeoSurf, OpticalSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use nalgebra::Point3;
@@ -123,14 +123,14 @@ impl Wedge {
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
-        let front_surf = OpticalSurface::new(Box::new(Plane::new(iso)));
+        let front_surf = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(iso)});
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let wedge_iso = Isometry::new(
             Point3::origin(),
             Point3::new(wedge, Angle::zero(), Angle::zero()),
         )?;
         let isometry = iso.append(&thickness_iso).append(&wedge_iso);
-        let rear_surf = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let rear_surf = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&isometry)});
         if let Some(aperture) = self.ports().input_aperture("front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -164,14 +164,14 @@ impl Wedge {
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
 
-        let front_surf = OpticalSurface::new(Box::new(Plane::new(iso)));
+        let front_surf = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(iso)});
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let wedge_iso = Isometry::new(
             Point3::origin(),
             Point3::new(wedge, Angle::zero(), Angle::zero()),
         )?;
         let isometry = iso.append(&thickness_iso).append(&wedge_iso);
-        let rear_surf = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let rear_surf = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&isometry)});
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {

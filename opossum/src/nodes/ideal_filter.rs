@@ -9,7 +9,7 @@ use crate::{
     optical::{LightResult, Optical},
     properties::Proptype,
     spectrum::Spectrum,
-    surface::{OpticalSurface, Plane},
+    surface::{GeoSurf, OpticalSurface, Plane},
     utils::EnumProxy,
 };
 use serde::{Deserialize, Serialize};
@@ -196,7 +196,7 @@ impl Optical for IdealFilter {
                 }
                 let mut rays = r.clone();
                 if let Some(iso) = self.effective_iso() {
-                    let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                    let mut plane = OpticalSurface::new(GeoSurf::Flat{s: Plane::new(&iso)});
                     plane.set_coating(self.ports().input_coating("front").unwrap().clone());
                     rays.refract_on_surface(&plane, None)?;
                 } else {

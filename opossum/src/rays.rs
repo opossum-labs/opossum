@@ -18,7 +18,7 @@ use crate::{
     refractive_index::RefractiveIndexType,
     spectral_distribution::SpectralDistribution,
     spectrum::Spectrum,
-    surface::{GeoSurface, OpticalSurface},
+    surface::{GeoSurf, GeoSurface, OpticalSurface},
     utils::{
         filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
         geom_transformation::Isometry,
@@ -733,7 +733,7 @@ impl Rays {
     /// This function only propagates errors of contained functions.
     pub fn diffract_on_periodic_surface(
         &mut self,
-        surface: &dyn GeoSurface,
+        surface: &GeoSurf,
         refractive_index: &RefractiveIndexType,
         grating_vector: Vector3<f64>,
         diffraction_order: &i32,
@@ -1677,7 +1677,7 @@ mod test {
         testing_logger::setup();
         let reflected = rays
             .refract_on_surface(
-                &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+                &OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&Isometry::identity())}),
                 Some(&refr_index_vaccuum()),
             )
             .unwrap();
@@ -1706,7 +1706,7 @@ mod test {
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         rays.refract_on_surface(
-            &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+            &OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&Isometry::identity())}),
             None,
         )
         .unwrap();
@@ -1724,7 +1724,7 @@ mod test {
         testing_logger::setup();
         let reflected = rays
             .refract_on_surface(
-                &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+                &OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&Isometry::identity())}),
                 Some(&refr_index_vaccuum()),
             )
             .unwrap();
@@ -1738,7 +1738,7 @@ mod test {
             Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
                 .unwrap(),
         );
-        let mut s = OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())));
+        let mut s = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(&Isometry::identity())});
         s.set_coating(CoatingType::ConstantR { reflectivity: 0.2 });
         let reflected = rays
             .refract_on_surface(&s, Some(&refr_index_vaccuum()))
@@ -1997,9 +1997,9 @@ mod test {
         )
         .unwrap();
 
-        let plane = OpticalSurface::new(Box::new(Plane::new(
+        let plane = OpticalSurface::new(GeoSurf::Flat{s:Plane::new(
             &Isometry::new_along_z(millimeter!(10.0)).unwrap(),
-        )));
+        )});
         rays.refract_on_surface(&plane, Some(&refr_index_vaccuum()))
             .unwrap();
         let wf_error =

@@ -52,6 +52,7 @@ pub mod reporter;
 pub mod spectrum;
 pub mod spectrum_helper;
 pub mod surface;
+pub mod physical_optic_component;
 pub mod utils;
 
 pub use opm_document::OpmDocument;

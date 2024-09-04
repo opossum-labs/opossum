@@ -6,15 +6,15 @@
 mod cylinder;
 mod plane;
 mod sphere;
-
 mod optical_surface;
+
 
 pub use cylinder::Cylinder;
 pub use optical_surface::OpticalSurface;
 pub use plane::Plane;
 pub use sphere::Sphere;
 
-use crate::{ray::Ray, render::{Color, Render, Renderable, SDFCollection, SDF}, utils::geom_transformation::Isometry};
+use crate::{physical_optic_component::{OpticalVolume, SDF}, ray::Ray, render::{Color, Render}, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use std::fmt::Debug;
 use uom::si::f64::Length;
@@ -23,7 +23,7 @@ use uom::si::f64::Length;
 ///
 /// A geomatric surface such as [`Plane`] or [`Sphere`] has to implement this trait in order to be used by the
 /// `ray.refract_on_surface` function.
-pub trait GeoSurface {
+pub trait GeoSurface: SDF + Clone {
     /// Calculate intersection point and its normal vector of a [`Ray`] with a [`GeoSurface`]
     ///
     /// This function returns `None` if the given ray does not intersect with the surface.
@@ -53,27 +53,64 @@ pub trait GeoSurface {
     fn set_isometry(&mut self, isometry: &Isometry);
 }
 
+
+/// Enum to hold various surface types.
+/// Each Surface type holds a surface primitive, e.g. a sphere, a cylinder, etc
 #[derive(Clone)]
-pub enum Surf{
-    Spherical{s: Sphere, convex: bool},
-    Flat{s: Plane},
+pub enum GeoSurf{
+    ///Spherical surface. Holds a [`Sphere`] and a a flag that defines whether this surface is to be used as convex or concave
+    Spherical{
+        /// surface: [`Sphere`]
+        s: Sphere
+    },
+    /// flat surface that holds a [`Plane`]
+    Flat{
+        /// surface: [`Plane`]
+        s: Plane},
     // Cylindrical{s: Cylinder, convex: bool},
-    SurfaceVolume{s: SDFCollection}
+    ///Surface combination that holds a [`SurfaceCombination`]
+    SurfaceCombination{
+        /// surface: [`SurfaceCombination`]
+        s: OpticalVolume}
 }
-impl SDF for Surf{
-    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
-        match self{
-            Surf::Spherical { s, convex } => s.sdf_eval_point(p),
-            Surf::Flat { s } => s.sdf_eval_point(p),
-            Surf::SurfaceVolume { s } => s.sdf_eval_point(p),
+
+
+impl GeoSurface for GeoSurf{
+    fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
+        todo!();
+        // self.get_surface().calc_intersect_and_normal(ray)
+    }
+
+    fn isometry(&self) -> &Isometry {
+        match self {
+            GeoSurf::Spherical { s, .. } => s.isometry(),
+            GeoSurf::Flat { s } => s.isometry(),
+            GeoSurf::SurfaceCombination { s } => s.isometry(),
+        }
+  }
+    fn set_isometry(&mut self, isometry: &Isometry) {
+        match self {
+            GeoSurf::Spherical { s, .. } => s.set_isometry(isometry),
+            GeoSurf::Flat { s } => s.set_isometry(isometry),
+            GeoSurf::SurfaceCombination { s } => s.set_isometry(isometry),
         }
     }
 }
-impl Render<'_> for Surf {}
-// impl Renderable<'_> for Surf {}
 
-impl Debug for dyn GeoSurface {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Surface")
+impl SDF for GeoSurf{
+    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+        match self{
+            GeoSurf::Spherical { s, .. } => s.sdf_eval_point(p),
+            GeoSurf::Flat { s } => s.sdf_eval_point(p),
+            GeoSurf::SurfaceCombination { s } => s.sdf_eval_point(p),
+        }
     }
 }
+// impl Render<'_> for Surf {}
+// impl Renderable<'_> for Surf {}
+
+// impl Debug for dyn GeoSurface {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "Surface")
+//     }
+// }
