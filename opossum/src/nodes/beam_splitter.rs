@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{DataEnergy, LightData},
@@ -10,9 +10,8 @@ use crate::{
     properties::Proptype,
     ray::SplittingConfig,
     rays::Rays,
-    refractive_index::refr_index_vaccuum,
     spectrum::{merge_spectra, Spectrum},
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
     utils::EnumProxy,
 };
 
@@ -55,7 +54,7 @@ impl Default for BeamSplitter {
         ports.create_input("input2").unwrap();
         ports.create_output("out1_trans1_refl2").unwrap();
         ports.create_output("out2_trans2_refl1").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self { node_attr }
     }
 }
@@ -149,7 +148,7 @@ impl BeamSplitter {
         }
     }
     fn analyze_energy(
-        &mut self,
+        &self,
         in1: Option<&LightData>,
         in2: Option<&LightData>,
     ) -> OpmResult<(Option<LightData>, Option<LightData>)> {
@@ -173,7 +172,7 @@ impl BeamSplitter {
         Ok((out1_data, out2_data))
     }
     fn analyze_raytrace(
-        &mut self,
+        &self,
         in1: Option<&LightData>,
         in2: Option<&LightData>,
         analyzer_type: &AnalyzerType,
@@ -193,8 +192,8 @@ impl BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
-                        let plane = Plane::new(&iso);
-                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                        let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                        rays.refract_on_surface(&plane, None)?;
                     } else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
@@ -225,8 +224,8 @@ impl BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
-                        let plane = Plane::new(&iso);
-                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                        let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                        rays.refract_on_surface(&plane, None)?;
                     } else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
@@ -293,6 +292,11 @@ impl Optical for BeamSplitter {
         let (out1_data, out2_data) = match analyzer_type {
             AnalyzerType::Energy => self.analyze_energy(in1, in2)?,
             AnalyzerType::RayTrace(_) => self.analyze_raytrace(in1, in2, analyzer_type)?,
+            _ => {
+                return Err(OpossumError::Analysis(
+                    "analysis mode not yet implemented for beam splitter".into(),
+                ))
+            }
         };
         if out1_data.is_some() && out2_data.is_some() {
             let (target1, target2) = if self.inverted() {
@@ -321,8 +325,8 @@ impl Optical for BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(iso) = self.effective_iso() {
-                        let plane = Plane::new(&iso);
-                        rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                        let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                        rays.refract_on_surface(&plane, None)?;
                     } else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
@@ -370,8 +374,9 @@ impl Dottable for BeamSplitter {
 mod test {
     use super::*;
     use crate::{
-        analyzer::RayTraceConfig, joule, millimeter, nanometer, nodes::test_helper::test_helper::*,
-        ray::Ray, spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
+        analyzers::RayTraceConfig, joule, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, ray::Ray, spectrum_helper::create_he_ne_spec,
+        utils::geom_transformation::Isometry,
     };
     use approx::{assert_abs_diff_eq, AbsDiffEq};
     use uom::si::energy::joule;

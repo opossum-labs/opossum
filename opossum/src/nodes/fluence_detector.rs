@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -15,9 +15,8 @@ use crate::{
     optical::{LightResult, Optical},
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
-    refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
 };
 use std::path::{Path, PathBuf};
 
@@ -54,7 +53,7 @@ impl Default for FluenceDetector {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self {
             light_data: None,
             node_attr,
@@ -91,8 +90,8 @@ impl Optical for FluenceDetector {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = Plane::new(&iso);
-                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                rays.refract_on_surface(&plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
@@ -212,7 +211,7 @@ impl Optical for FluenceDetector {
 
 impl Dottable for FluenceDetector {
     fn node_color(&self) -> &str {
-        "lightpurple"
+        "hotpink"
     }
 }
 
@@ -290,7 +289,7 @@ impl FluenceData {
         self.y_data.len()
     }
 
-    /// Returns the peak fluence value
+    /// Returns the shape of the interpolation distribution in pixels
     #[must_use]
     pub fn shape(&self) -> (usize, usize) {
         self.interp_distribution.shape()
@@ -312,7 +311,11 @@ impl Plottable for FluenceData {
         PlotType::ColorMesh(plt_params.clone())
     }
 
-    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        plt_type: &mut PlotType,
+        _legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let (nrows, ncols) = self.interp_distribution.shape();
 
         match plt_type {
@@ -350,7 +353,7 @@ impl Plottable for FluenceData {
 mod test {
     use super::*;
     use crate::{
-        analyzer::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
+        analyzers::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
         nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
@@ -365,7 +368,7 @@ mod test {
         assert_eq!(node.node_type(), "fluence detector");
         assert_eq!(node.is_detector(), true);
         assert_eq!(node.inverted(), false);
-        assert_eq!(node.node_color(), "lightpurple");
+        assert_eq!(node.node_color(), "hotpink");
         assert!(node.as_group().is_err());
     }
     #[test]

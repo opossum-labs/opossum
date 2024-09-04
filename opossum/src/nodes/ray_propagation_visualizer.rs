@@ -11,7 +11,7 @@ use uom::si::{
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -21,9 +21,8 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
     rays::Rays,
-    refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
 };
 use std::path::{Path, PathBuf};
 
@@ -52,10 +51,15 @@ impl Default for RayPropagationVisualizer {
     /// create a spot-diagram monitor.
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("ray propagation");
+        node_attr.create_property("view_direction", 
+        "plane to project the ray positions onto, defined by the normal vector. default: y-z plane", 
+        None,
+        Proptype::Vec3(Vector3::x())).unwrap();
+
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self {
             light_data: None,
             node_attr,
@@ -67,14 +71,22 @@ impl RayPropagationVisualizer {
     /// Creates a new [`RayPropagationVisualizer`].
     /// # Attributes
     /// * `name`: name of the `RayPropagationVisualizer`
-    #[must_use]
-    pub fn new(name: &str) -> Self {
+    /// # Errors
+    /// This function errors if the properties `view_direction` can not be set
+    pub fn new(name: &str, view_normal_vector: Option<Vector3<f64>>) -> OpmResult<Self> {
         let mut rpv = Self::default();
         rpv.node_attr.set_name(name);
         rpv.node_attr
             .set_property("plot_aperture", true.into())
             .unwrap();
-        rpv
+        if let Some(view_vec) = view_normal_vector {
+            rpv.node_attr
+                .set_property("view_direction", Proptype::Vec3(view_vec))?;
+        } else {
+            rpv.node_attr
+                .set_property("view_direction", Proptype::Vec3(Vector3::x()))?;
+        }
+        Ok(rpv)
     }
 }
 impl Optical for RayPropagationVisualizer {
@@ -94,8 +106,8 @@ impl Optical for RayPropagationVisualizer {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = Plane::new(&iso);
-                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                rays.refract_on_surface(&plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
@@ -136,7 +148,15 @@ impl Optical for RayPropagationVisualizer {
     fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
         if self.light_data.is_some() {
             if let Some(LightData::Geometric(rays)) = &self.light_data {
-                let ray_prop_data = rays.get_rays_position_history()?;
+                let mut ray_prop_data = rays.get_rays_position_history()?;
+                if let Ok(Proptype::Vec3(plot_view_direction)) =
+                    self.node_attr.get_property("view_direction")
+                {
+                    ray_prop_data.plot_view_direction = Some(*plot_view_direction);
+                } else {
+                    warn!("could not read 'view_direction' property. defaulted to yz-plane");
+                    ray_prop_data.plot_view_direction = Some(Vector3::x());
+                };
 
                 let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
                     "ray_propagation_{}_{}.svg",
@@ -144,17 +164,13 @@ impl Optical for RayPropagationVisualizer {
                     uuid
                 )));
                 ray_prop_data.to_plot(&file_path, PltBackEnd::SVG)?;
-                Ok(())
             } else {
-                Err(OpossumError::Other(
-                    "ray-propagation visualizer: wrong light data".into(),
-                ))
+                warn!("ray-propagation visualizer: wrong light data. Cannot create plot!");
             }
         } else {
-            Err(OpossumError::Other(
-                "ray-propagation visualizer: no light data for export available".into(),
-            ))
+            warn!("ray-propagation visualizer: no light data for export available. Cannot create plot!");
         }
+        Ok(())
     }
     fn is_detector(&self) -> bool {
         true
@@ -219,6 +235,7 @@ impl RayPositionHistorySpectrum {
     /// - `history`: position history of the ray bundle
     /// - `center_wavelength`: wavelength of this ray bundle
     /// - `wavelength_bin_size`: wavelength resolution of this ray bundle.
+    ///
     /// All rays positions in this struct correspond to rays with a wavelength in the bin:
     /// [`center_wavelength` - `wavelength_bin_size/2`; `center_wavelength` + `wavelength_bin_size/2`)
     /// # Errors
@@ -327,8 +344,10 @@ impl RayPositionHistorySpectrum {
 /// struct that holds the history of the ray positions that is needed for report generation
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPositionHistories {
-    /// vector of ray positions for each raybundle at a specifc sptracl position
+    /// vector of ray positions for each raybundle at a specifc spectral position
     pub rays_pos_history: Vec<RayPositionHistorySpectrum>,
+    /// view direction if the rayposition thistory is plotted
+    pub plot_view_direction: Option<Vector3<f64>>,
 }
 
 impl RayPositionHistories {
@@ -348,7 +367,8 @@ impl Plottable for RayPositionHistories {
             .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?
             .set(&PlotArgs::PlotSize((1200, 1200)))?
             .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotAutoSize(true))?;
+            .set(&PlotArgs::PlotAutoSize(true))?
+            .set(&PlotArgs::Legend(false))?;
         Ok(())
     }
 
@@ -356,7 +376,11 @@ impl Plottable for RayPositionHistories {
         PlotType::MultiLine2D(plt_params.clone())
     }
 
-    fn get_plot_series(&self, _plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        _plt_type: &mut PlotType,
+        legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         if self.rays_pos_history.is_empty() {
             Ok(None)
         } else {
@@ -378,11 +402,15 @@ impl Plottable for RayPositionHistories {
                 (wavelengths[num_series - 1] - wavelengths[0]) * 2.
             };
 
+            let Some(plot_view_direction) = self.plot_view_direction else {
+                return Err(OpossumError::Other("cannot get plot series for raypropagationvisualizer, plot_view_direction not defined".into()));
+            };
+
             for ray_pos_hist in &self.rays_pos_history {
                 let wvl = ray_pos_hist.get_center_wavelength().get::<nanometer>();
                 let grad_val = 0.42 + (wvl - wavelengths[0]) / wvl_range;
                 let rgbcolor = color_grad.eval_continuous(grad_val);
-                let projected_positions = ray_pos_hist.project_to_plane(Vector3::x())?;
+                let projected_positions = ray_pos_hist.project_to_plane(plot_view_direction)?;
                 let mut proj_pos_mm =
                     Vec::<MatrixXx2<f64>>::with_capacity(projected_positions.len());
                 for ray_pos in &projected_positions {
@@ -397,11 +425,16 @@ impl Plottable for RayPositionHistories {
                 let plt_data = PlotData::MultiDim2 {
                     vec_of_xy_data: proj_pos_mm,
                 };
-                let series_label = format!("{wvl:.1} nm");
+
+                let series_label = if legend {
+                    Some(format!("{wvl:.1} nm"))
+                } else {
+                    None
+                };
                 plt_series.push(PlotSeries::new(
                     &plt_data,
                     RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.),
-                    Some(series_label),
+                    series_label,
                 ));
             }
 
@@ -413,8 +446,10 @@ impl Plottable for RayPositionHistories {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::spectrum::Spectrum;
+    use crate::utils::test_helper::test_helper::check_warnings;
     use crate::{
-        analyzer::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
+        analyzers::AnalyzerType, joule, lightdata::DataEnergy, millimeter, nanometer,
         nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
@@ -436,7 +471,7 @@ mod test {
     }
     #[test]
     fn new() {
-        let meter = RayPropagationVisualizer::new("test");
+        let meter = RayPropagationVisualizer::new("test", None).unwrap();
         assert_eq!(meter.name(), "test");
         assert!(meter.light_data.is_none());
     }
@@ -514,8 +549,19 @@ mod test {
     }
     #[test]
     fn export_data() {
+        testing_logger::setup();
         let mut rpv = RayPropagationVisualizer::default();
-        assert!(rpv.export_data(Path::new(""), "").is_err());
+        assert!(rpv.export_data(Path::new(""), "").is_ok());
+        check_warnings(vec![
+            "ray-propagation visualizer: no light data for export available. Cannot create plot!",
+        ]);
+        rpv.light_data = Some(LightData::Energy(DataEnergy {
+            spectrum: Spectrum::new(nanometer!(1000.)..nanometer!(1100.), nanometer!(1.)).unwrap(),
+        }));
+        assert!(rpv.export_data(Path::new(""), "").is_ok());
+        check_warnings(vec![
+            "ray-propagation visualizer: wrong light data. Cannot create plot!",
+        ]);
         rpv.light_data = Some(LightData::Geometric(Rays::default()));
         let path = NamedTempFile::new().unwrap();
         assert!(rpv.export_data(path.path().parent().unwrap(), "").is_err());

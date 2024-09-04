@@ -1,0 +1,113 @@
+use opossum::{
+    centimeter, degree,
+    error::OpmResult,
+    millimeter,
+    nodes::{Lens, NodeGroup, NodeReference, ReflectiveGrating, ThinMirror},
+    num_per_mm,
+    optical::{Alignable, Optical},
+    refractive_index::RefractiveIndex,
+};
+use uom::si::f64::Length;
+
+pub fn folded_martinez_longer_f(
+    telescope_distance: Length,
+    refr_index: &dyn RefractiveIndex,
+    alignment_wvl: Length,
+) -> OpmResult<NodeGroup> {
+    //////////////////////////////////////////
+    //       FoldedMartinez Stretcher       //
+    //////////////////////////////////////////
+    let mut cb = NodeGroup::new("Martinez stretcher");
+
+    let i_g1 = cb.add_node(
+        ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
+            .with_rot_from_littrow(alignment_wvl, degree!(-4.))?,
+    )?;
+    // focal length = 996.7 mm (Thorlabs LA1779-B)
+    let lens1 = cb.add_node(
+        Lens::new(
+            "Lens 1",
+            millimeter!(1250.),
+            millimeter!(f64::INFINITY),
+            millimeter!(4.),
+            refr_index,
+        )?
+        .with_decenter(centimeter!(0., 0., 0.))?,
+    )?;
+
+    let mir_1 = cb
+        .add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance))?;
+    let mir_1_ref = cb.add_node(NodeReference::from_node(&cb.node(mir_1)?))?;
+    let mut lens_1_ref1 = NodeReference::from_node(&cb.node(lens1)?);
+    lens_1_ref1.set_inverted(true)?;
+    let lens_1_ref1 = cb.add_node(lens_1_ref1)?;
+    let lens_1_ref2 = cb.add_node(NodeReference::from_node(&cb.node(lens1)?))?;
+    let mut lens_1_ref3 = NodeReference::from_node(&cb.node(lens1)?);
+    lens_1_ref3.set_inverted(true)?;
+    let lens_1_ref3 = cb.add_node(lens_1_ref3)?;
+    let g1ref1 = cb.add_node(NodeReference::from_node(&cb.node(i_g1)?))?;
+    let g1ref2 = cb.add_node(NodeReference::from_node(&cb.node(i_g1)?))?;
+    let g1ref3 = cb.add_node(NodeReference::from_node(&cb.node(i_g1)?))?;
+    let retro_mir1 = cb.add_node(ThinMirror::new("retro_mir1"))?;
+    // let retro_mir1 =
+    //     cb.add_node(ThinMirror::new("retro_mir1").with_tilt(degree!(-45., 0., 0.))?)?;
+    // let retro_mir2 =
+    //     cb.add_node(ThinMirror::new("retro_mir2").with_tilt(degree!(-45., 0., 0.))?)?;
+
+    //first grating pass up to 0° mirror
+    cb.connect_nodes(
+        i_g1,
+        "diffracted",
+        lens1,
+        "front",
+        telescope_distance - millimeter!(200.),
+    )?;
+    cb.connect_nodes(lens1, "rear", mir_1, "input", millimeter!(100.0))?;
+
+    //second grating pass pass up to rooftop mirror
+    cb.connect_nodes(mir_1, "reflected", lens_1_ref1, "rear", millimeter!(100.0))?;
+    cb.connect_nodes(lens_1_ref1, "front", g1ref1, "input", millimeter!(100.0))?;
+    cb.connect_nodes(
+        g1ref1,
+        "diffracted",
+        retro_mir1,
+        "input",
+        telescope_distance,
+    )?;
+    cb.connect_nodes(retro_mir1, "reflected", g1ref2, "input", millimeter!(10.0))?;
+
+    // cb.connect_nodes(
+    //     retro_mir1,
+    //     "reflected",
+    //     retro_mir2,
+    //     "input",
+    //     millimeter!(5.0),
+    // )?;
+    // cb.connect_nodes(retro_mir2, "reflected", g1ref2, "input", millimeter!(10.0))?;
+
+    //third grating pass pass up to 0° mirror
+    cb.connect_nodes(
+        g1ref2,
+        "diffracted",
+        lens_1_ref2,
+        "front",
+        millimeter!(1500.0),
+    )?;
+    cb.connect_nodes(lens_1_ref2, "rear", mir_1_ref, "input", millimeter!(100.0))?;
+
+    //fourth grating pass up to last grating interaction
+    cb.connect_nodes(
+        mir_1_ref,
+        "reflected",
+        lens_1_ref3,
+        "rear",
+        millimeter!(100.0),
+    )?;
+    cb.connect_nodes(lens_1_ref3, "front", g1ref3, "input", millimeter!(100.0))?;
+
+    cb.map_input_port(i_g1, "input", "input")?;
+    // cb.map_output_port(lens_1_ref1, "front", "output")?;
+    cb.map_output_port(g1ref3, "diffracted", "output")?;
+
+    Ok(cb)
+}

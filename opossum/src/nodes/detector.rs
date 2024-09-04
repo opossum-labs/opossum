@@ -1,14 +1,13 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     optic_ports::OpticPorts,
     optical::{LightResult, Optical},
-    refractive_index::refr_index_vaccuum,
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
 };
 use log::warn;
 use std::fmt::Debug;
@@ -40,7 +39,7 @@ impl Default for Detector {
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
         let mut node_attr = NodeAttr::new("detector");
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self {
             light_data: Option::default(),
             node_attr,
@@ -81,8 +80,8 @@ impl Optical for Detector {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = Plane::new(&iso);
-                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                rays.refract_on_surface(&plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
@@ -143,7 +142,7 @@ impl Dottable for Detector {
 #[cfg(test)]
 mod test {
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
+        analyzers::AnalyzerType, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
         spectrum_helper::create_he_ne_spec,
     };
 

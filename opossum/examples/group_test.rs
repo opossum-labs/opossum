@@ -1,4 +1,5 @@
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     degree,
     error::OpmResult,
     joule, millimeter,
@@ -7,17 +8,17 @@ use opossum::{
         ThinMirror,
     },
     optical::Alignable,
-    OpticScenery,
+    OpmDocument,
 };
 use std::path::Path;
 fn main() -> OpmResult<()> {
-    let mut scenery = OpticScenery::default();
+    let mut scenery = NodeGroup::new("group test");
 
     let i_src = scenery.add_node(collimated_line_ray_source(
         millimeter!(20.0),
         joule!(1.0),
         6,
-    )?);
+    )?)?;
     let mut group1 = NodeGroup::new("group 1");
     group1.set_expand_view(true)?;
     let i_g1_l = group1.add_node(Lens::default())?;
@@ -35,16 +36,17 @@ fn main() -> OpmResult<()> {
     group1.map_output_port(i_g1_bs, "out2_trans2_refl1", "output1")?;
     group1.map_output_port(i_g1_m, "reflected", "output2")?;
 
-    let scene_g1 = scenery.add_node(group1);
+    let scene_g1 = scenery.add_node(group1)?;
 
     scenery.connect_nodes(i_src, "out1", scene_g1, "input", millimeter!(50.0))?;
 
-    let i_prop1 = scenery.add_node(RayPropagationVisualizer::new("direct"));
-    let i_prop2 = scenery.add_node(RayPropagationVisualizer::new("mirrored"));
+    let i_prop1 = scenery.add_node(RayPropagationVisualizer::new("direct", None)?)?;
+    let i_prop2 = scenery.add_node(RayPropagationVisualizer::new("mirrored", None)?)?;
 
     scenery.connect_nodes(scene_g1, "output1", i_prop1, "in1", millimeter!(100.0))?;
     scenery.connect_nodes(scene_g1, "output2", i_prop2, "in1", millimeter!(150.0))?;
 
-    scenery.save_to_file(Path::new("./opossum/playground/group_test.opm"))?;
-    Ok(())
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/group_test.opm"))
 }

@@ -5,7 +5,7 @@ use uom::si::length::nanometer;
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -14,9 +14,8 @@ use crate::{
     optical::{LightResult, Optical},
     plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
-    refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
 };
 use std::{
     fmt::{Debug, Display},
@@ -64,8 +63,8 @@ impl From<Spectrometer> for Proptype {
 ///
 /// ## Properties
 ///   - `name`
-///   - `spectrometer type
-/// `
+///   - `spectrometer type`
+///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 #[derive(Serialize, Deserialize, Clone)]
@@ -89,7 +88,7 @@ impl Default for Spectrometer {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self {
             light_data: None,
             node_attr,
@@ -166,8 +165,8 @@ impl Optical for Spectrometer {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = Plane::new(&iso);
-                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                rays.refract_on_surface(&plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
@@ -311,13 +310,17 @@ impl Plottable for Spectrometer {
         PlotType::Line2D(plt_params.clone())
     }
 
-    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        plt_type: &mut PlotType,
+        legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = &self.light_data;
         match data {
             Some(LightData::Geometric(rays)) => rays
                 .to_spectrum(&nanometer!(0.2))?
-                .get_plot_series(plt_type),
-            Some(LightData::Energy(e)) => e.spectrum.get_plot_series(plt_type),
+                .get_plot_series(plt_type, legend),
+            Some(LightData::Energy(e)) => e.spectrum.get_plot_series(plt_type, legend),
             _ => Ok(None),
         }
     }
@@ -327,7 +330,7 @@ impl Plottable for Spectrometer {
 mod test {
     use super::*;
     use crate::{
-        analyzer::AnalyzerType,
+        analyzers::AnalyzerType,
         joule,
         lightdata::DataEnergy,
         nodes::{test_helper::test_helper::*, EnergyMeter},

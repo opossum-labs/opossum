@@ -4,11 +4,15 @@ attributes:
   alignment: null
   isometry: null
   name: test123
-  apertures:
+  ports:
     inputs:
-      front: None
+      front: 
+        aperture: None
+        coating: Fresnel
     outputs:
-      rear: None
+      rear:
+        aperture: None
+        coating: Fresnel
   inverted: false
   props:
       

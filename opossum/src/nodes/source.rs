@@ -1,13 +1,19 @@
 #![warn(missing_docs)]
+use log::warn;
+use uom::si::f64::Length;
+
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzer::{AnalyzerType, RayTraceConfig},
+    analyzers::{AnalyzerType, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    joule,
     lightdata::LightData,
+    millimeter,
     optic_ports::OpticPorts,
     optical::{Alignable, LightResult, Optical},
     properties::Proptype,
+    ray::Ray,
     rays::Rays,
     utils::EnumProxy,
 };
@@ -15,7 +21,8 @@ use std::fmt::Debug;
 
 /// A general light source
 ///
-/// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first nodes of an [`OpticScenery`](crate::OpticScenery).
+/// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first
+/// nodes of a [`NodeGroup`](crate::nodes::NodeGroup).
 ///
 /// ## Optical Ports
 ///   - Inputs
@@ -28,6 +35,7 @@ use std::fmt::Debug;
 ///   - `light data`
 ///
 /// **Note**: This node does not have the `inverted` property since it has only one output port.
+#[derive(Clone)]
 pub struct Source {
     node_attr: NodeAttr,
 }
@@ -42,9 +50,19 @@ impl Default for Source {
                 EnumProxy::<Option<LightData>> { value: None }.into(),
             )
             .unwrap();
+
+        node_attr
+            .create_property(
+                "alignment wavelength",
+                "wavelength to be used for alignment. Necessary for, e.g., grating alignments",
+                None,
+                Proptype::LengthOption(None),
+            )
+            .unwrap();
+
         let mut ports = OpticPorts::new();
         ports.create_output("out1").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self { node_attr }
     }
 }
@@ -81,6 +99,16 @@ impl Source {
             )
             .unwrap();
         source
+    }
+
+    /// Sets the alignment wavelength for an optical scenery
+    /// This function is useful, or example, when aligning grating setups that should be analyzed with a given spectrum,
+    /// but should be positioned to be ideal for a certain wavelength
+    /// # Errors
+    /// This function only propagates the errors of the contained functions
+    pub fn set_alignment_wavelength(&mut self, wvl: Length) -> OpmResult<()> {
+        self.node_attr
+            .set_property("alignment wavelength", Proptype::LengthOption(Some(wvl)))
     }
 
     /// Sets the light data of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
@@ -159,7 +187,14 @@ impl Optical for Source {
         let mut new_outgoing_edges = LightResult::new();
         for outgoing_edge in &outgoing_edges {
             if let LightData::Geometric(rays) = outgoing_edge.1 {
-                let mut axis_ray = rays.get_optical_axis_ray()?;
+                let mut axis_ray = if let Ok(Proptype::LengthOption(Some(alignment_wvl))) =
+                    self.node_attr.get_property("alignment wavelength")
+                {
+                    Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), *alignment_wvl, joule!(1.0))
+                } else {
+                    warn!("No alignment wavelength defined, using energy-weighted central wavelength for alignment");
+                    rays.get_optical_axis_ray()
+                }?;
                 if let Some(iso) = self.effective_iso() {
                     axis_ray = axis_ray.transformed_ray(&iso);
                 }
@@ -208,7 +243,7 @@ impl Dottable for Source {
 mod test {
     use super::*;
     use crate::{
-        analyzer::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
+        analyzers::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
     };
     use assert_matches::assert_matches;
 

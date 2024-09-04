@@ -365,6 +365,7 @@ impl Spectrum {
         let mut bucket_upper = bucket_interval.unwrap()[1];
         let mut bucket_idx: usize = 0;
         self.data[bucket_idx].1 = 0.0;
+        #[allow(clippy::while_float)]
         while src_upper < bucket_lower {
             if let Some(src_interval) = src_it.next() {
                 src_lower = src_interval[0].0;
@@ -469,7 +470,11 @@ impl Spectrum {
 }
 
 impl Plottable for Spectrum {
-    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        plt_type: &mut PlotType,
+        _legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = self.data.clone();
         let mut spec_mat = MatrixXx2::zeros(data.len());
         for (i, s) in data.iter().enumerate() {

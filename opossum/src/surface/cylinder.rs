@@ -1,7 +1,10 @@
-use approx::relative_eq;
-use nalgebra::{Point3, Vector2, Vector3};
-use uom::si::f64::Length;
-
+//! Spherical surface
+//!
+//! This module implements a cylindrical surface with a given radius of curvature and a given position / alignment in 3D space.
+use super::GeoSurface;
+use crate::radian;
+use crate::ray::Ray;
+use crate::utils::geom_transformation::Isometry;
 use crate::{
     error::{OpmResult, OpossumError},
     render::{Color, Render, Renderable, SDF},
@@ -74,7 +77,7 @@ impl Cylinder {
     }
 }
 
-impl Surface for Cylinder {
+impl GeoSurface for Cylinder {
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let dir = ray.direction();
         let pos = vector![

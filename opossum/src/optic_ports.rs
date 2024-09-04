@@ -18,7 +18,9 @@
 //! ```
 use crate::{
     aperture::Aperture,
+    coatings::CoatingType,
     error::{OpmResult, OpossumError},
+    optic_port::OpticPort,
     properties::Proptype,
 };
 use serde::{Deserialize, Serialize};
@@ -27,8 +29,8 @@ use std::{collections::BTreeMap, fmt::Display};
 /// Structure defining the optical ports (input / output terminals) of an [`Optical`](crate::optical::Optical).
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct OpticPorts {
-    inputs: BTreeMap<String, Aperture>,
-    outputs: BTreeMap<String, Aperture>,
+    inputs: BTreeMap<String, OpticPort>,
+    outputs: BTreeMap<String, OpticPort>,
     #[serde(skip)]
     inverted: bool,
 }
@@ -71,7 +73,7 @@ impl OpticPorts {
     }
     /// Returns a reference to the input ports of this [`OpticPorts`].
     #[must_use]
-    pub const fn inputs(&self) -> &BTreeMap<String, Aperture> {
+    pub const fn inputs(&self) -> &BTreeMap<String, OpticPort> {
         if self.inverted {
             &self.outputs
         } else {
@@ -80,7 +82,7 @@ impl OpticPorts {
     }
     /// Returns a reference to the output ports of this [`OpticPorts`].
     #[must_use]
-    pub const fn outputs(&self) -> &BTreeMap<String, Aperture> {
+    pub const fn outputs(&self) -> &BTreeMap<String, OpticPort> {
         if self.inverted {
             &self.inputs
         } else {
@@ -95,7 +97,11 @@ impl OpticPorts {
     ///
     /// This function will return an error if the input port name already exists.
     pub fn create_input(&mut self, name: &str) -> OpmResult<()> {
-        if self.inputs.insert(name.into(), Aperture::None).is_none() {
+        if self
+            .inputs
+            .insert(name.into(), OpticPort::default())
+            .is_none()
+        {
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -111,7 +117,11 @@ impl OpticPorts {
     ///
     /// This function will return an error if the output port name already exists.
     pub fn create_output(&mut self, name: &str) -> OpmResult<()> {
-        if self.outputs.insert(name.into(), Aperture::None).is_none() {
+        if self
+            .outputs
+            .insert(name.into(), OpticPort::default())
+            .is_none()
+        {
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -127,15 +137,17 @@ impl OpticPorts {
     ///
     /// This function will return an error if the port name does not exist.
     pub fn set_input_aperture(&mut self, port_name: &str, aperture: &Aperture) -> OpmResult<()> {
-        if self.inputs.contains_key(port_name) {
-            self.inputs
-                .insert(port_name.to_owned(), (*aperture).clone());
-            Ok(())
-        } else {
-            Err(OpossumError::OpticPort(format!(
-                "input port <{port_name}> does not exist",
-            )))
-        }
+        self.inputs.get_mut(port_name).map_or_else(
+            || {
+                Err(OpossumError::OpticPort(format!(
+                    "input port <{port_name}> does not exist",
+                )))
+            },
+            |optic_port| {
+                optic_port.set_aperture(aperture.clone());
+                Ok(())
+            },
+        )
     }
     /// Sets the aperture of an output port with the given name.
     ///
@@ -145,15 +157,57 @@ impl OpticPorts {
     ///
     /// This function will return an error if the port name does not exist.
     pub fn set_output_aperture(&mut self, port_name: &str, aperture: &Aperture) -> OpmResult<()> {
-        if self.outputs.contains_key(port_name) {
-            self.outputs
-                .insert(port_name.to_owned(), (*aperture).clone());
-            Ok(())
-        } else {
-            Err(OpossumError::OpticPort(format!(
-                "output port <{port_name}> does not exist"
-            )))
-        }
+        self.outputs.get_mut(port_name).map_or_else(
+            || {
+                Err(OpossumError::OpticPort(format!(
+                    "output port <{port_name}> does not exist",
+                )))
+            },
+            |optic_port| {
+                optic_port.set_aperture(aperture.clone());
+                Ok(())
+            },
+        )
+    }
+    /// Sets the coating of an input port with the given name.
+    ///
+    /// The port must have already been created before.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the port name does not exist.
+    pub fn set_input_coating(&mut self, port_name: &str, coating: &CoatingType) -> OpmResult<()> {
+        self.inputs.get_mut(port_name).map_or_else(
+            || {
+                Err(OpossumError::OpticPort(format!(
+                    "input port <{port_name}> does not exist",
+                )))
+            },
+            |optic_port| {
+                optic_port.set_coating(coating.clone());
+                Ok(())
+            },
+        )
+    }
+    /// Sets the coating of an output port with the given name.
+    ///
+    /// The port must have already been created before.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the port name does not exist.
+    pub fn set_output_coating(&mut self, port_name: &str, coating: &CoatingType) -> OpmResult<()> {
+        self.inputs.get_mut(port_name).map_or_else(
+            || {
+                Err(OpossumError::OpticPort(format!(
+                    "output port <{port_name}> does not exist",
+                )))
+            },
+            |optic_port| {
+                optic_port.set_coating(coating.clone());
+                Ok(())
+            },
+        )
     }
     /// Sets the (input & ouput port) apertures of this [`OpticPorts`] from another [`OpticPorts`].
     ///
@@ -164,10 +218,10 @@ impl OpticPorts {
     /// This function will return an error if the port names in `set_ports` are not found.
     pub fn set_apertures(&mut self, set_ports: Self) -> OpmResult<()> {
         for set_port in set_ports.inputs {
-            self.set_input_aperture(&set_port.0, &set_port.1)?;
+            self.set_input_aperture(&set_port.0, set_port.1.aperture())?;
         }
         for set_port in set_ports.outputs {
-            self.set_output_aperture(&set_port.0, &set_port.1)?;
+            self.set_output_aperture(&set_port.0, set_port.1.aperture())?;
         }
         Ok(())
     }
@@ -176,14 +230,28 @@ impl OpticPorts {
     /// This function returns `None` if the given port name was not found.
     #[must_use]
     pub fn input_aperture(&self, port_name: &str) -> Option<&Aperture> {
-        self.inputs.get(port_name)
+        self.inputs.get(port_name).map(OpticPort::aperture)
     }
     /// Get the [`Aperture`] of the given ouput port.
     ///
     /// This function returns `None` if the given port name was not found.
     #[must_use]
     pub fn output_aperture(&self, port_name: &str) -> Option<&Aperture> {
-        self.outputs.get(port_name)
+        self.outputs.get(port_name).map(OpticPort::aperture)
+    }
+    /// Get the coating of the given input port.
+    ///
+    /// This function returns `None` if the given port name was not found.
+    #[must_use]
+    pub fn input_coating(&self, port_name: &str) -> Option<&CoatingType> {
+        self.inputs.get(port_name).map(OpticPort::coating)
+    }
+    /// Get the coating of the given output port.
+    ///
+    /// This function returns `None` if the given port name was not found.
+    #[must_use]
+    pub fn output_coating(&self, port_name: &str) -> Option<&CoatingType> {
+        self.outputs.get(port_name).map(OpticPort::coating)
     }
     /// Mark the [`OpticPorts`] as `inverted`.
     ///
@@ -326,7 +394,7 @@ mod test {
         ports.create_output("test4").unwrap();
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1> None\n  <test2> None\noutput:\n  <test3> None\n  <test4> None\n"
+            "inputs:\n  <test1> OpticPort { aperture: None, coating: IdealAR }\n  <test2> OpticPort { aperture: None, coating: IdealAR }\noutput:\n  <test3> OpticPort { aperture: None, coating: IdealAR }\n  <test4> OpticPort { aperture: None, coating: IdealAR }\n"
                 .to_owned()
         );
     }
@@ -340,7 +408,7 @@ mod test {
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test3> None\n  <test4> None\noutput:\n  <test1> None\n  <test2> None\nports are inverted\n"
+            "inputs:\n  <test3> OpticPort { aperture: None, coating: IdealAR }\n  <test4> OpticPort { aperture: None, coating: IdealAR }\noutput:\n  <test1> OpticPort { aperture: None, coating: IdealAR }\n  <test2> OpticPort { aperture: None, coating: IdealAR }\nports are inverted\n"
                 .to_owned()
         );
     }

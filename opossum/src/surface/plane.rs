@@ -2,7 +2,7 @@
 //!
 //! An infinitely large flat 2D surface oriented perpendicular to the optical axis (xy plane) and positioned a the given z position.
 
-use super::Surface;
+use super::GeoSurface;
 use crate::{meter, ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use num::Zero;
@@ -24,7 +24,7 @@ impl Plane {
         }
     }
 }
-impl Surface for Plane {
+impl GeoSurface for Plane {
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let mut trans_pos_in_m = ray.position().map(|c| c.value);
         let trans_dir = ray.direction();
@@ -40,7 +40,7 @@ impl Surface for Plane {
         }
         Some((
             meter!(trans_pos_in_m.x, trans_pos_in_m.y, trans_pos_in_m.z),
-            Vector3::new(0.0, 0.0, -1.0),
+            Vector3::new(0.0, 0.0, -1.0 * trans_dir.z.signum()),
         ))
     }
     fn set_isometry(&mut self, isometry: &Isometry) {

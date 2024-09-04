@@ -7,6 +7,7 @@ use num::Zero;
 use uom::si::f64::Length;
 
 /// Rectangular, evenly-sized grid distribution
+#[derive(Clone)]
 pub struct Grid {
     nr_of_points: (usize, usize),
     side_length: (Length, Length),

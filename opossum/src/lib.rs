@@ -20,7 +20,7 @@ pub mod bevy_scene;
 #[cfg(feature = "bevy")]
 mod scenery_bevy_data;
 
-pub mod analyzer;
+pub mod analyzers;
 pub mod aperture;
 pub mod console;
 pub mod dottable;
@@ -29,10 +29,11 @@ pub mod error;
 mod light;
 pub mod lightdata;
 pub mod nodes;
+pub mod opm_document;
 mod optic_graph;
+mod optic_port;
 pub mod optic_ports;
 pub mod optic_ref;
-mod optic_scenery;
 mod optic_senery_rsc;
 pub mod optical;
 pub mod plottable;
@@ -42,8 +43,10 @@ pub mod properties;
 pub mod ray;
 pub mod rays;
 pub mod refractive_index;
+pub mod spectral_distribution;
 pub mod render;
 // pub mod render;
+pub mod coatings;
 pub mod geometry;
 pub mod reporter;
 pub mod spectrum;
@@ -51,7 +54,7 @@ pub mod spectrum_helper;
 pub mod surface;
 pub mod utils;
 
-pub use optic_scenery::OpticScenery;
+pub use opm_document::OpmDocument;
 pub use optic_senery_rsc::SceneryResources;
 
 #[cfg(feature = "bevy")]

@@ -18,7 +18,7 @@ use crate::{
 /// Structure for storing an optical node.
 ///
 /// This structure stores a reference to an optical node (a structure implementing the [`Optical`] trait). This [`OpticRef`]
-/// is then stored as a node in an `OpticGraph` (i.e. (`OpticScenery`)[`crate::OpticScenery`] or (`NodeGroup`)[`crate::nodes::NodeGroup`]).
+/// is then stored as a node in a `NodeGroup`)[`crate::nodes::NodeGroup`].
 /// In addition, it contains a unique id ([`Uuid`]) in order to unambiguously identify a node within a scene.
 pub struct OpticRef {
     /// The underlying optical reference.
@@ -47,7 +47,7 @@ impl OpticRef {
     }
     /// Update the reference to the global configuration.
     /// **Note**: This functions is normally only called from `OpticGraph`.
-    pub fn update_global_config(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
+    pub fn update_global_config(&self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
         self.optical_ref.borrow_mut().set_global_conf(global_conf);
     }
 }
@@ -59,7 +59,6 @@ impl Serialize for OpticRef {
         let mut node = serializer.serialize_struct("node", 3)?;
         node.serialize_field("type", &self.optical_ref.borrow().node_type())?;
         node.serialize_field("id", &self.uuid)?;
-        // node.serialize_field("properties", &self.optical_ref.borrow().properties())?;
         node.serialize_field("attributes", &self.optical_ref.borrow().node_attr())?;
         node.end()
     }

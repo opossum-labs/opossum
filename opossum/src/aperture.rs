@@ -145,10 +145,10 @@ impl CircleConfig {
         }
     }
 
-    /// Returns the radius of this [`CircleConfig`]
+    ///return the radius of this [`CircleConfig`]
     #[must_use]
-    pub const fn radius(&self) -> Length {
-        self.radius
+    pub fn radius(&self) -> &Length {
+        &self.radius
     }
 }
 impl Apodize for CircleConfig {
@@ -442,7 +442,11 @@ fn plot_circle(conf: &CircleConfig) -> Vec<PlotSeries> {
     )]
 }
 impl Plottable for Aperture {
-    fn get_plot_series(&self, plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        plt_type: &mut PlotType,
+        legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let plt_series_opt = match plt_type {
             PlotType::Line2D(_) | PlotType::Scatter2D(_) => match self {
                 Self::None => None,
@@ -466,10 +470,15 @@ impl Plottable for Aperture {
                         .transpose(),
                     };
 
+                    let series_label = if legend {
+                        Some("Aperture".to_owned())
+                    } else {
+                        None
+                    };
                     Some(vec![PlotSeries::new(
                         &plt_dat,
                         RGBAColor(0, 0, 0, 1.),
-                        Some("Aperture".to_owned()),
+                        series_label,
                     )])
                 }
 
@@ -514,7 +523,7 @@ impl Plottable for Aperture {
                     let mut aperture_series_vec =
                         Vec::<PlotSeries>::with_capacity(conf.apertures.len());
                     for aperture in &conf.apertures {
-                        if let Some(plt_series_vec) = aperture.get_plot_series(plt_type)? {
+                        if let Some(plt_series_vec) = aperture.get_plot_series(plt_type, legend)? {
                             aperture_series_vec.extend(plt_series_vec);
                         }
                     }

@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Cylindric lens with spherical or flat surfaces.
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -11,7 +11,7 @@ use crate::{
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{Cylinder, Plane, Surface},
+    surface::{Cylinder, OpticalSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -86,7 +86,7 @@ impl Default for CylindricLens {
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self { node_attr }
     }
 }
@@ -154,17 +154,17 @@ impl CylindricLens {
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
-        let front_surf: Box<dyn Surface> = if front_roc.is_infinite() {
-            Box::new(Plane::new(iso))
+        let front_surf: OpticalSurface = if front_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(iso)))
         } else {
-            Box::new(Cylinder::new(front_roc, iso)?)
+            OpticalSurface::new(Box::new(Cylinder::new(front_roc, iso)?))
         };
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
-        let rear_surf: Box<dyn Surface> = if rear_roc.is_infinite() {
-            Box::new(Plane::new(&isometry))
+        let rear_surf: OpticalSurface = if rear_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(&isometry)))
         } else {
-            Box::new(Cylinder::new(rear_roc, &isometry)?)
+            OpticalSurface::new(Box::new(Cylinder::new(rear_roc, &isometry)?))
         };
         if let Some(aperture) = self.ports().input_aperture("front") {
             rays.apodize(aperture)?;
@@ -174,9 +174,9 @@ impl CylindricLens {
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
         };
-        rays.refract_on_surface(&(*front_surf), refri)?;
+        rays.refract_on_surface(&front_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&(*rear_surf), &self.ambient_idx())?;
+        rays.refract_on_surface(&rear_surf, Some(&self.ambient_idx()))?;
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -200,17 +200,17 @@ impl CylindricLens {
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
 
-        let front_surf: Box<dyn Surface> = if front_roc.is_infinite() {
-            Box::new(Plane::new(iso))
+        let front_surf = if front_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(iso)))
         } else {
-            Box::new(Cylinder::new(front_roc, iso)?)
+            OpticalSurface::new(Box::new(Cylinder::new(front_roc, iso)?))
         };
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
-        let rear_surf: Box<dyn Surface> = if rear_roc.is_infinite() {
-            Box::new(Plane::new(&isometry))
+        let rear_surf = if rear_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(&isometry)))
         } else {
-            Box::new(Cylinder::new(rear_roc, &isometry)?)
+            OpticalSurface::new(Box::new(Cylinder::new(rear_roc, &isometry)?))
         };
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
@@ -220,9 +220,9 @@ impl CylindricLens {
         } else {
             return Err(OpossumError::OpticPort("output aperture not found".into()));
         };
-        rays.refract_on_surface(&(*rear_surf), refri)?;
+        rays.refract_on_surface(&rear_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&(*front_surf), &self.ambient_idx())?;
+        rays.refract_on_surface(&front_surf, Some(&self.ambient_idx()))?;
         if let Some(aperture) = self.ports().input_aperture("front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -308,6 +308,11 @@ impl Optical for CylindricLens {
                 };
                 LightData::Geometric(output)
             }
+            _ => {
+                return Err(OpossumError::Analysis(
+                    "analysis mode not yet implemented for cylindric lens".into(),
+                ))
+            }
         };
         let light_result = LightResult::from([(out_port.into(), light_data)]);
         Ok(light_result)
@@ -330,8 +335,8 @@ impl Dottable for CylindricLens {
 #[cfg(test)]
 mod test {
     use crate::{
-        analyzer::RayTraceConfig, joule, millimeter, nanometer, nodes::test_helper::test_helper::*,
-        position_distributions::Hexapolar, rays::Rays,
+        analyzers::RayTraceConfig, joule, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;

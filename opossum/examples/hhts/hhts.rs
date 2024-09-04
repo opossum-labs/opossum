@@ -7,9 +7,12 @@ use cambox_1w::cambox_1w;
 use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
+use nalgebra::Point2;
 use num::Zero;
 use opossum::{
+    analyzers::{AnalyzerType, RayTraceConfig},
     aperture::{Aperture, CircleConfig},
+    energy_distributions::General2DGaussian,
     error::OpmResult,
     joule,
     lightdata::LightData,
@@ -19,14 +22,15 @@ use opossum::{
         RayPropagationVisualizer, Source, WaveFront,
     },
     optical::Optical,
-    position_distributions::Hexapolar,
+    position_distributions::HexagonalTiling,
+    radian,
     ray::SplittingConfig,
     rays::Rays,
     refractive_index::{refr_index_schott::RefrIndexSchott, RefrIndexSellmeier1},
     spectrum::Spectrum,
     spectrum_helper::generate_filter_spectrum,
     utils::geom_transformation::Isometry,
-    OpticScenery,
+    OpmDocument,
 };
 use uom::si::f64::Length;
 
@@ -37,7 +41,8 @@ fn main() -> OpmResult<()> {
     let energy_1w = joule!(100.0);
     let energy_2w = joule!(50.0);
 
-    let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
+    // let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
+    let beam_dist_1w = HexagonalTiling::new(millimeter!(100.), 25)?;
     let beam_dist_2w = beam_dist_1w.clone();
 
     let refr_index_hk9l = RefrIndexSellmeier1::new(
@@ -75,8 +80,33 @@ fn main() -> OpmResult<()> {
     let a_1inch = Aperture::BinaryCircle(circle_config);
 
     // collimated source
-    let rays_1w = Rays::new_uniform_collimated(wvl_1w, energy_1w, &beam_dist_1w)?;
-    let mut rays_2w = Rays::new_uniform_collimated(wvl_2w, energy_2w, &beam_dist_2w)?;
+
+    let rays_1w = Rays::new_collimated(
+        wvl_1w,
+        &General2DGaussian::new(
+            energy_1w,
+            Point2::new(0., 0.),
+            Point2::new(60.6389113608, 60.6389113608),
+            5.,
+            radian!(0.),
+            false,
+        )?,
+        &beam_dist_1w,
+    )?;
+    let mut rays_2w = Rays::new_collimated(
+        wvl_2w,
+        &General2DGaussian::new(
+            energy_2w,
+            Point2::new(0., 0.),
+            Point2::new(60.6389113608, 60.6389113608),
+            5.,
+            radian!(0.),
+            false,
+        )?,
+        &beam_dist_2w,
+    )?;
+    // let rays_1w = Rays::new_uniform_collimated(wvl_1w, energy_1w, &beam_dist_1w)?;
+    // let mut rays_2w = Rays::new_uniform_collimated(wvl_2w, energy_2w, &beam_dist_2w)?;
 
     // point source
 
@@ -106,12 +136,11 @@ fn main() -> OpmResult<()> {
     let mut rays = rays_1w;
     rays.add_rays(&mut rays_2w);
 
-    let mut scenery = OpticScenery::default();
-    scenery.set_description("HHT Sensor")?;
+    let mut scenery = NodeGroup::new("HHT Sensor");
     let mut src = Source::new("Source", &LightData::Geometric(rays));
     src.set_isometry(Isometry::identity());
-    let src = scenery.add_node(src);
-    let input_group = scenery.add_node(hhts_input()?);
+    let src = scenery.add_node(src)?;
+    let input_group = scenery.add_node(hhts_input()?)?;
     scenery.connect_nodes(src, "out1", input_group, "input", Length::zero())?;
 
     // T1
@@ -164,7 +193,7 @@ fn main() -> OpmResult<()> {
     group_t1.map_output_port(t1_l2c, "rear", "output")?;
 
     group_t1.set_expand_view(false)?;
-    let t1 = scenery.add_node(group_t1);
+    let t1 = scenery.add_node(group_t1)?;
 
     scenery.connect_nodes(input_group, "output", t1, "input", millimeter!(100.0))?;
 
@@ -209,7 +238,7 @@ fn main() -> OpmResult<()> {
     group_bs.map_output_port(filter_1w, "rear", "output_1w")?;
     group_bs.map_output_port(filter_2w, "rear", "output_2w")?;
 
-    let bs_group = scenery.add_node(group_bs);
+    let bs_group = scenery.add_node(group_bs)?;
 
     scenery.connect_nodes(t1, "output", bs_group, "input", millimeter!(100.0))?;
     // 1w branch
@@ -255,7 +284,7 @@ fn main() -> OpmResult<()> {
 
     group_t2_1w.map_input_port(t2_1w_in, "front", "input")?;
     group_t2_1w.map_output_port(t2_1w_exit, "rear", "output")?;
-    let t2_1w = scenery.add_node(group_t2_1w);
+    let t2_1w = scenery.add_node(group_t2_1w)?;
 
     // T3_1w
     let mut group_t3_1w = NodeGroup::new("T3 1w");
@@ -286,14 +315,14 @@ fn main() -> OpmResult<()> {
 
     group_t3_1w.map_input_port(t3_1w_input, "front", "input")?;
     group_t3_1w.map_output_port(d_1w_12, "rear", "output")?;
-    let t3_1w = scenery.add_node(group_t3_1w);
+    let t3_1w = scenery.add_node(group_t3_1w)?;
 
     scenery.connect_nodes(bs_group, "output_1w", t2_1w, "input", millimeter!(537.5190))?;
     scenery.connect_nodes(t2_1w, "output", t3_1w, "input", millimeter!(664.58900))?;
 
     let mut group_det_1w = NodeGroup::new("Detectors 1w");
 
-    let det_prop = group_det_1w.add_node(RayPropagationVisualizer::new("Propagation"))?;
+    let det_prop = group_det_1w.add_node(RayPropagationVisualizer::new("Propagation", None)?)?;
     let det_wavefront_1w = group_det_1w.add_node(WaveFront::new("Wavefront"))?;
     let cambox_1w = group_det_1w.add_node(cambox_1w()?)?;
     let det_energy_1w =
@@ -311,7 +340,7 @@ fn main() -> OpmResult<()> {
 
     group_det_1w.map_input_port(det_prop, "in1", "input")?;
 
-    let det_1w = scenery.add_node(group_det_1w);
+    let det_1w = scenery.add_node(group_det_1w)?;
     scenery.connect_nodes(t3_1w, "output", det_1w, "input", Length::zero())?;
 
     // 2w branch
@@ -357,7 +386,7 @@ fn main() -> OpmResult<()> {
 
     group_t2_2w.map_input_port(t2_2w_in, "front", "input")?;
     group_t2_2w.map_output_port(t2_2w_exit, "rear", "output")?;
-    let t2_2w = scenery.add_node(group_t2_2w);
+    let t2_2w = scenery.add_node(group_t2_2w)?;
 
     // T3_2w
     let mut group_t3_2w = NodeGroup::new("T3 2w");
@@ -388,7 +417,7 @@ fn main() -> OpmResult<()> {
 
     group_t3_2w.map_input_port(t3_2w_input, "front", "input")?;
     group_t3_2w.map_output_port(d_2w_12, "rear", "output")?;
-    let t3_2w = scenery.add_node(group_t3_2w);
+    let t3_2w = scenery.add_node(group_t3_2w)?;
 
     scenery.connect_nodes(bs_group, "output_2w", t2_2w, "input", millimeter!(474.589))?;
     scenery.connect_nodes(t2_2w, "output", t3_2w, "input", millimeter!(622.09000))?;
@@ -396,7 +425,7 @@ fn main() -> OpmResult<()> {
     // 2w detectors
     let mut group_det_2w = NodeGroup::new("Detectors 2w");
 
-    let det_prop_2w = group_det_2w.add_node(RayPropagationVisualizer::new("Propagation"))?;
+    let det_prop_2w = group_det_2w.add_node(RayPropagationVisualizer::new("Propagation", None)?)?;
     let det_wavefront_2w = group_det_2w.add_node(WaveFront::new("Wavefront"))?;
     let det_energy_2w =
         group_det_2w.add_node(EnergyMeter::new("Energy", Metertype::IdealEnergyMeter))?;
@@ -413,9 +442,11 @@ fn main() -> OpmResult<()> {
     group_det_2w.connect_nodes(det_energy_2w, "out1", cambox_2w, "input", Length::zero())?;
 
     group_det_2w.map_input_port(det_prop_2w, "in1", "input")?;
-    let det_2w = scenery.add_node(group_det_2w);
+    let det_2w = scenery.add_node(group_det_2w)?;
 
     scenery.connect_nodes(t3_2w, "output", det_2w, "input", Length::zero())?;
-    scenery.save_to_file(Path::new("./opossum/playground/hhts.opm"))?;
-    Ok(())
+
+    let mut doc = OpmDocument::new(scenery);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.save_to_file(Path::new("./opossum/playground/hhts.opm"))
 }

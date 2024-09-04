@@ -1,6 +1,6 @@
 use super::NodeAttr;
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -10,7 +10,7 @@ use crate::{
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{Plane, Surface},
+    surface::{OpticalSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use nalgebra::Point3;
@@ -68,7 +68,7 @@ impl Default for Wedge {
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self { node_attr }
     }
 }
@@ -123,14 +123,14 @@ impl Wedge {
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
-        let front_surf: Box<dyn Surface> = Box::new(Plane::new(iso));
+        let front_surf = OpticalSurface::new(Box::new(Plane::new(iso)));
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let wedge_iso = Isometry::new(
             Point3::origin(),
             Point3::new(wedge, Angle::zero(), Angle::zero()),
         )?;
         let isometry = iso.append(&thickness_iso).append(&wedge_iso);
-        let rear_surf: Box<dyn Surface> = Box::new(Plane::new(&isometry));
+        let rear_surf = OpticalSurface::new(Box::new(Plane::new(&isometry)));
         if let Some(aperture) = self.ports().input_aperture("front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -139,9 +139,9 @@ impl Wedge {
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
         };
-        rays.refract_on_surface(&(*front_surf), refri)?;
+        rays.refract_on_surface(&front_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&(*rear_surf), &self.ambient_idx())?;
+        rays.refract_on_surface(&rear_surf, Some(&self.ambient_idx()))?;
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -164,14 +164,14 @@ impl Wedge {
     ) -> OpmResult<Rays> {
         let mut rays = incoming_rays;
 
-        let front_surf = Box::new(Plane::new(iso));
+        let front_surf = OpticalSurface::new(Box::new(Plane::new(iso)));
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let wedge_iso = Isometry::new(
             Point3::origin(),
             Point3::new(wedge, Angle::zero(), Angle::zero()),
         )?;
         let isometry = iso.append(&thickness_iso).append(&wedge_iso);
-        let rear_surf = Box::new(Plane::new(&isometry));
+        let rear_surf = OpticalSurface::new(Box::new(Plane::new(&isometry)));
         if let Some(aperture) = self.ports().output_aperture("rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -180,9 +180,9 @@ impl Wedge {
         } else {
             return Err(OpossumError::OpticPort("output aperture not found".into()));
         };
-        rays.refract_on_surface(&(*rear_surf), refri)?;
+        rays.refract_on_surface(&rear_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&(*front_surf), &self.ambient_idx())?;
+        rays.refract_on_surface(&front_surf, Some(&self.ambient_idx()))?;
         if let Some(aperture) = self.ports().input_aperture("front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -260,6 +260,11 @@ impl Optical for Wedge {
                 };
                 LightData::Geometric(output)
             }
+            _ => {
+                return Err(OpossumError::Analysis(
+                    "analysis mode not yet implemented for wedge".into(),
+                ))
+            }
         };
         let light_result = LightResult::from([(out_port.into(), light_data)]);
         Ok(light_result)
@@ -286,7 +291,7 @@ mod test {
 
     use super::*;
     use crate::{
-        analyzer::RayTraceConfig, degree, joule, lightdata::DataEnergy, nanometer,
+        analyzers::RayTraceConfig, degree, joule, lightdata::DataEnergy, nanometer,
         nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };

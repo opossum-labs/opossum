@@ -3,16 +3,22 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
-        fluence_detector::Fluence, ray_propagation_visualizer::RayPositionHistories, FilterType,
-        FluenceData, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
+        fluence_detector::Fluence, ray_propagation_visualizer::RayPositionHistories,
+        reflective_grating::LinearDensity, FilterType, FluenceData, Metertype, Spectrometer,
+        SpectrometerType, SpotDiagram, WaveFrontData,
     },
     optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporter::{HtmlNodeReport, NodeReport},
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::{
+        geom_transformation::Isometry,
+        unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
+        EnumProxy,
+    },
 };
+use nalgebra::Vector3;
 use num::Float;
 use serde::{Deserialize, Serialize};
 use tinytemplate::TinyTemplate;
@@ -49,7 +55,7 @@ pub enum Proptype {
     Bool(bool),
     /// An optional [`LightData`] property
     LightData(EnumProxy<Option<LightData>>),
-    /// A property for storing a complete `OpticGraph` to be used by [`OpticScenery`](crate::OpticScenery).
+    /// A property for storing a complete `OpticGraph` to be used by [`NodeGroup`](crate::nodes::NodeGroup).
     OpticGraph(OpticGraph),
     /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterType(EnumProxy<FilterType>),
@@ -79,6 +85,8 @@ pub enum Proptype {
     RayPositionHistory(RayPositionHistories),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
+    /// linear density in `1/length_unit`
+    LinearDensity(LinearDensity),
     /// Fluence in Units of J/cm²
     Fluence(Fluence),
     /// Unit of Wavelength
@@ -92,6 +100,10 @@ pub enum Proptype {
     RefractiveIndex(EnumProxy<RefractiveIndexType>),
     /// a (node) location / orientation
     Isometry(EnumProxy<Option<Isometry>>),
+    /// Three dimensional Vector
+    Vec3(Vector3<f64>),
+    /// an optional length parameter. used, e.g., for the alignment wavelength of the source
+    LengthOption(Option<Length>),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -142,7 +154,11 @@ impl Proptype {
             }
             Self::Fluence(value) => tt.render(
                 "simple",
-                &format_quantity(joule_per_square_centimeter, *value),
+                &format!(
+                    "{}{}",
+                    format_value_with_prefix(value.get::<joule_per_square_centimeter>()),
+                    joule_per_square_centimeter::abbreviation()
+                ),
             ),
             Self::WfLambda(value, wvl) => tt.render(
                 "simple",
@@ -223,29 +239,9 @@ fn format_value_with_prefix(value: f64) -> String {
         return String::from("   0.000 ");
     }
     #[allow(clippy::cast_possible_truncation)]
-    let mut exponent = (f64::log10(value.abs()).floor()) as i32;
-    if exponent.is_negative() {
-        exponent -= 2;
-    }
-    let exponent = (exponent / 3) * 3;
-    let prefix = match exponent {
-        -21 => "z",
-        -18 => "a",
-        -15 => "f",
-        -12 => "p",
-        -9 => "n",
-        -6 => "μ",
-        -3 => "m",
-        0 => "",
-        3 => "k",
-        6 => "M",
-        9 => "G",
-        12 => "T",
-        15 => "P",
-        18 => "E",
-        21 => "Z",
-        _ => "?",
-    };
+    let prefix = get_prefix_for_base_unit(value);
+    let exponent = get_exponent_for_base_unit_in_e3_steps(value);
+
     format!("{:8.3} {prefix}", value / f64::powi(10.0, exponent))
 }
 fn format_quantity<D, U, V, N>(_: N, q: Quantity<D, U, V>) -> String

@@ -1,16 +1,15 @@
 #![warn(missing_docs)]
 //! A paraxial surface (ideal lens)
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     millimeter,
     optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optical::{Alignable, LightResult, Optical},
     properties::Proptype,
-    refractive_index::refr_index_vaccuum,
-    surface::Plane,
+    surface::{OpticalSurface, Plane},
 };
 use uom::{num_traits::Zero, si::f64::Length};
 
@@ -18,7 +17,7 @@ use super::node_attr::NodeAttr;
 
 /// Paraxial surface (=ideal lens)
 ///
-/// This node models a (flat) paraxial surface with a given `focal leength`. This corresponds to an ideal lens which is aberration free
+/// This node models a (flat) paraxial surface with a given `focal length`. This corresponds to an ideal lens which is aberration free
 /// and achromatic. A positive `focal length` corresponds to a focussing (convex) lens while a negative `focal length` represents a
 /// defocussing (concave) lens.
 ///
@@ -48,7 +47,7 @@ impl Default for ParaxialSurface {
         let mut ports = OpticPorts::new();
         ports.create_input("front").unwrap();
         ports.create_output("rear").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
 
         node_attr
             .create_property(
@@ -108,8 +107,11 @@ impl Optical for ParaxialSurface {
                         return Err(OpossumError::Analysis("cannot read focal length".into()));
                     };
                     if let Some(iso) = self.effective_iso() {
-                        rays.refract_on_surface(&Plane::new(&iso), &refr_index_vaccuum())?;
-                        rays.refract_paraxial(*focal_length)?;
+                        rays.refract_on_surface(
+                            &OpticalSurface::new(Box::new(Plane::new(&iso))),
+                            None,
+                        )?;
+                        rays.refract_paraxial(*focal_length, &iso)?;
                     } else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
@@ -138,6 +140,11 @@ impl Optical for ParaxialSurface {
                     ));
                 }
             }
+            _ => {
+                return Err(OpossumError::Analysis(
+                    "analysis mode not yet implemented for paraxial surface".into(),
+                ))
+            }
         };
         let mut light_result = LightResult::default();
         light_result.insert(target.into(), light_data);
@@ -151,6 +158,8 @@ impl Optical for ParaxialSurface {
     }
 }
 
+impl Alignable for ParaxialSurface {}
+
 impl Dottable for ParaxialSurface {
     fn node_color(&self) -> &str {
         "palegreen"
@@ -160,7 +169,7 @@ impl Dottable for ParaxialSurface {
 mod test {
     use super::*;
     use crate::{
-        analyzer::RayTraceConfig, degree, joule, millimeter, nanometer,
+        analyzers::RayTraceConfig, degree, joule, millimeter, nanometer,
         nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
         utils::geom_transformation::Isometry,
     };

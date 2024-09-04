@@ -3,11 +3,13 @@
 #[cfg(feature = "bevy")]
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
-use nalgebra::Point3;
+use nalgebra::{Point3, Vector3};
+use petgraph::stable_graph::NodeIndex;
 use uom::si::f64::{Angle, Length};
 
-use crate::analyzer::{AnalyzerType, RayTraceConfig};
+use crate::analyzers::{AnalyzerType, RayTraceConfig};
 use crate::aperture::Aperture;
+use crate::coatings::CoatingType;
 use crate::dottable::Dottable;
 use crate::error::{OpmResult, OpossumError};
 use crate::lightdata::LightData;
@@ -39,7 +41,7 @@ pub trait Optical: Dottable {
     // fn node_type(&self) -> &str;
     // /// Return the available (input & output) ports of this [`Optical`].
     fn ports(&self) -> OpticPorts {
-        let mut ports = self.node_attr().apertures().clone();
+        let mut ports = self.node_attr().ports().clone();
         if self.node_attr().inverted() {
             ports.set_inverted(true);
         }
@@ -54,7 +56,7 @@ pub trait Optical: Dottable {
         let mut ports = self.ports();
         if ports.inputs().contains_key(port_name) {
             ports.set_input_aperture(port_name, aperture)?;
-            self.node_attr_mut().set_apertures(ports);
+            self.node_attr_mut().set_ports(ports);
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -71,7 +73,7 @@ pub trait Optical: Dottable {
         let mut ports = self.ports();
         if ports.outputs().contains_key(port_name) {
             ports.set_output_aperture(port_name, aperture)?;
-            self.node_attr_mut().set_apertures(ports);
+            self.node_attr_mut().set_ports(ports);
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -79,9 +81,26 @@ pub trait Optical: Dottable {
             )))
         }
     }
+    /// Set an coating for a given input port name.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the port name does not exist.
+    fn set_input_coating(&mut self, port_name: &str, coating: &CoatingType) -> OpmResult<()> {
+        let mut ports = self.ports();
+        if ports.inputs().contains_key(port_name) {
+            ports.set_input_coating(port_name, coating)?;
+            self.node_attr_mut().set_ports(ports);
+            Ok(())
+        } else {
+            Err(OpossumError::OpticPort(format!(
+                "input port name <{port_name}> does not exist"
+            )))
+        }
+    }
     /// Perform an analysis of this element. The type of analysis is given by an [`AnalyzerType`].
     ///
-    /// This function is normally only called by [`OpticScenery::analyze()`](crate::optic_scenery::OpticScenery::analyze()).
+    /// This function is normally only called by [`NodeGroup::analyze()`](crate::nodes::NodeGroup::analyze()).
     ///
     /// # Errors
     ///
@@ -108,6 +127,39 @@ pub trait Optical: Dottable {
             incoming_data,
             &AnalyzerType::RayTrace(RayTraceConfig::default()),
         )
+    }
+
+    /// define the up-direction of this lightdata's first ray which is needed to create an isometry from this ray.
+    /// This function should only be used during the node positioning process, and only for source nodes
+    /// # Errors
+    /// This function errors if the the lightdata is not geometric
+    fn define_up_direction(&self, ray_data: &LightData) -> OpmResult<Vector3<f64>> {
+        if let LightData::Geometric(rays) = ray_data {
+            rays.define_up_direction()
+        } else {
+            Err(OpossumError::Other(
+                "Wrong light data for \"up-direction\" definition".into(),
+            ))
+        }
+    }
+
+    /// Modifies the current up-direction of a ray, stored in lightdata, which is needed to create an isometry from this ray.
+    /// This function should only be used during the node positioning process
+    /// # Errors
+    /// This function errors if the the lightdata is not geometric
+    fn calc_new_up_direction(
+        &self,
+        ray_data: &LightData,
+        up_direction: &mut Vector3<f64>,
+    ) -> OpmResult<()> {
+        if let LightData::Geometric(rays) = ray_data {
+            rays.calc_new_up_direction(up_direction)?;
+        } else {
+            return Err(OpossumError::Other(
+                "Wrong light data for \"up-direction\" calculation".into(),
+            ));
+        }
+        Ok(())
     }
     /// Export analysis data to file(s) within the given directory path.
     ///
@@ -185,10 +237,10 @@ pub trait Optical: Dottable {
                             if self.node_type() == "group" {
                                 // apertures cannot be set here for groups since no port mapping is defined yet.
                                 // this will be done later dynamically in group:ports() function.
-                                self.node_attr_mut().set_apertures(ports_to_be_set);
+                                self.node_attr_mut().set_ports(ports_to_be_set);
                             } else {
                                 ports.set_apertures(ports_to_be_set)?;
-                                self.node_attr_mut().set_apertures(ports);
+                                self.node_attr_mut().set_ports(ports);
                             }
                         }
                     }
@@ -240,8 +292,13 @@ pub trait Optical: Dottable {
         }
         node_attr_mut.set_name(&node_attributes.name());
         node_attr_mut.set_inverted(node_attributes.inverted());
+        if let Some((node_idx, distance)) = node_attributes.get_align_like_node_at_distance() {
+            node_attr_mut.set_align_like_node_at_distance(*node_idx, *distance);
+        }
         node_attr_mut.update_properties(node_attributes.properties().clone());
+        node_attr_mut.set_ports(node_attributes.ports().clone());
     }
+
     /// Get the node type of this [`Optical`]
     fn node_type(&self) -> String {
         self.node_attr().node_type()
@@ -350,6 +407,19 @@ pub trait Alignable: Optical + Sized {
         let rotation_iso = Isometry::new(old_translation, tilt)?;
         self.node_attr_mut().set_alignment(rotation_iso);
         Ok(self)
+    }
+
+    /// Aligns this optical element with respect to another optical element.
+    /// Specifically, the center (optical) axes of these to nodes are set on top of each other and the anchor points are separated by a given distance
+    /// This helper function allows, e.g., to build a folded telescope (lens + 0° mirror) when the alignment beams propagate off-center through the lens.
+    /// Remark: if this function is used, the distance specified at the `connect_nodes` function is ignored
+    /// # Returns
+    /// This function returns the original Node with updated alignment settings.
+    #[must_use]
+    fn align_like_node_at_distance(mut self, node_idx: NodeIndex, distance: Length) -> Self {
+        self.node_attr_mut()
+            .set_align_like_node_at_distance(node_idx, distance);
+        self
     }
 }
 impl Debug for dyn Optical {

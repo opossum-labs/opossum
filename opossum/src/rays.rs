@@ -7,6 +7,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule, micrometer, millimeter, nanometer,
     nodes::{
+        fluence_detector::Fluence,
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
         FilterType, FluenceData, WaveFrontData, WaveFrontErrorMap,
     },
@@ -15,8 +16,9 @@ use crate::{
     properties::Proptype,
     ray::{Ray, SplittingConfig},
     refractive_index::RefractiveIndexType,
+    spectral_distribution::SpectralDistribution,
     spectrum::Spectrum,
-    surface::Surface,
+    surface::{GeoSurface, OpticalSurface},
     utils::{
         filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
         geom_transformation::Isometry,
@@ -32,13 +34,12 @@ use approx::relative_eq;
 use itertools::{izip, Itertools};
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::{distance, vector, DMatrix, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2};
+use nalgebra::{
+    distance, vector, DMatrix, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3,
+};
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Display,
-    ops::{Add, Range},
-};
+use std::{fmt::Display, ops::Range};
 use uom::{
     num_traits::Zero,
     si::f64::Area,
@@ -90,6 +91,46 @@ impl Rays {
         })
     }
 
+    /// Generate a set of collimated rays (collinear with optical axis) with specified energy, spectral and position distribution.
+    ///
+    /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
+    /// distributed according to the specified distribution function over the indivual rays: [`EnergyDistribution`]. The ray positions are distributed according to the given [`PositionDistribution`].
+    /// The spectral shape of the ray bundles follow the defines spectral distribution.
+    ///
+    /// This function returns an error if
+    /// # Errors
+    ///  - the given wavelength is <= 0.0, NaN or +inf
+    ///  - the given energy is <= 0.0, NaN or +inf
+    ///  - the given size is < 0.0, NaN or +inf
+    pub fn new_collimated_with_spectrum(
+        spectral_distribution: &dyn SpectralDistribution,
+        energy_strategy: &dyn EnergyDistribution,
+        pos_strategy: &dyn PositionDistribution,
+    ) -> OpmResult<Self> {
+        let ray_pos = pos_strategy.generate();
+        let (spec_amp, wvls) = spectral_distribution.generate()?;
+
+        //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
+        let ray_pos_plane = ray_pos
+            .iter()
+            .map(|p| Point2::<f64>::new(p.x.get::<millimeter>(), p.y.get::<millimeter>()))
+            .collect::<Vec<Point2<f64>>>();
+        //apply distribution strategy
+        let mut ray_energies = energy_strategy.apply(&ray_pos_plane);
+        energy_strategy.renormalize(&mut ray_energies);
+
+        //create rays
+        let nr_of_rays = ray_pos.len();
+        let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
+        for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
+            for (spec_amp, wvl) in izip!(spec_amp.iter(), wvls.iter()) {
+                let ray = Ray::new_collimated(*pos, *wvl, *energy * *spec_amp)?;
+                rays.push(ray);
+            }
+        }
+        Ok(Self { rays })
+    }
+
     /// Generate a set of collimated rays (collinear with optical axis) with specified energy distribution and position distribution.
     ///
     /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
@@ -113,30 +154,15 @@ impl Rays {
             .map(|p| Point2::<f64>::new(p.x.get::<millimeter>(), p.y.get::<millimeter>()))
             .collect::<Vec<Point2<f64>>>();
         //apply distribution strategy
-        let ray_energies = energy_strategy.apply(&ray_pos_plane);
-        //sum up energy of rays that are valid: energy is larger than machine epsilon times total energy
-        let min_energy = f64::EPSILON * energy_strategy.get_total_energy();
-        let total_energy_valid_rays = joule!(ray_energies
-            .iter()
-            .map(|e| {
-                if *e > min_energy {
-                    e.get::<joule>()
-                } else {
-                    0.
-                }
-            })
-            .collect::<Vec<f64>>()
-            .iter()
-            .kahan_sum()
-            .sum());
-        //scaling factor if a significant amount of energy has been lost
-        let energy_scale_factor = energy_strategy.get_total_energy() / total_energy_valid_rays;
+        let mut ray_energies = energy_strategy.apply(&ray_pos_plane);
+        energy_strategy.renormalize(&mut ray_energies);
+
         //create rays
         let nr_of_rays = ray_pos.len();
         let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
         for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
             if *energy > f64::EPSILON * energy_strategy.get_total_energy() {
-                let ray = Ray::new_collimated(*pos, wave_length, *energy * energy_scale_factor)?;
+                let ray = Ray::new_collimated(*pos, wave_length, *energy)?;
                 rays.push(ray);
             }
         }
@@ -394,11 +420,13 @@ impl Rays {
         &self,
         center_wavelength_flag: bool,
         spec_res: Length,
+        monitor_isometry: &Isometry,
     ) -> OpmResult<WaveFrontData> {
         let spec = self.to_spectrum(&spec_res)?;
         if center_wavelength_flag {
             let center_wavelength = spec.center_wavelength();
-            let wf_err = self.wavefront_error_at_pos_in_units_of_wvl(center_wavelength);
+            let wf_err =
+                self.wavefront_error_at_pos_in_units_of_wvl(center_wavelength, monitor_isometry);
             Ok(WaveFrontData {
                 wavefront_error_maps: vec![WaveFrontErrorMap::new(&wf_err, center_wavelength)?],
             })
@@ -423,8 +451,10 @@ impl Rays {
                 if !rays.is_empty() {
                     let wvl = idx.to_f64().unwrap().mul_add(spec_res_micro, spec_start);
                     wf_error_maps.push(WaveFrontErrorMap::new(
-                        &Self::from(rays.clone())
-                            .wavefront_error_at_pos_in_units_of_wvl(micrometer!(wvl)),
+                        &Self::from(rays.clone()).wavefront_error_at_pos_in_units_of_wvl(
+                            micrometer!(wvl),
+                            monitor_isometry,
+                        ),
                         micrometer!(wvl),
                     )?);
                 }
@@ -442,15 +472,20 @@ impl Rays {
     /// # Returns
     /// This method returns a Matrix with 3 columns for the x(1) & y(2) axes and the negative optical path(3) and a dynamic number of rows. x & y referes to the transverse extend of the beam with reference to its the optical axis
     #[must_use]
-    pub fn wavefront_error_at_pos_in_units_of_wvl(&self, wavelength: Length) -> MatrixXx3<f64> {
+    pub fn wavefront_error_at_pos_in_units_of_wvl(
+        &self,
+        wavelength: Length,
+        monitor_isometry: &Isometry,
+    ) -> MatrixXx3<f64> {
         let wvl = wavelength.get::<nanometer>();
         let mut wave_front_err = MatrixXx3::from_element(self.nr_of_rays(true), 0.);
         let mut min_radius = f64::INFINITY;
         let mut path_length_at_center = 0.;
         for (i, ray) in self.rays.iter().filter(|r| r.valid()).enumerate() {
+            let pos_in_monitor_frame = monitor_isometry.inverse_transform_point(&ray.position());
             let position = Vector2::new(
-                ray.position().x.get::<millimeter>(),
-                ray.position().y.get::<millimeter>(),
+                pos_in_monitor_frame.x.get::<millimeter>(),
+                pos_in_monitor_frame.y.get::<millimeter>(),
             );
             wave_front_err[(i, 0)] = position.x;
             wave_front_err[(i, 1)] = position.y;
@@ -493,7 +528,7 @@ impl Rays {
     fn calc_ray_fluence_in_voronoi_cells(
         &self,
         // projected_ray_pos: &MatrixXx2<Length>,
-    ) -> OpmResult<(OpmResult<VoronoiedData>, AxLims, AxLims)> {
+    ) -> OpmResult<(VoronoiedData, AxLims, AxLims, Fluence)> {
         let valid_rays = Self::from(
             self.rays
                 .iter()
@@ -521,17 +556,17 @@ impl Rays {
             )
         })?;
 
-        let voronoi =
-            create_voronoi_cells(&ray_pos_cm, &proj_ax1_lim, &proj_ax2_lim).map_err(|_| {
-                OpossumError::Other(
-                    "Voronoi diagram for fluence estimation could not be created!".into(),
-                )
-            })?;
+        let (voronoi, beam_area) = create_voronoi_cells(&ray_pos_cm).map_err(|_| {
+            OpossumError::Other(
+                "Voronoi diagram for fluence estimation could not be created!".into(),
+            )
+        })?;
 
         //get the voronoi cells
         let v_cells = voronoi.cells();
 
-        let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), 0.);
+        let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), f64::NAN);
+        let mut energy_in_beam = 0.;
 
         for (idx, ray) in valid_rays.iter().enumerate() {
             //} in 0..self.nr_of_rays(true) {
@@ -542,6 +577,8 @@ impl Rays {
                 .collect::<Vec<Point2<f64>>>();
             if v_neighbours.len() >= 3 {
                 let poly_area = calc_closed_poly_area(&v_neighbours)?;
+                // beam_area += poly_area;
+                energy_in_beam += ray.energy().get::<joule>();
                 fluence_scatter[idx] = ray.energy().get::<joule>() / poly_area;
             } else {
                 warn!(
@@ -551,9 +588,10 @@ impl Rays {
             }
         }
         Ok((
-            VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter),
+            VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)?,
             proj_ax1_lim,
             proj_ax2_lim,
+            J_per_cm2!(energy_in_beam / beam_area),
         ))
     }
 
@@ -568,7 +606,7 @@ impl Rays {
         let num_axes_points = 100;
 
         // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
-        let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim) =
+        let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim, average_fluence) =
             self.calc_ray_fluence_in_voronoi_cells()?;
 
         //axes definition
@@ -576,32 +614,20 @@ impl Rays {
         let co_ax2 = linspace(co_ax2_lim.min, co_ax2_lim.max, num_axes_points)?;
 
         //currently only interpolation. voronoid data for plotting must still be implemented
-        let (interp_fluence, interp_mask) =
-            interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter?, &co_ax1, &co_ax2)?;
+        let (interp_fluence, _) =
+            interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter, &co_ax1, &co_ax2)?;
 
-        let (peak_fluence, mut average) = izip!(
-            interp_fluence.into_iter(),
-            interp_mask.into_iter()
-        )
-        .fold((f64::NEG_INFINITY, 0.), |arg0, v| {
-            let max_val = if v.0.is_nan() {
-                arg0.0
+        let peak_fluence = interp_fluence.iter().fold(f64::NEG_INFINITY, |arg0, v| {
+            if v.is_finite() {
+                f64::max(arg0, *v)
             } else {
-                f64::max(arg0.0, *v.0)
-            };
-            let average_val = if v.1 > &f64::EPSILON {
-                f64::add(arg0.1, *v.0)
-            } else {
-                arg0.1
-            };
-            (max_val, average_val)
+                arg0
+            }
         });
-
-        average /= interp_mask.sum();
 
         Ok(FluenceData::new(
             J_per_cm2!(peak_fluence),
-            J_per_cm2!(average),
+            average_fluence,
             DMatrix::from_iterator(
                 co_ax1.len(),
                 co_ax2.len(),
@@ -634,7 +660,7 @@ impl Rays {
     /// This function returns an error if
     ///  - the z component of a ray direction is zero.
     ///  - the focal length is zero or not finite.
-    pub fn refract_paraxial(&mut self, focal_length: Length) -> OpmResult<()> {
+    pub fn refract_paraxial(&mut self, focal_length: Length, iso: &Isometry) -> OpmResult<()> {
         if focal_length.is_zero() || !focal_length.is_finite() {
             return Err(OpossumError::Other(
                 "focal length must be !=0.0 and finite".into(),
@@ -642,14 +668,18 @@ impl Rays {
         }
         for ray in &mut self.rays {
             if ray.valid() {
-                ray.refract_paraxial(focal_length)?;
+                ray.refract_paraxial(focal_length, iso)?;
             }
         }
         Ok(())
     }
-    /// Refract a ray bundle on a [`Surface`] and returns a reflected [`Ray`] bundle.
+    /// Refract a ray bundle on a [`GeoSurface`] and returns a reflected [`Ray`] bundle.
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
+    ///
+    /// The refractive index of the surface is given by the `refractive_index` parameter. If this parameter is
+    /// set to `None`, the refractive index of the incoming individual beam is used. This way it is possibe to model
+    /// a "passive" surface, which does not change the direction of the [`Ray`].
     ///
     /// # Warnings
     ///
@@ -657,11 +687,56 @@ impl Rays {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if
+    ///   - the refractive index of the surface for a given ray cannot be determined (e.g. wavelength out of range, etc.).
+    ///   - the underlying function for refraction of a single [`Ray`] on the surface fails.
     pub fn refract_on_surface(
         &mut self,
-        surface: &dyn Surface,
+        surface: &OpticalSurface,
+        refractive_index: Option<&RefractiveIndexType>,
+    ) -> OpmResult<Self> {
+        let mut valid_rays_found = false;
+        let mut rays_missed = false;
+        let mut reflected_rays = Self::default();
+        for ray in &mut self.rays {
+            if ray.valid() {
+                let n2 = if let Some(refractive_index) = refractive_index {
+                    Some(refractive_index.get_refractive_index(ray.wavelength())?)
+                } else {
+                    None
+                };
+                if let Some(reflected) = ray.refract_on_surface(surface, n2)? {
+                    reflected_rays.add_ray(reflected);
+                } else {
+                    rays_missed = true;
+                };
+                valid_rays_found = true;
+            }
+        }
+        if rays_missed {
+            warn!("rays totally reflected or missed a surface");
+        }
+        if !valid_rays_found {
+            warn!("ray bundle contains no valid rays - not propagating");
+        }
+        Ok(reflected_rays)
+    }
+    /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating
+    /// All valid rays that hit this surface are diffracted according to the peridic structure,
+    /// the diffraction order, the wavelength of the rays and there incoming k-vector
+    /// # Warnings
+    ///
+    /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
+    ///
+    /// # Errors
+    ///
+    /// This function only propagates errors of contained functions.
+    pub fn diffract_on_periodic_surface(
+        &mut self,
+        surface: &dyn GeoSurface,
         refractive_index: &RefractiveIndexType,
+        grating_vector: Vector3<f64>,
+        diffraction_order: &i32,
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
@@ -669,7 +744,12 @@ impl Rays {
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength())?;
-                if let Some(reflected) = ray.refract_on_surface(surface, n2)? {
+                if let Some(reflected) = ray.diffract_on_periodic_surface(
+                    surface,
+                    n2,
+                    grating_vector,
+                    diffraction_order,
+                )? {
                     reflected_rays.add_ray(reflected);
                 } else {
                     rays_missed = true;
@@ -951,6 +1031,7 @@ impl Rays {
 
         Ok(RayPositionHistories {
             rays_pos_history: ray_pos_hists,
+            plot_view_direction: None,
         })
     }
     /// Invalide all rays that have a number of refractions higher or equal than the given upper limit.
@@ -998,6 +1079,36 @@ impl Rays {
             *ray = ray.transformed_ray(isometry);
         }
         rays
+    }
+    /// define the up-direction of a ray bundle's first ray which is needed to create an isometry from this ray.
+    /// This function should only be used during the node positioning process, and only for source nodes
+    /// # Errors
+    /// This function errors if there are no rays
+    pub fn define_up_direction(&self) -> OpmResult<Vector3<f64>> {
+        if self.rays.is_empty() {
+            return Err(OpossumError::Other(
+                "empty ray bundle, cannot define up-direction".into(),
+            ));
+        }
+        if self.nr_of_rays(true) > 1 {
+            warn!("Ray bundle not used for alignment, use first ray for up-direction calculation");
+        }
+        Ok(self.rays[0].define_up_direction())
+    }
+    /// Modifies the current up-direction of a ray which is needed to create an isometry from this ray.
+    /// This function should only be used during the node positioning process
+    /// # Errors
+    /// This function errors if there are no rays
+    pub fn calc_new_up_direction(&self, up_direction: &mut Vector3<f64>) -> OpmResult<()> {
+        if self.rays.is_empty() {
+            return Err(OpossumError::Other(
+                "empty ray bundle, cannot define up-direction".into(),
+            ));
+        }
+        if self.nr_of_rays(true) > 1 {
+            warn!("Ray bundle not used for alignment, use first ray for up-direction calculation");
+        }
+        self.rays[0].calc_new_up_direction(up_direction)
     }
 }
 
@@ -1048,6 +1159,7 @@ mod test {
     use crate::{
         aperture::CircleConfig,
         centimeter,
+        coatings::CoatingType,
         energy_distributions::General2DGaussian,
         joule, meter, millimeter, nanometer,
         position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
@@ -1528,20 +1640,29 @@ mod test {
     #[test]
     fn refract_paraxial() {
         let mut rays = Rays::default();
-        assert!(rays.refract_paraxial(millimeter!(0.0)).is_err());
-        assert!(rays.refract_paraxial(millimeter!(f64::NAN)).is_err());
-        assert!(rays.refract_paraxial(millimeter!(f64::INFINITY)).is_err());
         assert!(rays
-            .refract_paraxial(millimeter!(f64::NEG_INFINITY))
+            .refract_paraxial(millimeter!(0.0), &Isometry::identity())
             .is_err());
-        assert!(rays.refract_paraxial(millimeter!(100.0)).is_ok());
+        assert!(rays
+            .refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
+            .is_err());
+        assert!(rays
+            .refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
+            .is_err());
+        assert!(rays
+            .refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
+            .is_err());
+        assert!(rays
+            .refract_paraxial(millimeter!(100.0), &Isometry::identity())
+            .is_ok());
         let ray0 =
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
         let ray1 =
             Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
         rays.add_ray(ray0.clone());
         rays.add_ray(ray1.clone());
-        rays.refract_paraxial(millimeter!(100.0)).unwrap();
+        rays.refract_paraxial(millimeter!(100.0), &Isometry::identity())
+            .unwrap();
         assert_eq!(rays.rays[0].position(), ray0.position());
         assert_eq!(rays.rays[0].direction(), ray0.direction());
         assert_eq!(rays.rays[1].position(), ray1.position());
@@ -1555,10 +1676,43 @@ mod test {
         let mut rays = Rays::default();
         testing_logger::setup();
         let reflected = rays
-            .refract_on_surface(&Plane::new(&Isometry::identity()), &refr_index_vaccuum())
+            .refract_on_surface(
+                &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+                Some(&refr_index_vaccuum()),
+            )
             .unwrap();
         check_warnings(vec!["ray bundle contains no valid rays - not propagating"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
+    }
+    #[test]
+    fn refract_on_surface_same_index() {
+        let mut rays = Rays::default();
+        let mut ray0 = Ray::new(
+            millimeter!(0., 0., -10.),
+            vector![0.0, 1.0, 1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        ray0.set_refractive_index(1.5).unwrap();
+        let mut ray1 = Ray::new(
+            millimeter!(0., 1., -10.),
+            vector![0.0, 1.0, 1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        ray1.set_refractive_index(2.0).unwrap();
+        rays.add_ray(ray0);
+        rays.add_ray(ray1);
+        rays.refract_on_surface(
+            &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+            None,
+        )
+        .unwrap();
+        for ray in rays.iter() {
+            assert_abs_diff_eq!(ray.direction(), vector![0.0, 1.0, 1.0].normalize())
+        }
     }
     #[test]
     fn refract_on_surface_missed() {
@@ -1569,10 +1723,28 @@ mod test {
         );
         testing_logger::setup();
         let reflected = rays
-            .refract_on_surface(&Plane::new(&Isometry::identity()), &refr_index_vaccuum())
+            .refract_on_surface(
+                &OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+                Some(&refr_index_vaccuum()),
+            )
             .unwrap();
         check_warnings(vec!["rays totally reflected or missed a surface"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
+    }
+    #[test]
+    fn refract_on_surface_energy() {
+        let mut rays = Rays::default();
+        rays.add_ray(
+            Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
+                .unwrap(),
+        );
+        let mut s = OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())));
+        s.set_coating(CoatingType::ConstantR { reflectivity: 0.2 });
+        let reflected = rays
+            .refract_on_surface(&s, Some(&refr_index_vaccuum()))
+            .unwrap();
+        assert_eq!(rays.total_energy(), joule!(0.8));
+        assert_eq!(reflected.total_energy(), joule!(0.2));
     }
     #[test]
     fn filter_energy() {
@@ -1761,7 +1933,8 @@ mod test {
     fn get_wavefront_data_in_units_of_wvl() {
         //empty rays vector
         let rays = Rays::from(Vec::<Ray>::new());
-        let wf_data = rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(10.));
+        let wf_data =
+            rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(10.), &Isometry::identity());
         assert!(wf_data.is_err());
 
         let mut rays = Rays::new_hexapolar_point_source(
@@ -1774,7 +1947,7 @@ mod test {
         .unwrap();
         let _ = propagate(&mut rays, millimeter!(1.0));
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(true, nanometer!(10.))
+            .get_wavefront_data_in_units_of_wvl(true, nanometer!(10.), &Isometry::identity())
             .unwrap();
         assert!(wf_data.wavefront_error_maps.len() == 1);
         rays.add_ray(
@@ -1787,13 +1960,13 @@ mod test {
             .unwrap(),
         );
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, nanometer!(10.))
+            .get_wavefront_data_in_units_of_wvl(false, nanometer!(10.), &Isometry::identity())
             .unwrap();
 
         assert!(wf_data.wavefront_error_maps.len() == 1);
 
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, nanometer!(3.))
+            .get_wavefront_data_in_units_of_wvl(false, nanometer!(3.), &Isometry::identity())
             .unwrap();
 
         assert!(wf_data.wavefront_error_maps.len() == 2);
@@ -1808,7 +1981,7 @@ mod test {
         );
 
         let wf_data = rays
-            .get_wavefront_data_in_units_of_wvl(false, nanometer!(3.))
+            .get_wavefront_data_in_units_of_wvl(false, nanometer!(3.), &Isometry::identity())
             .unwrap();
 
         assert!(wf_data.wavefront_error_maps.len() == 3);
@@ -1824,10 +1997,13 @@ mod test {
         )
         .unwrap();
 
-        let plane = Plane::new(&Isometry::new_along_z(millimeter!(10.0)).unwrap());
-        rays.refract_on_surface(&plane, &refr_index_vaccuum())
+        let plane = OpticalSurface::new(Box::new(Plane::new(
+            &Isometry::new_along_z(millimeter!(10.0)).unwrap(),
+        )));
+        rays.refract_on_surface(&plane, Some(&refr_index_vaccuum()))
             .unwrap();
-        let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.));
+        let wf_error =
+            rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.), &Isometry::identity());
         for (i, val) in wf_error.column(2).iter().enumerate() {
             if i != 0 {
                 assert_relative_eq!(
@@ -1847,9 +2023,10 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        rays.refract_on_surface(&plane, &refr_index_vaccuum())
+        rays.refract_on_surface(&plane, Some(&refr_index_vaccuum()))
             .unwrap();
-        let wf_error = rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.));
+        let wf_error =
+            rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.), &Isometry::identity());
         for (i, val) in wf_error.column(2).iter().enumerate() {
             if i != 0 {
                 assert_relative_eq!(
@@ -1931,11 +2108,17 @@ mod test {
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
-            &FibonacciRectangle::new(centimeter!(1.), centimeter!(1.), 1000).unwrap(),
+            &FibonacciRectangle::new(centimeter!(1.), centimeter!(1.), 2000).unwrap(),
         )
         .unwrap();
 
         let fluence = rays.calc_fluence_at_position().unwrap();
+        println!(
+            "{:?}",
+            fluence
+                .get_average_fluence()
+                .get::<joule_per_square_centimeter>()
+        );
         assert!(approx::RelativeEq::relative_eq(
             &fluence
                 .get_average_fluence()
@@ -2000,5 +2183,63 @@ mod test {
         let rays = Rays::default();
         let centroid = rays.energy_weighted_centroid();
         assert!(centroid.is_none());
+    }
+
+    #[test]
+    fn define_up_direction_test() {
+        let mut rays = Rays::default();
+        assert!(rays.define_up_direction().is_err());
+        rays.add_ray(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::x(),
+                nanometer!(1000.),
+                joule!(1.),
+            )
+            .unwrap(),
+        );
+        rays.add_ray(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::x(),
+                nanometer!(1000.),
+                joule!(1.),
+            )
+            .unwrap(),
+        );
+        testing_logger::setup();
+        assert!(rays.define_up_direction().is_ok());
+        check_warnings(vec![
+            "Ray bundle not used for alignment, use first ray for up-direction calculation",
+        ]);
+    }
+    #[test]
+    fn calc_new_up_direction_test() {
+        let mut rays = Rays::default();
+        assert!(rays.calc_new_up_direction(&mut Vector3::y()).is_err());
+        rays.add_ray(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::x(),
+                nanometer!(1000.),
+                joule!(1.),
+            )
+            .unwrap(),
+        );
+        rays.add_ray(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::x(),
+                nanometer!(1000.),
+                joule!(1.),
+            )
+            .unwrap(),
+        );
+        testing_logger::setup();
+        //error because underlying function return error
+        assert!(rays.calc_new_up_direction(&mut Vector3::y()).is_err());
+        check_warnings(vec![
+            "Ray bundle not used for alignment, use first ray for up-direction calculation",
+        ]);
     }
 }

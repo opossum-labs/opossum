@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
-    analyzer::AnalyzerType,
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -18,10 +18,12 @@ use crate::{
         AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
     },
     properties::{Properties, Proptype},
-    refractive_index::refr_index_vaccuum,
     reporter::NodeReport,
-    surface::Plane,
-    utils::griddata::{create_linspace_axes, interpolate_3d_scatter_data},
+    surface::{OpticalSurface, Plane},
+    utils::{
+        geom_transformation::Isometry,
+        griddata::{create_linspace_axes, interpolate_3d_scatter_data},
+    },
 };
 
 use super::node_attr::NodeAttr;
@@ -55,7 +57,7 @@ impl Default for WaveFront {
         let mut ports = OpticPorts::new();
         ports.create_input("in1").unwrap();
         ports.create_output("out1").unwrap();
-        node_attr.set_apertures(ports);
+        node_attr.set_ports(ports);
         Self {
             light_data: None,
             node_attr,
@@ -176,8 +178,8 @@ impl Optical for WaveFront {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = Plane::new(&iso);
-                rays.refract_on_surface(&plane, &refr_index_vaccuum())?;
+                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                rays.refract_on_surface(&plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
@@ -215,7 +217,11 @@ impl Optical for WaveFront {
     fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
         if let Some(LightData::Geometric(rays)) = &self.light_data {
             let wf_data_opt = rays
-                .get_wavefront_data_in_units_of_wvl(true, nanometer!(1.))
+                .get_wavefront_data_in_units_of_wvl(
+                    true,
+                    nanometer!(1.),
+                    &self.effective_iso().map_or_else(Isometry::identity, |v| v),
+                )
                 .ok();
 
             let mut file_path = PathBuf::from(report_dir);
@@ -241,7 +247,8 @@ impl Optical for WaveFront {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
-            let wf_data_opt = rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(1.));
+            let iso = self.effective_iso().map_or_else(Isometry::identity, |v| v);
+            let wf_data_opt = rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(1.), &iso);
 
             if wf_data_opt.is_ok()
                 && !wf_data_opt
@@ -332,8 +339,8 @@ impl Plottable for WaveFrontErrorMap {
     }
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
         let mut plt_type = PlotType::ColorMesh(plt_params.clone());
-
-        if let Some(plt_series) = &self.get_plot_series(&plt_type).unwrap_or(None) {
+        let legend = plt_params.get_legend_flag().unwrap_or(false);
+        if let Some(plt_series) = &self.get_plot_series(&mut plt_type, legend).unwrap_or(None) {
             let ranges = plt_series[0].define_data_based_axes_bounds(false);
             let z_bounds = ranges
                 .get_z_bounds()
@@ -349,7 +356,11 @@ impl Plottable for WaveFrontErrorMap {
         plt_type
     }
 
-    fn get_plot_series(&self, _plt_type: &PlotType) -> OpmResult<Option<Vec<PlotSeries>>> {
+    fn get_plot_series(
+        &self,
+        _plt_type: &mut PlotType,
+        _legend: bool,
+    ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let (x_interp, _) =
             create_linspace_axes(DVectorView::from(&DVector::from_vec(self.x.clone())), 100)?;
         let (y_interp, _) =
@@ -388,7 +399,8 @@ mod test_wavefront_error_map {
         let mut ray = Ray::new_collimated(Point3::origin(), wvl, en).unwrap();
         ray.propagate(wvl).unwrap();
         rays.add_ray(ray);
-        let wavefront_error = rays.wavefront_error_at_pos_in_units_of_wvl(wvl);
+        let wavefront_error =
+            rays.wavefront_error_at_pos_in_units_of_wvl(wvl, &Isometry::identity());
         let wvf_map = WaveFrontErrorMap::new(&wavefront_error, wvl).unwrap();
         assert_eq!(wvf_map.ptv, 1.0);
         assert_abs_diff_eq!(wvf_map.rms, 0.5);
@@ -409,9 +421,9 @@ mod test {
     use super::*;
     use crate::utils::geom_transformation::Isometry;
     use crate::{
-        analyzer::AnalyzerType, analyzer::RayTraceConfig, joule, lightdata::DataEnergy, millimeter,
-        nanometer, nodes::test_helper::test_helper::*, position_distributions::Hexapolar,
-        rays::Rays, spectrum_helper::create_he_ne_spec,
+        analyzers::AnalyzerType, analyzers::RayTraceConfig, joule, lightdata::DataEnergy,
+        millimeter, nanometer, nodes::test_helper::test_helper::*,
+        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
     };
     use tempfile::NamedTempFile;
     use uom::num_traits::Zero;
