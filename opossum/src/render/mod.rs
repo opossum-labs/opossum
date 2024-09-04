@@ -2,8 +2,7 @@ mod sdf;
 pub use sdf::{Renderable, SDFCollection, SDFOperation, SDF};
 
 use crate::{
-    error::{OpmResult, OpossumError},
-    utils::{geom_transformation::Isometry, griddata::linspace},
+    error::{OpmResult, OpossumError}, surface::Surf, utils::{geom_transformation::Isometry, griddata::linspace}
 };
 use itertools::Itertools;
 use nalgebra::{Point2, Point3, Vector2, Vector3};
@@ -195,8 +194,8 @@ pub trait Render<'a>: SDF + Sync {
             }
         }
         // let pos =pos + dist*dir ;
-        let (sdf, color) = self.sdf_eval_with_color(pos);
-        Some((sdf, color, dist))
+        let sdf= self.sdf_eval_point(pos);
+        Some((sdf, Vector3::new(0.8,0.8,0.8), dist))
     }
 
     fn approx_normal(&self, p: &Point3<f64>) -> Vector3<f64> {
@@ -226,7 +225,7 @@ pub trait Render<'a>: SDF + Sync {
     /// Returns a vector of Length with the signed distance of the objects' union for each input point
     fn sdf_union_vec_of_points(
         &self,
-        sdf_vec: &[&'a dyn Renderable<'a>],
+        sdf_vec: &[Surf],
         p_vec: &Vec<Point3<f64>>,
     ) -> Vec<f64> {
         if sdf_vec.is_empty() {
@@ -249,7 +248,7 @@ pub trait Render<'a>: SDF + Sync {
     /// - `p`: 3D point of type Length
     /// # Returns
     /// Returns a Point3 of Length with the signed distance of the objects' union for each input point
-    fn sdf_union_point(&self, sdf_vec: &[&'a dyn Renderable<'_>], p: &Point3<f64>) -> f64 {
+    fn sdf_union_point(&self, sdf_vec: &[Surf], p: &Point3<f64>) -> f64 {
         if sdf_vec.is_empty() {
             self.sdf_eval_point(p)
         } else {
@@ -266,26 +265,26 @@ pub trait Render<'a>: SDF + Sync {
     /// - `p`: 3D point of type Length
     /// # Returns
     /// Returns a Point3 of Length with the signed distance of the objects' union for each input point
-    fn sdf_union_point_with_color(
-        &self,
-        sdf_vec: &[&'a dyn Renderable<'_>],
-        p: &Point3<f64>,
-    ) -> (f64, Vector3<f64>) {
-        if sdf_vec.is_empty() {
-            self.sdf_eval_with_color(p)
-        } else {
-            sdf_vec
-                .iter()
-                .fold(self.sdf_eval_with_color(p), |arg0, sdf| {
-                    let val = sdf.sdf_eval_with_color(p);
-                    if val.0 < arg0.0 {
-                        val
-                    } else {
-                        arg0
-                    }
-                })
-        }
-    }
+    // fn sdf_union_point_with_color(
+    //     &self,
+    //     sdf_vec: &[Surf],
+    //     p: &Point3<f64>,
+    // ) -> (f64, Vector3<f64>) {
+    //     if sdf_vec.is_empty() {
+    //         self.sdf_eval_with_color(p)
+    //     } else {
+    //         sdf_vec
+    //             .iter()
+    //             .fold(self.sdf_eval_with_color(p), |arg0, sdf| {
+    //                 let val = sdf.sdf_eval_with_color(p);
+    //                 if val.0 < arg0.0 {
+    //                     val
+    //                 } else {
+    //                     arg0
+    //                 }
+    //             })
+    //     }
+    // }
 
     /// Calculation of an intersection of signed distance functions for a vector of points.
     /// The intersection of difference objects is calculated by taking the maximum value of the sdf-values of all objects.
@@ -296,7 +295,7 @@ pub trait Render<'a>: SDF + Sync {
     /// Returns a vector of Length with the signed distance of the objects' intersection for each input point
     fn sdf_intersection_vec_of_points(
         &self,
-        sdf_vec: &[&'a dyn Renderable<'a>],
+        sdf_vec: &[Surf],
         p_vec: &Vec<Point3<f64>>,
     ) -> Vec<f64> {
         if sdf_vec.is_empty() {
@@ -319,7 +318,7 @@ pub trait Render<'a>: SDF + Sync {
     /// - `p`: 3D point of type Length
     /// # Returns
     /// Returns a Point3 of Length with the signed distance of the objects' intersection for each input point
-    fn sdf_intersection_point(&self, sdf_vec: &[&'a dyn Renderable<'_>], p: &Point3<f64>) -> f64 {
+    fn sdf_intersection_point(&self, sdf_vec: &[Surf], p: &Point3<f64>) -> f64 {
         if sdf_vec.is_empty() {
             self.sdf_eval_point(p)
         } else {
@@ -338,7 +337,7 @@ pub trait Render<'a>: SDF + Sync {
     /// Returns a vector of Length with the signed distance of the input object (self), subtracted by all other objects intersection for each input point
     fn sdf_subtraction_vec_of_points(
         &self,
-        sdf_vec: &[&'a dyn Renderable<'a>],
+        sdf_vec: &[Surf],
         p_vec: &Vec<Point3<f64>>,
     ) -> Vec<f64> {
         if sdf_vec.is_empty() {
@@ -361,7 +360,7 @@ pub trait Render<'a>: SDF + Sync {
     /// - `p`: 3D point of type Length
     /// # Returns
     /// Returns a Point3 of Length with the signed distance of the input object (self), subtracted by all other objects intersection
-    fn sdf_subtraction_point(&self, sdf_vec: &[&'a dyn Renderable<'_>], p: &Point3<f64>) -> f64 {
+    fn sdf_subtraction_point(&self, sdf_vec: &[Surf], p: &Point3<f64>) -> f64 {
         if sdf_vec.is_empty() {
             self.sdf_eval_point(p)
         } else {

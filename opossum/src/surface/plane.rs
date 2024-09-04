@@ -3,12 +3,12 @@
 //! An infinitely large flat 2D surface oriented perpendicular to the optical axis (xy plane) and positioned a the given z position.
 
 use super::GeoSurface;
-use crate::{meter, ray::Ray, utils::geom_transformation::Isometry};
+use crate::{meter, ray::Ray, render::{Render, Renderable, SDF}, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use num::Zero;
 use uom::si::f64::Length;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// An infinitely large flat surface with its normal collinear to the optical axis.
 pub struct Plane {
     isometry: Isometry,
@@ -55,15 +55,14 @@ impl GeoSurface for Plane {
 //         Vector3::new(0.3, 0.3, 0.3)
 //     }
 // }
-// impl SDF for Plane {
-//     fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
-//         let p_out = self.isometry.inverse_transform_point_f64(p);
-//         p_out.x.mul_add(self.normal.x, p_out.y * self.normal.y)
-//             + p_out.z.mul_add(self.normal.z, self.shift.value)
-//     }
-// }
-// impl Render<'_> for Plane {}
-// impl Renderable<'_> for Plane {}
+impl SDF for Plane {
+    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+        let p_out = self.isometry.inverse_transform_point_f64(p);
+        p_out.z
+    }
+}
+impl Render<'_> for Plane {}
+impl Renderable<'_> for Plane {}
 #[cfg(test)]
 mod test {
     use super::*;

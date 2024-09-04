@@ -14,7 +14,7 @@ pub use optical_surface::OpticalSurface;
 pub use plane::Plane;
 pub use sphere::Sphere;
 
-use crate::{ray::Ray, utils::geom_transformation::Isometry};
+use crate::{ray::Ray, render::{Color, Render, Renderable, SDFCollection, SDF}, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use std::fmt::Debug;
 use uom::si::f64::Length;
@@ -52,6 +52,25 @@ pub trait GeoSurface {
     /// This function can be used to place and align the [`GeoSurface`] in 3D space.
     fn set_isometry(&mut self, isometry: &Isometry);
 }
+
+#[derive(Clone)]
+pub enum Surf{
+    Spherical{s: Sphere, convex: bool},
+    Flat{s: Plane},
+    // Cylindrical{s: Cylinder, convex: bool},
+    SurfaceVolume{s: SDFCollection}
+}
+impl SDF for Surf{
+    fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
+        match self{
+            Surf::Spherical { s, convex } => s.sdf_eval_point(p),
+            Surf::Flat { s } => s.sdf_eval_point(p),
+            Surf::SurfaceVolume { s } => s.sdf_eval_point(p),
+        }
+    }
+}
+impl Render<'_> for Surf {}
+// impl Renderable<'_> for Surf {}
 
 impl Debug for dyn GeoSurface {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

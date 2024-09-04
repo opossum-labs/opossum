@@ -1,6 +1,8 @@
 #![warn(missing_docs)]
 //! Module for the calculation of the signed distane function of nodes.
 
+use crate::surface::Surf;
+
 use super::{Color, Render};
 use nalgebra::{Point3, Vector3};
 
@@ -8,6 +10,7 @@ use nalgebra::{Point3, Vector3};
 pub trait Renderable<'a>: Render<'a> + SDF {}
 
 /// Enum to define the binary operation for sdf objects
+#[derive(Clone)]
 pub enum SDFOperation {
     /// build a union from all objects
     Union,
@@ -21,29 +24,30 @@ pub enum SDFOperation {
 }
 
 ///Struct to stor a collection of sdf objects. This also includes [`SDFCollection`] structs
-pub struct SDFCollection<'a> {
-    sdf_objs: Vec<&'a dyn Renderable<'a>>,
+#[derive(Clone)]
+pub struct SDFCollection {
+    sdf_objs: Vec<Surf>,
     sdf_op: SDFOperation,
     bbox: tessellation::BoundingBox<f64>,
 }
 
-impl<'a> Render<'_> for SDFCollection<'a> {}
-impl<'a> Renderable<'_> for SDFCollection<'a> {}
+impl Render<'_> for SDFCollection {}
+impl Renderable<'_> for SDFCollection {}
 
-impl<'a> Color for SDFCollection<'a> {
+impl Color for SDFCollection {
     fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
         Vector3::<f64>::new(0.8, 0.7, 0.6)
     }
 }
-impl<'a> SDF for SDFCollection<'a> {
+impl SDF for SDFCollection {
     fn sdf_eval_point(&self, p: &Point3<f64>) -> f64 {
         self.sdf_eval(p)
     }
-    fn sdf_eval_with_color(&self, p: &Point3<f64>) -> (f64, Vector3<f64>) {
-        (self.sdf_eval_point(p), self.get_color(p))
-    }
+    // fn sdf_eval_with_color(&self, p: &Point3<f64>) -> (f64, Vector3<f64>) {
+    //     (self.sdf_eval_point(p), self.get_color(p))
+    // }
 }
-impl<'a> SDFCollection<'a> {
+impl SDFCollection {
     /// Create a new [`SDFCollection`] struct
     /// # Attributes
     /// - `sdf_objs`: vector of sdf objects: must hav implemented the renderable trait
@@ -53,7 +57,7 @@ impl<'a> SDFCollection<'a> {
     /// - `Option<Self>` otherwise
     #[must_use]
     pub fn new(
-        sdf_objs: Vec<&'a dyn Renderable<'a>>,
+        sdf_objs: Vec<Surf>,
         sdf_op_opt: Option<SDFOperation>,
         bbox: tessellation::BoundingBox<f64>,
     ) -> Option<Self> {
@@ -79,8 +83,8 @@ impl<'a> SDFCollection<'a> {
         &self.bbox
     }
     /// Add and sdf object (must implement Renderable) to this [`SDFCollection`]
-    pub fn add_sdf_obj(&mut self, sdf_obj: &'a dyn Renderable<'a>) {
-        self.sdf_objs.push(sdf_obj);
+    pub fn add_sdf_obj(&mut self, sdf_obj: &Surf) {
+        self.sdf_objs.push(sdf_obj.clone());
     }
 
     /// Evaluate the sdf of this [`SDFCollection`] for a given point
@@ -158,7 +162,7 @@ impl<'a> SDFCollection<'a> {
 /// - negative for points inside of the object
 /// - positive for points outside of the object
 /// - zero if the point is on the surface
-pub trait SDF: Color {
+pub trait SDF {
     /// Calculation of the signed distance function value for a single point.
     /// This function must be implemented individually for each object, as the definition of the signed distance function is different for each object
     /// # Arguments
@@ -169,9 +173,9 @@ pub trait SDF: Color {
     /// This function must be implemented individually for each object, as the definition of the signed distance function is different for each object
     /// # Arguments
     /// - `p`: 3D point filled with xyz coordinates of type Length
-    fn sdf_eval_with_color(&self, p: &Point3<f64>) -> (f64, Vector3<f64>) {
-        (self.sdf_eval_point(p), self.get_color(p))
-    }
+    // fn sdf_eval_with_color(&self, p: &Point3<f64>) -> (f64, Vector3<f64>) {
+    //     (self.sdf_eval_point(p), self.get_color(p))
+    // }
 
     /// Calculation of the signed distance function value for a vector of points
     /// # Arguments

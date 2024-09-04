@@ -17,7 +17,7 @@ use roots::find_roots_quadratic;
 use roots::Roots;
 use uom::si::f64::Length;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A spherical surface with its anchor point on the optical axis.
 pub struct Sphere {
     radius: Length,
