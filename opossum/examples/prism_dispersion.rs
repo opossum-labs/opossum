@@ -9,7 +9,7 @@ use opossum::{
     lightdata::LightData,
     millimeter, nanometer,
     nodes::{NodeGroup, RayPropagationVisualizer, Source, SpotDiagram, Wedge},
-    optical::{Alignable, Optical},
+    optic_node::{Alignable, OpticNode},
     position_distributions::Grid,
     rays::Rays,
     refractive_index::RefrIndexSellmeier1,

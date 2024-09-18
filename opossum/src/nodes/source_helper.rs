@@ -5,7 +5,7 @@ use crate::{
     error::OpmResult,
     lightdata::LightData,
     nanometer,
-    optical::Optical,
+    optic_node::OpticNode,
     position_distributions::{Grid, Hexapolar},
     rays::Rays,
     utils::geom_transformation::Isometry,
@@ -92,7 +92,7 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{degree, joule, millimeter, optical::Optical, properties::Proptype, ray::Ray};
+    use crate::{degree, joule, millimeter, optic_node::OpticNode, properties::Proptype, ray::Ray};
     use approx::assert_abs_diff_eq;
     use uom::si::energy::joule;
     #[test]

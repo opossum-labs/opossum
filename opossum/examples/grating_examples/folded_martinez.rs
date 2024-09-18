@@ -4,7 +4,7 @@ use opossum::{
     millimeter,
     nodes::{Lens, NodeGroup, NodeReference, ReflectiveGrating, ThinMirror},
     num_per_mm,
-    optical::{Alignable, Optical},
+    optic_node::{Alignable, OpticNode},
     refractive_index::RefractiveIndex,
 };
 use uom::si::f64::Length;

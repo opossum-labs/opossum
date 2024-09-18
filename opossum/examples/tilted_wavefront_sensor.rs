@@ -6,7 +6,7 @@ use opossum::{
     nodes::{
         round_collimated_ray_source, NodeGroup, RayPropagationVisualizer, SpotDiagram, WaveFront,
     },
-    optical::Alignable,
+    optic_node::Alignable,
     OpmDocument,
 };
 use std::path::Path;

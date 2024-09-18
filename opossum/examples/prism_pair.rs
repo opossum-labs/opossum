@@ -4,7 +4,7 @@ use opossum::{
     error::OpmResult,
     joule, millimeter,
     nodes::{collimated_line_ray_source, NodeGroup, RayPropagationVisualizer, SpotDiagram, Wedge},
-    optical::Optical,
+    optic_node::OpticNode,
     refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
     OpmDocument,

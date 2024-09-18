@@ -1,16 +1,17 @@
 //! Analyzer for sequential ray tracing
+use super::Analyzer;
 use crate::{
-    analyzers::AnalyzerType,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
     nodes::NodeGroup,
-    optical::{LightResult, Optical},
+    optic_node::OpticNode,
     picojoule,
 };
 use log::info;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Energy;
 
-use super::Analyzer;
+//pub type LightResRays = LightDings<Rays>;
 
 /// Analyzer for (sequential) ray tracing
 #[derive(Default, Debug)]
@@ -31,40 +32,61 @@ impl Analyzer for RayTracingAnalyzer {
         } else {
             format!(" '{}'", scenery.node_attr().name())
         };
+        info!("Calculate node positions of scenery{scenery_name}.");
+        AnalysisRayTrace::calc_node_position(scenery, LightResult::default(), &self.config)?;
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
-        let graph = scenery.graph_mut();
-        let name = format!("scenery{scenery_name}");
-        graph.calc_node_positions(&name, &LightResult::default())?;
-        let name = format!("Scenery{scenery_name}");
-        graph.analyze(
-            &name,
-            &LightResult::default(),
-            &AnalyzerType::RayTrace(self.config.clone()),
-        )?;
+        AnalysisRayTrace::analyze(scenery, LightResult::default(), &self.config)?;
         Ok(())
     }
 }
-
-/// enum to define the mode of the raytracing analysis.
-/// Currently only sequential mode
-#[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
-pub enum RayTracingMode {
-    #[default]
-    /// Sequential mode
+/// Trait for implementing the ray trace analysis.
+pub trait AnalysisRayTrace: OpticNode {
+    /// Perform a ray trace analysis an [`OpticNode`].
     ///
-    /// In this mode, rays follow the directed graph from node to node. If the next node is not hit, further propagation is dropped. This mode is
-    /// mostly useful for imaging, collimation, and optimizing of "simple" optical lens systems.
-    Sequential,
-    // /// Semi-sequential mode
-    // ///
-    // /// Rays may bounce and traverse the graph in backward direction. If the next intended node is not hit, further propagation is dropped.
-    // /// Interesting for ghost focus simulation
-    // SemiSequential,
-    // /// Non-sequential mode
-    // ///
-    // /// Rays do not follow a specific direction of the graph. Skipping of nodes may be allowed. Interesting for stray-light analysis, flash-lamp pumping, beam dumps, etc.
-    // NonSequential
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult>;
+    /// Calculate the position of this [`OpticNode`] element.
+    ///
+    /// This function calculates the position of this [`OpticNode`] element in 3D space. This is based on the analysis of a single,
+    /// central [`Ray`](crate::ray::Ray) representing the optical axis. The default implementation is to use the normal `analyze`
+    /// function. For a [`NodeGroup`] however, this must be separately implemented in order to allow nesting.
+    ///
+    /// # Errors
+    /// This function will return an error if internal element-specific errors occur and the analysis cannot be performed.
+    fn calc_node_position(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        self.analyze(incoming_data, config)
+    }
 }
+// /// enum to define the mode of the raytracing analysis.
+// /// Currently only sequential mode
+// #[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+// pub enum RayTracingMode {
+//     #[default]
+//     /// Sequential mode
+//     ///
+//     /// In this mode, rays follow the directed graph from node to node. If the next node is not hit, further propagation is dropped. This mode is
+//     /// mostly useful for imaging, collimation, and optimizing of "simple" optical lens systems.
+//     Sequential,
+//     // /// Semi-sequential mode
+//     // ///
+//     // /// Rays may bounce and traverse the graph in backward direction. If the next intended node is not hit, further propagation is dropped.
+//     // /// Interesting for ghost focus simulation
+//     // SemiSequential,
+//     // /// Non-sequential mode
+//     // ///
+//     // /// Rays do not follow a specific direction of the graph. Skipping of nodes may be allowed. Interesting for stray-light analysis, flash-lamp pumping, beam dumps, etc.
+//     // NonSequential
+// }
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration data for a rays tracing analysis.
@@ -75,7 +97,7 @@ pub enum RayTracingMode {
 ///   - maximum number of bounces (reflections) / ray
 ///   - maximum number of refractions / ray
 pub struct RayTraceConfig {
-    mode: RayTracingMode,
+    //mode: RayTracingMode,
     min_energy_per_ray: Energy,
     max_number_of_bounces: usize,
     max_number_of_refractions: usize,
@@ -88,7 +110,7 @@ impl Default for RayTraceConfig {
     ///   - maximum number od refractions / ray: `1000`
     fn default() -> Self {
         Self {
-            mode: RayTracingMode::default(),
+            //mode: RayTracingMode::default(),
             min_energy_per_ray: picojoule!(1.0),
             max_number_of_bounces: 1000,
             max_number_of_refractions: 1000,
@@ -103,10 +125,10 @@ impl RayTraceConfig {
     }
 
     /// Returns the ray-tracing mode of this config.
-    #[must_use]
-    pub const fn mode(&self) -> RayTracingMode {
-        self.mode
-    }
+    // #[must_use]
+    // pub const fn mode(&self) -> RayTracingMode {
+    //     self.mode
+    // }
     /// Sets the min energy per ray during analysis. Rays with energies lower than this limit will be dropped.
     ///
     /// # Errors
@@ -144,21 +166,25 @@ impl RayTraceConfig {
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
-    fn ray_tracing_mode_default() {
-        assert!(matches!(
-            RayTracingMode::default(),
-            RayTracingMode::Sequential
-        ));
-    }
-    #[test]
-    fn ray_tracing_mode_debug() {
-        assert_eq!(format!("{:?}", RayTracingMode::default()), "Sequential");
-    }
+    use crate::{
+        joule, millimeter,
+        nodes::{round_collimated_ray_source, ParaxialSurface},
+    };
+    // #[test]
+    // fn ray_tracing_mode_default() {
+    //     assert!(matches!(
+    //         RayTracingMode::default(),
+    //         RayTracingMode::Sequential
+    //     ));
+    // }
+    // #[test]
+    // fn ray_tracing_mode_debug() {
+    //     assert_eq!(format!("{:?}", RayTracingMode::default()), "Sequential");
+    // }
     #[test]
     fn ray_tracing_config_default() {
         let rt_conf = RayTraceConfig::default();
-        assert!(matches!(rt_conf.mode(), RayTracingMode::Sequential));
+        // assert!(matches!(rt_conf.mode(), RayTracingMode::Sequential));
         assert_eq!(rt_conf.max_number_of_bounces(), 1000);
         assert_eq!(rt_conf.max_number_of_refractions(), 1000);
         assert_eq!(rt_conf.min_energy_per_ray(), picojoule!(1.0));
@@ -189,7 +215,23 @@ mod test {
     fn ray_tracing_config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { mode: Sequential, min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000 }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000 }"
         );
+    }
+    #[test]
+    fn ray_tracing_integration_test() {
+        // simulate simple system for integration test
+        let mut group = NodeGroup::default();
+        let i_src = group
+            .add_node(round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 3).unwrap())
+            .unwrap();
+        let i_l1 = group
+            .add_node(ParaxialSurface::new("f=100", millimeter!(100.0)).unwrap())
+            .unwrap();
+        group
+            .connect_nodes(i_src, "out1", i_l1, "front", millimeter!(50.0))
+            .unwrap();
+        let analyzer = RayTracingAnalyzer::default();
+        analyzer.analyze(&mut group).unwrap();
     }
 }

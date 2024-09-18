@@ -1,12 +1,14 @@
 use super::NodeAttr;
 use crate::{
-    analyzers::AnalyzerType,
+    analyzable::Analyzable,
+    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
     lightdata::LightData,
     millimeter,
-    optic_ports::OpticPorts,
-    optical::{Alignable, LightResult, Optical},
+    optic_node::{Alignable, OpticNode},
+    optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
@@ -66,8 +68,8 @@ impl Default for Wedge {
             .create_property("wedge", "wedge angle", None, Angle::zero().into())
             .unwrap();
         let mut ports = OpticPorts::new();
-        ports.create_input("front").unwrap();
-        ports.create_output("rear").unwrap();
+        ports.add(&PortType::Input, "front").unwrap();
+        ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
         Self { node_attr }
     }
@@ -131,7 +133,7 @@ impl Wedge {
         )?;
         let isometry = iso.append(&thickness_iso).append(&wedge_iso);
         let rear_surf = OpticalSurface::new(Box::new(Plane::new(&isometry)));
-        if let Some(aperture) = self.ports().input_aperture("front") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -142,7 +144,7 @@ impl Wedge {
         rays.refract_on_surface(&front_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
         rays.refract_on_surface(&rear_surf, Some(&self.ambient_idx()))?;
-        if let Some(aperture) = self.ports().output_aperture("rear") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -172,7 +174,7 @@ impl Wedge {
         )?;
         let isometry = iso.append(&thickness_iso).append(&wedge_iso);
         let rear_surf = OpticalSurface::new(Box::new(Plane::new(&isometry)));
-        if let Some(aperture) = self.ports().output_aperture("rear") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -183,7 +185,7 @@ impl Wedge {
         rays.refract_on_surface(&rear_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
         rays.refract_on_surface(&front_surf, Some(&self.ambient_idx()))?;
-        if let Some(aperture) = self.ports().input_aperture("front") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -195,80 +197,7 @@ impl Wedge {
     }
 }
 
-impl Optical for Wedge {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<LightResult> {
-        let (in_port, out_port) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
-        let light_data = match analyzer_type {
-            AnalyzerType::Energy => data.clone(),
-            AnalyzerType::RayTrace(_) => {
-                let LightData::Geometric(rays) = data.clone() else {
-                    return Err(OpossumError::Analysis(
-                        "expected ray data at input port".into(),
-                    ));
-                };
-                let Some(eff_iso) = self.effective_iso() else {
-                    return Err(OpossumError::Analysis(
-                        "no location for surface defined".into(),
-                    ));
-                };
-                let Ok(Proptype::RefractiveIndex(index_model)) =
-                    self.node_attr.get_property("refractive index")
-                else {
-                    return Err(OpossumError::Analysis(
-                        "cannot read refractive index".into(),
-                    ));
-                };
-                let Ok(Proptype::Length(center_thickness)) =
-                    self.node_attr.get_property("center thickness")
-                else {
-                    return Err(OpossumError::Analysis(
-                        "cannot read center thickness".into(),
-                    ));
-                };
-                let Ok(Proptype::Angle(angle)) = self.node_attr.get_property("wedge") else {
-                    return Err(OpossumError::Analysis("cannot wedge angle".into()));
-                };
-                let output = if self.inverted() {
-                    self.analyze_inverse(
-                        rays,
-                        *center_thickness,
-                        *angle,
-                        &index_model.value,
-                        &eff_iso,
-                        analyzer_type,
-                    )?
-                } else {
-                    self.analyze_forward(
-                        rays,
-                        *center_thickness,
-                        *angle,
-                        &index_model.value,
-                        &eff_iso,
-                        analyzer_type,
-                    )?
-                };
-                LightData::Geometric(output)
-            }
-            _ => {
-                return Err(OpossumError::Analysis(
-                    "analysis mode not yet implemented for wedge".into(),
-                ))
-            }
-        };
-        let light_result = LightResult::from([(out_port.into(), light_data)]);
-        Ok(light_result)
-    }
+impl OpticNode for Wedge {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -284,17 +213,94 @@ impl Dottable for Wedge {
         "aquamarine"
     }
 }
+impl Analyzable for Wedge {}
+impl AnalysisEnergy for Wedge {
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let (in_port, out_port) = if self.inverted() {
+            ("rear", "front")
+        } else {
+            ("front", "rear")
+        };
+        let Some(data) = incoming_data.get(in_port) else {
+            return Ok(LightResult::default());
+        };
+        Ok(LightResult::from([(out_port.into(), data.clone())]))
+    }
+}
+impl AnalysisRayTrace for Wedge {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let (in_port, out_port) = if self.inverted() {
+            ("rear", "front")
+        } else {
+            ("front", "rear")
+        };
+        let Some(data) = incoming_data.get(in_port) else {
+            return Ok(LightResult::default());
+        };
+        let LightData::Geometric(rays) = data.clone() else {
+            return Err(OpossumError::Analysis(
+                "expected ray data at input port".into(),
+            ));
+        };
+        let Some(eff_iso) = self.effective_iso() else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined".into(),
+            ));
+        };
+        let Ok(Proptype::RefractiveIndex(index_model)) =
+            self.node_attr.get_property("refractive index")
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read refractive index".into(),
+            ));
+        };
+        let Ok(Proptype::Length(center_thickness)) =
+            self.node_attr.get_property("center thickness")
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read center thickness".into(),
+            ));
+        };
+        let Ok(Proptype::Angle(angle)) = self.node_attr.get_property("wedge") else {
+            return Err(OpossumError::Analysis("cannot wedge angle".into()));
+        };
+        let output = if self.inverted() {
+            self.analyze_inverse(
+                rays,
+                *center_thickness,
+                *angle,
+                &index_model.value,
+                &eff_iso,
+                &AnalyzerType::RayTrace(config.clone()),
+            )?
+        } else {
+            self.analyze_forward(
+                rays,
+                *center_thickness,
+                *angle,
+                &index_model.value,
+                &eff_iso,
+                &AnalyzerType::RayTrace(config.clone()),
+            )?
+        };
+        let light_result = LightResult::from([(out_port.into(), LightData::Geometric(output))]);
+        Ok(light_result)
+    }
+}
 
 #[cfg(test)]
 mod test {
-    use nalgebra::Vector3;
-
     use super::*;
     use crate::{
         analyzers::RayTraceConfig, degree, joule, lightdata::DataEnergy, nanometer,
-        nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
+        nodes::test_helper::test_helper::*, optic_ports::PortType, ray::Ray, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
+    use nalgebra::Vector3;
 
     #[test]
     fn default() {
@@ -437,8 +443,8 @@ mod test {
     #[test]
     fn ports() {
         let node = Wedge::default();
-        assert_eq!(node.ports().input_names(), vec!["front"]);
-        assert_eq!(node.ports().output_names(), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["front"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["rear"]);
     }
     #[test]
     fn set_aperture() {
@@ -458,9 +464,8 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("rear".into(), input_light.clone());
-        let output = node
-            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -471,9 +476,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("front".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
         let output = output.get("rear");
@@ -496,9 +499,8 @@ mod test {
         rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
         let input_light = LightData::Geometric(rays);
         input.insert("front".into(), input_light.clone());
-        let output = node
-            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         if let Some(LightData::Geometric(rays)) = output.get("rear") {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();

@@ -1,12 +1,14 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::AnalyzerType,
+    analyzable::Analyzable,
+    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
     lightdata::LightData,
-    optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optic_node::OpticNode,
+    optic_ports::{OpticPorts, PortType},
     surface::{OpticalSurface, Plane},
 };
 use log::warn;
@@ -36,8 +38,8 @@ pub struct Detector {
 impl Default for Detector {
     fn default() -> Self {
         let mut ports = OpticPorts::new();
-        ports.create_input("in1").unwrap();
-        ports.create_output("out1").unwrap();
+        ports.add(&PortType::Input, "in1").unwrap();
+        ports.add(&PortType::Output, "out1").unwrap();
         let mut node_attr = NodeAttr::new("detector");
         node_attr.set_ports(ports);
         Self {
@@ -63,58 +65,7 @@ impl Detector {
         detector
     }
 }
-impl Optical for Detector {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
-        let Some(data) = incoming_data.get(inport) else {
-            return Ok(LightResult::default());
-        };
-        if let LightData::Geometric(rays) = data {
-            let mut rays = rays.clone();
-            if let Some(iso) = self.effective_iso() {
-                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                rays.refract_on_surface(&plane, None)?;
-            } else {
-                return Err(OpossumError::Analysis(
-                    "no location for surface defined. Aborting".into(),
-                ));
-            }
-            if let Some(aperture) = self.ports().input_aperture("in1") {
-                let rays_apodized = rays.apodize(aperture)?;
-                if rays_apodized {
-                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn Optical);
-                }
-                if let AnalyzerType::RayTrace(config) = analyzer_type {
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                }
-            } else {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
-            };
-            self.light_data = Some(LightData::Geometric(rays.clone()));
-            if let Some(aperture) = self.ports().output_aperture("out1") {
-                rays.apodize(aperture)?;
-                if let AnalyzerType::RayTrace(config) = analyzer_type {
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                }
-            } else {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
-            };
-            Ok(LightResult::from([(
-                outport.into(),
-                LightData::Geometric(rays),
-            )]))
-        } else {
-            Ok(LightResult::from([(outport.into(), data.clone())]))
-        }
-    }
+impl OpticNode for Detector {
     fn is_detector(&self) -> bool {
         true
     }
@@ -139,14 +90,77 @@ impl Dottable for Detector {
         "lemonchiffon"
     }
 }
+impl Analyzable for Detector {}
+impl AnalysisEnergy for Detector {
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let (inport, outport) = if self.inverted() {
+            ("out1", "in1")
+        } else {
+            ("in1", "out1")
+        };
+        let Some(data) = incoming_data.get(inport) else {
+            return Ok(LightResult::default());
+        };
+        let outgoing_data = LightResult::from([(outport.to_string(), data.clone())]);
+        Ok(outgoing_data)
+    }
+}
+impl AnalysisRayTrace for Detector {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let (inport, outport) = if self.inverted() {
+            ("out1", "in1")
+        } else {
+            ("in1", "out1")
+        };
+        let Some(data) = incoming_data.get(inport) else {
+            return Ok(LightResult::default());
+        };
+        if let LightData::Geometric(rays) = data {
+            let mut rays = rays.clone();
+            if let Some(iso) = self.effective_iso() {
+                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                rays.refract_on_surface(&plane, None)?;
+            } else {
+                return Err(OpossumError::Analysis(
+                    "no location for surface defined. Aborting".into(),
+                ));
+            }
+            if let Some(aperture) = self.ports().aperture(&PortType::Input, "in1") {
+                let rays_apodized = rays.apodize(aperture)?;
+                if rays_apodized {
+                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
+                }
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            } else {
+                return Err(OpossumError::OpticPort("input aperture not found".into()));
+            };
+            self.light_data = Some(LightData::Geometric(rays.clone()));
+            if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
+                rays.apodize(aperture)?;
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            } else {
+                return Err(OpossumError::OpticPort("input aperture not found".into()));
+            };
+            Ok(LightResult::from([(
+                outport.into(),
+                LightData::Geometric(rays),
+            )]))
+        } else {
+            Ok(LightResult::from([(outport.into(), data.clone())]))
+        }
+    }
+}
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::{
-        analyzers::AnalyzerType, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
+        lightdata::DataEnergy, nodes::test_helper::test_helper::*, optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
     };
-
-    use super::*;
     #[test]
     fn default() {
         let mut node = Detector::default();
@@ -173,15 +187,15 @@ mod test {
     #[test]
     fn ports() {
         let node = Detector::default();
-        assert_eq!(node.ports().input_names(), vec!["in1"]);
-        assert_eq!(node.ports().output_names(), vec!["out1"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["in1"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["out1"]);
     }
     #[test]
     fn ports_inverted() {
         let mut node = Detector::default();
         node.set_inverted(true).unwrap();
-        assert_eq!(node.ports().input_names(), vec!["out1"]);
-        assert_eq!(node.ports().output_names(), vec!["in1"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["out1"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["in1"]);
     }
     #[test]
     fn analyze_empty() {
@@ -195,7 +209,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("wrong".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -206,9 +220,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("in1".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("out1"));
         assert_eq!(output.len(), 1);
         let output = output.get("out1").unwrap();
@@ -228,9 +240,7 @@ mod test {
         });
         input.insert("out1".to_string(), input_light.clone());
 
-        let output = node.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("in1"));
         assert_eq!(output.len(), 1);
         let output = output.get("in1");

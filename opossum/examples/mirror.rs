@@ -8,7 +8,8 @@ use opossum::{
         round_collimated_ray_source, EnergyMeter, NodeGroup, RayPropagationVisualizer, SpotDiagram,
         ThinMirror, WaveFront,
     },
-    optical::{Alignable, Optical},
+    optic_node::{Alignable, OpticNode},
+    optic_ports::PortType,
     OpmDocument,
 };
 use std::path::Path;
@@ -21,7 +22,11 @@ fn main() -> OpmResult<()> {
         3,
     )?)?;
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(22.5, 0.0, 0.0))?;
-    mirror1.set_input_coating("input", &CoatingType::ConstantR { reflectivity: 0.5 })?;
+    mirror1.set_coating(
+        &PortType::Input,
+        "input",
+        &CoatingType::ConstantR { reflectivity: 0.5 },
+    )?;
     let i_m1 = scenery.add_node(mirror1)?;
     let i_m2 = scenery.add_node(
         ThinMirror::new("mirror 2")

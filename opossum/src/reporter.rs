@@ -4,7 +4,7 @@
 use crate::{
     error::{OpmResult, OpossumError},
     nodes::{ray_propagation_visualizer::RayPositionHistories, NodeGroup},
-    optical::Optical,
+    optic_node::OpticNode,
     properties::{property::HtmlProperty, Properties, Proptype},
 };
 use chrono::{DateTime, Local};
@@ -63,8 +63,9 @@ impl AnalysisReport {
     }
     /// Add an (detector) [`NodeReport`] to this [`AnalysisReport`].
     ///
-    /// After analysis of a [`NodeGroup`], each node can generate a [`NodeReport`] using the `Optical::report` trait function.
-    /// While assembling a report this function adds the node data to it. This is mostly interesting for detector nodes which deliver
+    /// After analysis of a [`NodeGroup`], each node can generate a [`NodeReport`] using the
+    /// [`report`](crate::optic_node::OpticNode::report) trait function. While assembling a report this
+    /// function adds the node data to it. This is mostly interesting for detector nodes which deliver
     /// their particular analysis result.
     pub fn add_detector(&mut self, report: NodeReport) {
         self.node_reports.push(report);

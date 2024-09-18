@@ -7,10 +7,12 @@ use opossum::{
     lightdata::LightData,
     millimeter, nanometer,
     nodes::{EnergyMeter, FluenceDetector, Lens, NodeGroup, RayPropagationVisualizer, Source},
-    optical::Optical,
+    optic_node::OpticNode,
+    optic_ports::PortType,
     position_distributions::Grid,
     rays::Rays,
     refractive_index::RefrIndexConst,
+    utils::geom_transformation::Isometry,
     OpmDocument,
 };
 use std::path::Path;
@@ -22,7 +24,8 @@ fn main() -> OpmResult<()> {
         &UniformDist::new(joule!(1.))?,
         &Grid::new((millimeter!(9.), millimeter!(9.)), (100, 100))?,
     )?;
-    let source = Source::new("src", &LightData::Geometric(rays));
+    let mut source = Source::new("src", &LightData::Geometric(rays));
+    source.set_isometry(Isometry::identity());
     let src = scenery.add_node(source)?;
     let fd1 = scenery.add_node(FluenceDetector::new("before lens"))?;
 
@@ -33,7 +36,7 @@ fn main() -> OpmResult<()> {
         millimeter!(1.0),
         &RefrIndexConst::new(1.5)?,
     )?;
-    lens1.set_input_coating("front", &CoatingType::Fresnel)?;
+    lens1.set_coating(&PortType::Input, "front", &CoatingType::Fresnel)?;
     let l1 = scenery.add_node(lens1)?;
     let fd2 = scenery.add_node(FluenceDetector::new("after lens"))?;
     let ed = scenery.add_node(EnergyMeter::default())?;

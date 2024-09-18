@@ -1,13 +1,15 @@
 #![warn(missing_docs)]
 //! Cylindric lens with spherical or flat surfaces.
 use crate::{
-    analyzers::AnalyzerType,
+    analyzable::Analyzable,
+    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
     lightdata::LightData,
     millimeter,
-    optic_ports::OpticPorts,
-    optical::{Alignable, LightResult, Optical},
+    optic_node::{Alignable, OpticNode},
+    optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
@@ -42,7 +44,6 @@ use uom::si::f64::Length;
 pub struct CylindricLens {
     node_attr: NodeAttr,
 }
-
 impl Default for CylindricLens {
     /// Create a cylindric lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
     fn default() -> Self {
@@ -84,8 +85,8 @@ impl Default for CylindricLens {
             .unwrap();
 
         let mut ports = OpticPorts::new();
-        ports.create_input("front").unwrap();
-        ports.create_output("rear").unwrap();
+        ports.add(&PortType::Input, "front").unwrap();
+        ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
         Self { node_attr }
     }
@@ -166,7 +167,7 @@ impl CylindricLens {
         } else {
             OpticalSurface::new(Box::new(Cylinder::new(rear_roc, &isometry)?))
         };
-        if let Some(aperture) = self.ports().input_aperture("front") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -177,7 +178,7 @@ impl CylindricLens {
         rays.refract_on_surface(&front_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
         rays.refract_on_surface(&rear_surf, Some(&self.ambient_idx()))?;
-        if let Some(aperture) = self.ports().output_aperture("rear") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -212,7 +213,7 @@ impl CylindricLens {
         } else {
             OpticalSurface::new(Box::new(Cylinder::new(rear_roc, &isometry)?))
         };
-        if let Some(aperture) = self.ports().output_aperture("rear") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -223,7 +224,7 @@ impl CylindricLens {
         rays.refract_on_surface(&rear_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
         rays.refract_on_surface(&front_surf, Some(&self.ambient_idx()))?;
-        if let Some(aperture) = self.ports().input_aperture("front") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -235,88 +236,7 @@ impl CylindricLens {
     }
 }
 
-impl Optical for CylindricLens {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<LightResult> {
-        let (in_port, out_port) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
-        let light_data = match analyzer_type {
-            AnalyzerType::Energy => data.clone(),
-            AnalyzerType::RayTrace(_) => {
-                let LightData::Geometric(rays) = data.clone() else {
-                    return Err(OpossumError::Analysis(
-                        "expected ray data at input port".into(),
-                    ));
-                };
-                let Some(eff_iso) = self.effective_iso() else {
-                    return Err(OpossumError::Analysis(
-                        "no location for surface defined".into(),
-                    ));
-                };
-                let Ok(Proptype::Length(front_roc)) =
-                    self.node_attr.get_property("front curvature")
-                else {
-                    return Err(OpossumError::Analysis("cannot read front curvature".into()));
-                };
-                let Ok(Proptype::RefractiveIndex(index_model)) =
-                    self.node_attr.get_property("refractive index")
-                else {
-                    return Err(OpossumError::Analysis(
-                        "cannot read refractive index".into(),
-                    ));
-                };
-                let Ok(Proptype::Length(center_thickness)) =
-                    self.node_attr.get_property("center thickness")
-                else {
-                    return Err(OpossumError::Analysis(
-                        "cannot read center thickness".into(),
-                    ));
-                };
-                let Ok(Proptype::Length(rear_roc)) = self.node_attr.get_property("rear curvature")
-                else {
-                    return Err(OpossumError::Analysis("cannot read rear curvature".into()));
-                };
-                let output = if self.inverted() {
-                    self.analyze_inverse(
-                        rays,
-                        *front_roc,
-                        *center_thickness,
-                        *rear_roc,
-                        &index_model.value,
-                        &eff_iso,
-                        analyzer_type,
-                    )?
-                } else {
-                    self.analyze_forward(
-                        rays,
-                        *front_roc,
-                        *center_thickness,
-                        *rear_roc,
-                        &index_model.value,
-                        &eff_iso,
-                        analyzer_type,
-                    )?
-                };
-                LightData::Geometric(output)
-            }
-            _ => {
-                return Err(OpossumError::Analysis(
-                    "analysis mode not yet implemented for cylindric lens".into(),
-                ))
-            }
-        };
-        let light_result = LightResult::from([(out_port.into(), light_data)]);
-        Ok(light_result)
-    }
+impl OpticNode for CylindricLens {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -330,6 +250,89 @@ impl Alignable for CylindricLens {}
 impl Dottable for CylindricLens {
     fn node_color(&self) -> &str {
         "aqua"
+    }
+}
+impl Analyzable for CylindricLens {}
+impl AnalysisEnergy for CylindricLens {
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let (in_port, out_port) = if self.inverted() {
+            ("rear", "front")
+        } else {
+            ("front", "rear")
+        };
+        let Some(data) = incoming_data.get(in_port) else {
+            return Ok(LightResult::default());
+        };
+        Ok(LightResult::from([(out_port.into(), data.clone())]))
+    }
+}
+impl AnalysisRayTrace for CylindricLens {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let (in_port, out_port) = if self.inverted() {
+            ("rear", "front")
+        } else {
+            ("front", "rear")
+        };
+        let Some(data) = incoming_data.get(in_port) else {
+            return Ok(LightResult::default());
+        };
+        let LightData::Geometric(rays) = data.clone() else {
+            return Err(OpossumError::Analysis(
+                "expected ray data at input port".into(),
+            ));
+        };
+        let Some(eff_iso) = self.effective_iso() else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined".into(),
+            ));
+        };
+        let Ok(Proptype::Length(front_roc)) = self.node_attr.get_property("front curvature") else {
+            return Err(OpossumError::Analysis("cannot read front curvature".into()));
+        };
+        let Ok(Proptype::RefractiveIndex(index_model)) =
+            self.node_attr.get_property("refractive index")
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read refractive index".into(),
+            ));
+        };
+        let Ok(Proptype::Length(center_thickness)) =
+            self.node_attr.get_property("center thickness")
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read center thickness".into(),
+            ));
+        };
+        let Ok(Proptype::Length(rear_roc)) = self.node_attr.get_property("rear curvature") else {
+            return Err(OpossumError::Analysis("cannot read rear curvature".into()));
+        };
+        let output = if self.inverted() {
+            self.analyze_inverse(
+                rays,
+                *front_roc,
+                *center_thickness,
+                *rear_roc,
+                &index_model.value,
+                &eff_iso,
+                &AnalyzerType::RayTrace(config.clone()),
+            )?
+        } else {
+            self.analyze_forward(
+                rays,
+                *front_roc,
+                *center_thickness,
+                *rear_roc,
+                &index_model.value,
+                &eff_iso,
+                &AnalyzerType::RayTrace(config.clone()),
+            )?
+        };
+        let light_result = LightResult::from([(out_port.into(), LightData::Geometric(output))]);
+        Ok(light_result)
     }
 }
 #[cfg(test)]
@@ -443,7 +446,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("rear".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -469,12 +472,9 @@ mod test {
         .unwrap();
         let mut incoming_data = LightResult::default();
         incoming_data.insert("front".into(), LightData::Geometric(rays));
-        let output = node
-            .analyze(
-                incoming_data,
-                &AnalyzerType::RayTrace(RayTraceConfig::default()),
-            )
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())
+                .unwrap();
         if let Some(LightData::Geometric(rays)) = output.get("rear") {
             for ray in rays {
                 assert_eq!(ray.direction(), Vector3::z());
@@ -504,12 +504,9 @@ mod test {
         .unwrap();
         let mut incoming_data = LightResult::default();
         incoming_data.insert("front".into(), LightData::Geometric(rays));
-        let output = node
-            .analyze(
-                incoming_data,
-                &AnalyzerType::RayTrace(RayTraceConfig::default()),
-            )
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())
+                .unwrap();
         if let Some(LightData::Geometric(rays)) = output.get("rear") {
             for ray in rays {
                 assert_eq!(ray.direction().x, 0.0);

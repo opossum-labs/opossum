@@ -7,7 +7,7 @@ use opossum::{
         collimated_line_ray_source, Lens, NodeGroup, NodeReference, RayPropagationVisualizer,
         ThinMirror,
     },
-    optical::{Alignable, Optical},
+    optic_node::{Alignable, OpticNode},
     refractive_index::RefrIndexConst,
     OpmDocument,
 };

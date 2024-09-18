@@ -6,15 +6,12 @@ mod cylindric_lens;
 mod detector;
 mod dummy;
 mod energy_meter;
-pub mod fluence_detector;
-mod group;
 mod ideal_filter;
 mod lens;
 mod node_attr;
+mod node_group;
 mod paraxial_surface;
-pub mod ray_propagation_visualizer;
 mod reference;
-pub mod reflective_grating;
 mod source;
 mod source_helper;
 mod spectrometer;
@@ -24,37 +21,39 @@ mod thin_mirror;
 mod wavefront;
 mod wedge;
 
+pub mod fluence_detector;
+pub mod ray_propagation_visualizer;
+pub mod reflective_grating;
 pub use beam_splitter::BeamSplitter;
 pub use cylindric_lens::CylindricLens;
 pub use detector::Detector;
 pub use dummy::Dummy;
-pub use group::NodeGroup;
+pub use energy_meter::{EnergyMeter, Metertype};
+pub use fluence_detector::{FluenceData, FluenceDetector};
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::Lens;
+pub use node_attr::NodeAttr;
+pub use node_group::{NodeGroup, OpticGraph};
 pub use paraxial_surface::ParaxialSurface;
+pub use ray_propagation_visualizer::RayPropagationVisualizer;
 pub use reference::NodeReference;
 pub use reflective_grating::ReflectiveGrating;
 pub use source::Source;
 pub use source_helper::{
     collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
 };
+pub use spectrometer::{Spectrometer, SpectrometerType};
+pub use spot_diagram::SpotDiagram;
+use std::{cell::RefCell, rc::Rc};
+pub use thin_mirror::ThinMirror;
+pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
+pub use wedge::Wedge;
 
 use crate::{
     error::{OpmResult, OpossumError},
     optic_ref::OpticRef,
 };
-pub use energy_meter::{EnergyMeter, Metertype};
-pub use fluence_detector::{FluenceData, FluenceDetector};
-pub use node_attr::NodeAttr;
-pub use ray_propagation_visualizer::RayPropagationVisualizer;
-pub use spectrometer::{Spectrometer, SpectrometerType};
-pub use spot_diagram::SpotDiagram;
-use std::{cell::RefCell, rc::Rc};
-pub use thin_mirror::ThinMirror;
 use uuid::Uuid;
-pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
-pub use wedge::Wedge;
-
 /// Factory function creating a new reference of an optical node of the given type.
 ///
 /// If a uuid is given, the optical node is created using this id. Otherwise a new (random) id is generated. This

@@ -6,10 +6,10 @@ use opossum::{
     analyzers::AnalyzerType,
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
+    nanometer,
     nodes::{BeamSplitter, Detector, FilterType, IdealFilter, NodeGroup, Source},
     ray::SplittingConfig,
-    spectrum::Spectrum,
-    spectrum_helper::{create_he_ne_spec, create_nd_glass_spec},
+    spectrum_helper::{self, create_he_ne_spec, create_nd_glass_spec, generate_filter_spectrum},
     OpmDocument,
 };
 use uom::si::f64::Length;
@@ -29,7 +29,13 @@ fn main() -> OpmResult<()> {
         }),
     ))?;
     let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.5)).unwrap())?;
-    let filter_spectrum = Spectrum::from_csv("./opossum/NE03B.csv")?;
+    let filter_spectrum = generate_filter_spectrum(
+        nanometer!(400.0)..nanometer!(1100.0),
+        nanometer!(1.0),
+        &spectrum_helper::FilterType::LongPassStep {
+            cut_off: nanometer!(700.0),
+        },
+    )?;
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
         &FilterType::Spectrum(filter_spectrum),

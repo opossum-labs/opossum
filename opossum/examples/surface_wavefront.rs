@@ -8,7 +8,8 @@ use opossum::{
         round_collimated_ray_source, Lens, NodeGroup, RayPropagationVisualizer, SpotDiagram,
         WaveFront,
     },
-    optical::Optical,
+    optic_node::OpticNode,
+    optic_ports::PortType,
     refractive_index::RefrIndexConst,
     OpmDocument,
 };
@@ -37,7 +38,7 @@ fn main() -> OpmResult<()> {
         &RefrIndexConst::new(2.0).unwrap(),
     )?;
     let circle = CircleConfig::new(millimeter!(3.0), millimeter!(0., 0.))?;
-    lens.set_output_aperture("rear", &Aperture::BinaryCircle(circle))?;
+    lens.set_aperture(&PortType::Output, "rear", &Aperture::BinaryCircle(circle))?;
     let l2 = scenery.add_node(lens)?;
     let det = scenery.add_node(RayPropagationVisualizer::default())?;
     let wf = scenery.add_node(WaveFront::default())?;

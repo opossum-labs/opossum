@@ -4,7 +4,8 @@ use opossum::{
     error::OpmResult,
     joule, millimeter,
     nodes::{collimated_line_ray_source, NodeGroup, ParaxialSurface, RayPropagationVisualizer},
-    optical::Optical,
+    optic_node::OpticNode,
+    optic_ports::PortType,
     OpmDocument,
 };
 use std::path::Path;
@@ -18,7 +19,7 @@ fn main() -> OpmResult<()> {
     )?)?;
     let mut lens1 = ParaxialSurface::new("100 mm lens", millimeter!(100.0))?;
     let circle = CircleConfig::new(millimeter!(25.), millimeter!(0., 0.))?;
-    lens1.set_input_aperture("front", &Aperture::BinaryCircle(circle))?;
+    lens1.set_aperture(&PortType::Input, "front", &Aperture::BinaryCircle(circle))?;
     let i_pl1 = scenery.add_node(lens1)?;
     let i_pl2 = scenery.add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0))?)?;
     let i_sd3 = scenery.add_node(RayPropagationVisualizer::new("after telecope", None)?)?;

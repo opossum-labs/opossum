@@ -1,21 +1,21 @@
 #![warn(missing_docs)]
 use crate::{
-    analyzers::{AnalyzerType, RayTraceConfig},
+    analyzable::Analyzable,
+    analyzers::energy::AnalysisEnergy,
     error::{OpmResult, OpossumError},
     light::Light,
+    light_result::LightResult,
     lightdata::LightData,
     nodes::NodeGroup,
+    optic_node::OpticNode,
+    optic_ports::PortType,
     optic_ref::OpticRef,
     optic_senery_rsc::SceneryResources,
-    optical::{LightResult, Optical},
     port_map::PortMap,
     properties::Proptype,
-    radian,
-    utils::geom_transformation::Isometry,
 };
-use log::{info, warn};
-use nalgebra::{Point3, Vector3};
-use num::Zero;
+use log::warn;
+use nalgebra::Vector3;
 use petgraph::{
     algo::{connected_components, is_cyclic_directed, toposort},
     graph::{EdgeIndex, Edges},
@@ -37,6 +37,7 @@ use std::{
 use uom::si::f64::Length;
 use uuid::Uuid;
 
+/// Data structure representing an optical graph
 #[derive(Debug, Default, Clone)]
 pub struct OpticGraph {
     g: DiGraph<OpticRef, Light>,
@@ -50,8 +51,12 @@ impl OpticGraph {
     /// Add a new optical node to this [`OpticGraph`].
     ///
     /// This function returns a [`NodeIndex`] of the added node for later referencing (see `connect_nodes`).
-    /// **Note**: While constructing the underlying [`OpticRef`] a rando, uuid is assigned.
-    pub fn add_node<T: Optical + 'static>(&mut self, node: T) -> OpmResult<NodeIndex> {
+    /// **Note**: While constructing the underlying [`OpticRef`] a random, uuid is assigned.
+    ///
+    /// # Errors
+    /// This function returns an error if the graph is set as `inverted` and a node is added. (This could end up in
+    /// a weird / undefined behaviour)
+    pub fn add_node<T: Analyzable + 'static>(&mut self, node: T) -> OpmResult<NodeIndex> {
         if self.is_inverted {
             return Err(OpossumError::OpticGroup(
                 "cannot add nodes if group is set as inverted".into(),
@@ -96,7 +101,7 @@ impl OpticGraph {
             .optical_ref
             .borrow()
             .ports()
-            .output_names()
+            .names(&PortType::Output)
             .contains(&src_port.into())
         {
             return Err(OpossumError::OpticScenery(format!(
@@ -112,7 +117,7 @@ impl OpticGraph {
             .optical_ref
             .borrow()
             .ports()
-            .input_names()
+            .names(&PortType::Input)
             .contains(&target_port.into())
         {
             return Err(OpossumError::OpticScenery(format!(
@@ -152,32 +157,36 @@ impl OpticGraph {
         Ok(())
     }
     /// Returns a reference to the input port map of this [`OpticGraph`].
-    pub const fn input_port_map(&self) -> &PortMap {
-        &self.input_port_map
+    #[must_use]
+    pub const fn port_map(&self, port_type: &PortType) -> &PortMap {
+        match port_type {
+            PortType::Input => &self.input_port_map,
+            PortType::Output => &self.output_port_map,
+        }
     }
-    /// Returns a reference to the output port map of this [`OpticGraph`].
-    pub const fn output_port_map(&self) -> &PortMap {
-        &self.output_port_map
-    }
-    fn input_nodes(&self) -> Vec<NodeIndex> {
-        let mut input_nodes: Vec<NodeIndex> = Vec::default();
+    fn external_nodes(&self, port_type: &PortType) -> Vec<NodeIndex> {
+        let edge_direction = match port_type {
+            PortType::Input => Direction::Incoming,
+            PortType::Output => Direction::Outgoing,
+        };
+        let mut nodes: Vec<NodeIndex> = Vec::default();
         for node_idx in self.g.node_indices() {
-            let incoming_edges = self.edges_directed(node_idx, Direction::Incoming).count();
-            let input_ports = self
+            let edges = self.edges_directed(node_idx, edge_direction).count();
+            let ports = self
                 .node_by_idx(node_idx)
                 .unwrap()
                 .optical_ref
                 .borrow()
                 .ports()
-                .input_names()
+                .names(port_type)
                 .len();
-            if input_ports != incoming_edges {
-                input_nodes.push(node_idx);
+            if ports != edges {
+                nodes.push(node_idx);
             }
         }
-        input_nodes
+        nodes
     }
-    /// Map an input port of an internal node to an external port of the group.
+    /// Map a port of an internal node to an external port of the group.
     ///
     /// In oder to use an [`OpticGraph`] from the outside, internal nodes / ports must be mapped to be visible. The
     /// corresponding `ports` function only returns ports that have been mapped before.
@@ -188,103 +197,82 @@ impl OpticGraph {
     ///   - the `input_node` / `internal_name` does not exist.
     ///   - the specified `input_node` is not an input node of the group (i.e. fully connected to other internal nodes).
     ///   - the `input_node` has an input port with the specified `internal_name` but is already internally connected.
-    pub fn map_input_port(
+    pub fn map_port(
         &mut self,
-        input_node: NodeIndex,
+        node_idx: NodeIndex,
+        port_type: &PortType,
         internal_name: &str,
         external_name: &str,
     ) -> OpmResult<()> {
-        if self.input_port_map.contains_external_name(external_name) {
-            return Err(OpossumError::OpticGroup(
-                "external input port name already assigned".into(),
-            ));
+        let name_type = match port_type {
+            PortType::Input => "input",
+            PortType::Output => "output",
+        };
+        let port_map = match port_type {
+            PortType::Input => &self.input_port_map,
+            PortType::Output => &self.output_port_map,
+        };
+        if port_map.contains_external_name(external_name) {
+            return Err(OpossumError::OpticGroup(format!(
+                "external {name_type} port name already assigned"
+            )));
         }
-        let node = self.node_by_idx(input_node)?;
+        let node = self.node_by_idx(node_idx)?;
         if !node
             .optical_ref
             .borrow()
             .ports()
-            .input_names()
+            .names(port_type)
             .contains(&(internal_name.to_string()))
         {
-            return Err(OpossumError::OpticGroup(
-                "internal input port name not found".into(),
-            ));
+            return Err(OpossumError::OpticGroup(format!(
+                "internal {name_type} port name not found"
+            )));
         }
-        if !self.input_nodes().contains(&input_node) {
-            return Err(OpossumError::OpticGroup(
-                "node to be mapped is not an input node of the group".into(),
-            ));
+        if !self.external_nodes(port_type).contains(&node_idx) {
+            return Err(OpossumError::OpticGroup(format!(
+                "node to be mapped is not an {name_type} node of the group"
+            )));
         }
-        let incoming_edge_connected = self
-            .g
-            .edges_directed(input_node, Direction::Incoming)
-            .map(|e| e.weight().target_port())
-            .any(|p| p == internal_name);
-        if incoming_edge_connected {
-            return Err(OpossumError::OpticGroup(
-                "port of input node is already internally connected".into(),
-            ));
+        let edge_direction = match port_type {
+            PortType::Input => Direction::Incoming,
+            PortType::Output => Direction::Outgoing,
+        };
+
+        let edge_connected = match port_type {
+            PortType::Input => self
+                .g
+                .edges_directed(node_idx, edge_direction)
+                .map(|e| e.weight().target_port())
+                .any(|p| p == internal_name),
+            PortType::Output => self
+                .g
+                .edges_directed(node_idx, edge_direction)
+                .map(|e| e.weight().src_port())
+                .any(|p| p == internal_name),
+        };
+        if edge_connected {
+            return Err(OpossumError::OpticGroup(format!(
+                "port of {name_type} node is already internally connected"
+            )));
         }
-        self.input_port_map
-            .add(external_name, input_node, internal_name);
+        match port_type {
+            PortType::Input => self
+                .input_port_map
+                .add(external_name, node_idx, internal_name),
+            PortType::Output => self
+                .output_port_map
+                .add(external_name, node_idx, internal_name),
+        };
         Ok(())
     }
-    /// Map an output port of an internal node to an external port of the group.
+    /// .
     ///
-    /// In oder to use a [`OpticGraph`] from the outside, internal nodes / ports must be mapped to be visible. The
-    /// corresponding `ports` function only returns ports that have been mapped before.
     /// # Errors
     ///
-    /// This function will return an error if
-    ///   - an external output port name has already been assigned.
-    ///   - the `output_node` / `internal_name` does not exist.
-    ///   - the specified `output_node` is not an output node of the group (i.e. fully connected to other internal nodes).
-    ///   - the `output_node` has an output port with the specified `internal_name` but is already internally connected.
-    pub fn map_output_port(
-        &mut self,
-        output_node: NodeIndex,
-        internal_name: &str,
-        external_name: &str,
-    ) -> OpmResult<()> {
-        if self.output_port_map.contains_external_name(external_name) {
-            return Err(OpossumError::OpticGroup(format!(
-                "external output port name '{external_name}' already assigned"
-            )));
-        }
-        let node = self.node_by_idx(output_node)?;
-        if !node
-            .optical_ref
-            .borrow()
-            .ports()
-            .output_names()
-            .contains(&(internal_name.to_string()))
-        {
-            return Err(OpossumError::OpticGroup(format!(
-                "internal output port name '{internal_name}' not found"
-            )));
-        }
-
-        if !self.output_nodes().contains(&output_node) {
-            return Err(OpossumError::OpticGroup(
-                "node to be mapped is not an output node of the group".into(),
-            ));
-        }
-        let outgoing_edge_connected = self
-            .g
-            .edges_directed(output_node, Direction::Outgoing)
-            .map(|e| e.weight().src_port())
-            .any(|p| p == internal_name);
-        if outgoing_edge_connected {
-            return Err(OpossumError::OpticGroup(
-                "port of output node is already internally connected".into(),
-            ));
-        }
-        self.output_port_map
-            .add(external_name, output_node, internal_name);
-        Ok(())
-    }
-    fn get_incoming(&self, idx: NodeIndex, incoming_data: &LightResult) -> LightResult {
+    /// This function will return an error if .
+    #[must_use]
+    pub fn get_incoming(&self, idx: NodeIndex, incoming_data: &LightResult) -> LightResult {
         if self.is_incoming_node(idx) {
             let portmap = if self.is_inverted {
                 self.output_port_map.clone()
@@ -309,25 +297,9 @@ impl OpticGraph {
             self.incoming_edges(idx)
         }
     }
-    fn output_nodes(&self) -> Vec<NodeIndex> {
-        let mut output_nodes: Vec<NodeIndex> = Vec::default();
-        for node_idx in self.g.node_indices() {
-            let outgoing_edges = self.edges_directed(node_idx, Direction::Outgoing).count();
-            let output_ports = self
-                .node_by_idx(node_idx)
-                .unwrap()
-                .optical_ref
-                .borrow()
-                .ports()
-                .output_names()
-                .len();
-            if output_ports != outgoing_edges {
-                output_nodes.push(node_idx);
-            }
-        }
-        output_nodes
-    }
-    fn is_stale_node(&self, idx: NodeIndex) -> bool {
+    /// .
+    #[must_use]
+    pub fn is_stale_node(&self, idx: NodeIndex) -> bool {
         let neighbors = self.g.neighbors_undirected(idx);
         neighbors.count() == 0 && !self.input_port_map.contains_node(idx)
     }
@@ -373,6 +345,8 @@ impl OpticGraph {
             .node_indices()
             .find(|idx| self.g.node_weight(*idx).unwrap().uuid() == uuid)
     }
+    /// Returns all nodes ([`OpticRef`]) of this [`OpticGraph`].
+    #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
         self.g.node_weights().collect()
     }
@@ -381,277 +355,27 @@ impl OpticGraph {
             .edge_weight(idx)
             .ok_or_else(|| OpossumError::Other("could not get edge weight".into()))
     }
-    fn topologically_sorted(&self) -> OpmResult<Vec<NodeIndex>> {
-        toposort(&self.g, None)
-            .map_err(|_| OpossumError::Analysis("topological sort failed".into()))
-    }
-    pub fn contains_detector(&self) -> bool {
-        self.g
-            .node_weights()
-            .any(|node| node.optical_ref.borrow().is_detector())
-    }
-    fn is_single_tree(&self) -> bool {
-        connected_components(&self.g) == 1
-    }
-    pub fn node_count(&self) -> usize {
-        self.g.node_count()
-    }
-    pub fn edge_count(&self) -> usize {
-        self.g.edge_count()
-    }
-    fn is_incoming_node(&self, idx: NodeIndex) -> bool {
-        // let group_srcs = self.g.externals(petgraph::Direction::Incoming);
-        // group_srcs.into_iter().any(|gs| gs == idx)
-
-        let nr_of_input_ports = self
-            .node_by_idx(idx)
-            .unwrap()
-            .optical_ref
-            .borrow()
-            .ports()
-            .inputs()
-            .len();
-        let nr_of_incoming_edges = self
-            .g
-            .edges_directed(idx, petgraph::Direction::Incoming)
-            .count();
-        assert!(
-            nr_of_incoming_edges <= nr_of_input_ports,
-            "# of incoming edges > # of input ports ???"
-        );
-        nr_of_incoming_edges < nr_of_input_ports
-    }
-    fn is_output_node(&self, idx: NodeIndex) -> bool {
-        let nr_of_output_ports = self
-            .node_by_idx(idx)
-            .unwrap()
-            .optical_ref
-            .borrow()
-            .ports()
-            .outputs()
-            .len();
-        let nr_of_outgoing_edges = self
-            .g
-            .edges_directed(idx, petgraph::Direction::Outgoing)
-            .count();
-        assert!(
-            nr_of_outgoing_edges <= nr_of_output_ports,
-            "# of outgoing edges > # of output ports ???"
-        );
-        nr_of_outgoing_edges < nr_of_output_ports
-    }
-    fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
-        let edges = self.g.edges_directed(idx, petgraph::Direction::Incoming);
-        edges
-            .into_iter()
-            .filter(|e| e.weight().data().is_some())
-            .map(|e| {
-                (
-                    e.weight().target_port().to_owned(),
-                    e.weight().data().cloned().unwrap(),
-                )
-            })
-            .collect::<LightResult>()
-    }
-    fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: LightData) {
-        let edges = self.g.edges_directed(idx, Direction::Outgoing);
-        let edge_ref = edges
-            .into_iter()
-            .filter(|idx| idx.weight().src_port() == port)
-            .last();
-        if let Some(edge_ref) = edge_ref {
-            let edge_idx = edge_ref.id();
-            let light = self.g.edge_weight_mut(edge_idx);
-            if let Some(light) = light {
-                light.set_data(Some(data));
-            }
-        } // else outgoing edge not connected -> data dropped
-    }
-    fn edges_directed(&self, idx: NodeIndex, dir: Direction) -> Edges<'_, Light, Directed> {
-        self.g.edges_directed(idx, dir)
-    }
-    pub fn invert_graph(&mut self) -> OpmResult<()> {
-        for node in self.g.node_weights_mut() {
-            node.optical_ref
-                .borrow_mut()
-                .set_inverted(true)
-                .map_err(|_| {
-                    OpossumError::OpticGroup(
-                        "group cannot be inverted because it contains a non-invertable node".into(),
-                    )
-                })?;
-        }
-        for edge in self.g.edge_weights_mut() {
-            edge.inverse();
-        }
-        self.g.reverse();
-        Ok(())
-    }
-    fn filter_ray_limits(light_result: &mut LightResult, r_config: &RayTraceConfig) {
-        for lr in light_result {
-            if let LightData::Geometric(rays) = lr.1 {
-                rays.filter_by_nr_of_bounces(r_config.max_number_of_bounces());
-                rays.filter_by_nr_of_refractions(r_config.max_number_of_refractions());
-            }
-        }
-    }
-    /// Calculate the node positions of this `OpticScenery`.
-    ///
-    /// This function calculates the node positions (if not explicitly defined before) by propagating a single ray
-    /// on the optical axis through the entire system.
+    /// Returns the topologically sorted of this [`OpticGraph`].
     ///
     /// # Errors
     ///
-    /// This function will return an error if the position of a node cannot be calculated.
-    pub fn calc_node_positions(
-        &mut self,
-        graph_name: &str,
-        incoming: &LightResult,
-    ) -> OpmResult<LightResult> {
-        info!("Calculate node positions for {graph_name}");
-        let sorted = self.topologically_sorted()?;
-        let mut light_result = LightResult::default();
-        let mut up_direction = Vector3::<f64>::y();
-        for idx in sorted {
-            let node = self.node_by_idx(idx)?.optical_ref;
-            let node_type = node.borrow().node_type();
-            let node_attr = node.borrow().node_attr().clone();
-            let incoming_edges: LightResult = self.get_incoming(idx, incoming);
-            if node.borrow().isometry().is_none() {
-                if incoming_edges.is_empty() {
-                    warn!("{} has no incoming edges", node.borrow());
-                }
-                if let Some((node_idx, distance)) = node_attr.get_align_like_node_at_distance() {
-                    if let Some(align_ref_iso) =
-                        self.node_by_idx(*node_idx)?.optical_ref.borrow().isometry()
-                    {
-                        let mut node_borrow_mut = node.borrow_mut();
-                        let align_iso = Isometry::new(
-                            Point3::new(Length::zero(), Length::zero(), *distance),
-                            radian!(0., 0., 0.),
-                        )?;
-                        let new_iso = align_ref_iso.append(&align_iso);
-                        node_borrow_mut.set_isometry(new_iso);
-                    } else {
-                        warn!("Cannot align node like NodeIdx:{}. Fall back to standard positioning method", node_idx.index());
-                        self.set_node_isometry(
-                            &incoming_edges,
-                            &mut node.borrow_mut(),
-                            &node_type,
-                            idx,
-                            up_direction,
-                        )?;
-                    }
-                } else {
-                    self.set_node_isometry(
-                        &incoming_edges,
-                        &mut node.borrow_mut(),
-                        &node_type,
-                        idx,
-                        up_direction,
-                    )?;
-                };
-            } else {
-                info!(
-                    "Node {} has already been placed. Leaving untouched.",
-                    node.borrow()
-                );
-            }
-            let output = node.borrow_mut().calc_node_position(incoming_edges);
-
-            let outgoing_edges = output.map_err(|e| {
-                OpossumError::Analysis(format!(
-                    "calculation of optical axis for node {} failed: {e}",
-                    node.borrow()
-                ))
-            })?;
-            // If node is sink node, rewrite port names according to output mapping
-            if self.is_output_node(idx) {
-                let portmap = if self.is_inverted {
-                    self.input_port_map.clone()
-                } else {
-                    self.output_port_map.clone()
-                };
-                let assigned_ports = portmap.assigned_ports_for_node(idx);
-                for port in assigned_ports {
-                    if let Some(light_data) = outgoing_edges.get(&port.1) {
-                        light_result.insert(port.0, light_data.clone());
-                    }
-                }
-            }
-            for outgoing_edge in outgoing_edges {
-                if node_type == "source" {
-                    up_direction = node.borrow().define_up_direction(&outgoing_edge.1)?;
-                } else {
-                    node.borrow_mut()
-                        .calc_new_up_direction(&outgoing_edge.1, &mut up_direction)?;
-                }
-
-                self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
-            }
-        }
-        Ok(light_result)
+    /// This function will return an error if .
+    pub fn topologically_sorted(&self) -> OpmResult<Vec<NodeIndex>> {
+        toposort(&self.g, None)
+            .map_err(|_| OpossumError::Analysis("topological sort failed".into()))
     }
-
-    fn set_node_isometry(
-        &self,
-        incoming_edges: &LightResult,
-        node_borrow_mut: &mut RefMut<'_, dyn Optical + 'static>,
-        node_type: &str,
-        idx: NodeIndex,
-        up_direction: Vector3<f64>,
-    ) -> OpmResult<()> {
-        for incoming_edge in incoming_edges {
-            let distance_from_predecessor = self.distance_from_predecessor(idx, incoming_edge.0)?;
-            if node_type == "group" {
-                // let mut node_borrow_mut = node;
-                let group = node_borrow_mut.as_group()?;
-                group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
-            }
-            if let LightData::Geometric(rays) = incoming_edge.1 {
-                let mut ray = rays.into_iter().next().unwrap().to_owned();
-                ray.propagate(distance_from_predecessor)?;
-                let node_iso = ray.to_isometry(up_direction);
-                // if a node with more than one input was already placed (in an earlier loop cycle),
-                // check, if the resulting isometry is consistent
-                {
-                    // borrow guard
-                    // let mut node_borrow_mut = node.borrow_mut();
-                    if let Some(iso) = node_borrow_mut.isometry() {
-                        if iso != node_iso {
-                            warn!(
-                                "Node {} cannot be consistently positioned.",
-                                node_borrow_mut.name()
-                            );
-                            warn!("Position based on previous input port is: {iso}");
-                            warn!("Position based on this port would be:     {node_iso}");
-                            warn!("Keeping first position");
-                        }
-                    } else {
-                        node_borrow_mut.set_isometry(node_iso);
-                    };
-                }
-            } else {
-                return Err(OpossumError::Analysis(
-                    "expected LightData::Geometric at input port".into(),
-                ));
-            }
-        }
-        Ok(())
-    }
-    pub fn analyze(
-        &mut self,
-        graph_name: &str,
-        incoming_data: &LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<LightResult> {
-        info!("Perform analysis for {graph_name}");
+    /// Performs an energy flow analysis of this graph.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn analyze_energy(&mut self, incoming_data: &LightResult) -> OpmResult<LightResult> {
         if self.is_inverted() {
             self.invert_graph()?;
         }
         let g_clone = self.clone();
         if !self.is_single_tree() {
-            warn!("{graph_name} contains unconnected sub-trees. Analysis might not be complete.");
+            warn!("group contains unconnected sub-trees. Analysis might not be complete.");
         }
         let sorted = self.topologically_sorted()?;
         let mut light_result = LightResult::default();
@@ -659,32 +383,19 @@ impl OpticGraph {
             let node = g_clone.node_by_idx(idx)?.optical_ref;
             if self.is_stale_node(idx) {
                 warn!(
-                    "{graph_name} contains stale (completely unconnected) node {}. Skipping.",
+                    "graph contains stale (completely unconnected) node {}. Skipping.",
                     node.borrow()
                 );
             } else {
-                // check if node has isometry, otherwise place @ origin.
-                {
-                    let mut node_borrow_mut = node.borrow_mut();
-                    if node_borrow_mut.isometry().is_none() {
-                        warn!(
-                            "Node {} has not been placed yet. Using coordinate origin",
-                            node_borrow_mut
-                        );
-                        node_borrow_mut.set_isometry(Isometry::identity());
-                    }
-                }
                 let incoming_edges = self.get_incoming(idx, incoming_data);
                 let node_name = format!("{}", node.borrow());
-                let mut outgoing_edges: LightResult = node
-                    .borrow_mut()
-                    .analyze(incoming_edges, analyzer_type)
-                    .map_err(|e| {
-                        OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
-                    })?;
-                if let AnalyzerType::RayTrace(r_config) = analyzer_type {
-                    Self::filter_ray_limits(&mut outgoing_edges, r_config);
-                }
+                let outgoing_edges = AnalysisEnergy::analyze(
+                    &mut *node.borrow_mut(),
+                    incoming_edges,
+                )
+                .map_err(|e| {
+                    OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
+                })?;
                 // If node is sink node, rewrite port names according to output mapping
                 if self.is_output_node(idx) {
                     let portmap = if self.is_inverted {
@@ -709,6 +420,174 @@ impl OpticGraph {
         } // revert initial inversion (if necessary)
         Ok(light_result)
     }
+
+    /// Returns `true` if the [`OpticGraph`] contains a detector node.
+    #[must_use]
+    pub fn contains_detector(&self) -> bool {
+        self.g
+            .node_weights()
+            .any(|node| node.optical_ref.borrow().is_detector())
+    }
+    /// Returns the is single tree of this [`OpticGraph`].
+    #[must_use]
+    pub fn is_single_tree(&self) -> bool {
+        connected_components(&self.g) == 1
+    }
+    /// Returns the number of nodes in this [`OpticGraph`].
+    #[must_use]
+    pub fn node_count(&self) -> usize {
+        self.g.node_count()
+    }
+    /// Returns the number of connection (edges) in this [`OpticGraph`].
+    #[must_use]
+    pub fn edge_count(&self) -> usize {
+        self.g.edge_count()
+    }
+    fn is_incoming_node(&self, idx: NodeIndex) -> bool {
+        let nr_of_input_ports = self
+            .node_by_idx(idx)
+            .unwrap()
+            .optical_ref
+            .borrow()
+            .ports()
+            .ports(&PortType::Input)
+            .len();
+        let nr_of_incoming_edges = self.g.edges_directed(idx, Direction::Incoming).count();
+        assert!(
+            nr_of_incoming_edges <= nr_of_input_ports,
+            "# of incoming edges > # of input ports ???"
+        );
+        nr_of_incoming_edges < nr_of_input_ports
+    }
+    /// .
+    ///
+    /// # Panics
+    ///
+    /// Panics if .
+    #[must_use]
+    pub fn is_output_node(&self, idx: NodeIndex) -> bool {
+        let nr_of_output_ports = self
+            .node_by_idx(idx)
+            .unwrap()
+            .optical_ref
+            .borrow()
+            .ports()
+            .ports(&PortType::Output)
+            .len();
+        let nr_of_outgoing_edges = self.g.edges_directed(idx, Direction::Outgoing).count();
+        assert!(
+            nr_of_outgoing_edges <= nr_of_output_ports,
+            "# of outgoing edges > # of output ports ???"
+        );
+        nr_of_outgoing_edges < nr_of_output_ports
+    }
+    fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
+        let edges = self.g.edges_directed(idx, Direction::Incoming);
+        edges
+            .into_iter()
+            .filter(|e| e.weight().data().is_some())
+            .map(|e| {
+                (
+                    e.weight().target_port().to_owned(),
+                    e.weight().data().cloned().unwrap(),
+                )
+            })
+            .collect::<LightResult>()
+    }
+    /// Sets the outgoing edge data of this [`OpticGraph`].
+    pub fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: LightData) {
+        let edges = self.g.edges_directed(idx, Direction::Outgoing);
+        let edge_ref = edges
+            .into_iter()
+            .filter(|idx| idx.weight().src_port() == port)
+            .last();
+        if let Some(edge_ref) = edge_ref {
+            let edge_idx = edge_ref.id();
+            let light = self.g.edge_weight_mut(edge_idx);
+            if let Some(light) = light {
+                light.set_data(Some(data));
+            }
+        } // else outgoing edge not connected -> data dropped
+    }
+    fn edges_directed(&self, idx: NodeIndex, dir: Direction) -> Edges<'_, Light, Directed> {
+        self.g.edges_directed(idx, dir)
+    }
+    /// Inverts the [`OpticGraph`].
+    ///
+    /// This functions changes all directions of node connections and inverts the nodes itself.
+    /// # Errors
+    ///
+    /// This function will return an error if one tries to invert a graph containing a non-invertable node (eg. source).
+    pub fn invert_graph(&mut self) -> OpmResult<()> {
+        for node in self.g.node_weights_mut() {
+            node.optical_ref
+                .borrow_mut()
+                .set_inverted(true)
+                .map_err(|_| {
+                    OpossumError::OpticGroup(
+                        "group cannot be inverted because it contains a non-invertable node".into(),
+                    )
+                })?;
+        }
+        for edge in self.g.edge_weights_mut() {
+            edge.inverse();
+        }
+        self.g.reverse();
+        Ok(())
+    }
+    /// Sets the node isometry of this [`OpticGraph`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn set_node_isometry(
+        &self,
+        incoming_edges: &LightResult,
+        node_borrow_mut: &mut RefMut<'_, dyn Analyzable + 'static>,
+        node_type: &str,
+        idx: NodeIndex,
+        up_direction: Vector3<f64>,
+    ) -> OpmResult<()> {
+        for incoming_edge in incoming_edges {
+            let distance_from_predecessor = self.distance_from_predecessor(idx, incoming_edge.0)?;
+            if node_type == "group" {
+                // let mut node_borrow_mut = node;
+                let group = node_borrow_mut.as_group()?;
+                group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
+            }
+            if let LightData::Geometric(rays) = incoming_edge.1 {
+                let mut ray = rays.into_iter().next().unwrap().to_owned();
+                ray.propagate(distance_from_predecessor)?;
+                let node_iso = ray.to_isometry(up_direction);
+                // if a node with more than one input was already placed (in an earlier loop cycle),
+                // check, if the resulting isometry is consistent
+                {
+                    if let Some(iso) = node_borrow_mut.isometry() {
+                        if iso != node_iso {
+                            warn!(
+                                "Node {} cannot be consistently positioned.",
+                                node_borrow_mut.name()
+                            );
+                            warn!("Position based on previous input port is: {iso}");
+                            warn!("Position based on this port would be:     {node_iso}");
+                            warn!("Keeping first position");
+                        }
+                    } else {
+                        node_borrow_mut.set_isometry(node_iso);
+                    };
+                }
+            } else {
+                return Err(OpossumError::Analysis(
+                    "expected LightData::Geometric at input port".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
     /// Creates the dot-format string which describes the edge that connects two nodes
     ///
     /// # Parameters:
@@ -727,6 +606,11 @@ impl OpticGraph {
             Ok(format!("{node_id}:{light_port}"))
         }
     }
+    /// Retruns a string of a graphwiz structure of this group.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
     pub fn create_dot_string(&self, rankdir: &str) -> OpmResult<String> {
         //check direction
         let rankdir = if rankdir == "LR" { "LR" } else { "TB" };
@@ -793,13 +677,16 @@ impl OpticGraph {
             )
         }
     }
+    /// Returns `true` if the graph is inverted.
+    #[must_use]
     pub const fn is_inverted(&self) -> bool {
         self.is_inverted
     }
+    /// Sets the is inverted of this [`OpticGraph`].
     pub fn set_is_inverted(&mut self, is_inverted: bool) {
         self.is_inverted = is_inverted;
     }
-
+    /// Sets the external distances of this [`OpticGraph`].
     pub fn set_external_distances(&mut self, external_distances: BTreeMap<String, Length>) {
         self.external_distances = external_distances;
     }
@@ -1000,7 +887,7 @@ mod test {
         nodes::{BeamSplitter, Dummy, Source},
         ray::SplittingConfig,
         spectrum_helper::create_he_ne_spec,
-        utils::test_helper::test_helper::check_warnings,
+        utils::{geom_transformation::Isometry, test_helper::test_helper::check_warnings},
     };
     use approx::assert_abs_diff_eq;
     use num::Zero;
@@ -1119,8 +1006,10 @@ mod test {
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(Dummy::default()).unwrap();
 
-        og.map_input_port(sn2_i, "front", "input").unwrap();
-        og.map_output_port(sn1_i, "rear", "output").unwrap();
+        og.map_port(sn2_i, &PortType::Input, "front", "input")
+            .unwrap();
+        og.map_port(sn1_i, &PortType::Output, "rear", "output")
+            .unwrap();
         assert_eq!(og.input_port_map.len(), 1);
         assert_eq!(og.output_port_map.len(), 1);
         og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
@@ -1137,19 +1026,29 @@ mod test {
         og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
             .unwrap();
         // wrong port name
-        assert!(og.map_input_port(sn1_i, "wrong", "input").is_err());
+        assert!(og
+            .map_port(sn1_i, &PortType::Input, "wrong", "input")
+            .is_err());
         assert_eq!(og.input_port_map.len(), 0);
         // wrong node index
-        assert!(og.map_input_port(5.into(), "front", "input").is_err());
+        assert!(og
+            .map_port(5.into(), &PortType::Input, "front", "input")
+            .is_err());
         assert_eq!(og.input_port_map.len(), 0);
         // map output port
-        assert!(og.map_input_port(sn2_i, "rear", "input").is_err());
+        assert!(og
+            .map_port(sn2_i, &PortType::Input, "rear", "input")
+            .is_err());
         assert_eq!(og.input_port_map.len(), 0);
         // map internal node
-        assert!(og.map_input_port(sn2_i, "front", "input").is_err());
+        assert!(og
+            .map_port(sn2_i, &PortType::Input, "front", "input")
+            .is_err());
         assert_eq!(og.input_port_map.len(), 0);
         // correct usage
-        assert!(og.map_input_port(sn1_i, "front", "input").is_ok());
+        assert!(og
+            .map_port(sn1_i, &PortType::Input, "front", "input")
+            .is_ok());
         assert_eq!(og.input_port_map.len(), 1);
     }
     #[test]
@@ -1161,11 +1060,17 @@ mod test {
             .unwrap();
 
         // node port already internally connected
-        assert!(og.map_input_port(sn2_i, "input1", "bs_input").is_err());
+        assert!(og
+            .map_port(sn2_i, &PortType::Input, "input1", "bs_input")
+            .is_err());
 
         // correct usage
-        assert!(og.map_input_port(sn1_i, "front", "input").is_ok());
-        assert!(og.map_input_port(sn2_i, "input2", "bs_input").is_ok());
+        assert!(og
+            .map_port(sn1_i, &PortType::Input, "front", "input")
+            .is_ok());
+        assert!(og
+            .map_port(sn2_i, &PortType::Input, "input2", "bs_input")
+            .is_ok());
         assert_eq!(og.input_port_map.len(), 2);
     }
     #[test]
@@ -1177,19 +1082,29 @@ mod test {
             .unwrap();
 
         // wrong port name
-        assert!(og.map_output_port(sn2_i, "wrong", "output").is_err());
+        assert!(og
+            .map_port(sn2_i, &PortType::Output, "wrong", "output")
+            .is_err());
         assert_eq!(og.output_port_map.len(), 0);
         // wrong node index
-        assert!(og.map_output_port(5.into(), "rear", "output").is_err());
+        assert!(og
+            .map_port(5.into(), &PortType::Output, "rear", "output")
+            .is_err());
         assert_eq!(og.output_port_map.len(), 0);
         // map input port
-        assert!(og.map_output_port(sn1_i, "front", "output").is_err());
+        assert!(og
+            .map_port(sn1_i, &PortType::Output, "front", "output")
+            .is_err());
         assert_eq!(og.output_port_map.len(), 0);
         // map internal node
-        assert!(og.map_output_port(sn1_i, "rear", "output").is_err());
+        assert!(og
+            .map_port(sn1_i, &PortType::Output, "rear", "output")
+            .is_err());
         assert_eq!(og.output_port_map.len(), 0);
         // correct usage
-        assert!(og.map_output_port(sn2_i, "rear", "output").is_ok());
+        assert!(og
+            .map_port(sn2_i, &PortType::Output, "rear", "output")
+            .is_ok());
         assert_eq!(og.output_port_map.len(), 1);
     }
     #[test]
@@ -1202,14 +1117,16 @@ mod test {
 
         // node port already internally connected
         assert!(og
-            .map_output_port(sn1_i, "out1_trans1_refl2", "bs_output")
+            .map_port(sn1_i, &PortType::Output, "out1_trans1_refl2", "bs_output")
             .is_err());
 
         // correct usage
         assert!(og
-            .map_output_port(sn1_i, "out2_trans2_refl1", "bs_output")
+            .map_port(sn1_i, &PortType::Output, "out2_trans2_refl1", "bs_output")
             .is_ok());
-        assert!(og.map_output_port(sn2_i, "rear", "output").is_ok());
+        assert!(og
+            .map_port(sn2_i, &PortType::Output, "rear", "output")
+            .is_ok());
         assert_eq!(og.output_port_map.len(), 2);
     }
     #[test]
@@ -1223,7 +1140,10 @@ mod test {
             .unwrap();
         og.connect_nodes(sn2_i, "rear", sn3_i, "input1", Length::zero())
             .unwrap();
-        assert_eq!(og.input_nodes(), vec![0.into(), 2.into()])
+        assert_eq!(
+            og.external_nodes(&PortType::Input),
+            vec![0.into(), 2.into()]
+        )
     }
     #[test]
     fn output_nodes() {
@@ -1236,7 +1156,10 @@ mod test {
             .unwrap();
         og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front", Length::zero())
             .unwrap();
-        assert_eq!(og.input_nodes(), vec![0.into(), 1.into()])
+        assert_eq!(
+            og.external_nodes(&PortType::Input),
+            vec![0.into(), 1.into()]
+        )
     }
     #[test]
     fn node_by_uuid() {
@@ -1276,9 +1199,7 @@ mod test {
     #[test]
     fn analyze_empty() {
         let mut node = OpticGraph::default();
-        let output = node
-            .analyze("graph", &LightResult::default(), &AnalyzerType::Energy)
-            .unwrap();
+        let output = node.analyze_energy(&LightResult::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -1296,14 +1217,14 @@ mod test {
         graph
             .connect_nodes(d3, "rear", d4, "front", Length::zero())
             .unwrap();
-        graph.map_input_port(d1, "front", "input").unwrap();
+        graph
+            .map_port(d1, &PortType::Input, "front", "input")
+            .unwrap();
         let input = LightResult::default();
         testing_logger::setup();
-        graph
-            .analyze("graph", &input, &AnalyzerType::Energy)
-            .unwrap();
+        graph.analyze_energy(&input).unwrap();
         check_warnings(vec![
-            "graph contains unconnected sub-trees. Analysis might not be complete.",
+            "group contains unconnected sub-trees. Analysis might not be complete.",
         ]);
     }
     #[test]
@@ -1313,15 +1234,15 @@ mod test {
         dummy.set_isometry(Isometry::identity());
         let d1 = graph.add_node(dummy).unwrap();
         let _ = graph.add_node(Dummy::new("stale node")).unwrap();
-        graph.map_input_port(d1, "front", "input").unwrap();
+        graph
+            .map_port(d1, &PortType::Input, "front", "input")
+            .unwrap();
         let mut input = LightResult::default();
         input.insert("input".into(), LightData::Fourier);
         testing_logger::setup();
-        assert!(graph
-            .analyze("graph", &input, &AnalyzerType::Energy)
-            .is_ok());
+        assert!(graph.analyze_energy(&input).is_ok());
         check_warnings(vec![
-            "graph contains unconnected sub-trees. Analysis might not be complete.",
+            "group contains unconnected sub-trees. Analysis might not be complete.",
             "graph contains stale (completely unconnected) node 'stale node' (dummy). Skipping.",
         ]);
     }
@@ -1332,9 +1253,11 @@ mod test {
             .add_node(BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap())
             .unwrap();
         graph
-            .map_output_port(g1_n2, "out1_trans1_refl2", "output")
+            .map_port(g1_n2, &PortType::Output, "out1_trans1_refl2", "output")
             .unwrap();
-        graph.map_input_port(g1_n1, "front", "input").unwrap();
+        graph
+            .map_port(g1_n1, &PortType::Input, "front", "input")
+            .unwrap();
         graph
             .connect_nodes(g1_n1, "rear", g1_n2, "input1", Length::zero())
             .unwrap();
@@ -1348,7 +1271,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("input".into(), input_light.clone());
-        let output = graph.analyze("graph", &input, &AnalyzerType::Energy);
+        let output = graph.analyze_energy(&input);
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("output"));
@@ -1368,9 +1291,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("wrong".into(), input_light.clone());
-        let output = graph
-            .analyze("graph", &input, &AnalyzerType::Energy)
-            .unwrap();
+        let output = graph.analyze_energy(&input).unwrap();
         assert!(output.is_empty());
     }
 
@@ -1383,7 +1304,7 @@ mod test {
         });
         graph.set_is_inverted(true);
         input.insert("output".into(), input_light);
-        let output = graph.analyze("graph", &input, &AnalyzerType::Energy);
+        let output = graph.analyze_energy(&input);
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("input"));
@@ -1400,7 +1321,9 @@ mod test {
         let mut graph = OpticGraph::default();
         let g1_n1 = graph.add_node(Source::default()).unwrap();
         let g1_n2 = graph.add_node(Dummy::default()).unwrap();
-        graph.map_output_port(g1_n2, "rear", "output").unwrap();
+        graph
+            .map_port(g1_n2, &PortType::Output, "rear", "output")
+            .unwrap();
         graph
             .connect_nodes(g1_n1, "out1", g1_n2, "front", Length::zero())
             .unwrap();
@@ -1410,7 +1333,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("output".into(), input_light);
-        let output = graph.analyze("graph", &input, &AnalyzerType::Energy);
+        let output = graph.analyze_energy(&input);
         assert!(output.is_err());
     }
     #[test]
@@ -1418,16 +1341,20 @@ mod test {
         let mut graph = OpticGraph::default();
         let i_d1 = graph.add_node(Dummy::default()).unwrap();
         let i_d2 = graph.add_node(Dummy::default()).unwrap();
-        graph.map_input_port(i_d1, "front", "input1").unwrap();
-        graph.map_input_port(i_d2, "front", "input2").unwrap();
+        graph
+            .map_port(i_d1, &PortType::Input, "front", "input1")
+            .unwrap();
+        graph
+            .map_port(i_d2, &PortType::Input, "front", "input2")
+            .unwrap();
         assert_eq!(
-            graph.input_port_map().port_names(),
+            graph.port_map(&PortType::Input).port_names(),
             vec!["input1", "input2"]
         );
         let serialized = serde_yaml::to_string(&graph).unwrap();
         let deserialized: OpticGraph = serde_yaml::from_str(&serialized).unwrap();
         assert_eq!(
-            deserialized.input_port_map().port_names(),
+            deserialized.port_map(&PortType::Input).port_names(),
             vec!["input1", "input2"]
         );
     }

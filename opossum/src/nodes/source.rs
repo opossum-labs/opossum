@@ -4,14 +4,19 @@ use uom::si::f64::Length;
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::{AnalyzerType, RayTraceConfig},
+    analyzable::Analyzable,
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     joule,
+    light_result::LightResult,
     lightdata::LightData,
     millimeter,
-    optic_ports::OpticPorts,
-    optical::{Alignable, LightResult, Optical},
+    optic_node::{Alignable, OpticNode},
+    optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     ray::Ray,
     rays::Rays,
@@ -61,7 +66,7 @@ impl Default for Source {
             .unwrap();
 
         let mut ports = OpticPorts::new();
-        ports.create_output("out1").unwrap();
+        ports.add(&PortType::Output, "out1").unwrap();
         node_attr.set_ports(ports);
         Self { node_attr }
     }
@@ -146,71 +151,7 @@ impl Debug for Source {
         }
     }
 }
-impl Optical for Source {
-    fn analyze(
-        &mut self,
-        _incoming_edges: LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<LightResult> {
-        if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {
-            let Some(mut data) = data.value.clone() else {
-                return Err(OpossumError::Analysis(
-                    "source has empty light data defined".into(),
-                ));
-            };
-            if let LightData::Geometric(rays) = &mut data {
-                if let Some(iso) = self.effective_iso() {
-                    *rays = rays.transformed_rays(&iso);
-                }
-                if let Some(aperture) = self.ports().output_aperture("out1") {
-                    rays.apodize(aperture)?;
-                    if let AnalyzerType::RayTrace(config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-            }
-            Ok(LightResult::from([("out1".into(), data)]))
-        } else {
-            Err(OpossumError::Analysis(
-                "source has no light data defined".into(),
-            ))
-        }
-    }
-    fn calc_node_position(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let outgoing_edges = self.analyze(
-            incoming_data,
-            &AnalyzerType::RayTrace(RayTraceConfig::default()),
-        )?;
-        // generate a single beam (= optical axis) from source
-        let mut new_outgoing_edges = LightResult::new();
-        for outgoing_edge in &outgoing_edges {
-            if let LightData::Geometric(rays) = outgoing_edge.1 {
-                let mut axis_ray = if let Ok(Proptype::LengthOption(Some(alignment_wvl))) =
-                    self.node_attr.get_property("alignment wavelength")
-                {
-                    Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), *alignment_wvl, joule!(1.0))
-                } else {
-                    warn!("No alignment wavelength defined, using energy-weighted central wavelength for alignment");
-                    rays.get_optical_axis_ray()
-                }?;
-                if let Some(iso) = self.effective_iso() {
-                    axis_ray = axis_ray.transformed_ray(&iso);
-                }
-                let mut new_rays = Rays::default();
-                new_rays.add_ray(axis_ray);
-                new_outgoing_edges
-                    .insert(outgoing_edge.0.to_string(), LightData::Geometric(new_rays));
-            } else {
-                return Err(OpossumError::Analysis(
-                    "did not receive LightData:Geometric for conversion into OpticalAxis data"
-                        .into(),
-                ));
-            }
-        }
-        Ok(new_outgoing_edges)
-    }
+impl OpticNode for Source {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.node_attr.set_property(name, prop)
     }
@@ -239,12 +180,94 @@ impl Dottable for Source {
         "slateblue"
     }
 }
+impl Analyzable for Source {}
+impl AnalysisEnergy for Source {
+    fn analyze(&mut self, _incoming_data: LightResult) -> OpmResult<LightResult> {
+        if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {
+            let Some(data) = data.value.clone() else {
+                return Err(OpossumError::Analysis(
+                    "source has empty light data defined".into(),
+                ));
+            };
+            Ok(LightResult::from([("out1".into(), data)]))
+        } else {
+            Err(OpossumError::Analysis(
+                "source has no light data defined".into(),
+            ))
+        }
+    }
+}
+impl AnalysisRayTrace for Source {
+    fn analyze(
+        &mut self,
+        _incoming_edges: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {
+            let Some(mut data) = data.value.clone() else {
+                return Err(OpossumError::Analysis(
+                    "source has empty light data defined".into(),
+                ));
+            };
+            if let LightData::Geometric(rays) = &mut data {
+                if let Some(iso) = self.effective_iso() {
+                    *rays = rays.transformed_rays(&iso);
+                }
+                if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
+                    rays.apodize(aperture)?;
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                } else {
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                };
+            }
+            Ok(LightResult::from([("out1".into(), data)]))
+        } else {
+            Err(OpossumError::Analysis(
+                "source has no light data defined".into(),
+            ))
+        }
+    }
+    fn calc_node_position(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let outgoing_edges = AnalysisRayTrace::analyze(self, incoming_data, config)?;
+        // generate a single beam (= optical axis) from source
+        let mut new_outgoing_edges = LightResult::new();
+        for outgoing_edge in &outgoing_edges {
+            if let LightData::Geometric(rays) = outgoing_edge.1 {
+                let mut axis_ray = if let Ok(Proptype::LengthOption(Some(alignment_wvl))) =
+                    self.node_attr.get_property("alignment wavelength")
+                {
+                    Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), *alignment_wvl, joule!(1.0))
+                } else {
+                    warn!("No alignment wavelength defined, using energy-weighted central wavelength for alignment");
+                    rays.get_optical_axis_ray()
+                }?;
+                if let Some(iso) = self.effective_iso() {
+                    axis_ray = axis_ray.transformed_ray(&iso);
+                }
+                let mut new_rays = Rays::default();
+                new_rays.add_ray(axis_ray);
+                new_outgoing_edges
+                    .insert(outgoing_edge.0.to_string(), LightData::Geometric(new_rays));
+            } else {
+                return Err(OpossumError::Analysis(
+                    "did not receive LightData:Geometric for conversion into OpticalAxis data"
+                        .into(),
+                ));
+            }
+        }
+        Ok(new_outgoing_edges)
+    }
+}
+impl AnalysisGhostFocus for Source {}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        analyzers::AnalyzerType, lightdata::DataEnergy, spectrum_helper::create_he_ne_spec,
-    };
+    use crate::{lightdata::DataEnergy, optic_ports::PortType, spectrum_helper::create_he_ne_spec};
     use assert_matches::assert_matches;
 
     #[test]
@@ -276,8 +299,8 @@ mod test {
     #[test]
     fn ports() {
         let node = Source::default();
-        assert!(node.ports().input_names().is_empty());
-        assert_eq!(node.ports().output_names(), vec!["out1"]);
+        assert!(node.ports().names(&PortType::Input).is_empty());
+        assert_eq!(node.ports().names(&PortType::Output), vec!["out1"]);
     }
     #[test]
     fn test_set_light_data() {
@@ -293,7 +316,7 @@ mod test {
     #[test]
     fn analyze_no_light_defined() {
         let mut node = Source::default();
-        let output = node.analyze(LightResult::default(), &AnalyzerType::Energy);
+        let output = AnalysisEnergy::analyze(&mut node, LightResult::default());
         assert!(output.is_err());
     }
     #[test]
@@ -302,10 +325,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         let mut node = Source::new("test", &light);
-        let incoming_data: LightResult = LightResult::default();
-        let output = node.analyze(incoming_data, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
         assert!(output.contains_key("out1"));
         assert_eq!(output.len(), 1);
         let output = output.get("out1");

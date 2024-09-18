@@ -1,14 +1,11 @@
 //! Performing a (simple) energy flow analysis
 use log::info;
 
-use crate::{
-    analyzers::AnalyzerType,
-    error::OpmResult,
-    nodes::NodeGroup,
-    optical::{LightResult, Optical},
-};
+use crate::{error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode};
 
 use super::Analyzer;
+
+//pub type LightResEnergy = LightDings<DataEnergy>;
 
 /// Analyzer for simulating a simple energy flow
 #[derive(Debug, Default)]
@@ -21,10 +18,16 @@ impl Analyzer for EnergyAnalyzer {
         } else {
             format!(" '{}'", scenery.node_attr().name())
         };
-        info!("Performing energy analysis of scenery{scenery_name}.");
-        let graph = scenery.graph_mut();
-        let name = format!("Scenery{scenery_name}");
-        graph.analyze(&name, &LightResult::default(), &AnalyzerType::Energy)?;
+        info!("Performing energy flow analysis of scenery{scenery_name}.");
+        AnalysisEnergy::analyze(scenery, LightResult::default())?;
         Ok(())
     }
+}
+/// Trait for implementing the energy flow analysis.
+pub trait AnalysisEnergy: OpticNode {
+    /// Analyze the energy flow of an [`OpticNode`].
+    ///
+    /// # Errors
+    /// This function will return an error if the concrete implementation of the [`OpticNode`] fails.
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult>;
 }

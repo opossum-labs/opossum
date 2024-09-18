@@ -9,20 +9,20 @@ use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
 
 use crate::{
+    analyzable::Analyzable,
     nodes::{create_node_ref, NodeAttr},
     optic_senery_rsc::SceneryResources,
-    optical::Optical,
 };
 
 #[derive(Debug, Clone)]
 /// Structure for storing an optical node.
 ///
-/// This structure stores a reference to an optical node (a structure implementing the [`Optical`] trait). This [`OpticRef`]
+/// This structure stores a reference to an optical node (a structure implementing the [`OpticNode`] trait). This [`OpticRef`]
 /// is then stored as a node in a `NodeGroup`)[`crate::nodes::NodeGroup`].
 /// In addition, it contains a unique id ([`Uuid`]) in order to unambiguously identify a node within a scene.
 pub struct OpticRef {
     /// The underlying optical reference.
-    pub optical_ref: Rc<RefCell<dyn Optical>>,
+    pub optical_ref: Rc<RefCell<dyn Analyzable>>,
     uuid: Uuid,
 }
 impl OpticRef {
@@ -30,7 +30,7 @@ impl OpticRef {
     ///
     /// You can either assign a given [`Uuid`] using `Some(uuid!(...))` or provide `None`, where a new unique id is generated.
     pub fn new(
-        node: Rc<RefCell<dyn Optical>>,
+        node: Rc<RefCell<dyn Analyzable>>,
         uuid: Option<Uuid>,
         global_conf: Option<Rc<RefCell<SceneryResources>>>,
     ) -> Self {

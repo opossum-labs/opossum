@@ -1,14 +1,15 @@
 #![warn(missing_docs)]
 //! Lens with spherical or flat surfaces
 use crate::{
-    analyzers::AnalyzerType,
-    // aperture::{Aperture, CircleConfig},
+    analyzable::Analyzable,
+    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
     lightdata::LightData,
     millimeter,
-    optic_ports::OpticPorts,
-    optical::{Alignable, LightResult, Optical},
+    optic_node::{Alignable, OpticNode},
+    optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
@@ -85,8 +86,8 @@ impl Default for Lens {
 
         let mut ports = OpticPorts::new();
 
-        ports.create_input("front").unwrap();
-        ports.create_output("rear").unwrap();
+        ports.add(&PortType::Input, "front").unwrap();
+        ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
         Self { node_attr }
     }
@@ -147,8 +148,8 @@ impl Lens {
         //     center_thickness,
         // ) {
         //     let circle = CircleConfig::new(radius, millimeter!(0., 0.))?;
-        //     lens.set_input_aperture("front", &Aperture::BinaryCircle(circle.clone()))?;
-        //     lens.set_output_aperture("rear", &Aperture::BinaryCircle(circle))?;
+        //     lens.set_aperture(&PortType::Input, "front", &Aperture::BinaryCircle(circle.clone()))?;
+        //     lens.set_aperture(&PortType::Output, "rear", &Aperture::BinaryCircle(circle))?;
         // };
 
         Ok(lens)
@@ -259,7 +260,7 @@ impl Lens {
         front_surf.set_coating(
             self.node_attr()
                 .ports()
-                .input_coating("front")
+                .coating(&PortType::Input, "front")
                 .unwrap()
                 .clone(),
         );
@@ -273,11 +274,11 @@ impl Lens {
         rear_surf.set_coating(
             self.node_attr()
                 .ports()
-                .output_coating("rear")
+                .coating(&PortType::Output, "rear")
                 .unwrap()
                 .clone(),
         );
-        if let Some(aperture) = self.ports().input_aperture("front") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -288,7 +289,7 @@ impl Lens {
         rays.refract_on_surface(&front_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
         rays.refract_on_surface(&rear_surf, Some(&self.ambient_idx()))?;
-        if let Some(aperture) = self.ports().output_aperture("rear") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -319,7 +320,7 @@ impl Lens {
         front_surf.set_coating(
             self.node_attr()
                 .ports()
-                .input_coating("front")
+                .coating(&PortType::Input, "front")
                 .unwrap()
                 .clone(),
         );
@@ -333,11 +334,11 @@ impl Lens {
         rear_surf.set_coating(
             self.node_attr()
                 .ports()
-                .output_coating("rear")
+                .coating(&PortType::Output, "rear")
                 .unwrap()
                 .clone(),
         );
-        if let Some(aperture) = self.ports().output_aperture("rear") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -348,7 +349,7 @@ impl Lens {
         rays.refract_on_surface(&rear_surf, Some(refri))?;
         rays.set_refractive_index(refri)?;
         rays.refract_on_surface(&front_surf, Some(&self.ambient_idx()))?;
-        if let Some(aperture) = self.ports().input_aperture("front") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -360,88 +361,7 @@ impl Lens {
     }
 }
 
-impl Optical for Lens {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<LightResult> {
-        let (in_port, out_port) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
-        let light_data = match analyzer_type {
-            AnalyzerType::Energy => data.clone(),
-            AnalyzerType::RayTrace(_) => {
-                let LightData::Geometric(rays) = data.clone() else {
-                    return Err(OpossumError::Analysis(
-                        "expected ray data at input port".into(),
-                    ));
-                };
-                let Some(eff_iso) = self.effective_iso() else {
-                    return Err(OpossumError::Analysis(
-                        "no location for surface defined".into(),
-                    ));
-                };
-                let Ok(Proptype::Length(front_roc)) =
-                    self.node_attr.get_property("front curvature")
-                else {
-                    return Err(OpossumError::Analysis("cannot read front curvature".into()));
-                };
-                let Ok(Proptype::RefractiveIndex(index_model)) =
-                    self.node_attr.get_property("refractive index")
-                else {
-                    return Err(OpossumError::Analysis(
-                        "cannot read refractive index".into(),
-                    ));
-                };
-                let Ok(Proptype::Length(center_thickness)) =
-                    self.node_attr.get_property("center thickness")
-                else {
-                    return Err(OpossumError::Analysis(
-                        "cannot read center thickness".into(),
-                    ));
-                };
-                let Ok(Proptype::Length(rear_roc)) = self.node_attr.get_property("rear curvature")
-                else {
-                    return Err(OpossumError::Analysis("cannot read rear curvature".into()));
-                };
-                let output = if self.inverted() {
-                    self.analyze_inverse(
-                        rays,
-                        *front_roc,
-                        *center_thickness,
-                        *rear_roc,
-                        &index_model.value,
-                        &eff_iso,
-                        analyzer_type,
-                    )?
-                } else {
-                    self.analyze_forward(
-                        rays,
-                        *front_roc,
-                        *center_thickness,
-                        *rear_roc,
-                        &index_model.value,
-                        &eff_iso,
-                        analyzer_type,
-                    )?
-                };
-                LightData::Geometric(output)
-            }
-            _ => {
-                return Err(OpossumError::Analysis(
-                    "analysis mode not yet implemented for lens".into(),
-                ))
-            }
-        };
-        let light_result = LightResult::from([(out_port.into(), light_data)]);
-        Ok(light_result)
-    }
+impl OpticNode for Lens {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -465,18 +385,101 @@ impl Dottable for Lens {
         "aqua"
     }
 }
+impl Analyzable for Lens {}
+impl AnalysisEnergy for Lens {
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let (inport, outport) = if self.inverted() {
+            ("out1", "in1")
+        } else {
+            ("in1", "out1")
+        };
+        let Some(data) = incoming_data.get(inport) else {
+            return Ok(LightResult::default());
+        };
+        Ok(LightResult::from([(outport.into(), data.clone())]))
+    }
+}
+impl AnalysisRayTrace for Lens {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let (in_port, out_port) = if self.inverted() {
+            ("rear", "front")
+        } else {
+            ("front", "rear")
+        };
+        let Some(data) = incoming_data.get(in_port) else {
+            return Ok(LightResult::default());
+        };
+        let LightData::Geometric(rays) = data.clone() else {
+            return Err(OpossumError::Analysis(
+                "expected ray data at input port".into(),
+            ));
+        };
+        let Some(eff_iso) = self.effective_iso() else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined".into(),
+            ));
+        };
+        let Ok(Proptype::Length(front_roc)) = self.node_attr.get_property("front curvature") else {
+            return Err(OpossumError::Analysis("cannot read front curvature".into()));
+        };
+        let Ok(Proptype::RefractiveIndex(index_model)) =
+            self.node_attr.get_property("refractive index")
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read refractive index".into(),
+            ));
+        };
+        let Ok(Proptype::Length(center_thickness)) =
+            self.node_attr.get_property("center thickness")
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read center thickness".into(),
+            ));
+        };
+        let Ok(Proptype::Length(rear_roc)) = self.node_attr.get_property("rear curvature") else {
+            return Err(OpossumError::Analysis("cannot read rear curvature".into()));
+        };
+        let output = if self.inverted() {
+            self.analyze_inverse(
+                rays,
+                *front_roc,
+                *center_thickness,
+                *rear_roc,
+                &index_model.value,
+                &eff_iso,
+                &AnalyzerType::RayTrace(config.clone()),
+            )?
+        } else {
+            self.analyze_forward(
+                rays,
+                *front_roc,
+                *center_thickness,
+                *rear_roc,
+                &index_model.value,
+                &eff_iso,
+                &AnalyzerType::RayTrace(config.clone()),
+            )?
+        };
+        let light_result = LightResult::from([(out_port.into(), LightData::Geometric(output))]);
+        Ok(light_result)
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use core::f64;
-
+    use super::*;
     use crate::{
-        analyzers::RayTraceConfig, aperture::Aperture, joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
+        analyzers::RayTraceConfig, aperture::Aperture, joule, lightdata::LightData, millimeter,
+        nanometer, nodes::test_helper::test_helper::*, position_distributions::Hexapolar,
+        properties::Proptype, rays::Rays,
     };
     use approx::assert_relative_eq;
+    use core::f64;
     use nalgebra::Vector3;
-
-    use super::*;
     #[test]
     fn default() {
         let mut node = Lens::default();
@@ -568,7 +571,7 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("rear".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -594,12 +597,9 @@ mod test {
         .unwrap();
         let mut incoming_data = LightResult::default();
         incoming_data.insert("front".into(), LightData::Geometric(rays));
-        let output = node
-            .analyze(
-                incoming_data,
-                &AnalyzerType::RayTrace(RayTraceConfig::default()),
-            )
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())
+                .unwrap();
         if let Some(LightData::Geometric(rays)) = output.get("rear") {
             for ray in rays {
                 assert_eq!(ray.direction(), Vector3::z());
@@ -627,15 +627,11 @@ mod test {
             &Hexapolar::new(millimeter!(10.0), 3).unwrap(),
         )
         .unwrap();
-        // rays.set_dist_to_next_surface(millimeter!(10.0));
         let mut incoming_data = LightResult::default();
         incoming_data.insert("front".into(), LightData::Geometric(rays));
-        let output = node
-            .analyze(
-                incoming_data,
-                &AnalyzerType::RayTrace(RayTraceConfig::default()),
-            )
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())
+                .unwrap();
         if let Some(LightData::Geometric(rays)) = output.get("rear") {
             for ray in rays {
                 assert_eq!(ray.direction(), Vector3::z());
@@ -655,12 +651,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 0.031224989991992);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 0.031224989991992);
         }
     }
@@ -675,12 +671,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 0.04358898943540674);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 0.04358898943540674);
         }
 
@@ -693,12 +689,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 0.04358898943540674);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 0.04358898943540674);
         }
     }
@@ -713,12 +709,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
 
@@ -731,12 +727,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
 
@@ -749,12 +745,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
     }
@@ -769,12 +765,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
 
@@ -787,12 +783,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
     }
@@ -807,12 +803,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 0.09637888196533964);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 0.09637888196533964);
         }
 
@@ -825,12 +821,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 0.09637888196533964);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 0.09637888196533964);
         }
 
@@ -843,12 +839,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 0.09987492177719105);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 0.09987492177719105);
         }
 
@@ -861,12 +857,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 0.09987492177719105);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 0.09987492177719105);
         }
     }
@@ -881,12 +877,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
 
@@ -899,12 +895,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(node.ports().input_aperture("front").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().input_aperture("front") {
+        assert!(node.ports().aperture(&PortType::Input, "front").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Input, "front") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
-        assert!(node.ports().output_aperture("rear").is_some());
-        if let Some(Aperture::BinaryCircle(c)) = node.ports().output_aperture("rear") {
+        assert!(node.ports().aperture(&PortType::Output, "rear").is_some());
+        if let Some(Aperture::BinaryCircle(c)) = node.ports().aperture(&PortType::Output, "rear") {
             assert_relative_eq!(c.radius().value, 100e-3);
         }
     }
