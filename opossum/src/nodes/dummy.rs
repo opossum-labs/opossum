@@ -1,12 +1,14 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::AnalyzerType,
+    analyzable::Analyzable,
+    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
     lightdata::LightData,
-    optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optic_node::OpticNode,
+    optic_ports::{OpticPorts, PortType},
     reporter::NodeReport,
     surface::{OpticalSurface, Plane},
 };
@@ -33,8 +35,8 @@ impl Default for Dummy {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("dummy");
         let mut ports = OpticPorts::new();
-        ports.create_input("front").unwrap();
-        ports.create_output("rear").unwrap();
+        ports.add(&PortType::Input, "front").unwrap();
+        ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
         Self { node_attr }
     }
@@ -53,11 +55,25 @@ impl Dummy {
         dummy
     }
 }
-impl Optical for Dummy {
+impl Analyzable for Dummy {}
+impl AnalysisEnergy for Dummy {
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let (inport, outport) = if self.inverted() {
+            ("rear", "front")
+        } else {
+            ("front", "rear")
+        };
+        incoming_data.get(inport).map_or_else(
+            || Ok(LightResult::default()),
+            |data| Ok(LightResult::from([(outport.into(), data.clone())])),
+        )
+    }
+}
+impl AnalysisRayTrace for Dummy {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
-        analyzer_type: &AnalyzerType,
+        config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {
             ("rear", "front")
@@ -77,19 +93,15 @@ impl Optical for Dummy {
                     "no location for surface defined. Aborting".into(),
                 ));
             }
-            if let Some(aperture) = self.ports().input_aperture("front") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
                 rays.apodize(aperture)?;
-                if let AnalyzerType::RayTrace(config) = analyzer_type {
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                }
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
-            if let Some(aperture) = self.ports().output_aperture("rear") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
                 rays.apodize(aperture)?;
-                if let AnalyzerType::RayTrace(config) = analyzer_type {
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                }
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
@@ -101,6 +113,9 @@ impl Optical for Dummy {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
     }
+}
+
+impl OpticNode for Dummy {
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         Some(NodeReport::new(
             &self.node_type(),
@@ -125,6 +140,7 @@ mod test {
     use crate::{
         lightdata::{DataEnergy, LightData},
         nodes::test_helper::test_helper::*,
+        optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
     };
     #[test]
@@ -154,18 +170,13 @@ mod test {
     #[test]
     fn ports() {
         let node = Dummy::default();
-        assert_eq!(node.ports().input_names(), vec!["front"]);
-        assert_eq!(node.ports().output_names(), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["front"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["rear"]);
     }
     #[test]
     fn set_aperture() {
         test_set_aperture::<Dummy>("front", "rear");
     }
-    // #[test]
-    // #[ignore]
-    // fn export_data() {
-    //     assert!(Dummy::default().export_data(Path::new("")).is_ok());
-    // }
     #[test]
     fn as_ref_node_mut() {
         let mut node = Dummy::default();
@@ -180,8 +191,8 @@ mod test {
     fn ports_inverted() {
         let mut node = Dummy::default();
         node.set_inverted(true).unwrap();
-        assert_eq!(node.ports().input_names(), vec!["rear"]);
-        assert_eq!(node.ports().output_names(), vec!["front"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["front"]);
     }
     #[test]
     fn is_detector() {
@@ -200,7 +211,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("rear".into(), input_light.clone());
-        let output = dummy.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -211,9 +222,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("front".into(), input_light.clone());
-        let output = dummy.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
         assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
         let output = output.get("rear");
@@ -221,7 +230,6 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-
     #[test]
     fn analyze_inverse() {
         let mut dummy = Dummy::default();
@@ -232,9 +240,7 @@ mod test {
         });
         input.insert("rear".into(), input_light.clone());
 
-        let output = dummy.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
         assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
         let output = output.get("front");

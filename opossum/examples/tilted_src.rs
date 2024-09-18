@@ -4,7 +4,7 @@ use opossum::{
     error::OpmResult,
     joule, millimeter,
     nodes::{collimated_line_ray_source, NodeGroup, RayPropagationVisualizer, ThinMirror},
-    optical::Alignable,
+    optic_node::Alignable,
     OpmDocument,
 };
 use std::path::Path;

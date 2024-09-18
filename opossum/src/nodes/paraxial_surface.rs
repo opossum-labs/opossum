@@ -1,13 +1,15 @@
 #![warn(missing_docs)]
 //! A paraxial surface (ideal lens)
 use crate::{
-    analyzers::AnalyzerType,
+    analyzable::Analyzable,
+    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
     lightdata::LightData,
     millimeter,
-    optic_ports::OpticPorts,
-    optical::{Alignable, LightResult, Optical},
+    optic_node::{Alignable, OpticNode},
+    optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     surface::{OpticalSurface, Plane},
 };
@@ -45,8 +47,8 @@ impl Default for ParaxialSurface {
         let mut node_attr = NodeAttr::new("paraxial surface");
 
         let mut ports = OpticPorts::new();
-        ports.create_input("front").unwrap();
-        ports.create_output("rear").unwrap();
+        ports.add(&PortType::Input, "front").unwrap();
+        ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
 
         node_attr
@@ -83,73 +85,7 @@ impl ParaxialSurface {
         Ok(parsurf)
     }
 }
-impl Optical for ParaxialSurface {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<LightResult> {
-        let (src, target) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
-        let Some(data) = incoming_data.get(src) else {
-            return Ok(LightResult::default());
-        };
-        let light_data = match analyzer_type {
-            AnalyzerType::Energy => data.clone(),
-            AnalyzerType::RayTrace(_config) => {
-                if let LightData::Geometric(mut rays) = data.clone() {
-                    let Ok(Proptype::Length(focal_length)) =
-                        self.node_attr.get_property("focal length")
-                    else {
-                        return Err(OpossumError::Analysis("cannot read focal length".into()));
-                    };
-                    if let Some(iso) = self.effective_iso() {
-                        rays.refract_on_surface(
-                            &OpticalSurface::new(Box::new(Plane::new(&iso))),
-                            None,
-                        )?;
-                        rays.refract_paraxial(*focal_length, &iso)?;
-                    } else {
-                        return Err(OpossumError::Analysis(
-                            "no location for surface defined. Aborting".into(),
-                        ));
-                    }
-                    if let Some(aperture) = self.ports().input_aperture("front") {
-                        rays.apodize(aperture)?;
-                        if let AnalyzerType::RayTrace(config) = analyzer_type {
-                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        }
-                    } else {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    };
-                    if let Some(aperture) = self.ports().output_aperture("rear") {
-                        rays.apodize(aperture)?;
-                        if let AnalyzerType::RayTrace(config) = analyzer_type {
-                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        }
-                    } else {
-                        return Err(OpossumError::OpticPort("output aperture not found".into()));
-                    };
-                    LightData::Geometric(rays)
-                } else {
-                    return Err(crate::error::OpossumError::Analysis(
-                        "No LightData::Geometric for analyzer type RayTrace".into(),
-                    ));
-                }
-            }
-            _ => {
-                return Err(OpossumError::Analysis(
-                    "analysis mode not yet implemented for paraxial surface".into(),
-                ))
-            }
-        };
-        let mut light_result = LightResult::default();
-        light_result.insert(target.into(), light_data);
-        Ok(light_result)
-    }
+impl OpticNode for ParaxialSurface {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -165,12 +101,76 @@ impl Dottable for ParaxialSurface {
         "palegreen"
     }
 }
+impl Analyzable for ParaxialSurface {}
+impl AnalysisEnergy for ParaxialSurface {
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let (inport, outport) = if self.inverted() {
+            ("rear", "front")
+        } else {
+            ("front", "rear")
+        };
+        let Some(data) = incoming_data.get(inport) else {
+            return Ok(LightResult::default());
+        };
+        Ok(LightResult::from([(outport.into(), data.clone())]))
+    }
+}
+impl AnalysisRayTrace for ParaxialSurface {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let (src, target) = if self.inverted() {
+            ("rear", "front")
+        } else {
+            ("front", "rear")
+        };
+        let Some(data) = incoming_data.get(src) else {
+            return Ok(LightResult::default());
+        };
+        if let LightData::Geometric(mut rays) = data.clone() {
+            let Ok(Proptype::Length(focal_length)) = self.node_attr.get_property("focal length")
+            else {
+                return Err(OpossumError::Analysis("cannot read focal length".into()));
+            };
+            if let Some(iso) = self.effective_iso() {
+                rays.refract_on_surface(&OpticalSurface::new(Box::new(Plane::new(&iso))), None)?;
+                rays.refract_paraxial(*focal_length, &iso)?;
+            } else {
+                return Err(OpossumError::Analysis(
+                    "no location for surface defined. Aborting".into(),
+                ));
+            }
+            if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
+                rays.apodize(aperture)?;
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            } else {
+                return Err(OpossumError::OpticPort("input aperture not found".into()));
+            };
+            if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
+                rays.apodize(aperture)?;
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            } else {
+                return Err(OpossumError::OpticPort("output aperture not found".into()));
+            };
+            let mut light_result = LightResult::default();
+            light_result.insert(target.into(), LightData::Geometric(rays));
+            Ok(light_result)
+        } else {
+            Err(crate::error::OpossumError::Analysis(
+                "No LightData::Geometric for analyzer type RayTrace".into(),
+            ))
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
         analyzers::RayTraceConfig, degree, joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
+        nodes::test_helper::test_helper::*, optic_ports::PortType, ray::Ray, rays::Rays,
         utils::geom_transformation::Isometry,
     };
     use assert_matches::assert_matches;
@@ -222,8 +222,8 @@ mod test {
     #[test]
     fn ports() {
         let node = ParaxialSurface::default();
-        assert_eq!(node.ports().input_names(), vec!["front"]);
-        assert_eq!(node.ports().output_names(), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["front"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["rear"]);
     }
     #[test]
     fn set_aperture() {
@@ -239,9 +239,8 @@ mod test {
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
         input.insert("rear".into(), input_light.clone());
-        let output = node
-            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -265,9 +264,8 @@ mod test {
         );
         let mut input = LightResult::default();
         input.insert("front".into(), LightData::Geometric(rays));
-        let output = node
-            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         if let Some(LightData::Geometric(rays)) = output.get("rear") {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();

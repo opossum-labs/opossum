@@ -7,7 +7,7 @@ use opossum::{
         round_collimated_ray_source, CylindricLens, NodeGroup, RayPropagationVisualizer,
         SpotDiagram,
     },
-    optical::Alignable,
+    optic_node::Alignable,
     refractive_index::RefrIndexConst,
     OpmDocument,
 };

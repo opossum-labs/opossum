@@ -1,12 +1,14 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::AnalyzerType,
+    analyzable::Analyzable,
+    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
     lightdata::{DataEnergy, LightData},
-    optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optic_node::OpticNode,
+    optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     ray::SplittingConfig,
     rays::Rays,
@@ -50,10 +52,10 @@ impl Default for BeamSplitter {
             )
             .unwrap();
         let mut ports = OpticPorts::new();
-        ports.create_input("input1").unwrap();
-        ports.create_input("input2").unwrap();
-        ports.create_output("out1_trans1_refl2").unwrap();
-        ports.create_output("out2_trans2_refl1").unwrap();
+        ports.add(&PortType::Input, "input1").unwrap();
+        ports.add(&PortType::Input, "input2").unwrap();
+        ports.add(&PortType::Output, "out1_trans1_refl2").unwrap();
+        ports.add(&PortType::Output, "out2_trans2_refl1").unwrap();
         node_attr.set_ports(ports);
         Self { node_attr }
     }
@@ -94,7 +96,7 @@ impl BeamSplitter {
     }
     /// Sets the [`SplittingConfig`] of this [`BeamSplitter`].
     ///
-    /// ## Errors
+    /// # Errors
     /// This function returns an [`OpossumError::Other`] if the [`SplittingConfig`] is invalid.
     pub fn set_splitting_config(&mut self, config: &SplittingConfig) -> OpmResult<()> {
         // if ratio.is_sign_negative() || ratio > 1.0 || !ratio.is_finite() {
@@ -171,6 +173,7 @@ impl BeamSplitter {
         }
         Ok((out1_data, out2_data))
     }
+    #[allow(clippy::too_many_lines)]
     fn analyze_raytrace(
         &self,
         in1: Option<&LightData>,
@@ -199,7 +202,7 @@ impl BeamSplitter {
                             "no location for surface defined. Aborting".into(),
                         ));
                     }
-                    if let Some(aperture) = self.ports().input_aperture("input1") {
+                    if let Some(aperture) = self.ports().aperture(&PortType::Input, "input1") {
                         rays.apodize(aperture)?;
                         if let AnalyzerType::RayTrace(config) = analyzer_type {
                             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -231,7 +234,7 @@ impl BeamSplitter {
                             "no location for surface defined. Aborting".into(),
                         ));
                     }
-                    if let Some(aperture) = self.ports().input_aperture("input2") {
+                    if let Some(aperture) = self.ports().aperture(&PortType::Input, "input2") {
                         rays.apodize(aperture)?;
                         if let AnalyzerType::RayTrace(config) = analyzer_type {
                             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -253,7 +256,10 @@ impl BeamSplitter {
         };
         in_ray1.merge(&split2);
         in_ray2.merge(&split1);
-        if let Some(aperture) = self.ports().output_aperture("out1_trans1_refl2") {
+        if let Some(aperture) = self
+            .ports()
+            .aperture(&PortType::Output, "out1_trans1_refl2")
+        {
             in_ray1.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 in_ray1.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -261,7 +267,10 @@ impl BeamSplitter {
         } else {
             return Err(OpossumError::OpticPort("ouput aperture not found".into()));
         };
-        if let Some(aperture) = self.ports().output_aperture("out2_trans2_refl1") {
+        if let Some(aperture) = self
+            .ports()
+            .aperture(&PortType::Output, "out2_trans2_refl1")
+        {
             in_ray2.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 in_ray2.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -276,12 +285,23 @@ impl BeamSplitter {
     }
 }
 
-impl Optical for BeamSplitter {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<LightResult> {
+impl OpticNode for BeamSplitter {
+    fn node_attr(&self) -> &NodeAttr {
+        &self.node_attr
+    }
+    fn node_attr_mut(&mut self) -> &mut NodeAttr {
+        &mut self.node_attr
+    }
+}
+
+impl Dottable for BeamSplitter {
+    fn node_color(&self) -> &str {
+        "lightpink"
+    }
+}
+impl Analyzable for BeamSplitter {}
+impl AnalysisEnergy for BeamSplitter {
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (input_port1, input_port2) = if self.inverted() {
             ("out1_trans1_refl2", "out2_trans2_refl1")
         } else {
@@ -289,15 +309,7 @@ impl Optical for BeamSplitter {
         };
         let in1 = incoming_data.get(input_port1);
         let in2 = incoming_data.get(input_port2);
-        let (out1_data, out2_data) = match analyzer_type {
-            AnalyzerType::Energy => self.analyze_energy(in1, in2)?,
-            AnalyzerType::RayTrace(_) => self.analyze_raytrace(in1, in2, analyzer_type)?,
-            _ => {
-                return Err(OpossumError::Analysis(
-                    "analysis mode not yet implemented for beam splitter".into(),
-                ))
-            }
-        };
+        let (out1_data, out2_data) = self.analyze_energy(in1, in2)?;
         if out1_data.is_some() && out2_data.is_some() {
             let (target1, target2) = if self.inverted() {
                 ("input1", "input2")
@@ -312,7 +324,41 @@ impl Optical for BeamSplitter {
             Ok(LightResult::default())
         }
     }
-    fn calc_node_position(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+}
+impl AnalysisRayTrace for BeamSplitter {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let (input_port1, input_port2) = if self.inverted() {
+            ("out1_trans1_refl2", "out2_trans2_refl1")
+        } else {
+            ("input1", "input2")
+        };
+        let in1 = incoming_data.get(input_port1);
+        let in2 = incoming_data.get(input_port2);
+        let (out1_data, out2_data) =
+            self.analyze_raytrace(in1, in2, &AnalyzerType::RayTrace(config.clone()))?;
+        if out1_data.is_some() && out2_data.is_some() {
+            let (target1, target2) = if self.inverted() {
+                ("input1", "input2")
+            } else {
+                ("out1_trans1_refl2", "out2_trans2_refl1")
+            };
+            Ok(LightResult::from([
+                (target1.into(), out1_data.unwrap()),
+                (target2.into(), out2_data.unwrap()),
+            ]))
+        } else {
+            Ok(LightResult::default())
+        }
+    }
+    fn calc_node_position(
+        &mut self,
+        incoming_data: LightResult,
+        _config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
         let (input_port1, _input_port2) = if self.inverted() {
             ("out1_trans1_refl2", "out2_trans2_refl1")
         } else {
@@ -354,29 +400,17 @@ impl Optical for BeamSplitter {
             (target1.into(), LightData::Geometric(out_rays.clone())),
             (target2.into(), LightData::Geometric(out_rays)),
         ]);
-        //info!("result from beam splitter {:?}",light_result);
         Ok(light_result)
-    }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
     }
 }
 
-impl Dottable for BeamSplitter {
-    fn node_color(&self) -> &str {
-        "lightpink"
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
         analyzers::RayTraceConfig, joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*, ray::Ray, spectrum_helper::create_he_ne_spec,
-        utils::geom_transformation::Isometry,
+        nodes::test_helper::test_helper::*, optic_ports::PortType, ray::Ray,
+        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
     use approx::{assert_abs_diff_eq, AbsDiffEq};
     use uom::si::energy::joule;
@@ -407,10 +441,10 @@ mod test {
     #[test]
     fn ports() {
         let node = BeamSplitter::default();
-        let mut input_ports = node.ports().input_names();
+        let mut input_ports = node.ports().names(&PortType::Input);
         input_ports.sort();
         assert_eq!(input_ports, vec!["input1", "input2"]);
-        let mut output_ports = node.ports().output_names();
+        let mut output_ports = node.ports().names(&PortType::Output);
         output_ports.sort();
         assert_eq!(output_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
     }
@@ -418,10 +452,10 @@ mod test {
     fn ports_inverted() {
         let mut node = BeamSplitter::default();
         node.set_inverted(true).unwrap();
-        let mut input_ports = node.ports().input_names();
+        let mut input_ports = node.ports().names(&PortType::Input);
         input_ports.sort();
         assert_eq!(input_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
-        let mut output_ports = node.ports().output_names();
+        let mut output_ports = node.ports().names(&PortType::Output);
         output_ports.sort();
         assert_eq!(output_ports, vec!["input1", "input2"]);
     }
@@ -433,7 +467,7 @@ mod test {
     fn analyze_energy_empty_input() {
         let mut node = BeamSplitter::default();
         let input = LightResult::default();
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -446,7 +480,7 @@ mod test {
                 spectrum: create_he_ne_spec(1.0).unwrap(),
             }),
         );
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         let result = output.clone().get("out1_trans1_refl2").unwrap().clone();
         let energy = if let LightData::Energy(e) = result {
             e.spectrum.total_energy()
@@ -478,7 +512,7 @@ mod test {
                 spectrum: create_he_ne_spec(0.5).unwrap(),
             }),
         );
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         let energy_output1 = if let LightData::Energy(s) =
             output.clone().get("out1_trans1_refl2").unwrap().clone()
         {
@@ -500,9 +534,8 @@ mod test {
     fn analyze_raytrace_empty() {
         let mut node = BeamSplitter::default();
         let input = LightResult::default();
-        let output = node
-            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -515,9 +548,8 @@ mod test {
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
         rays.add_ray(ray);
         input.insert("input1".into(), LightData::Geometric(rays));
-        let output = node
-            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         let result = output.clone().get("out1_trans1_refl2").unwrap().clone();
         let energy = if let LightData::Geometric(r) = result {
             r.total_energy().get::<joule>()
@@ -548,9 +580,8 @@ mod test {
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.5)).unwrap();
         rays.add_ray(ray);
         input.insert("input2".into(), LightData::Geometric(rays));
-        let output = node
-            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         let energy_output1 = if let LightData::Geometric(r) =
             output.clone().get("out1_trans1_refl2").unwrap().clone()
         {
@@ -585,7 +616,7 @@ mod test {
                 spectrum: create_he_ne_spec(0.5).unwrap(),
             }),
         );
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         let energy_output1 =
             if let LightData::Energy(s) = output.clone().get("input1").unwrap().clone() {
                 s.spectrum.total_energy()

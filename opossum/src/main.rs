@@ -49,11 +49,11 @@ fn create_dot_or_report_file_instance(
 fn create_dot_file(dot_path: &Path, scenery: &NodeGroup) -> OpmResult<()> {
     let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "dot", "diagram")?;
 
-    write!(output, "{}", scenery.to_toplevel_dot("")?)
+    write!(output, "{}", scenery.toplevel_dot("")?)
         .map_err(|e| OpossumError::Other(format!("writing diagram file (.dot) failed: {e}")))?;
 
     let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "svg", "diagram")?;
-    write!(output, "{}", scenery.to_toplevel_dot_svg()?)
+    write!(output, "{}", scenery.toplevel_dot_svg()?)
         .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))?;
     Ok(())
 }

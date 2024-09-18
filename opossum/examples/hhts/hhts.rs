@@ -21,7 +21,8 @@ use opossum::{
         BeamSplitter, Dummy, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
         RayPropagationVisualizer, Source, WaveFront,
     },
-    optical::Optical,
+    optic_node::OpticNode,
+    optic_ports::PortType,
     position_distributions::HexagonalTiling,
     radian,
     ray::SplittingConfig,
@@ -166,8 +167,8 @@ fn main() -> OpmResult<()> {
         millimeter!(5.77736),
         &refr_index_hzf52,
     )?;
-    // node.set_input_aperture("front", &a_2inch)?;
-    // node.set_output_aperture("rear", &a_2inch)?;
+    // node.set_aperture(&PortType::Input, "front", &a_2inch)?;
+    // node.set_aperture(&PortType::Output, "rear", &a_2inch)?;
     let t1_l2a = group_t1.add_node(node)?;
     let t1_l2b = group_t1.add_node(Lens::new(
         "T1 L2b",
@@ -221,7 +222,7 @@ fn main() -> OpmResult<()> {
         "opossum/examples/hhts/FELH1000_Transmission.csv",
     )?);
     let mut node = IdealFilter::new("1w Longpass filter", &felh1000)?;
-    node.set_input_aperture("front", &a_1inch)?;
+    node.set_aperture(&PortType::Input, "front", &a_1inch)?;
     let filter_1w = group_bs.add_node(node)?;
     group_bs.connect_nodes(bs, "out2_trans2_refl1", filter_1w, "front", Length::zero())?;
 
@@ -230,7 +231,7 @@ fn main() -> OpmResult<()> {
         "opossum/examples/hhts/FESH0700_Transmission.csv",
     )?);
     let mut node = IdealFilter::new("2w Shortpass filter", &fesh0700)?;
-    node.set_input_aperture("front", &a_1inch)?;
+    node.set_aperture(&PortType::Input, "front", &a_1inch)?;
     let filter_2w = group_bs.add_node(node)?;
     group_bs.connect_nodes(bs, "out1_trans1_refl2", filter_2w, "front", Length::zero())?;
 

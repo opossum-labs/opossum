@@ -4,7 +4,8 @@ use opossum::{
     error::OpmResult,
     joule, millimeter,
     nodes::{round_collimated_ray_source, Lens, NodeGroup, RayPropagationVisualizer},
-    optical::Optical,
+    optic_node::OpticNode,
+    optic_ports::PortType,
     refractive_index::RefrIndexConst,
     OpmDocument,
 };
@@ -31,7 +32,8 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),
         &RefrIndexConst::new(2.0).unwrap(),
     )?;
-    lens2.set_input_aperture(
+    lens2.set_aperture(
+        &PortType::Input,
         "front",
         &Aperture::BinaryCircle(CircleConfig::new(millimeter!(3.), millimeter!(0., 0.))?),
     )?;

@@ -2,12 +2,12 @@ use crate::{
     aperture::Aperture,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
+    nodes::OpticGraph,
     nodes::{
         fluence_detector::Fluence, ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity, FilterType, FluenceData, Metertype, Spectrometer,
         SpectrometerType, SpotDiagram, WaveFrontData,
     },
-    optic_graph::OpticGraph,
     optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,

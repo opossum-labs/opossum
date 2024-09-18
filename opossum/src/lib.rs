@@ -20,6 +20,7 @@ pub mod bevy_scene;
 #[cfg(feature = "bevy")]
 mod scenery_bevy_data;
 
+pub mod analyzable;
 pub mod analyzers;
 pub mod aperture;
 pub mod console;
@@ -27,15 +28,15 @@ pub mod dottable;
 pub mod energy_distributions;
 pub mod error;
 mod light;
+mod light_result;
 pub mod lightdata;
 pub mod nodes;
 pub mod opm_document;
-mod optic_graph;
+pub mod optic_node;
 mod optic_port;
 pub mod optic_ports;
 pub mod optic_ref;
 mod optic_senery_rsc;
-pub mod optical;
 pub mod plottable;
 mod port_map;
 pub mod position_distributions;

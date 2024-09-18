@@ -5,12 +5,14 @@ use std::{
 use uuid::Uuid;
 
 use crate::{
-    analyzers::AnalyzerType,
+    analyzable::Analyzable,
+    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
+    optic_node::OpticNode,
     optic_ports::OpticPorts,
     optic_ref::OpticRef,
-    optical::{LightResult, Optical},
     utils::geom_transformation::Isometry,
 };
 
@@ -23,9 +25,9 @@ use super::node_attr::NodeAttr;
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - input ports of the referenced [`Optical`]
+///     - input ports of the referenced [`OpticNode`]
 ///   - Outputs
-///     - output ports of the referenced [`Optical`]
+///     - output ports of the referenced [`OpticNode`]
 ///
 /// ## Rpeoperties
 ///   - `name`
@@ -34,7 +36,7 @@ use super::node_attr::NodeAttr;
 /// **Note**: Since this node only refers to another optical node it does not handle
 /// (ignores) any [`Aperture`](crate::aperture::Aperture) definitions on its ports.
 pub struct NodeReference {
-    reference: Option<Weak<RefCell<dyn Optical>>>,
+    reference: Option<Weak<RefCell<dyn Analyzable>>>,
     node_attr: NodeAttr,
 }
 impl Default for NodeReference {
@@ -82,7 +84,7 @@ impl NodeReference {
         self.reference = Some(Rc::downgrade(&node.optical_ref));
     }
 }
-impl Optical for NodeReference {
+impl OpticNode for NodeReference {
     fn ports(&self) -> OpticPorts {
         self.reference
             .as_ref()
@@ -93,28 +95,6 @@ impl Optical for NodeReference {
                 }
                 ports
             })
-    }
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<LightResult> {
-        let rf = &self
-            .reference
-            .clone()
-            .ok_or_else(|| OpossumError::Analysis("no reference defined".into()))?;
-        let ref_node = rf.upgrade().unwrap();
-        let mut ref_node = ref_node.borrow_mut();
-        if self.inverted() {
-            ref_node.set_inverted(true).map_err(|_e| {
-                OpossumError::Analysis(format!("referenced node {ref_node} cannot be inverted"))
-            })?;
-        }
-        let output = ref_node.analyze(incoming_data, analyzer_type);
-        if self.inverted() {
-            ref_node.set_inverted(false)?;
-        }
-        output
     }
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Ok(self)
@@ -143,12 +123,58 @@ impl Dottable for NodeReference {
         "lightsalmon3"
     }
 }
+impl Analyzable for NodeReference {}
+impl AnalysisEnergy for NodeReference {
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let rf = &self
+            .reference
+            .clone()
+            .ok_or_else(|| OpossumError::Analysis("no reference defined".into()))?;
+        let ref_node = rf.upgrade().unwrap();
+        let mut ref_node = ref_node.borrow_mut();
+        if self.inverted() {
+            ref_node.set_inverted(true).map_err(|_e| {
+                OpossumError::Analysis(format!("referenced node {ref_node} cannot be inverted"))
+            })?;
+        }
+        let output = AnalysisEnergy::analyze(&mut *ref_node, incoming_data);
+        if self.inverted() {
+            ref_node.set_inverted(false)?;
+        }
+        output
+    }
+}
+impl AnalysisRayTrace for NodeReference {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let rf = &self
+            .reference
+            .clone()
+            .ok_or_else(|| OpossumError::Analysis("no reference defined".into()))?;
+        let ref_node = rf.upgrade().unwrap();
+        let mut ref_node = ref_node.borrow_mut();
+        if self.inverted() {
+            ref_node.set_inverted(true).map_err(|_e| {
+                OpossumError::Analysis(format!("referenced node {ref_node} cannot be inverted"))
+            })?;
+        }
+        let output = AnalysisRayTrace::analyze(&mut *ref_node, incoming_data, config);
+        if self.inverted() {
+            ref_node.set_inverted(false)?;
+        }
+        output
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
         lightdata::{DataEnergy, LightData},
         nodes::{test_helper::test_helper::*, Dummy, NodeGroup, Source},
+        optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
     };
     #[test]
@@ -197,16 +223,16 @@ mod test {
     #[test]
     fn ports_empty() {
         let node = NodeReference::default();
-        assert!(node.ports().input_names().is_empty());
-        assert!(node.ports().output_names().is_empty());
+        assert!(node.ports().names(&PortType::Input).is_empty());
+        assert!(node.ports().names(&PortType::Output).is_empty());
     }
     #[test]
     fn ports_non_empty() {
         let mut scenery = NodeGroup::default();
         let idx = scenery.add_node(Dummy::default()).unwrap();
         let node = NodeReference::from_node(&scenery.node(idx).unwrap());
-        assert_eq!(node.ports().input_names(), vec!["front"]);
-        assert_eq!(node.ports().output_names(), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["front"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["rear"]);
     }
     #[test]
     fn ports_inverted() {
@@ -214,23 +240,21 @@ mod test {
         let idx = scenery.add_node(Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
         node.set_inverted(true.into()).unwrap();
-        assert_eq!(node.ports().input_names(), vec!["rear"]);
-        assert_eq!(node.ports().output_names(), vec!["front"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["front"]);
     }
     #[test]
     fn analyze_empty() {
         let mut scenery = NodeGroup::default();
         let idx = scenery.add_node(Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
-        let output = node
-            .analyze(LightResult::default(), &AnalyzerType::Energy)
-            .unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
         assert!(output.is_empty());
     }
     #[test]
     fn analyze_no_reference() {
         let mut node = NodeReference::default();
-        let output = node.analyze(LightResult::default(), &AnalyzerType::Energy);
+        let output = AnalysisEnergy::analyze(&mut node, LightResult::default());
         assert!(output.is_err());
     }
     #[test]
@@ -244,9 +268,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("front".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
         let output = output.get("rear");
@@ -266,9 +288,7 @@ mod test {
         });
         input.insert("rear".into(), input_light.clone());
 
-        let output = node.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
         let output = output.get("front");
@@ -288,7 +308,7 @@ mod test {
         });
         input.insert("rear".into(), input_light.clone());
 
-        let output = node.analyze(input, &AnalyzerType::Energy);
+        let output = AnalysisEnergy::analyze(&mut node, input);
         assert!(output.is_err());
     }
 }

@@ -1,6 +1,6 @@
 use num::Zero;
 use opossum::{
-    analyzers::AnalyzerType,
+    analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     nodes::{Dummy, NodeGroup},
     OpmDocument,
@@ -15,6 +15,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(node1, "rear", node2, "front", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::Energy);
+    //doc.add_analyzer(AnalyzerType::Energy);
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new("./opossum/playground/opticscenery.opm"))
 }

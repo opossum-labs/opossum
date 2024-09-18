@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Data structures containing the light information flowing between [`Opticals`](crate::optical::Optical).
+//! Data structures containing the light information flowing between [`OpticNode`s](crate::optic_node::OpticNode).
 use crate::{error::OpmResult, joule, nodes::FilterType, rays::Rays, spectrum::Spectrum};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;

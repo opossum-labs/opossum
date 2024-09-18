@@ -2,7 +2,7 @@ use crate::{
     analyzers::AnalyzerType,
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
-    optical::Optical,
+    optic_node::OpticNode,
     SceneryResources,
 };
 use serde::{Deserialize, Serialize};
@@ -58,6 +58,10 @@ impl OpmDocument {
         let mut document: Self = serde_yaml::from_str(&contents)
             .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
         document.scenery.after_deserialization_hook()?;
+        document
+            .scenery
+            .graph_mut()
+            .update_global_config(&Some(document.global_conf.clone()));
         Ok(document)
     }
     /// Save this [`OpmDocument`] to an `.opm` file with the given path
@@ -115,7 +119,7 @@ impl OpmDocument {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{analyzers::RayTraceConfig, optical::Optical};
+    use crate::{analyzers::RayTraceConfig, optic_node::OpticNode};
     use petgraph::adj::NodeIndex;
     use std::path::PathBuf;
     use tempfile::NamedTempFile;

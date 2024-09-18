@@ -4,7 +4,7 @@ use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, EnergyMeter, NodeGroup, Source},
-    optical::Optical,
+    optic_node::OpticNode,
     ray::SplittingConfig,
     spectrum_helper::create_he_ne_spec,
     OpmDocument,

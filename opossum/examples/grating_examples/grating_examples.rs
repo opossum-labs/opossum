@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 use opossum::analyzers::{AnalyzerType, RayTraceConfig};
 use opossum::nodes::{NodeGroup, NodeReference, ParaxialSurface, SpotDiagram, ThinMirror};
-use opossum::optical::Alignable;
+use opossum::optic_node::Alignable;
 use opossum::refractive_index::{RefrIndexConst, RefractiveIndex};
 use opossum::OpmDocument;
 use opossum::{
@@ -11,7 +11,7 @@ use opossum::{
     lightdata::LightData,
     millimeter, nanometer,
     nodes::{Lens, RayPropagationVisualizer, Source},
-    optical::Optical,
+    optic_node::OpticNode,
     position_distributions::Hexapolar,
     rays::Rays,
     refractive_index::RefrIndexSellmeier1,

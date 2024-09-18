@@ -20,7 +20,7 @@ pub fn detector_group() -> OpmResult<NodeGroup> {
     let spot_monitor = SpotDiagram::new("spot diagram");
     // let rect_config = RectangleConfig::new(millimeter!(150.), millimeter!(150.), micrometer!(0.,0.))?;
     // let aperture = Aperture::BinaryRectangle(rect_config);
-    // spot_monitor.set_input_aperture("in1", &aperture)?;
+    // spot_monitor.set_aperture(&PortType::Input, "in1", &aperture)?;
     // spot_monitor.set_property("plot_aperture", true.into())?;
     let spot_diag = cb.add_node(spot_monitor)?;
 

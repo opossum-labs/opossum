@@ -1,12 +1,14 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::AnalyzerType,
+    analyzable::Analyzable,
+    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
     lightdata::LightData,
-    optic_ports::OpticPorts,
-    optical::{LightResult, Optical},
+    optic_node::OpticNode,
+    optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     spectrum::Spectrum,
     surface::{OpticalSurface, Plane},
@@ -54,8 +56,8 @@ impl Default for IdealFilter {
             )
             .unwrap();
         let mut ports = OpticPorts::new();
-        ports.create_input("front").unwrap();
-        ports.create_output("rear").unwrap();
+        ports.add(&PortType::Input, "front").unwrap();
+        ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
         Self { node_attr }
     }
@@ -154,80 +156,15 @@ impl IdealFilter {
     }
 }
 
-impl Optical for IdealFilter {
+impl OpticNode for IdealFilter {
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
-        ports.create_input("front").unwrap();
-        ports.create_output("rear").unwrap();
+        ports.add(&PortType::Input, "front").unwrap();
+        ports.add(&PortType::Output, "rear").unwrap();
         if self.inverted() {
             ports.set_inverted(true);
         }
         ports
-    }
-    fn analyze(
-        &mut self,
-        incoming_data: crate::optical::LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<crate::optical::LightResult> {
-        let (mut src, mut target) = ("front", "rear");
-        if self.inverted() {
-            (src, target) = (target, src);
-        }
-        let Some(input) = incoming_data.get(src) else {
-            return Ok(LightResult::default());
-        };
-        match input {
-            LightData::Energy(e) => {
-                if !matches!(analyzer_type, AnalyzerType::Energy) {
-                    return Err(OpossumError::Analysis(
-                        "expected energy analyzer for LightData::Energy".into(),
-                    ));
-                }
-                let mut new_data = e.clone();
-                new_data.filter(&self.filter_type())?;
-                let light_data = LightData::Energy(new_data);
-                Ok(LightResult::from([(target.into(), light_data)]))
-            }
-            LightData::Geometric(r) => {
-                if !matches!(analyzer_type, AnalyzerType::RayTrace(_)) {
-                    return Err(OpossumError::Analysis(
-                        "expected ray tracing analyzer for LightData::Geometric".into(),
-                    ));
-                }
-                let mut rays = r.clone();
-                if let Some(iso) = self.effective_iso() {
-                    let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                    plane.set_coating(self.ports().input_coating("front").unwrap().clone());
-                    rays.refract_on_surface(&plane, None)?;
-                } else {
-                    return Err(OpossumError::Analysis(
-                        "no location for surface defined. Aborting".into(),
-                    ));
-                }
-                rays.filter_energy(&self.filter_type())?;
-                if let Some(aperture) = self.ports().input_aperture("front") {
-                    rays.apodize(aperture)?;
-                    if let AnalyzerType::RayTrace(config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-                if let Some(aperture) = self.ports().output_aperture("rear") {
-                    rays.apodize(aperture)?;
-                    if let AnalyzerType::RayTrace(config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-                let light_data = LightData::Geometric(rays);
-                Ok(LightResult::from([(target.into(), light_data)]))
-            }
-            LightData::Fourier => Err(OpossumError::Analysis(
-                "Ideal filter: expected LightData::Energy or LightData::Geometric".into(),
-            )),
-        }
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -242,18 +179,89 @@ impl Dottable for IdealFilter {
         "darkgray"
     }
 }
+impl Analyzable for IdealFilter {}
+impl AnalysisEnergy for IdealFilter {
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let (mut src, mut target) = ("front", "rear");
+        if self.inverted() {
+            (src, target) = (target, src);
+        }
+        let Some(input) = incoming_data.get(src) else {
+            return Ok(LightResult::default());
+        };
+        if let LightData::Energy(e) = input {
+            let mut new_data = e.clone();
+            new_data.filter(&self.filter_type())?;
+            let light_data = LightData::Energy(new_data);
+            Ok(LightResult::from([(target.into(), light_data)]))
+        } else {
+            Err(OpossumError::Analysis("expected energy light data".into()))
+        }
+    }
+}
+impl AnalysisRayTrace for IdealFilter {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let (mut src, mut target) = ("front", "rear");
+        if self.inverted() {
+            (src, target) = (target, src);
+        }
+        let Some(input) = incoming_data.get(src) else {
+            return Ok(LightResult::default());
+        };
+        let LightData::Geometric(r) = input else {
+            return Err(OpossumError::Analysis(
+                "expected geometric light data".into(),
+            ));
+        };
+        let mut rays = r.clone();
+        if let Some(iso) = self.effective_iso() {
+            let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+            plane.set_coating(
+                self.ports()
+                    .coating(&PortType::Input, "front")
+                    .unwrap()
+                    .clone(),
+            );
+            rays.refract_on_surface(&plane, None)?;
+        } else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined. Aborting".into(),
+            ));
+        }
+        rays.filter_energy(&self.filter_type())?;
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
+            rays.apodize(aperture)?;
+            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+        } else {
+            return Err(OpossumError::OpticPort("input aperture not found".into()));
+        };
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
+            rays.apodize(aperture)?;
+            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+        } else {
+            return Err(OpossumError::OpticPort("output aperture not found".into()));
+        };
+        let light_data = LightData::Geometric(rays);
+        Ok(LightResult::from([(target.into(), light_data)]))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use approx::assert_abs_diff_eq;
     use uom::si::energy::joule;
 
     use crate::{
-        analyzers::{AnalyzerType, RayTraceConfig},
+        analyzers::RayTraceConfig,
         joule,
-        lightdata::DataEnergy,
+        lightdata::{DataEnergy, LightData},
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
-        optical::LightResult,
+        optic_ports::PortType,
         position_distributions::Hexapolar,
         rays::Rays,
         spectrum_helper::create_he_ne_spec,
@@ -320,15 +328,15 @@ mod test {
     #[test]
     fn ports() {
         let node = IdealFilter::default();
-        assert_eq!(node.ports().input_names(), vec!["front"]);
-        assert_eq!(node.ports().output_names(), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["front"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["rear"]);
     }
     #[test]
     fn ports_inverted() {
         let mut node = IdealFilter::default();
         node.set_inverted(true).unwrap();
-        assert_eq!(node.ports().input_names(), vec!["rear"]);
-        assert_eq!(node.ports().output_names(), vec!["front"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["front"]);
     }
     #[test]
     fn analyze_empty() {
@@ -342,7 +350,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("rear".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -357,15 +365,11 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("front".into(), input_light.clone());
-        assert!(node
-            .analyze(
-                input.clone(),
-                &AnalyzerType::RayTrace(RayTraceConfig::default())
-            )
-            .is_err());
-        let output = node.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        assert!(
+            AnalysisRayTrace::analyze(&mut node, input.clone(), &RayTraceConfig::default())
+                .is_err()
+        );
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
         let output = output.get("rear");
@@ -390,10 +394,9 @@ mod test {
             .unwrap(),
         );
         input.insert("front".into(), input_light.clone());
-        assert!(node.analyze(input.clone(), &AnalyzerType::Energy).is_err());
-        let output = node.analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()));
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        assert!(AnalysisEnergy::analyze(&mut node, input.clone()).is_err());
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         assert!(output.contains_key("rear"));
         assert_eq!(output.len(), 1);
         let output = output.get("rear");
@@ -413,9 +416,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("rear".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("front"));
         assert_eq!(output.len(), 1);
         let output = output.get("front");

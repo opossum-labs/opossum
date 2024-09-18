@@ -11,7 +11,7 @@ use opossum::{
     lightdata::LightData,
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
-    optical::{Alignable, Optical},
+    optic_node::{Alignable, OpticNode},
     position_distributions::Hexapolar,
     rays::Rays,
     refractive_index::RefrIndexSellmeier1,

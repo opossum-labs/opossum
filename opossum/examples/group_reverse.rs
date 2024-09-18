@@ -6,7 +6,7 @@ use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{Dummy, EnergyMeter, NodeGroup, Source},
-    optical::Optical,
+    optic_node::OpticNode,
     spectrum_helper::create_he_ne_spec,
     OpmDocument,
 };

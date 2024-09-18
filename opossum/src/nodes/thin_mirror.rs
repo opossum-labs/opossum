@@ -2,14 +2,16 @@
 //! Infinitely thin mirror with spherical or flat surface
 use super::NodeAttr;
 use crate::{
-    analyzers::AnalyzerType,
+    analyzable::Analyzable,
+    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
     coatings::CoatingType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
+    light_result::LightResult,
     lightdata::LightData,
     millimeter,
-    optic_ports::OpticPorts,
-    optical::{Alignable, LightResult, Optical},
+    optic_node::{Alignable, OpticNode},
+    optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     surface::{OpticalSurface, Plane, Sphere},
 };
@@ -46,11 +48,15 @@ impl Default for ThinMirror {
             )
             .unwrap();
         let mut ports = OpticPorts::new();
-        ports.create_input("input").unwrap();
+        ports.add(&PortType::Input, "input").unwrap();
         ports
-            .set_input_coating("input", &CoatingType::ConstantR { reflectivity: 1.0 })
+            .set_coating(
+                &PortType::Input,
+                "input",
+                &CoatingType::ConstantR { reflectivity: 1.0 },
+            )
             .unwrap();
-        ports.create_output("reflected").unwrap();
+        ports.add(&PortType::Output, "reflected").unwrap();
         node_attr.set_ports(ports);
         Self { node_attr }
     }
@@ -84,72 +90,7 @@ impl ThinMirror {
         Ok(self)
     }
 }
-impl Optical for ThinMirror {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("reflected", "input")
-        } else {
-            ("input", "reflected")
-        };
-        let Some(data) = incoming_data.get(inport) else {
-            return Ok(LightResult::default());
-        };
-        let light_data = match analyzer_type {
-            AnalyzerType::Energy => data.clone(),
-            AnalyzerType::RayTrace(_) => {
-                if let LightData::Geometric(mut rays) = data.clone() {
-                    let Ok(Proptype::Length(roc)) = self.node_attr.get_property("curvature") else {
-                        return Err(OpossumError::Analysis("curvature".into()));
-                    };
-                    let reflected = if let Some(iso) = self.effective_iso() {
-                        let mut surface = if roc.is_infinite() {
-                            OpticalSurface::new(Box::new(Plane::new(&iso)))
-                        } else {
-                            OpticalSurface::new(Box::new(Sphere::new(*roc, &iso)?))
-                        };
-                        surface.set_coating(
-                            self.node_attr()
-                                .ports()
-                                .input_coating("input")
-                                .unwrap()
-                                .clone(),
-                        );
-                        let mut reflected_rays = rays.refract_on_surface(&surface, None)?;
-                        if let Some(aperture) = self.ports().input_aperture("input") {
-                            reflected_rays.apodize(aperture)?;
-                            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                                reflected_rays
-                                    .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                            }
-                            reflected_rays
-                        } else {
-                            return Err(OpossumError::OpticPort("input aperture not found".into()));
-                        }
-                    } else {
-                        return Err(OpossumError::Analysis(
-                            "no location for surface defined. Aborting".into(),
-                        ));
-                    };
-                    LightData::Geometric(reflected)
-                } else {
-                    return Err(OpossumError::Analysis(
-                        "expected ray data at input port".into(),
-                    ));
-                }
-            }
-            _ => {
-                return Err(OpossumError::Analysis(
-                    "analysis mode not yet implemented for thin mirror".into(),
-                ))
-            }
-        };
-        let light_result = LightResult::from([(outport.into(), light_data)]);
-        Ok(light_result)
-    }
+impl OpticNode for ThinMirror {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -184,12 +125,91 @@ impl Dottable for ThinMirror {
         "aliceblue"
     }
 }
+impl Analyzable for ThinMirror {}
+impl AnalysisEnergy for ThinMirror {
+    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
+        let (inport, outport) = if self.inverted() {
+            ("reflected", "input")
+        } else {
+            ("input", "reflected")
+        };
+        let Some(data) = incoming_data.get(inport) else {
+            return Ok(LightResult::default());
+        };
+        Ok(LightResult::from([(outport.into(), data.clone())]))
+    }
+}
+impl AnalysisRayTrace for ThinMirror {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let (inport, outport) = if self.inverted() {
+            ("reflected", "input")
+        } else {
+            ("input", "reflected")
+        };
+        let Some(data) = incoming_data.get(inport) else {
+            return Ok(LightResult::default());
+        };
+        if let LightData::Geometric(mut rays) = data.clone() {
+            let Ok(Proptype::Length(roc)) = self.node_attr.get_property("curvature") else {
+                return Err(OpossumError::Analysis("curvature".into()));
+            };
+            let reflected = if let Some(iso) = self.effective_iso() {
+                let mut surface = if roc.is_infinite() {
+                    OpticalSurface::new(Box::new(Plane::new(&iso)))
+                } else {
+                    OpticalSurface::new(Box::new(Sphere::new(*roc, &iso)?))
+                };
+                surface.set_coating(
+                    self.node_attr()
+                        .ports()
+                        .coating(&PortType::Input, "input")
+                        .unwrap()
+                        .clone(),
+                );
+                let mut reflected_rays = rays.refract_on_surface(&surface, None)?;
+                if let Some(aperture) = self.ports().aperture(&PortType::Input, "input") {
+                    reflected_rays.apodize(aperture)?;
+                    //if let AnalyzerType::RayTrace(config) = analyzer_type {
+                    reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    // }
+                    reflected_rays
+                } else {
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                }
+            } else {
+                return Err(OpossumError::Analysis(
+                    "no location for surface defined. Aborting".into(),
+                ));
+            };
+            let light_data = LightData::Geometric(reflected);
+            let light_result = LightResult::from([(outport.into(), light_data)]);
+            Ok(light_result)
+        } else {
+            Err(OpossumError::Analysis(
+                "expected ray data at input port".into(),
+            ))
+        }
+    }
+
+    fn calc_node_position(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        AnalysisRayTrace::analyze(self, incoming_data, config)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
         analyzers::RayTraceConfig, degree, joule, lightdata::DataEnergy, nanometer,
-        nodes::test_helper::test_helper::*, ray::Ray, rays::Rays,
+        nodes::test_helper::test_helper::*, optic_ports::PortType, ray::Ray, rays::Rays,
         spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
     use nalgebra::vector;
@@ -221,8 +241,8 @@ mod test {
     #[test]
     fn ports() {
         let node = ThinMirror::default();
-        assert_eq!(node.ports().input_names(), vec!["input"]);
-        assert_eq!(node.ports().output_names(), vec!["reflected"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["input"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["reflected"]);
     }
     #[test]
     fn set_aperture() {
@@ -267,7 +287,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("reflected".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy).unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
     }
     #[test]
@@ -278,9 +298,7 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         input.insert("input".into(), input_light.clone());
-        let output = node.analyze(input, &AnalyzerType::Energy);
-        assert!(output.is_ok());
-        let output = output.unwrap();
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("reflected"));
         assert_eq!(output.len(), 1);
         let output = output.get("reflected");
@@ -307,9 +325,8 @@ mod test {
         rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
         let input_light = LightData::Geometric(rays);
         input.insert("input".into(), input_light.clone());
-        let output = node
-            .analyze(input, &AnalyzerType::RayTrace(RayTraceConfig::default()))
-            .unwrap();
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         if let Some(LightData::Geometric(rays)) = output.get("reflected") {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
