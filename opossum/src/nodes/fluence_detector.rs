@@ -8,7 +8,10 @@ use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_squar
 
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -156,6 +159,9 @@ impl OpticNode for FluenceDetector {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    fn reset_data(&mut self) {
+        self.light_data = None;
+    }
 }
 
 impl Dottable for FluenceDetector {
@@ -164,6 +170,7 @@ impl Dottable for FluenceDetector {
     }
 }
 impl Analyzable for FluenceDetector {}
+impl AnalysisGhostFocus for FluenceDetector {}
 impl AnalysisEnergy for FluenceDetector {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {

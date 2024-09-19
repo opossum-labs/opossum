@@ -2,7 +2,10 @@
 //! A paraxial surface (ideal lens)
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -102,6 +105,7 @@ impl Dottable for ParaxialSurface {
     }
 }
 impl Analyzable for ParaxialSurface {}
+impl AnalysisGhostFocus for ParaxialSurface {}
 impl AnalysisEnergy for ParaxialSurface {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {

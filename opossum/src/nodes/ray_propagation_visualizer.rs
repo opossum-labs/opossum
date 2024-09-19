@@ -12,7 +12,10 @@ use uom::si::{
 use super::node_attr::NodeAttr;
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -157,6 +160,9 @@ impl OpticNode for RayPropagationVisualizer {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    fn reset_data(&mut self) {
+        self.light_data = None;
+    }
 }
 
 impl Dottable for RayPropagationVisualizer {
@@ -165,6 +171,7 @@ impl Dottable for RayPropagationVisualizer {
     }
 }
 impl Analyzable for RayPropagationVisualizer {}
+impl AnalysisGhostFocus for RayPropagationVisualizer {}
 impl AnalysisEnergy for RayPropagationVisualizer {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {

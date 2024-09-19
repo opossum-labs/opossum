@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
 mod analysis_energy;
+mod analysis_ghostfocus;
 mod analysis_raytrace;
 mod optic_graph;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzable::Analyzable,
-    analyzers::ghostfocus::AnalysisGhostFocus,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     get_version,
@@ -17,6 +17,7 @@ use crate::{
     SceneryResources,
 };
 use chrono::Local;
+use log::warn;
 pub use optic_graph::OpticGraph;
 use petgraph::prelude::NodeIndex;
 use serde::{Deserialize, Serialize};
@@ -456,6 +457,12 @@ impl OpticNode for NodeGroup {
         self.node_attr_mut().set_inverted(inverted);
         Ok(())
     }
+    fn reset_data(&mut self) {
+        let nodes = self.graph.nodes();
+        for node in nodes {
+            node.optical_ref.borrow_mut().reset_data();
+        }
+    }
 }
 
 impl Dottable for NodeGroup {
@@ -482,7 +489,6 @@ impl Dottable for NodeGroup {
     }
 }
 impl Analyzable for NodeGroup {}
-impl AnalysisGhostFocus for NodeGroup {}
 #[cfg(test)]
 mod test {
     use super::*;

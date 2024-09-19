@@ -11,7 +11,10 @@ use uom::si::{
 use super::node_attr::NodeAttr;
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -189,6 +192,9 @@ impl OpticNode for SpotDiagram {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    fn reset_data(&mut self) {
+        self.light_data = None;
+    }
 }
 
 impl Dottable for SpotDiagram {
@@ -197,6 +203,7 @@ impl Dottable for SpotDiagram {
     }
 }
 impl Analyzable for SpotDiagram {}
+impl AnalysisGhostFocus for SpotDiagram {}
 impl AnalysisEnergy for SpotDiagram {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {
@@ -241,22 +248,17 @@ impl AnalysisRayTrace for SpotDiagram {
                     warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
                     self.apodization_warning = true;
                 }
-                // if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                // }
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
             self.light_data = Some(LightData::Geometric(rays.clone()));
             if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
                 rays.apodize(aperture)?;
-                // if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                // }
             } else {
                 return Err(OpossumError::OpticPort("output aperture not found".into()));
             };
-
             Ok(LightResult::from([(
                 outport.into(),
                 LightData::Geometric(rays),

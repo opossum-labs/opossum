@@ -3,7 +3,7 @@ use crate::{
     analyzable::Analyzable,
     analyzers::energy::AnalysisEnergy,
     error::{OpmResult, OpossumError},
-    light::Light,
+    light_flow::LightFlow,
     light_result::LightResult,
     lightdata::LightData,
     nodes::NodeGroup,
@@ -40,7 +40,7 @@ use uuid::Uuid;
 /// Data structure representing an optical graph
 #[derive(Debug, Default, Clone)]
 pub struct OpticGraph {
-    g: DiGraph<OpticRef, Light>,
+    g: DiGraph<OpticRef, LightFlow>,
     input_port_map: PortMap,
     output_port_map: PortMap,
     is_inverted: bool,
@@ -142,7 +142,7 @@ impl OpticGraph {
         }
         let src_name = source.optical_ref.borrow().name();
         let target_name = target.optical_ref.borrow().name();
-        let light = Light::new(src_port, target_port, distance)?;
+        let light = LightFlow::new(src_port, target_port, distance)?;
         let edge_index = self.g.add_edge(src_node, target_node, light);
         if is_cyclic_directed(&self.g) {
             self.g.remove_edge(edge_index);
@@ -350,7 +350,7 @@ impl OpticGraph {
     pub fn nodes(&self) -> Vec<&OpticRef> {
         self.g.node_weights().collect()
     }
-    fn edge_by_idx(&self, idx: EdgeIndex) -> OpmResult<&Light> {
+    fn edge_by_idx(&self, idx: EdgeIndex) -> OpmResult<&LightFlow> {
         self.g
             .edge_weight(idx)
             .ok_or_else(|| OpossumError::Other("could not get edge weight".into()))
@@ -509,7 +509,7 @@ impl OpticGraph {
             }
         } // else outgoing edge not connected -> data dropped
     }
-    fn edges_directed(&self, idx: NodeIndex, dir: Direction) -> Edges<'_, Light, Directed> {
+    fn edges_directed(&self, idx: NodeIndex, dir: Direction) -> Edges<'_, LightFlow, Directed> {
         self.g.edges_directed(idx, dir)
     }
     /// Inverts the [`OpticGraph`].
@@ -628,7 +628,7 @@ impl OpticGraph {
             )?;
         }
         for edge_idx in self.g.edge_indices() {
-            let light: &Light = self.edge_by_idx(edge_idx)?;
+            let light: &LightFlow = self.edge_by_idx(edge_idx)?;
             let end_nodes = self
                 .g
                 .edge_endpoints(edge_idx)

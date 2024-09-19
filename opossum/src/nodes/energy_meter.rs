@@ -1,7 +1,10 @@
 #![warn(missing_docs)]
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     joule,
@@ -182,6 +185,9 @@ impl OpticNode for EnergyMeter {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    fn reset_data(&mut self) {
+        self.light_data = None;
+    }
 }
 
 impl Debug for EnergyMeter {
@@ -198,6 +204,7 @@ impl Dottable for EnergyMeter {
     }
 }
 impl Analyzable for EnergyMeter {}
+impl AnalysisGhostFocus for EnergyMeter {}
 impl AnalysisEnergy for EnergyMeter {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {

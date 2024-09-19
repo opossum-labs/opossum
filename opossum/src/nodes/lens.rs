@@ -2,7 +2,10 @@
 //! Lens with spherical or flat surfaces
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        AnalyzerType, RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -386,6 +389,7 @@ impl Dottable for Lens {
     }
 }
 impl Analyzable for Lens {}
+impl AnalysisGhostFocus for Lens {}
 impl AnalysisEnergy for Lens {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {
