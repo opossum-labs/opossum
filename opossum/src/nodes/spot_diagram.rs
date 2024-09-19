@@ -192,6 +192,9 @@ impl OpticNode for SpotDiagram {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    fn reset_data(&mut self) {
+        self.light_data = None;
+    }
 }
 
 impl Dottable for SpotDiagram {

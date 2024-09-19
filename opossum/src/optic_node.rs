@@ -27,6 +27,8 @@ use std::rc::Rc;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait OpticNode: Dottable {
+    /// Reset internal data (e.g. internal state of detector nodes)
+    fn reset_data(&mut self) {}
     /// Return the available (input & output) ports of this [`OpticNode`].
     fn ports(&self) -> OpticPorts {
         let mut ports = self.node_attr().ports().clone();

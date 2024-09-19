@@ -17,6 +17,7 @@ use crate::{
     SceneryResources,
 };
 use chrono::Local;
+use log::warn;
 pub use optic_graph::OpticGraph;
 use petgraph::prelude::NodeIndex;
 use serde::{Deserialize, Serialize};
@@ -455,6 +456,12 @@ impl OpticNode for NodeGroup {
         self.graph.set_is_inverted(inverted);
         self.node_attr_mut().set_inverted(inverted);
         Ok(())
+    }
+    fn reset_data(&mut self) {
+        let nodes = self.graph.nodes();
+        for node in nodes {
+            node.optical_ref.borrow_mut().reset_data();
+        }
     }
 }
 

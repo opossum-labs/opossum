@@ -9,6 +9,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
+    optic_node::OpticNode,
     optic_ports::PortType,
     radian,
     utils::geom_transformation::Isometry,
@@ -181,6 +182,7 @@ impl AnalysisRayTrace for NodeGroup {
                     .set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
             }
         }
+        self.reset_data();
         Ok(light_result)
     }
 }
