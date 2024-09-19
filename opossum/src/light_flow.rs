@@ -12,7 +12,7 @@ use serde::Serialize;
 use uom::si::f64::Length;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Light {
+pub struct LightFlow {
     /// name of the optic port of the source node
     src_port: String,
     /// name of the optic port of the target node
@@ -24,7 +24,7 @@ pub struct Light {
     /// the (straight) Euclidian distance between the anchor points of source and target node
     distance: Length,
 }
-impl Light {
+impl LightFlow {
     pub fn new(src_port: &str, target_port: &str, distance: Length) -> OpmResult<Self> {
         if !distance.is_finite() {
             return Err(OpossumError::Other("distance must be finite".into()));
@@ -64,10 +64,10 @@ mod test {
 
     #[test]
     fn new() {
-        assert!(Light::new("test1", "test2", millimeter!(f64::NAN)).is_err());
-        assert!(Light::new("test1", "test2", millimeter!(f64::NEG_INFINITY)).is_err());
-        assert!(Light::new("test1", "test2", millimeter!(f64::INFINITY)).is_err());
-        let light = Light::new("test1", "test2", Length::zero()).unwrap();
+        assert!(LightFlow::new("test1", "test2", millimeter!(f64::NAN)).is_err());
+        assert!(LightFlow::new("test1", "test2", millimeter!(f64::NEG_INFINITY)).is_err());
+        assert!(LightFlow::new("test1", "test2", millimeter!(f64::INFINITY)).is_err());
+        let light = LightFlow::new("test1", "test2", Length::zero()).unwrap();
         assert_eq!(light.src_port, "test1");
         assert_eq!(light.target_port, "test2");
         assert!(light.data.is_none());
@@ -75,17 +75,17 @@ mod test {
     }
     #[test]
     fn src_port() {
-        let light = Light::new("test1", "test2", Length::zero()).unwrap();
+        let light = LightFlow::new("test1", "test2", Length::zero()).unwrap();
         assert_eq!(light.src_port(), "test1");
     }
     #[test]
     fn target_port() {
-        let light = Light::new("test1", "test2", Length::zero()).unwrap();
+        let light = LightFlow::new("test1", "test2", Length::zero()).unwrap();
         assert_eq!(light.target_port(), "test2");
     }
     #[test]
     fn distance() {
-        let light = Light::new("test1", "test2", millimeter!(100.0)).unwrap();
+        let light = LightFlow::new("test1", "test2", millimeter!(100.0)).unwrap();
         assert_eq!(light.distance(), &millimeter!(100.0));
     }
 }

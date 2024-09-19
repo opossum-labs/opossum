@@ -12,7 +12,10 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     joule,
-    light_result::LightResult,
+    light_result::{
+        light_bouncing_rays_to_light_result, light_rays_to_light_bouncing_rays,
+        light_result_to_light_rays, LightBouncingRays, LightResult,
+    },
     lightdata::LightData,
     millimeter,
     optic_node::{Alignable, OpticNode},
@@ -265,11 +268,17 @@ impl AnalysisRayTrace for Source {
 impl AnalysisGhostFocus for Source {
     fn analyze(
         &mut self,
-        incoming_data: LightResult,
+        incoming_data: LightBouncingRays,
         _config: &crate::analyzers::GhostFocusConfig,
-    ) -> OpmResult<(LightResult, LightResult)> {
-        let outgoing = AnalysisRayTrace::analyze(self, incoming_data, &RayTraceConfig::default())?;
-        Ok((outgoing, LightResult::default()))
+    ) -> OpmResult<LightBouncingRays> {
+        let outgoing = AnalysisRayTrace::analyze(
+            self,
+            light_bouncing_rays_to_light_result(incoming_data)?,
+            &RayTraceConfig::default(),
+        )?;
+        Ok(light_rays_to_light_bouncing_rays(
+            light_result_to_light_rays(outgoing)?,
+        ))
     }
 }
 

@@ -1,5 +1,5 @@
 use opossum::{
-    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
+    analyzers::{AnalyzerType, GhostFocusConfig},
     error::OpmResult,
     joule, millimeter,
     nodes::{collimated_line_ray_source, NodeGroup, SpotDiagram},
@@ -19,6 +19,5 @@ fn main() -> OpmResult<()> {
     let mut doc = OpmDocument::new(scenery);
     let config = GhostFocusConfig::default();
     doc.add_analyzer(AnalyzerType::GhostFocus(config));
-    //doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new("./opossum/playground/ghost_focus.opm"))
 }

@@ -3,7 +3,12 @@
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
-use crate::{error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode};
+use crate::{
+    error::OpmResult,
+    light_result::{LightBouncingRays, LightResult},
+    nodes::NodeGroup,
+    optic_node::OpticNode,
+};
 
 use super::{raytrace::AnalysisRayTrace, Analyzer, RayTraceConfig};
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +60,7 @@ impl Analyzer for GhostFocusAnalyzer {
             &RayTraceConfig::default(),
         )?;
         info!("Performing ghost focus analysis of scenery{scenery_name}.");
-        AnalysisGhostFocus::analyze(scenery, LightResult::default(), &self.config)?;
+        AnalysisGhostFocus::analyze(scenery, LightBouncingRays::default(), &self.config)?;
         Ok(())
     }
 }
@@ -72,13 +77,13 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     /// This function will return an error if .
     fn analyze(
         &mut self,
-        _incoming_data: LightResult,
+        _incoming_data: LightBouncingRays,
         _config: &GhostFocusConfig,
-    ) -> OpmResult<(LightResult, LightResult)> {
+    ) -> OpmResult<LightBouncingRays> {
         warn!(
             "{}: No ghost focus analysis function defined.",
             self.node_type()
         );
-        Ok((LightResult::default(), LightResult::default()))
+        Ok(LightBouncingRays::default())
     }
 }
