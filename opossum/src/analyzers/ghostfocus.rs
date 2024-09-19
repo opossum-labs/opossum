@@ -11,6 +11,14 @@ use super::{raytrace::AnalysisRayTrace, Analyzer, RayTraceConfig};
 pub struct GhostFocusConfig {
     max_bounces: usize,
 }
+
+impl GhostFocusConfig {
+    /// Returns the max bounces of this [`GhostFocusConfig`].
+    #[must_use]
+    pub const fn max_bounces(&self) -> usize {
+        self.max_bounces
+    }
+}
 impl Default for GhostFocusConfig {
     fn default() -> Self {
         Self { max_bounces: 1 }
@@ -40,6 +48,12 @@ impl Analyzer for GhostFocusAnalyzer {
         } else {
             format!(" '{}'", scenery.node_attr().name())
         };
+        info!("Calculate node positions of scenery{scenery_name}.");
+        AnalysisRayTrace::calc_node_position(
+            scenery,
+            LightResult::default(),
+            &RayTraceConfig::default(),
+        )?;
         info!("Performing ghost focus analysis of scenery{scenery_name}.");
         AnalysisGhostFocus::analyze(scenery, LightResult::default(), &self.config)?;
         Ok(())
@@ -48,7 +62,10 @@ impl Analyzer for GhostFocusAnalyzer {
 
 /// Trait for implementing the energy flow analysis.
 pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
-    /// Analyze the ghostenergy flow of an [`OpticNode`].
+    /// Perform a ghost focus analysis of an [`OpticNode`].
+    ///
+    /// This function is similar to the corresponding [`AnalysisRayTrace`] function but also
+    /// returns possible reflected [`Rays`](crate::rays::Rays) as the second component of the return tuple.  
     ///
     /// # Errors
     ///
@@ -57,27 +74,11 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
         &mut self,
         _incoming_data: LightResult,
         _config: &GhostFocusConfig,
-    ) -> OpmResult<LightResult> {
+    ) -> OpmResult<(LightResult, LightResult)> {
         warn!(
             "{}: No ghost focus analysis function defined.",
             self.node_type()
         );
-        Ok(LightResult::default())
-    }
-    /// Calculate the position of this [`OpticNode`] element.
-    ///
-    /// This function calculates the position of this [`OpticNode`] element in 3D space. This is based on the analysis of a single,
-    /// central [`Ray`](crate::ray::Ray) representing the optical axis. The default implementation is to use the normal `analyze`
-    /// function. For a [`NodeGroup`] however, this must be separately implemented in order to allow nesting.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if internal element-specific errors occur and the analysis cannot be performed.
-    fn calc_node_position(
-        &mut self,
-        incoming_data: LightResult,
-        _config: &GhostFocusConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze(&mut *self, incoming_data, &RayTraceConfig::default())
+        Ok((LightResult::default(), LightResult::default()))
     }
 }

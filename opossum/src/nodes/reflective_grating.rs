@@ -5,7 +5,10 @@ use std::f64::consts::PI;
 use super::NodeAttr;
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -160,6 +163,7 @@ impl Dottable for ReflectiveGrating {
     }
 }
 impl Analyzable for ReflectiveGrating {}
+impl AnalysisGhostFocus for ReflectiveGrating {}
 impl AnalysisEnergy for ReflectiveGrating {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {

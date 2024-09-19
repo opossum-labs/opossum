@@ -8,7 +8,10 @@ use uom::si::f64::Length;
 
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -277,6 +280,7 @@ impl Dottable for WaveFront {
     }
 }
 impl Analyzable for WaveFront {}
+impl AnalysisGhostFocus for WaveFront {}
 impl AnalysisEnergy for WaveFront {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {

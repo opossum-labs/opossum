@@ -17,9 +17,10 @@ use crate::{
 #[derive(Debug, Clone)]
 /// Structure for storing an optical node.
 ///
-/// This structure stores a reference to an optical node (a structure implementing the [`OpticNode`] trait). This [`OpticRef`]
-/// is then stored as a node in a `NodeGroup`)[`crate::nodes::NodeGroup`].
-/// In addition, it contains a unique id ([`Uuid`]) in order to unambiguously identify a node within a scene.
+/// This structure stores a reference to an optical node (a structure implementing the
+/// [`OpticNode`](crate::optic_node::OpticNode) trait). This [`OpticRef`] is then stored
+/// as a node in a `NodeGroup`)[`crate::nodes::NodeGroup`]. In addition, it contains a
+/// unique id ([`Uuid`]) in order to unambiguously identify a node within a scene.
 pub struct OpticRef {
     /// The underlying optical reference.
     pub optical_ref: Rc<RefCell<dyn Analyzable>>,

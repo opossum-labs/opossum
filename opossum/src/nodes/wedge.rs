@@ -1,7 +1,10 @@
 use super::NodeAttr;
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        AnalyzerType, RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -214,6 +217,7 @@ impl Dottable for Wedge {
     }
 }
 impl Analyzable for Wedge {}
+impl AnalysisGhostFocus for Wedge {}
 impl AnalysisEnergy for Wedge {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (in_port, out_port) = if self.inverted() {

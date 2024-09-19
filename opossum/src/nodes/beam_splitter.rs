@@ -2,7 +2,10 @@
 use super::node_attr::NodeAttr;
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        AnalyzerType, RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -300,6 +303,7 @@ impl Dottable for BeamSplitter {
     }
 }
 impl Analyzable for BeamSplitter {}
+impl AnalysisGhostFocus for BeamSplitter {}
 impl AnalysisEnergy for BeamSplitter {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (input_port1, input_port2) = if self.inverted() {

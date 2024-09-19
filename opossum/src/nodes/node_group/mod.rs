@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
 mod analysis_energy;
+mod analysis_ghostfocus;
 mod analysis_raytrace;
 mod optic_graph;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzable::Analyzable,
-    analyzers::ghostfocus::AnalysisGhostFocus,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     get_version,
@@ -482,7 +482,6 @@ impl Dottable for NodeGroup {
     }
 }
 impl Analyzable for NodeGroup {}
-impl AnalysisGhostFocus for NodeGroup {}
 #[cfg(test)]
 mod test {
     use super::*;

@@ -262,7 +262,16 @@ impl AnalysisRayTrace for Source {
         Ok(new_outgoing_edges)
     }
 }
-impl AnalysisGhostFocus for Source {}
+impl AnalysisGhostFocus for Source {
+    fn analyze(
+        &mut self,
+        incoming_data: LightResult,
+        _config: &crate::analyzers::GhostFocusConfig,
+    ) -> OpmResult<(LightResult, LightResult)> {
+        let outgoing = AnalysisRayTrace::analyze(self, incoming_data, &RayTraceConfig::default())?;
+        Ok((outgoing, LightResult::default()))
+    }
+}
 
 #[cfg(test)]
 mod test {

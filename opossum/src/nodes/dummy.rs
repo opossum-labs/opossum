@@ -2,7 +2,10 @@
 use super::node_attr::NodeAttr;
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -16,8 +19,11 @@ use crate::{
 #[derive(Debug, Clone)]
 /// A fake / dummy component without any optical functionality.
 ///
-/// Any [`LightResult`] is directly forwarded without any modification. It is mainly used for
-/// development and debugging purposes. A [`Dummy`] node geometrically consists of a single flat surface.
+/// Any incoming light is transparently forwarded without any modification. It is mainly used for
+/// development and debugging purposes. In addition it can be used as an "optical terminal" of a
+/// [`NodeGroup`](crate::nodes::NodeGroup) such as the "input hole" of a cameara box which does not really
+/// represent an optically active component. Howver this way a group can be positioned an a scene.
+/// Geometrically, a [`Dummy`] node consists of a single flat surface.
 ///
 /// ## Optical Ports
 ///   - Inputs
@@ -56,6 +62,7 @@ impl Dummy {
     }
 }
 impl Analyzable for Dummy {}
+impl AnalysisGhostFocus for Dummy {}
 impl AnalysisEnergy for Dummy {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {

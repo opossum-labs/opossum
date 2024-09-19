@@ -143,7 +143,11 @@ impl AnalysisRayTrace for NodeGroup {
                     node.borrow()
                 );
             }
-            let output = node.borrow_mut().calc_node_position(incoming_edges, config);
+            let output = AnalysisRayTrace::calc_node_position(
+                &mut *node.borrow_mut(),
+                incoming_edges,
+                config,
+            );
 
             let outgoing_edges = output.map_err(|e| {
                 OpossumError::Analysis(format!(

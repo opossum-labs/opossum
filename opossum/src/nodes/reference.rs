@@ -6,7 +6,10 @@ use uuid::Uuid;
 
 use crate::{
     analyzable::Analyzable,
-    analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
@@ -124,6 +127,7 @@ impl Dottable for NodeReference {
     }
 }
 impl Analyzable for NodeReference {}
+impl AnalysisGhostFocus for NodeReference {}
 impl AnalysisEnergy for NodeReference {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let rf = &self
