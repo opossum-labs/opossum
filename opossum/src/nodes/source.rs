@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-use log::warn;
+use log::{info, warn};
 use uom::si::f64::Length;
 
 use super::node_attr::NodeAttr;
@@ -245,7 +245,7 @@ impl AnalysisRayTrace for Source {
                 {
                     Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), *alignment_wvl, joule!(1.0))
                 } else {
-                    warn!("No alignment wavelength defined, using energy-weighted central wavelength for alignment");
+                    info!("No alignment wavelength defined, using energy-weighted central wavelength for alignment");
                     rays.get_optical_axis_ray()
                 }?;
                 if let Some(iso) = self.effective_iso() {
