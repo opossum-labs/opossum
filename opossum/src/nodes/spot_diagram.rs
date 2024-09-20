@@ -252,10 +252,10 @@ impl AnalysisRayTrace for SpotDiagram {
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
-            if let Some(LightData::Geometric(old_rays))=&self.light_data {
-                let mut rays_tob_merged=old_rays.clone();
+            if let Some(LightData::Geometric(old_rays)) = &self.light_data {
+                let mut rays_tob_merged = old_rays.clone();
                 rays_tob_merged.merge(&rays);
-                self.light_data=Some(LightData::Geometric(rays_tob_merged.clone()));
+                self.light_data = Some(LightData::Geometric(rays_tob_merged.clone()));
             } else {
                 self.light_data = Some(LightData::Geometric(rays.clone()));
             }
