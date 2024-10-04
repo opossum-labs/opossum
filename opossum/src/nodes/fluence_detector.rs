@@ -21,7 +21,7 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
     rays::Rays,
-    reporter::NodeReport,
+    reporting::reporter::NodeReport,
     surface::{OpticalSurface, Plane},
 };
 use std::path::{Path, PathBuf};
@@ -524,7 +524,7 @@ mod test {
     fn report() {
         let mut fd = FluenceDetector::default();
         let node_report = fd.report("123").unwrap();
-        assert_eq!(node_report.detector_type(), "fluence detector");
+        assert_eq!(node_report.node_type(), "fluence detector");
         assert_eq!(node_report.name(), "fluence detector");
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);

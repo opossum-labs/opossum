@@ -7,19 +7,21 @@ use nalgebra::{Point3, Vector3};
 use petgraph::stable_graph::NodeIndex;
 use uom::si::f64::{Angle, Length};
 
-use crate::aperture::Aperture;
-use crate::coatings::CoatingType;
-use crate::dottable::Dottable;
-use crate::error::{OpmResult, OpossumError};
-use crate::lightdata::LightData;
-use crate::nodes::{NodeAttr, NodeGroup, NodeReference};
-use crate::optic_ports::{OpticPorts, PortType};
-use crate::optic_senery_rsc::SceneryResources;
-use crate::properties::{Properties, Proptype};
-use crate::refractive_index::RefractiveIndexType;
-use crate::reporter::NodeReport;
-use crate::surface::hit_map::HitMap;
-use crate::utils::geom_transformation::Isometry;
+use crate::{
+    aperture::Aperture,
+    coatings::CoatingType,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    lightdata::LightData,
+    nodes::{NodeAttr, NodeGroup, NodeReference},
+    optic_ports::{OpticPorts, PortType},
+    optic_senery_rsc::SceneryResources,
+    properties::{Properties, Proptype},
+    refractive_index::RefractiveIndexType,
+    reporting::reporter::NodeReport,
+    surface::hit_map::HitMap,
+    utils::geom_transformation::Isometry,
+};
 use core::fmt::Debug;
 use std::cell::RefCell;
 use std::collections::HashMap;

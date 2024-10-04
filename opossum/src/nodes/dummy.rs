@@ -12,7 +12,7 @@ use crate::{
     lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
-    reporter::NodeReport,
+    reporting::reporter::NodeReport,
     surface::{OpticalSurface, Plane},
 };
 

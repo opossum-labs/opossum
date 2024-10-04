@@ -23,7 +23,7 @@ use crate::{
         AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
     },
     properties::{Properties, Proptype},
-    reporter::NodeReport,
+    reporting::reporter::NodeReport,
     surface::{OpticalSurface, Plane},
     utils::{
         geom_transformation::Isometry,
@@ -579,7 +579,7 @@ mod test {
             .unwrap(),
         ));
         let node_report = wf.report("").unwrap();
-        assert_eq!(node_report.detector_type(), "wavefront monitor");
+        assert_eq!(node_report.node_type(), "wavefront monitor");
         assert_eq!(node_report.name(), "wavefront monitor");
         assert!(node_report.properties().contains("Wavefront Map"));
         assert!(node_report.properties().contains("Wavefront RMS"));

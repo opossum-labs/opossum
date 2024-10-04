@@ -27,7 +27,7 @@ use crate::{
     },
     properties::{Properties, Proptype},
     rays::Rays,
-    reporter::NodeReport,
+    reporting::reporter::NodeReport,
     surface::{hit_map::HitMap, OpticalSurface, Plane},
     utils::{
         geom_transformation::Isometry,
@@ -589,7 +589,7 @@ mod test {
     fn report() {
         let mut sd = SpotDiagram::default();
         let node_report = sd.report("").unwrap();
-        assert_eq!(node_report.detector_type(), "spot diagram");
+        assert_eq!(node_report.node_type(), "spot diagram");
         assert_eq!(node_report.name(), "spot diagram");
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);

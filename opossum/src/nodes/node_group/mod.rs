@@ -14,7 +14,7 @@ use crate::{
     optic_ref::OpticRef,
     plottable::{Plottable, PltBackEnd},
     properties::{Properties, Proptype},
-    reporter::{AnalysisReport, NodeReport},
+    reporting::reporter::{AnalysisReport, NodeReport},
     SceneryResources,
 };
 use chrono::Local;
@@ -408,7 +408,7 @@ impl OpticNode for NodeGroup {
     }
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut group_props = Properties::default();
-        for node in self.graph.nodes().into_iter() {
+        for node in self.graph.nodes() {
             let sub_uuid = node.uuid().as_simple().to_string();
             if let Some(node_report) = node.optical_ref.borrow().report(&sub_uuid) {
                 let node_name = &node.optical_ref.borrow().name();

@@ -26,7 +26,7 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
     rays::Rays,
-    reporter::NodeReport,
+    reporting::reporter::NodeReport,
     surface::{OpticalSurface, Plane},
 };
 use std::path::{Path, PathBuf};
@@ -623,7 +623,7 @@ mod test {
     fn report() {
         let mut fd = RayPropagationVisualizer::default();
         let node_report = fd.report("").unwrap();
-        assert_eq!(node_report.detector_type(), "ray propagation");
+        assert_eq!(node_report.node_type(), "ray propagation");
         assert_eq!(node_report.name(), "ray propagation");
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);

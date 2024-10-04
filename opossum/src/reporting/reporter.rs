@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Module for generating analysis reports in PDF format.
+//! Module handling analysis reports and converting them to HTML.
 
 use crate::{
     error::{OpmResult, OpossumError},
@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 use tinytemplate::TinyTemplate;
 
-static HTML_REPORT: &str = include_str!("html/html_report.html");
-static HTML_NODE_REPORT: &str = include_str!("html/node_report.html");
+static HTML_REPORT: &str = include_str!("../html/html_report.html");
+static HTML_NODE_REPORT: &str = include_str!("../html/node_report.html");
 
 #[derive(Serialize)]
 struct HtmlReport {
@@ -23,7 +23,7 @@ struct HtmlReport {
     description: String,
     node_reports: Vec<HtmlNodeReport>,
 }
-/// Structure for storing a (detector) node report during html conversion.
+/// Structure for storing a node report during html conversion.
 #[derive(Serialize)]
 pub struct HtmlNodeReport {
     /// node name
@@ -121,9 +121,9 @@ impl AnalysisReport {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-/// Structure for storing (detector-)node specific data to be integrated in the [`AnalysisReport`].
+/// Structure for storing node specific data to be integrated in the [`AnalysisReport`].
 pub struct NodeReport {
-    detector_type: String,
+    node_type: String,
     name: String,
     uuid: String,
     properties: Properties,
@@ -131,18 +131,18 @@ pub struct NodeReport {
 impl NodeReport {
     /// Creates a new [`NodeReport`].
     #[must_use]
-    pub fn new(detector_type: &str, name: &str, uuid: &str, properties: Properties) -> Self {
+    pub fn new(node_type: &str, name: &str, uuid: &str, properties: Properties) -> Self {
         Self {
-            detector_type: detector_type.to_owned(),
+            node_type: node_type.to_owned(),
             name: name.to_owned(),
             uuid: uuid.to_string(),
             properties,
         }
     }
-    /// Returns a reference to the detector type of this [`NodeReport`].
+    /// Returns a reference to the node type of this [`NodeReport`].
     #[must_use]
-    pub fn detector_type(&self) -> &str {
-        self.detector_type.as_ref()
+    pub fn node_type(&self) -> &str {
+        self.node_type.as_ref()
     }
     /// Returns a reference to the name of this [`NodeReport`].
     #[must_use]
@@ -159,16 +159,18 @@ impl NodeReport {
     pub fn to_html_node_report(&self) -> HtmlNodeReport {
         HtmlNodeReport {
             node: self.name.clone(),
-            node_type: self.detector_type.clone(),
+            node_type: self.node_type.clone(),
             props: self.properties.html_props(self.name(), &self.uuid),
             uuid: self.uuid.clone(),
         }
     }
     /// Returns the ray history of this [`NodeReport`] if it describe either a ray propagation
     /// visualizer node or a group containing such a node. Otherwise the return value is `None`.
+    ///
+    /// **Note**: This is a temporary function to be used in combination with the Bevy visualizer.
     #[must_use]
     pub fn get_ray_history(&self) -> Option<&RayPositionHistories> {
-        if self.detector_type == "group" {
+        if self.node_type == "group" {
             for prop in &self.properties {
                 if let Proptype::NodeReport(node) = prop.1.prop() {
                     let data = node.get_ray_history();
@@ -177,7 +179,7 @@ impl NodeReport {
                     }
                 }
             }
-        } else if self.detector_type == "ray propagation" {
+        } else if self.node_type == "ray propagation" {
             if let Ok(Proptype::RayPositionHistory(ray_hist)) =
                 self.properties.get("Ray Propagation visualization plot")
             {
@@ -235,7 +237,7 @@ mod test {
             "123",
             Properties::default(),
         );
-        assert_eq!(report.detector_type, "test detector");
+        assert_eq!(report.node_type, "test detector");
         assert_eq!(report.name, "detector name");
     }
 }

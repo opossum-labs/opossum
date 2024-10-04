@@ -13,7 +13,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     properties::{Properties, Proptype},
-    reporter::NodeReport,
+    reporting::reporter::NodeReport,
     surface::{OpticalSurface, Plane},
 };
 use log::warn;
@@ -380,7 +380,7 @@ mod test {
         let mut meter = EnergyMeter::default();
         let report = meter.report("123").unwrap();
         assert_eq!(report.name(), "energy meter");
-        assert_eq!(report.detector_type(), "energy meter");
+        assert_eq!(report.node_type(), "energy meter");
         assert!(report.properties().contains("Energy"));
         assert!(report.properties().contains("Model"));
         if let Ok(Proptype::String(s)) = report.properties().get("Energy") {

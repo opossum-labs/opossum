@@ -11,7 +11,7 @@ use crate::{
     optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
-    reporter::{HtmlNodeReport, NodeReport},
+    reporting::reporter::{HtmlNodeReport, NodeReport},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
@@ -146,7 +146,7 @@ impl Proptype {
             Self::NodeReport(report) => {
                 let html_node_report = HtmlNodeReport {
                     node: report.name().into(),
-                    node_type: report.detector_type().into(),
+                    node_type: report.node_type().into(),
                     props: report.properties().html_props(report.name(), uuid),
                     uuid: uuid.to_string(),
                 };

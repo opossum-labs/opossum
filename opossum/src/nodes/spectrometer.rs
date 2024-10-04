@@ -19,7 +19,7 @@ use crate::{
     optic_ports::{OpticPorts, PortType},
     plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
-    reporter::NodeReport,
+    reporting::reporter::NodeReport,
     surface::{OpticalSurface, Plane},
 };
 use std::{
@@ -483,7 +483,7 @@ mod test {
     fn report() {
         let mut sd = Spectrometer::default();
         let node_report = sd.report("").unwrap();
-        assert_eq!(node_report.detector_type(), "spectrometer");
+        assert_eq!(node_report.node_type(), "spectrometer");
         assert_eq!(node_report.name(), "spectrometer");
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
