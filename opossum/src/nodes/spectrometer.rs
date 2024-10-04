@@ -283,8 +283,8 @@ impl AnalysisRayTrace for Spectrometer {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                rays.refract_on_surface(&plane, None)?;
+                let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                rays.refract_on_surface(&mut plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),

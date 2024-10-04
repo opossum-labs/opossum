@@ -16,7 +16,7 @@ Nodes form the building blocks of the optical model. Maybe it makes sense to int
 
 1. Non-sequential group node
 
-   A non-sequential group contains other nodes (which might still be set up as a graph but do not use the structure) which are simply placed in 3D space. This could be used for simulating flashlamp-pumped systems which need the illumination of a laser rod to be simulated. *One has to think about the definition of input and output ports (see later) for these systems.* 
+   A non-sequential group contains other nodes (which might still be set up as a graph but do not use the structure) which are simply placed in 3D space. This could be used for simulating flashlamp-pumped systems which need the illumination of a laser rod to be simulated. *One has to think about the definition of input and output ports (see later) for these systems.*
 
 1. Reference node
 
@@ -57,7 +57,7 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
    *This is strictly necessary only for propagation nodes...*
    Each optical element consists of a given material. These are mostly different glass materials but could also be metals (i.e. for mirrors) or other substances. Even for free-space propagation nodes a material must be given. This might often be "air" or "vacuum". Since materials have a plethora of attributes and will be used by different nodes within a model, the material will be a reference pointing to a materials database.
 
-   **Note**: For interoperability, it might not be always a good idea to only have the material properties in a (local) database. If the model data is given to another user, this data might not be found in his (also local) database. Hence it should be possible to attach the actual material data to the model during export. The alternative would be to have a global database...    
+   **Note**: For interoperability, it might not be always a good idea to only have the material properties in a (local) database. If the model data is given to another user, this data might not be found in his (also local) database. Hence it should be possible to attach the actual material data to the model during export. The alternative would be to have a global database...
 
 1. 3D location
 
@@ -70,7 +70,7 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 1. Aperture shape
 
    Each real-world optical component has a limited physical / mechanical size which also determines the area of incoming light it can handle. Incoming beams farther away from the optical axis than the component's extent will simply be lost during the analysis. Hence, each node can define an aperture with different shapes (mostly circular or rectangular). The exact handling of the aperture is defined by the specific node. Without a given aperture many nodes assume an infinitely large component such that all beams are always caught.
-   
+
    **Note**: It might be necessary to extend this to one aperture per input port for asymmetric parts.
 
 1. 3D mechanical model
@@ -83,4 +83,4 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 
 ## Analysis interface
 
-As discussed, the actual calculation is performed by the nodes. The presented framework will only make sure that all necessary input data will be provided. For this, each node has to implement an Analysis function with light data from the incoming edges as parameters. This function can now either directly perform a calculation or call specific external modules (such as C/C++ library code or a Python script)
+As discussed, the actual calculation is performed by the nodes. The presented framework will only make sure that all necessary input data will be provided. For this, each node has to implement an Analysis function with light data from the incoming edges as parameters. This function can now either directly perform a calculation or call specific external modules (such as C/C++ library code or a Python script).

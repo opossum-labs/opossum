@@ -8,7 +8,7 @@ use nalgebra::{Point3, Vector3};
 use num::Zero;
 use uom::si::f64::Length;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// An infinitely large flat surface with its normal collinear to the optical axis.
 pub struct Plane {
     isometry: Isometry,
@@ -48,6 +48,10 @@ impl GeoSurface for Plane {
     }
     fn isometry(&self) -> &Isometry {
         &self.isometry
+    }
+
+    fn box_clone(&self) -> Box<dyn GeoSurface> {
+        Box::new(self.clone())
     }
 }
 // impl Color for Plane {

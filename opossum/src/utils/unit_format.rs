@@ -1,3 +1,4 @@
+use num::Zero;
 use uom::si::{
     f64::Length,
     length::{
@@ -32,6 +33,9 @@ pub fn get_prefix_for_base_unit(base_unit_value: f64) -> String {
 
 #[must_use]
 pub fn get_exponent_for_base_unit_in_e3_steps(base_unit_value: f64) -> i32 {
+    if base_unit_value.is_zero() {
+        return 0;
+    }
     #[allow(clippy::cast_possible_truncation)]
     let mut exponent = (f64::log10(base_unit_value.abs()).floor()) as i32;
     if exponent.is_negative() {

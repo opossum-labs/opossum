@@ -18,15 +18,21 @@ use crate::optic_senery_rsc::SceneryResources;
 use crate::properties::{Properties, Proptype};
 use crate::refractive_index::RefractiveIndexType;
 use crate::reporter::NodeReport;
+use crate::surface::hit_map::HitMap;
 use crate::utils::geom_transformation::Isometry;
 use core::fmt::Debug;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::Path;
 use std::rc::Rc;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait OpticNode: Dottable {
+    /// Return all hit maps (if any) of this [`OpticNode`].
+    fn hit_maps(&self) -> HashMap<String, HitMap> {
+        HashMap::default()
+    }
     /// Reset internal data (e.g. internal state of detector nodes)
     fn reset_data(&mut self) {}
     /// Return the available (input & output) ports of this [`OpticNode`].

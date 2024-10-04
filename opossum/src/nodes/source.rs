@@ -13,8 +13,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule,
     light_result::{
-        light_bouncing_rays_to_light_result, light_rays_to_light_bouncing_rays,
-        light_result_to_light_rays, LightBouncingRays, LightResult,
+        light_rays_to_light_result, light_result_to_light_rays, LightRays, LightResult,
     },
     lightdata::LightData,
     millimeter,
@@ -23,18 +22,19 @@ use crate::{
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    utils::EnumProxy,
+    surface::{hit_map::HitMap, OpticalSurface, Plane},
+    utils::{geom_transformation::Isometry, EnumProxy},
 };
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
 /// A general light source
 ///
-/// Hence it has only one output port (out1) and no input ports. Source nodes usually are the first
-/// nodes of a [`NodeGroup`](crate::nodes::NodeGroup).
+/// Hence it has only one output port (out1) and effectively no input ports. The formal input port `in1` is discarded during analysis.
+/// Source nodes usually are the first nodes of a [`NodeGroup`](crate::nodes::NodeGroup).
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - none
+///     - `in1` (input discarded, used to make the node invertable)
 ///   - Outputs
 ///     - `out1`
 ///
@@ -42,10 +42,11 @@ use std::fmt::Debug;
 ///   - `name`
 ///   - `light data`
 ///
-/// **Note**: This node does not have the `inverted` property since it has only one output port.
+/// **Note**: If a [`Source`] is configured as `inverted` the initial output port becomes an input port and further data is discarded.
 #[derive(Clone)]
 pub struct Source {
     node_attr: NodeAttr,
+    surface: OpticalSurface,
 }
 impl Default for Source {
     fn default() -> Self {
@@ -70,8 +71,12 @@ impl Default for Source {
 
         let mut ports = OpticPorts::new();
         ports.add(&PortType::Output, "out1").unwrap();
+        ports.add(&PortType::Input, "in1").unwrap();
         node_attr.set_ports(ports);
-        Self { node_attr }
+        Self {
+            node_attr,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+        }
     }
 }
 impl Source {
@@ -158,24 +163,17 @@ impl OpticNode for Source {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.node_attr.set_property(name, prop)
     }
-    fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
-        if inverted {
-            Err(OpossumError::Properties(
-                "Cannot change the inversion status of a source node!".into(),
-            ))
-        } else {
-            Ok(())
-        }
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    // fn set_isometry(&mut self, isometry: crate::utils::geom_transformation::Isometry) {
-    //     self.node_attr.set_isometry(isometry.clone());
-    // }
+    fn hit_maps(&self) -> HashMap<String, HitMap> {
+        let mut maps = HashMap::default();
+        maps.insert("out1".to_string(), self.surface.hit_map().to_owned());
+        maps
+    }
 }
 
 impl Dottable for Source {
@@ -216,12 +214,15 @@ impl AnalysisRayTrace for Source {
                 if let Some(iso) = self.effective_iso() {
                     *rays = rays.transformed_rays(&iso);
                 }
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
-                    rays.apodize(aperture)?;
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
+                // consider aperture only if not inverted (there is only an output port)
+                if !self.inverted() {
+                    if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
+                        rays.apodize(aperture)?;
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    };
+                }
             }
             Ok(LightResult::from([("out1".into(), data)]))
         } else {
@@ -268,17 +269,47 @@ impl AnalysisRayTrace for Source {
 impl AnalysisGhostFocus for Source {
     fn analyze(
         &mut self,
-        incoming_data: LightBouncingRays,
+        incoming_data: LightRays,
         _config: &crate::analyzers::GhostFocusConfig,
-    ) -> OpmResult<LightBouncingRays> {
+    ) -> OpmResult<LightRays> {
+        let mut rays = if self.inverted() {
+            let Some(bouncing_rays) = incoming_data.get("out1") else {
+                return Err(OpossumError::Analysis("no light at port".into()));
+            };
+            bouncing_rays.clone()
+        } else if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {
+            let Some(mut data) = data.value.clone() else {
+                return Err(OpossumError::Analysis(
+                    "source has empty light data defined".into(),
+                ));
+            };
+            if let LightData::Geometric(rays) = &mut data {
+                if let Some(iso) = self.effective_iso() {
+                    *rays = rays.transformed_rays(&iso);
+                }
+                rays.clone()
+            } else {
+                return Err(OpossumError::Analysis(
+                    "source has wrong light data type defined".into(),
+                ));
+            }
+        } else {
+            return Err(OpossumError::Analysis("could not read light data".into()));
+        };
+        if let Some(iso) = self.effective_iso() {
+            self.surface.set_isometry(&iso);
+            rays.refract_on_surface(&mut self.surface, None)?;
+        } else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined. Aborting".into(),
+            ));
+        }
         let outgoing = AnalysisRayTrace::analyze(
             self,
-            light_bouncing_rays_to_light_result(incoming_data)?,
+            light_rays_to_light_result(incoming_data),
             &RayTraceConfig::default(),
         )?;
-        Ok(light_rays_to_light_bouncing_rays(
-            light_result_to_light_rays(outgoing)?,
-        ))
+        light_result_to_light_rays(outgoing)
     }
 }
 
@@ -312,12 +343,12 @@ mod test {
     fn not_invertable() {
         let mut node = Source::default();
         assert!(node.set_inverted(false).is_ok());
-        assert!(node.set_inverted(true).is_err());
+        assert!(node.set_inverted(true).is_ok());
     }
     #[test]
     fn ports() {
         let node = Source::default();
-        assert!(node.ports().names(&PortType::Input).is_empty());
+        assert_eq!(node.ports().names(&PortType::Input), vec!["in1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["out1"]);
     }
     #[test]

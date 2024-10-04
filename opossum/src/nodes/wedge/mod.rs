@@ -1,21 +1,17 @@
+use std::collections::HashMap;
+
 use super::NodeAttr;
 use crate::{
     analyzable::Analyzable,
-    analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        AnalyzerType, RayTraceConfig,
-    },
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::LightData,
     millimeter,
     optic_node::{Alignable, OpticNode},
     optic_ports::{OpticPorts, PortType},
-    properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{OpticalSurface, Plane},
+    surface::{hit_map::HitMap, OpticalSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use nalgebra::Point3;
@@ -24,6 +20,10 @@ use uom::si::{
     angle::degree,
     f64::{Angle, Length},
 };
+
+mod analysis_energy;
+mod analysis_ghostfocus;
+mod analysis_raytrace;
 
 #[derive(Debug)]
 /// An optical element with two flat surfaces, a given thickness and a  given wedge angle (= wedged window).
@@ -43,6 +43,8 @@ use uom::si::{
 ///   - `wedge`
 pub struct Wedge {
     node_attr: NodeAttr,
+    front_surf: OpticalSurface,
+    rear_surf: OpticalSurface,
 }
 impl Default for Wedge {
     /// Create a wedge with a center thickness of 10.0 mm, refractive index of 1.5 and no wedge angle (flat windows)
@@ -74,7 +76,11 @@ impl Default for Wedge {
         ports.add(&PortType::Input, "front").unwrap();
         ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
-        Self { node_attr }
+        Self {
+            node_attr,
+            front_surf: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+            rear_surf: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+        }
     }
 }
 impl Wedge {
@@ -117,9 +123,8 @@ impl Wedge {
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
         Ok(wedge)
     }
-    #[allow(clippy::too_many_arguments)]
     fn analyze_forward(
-        &self,
+        &mut self,
         incoming_rays: Rays,
         thickness: Length,
         wedge: Angle,
@@ -127,15 +132,30 @@ impl Wedge {
         iso: &Isometry,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<Rays> {
+        let ambient_idx = self.ambient_idx();
         let mut rays = incoming_rays;
-        let front_surf = OpticalSurface::new(Box::new(Plane::new(iso)));
+        self.front_surf.set_isometry(iso);
+        self.front_surf.set_coating(
+            self.node_attr()
+                .ports()
+                .coating(&PortType::Input, "front")
+                .unwrap()
+                .clone(),
+        );
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let wedge_iso = Isometry::new(
             Point3::origin(),
             Point3::new(wedge, Angle::zero(), Angle::zero()),
         )?;
         let isometry = iso.append(&thickness_iso).append(&wedge_iso);
-        let rear_surf = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        self.rear_surf.set_isometry(&isometry);
+        self.rear_surf.set_coating(
+            self.node_attr()
+                .ports()
+                .coating(&PortType::Output, "rear")
+                .unwrap()
+                .clone(),
+        );
         if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -144,9 +164,13 @@ impl Wedge {
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
         };
-        rays.refract_on_surface(&front_surf, Some(refri))?;
+        let reflected_front = rays.refract_on_surface(&mut self.front_surf, Some(refri))?;
+        self.front_surf.set_backwards_rays_cache(reflected_front);
+        rays.merge(self.front_surf.forward_rays_cache());
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&rear_surf, Some(&self.ambient_idx()))?;
+        let reflected_rear = rays.refract_on_surface(&mut self.rear_surf, Some(&ambient_idx))?;
+        self.rear_surf.set_backwards_rays_cache(reflected_rear);
+        rays.merge(self.rear_surf.forward_rays_cache());
         if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -157,9 +181,8 @@ impl Wedge {
         };
         Ok(rays)
     }
-    #[allow(clippy::too_many_arguments)]
     fn analyze_inverse(
-        &self,
+        &mut self,
         incoming_rays: Rays,
         thickness: Length,
         wedge: Angle,
@@ -167,17 +190,17 @@ impl Wedge {
         iso: &Isometry,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<Rays> {
+        let ambient_idx = self.ambient_idx();
         let mut rays = incoming_rays;
-
-        let front_surf = OpticalSurface::new(Box::new(Plane::new(iso)));
+        self.front_surf.set_isometry(iso);
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let wedge_iso = Isometry::new(
             Point3::origin(),
             Point3::new(wedge, Angle::zero(), Angle::zero()),
         )?;
         let isometry = iso.append(&thickness_iso).append(&wedge_iso);
-        let rear_surf = OpticalSurface::new(Box::new(Plane::new(&isometry)));
-        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
+        self.rear_surf.set_isometry(&isometry);
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -185,10 +208,15 @@ impl Wedge {
         } else {
             return Err(OpossumError::OpticPort("output aperture not found".into()));
         };
-        rays.refract_on_surface(&rear_surf, Some(refri))?;
+        let reflected_rear = rays.refract_on_surface(&mut self.rear_surf, Some(refri))?;
+        self.rear_surf.set_forward_rays_cache(reflected_rear);
+        rays.merge(self.rear_surf.backwards_rays_cache());
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&front_surf, Some(&self.ambient_idx()))?;
-        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
+
+        let reflected_front = rays.refract_on_surface(&mut self.front_surf, Some(&ambient_idx))?;
+        self.front_surf.set_forward_rays_cache(reflected_front);
+        rays.merge(self.front_surf.backwards_rays_cache());
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, "front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -201,6 +229,19 @@ impl Wedge {
 }
 
 impl OpticNode for Wedge {
+    fn reset_data(&mut self) {
+        self.front_surf.set_backwards_rays_cache(Rays::default());
+        self.front_surf.set_forward_rays_cache(Rays::default());
+
+        self.rear_surf.set_backwards_rays_cache(Rays::default());
+        self.rear_surf.set_forward_rays_cache(Rays::default());
+    }
+    fn hit_maps(&self) -> HashMap<String, HitMap> {
+        let mut map: HashMap<String, HitMap> = HashMap::default();
+        map.insert("front".to_string(), self.front_surf.hit_map().to_owned());
+        map.insert("rear".to_string(), self.rear_surf.hit_map().to_owned());
+        map
+    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -217,91 +258,21 @@ impl Dottable for Wedge {
     }
 }
 impl Analyzable for Wedge {}
-impl AnalysisGhostFocus for Wedge {}
-impl AnalysisEnergy for Wedge {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let (in_port, out_port) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
-        Ok(LightResult::from([(out_port.into(), data.clone())]))
-    }
-}
-impl AnalysisRayTrace for Wedge {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        let (in_port, out_port) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
-        let LightData::Geometric(rays) = data.clone() else {
-            return Err(OpossumError::Analysis(
-                "expected ray data at input port".into(),
-            ));
-        };
-        let Some(eff_iso) = self.effective_iso() else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined".into(),
-            ));
-        };
-        let Ok(Proptype::RefractiveIndex(index_model)) =
-            self.node_attr.get_property("refractive index")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read refractive index".into(),
-            ));
-        };
-        let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-        let Ok(Proptype::Angle(angle)) = self.node_attr.get_property("wedge") else {
-            return Err(OpossumError::Analysis("cannot wedge angle".into()));
-        };
-        let output = if self.inverted() {
-            self.analyze_inverse(
-                rays,
-                *center_thickness,
-                *angle,
-                &index_model.value,
-                &eff_iso,
-                &AnalyzerType::RayTrace(config.clone()),
-            )?
-        } else {
-            self.analyze_forward(
-                rays,
-                *center_thickness,
-                *angle,
-                &index_model.value,
-                &eff_iso,
-                &AnalyzerType::RayTrace(config.clone()),
-            )?
-        };
-        let light_result = LightResult::from([(out_port.into(), LightData::Geometric(output))]);
-        Ok(light_result)
-    }
-}
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
-        analyzers::RayTraceConfig, degree, joule, lightdata::DataEnergy, nanometer,
-        nodes::test_helper::test_helper::*, optic_ports::PortType, ray::Ray, rays::Rays,
+        analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+        degree, joule,
+        light_result::LightResult,
+        lightdata::{DataEnergy, LightData},
+        nanometer,
+        nodes::test_helper::test_helper::*,
+        optic_ports::PortType,
+        properties::Proptype,
+        ray::Ray,
+        rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
     use nalgebra::Vector3;

@@ -139,7 +139,10 @@ impl AnalysisRayTrace for ParaxialSurface {
                 return Err(OpossumError::Analysis("cannot read focal length".into()));
             };
             if let Some(iso) = self.effective_iso() {
-                rays.refract_on_surface(&OpticalSurface::new(Box::new(Plane::new(&iso))), None)?;
+                rays.refract_on_surface(
+                    &mut OpticalSurface::new(Box::new(Plane::new(&iso))),
+                    None,
+                )?;
                 rays.refract_paraxial(*focal_length, &iso)?;
             } else {
                 return Err(OpossumError::Analysis(

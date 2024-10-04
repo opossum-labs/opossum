@@ -16,7 +16,7 @@ use roots::find_roots_quadratic;
 use roots::Roots;
 use uom::si::f64::Length;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A spherical surface with its anchor point on the optical axis.
 pub struct Cylinder {
     radius: Length,
@@ -139,10 +139,18 @@ impl GeoSurface for Cylinder {
         ))
     }
     fn set_isometry(&mut self, isometry: &Isometry) {
-        self.isometry = isometry.clone();
+        let anchor_isometry = Isometry::new(
+            Point3::new(Length::zero(), Length::zero(), self.radius),
+            radian!(0., 0., 0.),
+        )
+        .unwrap();
+        self.isometry = isometry.clone().append(&anchor_isometry);
     }
     fn isometry(&self) -> &Isometry {
         &self.isometry
+    }
+    fn box_clone(&self) -> Box<dyn GeoSurface> {
+        Box::new(self.clone())
     }
 }
 

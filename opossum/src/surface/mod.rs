@@ -7,8 +7,8 @@ mod cylinder;
 mod plane;
 mod sphere;
 
+pub mod hit_map;
 mod optical_surface;
-
 pub use cylinder::Cylinder;
 pub use optical_surface::OpticalSurface;
 pub use plane::Plane;
@@ -51,6 +51,10 @@ pub trait GeoSurface {
     ///
     /// This function can be used to place and align the [`GeoSurface`] in 3D space.
     fn set_isometry(&mut self, isometry: &Isometry);
+    /// Create a clone of this [`GeoSurface`].
+    ///
+    /// **Note**: This has to be done explicitly since there is no `clone` for a trait.
+    fn box_clone(&self) -> Box<dyn GeoSurface>;
 }
 
 impl Debug for dyn GeoSurface {

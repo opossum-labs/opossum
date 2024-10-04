@@ -13,11 +13,11 @@ use crate::{
     analyzable::Analyzable,
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
+    light_result::{LightRays, LightResult},
     lightdata::LightData,
     nanometer,
     optic_node::{Alignable, OpticNode},
@@ -28,7 +28,7 @@ use crate::{
     properties::{Properties, Proptype},
     rays::Rays,
     reporter::NodeReport,
-    surface::{OpticalSurface, Plane},
+    surface::{hit_map::HitMap, OpticalSurface, Plane},
     utils::{
         geom_transformation::Isometry,
         unit_format::{
@@ -38,7 +38,10 @@ use crate::{
     },
 };
 use core::f64;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 /// A spot-diagram monitor
 ///
@@ -58,7 +61,7 @@ use std::path::{Path, PathBuf};
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SpotDiagram {
-    light_data: Option<LightData>,
+    light_data: Option<Rays>,
     node_attr: NodeAttr,
     apodization_warning: bool,
 }
@@ -113,13 +116,18 @@ impl OpticNode for SpotDiagram {
         }
         Ok(())
     }
+    fn hit_maps(&self) -> HashMap<String, HitMap> {
+        let mut map: HashMap<String, HitMap> = HashMap::default();
+        map.insert("in1".to_string(), HitMap::default());
+        map
+    }
     fn is_detector(&self) -> bool {
         true
     }
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
-        if let Some(LightData::Geometric(rays)) = data {
+        if let Some(rays) = data {
             let mut transformed_rays = Rays::default();
             let iso = self.effective_iso().unwrap_or_else(Isometry::identity);
             for ray in rays {
@@ -203,7 +211,42 @@ impl Dottable for SpotDiagram {
     }
 }
 impl Analyzable for SpotDiagram {}
-impl AnalysisGhostFocus for SpotDiagram {}
+impl AnalysisGhostFocus for SpotDiagram {
+    fn analyze(
+        &mut self,
+        incoming_data: LightRays,
+        _config: &GhostFocusConfig,
+    ) -> OpmResult<LightRays> {
+        let (in_port, out_port) = if self.inverted() {
+            ("out1", "in1")
+        } else {
+            ("in1", "out1")
+        };
+        let Some(bouncing_rays) = incoming_data.get(in_port) else {
+            return Ok(LightRays::default());
+        };
+        let mut rays = bouncing_rays.clone();
+        if let Some(iso) = self.effective_iso() {
+            let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+            rays.refract_on_surface(&mut plane, None)?;
+        } else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined. Aborting".into(),
+            ));
+        }
+        // merge all rays
+        let mut ray_cache = self
+            .light_data
+            .clone()
+            .map_or_else(Rays::default, |rays| rays);
+        ray_cache.merge(&rays);
+        self.light_data = Some(ray_cache);
+
+        let mut out_light_rays = LightRays::default();
+        out_light_rays.insert(out_port.to_string(), rays.clone());
+        Ok(out_light_rays)
+    }
+}
 impl AnalysisEnergy for SpotDiagram {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {
@@ -214,7 +257,9 @@ impl AnalysisEnergy for SpotDiagram {
         let Some(data) = incoming_data.get(inport) else {
             return Ok(LightResult::default());
         };
-        self.light_data = Some(data.clone());
+        if let LightData::Geometric(rays) = data {
+            self.light_data = Some(rays.clone());
+        }
         Ok(LightResult::from([(outport.into(), data.clone())]))
     }
 }
@@ -235,8 +280,8 @@ impl AnalysisRayTrace for SpotDiagram {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                rays.refract_on_surface(&plane, None)?;
+                let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                rays.refract_on_surface(&mut plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
@@ -252,12 +297,12 @@ impl AnalysisRayTrace for SpotDiagram {
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
-            if let Some(LightData::Geometric(old_rays)) = &self.light_data {
+            if let Some(old_rays) = &self.light_data {
                 let mut rays_tob_merged = old_rays.clone();
                 rays_tob_merged.merge(&rays);
-                self.light_data = Some(LightData::Geometric(rays_tob_merged.clone()));
+                self.light_data = Some(rays_tob_merged.clone());
             } else {
-                self.light_data = Some(LightData::Geometric(rays.clone()));
+                self.light_data = Some(rays.clone());
             }
             if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
                 rays.apodize(aperture)?;
@@ -283,8 +328,8 @@ impl From<SpotDiagram> for Proptype {
 impl Plottable for SpotDiagram {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
-            .set(&PlotArgs::XLabel("distance in m".into()))?
-            .set(&PlotArgs::YLabel("distance in m".into()))?
+            .set(&PlotArgs::XLabel("x position (m)".into()))?
+            .set(&PlotArgs::YLabel("y position (m)".into()))?
             .set(&PlotArgs::AxisEqual(true))?
             .set(&PlotArgs::PlotAutoSize(true))?
             .set(&PlotArgs::PlotSize((800, 800)))?;
@@ -303,12 +348,12 @@ impl Plottable for SpotDiagram {
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = &self.light_data;
         match data {
-            Some(LightData::Geometric(rays)) => {
+            Some(rays) => {
                 let (split_rays_bundles, wavelengths) =
                     rays.split_ray_bundle_by_wavelength(nanometer!(0.2), true)?;
                 let num_series = split_rays_bundles.len();
                 let use_colorbar = if num_series > 5 {
-                    plt_type.set_plot_param(&PlotArgs::CBarLabel("wavelength in nm".into()))?;
+                    plt_type.set_plot_param(&PlotArgs::CBarLabel("wavelength (nm)".into()))?;
                     plt_type.set_plot_param(&PlotArgs::PlotSize((970, 800)))?;
                     plt_type.set_plot_param(&PlotArgs::ZLim(AxLims::new(
                         wavelengths[0].get::<nanometer>(),
@@ -361,8 +406,8 @@ impl Plottable for SpotDiagram {
                 let y_prefix = get_prefix_for_base_unit(y_max);
                 let x_prefix = get_prefix_for_base_unit(x_max);
 
-                plt_type.set_plot_param(&PlotArgs::YLabel(format!("distance in {y_prefix}m")))?;
-                plt_type.set_plot_param(&PlotArgs::XLabel(format!("distance in {x_prefix}m")))?;
+                plt_type.set_plot_param(&PlotArgs::YLabel(format!("x position ({y_prefix}m)")))?;
+                plt_type.set_plot_param(&PlotArgs::XLabel(format!("y position ({x_prefix}m)")))?;
 
                 for (idx, xy_pos) in xy_pos_series.iter().enumerate() {
                     let grad_val =
@@ -531,17 +576,17 @@ mod test {
         check_warnings(vec![
             "spot diagram: no light data for export available. Cannot create plot!",
         ]);
-        sd.light_data = Some(LightData::Geometric(Rays::default()));
+        sd.light_data = Some(Rays::default());
         let path = NamedTempFile::new().unwrap();
         assert!(sd.export_data(path.path().parent().unwrap(), "").is_err());
-        sd.light_data = Some(LightData::Geometric(
+        sd.light_data = Some(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
                 joule!(1.0),
                 &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
-        ));
+        );
         assert!(sd.export_data(path.path().parent().unwrap(), "").is_ok());
     }
     #[test]
@@ -553,17 +598,17 @@ mod test {
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
-        sd.light_data = Some(LightData::Geometric(Rays::default()));
+        sd.light_data = Some(Rays::default());
         let node_report = sd.report("").unwrap();
         assert!(node_report.properties().contains("Spot diagram"));
-        sd.light_data = Some(LightData::Geometric(
+        sd.light_data = Some(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
                 joule!(1.0),
                 &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
-        ));
+        );
         let node_report = sd.report("").unwrap();
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);

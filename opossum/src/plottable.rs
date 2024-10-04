@@ -80,11 +80,6 @@ impl PlotType {
             Self::MultiLine2D(_) => Self::plot_2d_multi_line(plot, backend),
         };
     }
-
-    // fn set_plot_auto_size<B: DrawingBackend>(&self, plot: &mut Plot, backend: &DrawingArea<B, Shift>) -> DrawingArea<B, Shift>{
-
-    // }
-
     ///This method sets a plot argument ([`PlotArgs`]) to [`PlotParameters`] which is stored in this [`PlotType`]
     /// # Attributes
     /// - `plt_arg`: plot argument [`PlotArgs`]
@@ -122,7 +117,7 @@ impl PlotType {
         plot.add_margin_to_figure_size(self);
 
         match params.get_backend()? {
-            PltBackEnd::BMP => {
+            PltBackEnd::Bitmap => {
                 let backend = BitMapBackend::new(&path, plot.fig_size).into_drawing_area();
                 self.create_plot(&backend, &mut plot);
                 Ok(None)
@@ -1403,7 +1398,7 @@ pub trait Plottable {
     /// Whether an error is thrown depends on the individual implementation of the method
     fn to_plot(&self, f_path: &Path, backend: PltBackEnd) -> OpmResult<Option<RgbImage>> {
         let mut plt_params = PlotParameters::default();
-        if backend == PltBackEnd::BMP || backend == PltBackEnd::SVG {
+        if backend == PltBackEnd::Bitmap || backend == PltBackEnd::SVG {
             plt_params
                 .set(&PlotArgs::FName(
                     f_path.file_name().unwrap().to_str().unwrap().to_owned(),
@@ -1448,7 +1443,7 @@ pub trait Plottable {
 pub enum PltBackEnd {
     /// `BitmapBackend`. Used to create .png, .bmp, .jpg
     #[default]
-    BMP,
+    Bitmap,
     /// `SVGBackend`. Used to create .svg
     SVG,
     /// Buffered Backend. Used to buffer the image data into an image buffer.
@@ -1699,9 +1694,9 @@ impl Default for PlotParameters {
         //iterate over all enum variants and provide a default value for the argument of that variant
         for plt_arg in PlotArgs::iter() {
             match plt_arg {
-                PlotArgs::Backend(_) => {
-                    plt_params.set(&PlotArgs::Backend(PltBackEnd::BMP)).unwrap()
-                }
+                PlotArgs::Backend(_) => plt_params
+                    .set(&PlotArgs::Backend(PltBackEnd::Bitmap))
+                    .unwrap(),
                 PlotArgs::XLabel(_) => plt_params.set(&PlotArgs::XLabel("x".into())).unwrap(),
                 PlotArgs::XLabelPos(_) => plt_params
                     .set(&PlotArgs::XLabelPos(LabelPos::Bottom))
@@ -2171,7 +2166,7 @@ impl PlotParameters {
         let path_fname = self.get_fname()?;
 
         match backend {
-            PltBackEnd::BMP => {
+            PltBackEnd::Bitmap => {
                 if std::path::Path::new(&path_fname)
                     .extension()
                     .map_or(false, |ext| ext.eq_ignore_ascii_case("png"))
@@ -2865,7 +2860,7 @@ mod test {
     #[test]
     fn default_plot_params() {
         let plt_params = PlotParameters::default();
-        assert_eq!(plt_params.get_backend().unwrap(), PltBackEnd::BMP);
+        assert_eq!(plt_params.get_backend().unwrap(), PltBackEnd::Bitmap);
         assert_eq!(plt_params.get_x_label().unwrap(), "x".to_owned());
         assert_eq!(plt_params.get_x_label_pos().unwrap(), LabelPos::Bottom);
         assert_eq!(plt_params.get_y_label().unwrap(), "y".to_owned());

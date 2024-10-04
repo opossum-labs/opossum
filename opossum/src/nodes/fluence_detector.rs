@@ -10,16 +10,17 @@ use crate::{
     analyzable::Analyzable,
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
+    light_result::{LightRays, LightResult},
     lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
+    rays::Rays,
     reporter::NodeReport,
     surface::{OpticalSurface, Plane},
 };
@@ -47,7 +48,7 @@ pub type Fluence = uom::si::f64::RadiantExposure;
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 #[derive(Clone, Debug)]
 pub struct FluenceDetector {
-    light_data: Option<LightData>,
+    light_data: Option<Rays>,
     node_attr: NodeAttr,
     apodization_warning: bool,
 }
@@ -79,25 +80,28 @@ impl FluenceDetector {
 }
 impl OpticNode for FluenceDetector {
     fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
-        if let Some(LightData::Geometric(rays)) = &self.light_data {
-            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                "fluence_{}_{}.png",
-                self.name(),
-                uuid
-            )));
-            let _ = rays.calc_fluence_at_position().map_or_else(
-                |_| {
-                    warn!("Fluence Detector diagram: no fluence data for export available",);
-                    Ok(None)
-                },
-                |fluence_data| fluence_data.to_plot(&file_path, PltBackEnd::BMP),
-            );
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "Fluence detector: no light data for export available".into(),
-            ))
-        }
+        self.light_data.as_ref().map_or_else(
+            || {
+                Err(OpossumError::Other(
+                    "Fluence detector: no light data for export available".into(),
+                ))
+            },
+            |rays| {
+                let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+                    "fluence_{}_{}.png",
+                    self.name(),
+                    uuid
+                )));
+                let _ = rays.calc_fluence_at_position().map_or_else(
+                    |_| {
+                        warn!("Fluence Detector diagram: no fluence data for export available",);
+                        Ok(None)
+                    },
+                    |fluence_data| fluence_data.to_plot(&file_path, PltBackEnd::Bitmap),
+                );
+                Ok(())
+            },
+        )
     }
     fn is_detector(&self) -> bool {
         true
@@ -105,7 +109,7 @@ impl OpticNode for FluenceDetector {
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
-        if let Some(LightData::Geometric(rays)) = data {
+        if let Some(rays) = data {
             let fluence_data_res = rays.calc_fluence_at_position();
             if let Ok(fluence_data) = fluence_data_res {
                 props
@@ -170,7 +174,42 @@ impl Dottable for FluenceDetector {
     }
 }
 impl Analyzable for FluenceDetector {}
-impl AnalysisGhostFocus for FluenceDetector {}
+impl AnalysisGhostFocus for FluenceDetector {
+    fn analyze(
+        &mut self,
+        incoming_data: LightRays,
+        _config: &GhostFocusConfig,
+    ) -> OpmResult<LightRays> {
+        let (in_port, out_port) = if self.inverted() {
+            ("out1", "in1")
+        } else {
+            ("in1", "out1")
+        };
+        let Some(bouncing_rays) = incoming_data.get(in_port) else {
+            return Ok(LightRays::default());
+        };
+        let mut rays = bouncing_rays.clone();
+        if let Some(iso) = self.effective_iso() {
+            let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+            rays.refract_on_surface(&mut plane, None)?;
+        } else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined. Aborting".into(),
+            ));
+        }
+        // merge all rays
+        let mut ray_cache = self
+            .light_data
+            .clone()
+            .map_or_else(Rays::default, |rays| rays);
+        ray_cache.merge(&rays);
+        self.light_data = Some(ray_cache);
+
+        let mut out_light_rays = LightRays::default();
+        out_light_rays.insert(out_port.to_string(), rays.clone());
+        Ok(out_light_rays)
+    }
+}
 impl AnalysisEnergy for FluenceDetector {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let (inport, outport) = if self.inverted() {
@@ -181,7 +220,7 @@ impl AnalysisEnergy for FluenceDetector {
         let Some(data) = incoming_data.get(inport) else {
             return Ok(LightResult::default());
         };
-        self.light_data = Some(data.clone());
+        // self.light_data = Some(data.clone());
         Ok(LightResult::from([(outport.into(), data.clone())]))
     }
 }
@@ -202,8 +241,8 @@ impl AnalysisRayTrace for FluenceDetector {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                rays.refract_on_surface(&plane, None)?;
+                let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                rays.refract_on_surface(&mut plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
@@ -219,7 +258,7 @@ impl AnalysisRayTrace for FluenceDetector {
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
-            self.light_data = Some(LightData::Geometric(rays.clone()));
+            self.light_data = Some(rays.clone());
             if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
                 rays.apodize(aperture)?;
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -472,17 +511,17 @@ mod test {
     fn export_data() {
         let mut fd = FluenceDetector::default();
         assert!(fd.export_data(Path::new(""), "").is_err());
-        fd.light_data = Some(LightData::Geometric(Rays::default()));
+        fd.light_data = Some(Rays::default());
         let path = NamedTempFile::new().unwrap();
         assert!(fd.export_data(path.path().parent().unwrap(), "").is_ok());
-        fd.light_data = Some(LightData::Geometric(
+        fd.light_data = Some(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
                 joule!(1.0),
                 &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
-        ));
+        );
         assert!(fd.export_data(path.path().parent().unwrap(), "").is_ok());
     }
     #[test]
@@ -494,17 +533,17 @@ mod test {
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
-        fd.light_data = Some(LightData::Geometric(Rays::default()));
+        fd.light_data = Some(Rays::default());
         let node_report = fd.report("123").unwrap();
         assert!(!node_report.properties().contains("Fluence"));
-        fd.light_data = Some(LightData::Geometric(
+        fd.light_data = Some(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
                 joule!(1.0),
                 &Hexapolar::new(millimeter!(1.), 1).unwrap(),
             )
             .unwrap(),
-        ));
+        );
         let node_report = fd.report("123").unwrap();
         assert!(node_report.properties().contains("Fluence"));
         let node_props = node_report.properties();

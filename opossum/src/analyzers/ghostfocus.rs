@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::OpmResult,
-    light_result::{LightBouncingRays, LightResult},
+    light_result::{LightRays, LightResult},
     nodes::NodeGroup,
     optic_node::OpticNode,
 };
@@ -22,6 +22,10 @@ impl GhostFocusConfig {
     #[must_use]
     pub const fn max_bounces(&self) -> usize {
         self.max_bounces
+    }
+    /// Sets the maximum number of ray bounces to be considered during ghost focus analysis.
+    pub fn set_max_bounces(&mut self, max_bounces: usize) {
+        self.max_bounces = max_bounces;
     }
 }
 impl Default for GhostFocusConfig {
@@ -59,8 +63,11 @@ impl Analyzer for GhostFocusAnalyzer {
             LightResult::default(),
             &RayTraceConfig::default(),
         )?;
-        info!("Performing ghost focus analysis of scenery{scenery_name}.");
-        AnalysisGhostFocus::analyze(scenery, LightBouncingRays::default(), &self.config)?;
+        info!(
+            "Performing ghost focus analysis of scenery{scenery_name} up to {} ray bounces.",
+            self.config.max_bounces
+        );
+        AnalysisGhostFocus::analyze(scenery, LightRays::default(), &self.config)?;
         Ok(())
     }
 }
@@ -70,20 +77,20 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     /// Perform a ghost focus analysis of an [`OpticNode`].
     ///
     /// This function is similar to the corresponding [`AnalysisRayTrace`] function but also
-    /// returns possible reflected [`Rays`](crate::rays::Rays) as the second component of the return tuple.  
+    /// considers possible reflected [`Rays`](crate::rays::Rays).
     ///
     /// # Errors
     ///
     /// This function will return an error if .
     fn analyze(
         &mut self,
-        _incoming_data: LightBouncingRays,
+        _incoming_data: LightRays,
         _config: &GhostFocusConfig,
-    ) -> OpmResult<LightBouncingRays> {
+    ) -> OpmResult<LightRays> {
         warn!(
             "{}: No ghost focus analysis function defined.",
             self.node_type()
         );
-        Ok(LightBouncingRays::default())
+        Ok(LightRays::default())
     }
 }

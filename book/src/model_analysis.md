@@ -1,6 +1,6 @@
 # Model analysis
 
-Once a model is set up by defining the nodes, assigning specific node parameters, and connecting the nodes with edges, the model is ready to be analyzed / simulated. As already discussed in the introduction, the model could be analyzed in very different ways. One might simulate the system using geometric optics. A very simple analysis might only calculate the power / energy flow through the network. Another analysis would be a full-size Fourier optics propagation. In addition, a 3D raytracing procedure could give insight into illumination or straylight scenarios. 
+Once a model is set up by defining the nodes, assigning specific node parameters, and connecting the nodes with edges, the model is ready to be analyzed / simulated. As already discussed in the introduction, the model could be analyzed in very different ways. One might simulate the system using geometric optics. A very simple analysis might only calculate the power / energy flow through the network. Another analysis would be a full-size Fourier optics propagation. In addition, a 3D raytracing procedure could give insight into illumination or straylight scenarios.
 
 Besides this "direct" simulation of the model, it is possible to simply export the model into a given format suitable for external simulation software (e.g. ZEMAX or GLAD).
 

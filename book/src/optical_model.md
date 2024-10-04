@@ -24,7 +24,7 @@ One way out might be the introduction of *reference nodes*. A referenece node, a
 
 ## Intermediate data format
 
-While being not yet clear at this stage how to fully describe an optical system using the described graph system we would propose to use simple text files for storing optical models. For this the YAML format seems to be appropriate since it is more or less human readable and allows for comments (in contrast to the JSON format). Furthermore, the standard rust serialization library `serde` already supports this format. As the software progresses, new features will be added or changed. For this, a version system should be considered stright from the beginning. 
+While being not yet clear at this stage how to fully describe an optical system using the described graph system we would propose to use simple text files for storing optical models. For this the YAML format seems to be appropriate since it is more or less human readable and allows for comments (in contrast to the JSON format). Furthermore, the standard rust serialization library `serde` already supports this format. As the software progresses, new features will be added or changed. For this, a version system should be considered stright from the beginning.
 
 A graphical representation could be the usage of the [graphviz software](https://graphviz.org/) package. While the proposed rust graph library `petgraph` already provides some basic export to the graphviz [.dot files](https://graphviz.org/doc/info/lang.html) this needs to be extended.
 
