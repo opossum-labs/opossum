@@ -194,9 +194,6 @@ impl OpticNode for WaveFront {
         }
         Ok(())
     }
-    fn is_detector(&self) -> bool {
-        true
-    }
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
@@ -461,7 +458,6 @@ mod test {
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "wavefront monitor");
         assert_eq!(node.node_type(), "wavefront monitor");
-        assert_eq!(node.is_detector(), true);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "goldenrod1");
         assert!(node.as_group().is_err());

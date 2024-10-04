@@ -437,7 +437,6 @@ mod test {
         let mut node = Lens::default();
         assert_eq!(node.name(), "lens");
         assert_eq!(node.node_type(), "lens");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "aqua");
         assert!(node.as_group().is_err());

@@ -167,9 +167,6 @@ impl OpticNode for Spectrometer {
             ))
         }
     }
-    fn is_detector(&self) -> bool {
-        true
-    }
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
@@ -393,7 +390,6 @@ mod test {
         assert_eq!(node.spectrometer_type(), SpectrometerType::Ideal);
         assert_eq!(node.name(), "spectrometer");
         assert_eq!(node.node_type(), "spectrometer");
-        assert_eq!(node.is_detector(), true);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightseagreen");
         assert!(node.as_group().is_err());

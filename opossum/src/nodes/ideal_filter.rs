@@ -279,7 +279,6 @@ mod test {
         assert_eq!(node.filter_type(), FilterType::Constant(1.0));
         assert_eq!(node.name(), "ideal filter");
         assert_eq!(node.node_type(), "ideal filter");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkgray");
         assert!(node.as_group().is_err());

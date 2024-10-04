@@ -269,7 +269,6 @@ mod test {
         let node = ReflectiveGrating::default();
         assert_eq!(node.name(), "reflective grating");
         assert_eq!(node.node_type(), "reflective grating");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.node_color(), "cornsilk");
         assert_eq!(node.inverted(), false);
         if let Ok(Proptype::I32(order)) = node.properties().get("diffraction order") {

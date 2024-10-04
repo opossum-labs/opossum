@@ -119,9 +119,6 @@ impl OpticNode for RayPropagationVisualizer {
         }
         Ok(())
     }
-    fn is_detector(&self) -> bool {
-        true
-    }
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
@@ -516,7 +513,6 @@ mod test {
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "ray propagation");
         assert_eq!(node.node_type(), "ray propagation");
-        assert_eq!(node.is_detector(), true);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkgreen");
         assert!(node.as_group().is_err());

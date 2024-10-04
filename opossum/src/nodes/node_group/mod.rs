@@ -323,11 +323,6 @@ impl NodeGroup {
     pub fn toplevel_report(&self) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
         analysis_report.add_scenery(self);
-        // let detector_nodes = self
-        //     .graph
-        //     .nodes()
-        //     .into_iter()
-        //     .filter(|node| node.optical_ref.borrow().is_detector());
         for node in self.graph.nodes() {
             //detector_nodes {
             let node_name = &node.optical_ref.borrow().name();
@@ -413,12 +408,7 @@ impl OpticNode for NodeGroup {
     }
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut group_props = Properties::default();
-        for node in self
-            .graph
-            .nodes()
-            .into_iter()
-            .filter(|node| node.optical_ref.borrow().is_detector())
-        {
+        for node in self.graph.nodes().into_iter() {
             let sub_uuid = node.uuid().as_simple().to_string();
             if let Some(node_report) = node.optical_ref.borrow().report(&sub_uuid) {
                 let node_name = &node.optical_ref.borrow().name();
@@ -436,9 +426,6 @@ impl OpticNode for NodeGroup {
             uuid,
             group_props,
         ))
-    }
-    fn is_detector(&self) -> bool {
-        self.graph.contains_detector()
     }
     fn export_data(&self, report_dir: &Path, _uuid: &str) -> OpmResult<()> {
         for node in self.graph.nodes() {
@@ -548,13 +535,6 @@ mod test {
     fn new() {
         let node = NodeGroup::new("test");
         assert_eq!(node.name(), "test");
-    }
-    #[test]
-    fn is_detector() {
-        let mut node = NodeGroup::default();
-        assert_eq!(node.is_detector(), false);
-        node.add_node(Detector::default()).unwrap();
-        assert_eq!(node.is_detector(), true);
     }
     #[test]
     fn inverted() {

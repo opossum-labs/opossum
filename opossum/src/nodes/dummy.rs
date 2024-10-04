@@ -155,7 +155,6 @@ mod test {
         let mut node = Dummy::default();
         assert_eq!(node.name(), "dummy");
         assert_eq!(node.node_type(), "dummy");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.inverted(), false);
         assert!(node.as_group().is_err());
     }
@@ -200,11 +199,6 @@ mod test {
         node.set_inverted(true).unwrap();
         assert_eq!(node.ports().names(&PortType::Input), vec!["rear"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["front"]);
-    }
-    #[test]
-    fn is_detector() {
-        let node = Dummy::default();
-        assert_eq!(node.is_detector(), false);
     }
     #[test]
     fn analyze_empty() {

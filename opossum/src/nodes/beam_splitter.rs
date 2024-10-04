@@ -424,7 +424,6 @@ mod test {
         assert!(matches!(node.splitting_config(), SplittingConfig::Ratio(_)));
         assert_eq!(node.name(), "beam splitter");
         assert_eq!(node.node_type(), "beam splitter");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightpink");
         assert!(node.as_group().is_err());

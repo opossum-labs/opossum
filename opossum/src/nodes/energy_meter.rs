@@ -131,9 +131,6 @@ impl EnergyMeter {
     }
 }
 impl OpticNode for EnergyMeter {
-    fn is_detector(&self) -> bool {
-        true
-    }
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut energy: Option<Energy> = None;
         if let Some(light_data) = &self.light_data {
@@ -284,7 +281,6 @@ mod test {
         assert_eq!(node.meter_type(), Metertype::IdealEnergyMeter);
         assert_eq!(node.name(), "energy meter");
         assert_eq!(node.node_type(), "energy meter");
-        assert_eq!(node.is_detector(), true);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "whitesmoke");
         assert!(node.as_group().is_err());

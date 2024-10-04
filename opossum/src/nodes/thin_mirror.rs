@@ -222,7 +222,6 @@ mod test {
         let node = ThinMirror::default();
         assert_eq!(node.name(), "mirror");
         assert_eq!(node.node_type(), "mirror");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.node_color(), "aliceblue");
         assert_eq!(node.inverted(), false);
         if let Ok(Proptype::Length(r)) = node.properties().get("curvature") {

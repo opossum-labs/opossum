@@ -69,9 +69,6 @@ impl Detector {
     }
 }
 impl OpticNode for Detector {
-    fn is_detector(&self) -> bool {
-        true
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -173,7 +170,6 @@ mod test {
         let mut node = Detector::default();
         assert_eq!(node.name(), "detector");
         assert_eq!(node.node_type(), "detector");
-        assert_eq!(node.is_detector(), true);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lemonchiffon");
         assert!(node.as_group().is_err());

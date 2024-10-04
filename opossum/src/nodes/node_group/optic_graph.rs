@@ -420,14 +420,6 @@ impl OpticGraph {
         } // revert initial inversion (if necessary)
         Ok(light_result)
     }
-
-    /// Returns `true` if the [`OpticGraph`] contains a detector node.
-    #[must_use]
-    pub fn contains_detector(&self) -> bool {
-        self.g
-            .node_weights()
-            .any(|node| node.optical_ref.borrow().is_detector())
-    }
     /// Returns the is single tree of this [`OpticGraph`].
     #[must_use]
     pub fn is_single_tree(&self) -> bool {

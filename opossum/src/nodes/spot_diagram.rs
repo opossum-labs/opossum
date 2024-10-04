@@ -121,9 +121,6 @@ impl OpticNode for SpotDiagram {
         map.insert("in1".to_string(), HitMap::default());
         map
     }
-    fn is_detector(&self) -> bool {
-        true
-    }
     fn report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
@@ -489,7 +486,6 @@ mod test {
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "spot diagram");
         assert_eq!(node.node_type(), "spot diagram");
-        assert_eq!(node.is_detector(), true);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkorange");
         assert!(node.as_group().is_err());

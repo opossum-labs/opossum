@@ -341,7 +341,6 @@ mod test {
         let mut node = CylindricLens::default();
         assert_eq!(node.name(), "cylindric lens");
         assert_eq!(node.node_type(), "cylindric lens");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "aqua");
         assert!(node.as_group().is_err());

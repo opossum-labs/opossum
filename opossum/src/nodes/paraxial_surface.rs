@@ -187,7 +187,6 @@ mod test {
         let mut node = ParaxialSurface::default();
         assert_eq!(node.name(), "paraxial surface");
         assert_eq!(node.node_type(), "paraxial surface");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.inverted(), false);
         assert!(node.properties().get("focal length").is_ok());
         assert_matches!(

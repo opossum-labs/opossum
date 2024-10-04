@@ -282,7 +282,6 @@ mod test {
         let node = Wedge::default();
         assert_eq!(node.name(), "wedge");
         assert_eq!(node.node_type(), "wedge");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.node_color(), "aquamarine");
         assert_eq!(node.inverted(), false);
         if let Ok(Proptype::Length(p)) = node.properties().get("center thickness") {

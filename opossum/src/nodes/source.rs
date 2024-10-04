@@ -329,7 +329,6 @@ mod test {
         } else {
             panic!("cannot unpack light data property");
         };
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.node_color(), "slateblue");
         assert!(node.as_group().is_err());

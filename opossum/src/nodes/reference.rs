@@ -187,7 +187,6 @@ mod test {
         assert!(node.reference.is_none());
         assert_eq!(node.name(), "reference");
         assert_eq!(node.node_type(), "reference");
-        assert_eq!(node.is_detector(), false);
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightsalmon3");
         assert!(node.as_group().is_err());

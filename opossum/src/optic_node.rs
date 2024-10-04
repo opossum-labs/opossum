@@ -117,10 +117,6 @@ pub trait OpticNode: Dottable {
     fn export_data(&self, _data_dir: &Path, _uuid: &str) -> OpmResult<()> {
         Ok(())
     }
-    /// Returns `true` if the [`OpticNode`] represents a detector that can report analysis data.
-    fn is_detector(&self) -> bool {
-        false
-    }
     /// Return a downcasted reference of a [`NodeGroup`].
     ///
     /// # Errors
