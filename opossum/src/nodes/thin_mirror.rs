@@ -174,7 +174,7 @@ impl AnalysisRayTrace for ThinMirror {
                         .unwrap()
                         .clone(),
                 );
-                let mut reflected_rays = rays.refract_on_surface(&surface, None)?;
+                let mut reflected_rays = rays.refract_on_surface(&mut surface, None)?;
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, "input") {
                     reflected_rays.apodize(aperture)?;
                     //if let AnalyzerType::RayTrace(config) = analyzer_type {

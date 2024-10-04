@@ -2,41 +2,42 @@ use super::NodeGroup;
 use crate::{
     analyzers::{ghostfocus::AnalysisGhostFocus, GhostFocusConfig},
     error::{OpmResult, OpossumError},
-    light_result::{
-        light_bouncing_rays_to_light_rays, light_bouncing_rays_to_light_result,
-        light_rays_to_light_bouncing_rays, light_rays_to_light_result, light_result_to_light_rays,
-        LightBouncingRays, LightResult,
-    },
+    light_result::{light_rays_to_light_result, light_result_to_light_rays, LightRays},
     lightdata::LightData,
+    optic_node::OpticNode,
     optic_ports::PortType,
 };
 use log::{info, warn};
 
-fn filter_ray_limits(light_result: &mut LightResult, config: &GhostFocusConfig) {
-    for lr in light_result {
-        if let LightData::Geometric(rays) = lr.1 {
-            rays.filter_by_nr_of_bounces(config.max_bounces());
-        }
+fn filter_ray_limits(light_rays: &mut LightRays, config: &GhostFocusConfig) {
+    for lr in light_rays {
+        lr.1.filter_by_nr_of_bounces(config.max_bounces() + 1);
     }
 }
 impl AnalysisGhostFocus for NodeGroup {
     fn analyze(
         &mut self,
-        incoming_data: LightBouncingRays,
+        incoming_data: LightRays,
         config: &GhostFocusConfig,
-    ) -> OpmResult<LightBouncingRays> {
-        for bounce in 0..config.max_bounces() {
-            info!("Analyzing bounce {bounce}...");
-            let incoming_data = light_bouncing_rays_to_light_rays(incoming_data.clone(), bounce)?;
-            if self.graph.is_inverted() {
+    ) -> OpmResult<LightRays> {
+        let mut current_bouncing_rays = incoming_data;
+        let mut group_inversion = self.inverted();
+        for pass in 0..=config.max_bounces() {
+            let direction = if group_inversion {
+                "backward"
+            } else {
+                "forward"
+            };
+            info!("Analyzing pass {pass} ({direction}) ...");
+            if group_inversion {
                 self.graph.invert_graph()?;
             }
+            let current_bounce_data = current_bouncing_rays.clone();
             let g_clone = self.clone();
             if !self.graph.is_single_tree() {
                 warn!("group contains unconnected sub-trees. Analysis might not be complete.");
             }
             let sorted = self.graph.topologically_sorted()?;
-            //let mut light_result = incoming_data.clone();
             for idx in sorted {
                 let node = g_clone.graph.node_by_idx(idx)?.optical_ref;
                 if self.graph.is_stale_node(idx) {
@@ -45,28 +46,25 @@ impl AnalysisGhostFocus for NodeGroup {
                         node.borrow()
                     );
                 } else {
-                    let incoming_edges = self
-                        .graph
-                        .get_incoming(idx, &light_rays_to_light_result(incoming_data.clone()));
+                    let incoming_edges = self.graph.get_incoming(
+                        idx,
+                        &light_rays_to_light_result(current_bounce_data.clone()),
+                    );
                     let node_name = format!("{}", node.borrow());
-                    //
-                    // temporary only
-                    //
-                    let outgoing_edges = AnalysisGhostFocus::analyze(
+
+                    let mut outgoing_edges = AnalysisGhostFocus::analyze(
                         &mut *node.borrow_mut(),
-                        light_rays_to_light_bouncing_rays(light_result_to_light_rays(
-                            incoming_edges,
-                        )?),
+                        light_result_to_light_rays(incoming_edges)?,
                         config,
                     )
                     .map_err(|e| {
                         OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
                     })?;
-                    let mut outgoing_edges = light_bouncing_rays_to_light_result(outgoing_edges)?;
-                    //
-                    //
-                    //
                     filter_ray_limits(&mut outgoing_edges, config);
+
+                    current_bouncing_rays.clone_from(&outgoing_edges);
+                    let outgoing_edges = light_rays_to_light_result(outgoing_edges);
+
                     // If node is sink node, rewrite port names according to output mapping
                     if self.graph.is_output_node(idx) {
                         let portmap = if self.graph.is_inverted() {
@@ -87,10 +85,11 @@ impl AnalysisGhostFocus for NodeGroup {
                     }
                 }
             }
-            if self.graph.is_inverted() {
+            if group_inversion {
                 self.graph.invert_graph()?;
             } // revert initial inversion (if necessary)
+            group_inversion = !group_inversion;
         }
-        Ok(LightBouncingRays::default())
+        Ok(current_bouncing_rays)
     }
 }

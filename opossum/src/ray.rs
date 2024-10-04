@@ -402,7 +402,7 @@ impl Ray {
     /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
     pub fn refract_on_surface(
         &mut self,
-        os: &OpticalSurface,
+        os: &mut OpticalSurface,
         n2: Option<f64>,
     ) -> OpmResult<Option<Self>> {
         let n2 = n2.unwrap_or_else(|| self.refractive_index());
@@ -436,17 +436,20 @@ impl Ray {
             if dis.is_sign_positive() {
                 // handle energy (due to coating)
                 let reflectivity = os.coating().calc_reflectivity(self, surface_normal, n2)?;
-                let input_enery = self.energy();
+                let input_energy = self.energy();
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
                     - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
                 self.dir = refract_dir;
-                self.e = input_enery * (1. - reflectivity);
+                self.e = input_energy * (1. - reflectivity);
                 let mut reflected_ray = self.clone();
                 reflected_ray.dir = reflected_dir;
-                reflected_ray.e = input_enery * reflectivity;
+                reflected_ray.e = input_energy * reflectivity;
                 reflected_ray.number_of_bounces += 1;
                 self.refractive_index = n2;
                 self.number_of_refractions += 1;
+                // save on hit map of surface
+                os.add_to_hit_map((intersection_point, input_energy));
+
                 Ok(Some(reflected_ray))
             } else {
                 self.number_of_bounces += 1;
@@ -983,10 +986,10 @@ mod test {
         .unwrap();
         let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
         s.set_coating(CoatingType::ConstantR { reflectivity });
-        assert!(ray.refract_on_surface(&s, Some(0.9)).is_err());
-        assert!(ray.refract_on_surface(&s, Some(f64::NAN)).is_err());
-        assert!(ray.refract_on_surface(&s, Some(f64::INFINITY)).is_err());
-        let reflected_ray = ray.refract_on_surface(&s, Some(1.5)).unwrap().unwrap();
+        assert!(ray.refract_on_surface(&mut s, Some(0.9)).is_err());
+        assert!(ray.refract_on_surface(&mut s, Some(f64::NAN)).is_err());
+        assert!(ray.refract_on_surface(&mut s, Some(f64::INFINITY)).is_err());
+        let reflected_ray = ray.refract_on_surface(&mut s, Some(1.5)).unwrap().unwrap();
 
         // refracted ray
         assert_eq!(ray.pos, millimeter!(0., 0., 10.));
@@ -1010,7 +1013,7 @@ mod test {
 
         let position = millimeter!(0., 1., 0.);
         let mut ray = Ray::new_collimated(position, wvl, e).unwrap();
-        ray.refract_on_surface(&s, Some(1.5)).unwrap();
+        ray.refract_on_surface(&mut s, Some(1.5)).unwrap();
         assert_eq!(ray.pos, millimeter!(0., 1., 10.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.path_length, plane_z_pos);
@@ -1032,8 +1035,8 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
-        ray.refract_on_surface(&s, None).unwrap();
+        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        ray.refract_on_surface(&mut s, None).unwrap();
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
@@ -1055,8 +1058,8 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
-        ray.refract_on_surface(&s, Some(1.5)).unwrap();
+        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        ray.refract_on_surface(&mut s, Some(1.5)).unwrap();
         assert_eq!(ray.pos, millimeter!(0., 0., 0.));
         assert_eq!(ray.dir, direction);
         assert_eq!(ray.refractive_index, 1.0);
@@ -1077,18 +1080,18 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
-        assert!(ray.refract_on_surface(&s, Some(0.9)).is_err());
-        assert!(ray.refract_on_surface(&s, Some(f64::NAN)).is_err());
-        assert!(ray.refract_on_surface(&s, Some(f64::INFINITY)).is_err());
-        ray.refract_on_surface(&s, Some(1.0)).unwrap();
+        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        assert!(ray.refract_on_surface(&mut s, Some(0.9)).is_err());
+        assert!(ray.refract_on_surface(&mut s, Some(f64::NAN)).is_err());
+        assert!(ray.refract_on_surface(&mut s, Some(f64::INFINITY)).is_err());
+        ray.refract_on_surface(&mut s, Some(1.0)).unwrap();
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
         assert_abs_diff_eq!(ray.dir[2], direction.normalize()[2]);
         assert_abs_diff_eq!(ray.path_length.value, 2.0_f64.sqrt() * plane_z_pos.value);
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        ray.refract_on_surface(&s, Some(1.5)).unwrap();
+        ray.refract_on_surface(&mut s, Some(1.5)).unwrap();
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.number_of_refractions(), 1);
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
@@ -1097,7 +1100,7 @@ mod test {
         assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
         let direction = vector![1.0, 0.0, 1.0];
         let mut ray = Ray::new(position, direction, wvl, e).unwrap();
-        ray.refract_on_surface(&s, Some(1.5)).unwrap();
+        ray.refract_on_surface(&mut s, Some(1.5)).unwrap();
         assert_eq!(ray.pos, millimeter!(10., 0., 10.));
         assert_eq!(ray.dir[0], 0.4714045207910317);
         assert_abs_diff_eq!(ray.dir[1], 0.0);
@@ -1116,8 +1119,8 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
-        let reflected = ray.refract_on_surface(&s, Some(1.0)).unwrap();
+        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let reflected = ray.refract_on_surface(&mut s, Some(1.0)).unwrap();
         assert!(reflected.is_none());
         assert_eq!(ray.pos, millimeter!(0., 20., 10.));
         let test_reflect = vector![0.0, 2.0, -1.0].normalize();

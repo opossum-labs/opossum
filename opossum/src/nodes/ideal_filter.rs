@@ -230,7 +230,7 @@ impl AnalysisRayTrace for IdealFilter {
                     .unwrap()
                     .clone(),
             );
-            rays.refract_on_surface(&plane, None)?;
+            rays.refract_on_surface(&mut plane, None)?;
         } else {
             return Err(OpossumError::Analysis(
                 "no location for surface defined. Aborting".into(),

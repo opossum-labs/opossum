@@ -15,7 +15,7 @@ The following software already exists in the field of optical simulation and sho
 |          |LULI         |                |?                       |                                                            |
 |          |Rochester    |                |?                       |                                                            |
 
-## Commercial / 
+## Commercial
 
 |Software  |Institute |Contact person  |Language                |comment                                        |
 |----------|----------|----------------|------------------------|-----------------------------------------------|

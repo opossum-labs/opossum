@@ -11,6 +11,7 @@ use opossum::analyzers::AnalyzerType;
 #[cfg(feature = "bevy")]
 use opossum::bevy_main;
 use opossum::nodes::NodeGroup;
+use opossum::optic_node::OpticNode;
 use opossum::OpmDocument;
 #[cfg(feature = "bevy")]
 use opossum::SceneryBevyData;
@@ -79,6 +80,7 @@ fn create_report_and_data_files(report_directory: &Path, scenery: &NodeGroup) ->
     let mut report_path = report_directory.to_path_buf();
     report_path.push("report.html");
     analysis_report.generate_html(&report_path)?;
+    scenery.export_data(&data_dir, "")?;
     Ok(())
 }
 
@@ -105,8 +107,8 @@ fn opossum() -> OpmResult<()> {
         for ana in &analyzers {
             let analyzer: &dyn Analyzer = match ana {
                 AnalyzerType::Energy => &EnergyAnalyzer::default(),
-                AnalyzerType::RayTrace(_) => &RayTracingAnalyzer::default(),
-                AnalyzerType::GhostFocus(_) => &GhostFocusAnalyzer::default(),
+                AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
+                AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config.clone()),
                 _ => {
                     return Err(OpossumError::Analysis(
                         "specified analyzer not found".into(),

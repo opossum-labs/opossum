@@ -32,7 +32,7 @@ serde = { version = "1", features = ['rc'] }
 serde_yaml = "0.9"
 
 csv = "1"
-plotters = "0.3.5"
+plotters = "0.3"
 
 approx = "0.5" # assert macros for comparison of floats with tolerance
 clap = { version = "4", features = ["derive", "string"] } # command line argument parser
@@ -49,12 +49,12 @@ image="0.25"
 tempfile="3"
 rand="0.8"
 sobol="1"
-itertools = "0.13.0"
+itertools = "0.13"
 nalgebra = {version = "0.33", features = ["serde-serialize"]}
-colorous = "1.0.12"
+colorous = "1"
 strum_macros = "0.26"
-delaunator = "1.0.2"
-num = "0.4.1"
+delaunator = "1"
+num = "0.4"
 kahan = "0.1"
 log = "0.4"
 env_logger= "0.11"
@@ -68,7 +68,7 @@ tinytemplate = "1"
 bevy={ version="0.14", optional=true }
 bevy_flycam = { version= "0.14", optional =true }
 triangulate = "0.2.0"
-spade = "2.12.0"
+spade = "2.12"
 
 [lints.rust]
 # missing_docs = "warn"

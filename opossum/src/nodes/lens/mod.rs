@@ -1,30 +1,31 @@
 #![warn(missing_docs)]
 //! Lens with spherical or flat surfaces
+use std::collections::HashMap;
+
+use super::node_attr::NodeAttr;
 use crate::{
     analyzable::Analyzable,
-    analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        AnalyzerType, RayTraceConfig,
-    },
+    analyzers::AnalyzerType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    lightdata::LightData,
     millimeter,
     optic_node::{Alignable, OpticNode},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{OpticalSurface, Plane, Sphere},
+    surface::{hit_map::HitMap, OpticalSurface, Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
+use log::warn;
 use num::Zero;
 use uom::si::f64::Length;
 
-use super::node_attr::NodeAttr;
+mod analysis_energy;
+mod analysis_ghostfocus;
+mod analysis_raytrace;
 
 #[derive(Debug)]
 /// A real lens with spherical (or flat) surfaces.
@@ -45,6 +46,8 @@ use super::node_attr::NodeAttr;
 ///   - `refractive index`
 pub struct Lens {
     node_attr: NodeAttr,
+    front_surf: OpticalSurface,
+    rear_surf: OpticalSurface,
 }
 
 impl Default for Lens {
@@ -92,7 +95,15 @@ impl Default for Lens {
         ports.add(&PortType::Input, "front").unwrap();
         ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
-        Self { node_attr }
+        Self {
+            node_attr,
+            front_surf: OpticalSurface::new(Box::new(
+                Sphere::new(millimeter!(500.0), &Isometry::identity()).unwrap(),
+            )),
+            rear_surf: OpticalSurface::new(Box::new(
+                Sphere::new(millimeter!(-500.0), &Isometry::identity()).unwrap(),
+            )),
+        }
     }
 }
 impl Lens {
@@ -144,18 +155,27 @@ impl Lens {
             }
             .into(),
         )?;
-
-        // if let Some(radius) = Self::get_minimum_logical_aperture_radius(
-        //     front_curvature,
-        //     rear_curvature,
-        //     center_thickness,
-        // ) {
-        //     let circle = CircleConfig::new(radius, millimeter!(0., 0.))?;
-        //     lens.set_aperture(&PortType::Input, "front", &Aperture::BinaryCircle(circle.clone()))?;
-        //     lens.set_aperture(&PortType::Output, "rear", &Aperture::BinaryCircle(circle))?;
-        // };
-
+        lens.update_surfaces()?;
         Ok(lens)
+    }
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        let Ok(Proptype::Length(front_roc)) = self.node_attr.get_property("front curvature") else {
+            return Err(OpossumError::Analysis("cannot read front curvature".into()));
+        };
+        self.front_surf = if front_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())))
+        } else {
+            OpticalSurface::new(Box::new(Sphere::new(*front_roc, &Isometry::identity())?))
+        };
+        let Ok(Proptype::Length(rear_roc)) = self.node_attr.get_property("rear curvature") else {
+            return Err(OpossumError::Analysis("cannot read rear curvature".into()));
+        };
+        self.rear_surf = if rear_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())))
+        } else {
+            OpticalSurface::new(Box::new(Sphere::new(*rear_roc, &Isometry::identity())?))
+        };
+        Ok(())
     }
     /// create a default aperture: defined by
     ///  - intersection of two spheres
@@ -243,24 +263,18 @@ impl Lens {
             Some(rear_curvature.abs())
         }
     }
-    #[allow(clippy::too_many_arguments)]
     fn analyze_forward(
-        &self,
+        &mut self,
         incoming_rays: Rays,
-        front_roc: Length,
         thickness: Length,
-        rear_roc: Length,
         refri: &RefractiveIndexType,
         iso: &Isometry,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<Rays> {
+        let ambient_idx = self.ambient_idx();
         let mut rays = incoming_rays;
-        let mut front_surf = if front_roc.is_infinite() {
-            OpticalSurface::new(Box::new(Plane::new(iso)))
-        } else {
-            OpticalSurface::new(Box::new(Sphere::new(front_roc, iso)?))
-        };
-        front_surf.set_coating(
+        self.front_surf.set_isometry(iso);
+        self.front_surf.set_coating(
             self.node_attr()
                 .ports()
                 .coating(&PortType::Input, "front")
@@ -269,12 +283,8 @@ impl Lens {
         );
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
-        let mut rear_surf = if rear_roc.is_infinite() {
-            OpticalSurface::new(Box::new(Plane::new(&isometry)))
-        } else {
-            OpticalSurface::new(Box::new(Sphere::new(rear_roc, &isometry)?))
-        };
-        rear_surf.set_coating(
+        self.rear_surf.set_isometry(&isometry);
+        self.rear_surf.set_coating(
             self.node_attr()
                 .ports()
                 .coating(&PortType::Output, "rear")
@@ -289,9 +299,13 @@ impl Lens {
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
         };
-        rays.refract_on_surface(&front_surf, Some(refri))?;
+        let reflected_front = rays.refract_on_surface(&mut self.front_surf, Some(refri))?;
+        self.front_surf.set_backwards_rays_cache(reflected_front);
+        rays.merge(self.front_surf.forward_rays_cache());
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&rear_surf, Some(&self.ambient_idx()))?;
+        let reflected_rear = rays.refract_on_surface(&mut self.rear_surf, Some(&ambient_idx))?;
+        self.rear_surf.set_backwards_rays_cache(reflected_rear);
+        rays.merge(self.rear_surf.forward_rays_cache());
         if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -302,25 +316,18 @@ impl Lens {
         };
         Ok(rays)
     }
-    #[allow(clippy::too_many_arguments)]
     fn analyze_inverse(
-        &self,
+        &mut self,
         incoming_rays: Rays,
-        front_roc: Length,
         thickness: Length,
-        rear_roc: Length,
         refri: &RefractiveIndexType,
         iso: &Isometry,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<Rays> {
+        let ambient_idx = self.ambient_idx();
         let mut rays = incoming_rays;
-
-        let mut front_surf = if front_roc.is_infinite() {
-            OpticalSurface::new(Box::new(Plane::new(iso)))
-        } else {
-            OpticalSurface::new(Box::new(Sphere::new(front_roc, iso)?))
-        };
-        front_surf.set_coating(
+        self.front_surf.set_isometry(iso);
+        self.front_surf.set_coating(
             self.node_attr()
                 .ports()
                 .coating(&PortType::Input, "front")
@@ -329,19 +336,15 @@ impl Lens {
         );
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let isometry = iso.append(&thickness_iso);
-        let mut rear_surf = if rear_roc.is_infinite() {
-            OpticalSurface::new(Box::new(Plane::new(&isometry)))
-        } else {
-            OpticalSurface::new(Box::new(Sphere::new(rear_roc, &isometry)?))
-        };
-        rear_surf.set_coating(
+        self.rear_surf.set_isometry(&isometry);
+        self.rear_surf.set_coating(
             self.node_attr()
                 .ports()
                 .coating(&PortType::Output, "rear")
                 .unwrap()
                 .clone(),
         );
-        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, "front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -349,10 +352,15 @@ impl Lens {
         } else {
             return Err(OpossumError::OpticPort("output aperture not found".into()));
         };
-        rays.refract_on_surface(&rear_surf, Some(refri))?;
+        let reflected_rear = rays.refract_on_surface(&mut self.rear_surf, Some(refri))?;
+        self.rear_surf.set_forward_rays_cache(reflected_rear);
+        rays.merge(self.rear_surf.backwards_rays_cache());
         rays.set_refractive_index(refri)?;
-        rays.refract_on_surface(&front_surf, Some(&self.ambient_idx()))?;
-        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
+        let reflected_front = rays.refract_on_surface(&mut self.front_surf, Some(&ambient_idx))?;
+        self.front_surf.set_forward_rays_cache(reflected_front);
+        rays.merge(self.front_surf.backwards_rays_cache());
+
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -365,14 +373,29 @@ impl Lens {
 }
 
 impl OpticNode for Lens {
+    fn reset_data(&mut self) {
+        self.front_surf.set_backwards_rays_cache(Rays::default());
+        self.front_surf.set_forward_rays_cache(Rays::default());
+
+        self.rear_surf.set_backwards_rays_cache(Rays::default());
+        self.rear_surf.set_forward_rays_cache(Rays::default());
+    }
+    fn hit_maps(&self) -> HashMap<String, HitMap> {
+        let mut map: HashMap<String, HitMap> = HashMap::default();
+        map.insert("front".to_string(), self.front_surf.hit_map().to_owned());
+        map.insert("rear".to_string(), self.rear_surf.hit_map().to_owned());
+        map
+    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    fn after_deserialization_hook(&mut self) -> OpmResult<()> {
+        self.update_surfaces()
+    }
 }
-
 // impl SDF for Lens
 // {
 //     fn sdf_eval_point(&self, p: &nalgebra::Point3<f64>, p_out: &mut nalgebra::Point3<f64>) -> f64 {
@@ -382,94 +405,11 @@ impl OpticNode for Lens {
 //     }
 // }
 impl Alignable for Lens {}
+impl Analyzable for Lens {}
 
 impl Dottable for Lens {
     fn node_color(&self) -> &str {
         "aqua"
-    }
-}
-impl Analyzable for Lens {}
-impl AnalysisGhostFocus for Lens {}
-impl AnalysisEnergy for Lens {
-    fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
-        let Some(data) = incoming_data.get(inport) else {
-            return Ok(LightResult::default());
-        };
-        Ok(LightResult::from([(outport.into(), data.clone())]))
-    }
-}
-impl AnalysisRayTrace for Lens {
-    fn analyze(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        let (in_port, out_port) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
-        let Some(data) = incoming_data.get(in_port) else {
-            return Ok(LightResult::default());
-        };
-        let LightData::Geometric(rays) = data.clone() else {
-            return Err(OpossumError::Analysis(
-                "expected ray data at input port".into(),
-            ));
-        };
-        let Some(eff_iso) = self.effective_iso() else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined".into(),
-            ));
-        };
-        let Ok(Proptype::Length(front_roc)) = self.node_attr.get_property("front curvature") else {
-            return Err(OpossumError::Analysis("cannot read front curvature".into()));
-        };
-        let Ok(Proptype::RefractiveIndex(index_model)) =
-            self.node_attr.get_property("refractive index")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read refractive index".into(),
-            ));
-        };
-        let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-        let Ok(Proptype::Length(rear_roc)) = self.node_attr.get_property("rear curvature") else {
-            return Err(OpossumError::Analysis("cannot read rear curvature".into()));
-        };
-        let output = if self.inverted() {
-            self.analyze_inverse(
-                rays,
-                *front_roc,
-                *center_thickness,
-                *rear_roc,
-                &index_model.value,
-                &eff_iso,
-                &AnalyzerType::RayTrace(config.clone()),
-            )?
-        } else {
-            self.analyze_forward(
-                rays,
-                *front_roc,
-                *center_thickness,
-                *rear_roc,
-                &index_model.value,
-                &eff_iso,
-                &AnalyzerType::RayTrace(config.clone()),
-            )?
-        };
-        let light_result = LightResult::from([(out_port.into(), LightData::Geometric(output))]);
-        Ok(light_result)
     }
 }
 
@@ -477,13 +417,21 @@ impl AnalysisRayTrace for Lens {
 mod test {
     use super::*;
     use crate::{
-        analyzers::RayTraceConfig, aperture::Aperture, joule, lightdata::LightData, millimeter,
-        nanometer, nodes::test_helper::test_helper::*, position_distributions::Hexapolar,
-        properties::Proptype, rays::Rays,
+        analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
+        aperture::Aperture,
+        joule,
+        light_result::LightResult,
+        lightdata::LightData,
+        millimeter, nanometer,
+        nodes::test_helper::test_helper::*,
+        position_distributions::Hexapolar,
+        properties::Proptype,
+        rays::Rays,
     };
     use approx::assert_relative_eq;
     use core::f64;
     use nalgebra::Vector3;
+
     #[test]
     fn default() {
         let mut node = Lens::default();

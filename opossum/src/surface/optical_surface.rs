@@ -1,13 +1,30 @@
-use super::GeoSurface;
-use crate::coatings::CoatingType;
+use nalgebra::Point3;
+use uom::si::f64::{Energy, Length};
+
+use super::{hit_map::HitMap, GeoSurface};
+use crate::{coatings::CoatingType, rays::Rays, utils::geom_transformation::Isometry};
 
 /// This struct represents an optical surface, which consists of the geometric surface shape ([`GeoSurface`]) and further
 /// properties such as the [`CoatingType`].
+#[derive(Debug)]
 pub struct OpticalSurface {
     geo_surface: Box<dyn GeoSurface>,
     coating: CoatingType,
+    backward_rays_cache: Rays,
+    forward_rays_cache: Rays,
+    hit_map: HitMap,
 }
-
+impl Clone for OpticalSurface {
+    fn clone(&self) -> Self {
+        Self {
+            geo_surface: self.geo_surface.box_clone(),
+            coating: self.coating.clone(),
+            backward_rays_cache: self.backward_rays_cache.clone(),
+            forward_rays_cache: self.forward_rays_cache.clone(),
+            hit_map: self.hit_map.clone(),
+        }
+    }
+}
 impl OpticalSurface {
     /// Creates a new [`OpticalSurface`].
     #[must_use]
@@ -15,6 +32,9 @@ impl OpticalSurface {
         Self {
             geo_surface,
             coating: CoatingType::IdealAR,
+            backward_rays_cache: Rays::default(),
+            forward_rays_cache: Rays::default(),
+            hit_map: HitMap::default(),
         }
     }
     /// Returns a reference to the coating of this [`OpticalSurface`].
@@ -30,5 +50,43 @@ impl OpticalSurface {
     #[must_use]
     pub fn geo_surface(&self) -> &dyn GeoSurface {
         &(*self.geo_surface)
+    }
+    /// Sets the backwards rays cache of this [`OpticalSurface`].
+    pub fn set_backwards_rays_cache(&mut self, backward_rays_cache: Rays) {
+        self.backward_rays_cache = backward_rays_cache;
+    }
+    /// Returns a reference to the backwards rays cache of this [`OpticalSurface`].
+    #[must_use]
+    pub const fn backwards_rays_cache(&self) -> &Rays {
+        &self.backward_rays_cache
+    }
+    /// Sets the forward rays cache of this [`OpticalSurface`].
+    pub fn set_forward_rays_cache(&mut self, forward_rays_cache: Rays) {
+        self.forward_rays_cache = forward_rays_cache;
+    }
+    /// Returns a reference to the forward rays cache of this [`OpticalSurface`].
+    #[must_use]
+    pub const fn forward_rays_cache(&self) -> &Rays {
+        &self.forward_rays_cache
+    }
+    /// Sets the isometry of this [`OpticalSurface`].
+    pub fn set_isometry(&mut self, iso: &Isometry) {
+        self.geo_surface.set_isometry(iso);
+    }
+    /// Returns a reference to the hit map of this [`OpticalSurface`].
+    ///
+    /// This function returns a vector of intersection points (with energies) of [`Rays`] that hit the surface.
+    #[must_use]
+    pub const fn hit_map(&self) -> &HitMap {
+        &self.hit_map
+    }
+    /// Add intersection point (with energy) to hit map.
+    ///
+    pub fn add_to_hit_map(&mut self, hit_point: (Point3<Length>, Energy)) {
+        self.hit_map.add_point(hit_point);
+    }
+    /// Reset hit map of this [`OpticalSurface`].
+    pub fn reset_hit_map(&mut self) {
+        self.hit_map.reset();
     }
 }

@@ -181,7 +181,8 @@ impl OpticNode for WaveFront {
             file_path.push(format!("wavefront_diagram_{}_{}.png", self.name(), uuid));
             if let Some(wf_data) = wf_data_opt {
                 //todo! for all wavelengths
-                if let Err(e) = wf_data.wavefront_error_maps[0].to_plot(&file_path, PltBackEnd::BMP)
+                if let Err(e) =
+                    wf_data.wavefront_error_maps[0].to_plot(&file_path, PltBackEnd::Bitmap)
                 {
                     warn!("Could not export wavefront diagram: {}", e.to_string());
                 }
@@ -315,8 +316,8 @@ impl AnalysisRayTrace for WaveFront {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                rays.refract_on_surface(&plane, None)?;
+                let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                rays.refract_on_surface(&mut plane, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),

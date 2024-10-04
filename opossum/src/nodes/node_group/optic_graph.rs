@@ -466,16 +466,10 @@ impl OpticGraph {
     /// Panics if .
     #[must_use]
     pub fn is_output_node(&self, idx: NodeIndex) -> bool {
-        let nr_of_output_ports = self
-            .node_by_idx(idx)
-            .unwrap()
-            .optical_ref
-            .borrow()
-            .ports()
-            .ports(&PortType::Output)
-            .len();
+        let ports = self.node_by_idx(idx).unwrap().optical_ref.borrow().ports();
+        let nr_of_output_ports = ports.ports(&PortType::Output).len();
         let nr_of_outgoing_edges = self.g.edges_directed(idx, Direction::Outgoing).count();
-        assert!(
+        debug_assert!(
             nr_of_outgoing_edges <= nr_of_output_ports,
             "# of outgoing edges > # of output ports ???"
         );
@@ -520,9 +514,11 @@ impl OpticGraph {
     /// This function will return an error if one tries to invert a graph containing a non-invertable node (eg. source).
     pub fn invert_graph(&mut self) -> OpmResult<()> {
         for node in self.g.node_weights_mut() {
+            let node_to_be_inverted = !node.optical_ref.borrow().inverted();
+
             node.optical_ref
                 .borrow_mut()
-                .set_inverted(true)
+                .set_inverted(node_to_be_inverted)
                 .map_err(|_| {
                     OpossumError::OpticGroup(
                         "group cannot be inverted because it contains a non-invertable node".into(),

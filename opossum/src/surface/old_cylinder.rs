@@ -12,7 +12,6 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use roots::Roots;
-
 #[derive(Debug)]
 /// A spherical surface with its origin on the optical axis.
 pub struct Cylinder {
