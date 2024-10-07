@@ -79,7 +79,7 @@ fn create_report_and_data_files(report_directory: &Path, scenery: &NodeGroup) ->
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let mut report_path = report_directory.to_path_buf();
     report_path.push("report.html");
-    analysis_report.generate_html(&report_path)?;
+    analysis_report.to_html_report()?.generate_html(&report_path)?;
     scenery.export_data(&data_dir, "")?;
     Ok(())
 }

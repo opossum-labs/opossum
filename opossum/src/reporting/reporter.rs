@@ -2,39 +2,11 @@
 //! Module handling analysis reports and converting them to HTML.
 
 use crate::{
-    error::{OpmResult, OpossumError},
-    nodes::{ray_propagation_visualizer::RayPositionHistories, NodeGroup},
-    optic_node::OpticNode,
-    properties::{property::HtmlProperty, Properties, Proptype},
+    error::{OpmResult, OpossumError}, nodes::{ray_propagation_visualizer::RayPositionHistories, NodeGroup}, optic_node::OpticNode, properties::{Properties, Proptype}
 };
 use chrono::{DateTime, Local};
-use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path};
-use tinytemplate::TinyTemplate;
-
-static HTML_REPORT: &str = include_str!("../html/html_report.html");
-static HTML_NODE_REPORT: &str = include_str!("../html/node_report.html");
-
-#[derive(Serialize)]
-struct HtmlReport {
-    opossum_version: String,
-    analysis_timestamp: String,
-    description: String,
-    node_reports: Vec<HtmlNodeReport>,
-}
-/// Structure for storing a node report during html conversion.
-#[derive(Serialize)]
-pub struct HtmlNodeReport {
-    /// node name
-    pub node: String,
-    /// node type
-    pub node_type: String,
-    /// properties of the node
-    pub props: Vec<HtmlProperty>,
-    /// uuid of the node (needed for constructing filenames)
-    pub uuid: String,
-}
+use super::html_report::{HtmlNodeReport, HtmlReport};
 
 #[derive(Serialize, Debug, Clone)]
 /// Structure for storing data being integrated in an analysis report.
@@ -81,7 +53,12 @@ impl AnalysisReport {
         }
         None
     }
-    fn to_html_report(&self) -> OpmResult<HtmlReport> {
+    /// Generate an [`HtmlReport`] from this [`AnalysisReport`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn to_html_report(&self) -> OpmResult<HtmlReport> {
         let Some(scenery) = &self.scenery else {
             return Err(OpossumError::Other("no scenery found".into()));
         };
@@ -90,33 +67,12 @@ impl AnalysisReport {
             .iter()
             .map(NodeReport::to_html_node_report)
             .collect();
-        Ok(HtmlReport {
-            opossum_version: self.opossum_version.clone(),
-            analysis_timestamp: self.analysis_timestamp.format("%Y/%m/%d %H:%M").to_string(),
-            description: scenery.node_attr().name(),
-            node_reports: html_node_reports,
-        })
-    }
-    /// Generate an html report from this [`AnalysisReport`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    ///   - underlying templates could not be compiled.
-    ///   - the base file name could not be determined.
-    ///   - the conversion
-    pub fn generate_html(&self, path: &Path) -> OpmResult<()> {
-        info!("Write html report to {}", path.display());
-        let mut tt = TinyTemplate::new();
-        tt.add_template("report", HTML_REPORT)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        tt.add_template("node_report", HTML_NODE_REPORT)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        let rendered = tt
-            .render("report", &self.to_html_report()?)
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        fs::write(path, rendered).map_err(|e| OpossumError::Other(e.to_string()))?;
-        Ok(())
+        Ok(HtmlReport::new(
+            self.opossum_version.clone(),
+            self.analysis_timestamp.format("%Y/%m/%d %H:%M").to_string(),
+            scenery.node_attr().name(),
+            html_node_reports,
+        ))
     }
 }
 
