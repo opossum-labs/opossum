@@ -13,10 +13,12 @@ use crate::{error::OpmResult, nodes::NodeGroup};
 pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
+use std::{fmt::Display, path::Path};
 use strum::EnumIter;
 
 /// Type of analysis to be performed.
+/// 
+/// While the individual analyzers are implemented as traits, this enum is necessary for serialization / desrialization.
 #[non_exhaustive]
 #[derive(EnumIter, PartialEq, Debug, Serialize, Deserialize, Clone)]
 pub enum AnalyzerType {
@@ -73,4 +75,11 @@ pub trait Analyzer {
     /// # Errors
     /// This function will return an error if the concrete implementation of the [`Analyzer`] returns an error.
     fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()>;
+    
+    /// Generate an analysis report for this [`NodeGroup`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    fn report(&self, scenery: &NodeGroup, report_dir: &Path) -> OpmResult<()>;
 }

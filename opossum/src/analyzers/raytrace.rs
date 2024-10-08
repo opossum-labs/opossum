@@ -1,4 +1,6 @@
 //! Analyzer for sequential ray tracing
+use std::path::Path;
+
 use super::Analyzer;
 use crate::{
     error::{OpmResult, OpossumError},
@@ -38,6 +40,9 @@ impl Analyzer for RayTracingAnalyzer {
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
         AnalysisRayTrace::analyze(scenery, LightResult::default(), &self.config)?;
         Ok(())
+    }
+    fn report(&self, scenery: &NodeGroup, report_dir: &Path) -> OpmResult<()> {
+        todo!()
     }
 }
 /// Trait for implementing the ray trace analysis.
@@ -171,17 +176,6 @@ mod test {
         joule, millimeter,
         nodes::{round_collimated_ray_source, ParaxialSurface},
     };
-    // #[test]
-    // fn ray_tracing_mode_default() {
-    //     assert!(matches!(
-    //         RayTracingMode::default(),
-    //         RayTracingMode::Sequential
-    //     ));
-    // }
-    // #[test]
-    // fn ray_tracing_mode_debug() {
-    //     assert_eq!(format!("{:?}", RayTracingMode::default()), "Sequential");
-    // }
     #[test]
     fn ray_tracing_config_default() {
         let rt_conf = RayTraceConfig::default();

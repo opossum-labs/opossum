@@ -1,5 +1,7 @@
 //! Analyzer performing a ghost focus analysis using ray tracing
 
+use std::path::Path;
+
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
@@ -69,6 +71,9 @@ impl Analyzer for GhostFocusAnalyzer {
         );
         AnalysisGhostFocus::analyze(scenery, LightRays::default(), &self.config)?;
         Ok(())
+    }
+    fn report(&self, scenery: &NodeGroup, report_dir: &Path) -> OpmResult<()> {
+        todo!()
     }
 }
 
