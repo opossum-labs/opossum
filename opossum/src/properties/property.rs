@@ -4,12 +4,7 @@ use plotters::coord::combinators::LogScalable;
 use serde::{Deserialize, Serialize};
 use std::mem;
 
-#[derive(Serialize)]
-pub struct HtmlProperty {
-    pub name: String,
-    pub description: String,
-    pub prop_value: String,
-}
+
 /// (optical) Property
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a list of value conditions

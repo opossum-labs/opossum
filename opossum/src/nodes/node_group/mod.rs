@@ -329,7 +329,7 @@ impl NodeGroup {
             info!("toplevel report data for node {node_name}");
             let uuid = node.uuid().as_simple().to_string();
             if let Some(node_report) = node.optical_ref.borrow().report(&uuid) {
-                analysis_report.add_detector(node_report);
+                analysis_report.add_node_report(node_report);
             }
         }
         Ok(analysis_report)

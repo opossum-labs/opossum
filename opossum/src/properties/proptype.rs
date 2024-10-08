@@ -144,7 +144,7 @@ impl Proptype {
             }
             Self::NodeReport(report) => {
                 let html_node_report = HtmlNodeReport {
-                    node: report.name().into(),
+                    node_name: report.name().into(),
                     node_type: report.node_type().into(),
                     props: report.properties().html_props(report.name(), uuid),
                     uuid: uuid.to_string(),

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
-use self::property::HtmlProperty;
+use crate::reporting::html_report::HtmlProperty;
 
 /// A general set of (optical) properties.
 ///

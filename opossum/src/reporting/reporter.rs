@@ -2,7 +2,7 @@
 //! Module handling analysis reports and converting them to HTML.
 
 use crate::{
-    error::{OpmResult, OpossumError}, nodes::{ray_propagation_visualizer::RayPositionHistories, NodeGroup}, optic_node::OpticNode, properties::{Properties, Proptype}
+    error::{OpmResult, OpossumError}, nodes::NodeGroup, optic_node::OpticNode, properties::{Properties, Proptype}
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
@@ -33,25 +33,14 @@ impl AnalysisReport {
     pub fn add_scenery(&mut self, scenery: &NodeGroup) {
         self.scenery = Some(scenery.clone());
     }
-    /// Add an (detector) [`NodeReport`] to this [`AnalysisReport`].
+    /// Add a [`NodeReport`] to this [`AnalysisReport`].
     ///
     /// After analysis of a [`NodeGroup`], each node can generate a [`NodeReport`] using the
     /// [`report`](crate::optic_node::OpticNode::report) trait function. While assembling a report this
     /// function adds the node data to it. This is mostly interesting for detector nodes which deliver
     /// their particular analysis result.
-    pub fn add_detector(&mut self, report: NodeReport) {
+    pub fn add_node_report(&mut self, report: NodeReport) {
         self.node_reports.push(report);
-    }
-    /// Returns the ray history for the first found [`RayPropagationVisualizer`](crate::nodes::RayPropagationVisualizer) in this [`AnalysisReport`].
-    /// **Note**: This function is only a hack for displaying rays in the bevy engine.
-    #[must_use]
-    pub fn get_ray_hist(&self) -> Option<&RayPositionHistories> {
-        for node in &self.node_reports {
-            if let Some(ray_hist) = node.get_ray_history() {
-                return Some(ray_hist);
-            }
-        }
-        None
     }
     /// Generate an [`HtmlReport`] from this [`AnalysisReport`].
     ///
@@ -114,35 +103,11 @@ impl NodeReport {
     #[must_use]
     pub fn to_html_node_report(&self) -> HtmlNodeReport {
         HtmlNodeReport {
-            node: self.name.clone(),
+            node_name: self.name.clone(),
             node_type: self.node_type.clone(),
             props: self.properties.html_props(self.name(), &self.uuid),
             uuid: self.uuid.clone(),
         }
-    }
-    /// Returns the ray history of this [`NodeReport`] if it describe either a ray propagation
-    /// visualizer node or a group containing such a node. Otherwise the return value is `None`.
-    ///
-    /// **Note**: This is a temporary function to be used in combination with the Bevy visualizer.
-    #[must_use]
-    pub fn get_ray_history(&self) -> Option<&RayPositionHistories> {
-        if self.node_type == "group" {
-            for prop in &self.properties {
-                if let Proptype::NodeReport(node) = prop.1.prop() {
-                    let data = node.get_ray_history();
-                    if data.is_some() {
-                        return data;
-                    }
-                }
-            }
-        } else if self.node_type == "ray propagation" {
-            if let Ok(Proptype::RayPositionHistory(ray_hist)) =
-                self.properties.get("Ray Propagation visualization plot")
-            {
-                return Some(ray_hist);
-            }
-        }
-        None
     }
     /// Returns a reference to the uuid of this [`NodeReport`].
     #[must_use]
@@ -177,7 +142,7 @@ mod test {
     #[test]
     fn analysis_report_add_detector() {
         let mut report = AnalysisReport::new(String::from("test"), DateTime::default());
-        report.add_detector(NodeReport::new(
+        report.add_node_report(NodeReport::new(
             "test detector",
             "detector name",
             "123",

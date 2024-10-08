@@ -4,10 +4,7 @@ use log::info;
 use serde::Serialize;
 use tinytemplate::TinyTemplate;
 
-use crate::{
-    error::{OpmResult, OpossumError},
-    properties::property::HtmlProperty,
-};
+use crate::error::{OpmResult, OpossumError};
 
 static HTML_REPORT: &str = include_str!("../html/html_report.html");
 static HTML_NODE_REPORT: &str = include_str!("../html/node_report.html");
@@ -59,11 +56,18 @@ impl HtmlReport {
 #[derive(Serialize)]
 pub struct HtmlNodeReport {
     /// node name
-    pub node: String,
+    pub node_name: String,
     /// node type
     pub node_type: String,
     /// properties of the node
     pub props: Vec<HtmlProperty>,
     /// uuid of the node (needed for constructing filenames)
     pub uuid: String,
+}
+
+#[derive(Serialize)]
+pub struct HtmlProperty {
+    pub name: String,
+    pub description: String,
+    pub prop_value: String,
 }
