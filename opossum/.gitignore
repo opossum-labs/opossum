@@ -1,6 +1,8 @@
 /.vscode
 # ignore special directory for development
-/playground
+/playground/*
+# exception to the rule
+!playground/.gitkeep 
 
 *.dot
 *.svg
