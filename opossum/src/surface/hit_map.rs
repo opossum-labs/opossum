@@ -2,23 +2,22 @@
 //! [`OpticalSurface`](crate::surface::OpticalSurface).
 use nalgebra::{DVector, MatrixXx2, Point2, Point3};
 use plotters::style::RGBAColor;
+use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::{Energy, Length},
     length::meter,
 };
 
 use crate::{
-    error::OpmResult,
-    plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
-    utils::unit_format::{
+    error::OpmResult, plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable}, properties::Proptype, utils::unit_format::{
         get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit,
         get_unit_value_as_length_with_format_by_exponent,
-    },
+    }
 };
 
 /// Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
 /// [`OpticalSurface`](crate::surface::OpticalSurface).
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct HitMap {
     hit_map: Vec<(Point3<Length>, Energy)>,
 }
@@ -47,7 +46,11 @@ impl HitMap {
         self.hit_map.is_empty()
     }
 }
-
+impl From<HitMap> for Proptype {
+    fn from(value: HitMap) -> Self {
+        Proptype::HitMap(value)
+    }
+}
 impl Plottable for HitMap {
     fn get_plot_series(
         &self,

@@ -1,7 +1,7 @@
 use super::{PropCondition, Proptype};
 use crate::{
     error::{OpmResult, OpossumError},
-    plottable::Plottable,
+    plottable::Plottable, surface::hit_map,
 };
 use log::info;
 use plotters::coord::combinators::LogScalable;
@@ -195,6 +195,11 @@ impl Property {
             }
             Proptype::WaveFrontData(_wf_data) => {
                 todo!()
+            }
+            Proptype::HitMap(hit_map) => {
+                let file_path = report_path.join(Path::new(&format!("hit_map_{id}.svg")));
+                info!("  {}", file_path.display());
+                hit_map.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             _ => {}
         }

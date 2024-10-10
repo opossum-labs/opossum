@@ -303,6 +303,10 @@ impl NodeGroup {
     pub fn graph_mut(&mut self) -> &mut OpticGraph {
         &mut self.graph
     }
+    /// Returns a mutable reference to the underlying [`OpticGraph`] of this [`NodeGroup`].
+    pub fn graph(&self) -> &OpticGraph {
+        &self.graph
+    }
     /// Write node specific data files to the given `data_dir`.
     /// # Errors
     /// This function will return an error if the underlying `export_data` function of the corresponding

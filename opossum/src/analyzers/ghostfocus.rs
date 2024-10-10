@@ -1,13 +1,10 @@
 //! Analyzer performing a ghost focus analysis using ray tracing
+use chrono::Local;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::OpmResult,
-    light_result::{LightRays, LightResult},
-    nodes::NodeGroup,
-    optic_node::OpticNode,
-    reporting::analysis_report::AnalysisReport,
+    error::OpmResult, get_version, light_result::{LightRays, LightResult}, nodes::NodeGroup, optic_node::OpticNode, properties::Properties, reporting::analysis_report::{AnalysisReport, NodeReport}
 };
 
 use super::{raytrace::AnalysisRayTrace, Analyzer, RayTraceConfig};
@@ -71,7 +68,22 @@ impl Analyzer for GhostFocusAnalyzer {
         Ok(())
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
-        scenery.toplevel_report()
+        let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
+        analysis_report.add_scenery(scenery);
+        info!("Add hitmaps...");
+        for node in scenery.graph().nodes() {
+            let node_name = &node.optical_ref.borrow().name();
+            info!("node {node_name}");
+            let uuid = node.uuid().as_simple().to_string();
+            let mut props=Properties::default();
+            let hit_maps=node.optical_ref.borrow().hit_maps();
+            for hit_map in &hit_maps {
+                props.create(hit_map.0, "surface hit map", None, hit_map.1.clone().into())?;
+            }
+            let node_report=NodeReport::new("hitmap", &node_name, &uuid,props);
+            analysis_report.add_node_report(node_report);
+        }
+        Ok(analysis_report)
     }
 }
 
