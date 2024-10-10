@@ -271,7 +271,7 @@ impl OpticNode for WaveFront {
 }
 impl From<WaveFrontData> for Proptype {
     fn from(value: WaveFrontData) -> Self {
-        Self::WaveFrontStats(value)
+        Self::WaveFrontData(value)
     }
 }
 impl Dottable for WaveFront {

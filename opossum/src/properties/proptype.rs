@@ -79,7 +79,7 @@ pub enum Proptype {
     /// This property stores the fluence information [`FluenceData`]
     FluenceDetector(FluenceData),
     /// This property stores the wavefront Information [`WaveFrontData`]
-    WaveFrontStats(WaveFrontData),
+    WaveFrontData(WaveFrontData),
     /// This property stores the ray position history of all [`Rays`](crate::rays::Rays) during propagation through the optic scenery
     RayPositionHistory(RayPositionHistories),
     /// A (nested set) of Properties
@@ -135,7 +135,7 @@ impl Proptype {
                 "image",
                 &format!("data/spot_diagram_{property_name}_{uuid}.svg"),
             ),
-            Self::WaveFrontStats(_value) => tt.render(
+            Self::WaveFrontData(_value) => tt.render(
                 "image",
                 &format!("data/wavefront_diagram_{property_name}_{uuid}.png"),
             ),

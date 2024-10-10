@@ -16,15 +16,12 @@ use crate::{
     nanometer,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
-    plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
+    plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
 };
-use std::{
-    fmt::{Debug, Display},
-    path::{Path, PathBuf},
-};
+use std::fmt::{Debug, Display};
 
 #[non_exhaustive]
 #[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -151,21 +148,6 @@ impl Spectrometer {
     }
 }
 impl OpticNode for Spectrometer {
-    fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
-        if self.light_data.is_some() {
-            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                "spectrometer_{}_{}.svg",
-                self.name(),
-                uuid
-            )));
-            self.to_plot(&file_path, PltBackEnd::SVG)?;
-            Ok(())
-        } else {
-            Err(OpossumError::Other(
-                "spectrometer: no light data available".into(),
-            ))
-        }
-    }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;

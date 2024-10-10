@@ -17,14 +17,12 @@ use crate::{
     lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
+    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
 };
-use std::path::{Path, PathBuf};
-
 use super::node_attr::NodeAttr;
 
 ///alias for uom `RadiantExposure`, as this name is rather uncommon to use for laser scientists
@@ -78,30 +76,30 @@ impl FluenceDetector {
     }
 }
 impl OpticNode for FluenceDetector {
-    fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
-        self.light_data.as_ref().map_or_else(
-            || {
-                Err(OpossumError::Other(
-                    "Fluence detector: no light data for export available".into(),
-                ))
-            },
-            |rays| {
-                let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                    "fluence_{}_{}.png",
-                    self.name(),
-                    uuid
-                )));
-                let _ = rays.calc_fluence_at_position().map_or_else(
-                    |_| {
-                        warn!("Fluence Detector diagram: no fluence data for export available",);
-                        Ok(None)
-                    },
-                    |fluence_data| fluence_data.to_plot(&file_path, PltBackEnd::Bitmap),
-                );
-                Ok(())
-            },
-        )
-    }
+    // fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
+    //     self.light_data.as_ref().map_or_else(
+    //         || {
+    //             Err(OpossumError::Other(
+    //                 "Fluence detector: no light data for export available".into(),
+    //             ))
+    //         },
+    //         |rays| {
+    //             let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+    //                 "fluence_{}_{}.png",
+    //                 self.name(),
+    //                 uuid
+    //             )));
+    //             let _ = rays.calc_fluence_at_position().map_or_else(
+    //                 |_| {
+    //                     warn!("Fluence Detector diagram: no fluence data for export available",);
+    //                     Ok(None)
+    //                 },
+    //                 |fluence_data| fluence_data.to_plot(&file_path, PltBackEnd::Bitmap),
+    //             );
+    //             Ok(())
+    //         },
+    //     )
+    // }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
@@ -413,9 +411,6 @@ mod test {
         joule, lightdata::DataEnergy, millimeter, nanometer, nodes::test_helper::test_helper::*,
         position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
     };
-    use tempfile::NamedTempFile;
-    use uom::num_traits::Zero;
-    use uom::si::f64::Length;
     #[test]
     fn default() {
         let mut node = FluenceDetector::default();
@@ -502,23 +497,23 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-    #[test]
-    fn export_data() {
-        let mut fd = FluenceDetector::default();
-        assert!(fd.export_data(Path::new(""), "").is_err());
-        fd.light_data = Some(Rays::default());
-        let path = NamedTempFile::new().unwrap();
-        assert!(fd.export_data(path.path().parent().unwrap(), "").is_ok());
-        fd.light_data = Some(
-            Rays::new_uniform_collimated(
-                nanometer!(1053.0),
-                joule!(1.0),
-                &Hexapolar::new(Length::zero(), 1).unwrap(),
-            )
-            .unwrap(),
-        );
-        assert!(fd.export_data(path.path().parent().unwrap(), "").is_ok());
-    }
+    // #[test]
+    // fn export_data() {
+    //     let mut fd = FluenceDetector::default();
+    //     assert!(fd.export_data(Path::new(""), "").is_err());
+    //     fd.light_data = Some(Rays::default());
+    //     let path = NamedTempFile::new().unwrap();
+    //     assert!(fd.export_data(path.path().parent().unwrap(), "").is_ok());
+    //     fd.light_data = Some(
+    //         Rays::new_uniform_collimated(
+    //             nanometer!(1053.0),
+    //             joule!(1.0),
+    //             &Hexapolar::new(Length::zero(), 1).unwrap(),
+    //         )
+    //         .unwrap(),
+    //     );
+    //     assert!(fd.export_data(path.path().parent().unwrap(), "").is_ok());
+    // }
     #[test]
     fn report() {
         let mut fd = FluenceDetector::default();

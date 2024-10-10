@@ -183,6 +183,19 @@ impl Property {
                 info!("  {}", file_path.display());
                 fluence.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
             }
+            Proptype::Spectrometer(spectrometer) => {
+                let file_path = report_path.join(Path::new(&format!("spectrometer_{id}.svg")));
+                info!("  {}", file_path.display());
+                spectrometer.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+            }
+            Proptype::RayPositionHistory(ray_hist) => {
+                let file_path = report_path.join(Path::new(&format!("ray_propagation_{id}.svg")));
+                info!("  {}", file_path.display());
+                ray_hist.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+            }
+            Proptype::WaveFrontData(_wf_data) => {
+                todo!()
+            }
             _ => {}
         }
         Ok(())

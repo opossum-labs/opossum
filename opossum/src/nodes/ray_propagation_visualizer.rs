@@ -22,14 +22,12 @@ use crate::{
     millimeter,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
+    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
 };
-use std::path::{Path, PathBuf};
-
 /// A ray-propagation monitor
 ///
 /// It generates a plot that visualizes the ray path during propagtaion through the scenery.
@@ -91,33 +89,33 @@ impl RayPropagationVisualizer {
     }
 }
 impl OpticNode for RayPropagationVisualizer {
-    fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
-        if self.light_data.is_some() {
-            if let Some(rays) = &self.light_data {
-                let mut ray_prop_data = rays.get_rays_position_history()?;
-                if let Ok(Proptype::Vec3(plot_view_direction)) =
-                    self.node_attr.get_property("view_direction")
-                {
-                    ray_prop_data.plot_view_direction = Some(*plot_view_direction);
-                } else {
-                    warn!("could not read 'view_direction' property. defaulted to yz-plane");
-                    ray_prop_data.plot_view_direction = Some(Vector3::x());
-                };
+    // fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
+    //     if self.light_data.is_some() {
+    //         if let Some(rays) = &self.light_data {
+    //             let mut ray_prop_data = rays.get_rays_position_history()?;
+    //             if let Ok(Proptype::Vec3(plot_view_direction)) =
+    //                 self.node_attr.get_property("view_direction")
+    //             {
+    //                 ray_prop_data.plot_view_direction = Some(*plot_view_direction);
+    //             } else {
+    //                 warn!("could not read 'view_direction' property. defaulted to yz-plane");
+    //                 ray_prop_data.plot_view_direction = Some(Vector3::x());
+    //             };
 
-                let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                    "ray_propagation_{}_{}.svg",
-                    self.name(),
-                    uuid
-                )));
-                ray_prop_data.to_plot(&file_path, PltBackEnd::SVG)?;
-            } else {
-                warn!("ray-propagation visualizer: wrong light data. Cannot create plot!");
-            }
-        } else {
-            warn!("ray-propagation visualizer: no light data for export available. Cannot create plot!");
-        }
-        Ok(())
-    }
+    //             let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+    //                 "ray_propagation_{}_{}.svg",
+    //                 self.name(),
+    //                 uuid
+    //             )));
+    //             ray_prop_data.to_plot(&file_path, PltBackEnd::SVG)?;
+    //         } else {
+    //             warn!("ray-propagation visualizer: wrong light data. Cannot create plot!");
+    //         }
+    //     } else {
+    //         warn!("ray-propagation visualizer: no light data for export available. Cannot create plot!");
+    //     }
+    //     Ok(())
+    // }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
@@ -495,17 +493,13 @@ impl Plottable for RayPositionHistories {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::optic_ports::PortType;
-    use crate::utils::test_helper::test_helper::check_warnings;
     use crate::{
         joule, lightdata::DataEnergy, millimeter, nanometer, nodes::test_helper::test_helper::*,
-        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
+        optic_ports::PortType, position_distributions::Hexapolar, rays::Rays,
+        spectrum_helper::create_he_ne_spec,
     };
     use approx::assert_relative_eq;
-    use tempfile::NamedTempFile;
-    use uom::num_traits::Zero;
-    use uom::si::length::millimeter;
-    use uom::si::{f64::Length, length::nanometer};
+    use uom::si::length::{millimeter, nanometer};
     #[test]
     fn default() {
         let mut node = RayPropagationVisualizer::default();
@@ -590,34 +584,34 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-    #[test]
-    fn export_data() {
-        testing_logger::setup();
-        let mut rpv = RayPropagationVisualizer::default();
-        assert!(rpv.export_data(Path::new(""), "").is_ok());
-        check_warnings(vec![
-            "ray-propagation visualizer: no light data for export available. Cannot create plot!",
-        ]);
-        // rpv.light_data = Some(LightData::Energy(DataEnergy {
-        //     spectrum: Spectrum::new(nanometer!(1000.)..nanometer!(1100.), nanometer!(1.)).unwrap(),
-        // }));
-        // assert!(rpv.export_data(Path::new(""), "").is_ok());
-        // check_warnings(vec![
-        //     "ray-propagation visualizer: wrong light data. Cannot create plot!",
-        // ]);
-        rpv.light_data = Some(Rays::default());
-        let path = NamedTempFile::new().unwrap();
-        assert!(rpv.export_data(path.path().parent().unwrap(), "").is_err());
-        rpv.light_data = Some(
-            Rays::new_uniform_collimated(
-                nanometer!(1053.0),
-                joule!(1.0),
-                &Hexapolar::new(Length::zero(), 1).unwrap(),
-            )
-            .unwrap(),
-        );
-        assert!(rpv.export_data(path.path().parent().unwrap(), "").is_ok());
-    }
+    // #[test]
+    // fn export_data() {
+    //     testing_logger::setup();
+    //     let mut rpv = RayPropagationVisualizer::default();
+    //     assert!(rpv.export_data(Path::new(""), "").is_ok());
+    //     check_warnings(vec![
+    //         "ray-propagation visualizer: no light data for export available. Cannot create plot!",
+    //     ]);
+    //     // rpv.light_data = Some(LightData::Energy(DataEnergy {
+    //     //     spectrum: Spectrum::new(nanometer!(1000.)..nanometer!(1100.), nanometer!(1.)).unwrap(),
+    //     // }));
+    //     // assert!(rpv.export_data(Path::new(""), "").is_ok());
+    //     // check_warnings(vec![
+    //     //     "ray-propagation visualizer: wrong light data. Cannot create plot!",
+    //     // ]);
+    //     rpv.light_data = Some(Rays::default());
+    //     let path = NamedTempFile::new().unwrap();
+    //     assert!(rpv.export_data(path.path().parent().unwrap(), "").is_err());
+    //     rpv.light_data = Some(
+    //         Rays::new_uniform_collimated(
+    //             nanometer!(1053.0),
+    //             joule!(1.0),
+    //             &Hexapolar::new(Length::zero(), 1).unwrap(),
+    //         )
+    //         .unwrap(),
+    //     );
+    //     assert!(rpv.export_data(path.path().parent().unwrap(), "").is_ok());
+    // }
     #[test]
     fn report() {
         let mut fd = RayPropagationVisualizer::default();
