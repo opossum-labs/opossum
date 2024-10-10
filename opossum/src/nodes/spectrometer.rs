@@ -5,10 +5,9 @@ use uom::si::length::nanometer;
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzable::Analyzable,
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        RayTraceConfig,
+        Analyzable, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
@@ -167,7 +166,7 @@ impl OpticNode for Spectrometer {
             ))
         }
     }
-    fn report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(light_data) = data {
@@ -482,7 +481,7 @@ mod test {
     #[test]
     fn report() {
         let mut sd = Spectrometer::default();
-        let node_report = sd.report("").unwrap();
+        let node_report = sd.node_report("").unwrap();
         assert_eq!(node_report.node_type(), "spectrometer");
         assert_eq!(node_report.name(), "spectrometer");
         let node_props = node_report.properties();
@@ -496,7 +495,7 @@ mod test {
             )
             .unwrap(),
         ));
-        let node_report = sd.report("").unwrap();
+        let node_report = sd.node_report("").unwrap();
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 2);

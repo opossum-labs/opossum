@@ -20,7 +20,6 @@ pub mod bevy_scene;
 #[cfg(feature = "bevy")]
 mod scenery_bevy_data;
 
-pub mod analyzable;
 pub mod analyzers;
 pub mod aperture;
 pub mod console;

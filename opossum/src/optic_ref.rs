@@ -9,7 +9,7 @@ use std::{cell::RefCell, rc::Rc};
 use uuid::Uuid;
 
 use crate::{
-    analyzable::Analyzable,
+    analyzers::Analyzable,
     nodes::{create_node_ref, NodeAttr},
     optic_senery_rsc::SceneryResources,
 };

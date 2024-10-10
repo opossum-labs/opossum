@@ -5,10 +5,9 @@ use std::{
 use uuid::Uuid;
 
 use crate::{
-    analyzable::Analyzable,
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        RayTraceConfig,
+        Analyzable, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},

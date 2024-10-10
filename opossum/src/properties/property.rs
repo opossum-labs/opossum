@@ -4,7 +4,6 @@ use plotters::coord::combinators::LogScalable;
 use serde::{Deserialize, Serialize};
 use std::mem;
 
-
 /// (optical) Property
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a list of value conditions

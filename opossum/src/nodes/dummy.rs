@@ -1,10 +1,9 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzable::Analyzable,
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        RayTraceConfig,
+        Analyzable, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
@@ -123,7 +122,7 @@ impl AnalysisRayTrace for Dummy {
 }
 
 impl OpticNode for Dummy {
-    fn report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
@@ -190,7 +189,7 @@ mod test {
     }
     #[test]
     fn report() {
-        let report = Dummy::default().report("123");
+        let report = Dummy::default().node_report("123");
         assert!(report.is_some());
     }
     #[test]

@@ -1,10 +1,9 @@
 #![warn(missing_docs)]
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzable::Analyzable,
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        RayTraceConfig,
+        Analyzable, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},

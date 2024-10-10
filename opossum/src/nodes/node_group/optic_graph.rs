@@ -1,7 +1,6 @@
 #![warn(missing_docs)]
 use crate::{
-    analyzable::Analyzable,
-    analyzers::energy::AnalysisEnergy,
+    analyzers::{energy::AnalysisEnergy, Analyzable},
     error::{OpmResult, OpossumError},
     light_flow::LightFlow,
     light_result::LightResult,

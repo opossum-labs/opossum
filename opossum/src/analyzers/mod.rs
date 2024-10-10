@@ -5,11 +5,13 @@
 //! For example, the energy flow for a scenery can be calculated as a simple analysis. On the other hand, a full
 //! Fourier propagation could be performed. The result of an analysis run can be written to a JSON structure
 //! and / or exported as a PDF report.
+pub mod analyzable;
 pub mod energy;
 pub mod ghostfocus;
 pub mod raytrace;
 
 use crate::{error::OpmResult, nodes::NodeGroup};
+pub use analyzable::Analyzable;
 pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;
 use serde::{Deserialize, Serialize};
@@ -17,7 +19,7 @@ use std::{fmt::Display, path::Path};
 use strum::EnumIter;
 
 /// Type of analysis to be performed.
-/// 
+///
 /// While the individual analyzers are implemented as traits, this enum is necessary for serialization / desrialization.
 #[non_exhaustive]
 #[derive(EnumIter, PartialEq, Debug, Serialize, Deserialize, Clone)]
@@ -75,7 +77,7 @@ pub trait Analyzer {
     /// # Errors
     /// This function will return an error if the concrete implementation of the [`Analyzer`] returns an error.
     fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()>;
-    
+
     /// Generate an analysis report for this [`NodeGroup`].
     ///
     /// # Errors

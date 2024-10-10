@@ -7,10 +7,9 @@ use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
 use crate::{
-    analyzable::Analyzable,
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        GhostFocusConfig, RayTraceConfig,
+        Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
@@ -103,7 +102,7 @@ impl OpticNode for FluenceDetector {
             },
         )
     }
-    fn report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(rays) = data {
@@ -523,14 +522,14 @@ mod test {
     #[test]
     fn report() {
         let mut fd = FluenceDetector::default();
-        let node_report = fd.report("123").unwrap();
+        let node_report = fd.node_report("123").unwrap();
         assert_eq!(node_report.node_type(), "fluence detector");
         assert_eq!(node_report.name(), "fluence detector");
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
         fd.light_data = Some(Rays::default());
-        let node_report = fd.report("123").unwrap();
+        let node_report = fd.node_report("123").unwrap();
         assert!(!node_report.properties().contains("Fluence"));
         fd.light_data = Some(
             Rays::new_uniform_collimated(
@@ -540,7 +539,7 @@ mod test {
             )
             .unwrap(),
         );
-        let node_report = fd.report("123").unwrap();
+        let node_report = fd.node_report("123").unwrap();
         assert!(node_report.properties().contains("Fluence"));
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);

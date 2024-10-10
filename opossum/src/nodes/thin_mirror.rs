@@ -2,10 +2,9 @@
 //! Infinitely thin mirror with spherical or flat surface
 use super::NodeAttr;
 use crate::{
-    analyzable::Analyzable,
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        RayTraceConfig,
+        Analyzable, RayTraceConfig,
     },
     coatings::CoatingType,
     dottable::Dottable,

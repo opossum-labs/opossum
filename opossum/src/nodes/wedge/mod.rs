@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use super::NodeAttr;
 use crate::{
-    analyzable::Analyzable,
-    analyzers::AnalyzerType,
+    analyzers::{Analyzable, AnalyzerType},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     millimeter,

@@ -1,12 +1,15 @@
 #![warn(missing_docs)]
 //! Module handling analysis reports and converting them to HTML.
 
+use super::html_report::{HtmlNodeReport, HtmlReport};
 use crate::{
-    error::{OpmResult, OpossumError}, nodes::NodeGroup, optic_node::OpticNode, properties::{Properties, Proptype}
+    error::{OpmResult, OpossumError},
+    nodes::NodeGroup,
+    optic_node::OpticNode,
+    properties::{Properties, Proptype},
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
-use super::html_report::{HtmlNodeReport, HtmlReport};
 
 #[derive(Serialize, Debug, Clone)]
 /// Structure for storing data being integrated in an analysis report.

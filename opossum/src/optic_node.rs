@@ -202,11 +202,11 @@ pub trait OpticNode: Dottable {
     fn inverted(&self) -> bool {
         self.node_attr().inverted()
     }
-    /// Return a YAML representation of the current state of this [`OpticNode`].
+    /// Return [`NodeReport`] of the current state of this [`OpticNode`].
     ///
     /// This function must be overridden for generating output in the analysis report. Mainly
     /// detector nodes use this feature.
-    fn report(&self, _uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, _uuid: &str) -> Option<NodeReport> {
         None
     }
     /// Get the [`NodeAttr`] (common attributes) of an [`OpticNode`].
@@ -311,7 +311,7 @@ pub trait OpticNode: Dottable {
 }
 impl Debug for dyn OpticNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}' ({})", self.name(), self.node_type())
+        Display::fmt(&self, f)
     }
 }
 impl Display for dyn OpticNode {

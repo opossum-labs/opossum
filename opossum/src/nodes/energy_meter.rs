@@ -1,9 +1,8 @@
 #![warn(missing_docs)]
 use crate::{
-    analyzable::Analyzable,
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        RayTraceConfig,
+        Analyzable, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
@@ -131,7 +130,7 @@ impl EnergyMeter {
     }
 }
 impl OpticNode for EnergyMeter {
-    fn report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut energy: Option<Energy> = None;
         if let Some(light_data) = &self.light_data {
             energy = match light_data {
@@ -378,7 +377,7 @@ mod test {
     #[test]
     fn report() {
         let mut meter = EnergyMeter::default();
-        let report = meter.report("123").unwrap();
+        let report = meter.node_report("123").unwrap();
         assert_eq!(report.name(), "energy meter");
         assert_eq!(report.node_type(), "energy meter");
         assert!(report.properties().contains("Energy"));
@@ -399,7 +398,7 @@ mod test {
         });
         input.insert("in1".into(), input_data.clone());
         AnalysisEnergy::analyze(&mut meter, input).unwrap();
-        let report = meter.report("123").unwrap();
+        let report = meter.node_report("123").unwrap();
         if let Ok(Proptype::Energy(e)) = report.properties().get("Energy") {
             assert_eq!(e, &joule!(1.0));
         } else {

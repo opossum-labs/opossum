@@ -5,7 +5,7 @@ mod analysis_raytrace;
 mod optic_graph;
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzable::Analyzable,
+    analyzers::Analyzable,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     get_version,
@@ -328,7 +328,7 @@ impl NodeGroup {
             let node_name = &node.optical_ref.borrow().name();
             info!("toplevel report data for node {node_name}");
             let uuid = node.uuid().as_simple().to_string();
-            if let Some(node_report) = node.optical_ref.borrow().report(&uuid) {
+            if let Some(node_report) = node.optical_ref.borrow().node_report(&uuid) {
                 analysis_report.add_node_report(node_report);
             }
         }
@@ -406,11 +406,11 @@ impl OpticNode for NodeGroup {
         }
         Ok(())
     }
-    fn report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut group_props = Properties::default();
         for node in self.graph.nodes() {
             let sub_uuid = node.uuid().as_simple().to_string();
-            if let Some(node_report) = node.optical_ref.borrow().report(&sub_uuid) {
+            if let Some(node_report) = node.optical_ref.borrow().node_report(&sub_uuid) {
                 let node_name = &node.optical_ref.borrow().name();
                 info!("report data for node {node_name}");
                 if !(group_props.contains(node_name)) {
@@ -636,7 +636,7 @@ mod test {
             .unwrap()
             .optical_ref
             .borrow()
-            .report(&uuid)
+            .node_report(&uuid)
             .unwrap();
         if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {
             assert_eq!(*e, joule!(1.0));

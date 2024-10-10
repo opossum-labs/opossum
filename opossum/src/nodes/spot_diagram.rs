@@ -10,10 +10,9 @@ use uom::si::{
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzable::Analyzable,
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        GhostFocusConfig, RayTraceConfig,
+        Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
@@ -121,7 +120,7 @@ impl OpticNode for SpotDiagram {
         map.insert("in1".to_string(), HitMap::default());
         map
     }
-    fn report(&self, uuid: &str) -> Option<NodeReport> {
+    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(rays) = data {
@@ -588,14 +587,14 @@ mod test {
     #[test]
     fn report() {
         let mut sd = SpotDiagram::default();
-        let node_report = sd.report("").unwrap();
+        let node_report = sd.node_report("").unwrap();
         assert_eq!(node_report.node_type(), "spot diagram");
         assert_eq!(node_report.name(), "spot diagram");
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
         sd.light_data = Some(Rays::default());
-        let node_report = sd.report("").unwrap();
+        let node_report = sd.node_report("").unwrap();
         assert!(node_report.properties().contains("Spot diagram"));
         sd.light_data = Some(
             Rays::new_uniform_collimated(
@@ -605,7 +604,7 @@ mod test {
             )
             .unwrap(),
         );
-        let node_report = sd.report("").unwrap();
+        let node_report = sd.node_report("").unwrap();
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 5);
