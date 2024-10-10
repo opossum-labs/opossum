@@ -58,7 +58,11 @@ fn create_dot_file(dot_path: &Path, scenery: &NodeGroup) -> OpmResult<()> {
         .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))?;
     Ok(())
 }
-fn create_report_and_data_files(report_directory: &Path, scenery: &NodeGroup) -> OpmResult<()> {
+fn create_report_and_data_files(
+    report_directory: &Path,
+    analyzer: &dyn Analyzer,
+    scenery: &NodeGroup,
+) -> OpmResult<()> {
     let data_dir = report_directory.join("data/");
     if data_dir.exists() {
         info!("Delete old report data dir");
@@ -70,7 +74,7 @@ fn create_report_and_data_files(report_directory: &Path, scenery: &NodeGroup) ->
     scenery.export_node_data(&data_dir)?;
     let mut output =
         create_dot_or_report_file_instance(report_directory, "report", "yaml", "detector report")?;
-    let analysis_report = scenery.toplevel_report()?;
+    let analysis_report = analyzer.report(scenery)?;
     write!(
         output,
         "{}",
@@ -126,7 +130,7 @@ fn opossum() -> OpmResult<()> {
                 &opossum_args.analyzer,
             )?;
             #[cfg(not(feature = "bevy"))]
-            create_report_and_data_files(&opossum_args.report_directory, scenery)?;
+            create_report_and_data_files(&opossum_args.report_directory, analyzer, scenery)?;
             #[cfg(feature = "bevy")]
             bevy_main::bevy_main(SceneryBevyData::from_report(&analysis_report));
         }
@@ -164,6 +168,7 @@ mod test {
         let scenery = document.scenery_mut();
         let report_file = create_report_and_data_files(
             &Path::new("./files_for_testing/report/_not_valid/"),
+            &EnergyAnalyzer::default(),
             &scenery,
         );
         assert!(report_file.is_err());

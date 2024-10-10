@@ -17,6 +17,7 @@ pub struct HtmlReport {
     node_reports: Vec<HtmlNodeReport>,
 }
 impl HtmlReport {
+    #[must_use]
     pub fn new(
         opossum_version: String,
         analysis_timestamp: String,

@@ -1,6 +1,4 @@
 //! Analyzer for sequential ray tracing
-use std::path::Path;
-
 use super::Analyzer;
 use crate::{
     error::{OpmResult, OpossumError},
@@ -8,6 +6,7 @@ use crate::{
     nodes::NodeGroup,
     optic_node::OpticNode,
     picojoule,
+    reporting::reporter::AnalysisReport,
 };
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -41,8 +40,8 @@ impl Analyzer for RayTracingAnalyzer {
         AnalysisRayTrace::analyze(scenery, LightResult::default(), &self.config)?;
         Ok(())
     }
-    fn report(&self, scenery: &NodeGroup, report_dir: &Path) -> OpmResult<()> {
-        todo!()
+    fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
+        scenery.toplevel_report()
     }
 }
 /// Trait for implementing the ray trace analysis.

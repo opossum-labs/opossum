@@ -1,13 +1,12 @@
 //! Performing a (simple) energy flow analysis
-use std::path::Path;
-
 use log::info;
 
-use crate::{error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode};
+use crate::{
+    error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode,
+    reporting::reporter::AnalysisReport,
+};
 
 use super::Analyzer;
-
-//pub type LightResEnergy = LightDings<DataEnergy>;
 
 /// Analyzer for simulating a simple energy flow
 #[derive(Debug, Default)]
@@ -24,8 +23,8 @@ impl Analyzer for EnergyAnalyzer {
         AnalysisEnergy::analyze(scenery, LightResult::default())?;
         Ok(())
     }
-    fn report(&self, scenery: &NodeGroup, report_dir: &Path) -> OpmResult<()> {
-        todo!()
+    fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
+        scenery.toplevel_report()
     }
 }
 /// Trait for implementing the energy flow analysis.

@@ -10,12 +10,12 @@ pub mod energy;
 pub mod ghostfocus;
 pub mod raytrace;
 
-use crate::{error::OpmResult, nodes::NodeGroup};
+use crate::{error::OpmResult, nodes::NodeGroup, reporting::reporter::AnalysisReport};
 pub use analyzable::Analyzable;
 pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, path::Path};
+use std::fmt::Display;
 use strum::EnumIter;
 
 /// Type of analysis to be performed.
@@ -83,5 +83,5 @@ pub trait Analyzer {
     /// # Errors
     ///
     /// This function will return an error if .
-    fn report(&self, scenery: &NodeGroup, report_dir: &Path) -> OpmResult<()>;
+    fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport>;
 }

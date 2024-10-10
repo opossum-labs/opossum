@@ -1,7 +1,4 @@
 //! Analyzer performing a ghost focus analysis using ray tracing
-
-use std::path::Path;
-
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +7,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     nodes::NodeGroup,
     optic_node::OpticNode,
+    reporting::reporter::AnalysisReport,
 };
 
 use super::{raytrace::AnalysisRayTrace, Analyzer, RayTraceConfig};
@@ -72,8 +70,8 @@ impl Analyzer for GhostFocusAnalyzer {
         AnalysisGhostFocus::analyze(scenery, LightRays::default(), &self.config)?;
         Ok(())
     }
-    fn report(&self, scenery: &NodeGroup, report_dir: &Path) -> OpmResult<()> {
-        todo!()
+    fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
+        scenery.toplevel_report()
     }
 }
 
