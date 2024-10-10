@@ -10,6 +10,7 @@ use crate::error::{OpmResult, OpossumError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::path::Path;
 
 use crate::reporting::html_report::HtmlProperty;
 
@@ -166,6 +167,18 @@ impl Properties {
             }
         }
         html_props
+    }
+    /// Export these [`Properties`] to a of files on disk at the given `report_path`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the underlying implementation for a concrete property
+    /// returns an error.
+    pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
+        for prop in &self.props {
+            prop.1.export_data(report_path, id)?;
+        }
+        Ok(())
     }
 }
 

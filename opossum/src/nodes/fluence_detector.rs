@@ -20,7 +20,7 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
     rays::Rays,
-    reporting::reporter::NodeReport,
+    reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
 };
 use std::path::{Path, PathBuf};

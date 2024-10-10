@@ -10,7 +10,7 @@ use crate::{
     optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
-    reporting::{html_report::HtmlNodeReport, reporter::NodeReport},
+    reporting::{analysis_report::NodeReport, html_report::HtmlNodeReport},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},

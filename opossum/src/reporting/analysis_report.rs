@@ -1,6 +1,8 @@
 #![warn(missing_docs)]
 //! Module handling analysis reports and converting them to HTML.
 
+use std::path::Path;
+
 use super::html_report::{HtmlNodeReport, HtmlReport};
 use crate::{
     error::{OpmResult, OpossumError},
@@ -9,6 +11,7 @@ use crate::{
     properties::{Properties, Proptype},
 };
 use chrono::{DateTime, Local};
+use log::info;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug, Clone)]
@@ -44,6 +47,23 @@ impl AnalysisReport {
     /// their particular analysis result.
     pub fn add_node_report(&mut self, report: NodeReport) {
         self.node_reports.push(report);
+    }
+    /// Export data of each [`NodeReport`] of this [`AnalysisReport`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn export_data(&self, report_path: &Path) -> OpmResult<()> {
+        let report_path = report_path.join(Path::new("data"));
+        info!("Exporting report data");
+        for node_report in &self.node_reports {
+            info!(" - node {}", node_report.name);
+            node_report.properties.export_data(
+                &report_path,
+                &format!("{}_{}", &node_report.name, &node_report.uuid),
+            )?;
+        }
+        Ok(())
     }
     /// Generate an [`HtmlReport`] from this [`AnalysisReport`].
     ///

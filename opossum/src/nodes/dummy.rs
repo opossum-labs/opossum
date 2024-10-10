@@ -11,7 +11,7 @@ use crate::{
     lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
-    reporting::reporter::NodeReport,
+    reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
 };
 

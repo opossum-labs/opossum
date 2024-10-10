@@ -14,7 +14,7 @@ use crate::{
     optic_ref::OpticRef,
     plottable::{Plottable, PltBackEnd},
     properties::{Properties, Proptype},
-    reporting::reporter::{AnalysisReport, NodeReport},
+    reporting::analysis_report::{AnalysisReport, NodeReport},
     SceneryResources,
 };
 use chrono::Local;
@@ -307,13 +307,13 @@ impl NodeGroup {
     /// # Errors
     /// This function will return an error if the underlying `export_data` function of the corresponding
     /// node returns an error.
-    pub fn export_node_data(&self, data_dir: &Path) -> OpmResult<()> {
-        for node in self.graph.nodes() {
-            let uuid = node.uuid().as_simple().to_string();
-            node.optical_ref.borrow().export_data(data_dir, &uuid)?;
-        }
-        Ok(())
-    }
+    // pub fn export_node_data(&self, data_dir: &Path) -> OpmResult<()> {
+    //     for node in self.graph.nodes() {
+    //         let uuid = node.uuid().as_simple().to_string();
+    //         node.optical_ref.borrow().export_data(data_dir, &uuid)?;
+    //     }
+    //     Ok(())
+    // }
     /// Generate a (top level) [`AnalysisReport`] containing the result of a previously preformed analysis.
     ///
     /// This [`AnalysisReport`] can then be used to either save it to disk or produce an HTML document from. In addition,
@@ -324,7 +324,6 @@ impl NodeGroup {
         let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
         analysis_report.add_scenery(self);
         for node in self.graph.nodes() {
-            //detector_nodes {
             let node_name = &node.optical_ref.borrow().name();
             info!("toplevel report data for node {node_name}");
             let uuid = node.uuid().as_simple().to_string();

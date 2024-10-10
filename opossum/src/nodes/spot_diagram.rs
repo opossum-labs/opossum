@@ -21,12 +21,10 @@ use crate::{
     nanometer,
     optic_node::{Alignable, OpticNode},
     optic_ports::{OpticPorts, PortType},
-    plottable::{
-        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
-    },
+    plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
-    reporting::reporter::NodeReport,
+    reporting::analysis_report::NodeReport,
     surface::{hit_map::HitMap, OpticalSurface, Plane},
     utils::{
         geom_transformation::Isometry,
@@ -37,10 +35,7 @@ use crate::{
     },
 };
 use core::f64;
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::collections::HashMap;
 
 /// A spot-diagram monitor
 ///
@@ -102,19 +97,6 @@ impl SpotDiagram {
 impl Alignable for SpotDiagram {}
 
 impl OpticNode for SpotDiagram {
-    fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
-        if self.light_data.is_some() {
-            let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                "spot_diagram_{}_{}.svg",
-                self.name(),
-                uuid
-            )));
-            self.to_plot(&file_path, PltBackEnd::SVG)?;
-        } else {
-            warn!("spot diagram: no light data for export available. Cannot create plot!");
-        }
-        Ok(())
-    }
     fn hit_maps(&self) -> HashMap<String, HitMap> {
         let mut map: HashMap<String, HitMap> = HashMap::default();
         map.insert("in1".to_string(), HitMap::default());
@@ -471,14 +453,12 @@ impl Plottable for SpotDiagram {
 mod test {
     use super::*;
     use crate::optic_ports::PortType;
-    use crate::utils::test_helper::test_helper::check_warnings;
     use crate::{
         joule, lightdata::DataEnergy, nodes::test_helper::test_helper::*,
         position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
     };
-    use tempfile::NamedTempFile;
     use uom::num_traits::Zero;
-    use uom::si::f64::Length;
+
     #[test]
     fn default() {
         let mut node = SpotDiagram::default();
@@ -563,27 +543,27 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-    #[test]
-    fn export_data() {
-        testing_logger::setup();
-        let mut sd = SpotDiagram::default();
-        assert!(sd.export_data(Path::new(""), "").is_ok());
-        check_warnings(vec![
-            "spot diagram: no light data for export available. Cannot create plot!",
-        ]);
-        sd.light_data = Some(Rays::default());
-        let path = NamedTempFile::new().unwrap();
-        assert!(sd.export_data(path.path().parent().unwrap(), "").is_err());
-        sd.light_data = Some(
-            Rays::new_uniform_collimated(
-                nanometer!(1053.0),
-                joule!(1.0),
-                &Hexapolar::new(Length::zero(), 1).unwrap(),
-            )
-            .unwrap(),
-        );
-        assert!(sd.export_data(path.path().parent().unwrap(), "").is_ok());
-    }
+    // #[test]
+    // fn export_data() {
+    //     testing_logger::setup();
+    //     let mut sd = SpotDiagram::default();
+    //     assert!(sd.export_data(Path::new(""), "").is_ok());
+    //     check_warnings(vec![
+    //         "spot diagram: no light data for export available. Cannot create plot!",
+    //     ]);
+    //     sd.light_data = Some(Rays::default());
+    //     let path = NamedTempFile::new().unwrap();
+    //     assert!(sd.export_data(path.path().parent().unwrap(), "").is_err());
+    //     sd.light_data = Some(
+    //         Rays::new_uniform_collimated(
+    //             nanometer!(1053.0),
+    //             joule!(1.0),
+    //             &Hexapolar::new(Length::zero(), 1).unwrap(),
+    //         )
+    //         .unwrap(),
+    //     );
+    //     assert!(sd.export_data(path.path().parent().unwrap(), "").is_ok());
+    // }
     #[test]
     fn report() {
         let mut sd = SpotDiagram::default();

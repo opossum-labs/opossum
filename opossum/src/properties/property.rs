@@ -1,8 +1,12 @@
 use super::{PropCondition, Proptype};
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    plottable::Plottable,
+};
+use log::info;
 use plotters::coord::combinators::LogScalable;
 use serde::{Deserialize, Serialize};
-use std::mem;
+use std::{mem, path::Path};
 
 /// (optical) Property
 ///
@@ -158,6 +162,28 @@ impl Property {
                     }
                 }
             }
+        }
+        Ok(())
+    }
+    /// Export this [`Property`] to a file at the given `report_path`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the underlying implementation for the concrete
+    /// [`Proptype`] returns an error.
+    pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
+        match &self.prop {
+            Proptype::SpotDiagram(spot_diagram) => {
+                let file_path = report_path.join(Path::new(&format!("spot_diagram_{id}.svg")));
+                info!("  {}", file_path.display());
+                spot_diagram.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+            }
+            Proptype::FluenceDetector(fluence) => {
+                let file_path = report_path.join(Path::new(&format!("fluence_diagram_{id}.png")));
+                info!("  {}", file_path.display());
+                fluence.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
+            }
+            _ => {}
         }
         Ok(())
     }

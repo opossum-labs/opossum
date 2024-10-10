@@ -6,7 +6,7 @@ use crate::{
     nodes::NodeGroup,
     optic_node::OpticNode,
     picojoule,
-    reporting::reporter::AnalysisReport,
+    reporting::analysis_report::AnalysisReport,
 };
 use log::info;
 use serde::{Deserialize, Serialize};

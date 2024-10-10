@@ -3,7 +3,7 @@ use log::info;
 
 use crate::{
     error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode,
-    reporting::reporter::AnalysisReport,
+    reporting::analysis_report::AnalysisReport,
 };
 
 use super::Analyzer;

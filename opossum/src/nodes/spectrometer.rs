@@ -18,7 +18,7 @@ use crate::{
     optic_ports::{OpticPorts, PortType},
     plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd},
     properties::{Properties, Proptype},
-    reporting::reporter::NodeReport,
+    reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
 };
 use std::{

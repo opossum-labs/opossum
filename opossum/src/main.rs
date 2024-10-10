@@ -1,30 +1,28 @@
-//! Mainf function of Opossum
+//! Main function of Opossum
 #![warn(missing_docs)]
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
-use opossum::analyzers::energy::EnergyAnalyzer;
-use opossum::analyzers::ghostfocus::GhostFocusAnalyzer;
-use opossum::analyzers::raytrace::RayTracingAnalyzer;
-use opossum::analyzers::Analyzer;
-use opossum::analyzers::AnalyzerType;
 #[cfg(feature = "bevy")]
 use opossum::bevy_main;
-use opossum::nodes::NodeGroup;
-use opossum::optic_node::OpticNode;
-use opossum::OpmDocument;
 #[cfg(feature = "bevy")]
 use opossum::SceneryBevyData;
 use opossum::{
+    analyzers::{
+        energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
+        Analyzer, AnalyzerType,
+    },
     console::{Args, PartialArgs},
     error::{OpmResult, OpossumError},
+    nodes::NodeGroup,
+    OpmDocument,
 };
-use std::env;
-use std::fs::create_dir;
-use std::fs::remove_dir_all;
-use std::fs::File;
-use std::io::{self, Write};
-use std::path::Path;
+use std::{
+    env,
+    fs::{create_dir, remove_dir_all, File},
+    io::{self, Write},
+    path::Path,
+};
 
 fn read_and_parse_model(path: &Path) -> OpmResult<OpmDocument> {
     info!("Reading model...");
@@ -71,7 +69,6 @@ fn create_report_and_data_files(
     }
     create_dir(&data_dir)
         .map_err(|e| OpossumError::Other(format!("creating data directory failed: {e}")))?;
-    scenery.export_node_data(&data_dir)?;
     let mut output =
         create_dot_or_report_file_instance(report_directory, "report", "yaml", "detector report")?;
     let analysis_report = analyzer.report(scenery)?;
@@ -82,11 +79,11 @@ fn create_report_and_data_files(
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let mut report_path = report_directory.to_path_buf();
+    analysis_report.export_data(&report_path)?;
     report_path.push("report.html");
     analysis_report
         .to_html_report()?
         .generate_html(&report_path)?;
-    scenery.export_data(&data_dir, "")?;
     Ok(())
 }
 

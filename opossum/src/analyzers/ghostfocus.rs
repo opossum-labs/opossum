@@ -7,7 +7,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     nodes::NodeGroup,
     optic_node::OpticNode,
-    reporting::reporter::AnalysisReport,
+    reporting::analysis_report::AnalysisReport,
 };
 
 use super::{raytrace::AnalysisRayTrace, Analyzer, RayTraceConfig};

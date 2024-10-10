@@ -22,7 +22,7 @@ use crate::{
         AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
     },
     properties::{Properties, Proptype},
-    reporting::reporter::NodeReport,
+    reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
     utils::{
         geom_transformation::Isometry,

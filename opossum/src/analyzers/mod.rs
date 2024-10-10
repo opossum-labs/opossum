@@ -10,7 +10,7 @@ pub mod energy;
 pub mod ghostfocus;
 pub mod raytrace;
 
-use crate::{error::OpmResult, nodes::NodeGroup, reporting::reporter::AnalysisReport};
+use crate::{error::OpmResult, nodes::NodeGroup, reporting::analysis_report::AnalysisReport};
 pub use analyzable::Analyzable;
 pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;

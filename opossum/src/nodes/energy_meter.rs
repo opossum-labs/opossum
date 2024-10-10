@@ -12,7 +12,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     properties::{Properties, Proptype},
-    reporting::reporter::NodeReport,
+    reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
 };
 use log::warn;
