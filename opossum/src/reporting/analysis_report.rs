@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 pub struct AnalysisReport {
     opossum_version: String,
     analysis_timestamp: DateTime<Local>,
+    analysis_type: String,
     scenery: Option<NodeGroup>,
     node_reports: Vec<NodeReport>,
 }
@@ -29,6 +30,7 @@ impl AnalysisReport {
         Self {
             opossum_version,
             analysis_timestamp,
+            analysis_type: String::default(),
             scenery: None,
             node_reports: Vec::default(),
         }
@@ -82,9 +84,16 @@ impl AnalysisReport {
         Ok(HtmlReport::new(
             self.opossum_version.clone(),
             self.analysis_timestamp.format("%Y/%m/%d %H:%M").to_string(),
+            self.analysis_type.clone(),
             scenery.node_attr().name(),
             html_node_reports,
         ))
+    }
+    /// Sets the analysis type of this [`AnalysisReport`].
+    ///
+    /// This information is used i.e. in the [`HtmlReport`].
+    pub fn set_analysis_type(&mut self, analysis_type: &str) {
+        self.analysis_type = analysis_type.to_owned();
     }
 }
 

@@ -41,7 +41,9 @@ impl Analyzer for RayTracingAnalyzer {
         Ok(())
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
-        scenery.toplevel_report()
+        let mut report = scenery.toplevel_report()?;
+        report.set_analysis_type("Ray Tracing Analysis");
+        Ok(report)
     }
 }
 /// Trait for implementing the ray trace analysis.

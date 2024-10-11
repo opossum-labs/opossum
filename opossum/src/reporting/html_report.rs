@@ -13,6 +13,7 @@ static HTML_NODE_REPORT: &str = include_str!("../html/node_report.html");
 pub struct HtmlReport {
     opossum_version: String,
     analysis_timestamp: String,
+    analysis_type: String,
     description: String,
     node_reports: Vec<HtmlNodeReport>,
 }
@@ -21,12 +22,14 @@ impl HtmlReport {
     pub fn new(
         opossum_version: String,
         analysis_timestamp: String,
+        analysis_type: String,
         description: String,
         node_reports: Vec<HtmlNodeReport>,
     ) -> Self {
         Self {
             opossum_version,
             analysis_timestamp,
+            analysis_type,
             description,
             node_reports,
         }

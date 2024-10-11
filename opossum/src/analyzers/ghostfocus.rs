@@ -99,6 +99,7 @@ impl Analyzer for GhostFocusAnalyzer {
             let node_report = NodeReport::new("hitmap", node_name, &uuid, props);
             analysis_report.add_node_report(node_report);
         }
+        analysis_report.set_analysis_type("Ghost Focus Analysis");
         Ok(analysis_report)
     }
 }
