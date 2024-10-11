@@ -5,7 +5,18 @@ mod analysis_raytrace;
 mod optic_graph;
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::Analyzable, dottable::Dottable, error::{OpmResult, OpossumError}, get_version, optic_node::OpticNode, optic_ports::{OpticPorts, PortType}, optic_ref::OpticRef, plottable::{Plottable, PltBackEnd}, properties::{Properties, Proptype}, rays::Rays, reporting::analysis_report::{AnalysisReport, NodeReport}, SceneryResources
+    analyzers::Analyzable,
+    dottable::Dottable,
+    error::{OpmResult, OpossumError},
+    get_version,
+    optic_node::OpticNode,
+    optic_ports::{OpticPorts, PortType},
+    optic_ref::OpticRef,
+    plottable::{Plottable, PltBackEnd},
+    properties::{Properties, Proptype},
+    rays::Rays,
+    reporting::analysis_report::{AnalysisReport, NodeReport},
+    SceneryResources,
 };
 use chrono::Local;
 use log::{info, warn};
@@ -66,7 +77,7 @@ pub struct NodeGroup {
     node_attr: NodeAttr,
     input_port_distances: BTreeMap<String, Length>,
     #[serde(skip)]
-    accumulated_rays: Rays
+    accumulated_rays: Rays,
 }
 impl Default for NodeGroup {
     fn default() -> Self {
@@ -86,7 +97,7 @@ impl Default for NodeGroup {
             graph: OpticGraph::default(),
             input_port_distances: BTreeMap::default(),
             node_attr,
-            accumulated_rays: Rays::default()
+            accumulated_rays: Rays::default(),
         }
     }
 }
@@ -297,7 +308,8 @@ impl NodeGroup {
         &mut self.graph
     }
     /// Returns a mutable reference to the underlying [`OpticGraph`] of this [`NodeGroup`].
-    pub fn graph(&self) -> &OpticGraph {
+    #[must_use]
+    pub const fn graph(&self) -> &OpticGraph {
         &self.graph
     }
     /// Write node specific data files to the given `data_dir`.
@@ -375,10 +387,11 @@ impl NodeGroup {
         Ok(svg_string)
     }
     /// Returns a reference to the accumulated rays of this [`NodeGroup`].
-    /// 
+    ///
     /// This function returns a bundle of all rays that propagated in a group after a ghost focus analysis.
     /// This function is in particular helpful for generating a global rya propagation plot.
-    pub fn accumulated_rays(&self) -> &Rays {
+    #[must_use]
+    pub const fn accumulated_rays(&self) -> &Rays {
         &self.accumulated_rays
     }
 }
@@ -471,7 +484,7 @@ impl OpticNode for NodeGroup {
         for node in nodes {
             node.optical_ref.borrow_mut().reset_data();
         }
-        self.accumulated_rays=Rays::default();
+        self.accumulated_rays = Rays::default();
     }
 }
 

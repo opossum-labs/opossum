@@ -5,7 +5,8 @@ use crate::{
     light_result::{light_rays_to_light_result, light_result_to_light_rays, LightRays},
     lightdata::LightData,
     optic_node::OpticNode,
-    optic_ports::PortType, rays::Rays,
+    optic_ports::PortType,
+    rays::Rays,
 };
 use log::{info, warn};
 
@@ -20,7 +21,7 @@ impl AnalysisGhostFocus for NodeGroup {
         incoming_data: LightRays,
         config: &GhostFocusConfig,
     ) -> OpmResult<LightRays> {
-        let mut all_propagting_rays=Rays::default();
+        let mut all_propagting_rays = Rays::default();
         let mut current_bouncing_rays = incoming_data;
         let mut group_inversion = self.inverted();
         for pass in 0..=config.max_bounces() {
@@ -93,7 +94,7 @@ impl AnalysisGhostFocus for NodeGroup {
             } // revert initial inversion (if necessary)
             group_inversion = !group_inversion;
         }
-        self.accumulated_rays=all_propagting_rays;
+        self.accumulated_rays = all_propagting_rays;
         Ok(current_bouncing_rays)
     }
 }

@@ -1,13 +1,22 @@
 use crate::{
-    aperture::Aperture, error::{OpmResult, OpossumError}, lightdata::LightData, nodes::{
+    aperture::Aperture,
+    error::{OpmResult, OpossumError},
+    lightdata::LightData,
+    nodes::{
         fluence_detector::Fluence, ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity, FilterType, FluenceData, Metertype, OpticGraph,
         Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
-    }, optic_ports::OpticPorts, ray::SplittingConfig, refractive_index::RefractiveIndexType, reporting::{analysis_report::NodeReport, html_report::HtmlNodeReport}, surface::hit_map::HitMap, utils::{
+    },
+    optic_ports::OpticPorts,
+    ray::SplittingConfig,
+    refractive_index::RefractiveIndexType,
+    reporting::{analysis_report::NodeReport, html_report::HtmlNodeReport},
+    surface::hit_map::HitMap,
+    utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
         EnumProxy,
-    }
+    },
 };
 use nalgebra::Vector3;
 use num::Float;
@@ -95,8 +104,8 @@ pub enum Proptype {
     Vec3(Vector3<f64>),
     /// an optional length parameter. used, e.g., for the alignment wavelength of the source
     LengthOption(Option<Length>),
-    /// HitMap
-    HitMap(HitMap)
+    /// a hit map (position fo rays hitting a given surface)
+    HitMap(HitMap),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -129,10 +138,9 @@ impl Proptype {
                 "image",
                 &format!("data/spot_diagram_{property_name}_{uuid}.svg"),
             ),
-            Self::HitMap(_) => tt.render(
-                "image",
-                &format!("data/hit_map_{property_name}_{uuid}.svg"),
-            ),
+            Self::HitMap(_) => {
+                tt.render("image", &format!("data/hit_map_{property_name}_{uuid}.svg"))
+            }
             Self::WaveFrontData(_value) => tt.render(
                 "image",
                 &format!("data/wavefront_diagram_{property_name}_{uuid}.png"),

@@ -3,7 +3,9 @@ use opossum::{
     coatings::CoatingType,
     error::OpmResult,
     joule, millimeter,
-    nodes::{collimated_line_ray_source, round_collimated_ray_source, Lens, NodeGroup, SpotDiagram},
+    nodes::{
+        collimated_line_ray_source, round_collimated_ray_source, Lens, NodeGroup, SpotDiagram,
+    },
     optic_node::OpticNode,
     optic_ports::PortType,
     OpmDocument,

@@ -6,6 +6,7 @@ use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
+use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
@@ -23,7 +24,6 @@ use crate::{
     reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
 };
-use super::node_attr::NodeAttr;
 
 ///alias for uom `RadiantExposure`, as this name is rather uncommon to use for laser scientists
 pub type Fluence = uom::si::f64::RadiantExposure;

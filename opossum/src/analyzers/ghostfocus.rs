@@ -96,7 +96,7 @@ impl Analyzer for GhostFocusAnalyzer {
             for hit_map in &hit_maps {
                 props.create(hit_map.0, "surface hit map", None, hit_map.1.clone().into())?;
             }
-            let node_report = NodeReport::new("hitmap", &node_name, &uuid, props);
+            let node_report = NodeReport::new("hitmap", node_name, &uuid, props);
             analysis_report.add_node_report(node_report);
         }
         Ok(analysis_report)

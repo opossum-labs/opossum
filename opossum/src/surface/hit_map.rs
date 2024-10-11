@@ -9,10 +9,13 @@ use uom::si::{
 };
 
 use crate::{
-    error::OpmResult, plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable}, properties::Proptype, utils::unit_format::{
+    error::OpmResult,
+    plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+    properties::Proptype,
+    utils::unit_format::{
         get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit,
         get_unit_value_as_length_with_format_by_exponent,
-    }
+    },
 };
 
 /// Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
@@ -48,7 +51,7 @@ impl HitMap {
 }
 impl From<HitMap> for Proptype {
     fn from(value: HitMap) -> Self {
-        Proptype::HitMap(value)
+        Self::HitMap(value)
     }
 }
 impl Plottable for HitMap {
