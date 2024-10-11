@@ -1,7 +1,7 @@
 use nalgebra::Point3;
 use uom::si::f64::{Energy, Length};
 
-use super::{hit_map::HitMap, GeoSurface};
+use super::{hit_map::HitMap, GeoSurface, Plane};
 use crate::{coatings::CoatingType, rays::Rays, utils::geom_transformation::Isometry};
 
 /// This struct represents an optical surface, which consists of the geometric surface shape ([`GeoSurface`]) and further
@@ -13,6 +13,17 @@ pub struct OpticalSurface {
     backward_rays_cache: Rays,
     forward_rays_cache: Rays,
     hit_map: HitMap,
+}
+impl Default for OpticalSurface {
+    fn default() -> Self {
+        Self {
+            geo_surface: Box::new(Plane::new(&Isometry::identity())),
+            coating: CoatingType::IdealAR,
+            backward_rays_cache: Rays::default(),
+            forward_rays_cache: Rays::default(),
+            hit_map: HitMap::default(),
+        }
+    }
 }
 impl Clone for OpticalSurface {
     fn clone(&self) -> Self {

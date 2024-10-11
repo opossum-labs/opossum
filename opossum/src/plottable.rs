@@ -1251,7 +1251,7 @@ impl AxLims {
         if axlim.check_validity() {
             Some(axlim)
         } else {
-            warn!("Invalid ax limit! Must be finite, not NaN, not equal and min must be smaller than max! AxLimit is set to None!");
+            warn!("Invalid axis limits. Must be finite and min < max. Use default");
             None
         }
     }
@@ -1276,7 +1276,7 @@ impl AxLims {
             if axlim.check_validity() {
                 Some(axlim)
             } else {
-                warn!("Invalid ax limit! Must be finite, not NaN, not equal and min must be smaller than max! AxLimit is set to None!");
+                warn!("Invalid axis limits. Must be finite and min < max. Use default");
                 None
             }
         }
@@ -1344,7 +1344,6 @@ impl AxLims {
             max = 0.5;
             min = -0.5;
         };
-
         Self::new(min, max)
     }
 
@@ -1411,7 +1410,6 @@ pub trait Plottable {
         let _ = self.add_plot_specific_params(&mut plt_params);
 
         let mut plt_type = self.get_plot_type(&plt_params);
-
         let mut plt_series_opt =
             self.get_plot_series(&mut plt_type, plt_params.get_legend_flag().unwrap_or(false))?;
 

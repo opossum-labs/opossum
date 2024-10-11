@@ -3,9 +3,7 @@ use opossum::{
     coatings::CoatingType,
     error::OpmResult,
     joule, millimeter,
-    nodes::{
-        collimated_line_ray_source, round_collimated_ray_source, Lens, NodeGroup, SpotDiagram,
-    },
+    nodes::{round_collimated_ray_source, Lens, NodeGroup, SpotDiagram},
     optic_node::OpticNode,
     optic_ports::PortType,
     OpmDocument,
@@ -14,7 +12,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(collimated_line_ray_source(
+    let i_src = scenery.add_node(round_collimated_ray_source(
         millimeter!(50.0),
         joule!(1.0),
         5,

@@ -57,6 +57,8 @@ use std::collections::HashMap;
 pub struct SpotDiagram {
     light_data: Option<Rays>,
     node_attr: NodeAttr,
+    #[serde(skip)]
+    surface: OpticalSurface,
     apodization_warning: bool,
 }
 impl Default for SpotDiagram {
@@ -79,6 +81,7 @@ impl Default for SpotDiagram {
             light_data: None,
             node_attr,
             apodization_warning: false,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
         }
     }
 }
@@ -99,7 +102,7 @@ impl Alignable for SpotDiagram {}
 impl OpticNode for SpotDiagram {
     fn hit_maps(&self) -> HashMap<String, HitMap> {
         let mut map: HashMap<String, HitMap> = HashMap::default();
-        map.insert("in1".to_string(), HitMap::default());
+        map.insert("in1".to_string(), self.surface.hit_map().clone());
         map
     }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
@@ -205,8 +208,8 @@ impl AnalysisGhostFocus for SpotDiagram {
         };
         let mut rays = bouncing_rays.clone();
         if let Some(iso) = self.effective_iso() {
-            let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-            rays.refract_on_surface(&mut plane, None)?;
+            self.surface.set_isometry(&iso);
+            rays.refract_on_surface(&mut self.surface, None)?;
         } else {
             return Err(OpossumError::Analysis(
                 "no location for surface defined. Aborting".into(),

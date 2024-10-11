@@ -106,14 +106,17 @@ impl Plottable for HitMap {
         x_max *= f64::powi(10., -x_exponent);
         y_max *= f64::powi(10., -y_exponent);
 
-        plt_type.set_plot_param(&PlotArgs::XLim(AxLims::new(-x_max * 1.1, 1.1 * x_max)))?;
-        plt_type.set_plot_param(&PlotArgs::YLim(AxLims::new(-y_max * 1.1, 1.1 * y_max)))?;
+        let x_limits = AxLims::create_useful_axlims(-x_max * 1.1, x_max * 1.1);
+        let y_limits = AxLims::create_useful_axlims(-y_max * 1.1, y_max * 1.1);
+
+        plt_type.set_plot_param(&PlotArgs::XLim(x_limits))?;
+        plt_type.set_plot_param(&PlotArgs::YLim(y_limits))?;
         Ok(Some(plt_series))
     }
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
-            .set(&PlotArgs::XLabel("x position (m)".into()))?
-            .set(&PlotArgs::YLabel("y position (m)".into()))?
+            // .set(&PlotArgs::XLabel("x position (b)".into()))?
+            // .set(&PlotArgs::YLabel("y position (b)".into()))?
             .set(&PlotArgs::AxisEqual(true))?
             .set(&PlotArgs::PlotAutoSize(true))?
             .set(&PlotArgs::PlotSize((800, 800)))?;
