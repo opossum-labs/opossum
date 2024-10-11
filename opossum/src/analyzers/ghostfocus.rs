@@ -77,7 +77,6 @@ impl Analyzer for GhostFocusAnalyzer {
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
         analysis_report.add_scenery(scenery);
-        info!("Add global ray propagation");
         let mut props = Properties::default();
         let all_rays = scenery.accumulated_rays();
         if let Ok(proptype) = <Rays as TryInto<Proptype>>::try_into(all_rays.clone()) {
@@ -86,10 +85,8 @@ impl Analyzer for GhostFocusAnalyzer {
         let node_report =
             NodeReport::new("ray propagation", "Global ray propagation", "global", props);
         analysis_report.add_node_report(node_report);
-        info!("Add hitmaps...");
         for node in scenery.graph().nodes() {
             let node_name = &node.optical_ref.borrow().name();
-            info!("node {node_name}");
             let uuid = node.uuid().as_simple().to_string();
             let mut props = Properties::default();
             let hit_maps = node.optical_ref.borrow().hit_maps();

@@ -11,7 +11,6 @@ use crate::{
     properties::{Properties, Proptype},
 };
 use chrono::{DateTime, Local};
-use log::info;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug, Clone)]
@@ -57,9 +56,7 @@ impl AnalysisReport {
     /// This function will return an error if .
     pub fn export_data(&self, report_path: &Path) -> OpmResult<()> {
         let report_path = report_path.join(Path::new("data"));
-        info!("Exporting report data");
         for node_report in &self.node_reports {
-            info!(" - node {}", node_report.name);
             node_report.properties.export_data(
                 &report_path,
                 &format!("{}_{}", &node_report.name, &node_report.uuid),

@@ -3,7 +3,6 @@ use crate::{
     error::{OpmResult, OpossumError},
     plottable::Plottable,
 };
-use log::info;
 use nalgebra::vector;
 use plotters::coord::combinators::LogScalable;
 use serde::{Deserialize, Serialize};
@@ -176,22 +175,18 @@ impl Property {
         match &self.prop {
             Proptype::SpotDiagram(spot_diagram) => {
                 let file_path = report_path.join(Path::new(&format!("spot_diagram_{id}.svg")));
-                info!("  {}", file_path.display());
                 spot_diagram.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::FluenceDetector(fluence) => {
                 let file_path = report_path.join(Path::new(&format!("fluence_diagram_{id}.png")));
-                info!("  {}", file_path.display());
                 fluence.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
             }
             Proptype::Spectrometer(spectrometer) => {
                 let file_path = report_path.join(Path::new(&format!("spectrometer_{id}.svg")));
-                info!("  {}", file_path.display());
                 spectrometer.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::RayPositionHistory(ray_hist) => {
                 let file_path = report_path.join(Path::new(&format!("ray_propagation_{id}.svg")));
-                info!("  {}", file_path.display());
                 let mut ray_hist_clone = ray_hist.clone();
                 ray_hist_clone.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
                 ray_hist_clone.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
@@ -201,7 +196,6 @@ impl Property {
             }
             Proptype::HitMap(hit_map) => {
                 let file_path = report_path.join(Path::new(&format!("hit_map_{id}.svg")));
-                info!("  {}", file_path.display());
                 hit_map.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             _ => {}

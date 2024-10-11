@@ -26,7 +26,6 @@ use core::fmt::Debug;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::path::Path;
 use std::rc::Rc;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
@@ -116,9 +115,9 @@ pub trait OpticNode: Dottable {
     ///
     /// # Errors
     /// This function might return an error depending on the particular implementation.
-    fn export_data(&self, _data_dir: &Path, _uuid: &str) -> OpmResult<()> {
-        Ok(())
-    }
+    // fn export_data(&self, _data_dir: &Path, _uuid: &str) -> OpmResult<()> {
+    //     Ok(())
+    // }
     /// Return a downcasted reference of a [`NodeGroup`].
     ///
     /// # Errors

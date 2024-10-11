@@ -18,9 +18,7 @@ use crate::{
     nanometer,
     optic_node::{Alignable, OpticNode},
     optic_ports::{OpticPorts, PortType},
-    plottable::{
-        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable, PltBackEnd,
-    },
+    plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
@@ -31,7 +29,6 @@ use crate::{
 };
 
 use super::node_attr::NodeAttr;
-use std::path::{Path, PathBuf};
 
 /// A wavefront monitor node
 ///
@@ -166,33 +163,33 @@ impl WaveFrontErrorMap {
     }
 }
 impl OpticNode for WaveFront {
-    fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
-        if let Some(LightData::Geometric(rays)) = &self.light_data {
-            let wf_data_opt = rays
-                .get_wavefront_data_in_units_of_wvl(
-                    true,
-                    nanometer!(1.),
-                    &self.effective_iso().map_or_else(Isometry::identity, |v| v),
-                )
-                .ok();
+    // fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
+    //     if let Some(LightData::Geometric(rays)) = &self.light_data {
+    //         let wf_data_opt = rays
+    //             .get_wavefront_data_in_units_of_wvl(
+    //                 true,
+    //                 nanometer!(1.),
+    //                 &self.effective_iso().map_or_else(Isometry::identity, |v| v),
+    //             )
+    //             .ok();
 
-            let mut file_path = PathBuf::from(report_dir);
-            file_path.push(format!("wavefront_diagram_{}_{}.png", self.name(), uuid));
-            if let Some(wf_data) = wf_data_opt {
-                //todo! for all wavelengths
-                if let Err(e) =
-                    wf_data.wavefront_error_maps[0].to_plot(&file_path, PltBackEnd::Bitmap)
-                {
-                    warn!("Could not export wavefront diagram: {}", e.to_string());
-                }
-            } else {
-                warn!("Wavefront diagram: no wavefront data for export available",);
-            }
-        } else {
-            warn!("Wavefront diagram: no light data for export available",);
-        }
-        Ok(())
-    }
+    //         let mut file_path = PathBuf::from(report_dir);
+    //         file_path.push(format!("wavefront_diagram_{}_{}.png", self.name(), uuid));
+    //         if let Some(wf_data) = wf_data_opt {
+    //             //todo! for all wavelengths
+    //             if let Err(e) =
+    //                 wf_data.wavefront_error_maps[0].to_plot(&file_path, PltBackEnd::Bitmap)
+    //             {
+    //                 warn!("Could not export wavefront diagram: {}", e.to_string());
+    //             }
+    //         } else {
+    //             warn!("Wavefront diagram: no wavefront data for export available",);
+    //         }
+    //     } else {
+    //         warn!("Wavefront diagram: no light data for export available",);
+    //     }
+    //     Ok(())
+    // }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
@@ -448,9 +445,6 @@ mod test {
         nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
-    use tempfile::NamedTempFile;
-    use uom::num_traits::Zero;
-    use uom::si::f64::Length;
     #[test]
     fn default() {
         let mut node = WaveFront::default();
@@ -545,24 +539,24 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-    #[test]
-    fn export_data() {
-        let mut wf = WaveFront::default();
-        assert!(wf.export_data(Path::new(""), "").is_ok());
-        wf.light_data = Some(LightData::Geometric(Rays::default()));
-        let path = NamedTempFile::new().unwrap();
-        assert!(wf.export_data(path.path().parent().unwrap(), "").is_ok());
-        wf.light_data = Some(LightData::Geometric(
-            Rays::new_uniform_collimated(
-                nanometer!(1053.0),
-                joule!(1.0),
-                &Hexapolar::new(Length::zero(), 1).unwrap(),
-            )
-            .unwrap(),
-        ));
-        assert!(wf.export_data(path.path().parent().unwrap(), "").is_ok());
-        // todo! check for warnings
-    }
+    // #[test]
+    // fn export_data() {
+    //     let mut wf = WaveFront::default();
+    //     assert!(wf.export_data(Path::new(""), "").is_ok());
+    //     wf.light_data = Some(LightData::Geometric(Rays::default()));
+    //     let path = NamedTempFile::new().unwrap();
+    //     assert!(wf.export_data(path.path().parent().unwrap(), "").is_ok());
+    //     wf.light_data = Some(LightData::Geometric(
+    //         Rays::new_uniform_collimated(
+    //             nanometer!(1053.0),
+    //             joule!(1.0),
+    //             &Hexapolar::new(Length::zero(), 1).unwrap(),
+    //         )
+    //         .unwrap(),
+    //     ));
+    //     assert!(wf.export_data(path.path().parent().unwrap(), "").is_ok());
+    //     // todo! check for warnings
+    // }
     #[test]
     fn report() {
         let mut wf = WaveFront::default();

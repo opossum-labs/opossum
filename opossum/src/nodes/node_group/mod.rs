@@ -12,7 +12,6 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     optic_ref::OpticRef,
-    plottable::{Plottable, PltBackEnd},
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::analysis_report::{AnalysisReport, NodeReport},
@@ -23,13 +22,7 @@ use log::{info, warn};
 pub use optic_graph::OpticGraph;
 use petgraph::prelude::NodeIndex;
 use serde::{Deserialize, Serialize};
-use std::{
-    cell::RefCell,
-    collections::BTreeMap,
-    io::Write,
-    path::{Path, PathBuf},
-    rc::Rc,
-};
+use std::{cell::RefCell, collections::BTreeMap, io::Write, rc::Rc};
 use tempfile::NamedTempFile;
 use uom::si::f64::Length;
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -443,26 +436,26 @@ impl OpticNode for NodeGroup {
             group_props,
         ))
     }
-    fn export_data(&self, report_dir: &Path, _uuid: &str) -> OpmResult<()> {
-        for node in self.graph.nodes() {
-            let node_name = node.optical_ref.borrow().name();
-            info!("export data for node {node_name}");
-            let uuid = node.uuid().as_simple().to_string();
-            node.optical_ref.borrow().export_data(report_dir, &uuid)?;
-            let hitmaps = node.optical_ref.borrow().hit_maps();
-            for hitmap in &hitmaps {
-                let port_name = hitmap.0;
-                info!("   found hitmap for port {port_name}");
-                let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-                    "hitmap_{node_name}_{port_name}_{uuid}.svg"
-                )));
-                if !hitmap.1.is_empty() {
-                    hitmap.1.to_plot(&file_path, PltBackEnd::SVG)?;
-                }
-            }
-        }
-        Ok(())
-    }
+    // fn export_data(&self, report_dir: &Path, _uuid: &str) -> OpmResult<()> {
+    //     for node in self.graph.nodes() {
+    //         let node_name = node.optical_ref.borrow().name();
+    //         info!("export data for node {node_name}");
+    //         let uuid = node.uuid().as_simple().to_string();
+    //         node.optical_ref.borrow().export_data(report_dir, &uuid)?;
+    //         let hitmaps = node.optical_ref.borrow().hit_maps();
+    //         for hitmap in &hitmaps {
+    //             let port_name = hitmap.0;
+    //             info!("   found hitmap for port {port_name}");
+    //             let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+    //                 "hitmap_{node_name}_{port_name}_{uuid}.svg"
+    //             )));
+    //             if !hitmap.1.is_empty() {
+    //                 hitmap.1.to_plot(&file_path, PltBackEnd::SVG)?;
+    //             }
+    //         }
+    //     }
+    //     Ok(())
+    // }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
