@@ -5,17 +5,7 @@ mod analysis_raytrace;
 mod optic_graph;
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::Analyzable,
-    dottable::Dottable,
-    error::{OpmResult, OpossumError},
-    get_version,
-    optic_node::OpticNode,
-    optic_ports::{OpticPorts, PortType},
-    optic_ref::OpticRef,
-    plottable::{Plottable, PltBackEnd},
-    properties::{Properties, Proptype},
-    reporting::analysis_report::{AnalysisReport, NodeReport},
-    SceneryResources,
+    analyzers::Analyzable, dottable::Dottable, error::{OpmResult, OpossumError}, get_version, optic_node::OpticNode, optic_ports::{OpticPorts, PortType}, optic_ref::OpticRef, plottable::{Plottable, PltBackEnd}, properties::{Properties, Proptype}, rays::Rays, reporting::analysis_report::{AnalysisReport, NodeReport}, SceneryResources
 };
 use chrono::Local;
 use log::{info, warn};
@@ -75,6 +65,8 @@ pub struct NodeGroup {
     graph: OpticGraph,
     node_attr: NodeAttr,
     input_port_distances: BTreeMap<String, Length>,
+    #[serde(skip)]
+    accumulated_rays: Rays
 }
 impl Default for NodeGroup {
     fn default() -> Self {
@@ -94,6 +86,7 @@ impl Default for NodeGroup {
             graph: OpticGraph::default(),
             input_port_distances: BTreeMap::default(),
             node_attr,
+            accumulated_rays: Rays::default()
         }
     }
 }
@@ -381,6 +374,13 @@ impl NodeGroup {
             .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
         Ok(svg_string)
     }
+    /// Returns a reference to the accumulated rays of this [`NodeGroup`].
+    /// 
+    /// This function returns a bundle of all rays that propagated in a group after a ghost focus analysis.
+    /// This function is in particular helpful for generating a global rya propagation plot.
+    pub fn accumulated_rays(&self) -> &Rays {
+        &self.accumulated_rays
+    }
 }
 
 impl OpticNode for NodeGroup {
@@ -471,6 +471,7 @@ impl OpticNode for NodeGroup {
         for node in nodes {
             node.optical_ref.borrow_mut().reset_data();
         }
+        self.accumulated_rays=Rays::default();
     }
 }
 

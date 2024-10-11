@@ -3,7 +3,7 @@ use opossum::{
     coatings::CoatingType,
     error::OpmResult,
     joule, millimeter,
-    nodes::{round_collimated_ray_source, Lens, NodeGroup, SpotDiagram},
+    nodes::{collimated_line_ray_source, round_collimated_ray_source, Lens, NodeGroup, SpotDiagram},
     optic_node::OpticNode,
     optic_ports::PortType,
     OpmDocument,
@@ -12,8 +12,8 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(round_collimated_ray_source(
-        millimeter!(10.0),
+    let i_src = scenery.add_node(collimated_line_ray_source(
+        millimeter!(50.0),
         joule!(1.0),
         5,
     )?)?;
@@ -35,8 +35,8 @@ fn main() -> OpmResult<()> {
     let i_l = scenery.add_node(lens)?;
     let i_sd2 = scenery.add_node(SpotDiagram::default())?;
     scenery.connect_nodes(i_src, "out1", i_sd, "in1", millimeter!(20.0))?;
-    scenery.connect_nodes(i_sd, "out1", i_l, "front", millimeter!(150.0))?;
-    scenery.connect_nodes(i_l, "rear", i_sd2, "in1", millimeter!(50.0))?;
+    scenery.connect_nodes(i_sd, "out1", i_l, "front", millimeter!(80.0))?;
+    scenery.connect_nodes(i_l, "rear", i_sd2, "in1", millimeter!(70.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     let mut config = GhostFocusConfig::default();

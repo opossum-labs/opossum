@@ -396,7 +396,6 @@ pub struct RayPositionHistories {
     /// view direction if the rayposition thistory is plotted
     pub plot_view_direction: Option<Vector3<f64>>,
 }
-
 impl RayPositionHistories {
     /// returns the center wavelengths of the individual [`RayPositionHistorySpectrum`] structs as a Vector
     #[must_use]

@@ -4,7 +4,14 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::OpmResult, get_version, light_result::{LightRays, LightResult}, nodes::NodeGroup, optic_node::OpticNode, properties::Properties, reporting::analysis_report::{AnalysisReport, NodeReport}
+    error::OpmResult,
+    get_version,
+    light_result::{LightRays, LightResult},
+    nodes::NodeGroup,
+    optic_node::OpticNode,
+    properties::{Properties, Proptype},
+    rays::Rays,
+    reporting::analysis_report::{AnalysisReport, NodeReport},
 };
 
 use super::{raytrace::AnalysisRayTrace, Analyzer, RayTraceConfig};
@@ -70,17 +77,26 @@ impl Analyzer for GhostFocusAnalyzer {
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
         analysis_report.add_scenery(scenery);
+        info!("Add global ray propagation");
+        let mut props = Properties::default();
+        let all_rays = scenery.accumulated_rays();
+        if let Ok(proptype) = <Rays as TryInto<Proptype>>::try_into(all_rays.clone()) {
+            props.create("propagation", "ray propagation", None, proptype)?;
+        }
+        let node_report =
+            NodeReport::new("ray propagation", "Global ray propagation", "global", props);
+        analysis_report.add_node_report(node_report);
         info!("Add hitmaps...");
         for node in scenery.graph().nodes() {
             let node_name = &node.optical_ref.borrow().name();
             info!("node {node_name}");
             let uuid = node.uuid().as_simple().to_string();
-            let mut props=Properties::default();
-            let hit_maps=node.optical_ref.borrow().hit_maps();
+            let mut props = Properties::default();
+            let hit_maps = node.optical_ref.borrow().hit_maps();
             for hit_map in &hit_maps {
                 props.create(hit_map.0, "surface hit map", None, hit_map.1.clone().into())?;
             }
-            let node_report=NodeReport::new("hitmap", &node_name, &uuid,props);
+            let node_report = NodeReport::new("hitmap", &node_name, &uuid, props);
             analysis_report.add_node_report(node_report);
         }
         Ok(analysis_report)
