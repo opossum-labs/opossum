@@ -358,7 +358,6 @@ impl Lens {
         let reflected_front = rays.refract_on_surface(&mut self.front_surf, Some(&ambient_idx))?;
         self.front_surf.set_forward_rays_cache(reflected_front);
         rays.merge(self.front_surf.backwards_rays_cache());
-
         if let Some(aperture) = self.ports().aperture(&PortType::Input, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {

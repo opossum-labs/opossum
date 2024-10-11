@@ -82,8 +82,8 @@ impl Plottable for HitMap {
         let y_prefix = get_prefix_for_base_unit(y_max);
         let x_prefix = get_prefix_for_base_unit(x_max);
 
-        plt_type.set_plot_param(&PlotArgs::YLabel(format!("x position ({y_prefix}m)")))?;
-        plt_type.set_plot_param(&PlotArgs::XLabel(format!("y position ({x_prefix}m)")))?;
+        plt_type.set_plot_param(&PlotArgs::XLabel(format!("x position ({y_prefix}m)")))?;
+        plt_type.set_plot_param(&PlotArgs::YLabel(format!("y position ({x_prefix}m)")))?;
 
         let mut plt_series = Vec::<PlotSeries>::with_capacity(1);
         let x_vals = xy_pos

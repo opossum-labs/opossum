@@ -72,6 +72,7 @@ impl Default for Wedge {
             .create_property("wedge", "wedge angle", None, Angle::zero().into())
             .unwrap();
         let mut ports = OpticPorts::new();
+
         ports.add(&PortType::Input, "front").unwrap();
         ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
@@ -192,6 +193,13 @@ impl Wedge {
         let ambient_idx = self.ambient_idx();
         let mut rays = incoming_rays;
         self.front_surf.set_isometry(iso);
+        self.front_surf.set_coating(
+            self.node_attr()
+                .ports()
+                .coating(&PortType::Input, "front")
+                .unwrap()
+                .clone(),
+        );
         let thickness_iso = Isometry::new_along_z(thickness)?;
         let wedge_iso = Isometry::new(
             Point3::origin(),
@@ -199,7 +207,14 @@ impl Wedge {
         )?;
         let isometry = iso.append(&thickness_iso).append(&wedge_iso);
         self.rear_surf.set_isometry(&isometry);
-        if let Some(aperture) = self.ports().aperture(&PortType::Input, "rear") {
+        self.rear_surf.set_coating(
+            self.node_attr()
+                .ports()
+                .coating(&PortType::Output, "rear")
+                .unwrap()
+                .clone(),
+        );
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, "front") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -211,11 +226,10 @@ impl Wedge {
         self.rear_surf.set_forward_rays_cache(reflected_rear);
         rays.merge(self.rear_surf.backwards_rays_cache());
         rays.set_refractive_index(refri)?;
-
         let reflected_front = rays.refract_on_surface(&mut self.front_surf, Some(&ambient_idx))?;
         self.front_surf.set_forward_rays_cache(reflected_front);
         rays.merge(self.front_surf.backwards_rays_cache());
-        if let Some(aperture) = self.ports().aperture(&PortType::Output, "front") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, "rear") {
             rays.apodize(aperture)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
