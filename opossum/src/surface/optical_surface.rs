@@ -93,8 +93,8 @@ impl OpticalSurface {
     }
     /// Add intersection point (with energy) to hit map.
     ///
-    pub fn add_to_hit_map(&mut self, hit_point: (Point3<Length>, Energy)) {
-        self.hit_map.add_point(hit_point);
+    pub fn add_to_hit_map(&mut self, hit_point: (Point3<Length>, Energy), bounce: usize) {
+        self.hit_map.add_point(hit_point, bounce);
     }
     /// Reset hit map of this [`OpticalSurface`].
     pub fn reset_hit_map(&mut self) {

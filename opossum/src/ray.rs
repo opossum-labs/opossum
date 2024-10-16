@@ -448,7 +448,7 @@ impl Ray {
                 self.refractive_index = n2;
                 self.number_of_refractions += 1;
                 // save on hit map of surface
-                os.add_to_hit_map((intersection_point, input_energy));
+                os.add_to_hit_map((intersection_point, input_energy), self.number_of_bounces);
 
                 Ok(Some(reflected_ray))
             } else {

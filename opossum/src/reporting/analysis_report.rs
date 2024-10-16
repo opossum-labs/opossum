@@ -90,7 +90,7 @@ impl AnalysisReport {
     ///
     /// This information is used i.e. in the [`HtmlReport`].
     pub fn set_analysis_type(&mut self, analysis_type: &str) {
-        self.analysis_type = analysis_type.to_owned();
+        analysis_type.clone_into(&mut self.analysis_type);
     }
 }
 

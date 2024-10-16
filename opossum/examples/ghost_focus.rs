@@ -45,7 +45,7 @@ fn main() -> OpmResult<()> {
     .with_tilt(degree!(0.0, 5.0, 0.0))?;
     wedge.set_coating(&PortType::Input, "front", &CoatingType::Fresnel)?;
     wedge.set_coating(&PortType::Input, "front", &CoatingType::Fresnel)?;
-    let i_w=scenery.add_node(wedge)?;
+    let i_w = scenery.add_node(wedge)?;
 
     let i_sd2 = scenery.add_node(SpotDiagram::default())?;
     scenery.connect_nodes(i_src, "out1", i_sd, "in1", millimeter!(20.0))?;
