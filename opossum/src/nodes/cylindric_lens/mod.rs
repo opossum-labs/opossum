@@ -289,10 +289,13 @@ impl OpticNode for CylindricLens {
     fn reset_data(&mut self) {
         self.front_surf.set_backwards_rays_cache(Rays::default());
         self.front_surf.set_forward_rays_cache(Rays::default());
+        self.front_surf.reset_hit_map();
 
         self.rear_surf.set_backwards_rays_cache(Rays::default());
         self.rear_surf.set_forward_rays_cache(Rays::default());
+        self.rear_surf.reset_hit_map();
     }
+
     fn hit_maps(&self) -> HashMap<String, HitMap> {
         let mut map: HashMap<String, HitMap> = HashMap::default();
         map.insert("front".to_string(), self.front_surf.hit_map().to_owned());
