@@ -264,6 +264,9 @@ impl OpticNode for WaveFront {
     }
     fn reset_data(&mut self) {
         self.light_data = None;
+        todo!();
+
+        // self.surface.reset_hit_map();
     }
 }
 impl From<WaveFrontData> for Proptype {

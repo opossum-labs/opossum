@@ -133,7 +133,7 @@ impl Plottable for HitMap {
         );
         let y_limits = AxLims::create_useful_axlims(
             0.1f64.mul_add(-y_diff, y_min),
-            0.1f64.mul_add(-y_diff, y_min),
+            0.1f64.mul_add(y_diff, y_max),
         );
 
         plt_type.set_plot_param(&PlotArgs::XLim(x_limits))?;

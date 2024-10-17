@@ -199,6 +199,9 @@ impl OpticNode for Spectrometer {
     }
     fn reset_data(&mut self) {
         self.light_data = None;
+        todo!();
+
+        // self.surface.reset_hit_map();
     }
 }
 
