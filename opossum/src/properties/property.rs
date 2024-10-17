@@ -191,6 +191,12 @@ impl Property {
                 ray_hist_clone.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
                 ray_hist_clone.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
+            Proptype::GhostFocusHistory(ghost_hist) => {
+                let file_path = report_path.join(Path::new(&format!("ghost_propagation_{id}.svg")));
+                let mut ghost_hist = ghost_hist.clone();
+                ghost_hist.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
+                ghost_hist.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+            }
             Proptype::WaveFrontData(_wf_data) => {
                 todo!()
             }

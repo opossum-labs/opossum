@@ -4,6 +4,7 @@ use crate::{
     light_result::LightRays,
     optic_node::OpticNode,
     properties::Proptype,
+    rays::Rays,
 };
 
 use super::CylindricLens;
@@ -13,6 +14,7 @@ impl AnalysisGhostFocus for CylindricLens {
         &mut self,
         incoming_data: LightRays,
         _config: &GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
     ) -> OpmResult<LightRays> {
         let (in_port, out_port) = if self.inverted() {
             ("rear", "front")

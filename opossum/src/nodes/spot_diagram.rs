@@ -183,6 +183,7 @@ impl OpticNode for SpotDiagram {
     }
     fn reset_data(&mut self) {
         self.light_data = None;
+        self.surface.reset_hit_map();
     }
 }
 
@@ -197,6 +198,7 @@ impl AnalysisGhostFocus for SpotDiagram {
         &mut self,
         incoming_data: LightRays,
         _config: &GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
     ) -> OpmResult<LightRays> {
         let (in_port, out_port) = if self.inverted() {
             ("out1", "in1")
@@ -224,7 +226,7 @@ impl AnalysisGhostFocus for SpotDiagram {
         self.light_data = Some(ray_cache);
 
         let mut out_light_rays = LightRays::default();
-        out_light_rays.insert(out_port.to_string(), rays.clone());
+        out_light_rays.insert(out_port.to_string(), rays);
         Ok(out_light_rays)
     }
 }

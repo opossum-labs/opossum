@@ -152,7 +152,11 @@ impl Properties {
             } else {
                 uuid
             };
-            if let Ok(html_prop_value) = prop.1.prop().to_html(node_name, node_uuid) {
+            if let Ok(html_prop_value) = prop
+                .1
+                .prop()
+                .to_html((prop.0.to_owned() + "_" + node_name).as_str(), node_uuid)
+            {
                 let html_prop = HtmlProperty {
                     name: prop.0.to_owned(),
                     description: prop.1.description().into(),
@@ -176,7 +180,8 @@ impl Properties {
     /// returns an error.
     pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
         for prop in &self.props {
-            prop.1.export_data(report_path, id)?;
+            prop.1
+                .export_data(report_path, (prop.0.to_owned() + "_" + id).as_str())?;
         }
         Ok(())
     }

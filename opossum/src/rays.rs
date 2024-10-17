@@ -1035,12 +1035,12 @@ impl Rays {
             ray.set_invalid();
         }
     }
-    /// Invalide all rays that have a number of bounces (reflections) higher or equal than the given upper limit.
+    /// Invalide all rays that have a number of bounces (reflections) higher than the given upper limit.
     pub fn filter_by_nr_of_bounces(&mut self, max_bounces: usize) {
         for ray in self
             .rays
             .iter_mut()
-            .filter(|r| r.number_of_bounces() >= max_bounces)
+            .filter(|r| r.number_of_bounces() > max_bounces)
         {
             ray.set_invalid();
         }
