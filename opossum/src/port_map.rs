@@ -14,6 +14,7 @@ impl PortMap {
     pub fn port_names(&self) -> Vec<String> {
         self.0.iter().map(|p| p.0.clone()).collect_vec()
     }
+
     /// Get the internal node port info for the given external port name.
     #[must_use]
     pub fn get(&self, port_name: &str) -> Option<&(NodeIndex, String)> {

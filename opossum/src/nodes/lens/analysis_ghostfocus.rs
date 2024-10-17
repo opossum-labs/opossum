@@ -5,6 +5,7 @@ use crate::{
     light_result::LightRays,
     optic_node::OpticNode,
     properties::Proptype,
+    rays::Rays,
 };
 
 impl AnalysisGhostFocus for Lens {
@@ -12,6 +13,7 @@ impl AnalysisGhostFocus for Lens {
         &mut self,
         incoming_data: LightRays,
         _config: &GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
     ) -> OpmResult<LightRays> {
         let (in_port, out_port) = if self.inverted() {
             ("rear", "front")

@@ -70,7 +70,7 @@ pub struct NodeGroup {
     node_attr: NodeAttr,
     input_port_distances: BTreeMap<String, Length>,
     #[serde(skip)]
-    accumulated_rays: Rays,
+    accumulated_rays: Vec<Rays>,
 }
 impl Default for NodeGroup {
     fn default() -> Self {
@@ -90,7 +90,7 @@ impl Default for NodeGroup {
             graph: OpticGraph::default(),
             input_port_distances: BTreeMap::default(),
             node_attr,
-            accumulated_rays: Rays::default(),
+            accumulated_rays: Vec::<Rays>::new(),
         }
     }
 }
@@ -382,10 +382,27 @@ impl NodeGroup {
     /// Returns a reference to the accumulated rays of this [`NodeGroup`].
     ///
     /// This function returns a bundle of all rays that propagated in a group after a ghost focus analysis.
-    /// This function is in particular helpful for generating a global rya propagation plot.
+    /// This function is in particular helpful for generating a global ray propagation plot.
     #[must_use]
-    pub const fn accumulated_rays(&self) -> &Rays {
+    pub const fn accumulated_rays(&self) -> &Vec<Rays> {
         &self.accumulated_rays
+    }
+
+    /// add a ray bundle to the set of accumulated rays of this node group
+    /// # Arguments
+    /// - rays: pointer to ray bundle that should be included
+    /// - bounce: bouncle level of these rays
+    pub fn add_to_accumulated_rays(&mut self, rays: &Rays, bounce: usize) {
+        if self.accumulated_rays.len() <= bounce {
+            self.accumulated_rays.push(rays.clone());
+        } else {
+            self.accumulated_rays[bounce].merge(rays);
+        }
+    }
+
+    ///clears the edges of a graph. Necessary for ghost focus analysis
+    pub fn clear_edges(&mut self) {
+        self.graph.clear_edges();
     }
 }
 
@@ -477,7 +494,7 @@ impl OpticNode for NodeGroup {
         for node in nodes {
             node.optical_ref.borrow_mut().reset_data();
         }
-        self.accumulated_rays = Rays::default();
+        self.accumulated_rays = Vec::<Rays>::new();
     }
 }
 

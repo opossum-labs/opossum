@@ -12,6 +12,7 @@ use crate::{
     optic_senery_rsc::SceneryResources,
     port_map::PortMap,
     properties::Proptype,
+    rays::Rays,
 };
 use log::warn;
 use nalgebra::Vector3;
@@ -296,6 +297,34 @@ impl OpticGraph {
             self.incoming_edges(idx)
         }
     }
+
+    ///Clear the edges of an optic graph. Useful for back- and forth-propagation in ghost focus analysis
+    pub fn clear_edges(&mut self) {
+        let node_indices = self.g.node_indices();
+        for idx in node_indices {
+            let mut ids = Vec::<EdgeIndex>::new();
+            for edge in self.edges_directed(idx, Direction::Incoming) {
+                ids.push(edge.id());
+            }
+            for id in ids {
+                let light = self.g.edge_weight_mut(id);
+                if let Some(light) = light {
+                    light.set_data(Some(LightData::Geometric(Rays::default())));
+                }
+            }
+
+            let mut ids = Vec::<EdgeIndex>::new();
+            for edge in self.edges_directed(idx, Direction::Outgoing) {
+                ids.push(edge.id());
+            }
+            for id in ids {
+                let light = self.g.edge_weight_mut(id);
+                if let Some(light) = light {
+                    light.set_data(Some(LightData::Geometric(Rays::default())));
+                }
+            }
+        }
+    }
     /// .
     #[must_use]
     pub fn is_stale_node(&self, idx: NodeIndex) -> bool {
@@ -410,7 +439,7 @@ impl OpticGraph {
                     }
                 }
                 for outgoing_edge in outgoing_edges {
-                    self.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                    self.set_outgoing_edge_data(idx, &outgoing_edge.0, &outgoing_edge.1);
                 }
             }
         }
@@ -480,7 +509,8 @@ impl OpticGraph {
             .collect::<LightResult>()
     }
     /// Sets the outgoing edge data of this [`OpticGraph`].
-    pub fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: LightData) {
+    /// Returns true if data has been passed on, false otherwise
+    pub fn set_outgoing_edge_data(&mut self, idx: NodeIndex, port: &str, data: &LightData) -> bool {
         let edges = self.g.edges_directed(idx, Direction::Outgoing);
         let edge_ref = edges
             .into_iter()
@@ -490,9 +520,14 @@ impl OpticGraph {
             let edge_idx = edge_ref.id();
             let light = self.g.edge_weight_mut(edge_idx);
             if let Some(light) = light {
-                light.set_data(Some(data));
+                light.set_data(Some(data.clone()));
             }
-        } // else outgoing edge not connected -> data dropped
+            true
+        }
+        // else outgoing edge not connected -> data dropped
+        else {
+            false
+        }
     }
     fn edges_directed(&self, idx: NodeIndex, dir: Direction) -> Edges<'_, LightFlow, Directed> {
         self.g.edges_directed(idx, dir)

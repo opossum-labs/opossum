@@ -1,6 +1,5 @@
 //! Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
 //! [`OpticalSurface`](crate::surface::OpticalSurface).
-use colorous::Color;
 use nalgebra::{DVector, MatrixXx2, Point2, Point3};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
@@ -108,9 +107,7 @@ impl Plottable for HitMap {
             };
 
             let gradient = colorous::TURBO;
-            let c = if self.hit_map.len() == 1 {
-                Color { r: 255, g: 0, b: 0 }
-            } else if self.hit_map.len() > 10 {
+            let c = if self.hit_map.len() > 10 {
                 gradient.eval_rational(i, self.hit_map.len())
             } else {
                 colorous::CATEGORY10[i]
@@ -128,8 +125,16 @@ impl Plottable for HitMap {
         x_min *= f64::powi(10., -x_exponent);
         y_min *= f64::powi(10., -y_exponent);
 
-        let x_limits = AxLims::create_useful_axlims(x_min * 1.1, x_max * 1.1);
-        let y_limits = AxLims::create_useful_axlims(y_min * 1.1, y_max * 1.1);
+        let x_diff = x_max - x_min;
+        let y_diff = y_max - y_min;
+        let x_limits = AxLims::create_useful_axlims(
+            0.1f64.mul_add(-x_diff, x_min),
+            0.1f64.mul_add(x_diff, x_max),
+        );
+        let y_limits = AxLims::create_useful_axlims(
+            0.1f64.mul_add(-y_diff, y_min),
+            0.1f64.mul_add(-y_diff, y_min),
+        );
 
         plt_type.set_plot_param(&PlotArgs::XLim(x_limits))?;
         plt_type.set_plot_param(&PlotArgs::YLim(y_limits))?;

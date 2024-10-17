@@ -1,4 +1,5 @@
 use crate::{
+    analyzers::ghostfocus::GhostFocusHistory,
     aperture::Aperture,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
@@ -83,6 +84,9 @@ pub enum Proptype {
     WaveFrontData(WaveFrontData),
     /// This property stores the ray position history of all [`Rays`](crate::rays::Rays) during propagation through the optic scenery
     RayPositionHistory(RayPositionHistories),
+    /// This property stores the ray position history of all [`Rays`](crate::rays::Rays), separated by their bounce level,
+    /// during propagation through the optic scenery
+    GhostFocusHistory(GhostFocusHistory),
     /// A (nested set) of Properties
     NodeReport(NodeReport),
     /// linear density in `1/length_unit`
@@ -179,6 +183,11 @@ impl Proptype {
                 "image",
                 &format!("data/ray_propagation_{property_name}_{uuid}.svg"),
             ),
+            Self::GhostFocusHistory(_) => tt.render(
+                "image",
+                &format!("data/ghost_propagation_{property_name}_{uuid}.svg"),
+            ),
+
             _ => Ok("unknown property type".into()),
         };
         string_value.map_err(|e| OpossumError::Other(e.to_string()))
@@ -227,6 +236,12 @@ impl From<Energy> for Proptype {
 impl From<Angle> for Proptype {
     fn from(value: Angle) -> Self {
         Self::Angle(value)
+    }
+}
+
+impl From<GhostFocusHistory> for Proptype {
+    fn from(value: GhostFocusHistory) -> Self {
+        Self::GhostFocusHistory(value)
     }
 }
 

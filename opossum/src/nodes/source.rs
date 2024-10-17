@@ -6,14 +6,12 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, RayTraceConfig,
+        Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     joule,
-    light_result::{
-        light_rays_to_light_result, light_result_to_light_rays, LightRays, LightResult,
-    },
+    light_result::{light_result_to_light_rays, LightRays, LightResult},
     lightdata::LightData,
     millimeter,
     optic_node::{Alignable, OpticNode},
@@ -269,7 +267,8 @@ impl AnalysisGhostFocus for Source {
     fn analyze(
         &mut self,
         incoming_data: LightRays,
-        _config: &crate::analyzers::GhostFocusConfig,
+        _config: &GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
     ) -> OpmResult<LightRays> {
         let mut rays = if self.inverted() {
             let Some(bouncing_rays) = incoming_data.get("out1") else {
@@ -303,11 +302,12 @@ impl AnalysisGhostFocus for Source {
                 "no location for surface defined. Aborting".into(),
             ));
         }
-        let outgoing = AnalysisRayTrace::analyze(
-            self,
-            light_rays_to_light_result(incoming_data),
-            &RayTraceConfig::default(),
-        )?;
+        // let outgoing = AnalysisRayTrace::analyze(
+        //     self,
+        //     light_rays_to_light_result(incoming_data),
+        //     &RayTraceConfig::default(),
+        // )?;
+        let outgoing = LightResult::from([("out1".into(), LightData::Geometric(rays))]);
         light_result_to_light_rays(outgoing)
     }
 }

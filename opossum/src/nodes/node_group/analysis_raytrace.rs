@@ -74,7 +74,7 @@ impl AnalysisRayTrace for NodeGroup {
                 }
                 for outgoing_edge in outgoing_edges {
                     self.graph
-                        .set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                        .set_outgoing_edge_data(idx, &outgoing_edge.0, &outgoing_edge.1);
                 }
             }
         }
@@ -179,7 +179,7 @@ impl AnalysisRayTrace for NodeGroup {
                 }
 
                 self.graph
-                    .set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                    .set_outgoing_edge_data(idx, &outgoing_edge.0, &outgoing_edge.1);
             }
         }
         self.reset_data();

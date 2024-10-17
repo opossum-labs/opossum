@@ -173,6 +173,7 @@ impl AnalysisGhostFocus for FluenceDetector {
         &mut self,
         incoming_data: LightRays,
         _config: &GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
     ) -> OpmResult<LightRays> {
         let (in_port, out_port) = if self.inverted() {
             ("out1", "in1")
