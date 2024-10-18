@@ -7,12 +7,10 @@
       <div class="card-body">
         <table class="table table-sm table-bordered">
           <tbody>
-            {{for property in props}}
-            <tr>
+            {{for property in props}}<tr>
               <th class="text-end" scope="row" style="width:20ch"><abbr title="{property.description}">{property.name}</abbr>:</th>
               <td style="width:auto">{property.prop_value | unescaped}</td>
-            </tr>
-            {{ endfor }}
+            </tr>{{ endfor }}
           </tbody>
         </table>
       </div>

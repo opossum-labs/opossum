@@ -174,11 +174,9 @@ impl AnalysisRayTrace for ThinMirror {
                         .clone(),
                 );
                 let mut reflected_rays = rays.refract_on_surface(&mut surface, None)?;
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, "input") {
+                if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
                     reflected_rays.apodize(aperture)?;
-                    //if let AnalyzerType::RayTrace(config) = analyzer_type {
                     reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    // }
                     reflected_rays
                 } else {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));

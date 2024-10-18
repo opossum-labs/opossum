@@ -27,6 +27,7 @@ use crate::{
     rays::Rays,
     reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
+    utils::geom_transformation::Isometry,
 };
 /// A ray-propagation monitor
 ///
@@ -48,6 +49,8 @@ pub struct RayPropagationVisualizer {
     light_data: Option<Rays>,
     node_attr: NodeAttr,
     apodization_warning: bool,
+    #[serde(skip)]
+    surface: OpticalSurface,
 }
 impl Default for RayPropagationVisualizer {
     /// create a spot-diagram monitor.
@@ -66,6 +69,7 @@ impl Default for RayPropagationVisualizer {
             light_data: None,
             node_attr,
             apodization_warning: false,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
         }
     }
 }
@@ -156,9 +160,7 @@ impl OpticNode for RayPropagationVisualizer {
     }
     fn reset_data(&mut self) {
         self.light_data = None;
-        todo!();
-
-        // self.surface.reset_hit_map();
+        self.surface.reset_hit_map();
     }
 }
 
@@ -185,8 +187,8 @@ impl AnalysisGhostFocus for RayPropagationVisualizer {
         };
         let mut rays = bouncing_rays.clone();
         if let Some(iso) = self.effective_iso() {
-            let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-            rays.refract_on_surface(&mut plane, None)?;
+            self.surface.set_isometry(&iso);
+            rays.refract_on_surface(&mut self.surface, None)?;
         } else {
             return Err(OpossumError::Analysis(
                 "no location for surface defined. Aborting".into(),
@@ -235,14 +237,14 @@ impl AnalysisRayTrace for RayPropagationVisualizer {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                rays.refract_on_surface(&mut plane, None)?;
+                self.surface.set_isometry(&iso);
+                rays.refract_on_surface(&mut self.surface, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
                 ));
             }
-            if let Some(aperture) = self.ports().aperture(&PortType::Input, "in1") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
                     warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
@@ -253,7 +255,7 @@ impl AnalysisRayTrace for RayPropagationVisualizer {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
             self.light_data = Some(rays.clone());
-            if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
                     warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
@@ -421,11 +423,9 @@ impl Plottable for RayPositionHistories {
             .set(&PlotArgs::Legend(false))?;
         Ok(())
     }
-
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
         PlotType::MultiLine2D(plt_params.clone())
     }
-
     fn get_plot_series(
         &self,
         _plt_type: &mut PlotType,

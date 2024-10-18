@@ -13,6 +13,7 @@ use crate::{
     optic_ports::{OpticPorts, PortType},
     reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
+    utils::geom_transformation::Isometry,
 };
 
 #[derive(Debug, Clone)]
@@ -35,6 +36,7 @@ use crate::{
 ///   - `inverted`
 pub struct Dummy {
     node_attr: NodeAttr,
+    surface: OpticalSurface,
 }
 impl Default for Dummy {
     fn default() -> Self {
@@ -43,7 +45,10 @@ impl Default for Dummy {
         ports.add(&PortType::Input, "front").unwrap();
         ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
-        Self { node_attr }
+        Self {
+            node_attr,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+        }
     }
 }
 impl Dummy {
@@ -92,20 +97,20 @@ impl AnalysisRayTrace for Dummy {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                rays.refract_on_surface(&mut plane, None)?;
+                self.surface.set_isometry(&iso);
+                rays.refract_on_surface(&mut self.surface, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
                 ));
             }
-            if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
                 rays.apodize(aperture)?;
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
-            if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
                 rays.apodize(aperture)?;
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             } else {
@@ -135,6 +140,9 @@ impl OpticNode for Dummy {
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
+    }
+    fn reset_data(&mut self) {
+        self.surface.reset_hit_map();
     }
 }
 

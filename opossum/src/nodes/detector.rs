@@ -12,6 +12,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     surface::{OpticalSurface, Plane},
+    utils::geom_transformation::Isometry,
 };
 use log::warn;
 use std::fmt::Debug;
@@ -36,6 +37,7 @@ use std::fmt::Debug;
 pub struct Detector {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
+    surface: OpticalSurface,
 }
 impl Default for Detector {
     fn default() -> Self {
@@ -47,6 +49,7 @@ impl Default for Detector {
         Self {
             light_data: Option::default(),
             node_attr,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
         }
     }
 }
@@ -76,8 +79,7 @@ impl OpticNode for Detector {
     }
     fn reset_data(&mut self) {
         self.light_data = None;
-        todo!();
-        // self.surface.reset_hit_map();
+        self.surface.reset_hit_map();
     }
 }
 
@@ -116,25 +118,25 @@ impl AnalysisRayTrace for Detector {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
+        let (in_port, out_port) = if self.inverted() {
             ("out1", "in1")
         } else {
             ("in1", "out1")
         };
-        let Some(data) = incoming_data.get(inport) else {
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                rays.refract_on_surface(&mut plane, None)?;
+                self.surface.set_isometry(&iso);
+                rays.refract_on_surface(&mut self.surface, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
                 ));
             }
-            if let Some(aperture) = self.ports().aperture(&PortType::Input, "in1") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
                     warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
@@ -144,18 +146,18 @@ impl AnalysisRayTrace for Detector {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
             self.light_data = Some(LightData::Geometric(rays.clone()));
-            if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
                 rays.apodize(aperture)?;
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
             Ok(LightResult::from([(
-                outport.into(),
+                out_port.into(),
                 LightData::Geometric(rays),
             )]))
         } else {
-            Ok(LightResult::from([(outport.into(), data.clone())]))
+            Ok(LightResult::from([(out_port.into(), data.clone())]))
         }
     }
 }

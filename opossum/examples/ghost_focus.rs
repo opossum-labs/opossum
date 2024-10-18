@@ -22,15 +22,6 @@ fn main() -> OpmResult<()> {
 
     let mut lens = Lens::default();
 
-    // let mut lens = Wedge::new(
-    //     "Wedge",
-    //     millimeter!(10.0),
-    //     degree!(1.0),
-    //     &RefrIndexConst::new(1.5)?,
-    // )?;
-
-    // let mut lens = CylindricLens::default();
-
     lens.set_coating(&PortType::Input, "front", &CoatingType::Fresnel)?;
     lens.set_coating(&PortType::Output, "rear", &CoatingType::Fresnel)?;
     let i_l = scenery.add_node(lens)?;
@@ -48,10 +39,9 @@ fn main() -> OpmResult<()> {
 
     let i_sd2 = scenery.add_node(SpotDiagram::default())?;
     scenery.connect_nodes(i_src, "out1", i_sd, "in1", millimeter!(20.0))?;
-    // scenery.connect_nodes(i_sd, "out1", i_w, "front", millimeter!(80.0))?;
     scenery.connect_nodes(i_sd, "out1", i_l, "front", millimeter!(80.0))?;
-    // scenery.connect_nodes(i_l, "rear", i_w, "front", millimeter!(70.0))?;
-    scenery.connect_nodes(i_l, "rear", i_sd2, "in1", millimeter!(70.0))?;
+    scenery.connect_nodes(i_l, "rear", i_w, "front", millimeter!(70.0))?;
+    scenery.connect_nodes(i_w, "rear", i_sd2, "in1", millimeter!(70.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     let mut config = GhostFocusConfig::default();
