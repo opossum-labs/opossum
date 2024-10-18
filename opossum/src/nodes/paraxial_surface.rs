@@ -124,12 +124,12 @@ impl AnalysisRayTrace for ParaxialSurface {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (src, target) = if self.inverted() {
+        let (in_port, out_port) = if self.inverted() {
             ("rear", "front")
         } else {
             ("front", "rear")
         };
-        let Some(data) = incoming_data.get(src) else {
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
@@ -148,20 +148,20 @@ impl AnalysisRayTrace for ParaxialSurface {
                     "no location for surface defined. Aborting".into(),
                 ));
             }
-            if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
                 rays.apodize(aperture)?;
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
-            if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
                 rays.apodize(aperture)?;
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             } else {
                 return Err(OpossumError::OpticPort("output aperture not found".into()));
             };
             let mut light_result = LightResult::default();
-            light_result.insert(target.into(), LightData::Geometric(rays));
+            light_result.insert(out_port.into(), LightData::Geometric(rays));
             Ok(light_result)
         } else {
             Err(crate::error::OpossumError::Analysis(

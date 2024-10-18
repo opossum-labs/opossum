@@ -190,9 +190,6 @@ impl AnalysisRayTrace for ReflectiveGrating {
         let Some(data) = incoming_data.get(inport) else {
             return Ok(LightResult::default());
         };
-        // let light_data = match analyzer_type {
-        //     AnalyzerType::Energy => data.clone(),
-        //     AnalyzerType::RayTrace(_) => {
         if let LightData::Geometric(mut rays) = data.clone() {
             let Ok(Proptype::I32(diffraction_order)) =
                 self.node_attr.get_property("diffraction order")
@@ -217,11 +214,9 @@ impl AnalysisRayTrace for ReflectiveGrating {
                     diffraction_order,
                 )?;
 
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, "input") {
+                if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
                     diffracted_rays.apodize(aperture)?;
-                    // if let AnalyzerType::RayTrace(config) = analyzer_type {
                     diffracted_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    // }
                     diffracted_rays
                 } else {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));

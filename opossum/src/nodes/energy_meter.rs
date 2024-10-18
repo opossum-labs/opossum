@@ -14,6 +14,7 @@ use crate::{
     properties::{Properties, Proptype},
     reporting::analysis_report::NodeReport,
     surface::{OpticalSurface, Plane},
+    utils::geom_transformation::Isometry,
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -66,6 +67,7 @@ pub struct EnergyMeter {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
     apodization_warning: bool,
+    surface: OpticalSurface,
 }
 impl Default for EnergyMeter {
     fn default() -> Self {
@@ -86,6 +88,7 @@ impl Default for EnergyMeter {
             light_data: None,
             node_attr,
             apodization_warning: false,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
         }
     }
 }
@@ -183,8 +186,7 @@ impl OpticNode for EnergyMeter {
     }
     fn reset_data(&mut self) {
         self.light_data = None;
-        todo!();
-        // self.surface.reset_hit_map();
+        self.surface.reset_hit_map();
     }
 }
 
@@ -235,14 +237,14 @@ impl AnalysisRayTrace for EnergyMeter {
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
             if let Some(iso) = self.effective_iso() {
-                let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                rays.refract_on_surface(&mut plane, None)?;
+                self.surface.set_isometry(&iso);
+                rays.refract_on_surface(&mut self.surface, None)?;
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
                 ));
             }
-            if let Some(aperture) = self.ports().aperture(&PortType::Input, "in1") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
                     warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
@@ -253,7 +255,7 @@ impl AnalysisRayTrace for EnergyMeter {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
             self.light_data = Some(LightData::Geometric(rays.clone()));
-            if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
+            if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
                 rays.apodize(aperture)?;
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             } else {

@@ -14,7 +14,7 @@ use crate::{
     properties::Proptype,
     spectrum::Spectrum,
     surface::{OpticalSurface, Plane},
-    utils::EnumProxy,
+    utils::{geom_transformation::Isometry, EnumProxy},
 };
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +41,7 @@ pub enum FilterType {
 ///   - `filter type`
 pub struct IdealFilter {
     node_attr: NodeAttr,
+    surface: OpticalSurface,
 }
 impl Default for IdealFilter {
     /// Create an ideal filter node with a transmission of 100%.
@@ -61,7 +62,10 @@ impl Default for IdealFilter {
         ports.add(&PortType::Input, "front").unwrap();
         ports.add(&PortType::Output, "rear").unwrap();
         node_attr.set_ports(ports);
-        Self { node_attr }
+        Self {
+            node_attr,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+        }
     }
 }
 impl IdealFilter {
@@ -174,6 +178,9 @@ impl OpticNode for IdealFilter {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    fn reset_data(&mut self) {
+        self.surface.reset_hit_map();
+    }
 }
 
 impl Dottable for IdealFilter {
@@ -208,11 +215,11 @@ impl AnalysisRayTrace for IdealFilter {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (mut src, mut target) = ("front", "rear");
+        let (mut in_port, mut out_port) = ("front", "rear");
         if self.inverted() {
-            (src, target) = (target, src);
+            (in_port, out_port) = (out_port, in_port);
         }
-        let Some(input) = incoming_data.get(src) else {
+        let Some(input) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
         let LightData::Geometric(r) = input else {
@@ -222,34 +229,34 @@ impl AnalysisRayTrace for IdealFilter {
         };
         let mut rays = r.clone();
         if let Some(iso) = self.effective_iso() {
-            let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-            plane.set_coating(
+            self.surface.set_isometry(&iso);
+            self.surface.set_coating(
                 self.ports()
                     .coating(&PortType::Input, "front")
                     .unwrap()
                     .clone(),
             );
-            rays.refract_on_surface(&mut plane, None)?;
+            rays.refract_on_surface(&mut self.surface, None)?;
         } else {
             return Err(OpossumError::Analysis(
                 "no location for surface defined. Aborting".into(),
             ));
         }
         rays.filter_energy(&self.filter_type())?;
-        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
             rays.apodize(aperture)?;
             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
         };
-        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
             rays.apodize(aperture)?;
             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         } else {
             return Err(OpossumError::OpticPort("output aperture not found".into()));
         };
         let light_data = LightData::Geometric(rays);
-        Ok(LightResult::from([(target.into(), light_data)]))
+        Ok(LightResult::from([(out_port.into(), light_data)]))
     }
 }
 
