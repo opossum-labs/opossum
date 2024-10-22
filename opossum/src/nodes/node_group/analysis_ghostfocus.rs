@@ -11,15 +11,19 @@ use log::warn;
 
 fn filter_ray_limits(light_rays: &mut LightRays, config: &GhostFocusConfig) {
     for lr in light_rays {
-        lr.1.filter_by_nr_of_bounces(config.max_bounces());
+        for rays in lr.1 {
+            rays.filter_by_nr_of_bounces(config.max_bounces());
+        }
     }
 }
+
 impl AnalysisGhostFocus for NodeGroup {
     fn analyze(
         &mut self,
         incoming_data: LightRays,
         config: &GhostFocusConfig,
         ray_collection: &mut Vec<Rays>,
+        bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
         let mut current_bouncing_rays = incoming_data;
 
@@ -44,6 +48,7 @@ impl AnalysisGhostFocus for NodeGroup {
                     idx,
                     &light_rays_to_light_result(current_bouncing_rays.clone()),
                 );
+
                 let node_name = format!("{}", node.borrow());
 
                 let mut outgoing_edges = AnalysisGhostFocus::analyze(
@@ -51,6 +56,7 @@ impl AnalysisGhostFocus for NodeGroup {
                     light_result_to_light_rays(incoming_edges)?,
                     config,
                     ray_collection,
+                    bounce_lvl,
                 )
                 .map_err(|e| {
                     OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
@@ -69,8 +75,10 @@ impl AnalysisGhostFocus for NodeGroup {
                             .set_outgoing_edge_data(idx, &outgoing_edge.0, &outgoing_edge.1);
 
                     if !no_sink {
-                        if let LightData::Geometric(rays) = outgoing_edge.1 {
-                            ray_collection.push(rays);
+                        if let LightData::GhostFocus(rays) = outgoing_edge.1 {
+                            for r in rays {
+                                ray_collection.push(r);
+                            }
                         }
                     }
                 }

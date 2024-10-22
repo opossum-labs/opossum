@@ -13,7 +13,7 @@ use crate::{
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     spectrum::Spectrum,
-    surface::{OpticalSurface, Plane},
+    surface::{OpticalSurface, Plane, Surface},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use serde::{Deserialize, Serialize};
@@ -207,6 +207,11 @@ impl AnalysisEnergy for IdealFilter {
         } else {
             Err(OpossumError::Analysis("expected energy light data".into()))
         }
+    }
+}
+impl Surface for IdealFilter {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
     }
 }
 impl AnalysisRayTrace for IdealFilter {

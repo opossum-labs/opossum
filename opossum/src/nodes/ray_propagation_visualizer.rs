@@ -25,8 +25,8 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
-    reporting::analysis_report::NodeReport,
-    surface::{OpticalSurface, Plane},
+    reporting::node_report::NodeReport,
+    surface::{OpticalSurface, Plane, Surface},
     utils::geom_transformation::Isometry,
 };
 /// A ray-propagation monitor
@@ -46,7 +46,7 @@ use crate::{
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPropagationVisualizer {
-    light_data: Option<Rays>,
+    light_data: Option<LightData>,
     node_attr: NodeAttr,
     apodization_warning: bool,
     #[serde(skip)]
@@ -92,45 +92,26 @@ impl RayPropagationVisualizer {
         Ok(rpv)
     }
 }
+impl Surface for RayPropagationVisualizer {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
+    }
+}
 impl OpticNode for RayPropagationVisualizer {
-    // fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
-    //     if self.light_data.is_some() {
-    //         if let Some(rays) = &self.light_data {
-    //             let mut ray_prop_data = rays.get_rays_position_history()?;
-    //             if let Ok(Proptype::Vec3(plot_view_direction)) =
-    //                 self.node_attr.get_property("view_direction")
-    //             {
-    //                 ray_prop_data.plot_view_direction = Some(*plot_view_direction);
-    //             } else {
-    //                 warn!("could not read 'view_direction' property. defaulted to yz-plane");
-    //                 ray_prop_data.plot_view_direction = Some(Vector3::x());
-    //             };
-
-    //             let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-    //                 "ray_propagation_{}_{}.svg",
-    //                 self.name(),
-    //                 uuid
-    //             )));
-    //             ray_prop_data.to_plot(&file_path, PltBackEnd::SVG)?;
-    //         } else {
-    //             warn!("ray-propagation visualizer: wrong light data. Cannot create plot!");
-    //         }
-    //     } else {
-    //         warn!("ray-propagation visualizer: no light data for export available. Cannot create plot!");
-    //     }
-    //     Ok(())
-    // }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
-        if let Some(rays) = data {
-            if let Ok(proptype) = <Rays as TryInto<Proptype>>::try_into(rays.clone()) {
+        if let Some(LightData::Geometric(rays)) = data {
+            if let Ok(mut ray_position_histories) = rays.get_rays_position_history() {
+                if let Ok(Proptype::Vec3(view_vec)) = self.properties().get("view_direction") {
+                    ray_position_histories.plot_view_direction = Some(*view_vec);
+                }
                 props
                     .create(
-                        "Ray Propagation visualization plot",
+                        "Ray plot",
                         "Ray plot",
                         None,
-                        proptype,
+                        Proptype::RayPositionHistory(ray_position_histories),
                     )
                     .unwrap();
                 if self.apodization_warning {
@@ -139,7 +120,8 @@ impl OpticNode for RayPropagationVisualizer {
                         "Warning",
                         "warning during analysis",
                         None,
-                        "Rays have been apodized at input aperture. Results might not be accurate.".into(),
+                        "Rays have been apodized at input aperture. Results might not be accurate."
+                            .into(),
                     )
                     .unwrap();
                 }
@@ -176,28 +158,17 @@ impl AnalysisGhostFocus for RayPropagationVisualizer {
         incoming_data: LightRays,
         _config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
+        _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let (in_port, out_port) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
         let Some(bouncing_rays) = incoming_data.get(in_port) else {
-            return Ok(LightRays::default());
+            let mut out_light_rays = LightRays::default();
+            out_light_rays.insert(out_port.into(), Vec::<Rays>::new());
+            return Ok(out_light_rays);
         };
         let mut rays = bouncing_rays.clone();
-        if let Some(iso) = self.effective_iso() {
-            self.surface.set_isometry(&iso);
-            rays.refract_on_surface(&mut self.surface, None)?;
-        } else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined. Aborting".into(),
-            ));
-        }
-        // merge all rays
-        let mut ray_cache = self.light_data.clone().unwrap_or_default();
-        ray_cache.merge(&rays);
-        self.light_data = Some(ray_cache);
+        self.pass_through_inert_surface(&mut rays)?;
 
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.to_string(), rays.clone());
@@ -215,7 +186,7 @@ impl AnalysisEnergy for RayPropagationVisualizer {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(rays) = data.clone() {
-            self.light_data = Some(rays);
+            self.light_data = Some(LightData::Geometric(rays));
         }
         Ok(LightResult::from([(outport.into(), data.clone())]))
     }
@@ -254,7 +225,7 @@ impl AnalysisRayTrace for RayPropagationVisualizer {
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
-            self.light_data = Some(rays.clone());
+            self.light_data = Some(LightData::Geometric(rays.clone()));
             if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
                 let rays_apodized = rays.apodize(aperture)?;
                 if rays_apodized {
@@ -271,6 +242,12 @@ impl AnalysisRayTrace for RayPropagationVisualizer {
         } else {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
+    }
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
     }
 }
 
@@ -624,23 +601,19 @@ mod test {
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
-        fd.light_data = Some(Rays::default());
+        fd.light_data = Some(LightData::Geometric(Rays::default()));
         let node_report = fd.node_report("").unwrap();
-        assert!(!node_report
-            .properties()
-            .contains("Ray Propagation visualization plot"));
-        fd.light_data = Some(
+        assert!(!node_report.properties().contains("Ray plot"));
+        fd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
                 joule!(1.0),
                 &Hexapolar::new(millimeter!(1.), 1).unwrap(),
             )
             .unwrap(),
-        );
+        ));
         let node_report = fd.node_report("").unwrap();
-        assert!(node_report
-            .properties()
-            .contains("Ray Propagation visualization plot"));
+        assert!(node_report.properties().contains("Ray plot"));
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 1);

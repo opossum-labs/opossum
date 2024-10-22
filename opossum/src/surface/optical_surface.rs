@@ -10,8 +10,8 @@ use crate::{coatings::CoatingType, rays::Rays, utils::geom_transformation::Isome
 pub struct OpticalSurface {
     geo_surface: Box<dyn GeoSurface>,
     coating: CoatingType,
-    backward_rays_cache: Rays,
-    forward_rays_cache: Rays,
+    backward_rays_cache: Vec<Rays>,
+    forward_rays_cache: Vec<Rays>,
     hit_map: HitMap,
 }
 impl Default for OpticalSurface {
@@ -19,8 +19,8 @@ impl Default for OpticalSurface {
         Self {
             geo_surface: Box::new(Plane::new(&Isometry::identity())),
             coating: CoatingType::IdealAR,
-            backward_rays_cache: Rays::default(),
-            forward_rays_cache: Rays::default(),
+            backward_rays_cache: Vec::<Rays>::new(),
+            forward_rays_cache: Vec::<Rays>::new(),
             hit_map: HitMap::default(),
         }
     }
@@ -43,8 +43,8 @@ impl OpticalSurface {
         Self {
             geo_surface,
             coating: CoatingType::IdealAR,
-            backward_rays_cache: Rays::default(),
-            forward_rays_cache: Rays::default(),
+            backward_rays_cache: Vec::<Rays>::new(),
+            forward_rays_cache: Vec::<Rays>::new(),
             hit_map: HitMap::default(),
         }
     }
@@ -63,21 +63,29 @@ impl OpticalSurface {
         &(*self.geo_surface)
     }
     /// Sets the backwards rays cache of this [`OpticalSurface`].
-    pub fn set_backwards_rays_cache(&mut self, backward_rays_cache: Rays) {
+    pub fn set_backwards_rays_cache(&mut self, backward_rays_cache: Vec<Rays>) {
         self.backward_rays_cache = backward_rays_cache;
+    }
+    /// Adds a rays bundle to the backwards rays cache of this [`OpticalSurface`].
+    pub fn add_to_backward_rays_cache(&mut self, rays: Rays) {
+        self.backward_rays_cache.push(rays);
     }
     /// Returns a reference to the backwards rays cache of this [`OpticalSurface`].
     #[must_use]
-    pub const fn backwards_rays_cache(&self) -> &Rays {
+    pub const fn backwards_rays_cache(&self) -> &Vec<Rays> {
         &self.backward_rays_cache
     }
     /// Sets the forward rays cache of this [`OpticalSurface`].
-    pub fn set_forward_rays_cache(&mut self, forward_rays_cache: Rays) {
+    pub fn set_forward_rays_cache(&mut self, forward_rays_cache: Vec<Rays>) {
         self.forward_rays_cache = forward_rays_cache;
+    }
+    /// Adds a rays bundle to the forward rays cache of this [`OpticalSurface`].
+    pub fn add_to_forward_rays_cache(&mut self, rays: Rays) {
+        self.forward_rays_cache.push(rays);
     }
     /// Returns a reference to the forward rays cache of this [`OpticalSurface`].
     #[must_use]
-    pub const fn forward_rays_cache(&self) -> &Rays {
+    pub const fn forward_rays_cache(&self) -> &Vec<Rays> {
         &self.forward_rays_cache
     }
     /// Sets the isometry of this [`OpticalSurface`].
@@ -94,7 +102,7 @@ impl OpticalSurface {
     /// Add intersection point (with energy) to hit map.
     ///
     pub fn add_to_hit_map(&mut self, hit_point: (Point3<Length>, Energy), bounce: usize) {
-        self.hit_map.add_point(hit_point, bounce);
+        self.hit_map.add_to_hitmap(hit_point, bounce);
     }
     /// Reset hit map of this [`OpticalSurface`].
     pub fn reset_hit_map(&mut self) {

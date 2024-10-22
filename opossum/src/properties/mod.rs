@@ -98,6 +98,10 @@ impl Properties {
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, Property> {
         self.props.iter()
     }
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.props.is_empty()
+    }
     /// Return `true`if a property with the given name exists.
     #[must_use]
     pub fn contains(&self, key: &str) -> bool {
@@ -142,21 +146,17 @@ impl Properties {
         )
     }
     #[must_use]
-    pub fn html_props(&self, node_name: &str, uuid: &str) -> Vec<HtmlProperty> {
+    pub fn html_props(&self, id: &str) -> Vec<HtmlProperty> {
         let mut html_props: Vec<HtmlProperty> = Vec::new();
         for prop in &self.props {
             // Check if property is a NodeReport (= group node) and use the uuid of the individual sub nodes
             // instead of the uuid of the group node itself.
-            let node_uuid = if let Ok(Proptype::NodeReport(r)) = self.get(prop.0) {
-                r.uuid()
-            } else {
-                uuid
-            };
-            if let Ok(html_prop_value) = prop
-                .1
-                .prop()
-                .to_html((prop.0.to_owned() + "_" + node_name).as_str(), node_uuid)
-            {
+            // let node_uuid = if let Ok(Proptype::NodeReport(r)) = self.get(prop.0) {
+            //     r.uuid()
+            // } else {
+            //     uuid
+            // };
+            if let Ok(html_prop_value) = prop.1.prop().to_html(id, prop.0) {
                 let html_prop = HtmlProperty {
                     name: prop.0.to_owned(),
                     description: prop.1.description().into(),
@@ -181,7 +181,7 @@ impl Properties {
     pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
         for prop in &self.props {
             prop.1
-                .export_data(report_path, (prop.0.to_owned() + "_" + id).as_str())?;
+                .export_data(report_path, &format!("{id}_{}", prop.0))?;
         }
         Ok(())
     }

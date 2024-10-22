@@ -24,8 +24,8 @@ use crate::{
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
-    reporting::analysis_report::NodeReport,
-    surface::{hit_map::HitMap, OpticalSurface, Plane},
+    reporting::node_report::NodeReport,
+    surface::{hit_map::HitMap, OpticalSurface, Plane, Surface},
     utils::{
         geom_transformation::Isometry,
         unit_format::{
@@ -55,7 +55,7 @@ use std::collections::HashMap;
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SpotDiagram {
-    light_data: Option<Rays>,
+    light_data: Option<LightData>,
     node_attr: NodeAttr,
     #[serde(skip)]
     surface: OpticalSurface,
@@ -96,6 +96,11 @@ impl SpotDiagram {
         sd
     }
 }
+impl Surface for SpotDiagram {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
+    }
+}
 
 impl Alignable for SpotDiagram {}
 
@@ -108,7 +113,7 @@ impl OpticNode for SpotDiagram {
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
-        if let Some(rays) = data {
+        if let Some(LightData::Geometric(rays)) = data {
             let mut transformed_rays = Rays::default();
             let iso = self.effective_iso().unwrap_or_else(Isometry::identity);
             for ray in rays {
@@ -199,31 +204,17 @@ impl AnalysisGhostFocus for SpotDiagram {
         incoming_data: LightRays,
         _config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
+        _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let (in_port, out_port) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
         let Some(bouncing_rays) = incoming_data.get(in_port) else {
-            return Ok(LightRays::default());
+            let mut out_light_rays = LightRays::default();
+            out_light_rays.insert(out_port.into(), Vec::<Rays>::new());
+            return Ok(out_light_rays);
         };
         let mut rays = bouncing_rays.clone();
-        if let Some(iso) = self.effective_iso() {
-            self.surface.set_isometry(&iso);
-            rays.refract_on_surface(&mut self.surface, None)?;
-        } else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined. Aborting".into(),
-            ));
-        }
-        // merge all rays
-        let mut ray_cache = self
-            .light_data
-            .clone()
-            .map_or_else(Rays::default, |rays| rays);
-        ray_cache.merge(&rays);
-        self.light_data = Some(ray_cache);
+        self.pass_through_inert_surface(&mut rays)?;
 
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.to_string(), rays);
@@ -240,8 +231,8 @@ impl AnalysisEnergy for SpotDiagram {
         let Some(data) = incoming_data.get(inport) else {
             return Ok(LightResult::default());
         };
-        if let LightData::Geometric(rays) = data {
-            self.light_data = Some(rays.clone());
+        if let LightData::Geometric(_) = data {
+            self.light_data = Some(data.clone());
         }
         Ok(LightResult::from([(outport.into(), data.clone())]))
     }
@@ -280,12 +271,12 @@ impl AnalysisRayTrace for SpotDiagram {
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
-            if let Some(old_rays) = &self.light_data {
+            if let Some(LightData::Geometric(old_rays)) = &self.light_data {
                 let mut rays_tob_merged = old_rays.clone();
                 rays_tob_merged.merge(&rays);
-                self.light_data = Some(rays_tob_merged.clone());
+                self.light_data = Some(LightData::Geometric(rays_tob_merged.clone()));
             } else {
-                self.light_data = Some(rays.clone());
+                self.light_data = Some(LightData::Geometric(rays.clone()));
             }
             if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
                 rays.apodize(aperture)?;
@@ -300,6 +291,13 @@ impl AnalysisRayTrace for SpotDiagram {
         } else {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
+    }
+
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
     }
 }
 
@@ -331,7 +329,7 @@ impl Plottable for SpotDiagram {
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
         let data = &self.light_data;
         match data {
-            Some(rays) => {
+            Some(LightData::Geometric(rays)) => {
                 let (split_rays_bundles, wavelengths) =
                     rays.split_ray_bundle_by_wavelength(nanometer!(0.2), true)?;
                 let num_series = split_rays_bundles.len();
@@ -578,17 +576,17 @@ mod test {
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
-        sd.light_data = Some(Rays::default());
+        sd.light_data = Some(LightData::Geometric(Rays::default()));
         let node_report = sd.node_report("").unwrap();
         assert!(node_report.properties().contains("Spot diagram"));
-        sd.light_data = Some(
+        sd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
                 joule!(1.0),
                 &Hexapolar::new(Length::zero(), 1).unwrap(),
             )
             .unwrap(),
-        );
+        ));
         let node_report = sd.node_report("").unwrap();
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);

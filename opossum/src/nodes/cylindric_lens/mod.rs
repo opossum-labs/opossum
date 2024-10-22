@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::{Analyzable, AnalyzerType},
+    analyzers::Analyzable,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     millimeter,
@@ -13,7 +13,7 @@ use crate::{
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{hit_map::HitMap, Cylinder, OpticalSurface, Plane},
+    surface::{hit_map::HitMap, Cylinder, OpticalSurface, Plane, Surface},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -176,123 +176,16 @@ impl CylindricLens {
         };
         Ok(())
     }
-    fn analyze_forward(
-        &mut self,
-        incoming_rays: Rays,
-        thickness: Length,
-        refri: &RefractiveIndexType,
-        iso: &Isometry,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<Rays> {
-        let ambient_idx = self.ambient_idx();
-        let mut rays = incoming_rays;
-        self.front_surf.set_isometry(iso);
-        self.front_surf.set_coating(
-            self.node_attr()
-                .ports()
-                .coating(&PortType::Input, "front")
-                .unwrap()
-                .clone(),
-        );
-        let thickness_iso = Isometry::new_along_z(thickness)?;
-        let isometry = iso.append(&thickness_iso);
-        self.rear_surf.set_isometry(&isometry);
-        self.rear_surf.set_coating(
-            self.node_attr()
-                .ports()
-                .coating(&PortType::Output, "rear")
-                .unwrap()
-                .clone(),
-        );
-        if let Some(aperture) = self.ports().aperture(&PortType::Input, "front") {
-            rays.apodize(aperture)?;
-            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            }
-        } else {
-            return Err(OpossumError::OpticPort("input aperture not found".into()));
-        };
-        let reflected_front = rays.refract_on_surface(&mut self.front_surf, Some(refri))?;
-        self.front_surf.set_backwards_rays_cache(reflected_front);
-        rays.merge(self.front_surf.forward_rays_cache());
-        rays.set_refractive_index(refri)?;
-        let reflected_rear = rays.refract_on_surface(&mut self.rear_surf, Some(&ambient_idx))?;
-        self.rear_surf.set_backwards_rays_cache(reflected_rear);
-        rays.merge(self.rear_surf.forward_rays_cache());
-        if let Some(aperture) = self.ports().aperture(&PortType::Output, "rear") {
-            rays.apodize(aperture)?;
-            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            }
-        } else {
-            return Err(OpossumError::OpticPort("output aperture not found".into()));
-        };
-        Ok(rays)
-    }
-    fn analyze_inverse(
-        &mut self,
-        incoming_rays: Rays,
-        thickness: Length,
-        refri: &RefractiveIndexType,
-        iso: &Isometry,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<Rays> {
-        let ambient_idx = self.ambient_idx();
-        let mut rays = incoming_rays;
-        self.front_surf.set_isometry(iso);
-        self.front_surf.set_coating(
-            self.node_attr()
-                .ports()
-                .coating(&PortType::Input, "front")
-                .unwrap()
-                .clone(),
-        );
-        let thickness_iso = Isometry::new_along_z(thickness)?;
-        let isometry = iso.append(&thickness_iso);
-        self.rear_surf.set_isometry(&isometry);
-        self.rear_surf.set_coating(
-            self.node_attr()
-                .ports()
-                .coating(&PortType::Output, "rear")
-                .unwrap()
-                .clone(),
-        );
-        if let Some(aperture) = self.ports().aperture(&PortType::Output, "front") {
-            rays.apodize(aperture)?;
-            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            }
-        } else {
-            return Err(OpossumError::OpticPort("output aperture not found".into()));
-        };
-        let reflected_rear = rays.refract_on_surface(&mut self.rear_surf, Some(refri))?;
-        self.rear_surf.set_forward_rays_cache(reflected_rear);
-        rays.merge(self.rear_surf.backwards_rays_cache());
-        rays.set_refractive_index(refri)?;
-        let reflected_front = rays.refract_on_surface(&mut self.front_surf, Some(&ambient_idx))?;
-        self.front_surf.set_forward_rays_cache(reflected_front);
-        rays.merge(self.front_surf.backwards_rays_cache());
-
-        if let Some(aperture) = self.ports().aperture(&PortType::Input, "rear") {
-            rays.apodize(aperture)?;
-            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            }
-        } else {
-            return Err(OpossumError::OpticPort("input aperture not found".into()));
-        };
-        Ok(rays)
-    }
 }
 
 impl OpticNode for CylindricLens {
     fn reset_data(&mut self) {
-        self.front_surf.set_backwards_rays_cache(Rays::default());
-        self.front_surf.set_forward_rays_cache(Rays::default());
+        self.front_surf.set_backwards_rays_cache(Vec::<Rays>::new());
+        self.front_surf.set_forward_rays_cache(Vec::<Rays>::new());
         self.front_surf.reset_hit_map();
 
-        self.rear_surf.set_backwards_rays_cache(Rays::default());
-        self.rear_surf.set_forward_rays_cache(Rays::default());
+        self.rear_surf.set_backwards_rays_cache(Vec::<Rays>::new());
+        self.rear_surf.set_forward_rays_cache(Vec::<Rays>::new());
         self.rear_surf.reset_hit_map();
     }
 
@@ -318,6 +211,15 @@ impl Alignable for CylindricLens {}
 impl Dottable for CylindricLens {
     fn node_color(&self) -> &str {
         "aqua"
+    }
+}
+impl Surface for CylindricLens {
+    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface {
+        if surf_name == "front" {
+            &mut self.front_surf
+        } else {
+            &mut self.rear_surf
+        }
     }
 }
 impl Analyzable for CylindricLens {}

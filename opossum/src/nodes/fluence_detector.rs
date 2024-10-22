@@ -21,8 +21,8 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
-    reporting::analysis_report::NodeReport,
-    surface::{OpticalSurface, Plane},
+    reporting::node_report::NodeReport,
+    surface::{OpticalSurface, Plane, Surface},
     utils::geom_transformation::Isometry,
 };
 
@@ -46,7 +46,7 @@ pub type Fluence = uom::si::f64::RadiantExposure;
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 #[derive(Clone, Debug)]
 pub struct FluenceDetector {
-    light_data: Option<Rays>,
+    light_data: Option<LightData>,
     node_attr: NodeAttr,
     apodization_warning: bool,
     surface: OpticalSurface,
@@ -78,6 +78,11 @@ impl FluenceDetector {
         fld
     }
 }
+impl Surface for FluenceDetector {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
+    }
+}
 impl OpticNode for FluenceDetector {
     // fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
     //     self.light_data.as_ref().map_or_else(
@@ -106,7 +111,7 @@ impl OpticNode for FluenceDetector {
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
-        if let Some(rays) = data {
+        if let Some(LightData::Geometric(rays)) = data {
             let fluence_data_res = rays.calc_fluence_at_position();
             if let Ok(fluence_data) = fluence_data_res {
                 props
@@ -147,6 +152,12 @@ impl OpticNode for FluenceDetector {
                 }
             }
         }
+        // else if let Some(LightData::GhostFocus(v_rays)) = data{
+        //     todo!()
+        // }
+        // else{
+        //     todo!()
+        // }
         Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
@@ -178,31 +189,17 @@ impl AnalysisGhostFocus for FluenceDetector {
         incoming_data: LightRays,
         _config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
+        _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let (in_port, out_port) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
         let Some(bouncing_rays) = incoming_data.get(in_port) else {
-            return Ok(LightRays::default());
+            let mut out_light_rays = LightRays::default();
+            out_light_rays.insert(out_port.into(), Vec::<Rays>::new());
+            return Ok(out_light_rays);
         };
         let mut rays = bouncing_rays.clone();
-        if let Some(iso) = self.effective_iso() {
-            self.surface.set_isometry(&iso);
-            rays.refract_on_surface(&mut self.surface, None)?;
-        } else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined. Aborting".into(),
-            ));
-        }
-        // merge all rays
-        let mut ray_cache = self
-            .light_data
-            .clone()
-            .map_or_else(Rays::default, |rays| rays);
-        ray_cache.merge(&rays);
-        self.light_data = Some(ray_cache);
+        self.pass_through_inert_surface(&mut rays)?;
 
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.to_string(), rays.clone());
@@ -257,7 +254,7 @@ impl AnalysisRayTrace for FluenceDetector {
             } else {
                 return Err(OpossumError::OpticPort("input aperture not found".into()));
             };
-            self.light_data = Some(rays.clone());
+            self.light_data = Some(LightData::Geometric(rays.clone()));
             if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
                 rays.apodize(aperture)?;
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -271,6 +268,12 @@ impl AnalysisRayTrace for FluenceDetector {
         } else {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
+    }
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
     }
 }
 
@@ -528,17 +531,17 @@ mod test {
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
-        fd.light_data = Some(Rays::default());
+        fd.light_data = Some(LightData::Geometric(Rays::default()));
         let node_report = fd.node_report("123").unwrap();
         assert!(!node_report.properties().contains("Fluence"));
-        fd.light_data = Some(
+        fd.light_data = Some(LightData::Geometric(
             Rays::new_uniform_collimated(
                 nanometer!(1053.0),
                 joule!(1.0),
                 &Hexapolar::new(millimeter!(1.), 1).unwrap(),
             )
             .unwrap(),
-        );
+        ));
         let node_report = fd.node_report("123").unwrap();
         assert!(node_report.properties().contains("Fluence"));
         let node_props = node_report.properties();

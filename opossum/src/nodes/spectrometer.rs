@@ -18,8 +18,9 @@ use crate::{
     optic_ports::{OpticPorts, PortType},
     plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
-    reporting::analysis_report::NodeReport,
-    surface::{OpticalSurface, Plane},
+    rays::Rays,
+    reporting::node_report::NodeReport,
+    surface::{OpticalSurface, Plane, Surface},
     utils::geom_transformation::Isometry,
 };
 use std::fmt::{Debug, Display};
@@ -160,6 +161,13 @@ impl OpticNode for Spectrometer {
                 LightData::Energy(e) => Some(e.spectrum.clone()),
                 LightData::Geometric(r) => r.to_spectrum(&nanometer!(0.2)).ok(),
                 LightData::Fourier => None,
+                LightData::GhostFocus(r) => {
+                    let mut all_rays = Rays::default();
+                    for rays in r {
+                        all_rays.merge(rays);
+                    }
+                    all_rays.to_spectrum(&nanometer!(0.2)).ok()
+                }
             };
             if spectrum.is_some() {
                 props
@@ -204,6 +212,12 @@ impl OpticNode for Spectrometer {
     fn reset_data(&mut self) {
         self.light_data = None;
         self.surface.reset_hit_map();
+    }
+}
+
+impl Surface for Spectrometer {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
     }
 }
 
@@ -297,6 +311,13 @@ impl AnalysisRayTrace for Spectrometer {
         } else {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
+    }
+
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
     }
 }
 

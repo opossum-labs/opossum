@@ -14,7 +14,8 @@ use crate::{
     optic_ref::OpticRef,
     properties::{Properties, Proptype},
     rays::Rays,
-    reporting::analysis_report::{AnalysisReport, NodeReport},
+    reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
+    surface::{OpticalSurface, Surface},
     SceneryResources,
 };
 use chrono::Local;
@@ -70,7 +71,7 @@ pub struct NodeGroup {
     node_attr: NodeAttr,
     input_port_distances: BTreeMap<String, Length>,
     #[serde(skip)]
-    accumulated_rays: Vec<Rays>,
+    accumulated_rays: Vec<Vec<Rays>>,
 }
 impl Default for NodeGroup {
     fn default() -> Self {
@@ -90,7 +91,7 @@ impl Default for NodeGroup {
             graph: OpticGraph::default(),
             input_port_distances: BTreeMap::default(),
             node_attr,
-            accumulated_rays: Vec::<Rays>::new(),
+            accumulated_rays: Vec::<Vec<Rays>>::new(),
         }
     }
 }
@@ -384,7 +385,7 @@ impl NodeGroup {
     /// This function returns a bundle of all rays that propagated in a group after a ghost focus analysis.
     /// This function is in particular helpful for generating a global ray propagation plot.
     #[must_use]
-    pub const fn accumulated_rays(&self) -> &Vec<Rays> {
+    pub const fn accumulated_rays(&self) -> &Vec<Vec<Rays>> {
         &self.accumulated_rays
     }
 
@@ -394,9 +395,9 @@ impl NodeGroup {
     /// - bounce: bouncle level of these rays
     pub fn add_to_accumulated_rays(&mut self, rays: &Rays, bounce: usize) {
         if self.accumulated_rays.len() <= bounce {
-            self.accumulated_rays.push(rays.clone());
+            self.accumulated_rays.push(vec![rays.clone()]);
         } else {
-            self.accumulated_rays[bounce].merge(rays);
+            self.accumulated_rays[bounce].push(rays.clone());
         }
     }
 
@@ -404,6 +405,26 @@ impl NodeGroup {
     pub fn clear_edges(&mut self) {
         self.graph.clear_edges();
     }
+    // fn export_data(&self, report_dir: &Path, _uuid: &str) -> OpmResult<()> {
+    //     for node in self.graph.nodes() {
+    //         let node_name = node.optical_ref.borrow().name();
+    //         info!("export data for node {node_name}");
+    //         let uuid = node.uuid().as_simple().to_string();
+    //         node.optical_ref.borrow().export_data(report_dir, &uuid)?;
+    //         let hitmaps = node.optical_ref.borrow().hit_maps();
+    //         for hitmap in &hitmaps {
+    //             let port_name = hitmap.0;
+    //             info!("   found hitmap for port {port_name}");
+    //             let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
+    //                 "hitmap_{node_name}_{port_name}_{uuid}.svg"
+    //             )));
+    //             if !hitmap.1.is_empty() {
+    //                 hitmap.1.to_plot(&file_path, PltBackEnd::SVG)?;
+    //             }
+    //         }
+    //     }
+    //     Ok(())
+    // }
 }
 
 impl OpticNode for NodeGroup {
@@ -446,33 +467,17 @@ impl OpticNode for NodeGroup {
                 }
             }
         }
-        Some(NodeReport::new(
-            &self.node_type(),
-            &self.name(),
-            uuid,
-            group_props,
-        ))
+        if group_props.is_empty() {
+            None
+        } else {
+            Some(NodeReport::new(
+                &self.node_type(),
+                &self.name(),
+                uuid,
+                group_props,
+            ))
+        }
     }
-    // fn export_data(&self, report_dir: &Path, _uuid: &str) -> OpmResult<()> {
-    //     for node in self.graph.nodes() {
-    //         let node_name = node.optical_ref.borrow().name();
-    //         info!("export data for node {node_name}");
-    //         let uuid = node.uuid().as_simple().to_string();
-    //         node.optical_ref.borrow().export_data(report_dir, &uuid)?;
-    //         let hitmaps = node.optical_ref.borrow().hit_maps();
-    //         for hitmap in &hitmaps {
-    //             let port_name = hitmap.0;
-    //             info!("   found hitmap for port {port_name}");
-    //             let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-    //                 "hitmap_{node_name}_{port_name}_{uuid}.svg"
-    //             )));
-    //             if !hitmap.1.is_empty() {
-    //                 hitmap.1.to_plot(&file_path, PltBackEnd::SVG)?;
-    //             }
-    //         }
-    //     }
-    //     Ok(())
-    // }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -494,7 +499,13 @@ impl OpticNode for NodeGroup {
         for node in nodes {
             node.optical_ref.borrow_mut().reset_data();
         }
-        self.accumulated_rays = Vec::<Rays>::new();
+        self.accumulated_rays = Vec::<Vec<Rays>>::new();
+    }
+}
+
+impl Surface for NodeGroup {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
     }
 }
 
@@ -666,7 +677,7 @@ mod test {
             .node_report(&uuid)
             .unwrap();
         if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {
-            assert_eq!(*e, joule!(1.0));
+            assert_eq!(e, &joule!(1.0));
         } else {
             assert!(false)
         }

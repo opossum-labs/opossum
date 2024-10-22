@@ -13,7 +13,7 @@ use crate::{
     optic_node::{Alignable, OpticNode},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
-    surface::{OpticalSurface, Plane},
+    surface::{OpticalSurface, Plane, Surface},
 };
 use uom::{num_traits::Zero, si::f64::Length};
 
@@ -116,6 +116,11 @@ impl AnalysisEnergy for ParaxialSurface {
             return Ok(LightResult::default());
         };
         Ok(LightResult::from([(outport.into(), data.clone())]))
+    }
+}
+impl Surface for ParaxialSurface {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
     }
 }
 impl AnalysisRayTrace for ParaxialSurface {

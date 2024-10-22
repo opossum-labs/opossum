@@ -20,8 +20,8 @@ use crate::{
     optic_ports::{OpticPorts, PortType},
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
-    reporting::analysis_report::NodeReport,
-    surface::{OpticalSurface, Plane},
+    reporting::node_report::NodeReport,
+    surface::{OpticalSurface, Plane, Surface},
     utils::{
         geom_transformation::Isometry,
         griddata::{create_linspace_axes, interpolate_3d_scatter_data},
@@ -280,6 +280,11 @@ impl Dottable for WaveFront {
         "goldenrod1"
     }
 }
+impl Surface for WaveFront {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
+    }
+}
 impl Analyzable for WaveFront {}
 impl AnalysisGhostFocus for WaveFront {}
 impl AnalysisEnergy for WaveFront {
@@ -344,6 +349,13 @@ impl AnalysisRayTrace for WaveFront {
         } else {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
+    }
+
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
     }
 }
 

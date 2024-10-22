@@ -11,13 +11,13 @@ pub type LightDings<T> = HashMap<String, T>;
 
 pub type LightResult = LightDings<LightData>;
 
-pub type LightRays = LightDings<Rays>;
+pub type LightRays = LightDings<Vec<Rays>>;
 //pub type LightBouncingRays = LightDings<Vec<Rays>>;
 
 pub fn light_result_to_light_rays(light_result: LightResult) -> OpmResult<LightRays> {
-    let mut light_dings_rays = LightDings::<Rays>::new();
+    let mut light_dings_rays = LightDings::<Vec<Rays>>::new();
     for lr in light_result {
-        let LightData::Geometric(r) = lr.1 else {
+        let LightData::GhostFocus(r) = lr.1 else {
             return Err(OpossumError::Other(
                 "no geometric rays data found in LightResult".into(),
             ));
@@ -30,7 +30,7 @@ pub fn light_result_to_light_rays(light_result: LightResult) -> OpmResult<LightR
 pub fn light_rays_to_light_result(light_rays: LightRays) -> LightResult {
     let mut light_result = LightResult::default();
     for ld in light_rays {
-        light_result.insert(ld.0, LightData::Geometric(ld.1));
+        light_result.insert(ld.0, LightData::GhostFocus(ld.1));
     }
     light_result
 }

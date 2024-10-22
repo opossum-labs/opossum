@@ -18,7 +18,7 @@ use crate::{
     optic_senery_rsc::SceneryResources,
     properties::{Properties, Proptype},
     refractive_index::RefractiveIndexType,
-    reporting::analysis_report::NodeReport,
+    reporting::node_report::NodeReport,
     surface::hit_map::HitMap,
     utils::geom_transformation::Isometry,
 };

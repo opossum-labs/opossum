@@ -15,7 +15,7 @@ use crate::{
     ray::SplittingConfig,
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
-    surface::{OpticalSurface, Plane},
+    surface::{OpticalSurface, Plane, Surface},
     utils::EnumProxy,
 };
 
@@ -299,6 +299,11 @@ impl OpticNode for BeamSplitter {
 impl Dottable for BeamSplitter {
     fn node_color(&self) -> &str {
         "lightpink"
+    }
+}
+impl Surface for BeamSplitter {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
     }
 }
 impl Analyzable for BeamSplitter {}
