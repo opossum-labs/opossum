@@ -11,7 +11,6 @@ use crate::{
     lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
-    reporting::node_report::NodeReport,
     surface::{OpticalSurface, Plane, Surface},
     utils::geom_transformation::Isometry,
 };
@@ -132,14 +131,6 @@ impl AnalysisRayTrace for Dummy {
 }
 
 impl OpticNode for Dummy {
-    fn node_report(&self, uuid: &str) -> Option<NodeReport> {
-        Some(NodeReport::new(
-            &self.node_type(),
-            &self.name(),
-            uuid,
-            self.node_attr.properties().clone(),
-        ))
-    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
@@ -203,7 +194,7 @@ mod test {
     #[test]
     fn report() {
         let report = Dummy::default().node_report("123");
-        assert!(report.is_some());
+        assert!(report.is_none());
     }
     #[test]
     fn ports_inverted() {

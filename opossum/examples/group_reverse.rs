@@ -2,7 +2,7 @@ use std::path::Path;
 
 use num::Zero;
 use opossum::{
-    analyzers::{AnalyzerType, RayTraceConfig},
+    analyzers::AnalyzerType,
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{Dummy, EnergyMeter, NodeGroup, Source},
@@ -22,7 +22,7 @@ fn main() -> OpmResult<()> {
     ))?;
 
     let mut group = NodeGroup::default();
-    group.set_expand_view(true).unwrap();
+    group.set_expand_view(true)?;
     let g_n1 = group.add_node(Dummy::new("node1"))?;
     let g_n2 = group.add_node(Dummy::new("node2"))?;
 
@@ -38,6 +38,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_g, "in1", i_d, "in1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.add_analyzer(AnalyzerType::Energy);
     doc.save_to_file(Path::new("./opossum/playground/group_reverse.opm"))
 }

@@ -19,7 +19,6 @@ use crate::{
     SceneryResources,
 };
 use chrono::Local;
-use log::{info, warn};
 pub use optic_graph::OpticGraph;
 use petgraph::prelude::NodeIndex;
 use serde::{Deserialize, Serialize};
@@ -69,6 +68,7 @@ pub struct NodeGroup {
     #[serde(skip)]
     graph: OpticGraph,
     node_attr: NodeAttr,
+    #[serde(skip)]
     input_port_distances: BTreeMap<String, Length>,
     #[serde(skip)]
     accumulated_rays: Vec<Vec<Rays>>,
@@ -306,17 +306,6 @@ impl NodeGroup {
     pub const fn graph(&self) -> &OpticGraph {
         &self.graph
     }
-    /// Write node specific data files to the given `data_dir`.
-    /// # Errors
-    /// This function will return an error if the underlying `export_data` function of the corresponding
-    /// node returns an error.
-    // pub fn export_node_data(&self, data_dir: &Path) -> OpmResult<()> {
-    //     for node in self.graph.nodes() {
-    //         let uuid = node.uuid().as_simple().to_string();
-    //         node.optical_ref.borrow().export_data(data_dir, &uuid)?;
-    //     }
-    //     Ok(())
-    // }
     /// Generate a (top level) [`AnalysisReport`] containing the result of a previously preformed analysis.
     ///
     /// This [`AnalysisReport`] can then be used to either save it to disk or produce an HTML document from. In addition,
@@ -327,8 +316,6 @@ impl NodeGroup {
         let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
         analysis_report.add_scenery(self);
         for node in self.graph.nodes() {
-            let node_name = &node.optical_ref.borrow().name();
-            info!("toplevel report data for node {node_name}");
             let uuid = node.uuid().as_simple().to_string();
             if let Some(node_report) = node.optical_ref.borrow().node_report(&uuid) {
                 analysis_report.add_node_report(node_report);
@@ -405,26 +392,6 @@ impl NodeGroup {
     pub fn clear_edges(&mut self) {
         self.graph.clear_edges();
     }
-    // fn export_data(&self, report_dir: &Path, _uuid: &str) -> OpmResult<()> {
-    //     for node in self.graph.nodes() {
-    //         let node_name = node.optical_ref.borrow().name();
-    //         info!("export data for node {node_name}");
-    //         let uuid = node.uuid().as_simple().to_string();
-    //         node.optical_ref.borrow().export_data(report_dir, &uuid)?;
-    //         let hitmaps = node.optical_ref.borrow().hit_maps();
-    //         for hitmap in &hitmaps {
-    //             let port_name = hitmap.0;
-    //             info!("   found hitmap for port {port_name}");
-    //             let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-    //                 "hitmap_{node_name}_{port_name}_{uuid}.svg"
-    //             )));
-    //             if !hitmap.1.is_empty() {
-    //                 hitmap.1.to_plot(&file_path, PltBackEnd::SVG)?;
-    //             }
-    //         }
-    //     }
-    //     Ok(())
-    // }
 }
 
 impl OpticNode for NodeGroup {
@@ -451,6 +418,7 @@ impl OpticNode for NodeGroup {
         if let Proptype::OpticGraph(g) = &self.node_attr.get_property("graph")? {
             self.graph = g.clone();
         }
+        self.graph.set_is_inverted(self.node_attr.inverted());
         Ok(())
     }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
@@ -459,7 +427,6 @@ impl OpticNode for NodeGroup {
             let sub_uuid = node.uuid().as_simple().to_string();
             if let Some(node_report) = node.optical_ref.borrow().node_report(&sub_uuid) {
                 let node_name = &node.optical_ref.borrow().name();
-                info!("report data for node {node_name}");
                 if !(group_props.contains(node_name)) {
                     group_props
                         .create(node_name, "", None, node_report.into())
