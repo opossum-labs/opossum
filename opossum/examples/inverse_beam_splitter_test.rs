@@ -1,6 +1,6 @@
 use num::Zero;
 use opossum::{
-    analyzers::{AnalyzerType, RayTraceConfig},
+    analyzers::AnalyzerType,
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nodes::{BeamSplitter, EnergyMeter, NodeGroup, Source},
@@ -37,6 +37,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_bs, "input2", i_d2, "in1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.add_analyzer(AnalyzerType::Energy);
     doc.save_to_file(Path::new("./opossum/playground/inverse_beam_splitter.opm"))
 }
