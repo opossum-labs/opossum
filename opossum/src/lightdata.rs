@@ -16,6 +16,8 @@ pub enum LightData {
     Energy(DataEnergy),
     /// data type used for geometric optics analysis (ray tracing)
     Geometric(Rays),
+    /// data type used for ghost focus analysis (back- and forth ray-tracing)
+    GhostFocus(Vec<Rays>),
     /// placeholder value for future Fourier optics analysis, nothing implementd yet.
     Fourier,
 }

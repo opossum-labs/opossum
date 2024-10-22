@@ -11,7 +11,7 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     joule,
-    light_result::{light_result_to_light_rays, LightRays, LightResult},
+    light_result::{LightRays, LightResult},
     lightdata::LightData,
     millimeter,
     optic_node::{Alignable, OpticNode},
@@ -19,7 +19,7 @@ use crate::{
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    surface::{hit_map::HitMap, OpticalSurface, Plane},
+    surface::{hit_map::HitMap, OpticalSurface, Plane, Surface},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use std::{collections::HashMap, fmt::Debug};
@@ -269,34 +269,41 @@ impl AnalysisGhostFocus for Source {
         incoming_data: LightRays,
         _config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
+        bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
         let mut rays = if self.inverted() {
             let Some(bouncing_rays) = incoming_data.get("out1") else {
                 return Err(OpossumError::Analysis("no light at port".into()));
             };
             bouncing_rays.clone()
-        } else if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {
-            let Some(mut data) = data.value.clone() else {
-                return Err(OpossumError::Analysis(
-                    "source has empty light data defined".into(),
-                ));
-            };
-            if let LightData::Geometric(rays) = &mut data {
-                if let Some(iso) = self.effective_iso() {
-                    *rays = rays.transformed_rays(&iso);
+        } else if bounce_lvl == 0 {
+            if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {
+                let Some(mut data) = data.value.clone() else {
+                    return Err(OpossumError::Analysis(
+                        "source has empty light data defined".into(),
+                    ));
+                };
+                if let LightData::Geometric(rays) = &mut data {
+                    if let Some(iso) = self.effective_iso() {
+                        *rays = rays.transformed_rays(&iso);
+                    }
+                    vec![rays.clone()]
+                } else {
+                    return Err(OpossumError::Analysis(
+                        "source has wrong light data type defined".into(),
+                    ));
                 }
-                rays.clone()
             } else {
-                return Err(OpossumError::Analysis(
-                    "source has wrong light data type defined".into(),
-                ));
+                return Err(OpossumError::Analysis("could not read light data".into()));
             }
         } else {
-            return Err(OpossumError::Analysis("could not read light data".into()));
+            Vec::<Rays>::new()
         };
         if let Some(iso) = self.effective_iso() {
             self.surface.set_isometry(&iso);
-            rays.refract_on_surface(&mut self.surface, None)?;
+            for r in &mut rays {
+                r.refract_on_surface(&mut self.surface, None)?;
+            }
         } else {
             return Err(OpossumError::Analysis(
                 "no location for surface defined. Aborting".into(),
@@ -307,8 +314,18 @@ impl AnalysisGhostFocus for Source {
         //     light_rays_to_light_result(incoming_data),
         //     &RayTraceConfig::default(),
         // )?;
-        let outgoing = LightResult::from([("out1".into(), LightData::Geometric(rays))]);
-        light_result_to_light_rays(outgoing)
+        let mut out_light_rays = LightRays::default();
+        out_light_rays.insert("out1".into(), rays);
+        Ok(out_light_rays)
+
+        // let outgoing = LightResult::from([("out1".into(), LightData::Geometric(rays))]);
+        // light_result_to_light_rays(outgoing)
+    }
+}
+
+impl Surface for Source {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
     }
 }
 

@@ -11,7 +11,7 @@ use crate::{
     lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
-    surface::{OpticalSurface, Plane},
+    surface::{OpticalSurface, Plane, Surface},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -159,6 +159,18 @@ impl AnalysisRayTrace for Detector {
         } else {
             Ok(LightResult::from([(out_port.into(), data.clone())]))
         }
+    }
+
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
+    }
+}
+impl Surface for Detector {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
     }
 }
 #[cfg(test)]

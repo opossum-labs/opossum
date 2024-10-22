@@ -12,8 +12,8 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     properties::{Properties, Proptype},
-    reporting::analysis_report::NodeReport,
-    surface::{OpticalSurface, Plane},
+    reporting::node_report::NodeReport,
+    surface::{OpticalSurface, Plane, Surface},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -140,6 +140,13 @@ impl OpticNode for EnergyMeter {
                 LightData::Energy(e) => Some(joule!(e.spectrum.total_energy())),
                 LightData::Geometric(r) => Some(r.total_energy()),
                 LightData::Fourier => None,
+                LightData::GhostFocus(r) => {
+                    let mut energy = joule!(0.);
+                    for rays in r {
+                        energy += rays.total_energy();
+                    }
+                    Some(energy)
+                }
             };
         };
         let mut props = Properties::default();
@@ -189,7 +196,11 @@ impl OpticNode for EnergyMeter {
         self.surface.reset_hit_map();
     }
 }
-
+impl Surface for EnergyMeter {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
+    }
+}
 impl Debug for EnergyMeter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
@@ -268,6 +279,13 @@ impl AnalysisRayTrace for EnergyMeter {
         } else {
             Ok(LightResult::from([(outport.into(), data.clone())]))
         }
+    }
+
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        self.light_data.as_mut()
+    }
+    fn set_light_data(&mut self, ld: LightData) {
+        self.light_data = Some(ld);
     }
 }
 #[cfg(test)]

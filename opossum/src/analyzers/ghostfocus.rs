@@ -16,7 +16,7 @@ use crate::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
-    reporting::analysis_report::{AnalysisReport, NodeReport},
+    reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
 };
 
 use super::{raytrace::AnalysisRayTrace, Analyzer, RayTraceConfig};
@@ -76,6 +76,7 @@ impl Analyzer for GhostFocusAnalyzer {
             "Performing ghost focus analysis of scenery{scenery_name} up to {} ray bounces.",
             self.config.max_bounces
         );
+        scenery.clear_edges();
         for bounce in 0..=self.config.max_bounces {
             let mut ray_collection = Vec::<Rays>::new();
             if bounce % 2 == 0 {
@@ -90,6 +91,7 @@ impl Analyzer for GhostFocusAnalyzer {
                 LightRays::default(),
                 self.config(),
                 &mut ray_collection,
+                bounce,
             )?;
             scenery.clear_edges();
             for rays in &ray_collection {
@@ -142,6 +144,7 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
         _incoming_data: LightRays,
         _config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
+        _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
         warn!(
             "{}: No ghost focus analysis function defined.",
@@ -155,7 +158,7 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GhostFocusHistory {
     /// vector of ray positions for each raybundle at a specifc spectral position
-    pub rays_pos_history: Vec<Vec<MatrixXx3<Length>>>,
+    pub rays_pos_history: Vec<Vec<Vec<MatrixXx3<Length>>>>,
     /// view direction if the rayposition thistory is plotted
     pub plot_view_direction: Option<Vector3<f64>>,
 }
@@ -171,7 +174,7 @@ impl GhostFocusHistory {
     pub fn project_to_plane(
         &self,
         plane_normal_vec: Vector3<f64>,
-    ) -> OpmResult<Vec<Vec<MatrixXx2<Length>>>> {
+    ) -> OpmResult<Vec<Vec<Vec<MatrixXx2<Length>>>>> {
         let vec_norm = plane_normal_vec.norm();
 
         if vec_norm < f64::EPSILON {
@@ -203,41 +206,54 @@ impl GhostFocusHistory {
         };
 
         let mut projected_history =
-            Vec::<Vec<MatrixXx2<Length>>>::with_capacity(self.rays_pos_history.len());
-        for ray_bundle in &self.rays_pos_history {
-            let mut rays_pos_projection = Vec::<MatrixXx2<Length>>::with_capacity(ray_bundle.len());
-            for ray_pos in ray_bundle {
-                let mut projected_ray_pos = MatrixXx2::<Length>::zeros(ray_pos.column(0).len());
-                for (row, pos) in ray_pos.row_iter().enumerate() {
-                    // let pos_t = Vector3::from_vec(pos.transpose().iter().map(|p| p.get::<millimeter>()).collect::<Vec<f64>>());
-                    let pos_t = Vector3::from_vec(
-                        pos.iter()
-                            .map(uom::si::f64::Length::get::<millimeter>)
-                            .collect::<Vec<f64>>(),
-                    );
-                    let proj_pos = pos_t - pos_t.dot(&normed_normal_vec) * plane_normal_vec;
+            Vec::<Vec<Vec<MatrixXx2<Length>>>>::with_capacity(self.rays_pos_history.len());
+        for ray_vec_in_bounce in &self.rays_pos_history {
+            let mut rays_vec_pos_projection =
+                Vec::<Vec<MatrixXx2<Length>>>::with_capacity(ray_vec_in_bounce.len());
+            for ray_bundle in ray_vec_in_bounce {
+                let mut rays_pos_projection =
+                    Vec::<MatrixXx2<Length>>::with_capacity(ray_bundle.len());
+                for ray_pos in ray_bundle {
+                    let mut projected_ray_pos = MatrixXx2::<Length>::zeros(ray_pos.column(0).len());
+                    for (row, pos) in ray_pos.row_iter().enumerate() {
+                        // let pos_t = Vector3::from_vec(pos.transpose().iter().map(|p| p.get::<millimeter>()).collect::<Vec<f64>>());
+                        let pos_t = Vector3::from_vec(
+                            pos.iter()
+                                .map(uom::si::f64::Length::get::<millimeter>)
+                                .collect::<Vec<f64>>(),
+                        );
+                        let proj_pos = pos_t - pos_t.dot(&normed_normal_vec) * plane_normal_vec;
 
-                    projected_ray_pos[(row, 0)] = millimeter!(proj_pos.dot(&co_ax_1));
-                    projected_ray_pos[(row, 1)] = millimeter!(proj_pos.dot(&co_ax_2));
+                        projected_ray_pos[(row, 0)] = millimeter!(proj_pos.dot(&co_ax_1));
+                        projected_ray_pos[(row, 1)] = millimeter!(proj_pos.dot(&co_ax_2));
+                    }
+                    rays_pos_projection.push(projected_ray_pos);
                 }
-                rays_pos_projection.push(projected_ray_pos);
+                rays_vec_pos_projection.push(rays_pos_projection);
             }
-            projected_history.push(rays_pos_projection);
+            projected_history.push(rays_vec_pos_projection);
         }
 
         Ok(projected_history)
     }
 }
 
-impl From<Vec<Rays>> for GhostFocusHistory {
-    fn from(value: Vec<Rays>) -> Self {
-        let mut ghost_focus_history = Vec::<Vec<MatrixXx3<Length>>>::with_capacity(value.len());
-        for rays in &value {
-            let mut rays_history = Vec::<MatrixXx3<Length>>::with_capacity(rays.nr_of_rays(false));
-            for ray in rays {
-                rays_history.push(ray.position_history());
+impl From<Vec<Vec<Rays>>> for GhostFocusHistory {
+    fn from(value: Vec<Vec<Rays>>) -> Self {
+        let mut ghost_focus_history =
+            Vec::<Vec<Vec<MatrixXx3<Length>>>>::with_capacity(value.len());
+        for ray_vecs_in_bounce in &value {
+            let mut rays_per_bounce_history =
+                Vec::<Vec<MatrixXx3<Length>>>::with_capacity(ray_vecs_in_bounce.len());
+            for rays in ray_vecs_in_bounce {
+                let mut rays_history =
+                    Vec::<MatrixXx3<Length>>::with_capacity(rays.nr_of_rays(false));
+                for ray in rays {
+                    rays_history.push(ray.position_history());
+                }
+                rays_per_bounce_history.push(rays_history);
             }
-            ghost_focus_history.push(rays_history);
+            ghost_focus_history.push(rays_per_bounce_history);
         }
         Self {
             rays_pos_history: ghost_focus_history,
@@ -281,15 +297,16 @@ impl Plottable for GhostFocusHistory {
             for (i, bounce_positions) in projected_positions.iter().enumerate() {
                 let mut proj_pos_mm =
                     Vec::<MatrixXx2<f64>>::with_capacity(projected_positions.len());
-                for ray_pos in bounce_positions {
-                    proj_pos_mm.push(MatrixXx2::from_vec(
-                        ray_pos
-                            .iter()
-                            .map(uom::si::f64::Length::get::<millimeter>)
-                            .collect::<Vec<f64>>(),
-                    ));
+                for rays_in_bounce in bounce_positions {
+                    for ray_pos in rays_in_bounce {
+                        proj_pos_mm.push(MatrixXx2::from_vec(
+                            ray_pos
+                                .iter()
+                                .map(uom::si::f64::Length::get::<millimeter>)
+                                .collect::<Vec<f64>>(),
+                        ));
+                    }
                 }
-
                 let gradient = colorous::TURBO;
 
                 let c = if projected_positions.len() > 10 {

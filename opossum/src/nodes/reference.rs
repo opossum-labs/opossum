@@ -15,6 +15,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::OpticPorts,
     optic_ref::OpticRef,
+    surface::{OpticalSurface, Surface},
     utils::geom_transformation::Isometry,
 };
 
@@ -123,6 +124,11 @@ impl OpticNode for NodeReference {
 impl Dottable for NodeReference {
     fn node_color(&self) -> &str {
         "lightsalmon3"
+    }
+}
+impl Surface for NodeReference {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
     }
 }
 impl Analyzable for NodeReference {}

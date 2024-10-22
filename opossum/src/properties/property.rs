@@ -174,25 +174,23 @@ impl Property {
     pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
         match &self.prop {
             Proptype::SpotDiagram(spot_diagram) => {
-                let file_path = report_path.join(Path::new(&format!("spot_diagram_{id}.svg")));
+                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
                 spot_diagram.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::FluenceDetector(fluence) => {
-                let file_path = report_path.join(Path::new(&format!("fluence_diagram_{id}.png")));
+                let file_path = report_path.join(Path::new(&format!("{id}.png")));
                 fluence.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
             }
             Proptype::Spectrometer(spectrometer) => {
-                let file_path = report_path.join(Path::new(&format!("spectrometer_{id}.svg")));
+                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
                 spectrometer.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::RayPositionHistory(ray_hist) => {
-                let file_path = report_path.join(Path::new(&format!("ray_propagation_{id}.svg")));
-                let mut ray_hist_clone = ray_hist.clone();
-                ray_hist_clone.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
-                ray_hist_clone.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
+                ray_hist.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
             Proptype::GhostFocusHistory(ghost_hist) => {
-                let file_path = report_path.join(Path::new(&format!("ghost_propagation_{id}.svg")));
+                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
                 let mut ghost_hist = ghost_hist.clone();
                 ghost_hist.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
                 ghost_hist.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
@@ -201,8 +199,14 @@ impl Property {
                 todo!()
             }
             Proptype::HitMap(hit_map) => {
-                let file_path = report_path.join(Path::new(&format!("hit_map_{id}.svg")));
+                let file_path = report_path.join(Path::new(&format!("{id}.svg")));
                 hit_map.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
+            }
+            Proptype::NodeReport(report) => {
+                for prop in report.properties() {
+                    prop.1
+                        .export_data(report_path, &format!("{id}_{}_{}", report.uuid(), prop.0))?;
+                }
             }
             _ => {}
         }

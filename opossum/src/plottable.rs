@@ -1121,6 +1121,9 @@ impl PlotData {
                 ]
             }
             Self::MultiDim3 { vec_of_xyz_data } => {
+                if vec_of_xyz_data.is_empty() {
+                    return vec![None, None, None];
+                }
                 let num_cols = vec_of_xyz_data[0].row(0).len();
                 let mut max = vec![f64::NEG_INFINITY; num_cols];
                 let mut min = vec![f64::INFINITY; num_cols];
@@ -1147,6 +1150,9 @@ impl PlotData {
             }
 
             Self::MultiDim2 { vec_of_xy_data } => {
+                if vec_of_xy_data.is_empty() {
+                    return vec![None, None];
+                }
                 let num_cols = vec_of_xy_data[0].row(0).len();
                 let mut max = vec![f64::NEG_INFINITY; num_cols];
                 let mut min = vec![f64::INFINITY; num_cols];

@@ -3,15 +3,17 @@
 
 use std::path::Path;
 
-use super::html_report::{HtmlNodeReport, HtmlReport};
+use super::{
+    html_report::{HtmlNodeReport, HtmlReport},
+    node_report::NodeReport,
+};
 use crate::{
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     optic_node::OpticNode,
-    properties::{Properties, Proptype},
 };
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 #[derive(Serialize, Debug, Clone)]
 /// Structure for storing data being integrated in an analysis report.
@@ -57,10 +59,7 @@ impl AnalysisReport {
     pub fn export_data(&self, report_path: &Path) -> OpmResult<()> {
         let report_path = report_path.join(Path::new("data"));
         for node_report in &self.node_reports {
-            node_report.properties.export_data(
-                &report_path,
-                &format!("{}_{}", &node_report.name, &node_report.uuid),
-            )?;
+            node_report.export_data(&report_path, "")?;
         }
         Ok(())
     }
@@ -76,7 +75,7 @@ impl AnalysisReport {
         let html_node_reports: Vec<HtmlNodeReport> = self
             .node_reports
             .iter()
-            .map(NodeReport::to_html_node_report)
+            .map(|r| r.to_html_node_report(""))
             .collect();
         Ok(HtmlReport::new(
             self.opossum_version.clone(),
@@ -94,64 +93,10 @@ impl AnalysisReport {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-/// Structure for storing node specific data to be integrated in the [`AnalysisReport`].
-pub struct NodeReport {
-    node_type: String,
-    name: String,
-    uuid: String,
-    properties: Properties,
-}
-impl NodeReport {
-    /// Creates a new [`NodeReport`].
-    #[must_use]
-    pub fn new(node_type: &str, name: &str, uuid: &str, properties: Properties) -> Self {
-        Self {
-            node_type: node_type.to_owned(),
-            name: name.to_owned(),
-            uuid: uuid.to_string(),
-            properties,
-        }
-    }
-    /// Returns a reference to the node type of this [`NodeReport`].
-    #[must_use]
-    pub fn node_type(&self) -> &str {
-        self.node_type.as_ref()
-    }
-    /// Returns a reference to the name of this [`NodeReport`].
-    #[must_use]
-    pub fn name(&self) -> &str {
-        self.name.as_ref()
-    }
-    /// Returns a reference to the properties of this [`NodeReport`].
-    #[must_use]
-    pub const fn properties(&self) -> &Properties {
-        &self.properties
-    }
-    /// Return an [`HtmlNodeReport`] from this [`NodeReport`].
-    #[must_use]
-    pub fn to_html_node_report(&self) -> HtmlNodeReport {
-        HtmlNodeReport {
-            node_name: self.name.clone(),
-            node_type: self.node_type.clone(),
-            props: self.properties.html_props(self.name(), &self.uuid),
-            uuid: self.uuid.clone(),
-        }
-    }
-    /// Returns a reference to the uuid of this [`NodeReport`].
-    #[must_use]
-    pub fn uuid(&self) -> &str {
-        &self.uuid
-    }
-}
-
-impl From<NodeReport> for Proptype {
-    fn from(value: NodeReport) -> Self {
-        Self::NodeReport(value)
-    }
-}
 #[cfg(test)]
 mod test {
+    use crate::properties::Properties;
+
     use super::*;
     #[test]
     fn analysis_report_new() {
@@ -178,16 +123,5 @@ mod test {
             Properties::default(),
         ));
         assert_eq!(report.node_reports.len(), 1);
-    }
-    #[test]
-    fn node_report_new() {
-        let report = NodeReport::new(
-            "test detector",
-            "detector name",
-            "123",
-            Properties::default(),
-        );
-        assert_eq!(report.node_type, "test detector");
-        assert_eq!(report.name, "detector name");
     }
 }

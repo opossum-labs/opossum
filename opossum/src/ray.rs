@@ -442,6 +442,8 @@ impl Ray {
                 self.dir = refract_dir;
                 self.e = input_energy * (1. - reflectivity);
                 let mut reflected_ray = self.clone();
+                reflected_ray.pos_hist.clear();
+                reflected_ray.add_to_pos_hist(reflected_ray.pos);
                 reflected_ray.dir = reflected_dir;
                 reflected_ray.e = input_energy * reflectivity;
                 reflected_ray.number_of_bounces += 1;
@@ -1005,7 +1007,7 @@ mod test {
         assert_eq!(reflected_ray.pos, millimeter!(0., 0., 10.));
         assert_eq!(reflected_ray.refractive_index, 1.0);
         assert_eq!(reflected_ray.dir, -1.0 * Vector3::z());
-        assert_eq!(reflected_ray.pos_hist, vec![Point3::origin()]);
+        assert_eq!(reflected_ray.pos_hist, vec![millimeter!(0., 0., 10.)]);
         assert_eq!(reflected_ray.path_length(), plane_z_pos);
         assert_eq!(reflected_ray.number_of_bounces(), 1);
         assert_eq!(reflected_ray.number_of_refractions(), 0);

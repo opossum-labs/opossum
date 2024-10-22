@@ -18,7 +18,7 @@ use crate::{
     properties::Proptype,
     radian,
     refractive_index::refr_index_vaccuum,
-    surface::Plane,
+    surface::{OpticalSurface, Plane, Surface},
 };
 use approx::relative_eq;
 use nalgebra::Vector3;
@@ -159,6 +159,11 @@ impl Alignable for ReflectiveGrating {}
 impl Dottable for ReflectiveGrating {
     fn node_color(&self) -> &str {
         "cornsilk"
+    }
+}
+impl Surface for ReflectiveGrating {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
     }
 }
 impl Analyzable for ReflectiveGrating {}

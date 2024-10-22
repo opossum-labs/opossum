@@ -11,8 +11,8 @@ use crate::{
     lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
-    reporting::analysis_report::NodeReport,
-    surface::{OpticalSurface, Plane},
+    reporting::node_report::NodeReport,
+    surface::{OpticalSurface, Plane, Surface},
     utils::geom_transformation::Isometry,
 };
 
@@ -78,6 +78,11 @@ impl AnalysisEnergy for Dummy {
             || Ok(LightResult::default()),
             |data| Ok(LightResult::from([(outport.into(), data.clone())])),
         )
+    }
+}
+impl Surface for Dummy {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
     }
 }
 impl AnalysisRayTrace for Dummy {

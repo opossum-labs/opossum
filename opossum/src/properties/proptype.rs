@@ -11,7 +11,7 @@ use crate::{
     optic_ports::OpticPorts,
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
-    reporting::{analysis_report::NodeReport, html_report::HtmlNodeReport},
+    reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
     surface::hit_map::HitMap,
     utils::{
         geom_transformation::Isometry,
@@ -119,7 +119,7 @@ impl Proptype {
     /// This function will return an error if
     ///   - underlying html templates could not be compiled
     ///   - a property value could not be converted to html code.
-    pub fn to_html(&self, property_name: &str, uuid: &str) -> OpmResult<String> {
+    pub fn to_html(&self, id: &str, property_name: &str) -> OpmResult<String> {
         let mut tt = TinyTemplate::new();
         tt.add_template("simple", HTML_PROP_SIMPLE)
             .map_err(|e| OpossumError::Other(e.to_string()))?;
@@ -134,30 +134,26 @@ impl Proptype {
             Self::Bool(value) => tt.render("simple", &format!("{value}")),
             Self::SpectrometerType(value) => tt.render("simple", &value.to_string()),
             Self::Metertype(value) => tt.render("simple", &value.to_string()),
-            Self::Spectrometer(_) => tt.render(
-                "image",
-                &format!("data/spectrometer_{property_name}_{uuid}.svg"),
-            ),
-            Self::SpotDiagram(_) => tt.render(
-                "image",
-                &format!("data/spot_diagram_{property_name}_{uuid}.svg"),
-            ),
-            Self::HitMap(_) => {
-                tt.render("image", &format!("data/hit_map_{property_name}_{uuid}.svg"))
+            Self::Spectrometer(_)
+            | Self::SpotDiagram(_)
+            | Self::HitMap(_)
+            | Self::RayPositionHistory(_)
+            | Self::GhostFocusHistory(_) => {
+                tt.render("image", &format!("data/{id}_{property_name}.svg"))
             }
-            Self::WaveFrontData(_value) => tt.render(
-                "image",
-                &format!("data/wavefront_diagram_{property_name}_{uuid}.png"),
-            ),
-            Self::FluenceDetector(_value) => {
-                tt.render("image", &format!("data/fluence_{property_name}_{uuid}.png"))
+            Self::WaveFrontData(_) | Self::FluenceDetector(_) => {
+                tt.render("image", &format!("data/{id}_{property_name}.png"))
             }
             Self::NodeReport(report) => {
                 let html_node_report = HtmlNodeReport {
                     node_name: report.name().into(),
                     node_type: report.node_type().into(),
-                    props: report.properties().html_props(report.name(), uuid),
-                    uuid: uuid.to_string(),
+                    props: report.properties().html_props(&format!(
+                        "{id}_{}_{}",
+                        report.name(),
+                        report.uuid()
+                    )),
+                    uuid: report.uuid().to_string(),
                 };
                 tt.render("group", &html_node_report)
             }
@@ -179,15 +175,6 @@ impl Proptype {
             ),
             Self::Length(value) => tt.render("simple", &format_quantity(meter, *value)),
             Self::Energy(value) => tt.render("simple", &format_quantity(joule, *value)),
-            Self::RayPositionHistory(_) => tt.render(
-                "image",
-                &format!("data/ray_propagation_{property_name}_{uuid}.svg"),
-            ),
-            Self::GhostFocusHistory(_) => tt.render(
-                "image",
-                &format!("data/ghost_propagation_{property_name}_{uuid}.svg"),
-            ),
-
             _ => Ok("unknown property type".into()),
         };
         string_value.map_err(|e| OpossumError::Other(e.to_string()))

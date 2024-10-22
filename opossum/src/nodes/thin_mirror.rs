@@ -15,7 +15,7 @@ use crate::{
     optic_node::{Alignable, OpticNode},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
-    surface::{OpticalSurface, Plane, Sphere},
+    surface::{OpticalSurface, Plane, Sphere, Surface},
 };
 use num::Zero;
 use uom::si::f64::Length;
@@ -117,6 +117,12 @@ impl OpticNode for ThinMirror {
             warn!("Node has no isometry defined. Mesh will be located at origin.");
             mesh
         }
+    }
+}
+
+impl Surface for ThinMirror {
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
     }
 }
 

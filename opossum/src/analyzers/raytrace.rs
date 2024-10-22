@@ -1,16 +1,24 @@
 //! Analyzer for sequential ray tracing
-use super::Analyzer;
+use super::{Analyzer, AnalyzerType};
 use crate::{
+    degree,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
-    nodes::NodeGroup,
+    lightdata::LightData,
+    nodes::{NodeAttr, NodeGroup},
     optic_node::OpticNode,
+    optic_ports::PortType,
     picojoule,
+    properties::Proptype,
+    rays::Rays,
+    refractive_index::RefractiveIndexType,
     reporting::analysis_report::AnalysisReport,
+    surface::Surface,
+    utils::geom_transformation::Isometry,
 };
 use log::info;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::Energy;
+use uom::si::f64::{Angle, Energy, Length};
 
 //pub type LightResRays = LightDings<Rays>;
 
@@ -47,7 +55,7 @@ impl Analyzer for RayTracingAnalyzer {
     }
 }
 /// Trait for implementing the ray trace analysis.
-pub trait AnalysisRayTrace: OpticNode {
+pub trait AnalysisRayTrace: OpticNode + Surface {
     /// Perform a ray trace analysis an [`OpticNode`].
     ///
     /// # Errors
@@ -72,6 +80,179 @@ pub trait AnalysisRayTrace: OpticNode {
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
         self.analyze(incoming_data, config)
+    }
+
+    /// Pass a bundle of rays through an "input"-surface: Rays from outside a node which enter the node.
+    /// # Errors
+    /// This function errors on error propagation
+    fn enter_through_surface(
+        &mut self,
+        rays_bundle: &mut Vec<Rays>,
+        analyzer_type: &AnalyzerType,
+        refri: &RefractiveIndexType,
+        backward: bool,
+        port_name: &str,
+    ) -> OpmResult<()> {
+        if backward {
+            for rays in &mut *rays_bundle {
+                if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
+                    rays.apodize(aperture)?;
+                    if let AnalyzerType::RayTrace(ref config) = analyzer_type {
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                } else {
+                    return Err(OpossumError::OpticPort("output aperture not found".into()));
+                };
+                let surf = self.get_surface_mut(port_name);
+                let reflected_rear = rays.refract_on_surface(surf, Some(refri))?;
+                surf.add_to_forward_rays_cache(reflected_rear);
+            }
+            for rays in self.get_surface_mut(port_name).backwards_rays_cache() {
+                rays_bundle.push(rays.clone());
+            }
+        } else {
+            for rays in &mut *rays_bundle {
+                if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
+                    rays.apodize(aperture)?;
+                    if let AnalyzerType::RayTrace(ref config) = analyzer_type {
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                } else {
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                };
+                let surf = self.get_surface_mut(port_name);
+                let reflected_front = rays.refract_on_surface(surf, Some(refri))?;
+                surf.add_to_backward_rays_cache(reflected_front);
+            }
+            for rays in self.get_surface_mut(port_name).forward_rays_cache() {
+                rays_bundle.push(rays.clone());
+            }
+        }
+        Ok(())
+    }
+
+    /// Pass a bundle of rays through an "exit"-surface: rays from inside a node which leave the node.
+    /// # Errors
+    /// this function errors on error propagation
+    fn exit_through_surface(
+        &mut self,
+        rays_bundle: &mut Vec<Rays>,
+        analyzer_type: &AnalyzerType,
+        refri: &RefractiveIndexType,
+        backward: bool,
+        port_name: &str,
+    ) -> OpmResult<()> {
+        let surf = self.get_surface_mut(port_name);
+        if backward {
+            for rays in &mut *rays_bundle {
+                let reflected_front = rays.refract_on_surface(surf, Some(refri))?;
+                surf.add_to_forward_rays_cache(reflected_front);
+            }
+            for rays in surf.backwards_rays_cache() {
+                rays_bundle.push(rays.clone());
+            }
+            for rays in &mut *rays_bundle {
+                if let Some(aperture) = self.ports().aperture(&PortType::Output, port_name) {
+                    rays.apodize(aperture)?;
+                    if let AnalyzerType::RayTrace(config) = analyzer_type {
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                } else {
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                };
+            }
+        } else {
+            for rays in &mut *rays_bundle {
+                let reflected_rear = rays.refract_on_surface(surf, Some(refri))?;
+                surf.add_to_backward_rays_cache(reflected_rear);
+            }
+            for rays in surf.forward_rays_cache() {
+                rays_bundle.push(rays.clone());
+            }
+            for rays in &mut *rays_bundle {
+                if let Some(aperture) = self.ports().aperture(&PortType::Output, port_name) {
+                    rays.apodize(aperture)?;
+                    if let AnalyzerType::RayTrace(config) = analyzer_type {
+                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    }
+                } else {
+                    return Err(OpossumError::OpticPort("output aperture not found".into()));
+                };
+            }
+        }
+        Ok(())
+    }
+
+    /// Function to pass a bundle of rays through an "inert" surface.
+    /// Here, "inert" refers to a surface that does not mutate the rays in a sense of refraction or reflection, but only adds a new position to its history.
+    /// This functionis used for the propagation through ideal detectors, such as a spot diagram
+    /// # Errors
+    /// This function errors if the effective isometry is not defined
+    fn pass_through_inert_surface(&mut self, rays_bundle: &mut Vec<Rays>) -> OpmResult<()> {
+        if let Some(iso) = self.effective_iso() {
+            let surf = self.get_surface_mut("");
+            surf.set_isometry(&iso);
+            for rays in &mut *rays_bundle {
+                rays.refract_on_surface(surf, None)?;
+            }
+        } else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined. Aborting".into(),
+            ));
+        }
+        // merge all rays
+        if let Some(ld) = self.get_light_data_mut() {
+            if let LightData::GhostFocus(rays) = ld {
+                for r in rays_bundle {
+                    rays.push(r.clone());
+                }
+            }
+        } else {
+            self.set_light_data(LightData::GhostFocus(rays_bundle.clone()));
+        }
+        Ok(())
+    }
+
+    ///returns a mutable reference to the light data.
+    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
+        None
+    }
+
+    ///sets the light data field of this detector
+    fn set_light_data(&mut self, _ld: LightData) {}
+
+    ///returns the necessary node attributes for ray tracing
+    /// # Errors
+    /// This function errors if the node attributes: Isometry, Refractive Index or Center Thickness cannot be read,
+    fn get_node_attributes_ray_trace(
+        &self,
+        node_attr: &NodeAttr,
+    ) -> OpmResult<(Isometry, RefractiveIndexType, Length, Angle)> {
+        let Some(eff_iso) = self.effective_iso() else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined".into(),
+            ));
+        };
+        let Ok(Proptype::RefractiveIndex(index_model)) = node_attr.get_property("refractive index")
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read refractive index".into(),
+            ));
+        };
+        let Ok(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness")
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read center thickness".into(),
+            ));
+        };
+
+        let angle = if let Ok(Proptype::Angle(wedge)) = node_attr.get_property("wedge") {
+            *wedge
+        } else {
+            degree!(0.)
+        };
+
+        Ok((eff_iso, index_model.value.clone(), *center_thickness, angle))
     }
 }
 // /// enum to define the mode of the raytracing analysis.

@@ -1,10 +1,13 @@
 use opossum::{
-    analyzers::{AnalyzerType, GhostFocusConfig},
+    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
     coatings::CoatingType,
     degree,
     error::OpmResult,
     joule, millimeter,
-    nodes::{round_collimated_ray_source, Lens, NodeGroup, SpotDiagram, Wedge},
+    nodes::{
+        collimated_line_ray_source, round_collimated_ray_source, Lens, NodeGroup, SpotDiagram,
+        Wedge,
+    },
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
     refractive_index::RefrIndexConst,
@@ -15,8 +18,8 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(
-        // collimated_line_ray_source(millimeter!(50.), joule!(1.), 3)?
-        round_collimated_ray_source(millimeter!(50.0), joule!(1.0), 5)?,
+        // collimated_line_ray_source(millimeter!(50.), joule!(1.), 100)?
+        round_collimated_ray_source(millimeter!(50.0), joule!(1.0), 7)?,
     )?;
     let i_sd = scenery.add_node(SpotDiagram::default())?;
 
@@ -45,7 +48,8 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     let mut config = GhostFocusConfig::default();
-    config.set_max_bounces(2);
+    config.set_max_bounces(1);
     doc.add_analyzer(AnalyzerType::GhostFocus(config));
+    // doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new("./opossum/playground/ghost_focus.opm"))
 }
