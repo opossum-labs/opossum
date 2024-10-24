@@ -50,11 +50,32 @@ use uom::{
         length::{micrometer, millimeter, nanometer},
     },
 };
+use uuid::Uuid;
 /// Struct containing all relevant information of a ray bundle
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Rays {
     /// vector containing the individual rays
     rays: Vec<Ray>,
+    /// origin node of this ray bundle
+    node_origin: Option<Uuid>,
+    /// id of this ray bundle
+    uuid: Uuid,
+    /// parent id of this ray bundle
+    parent_id: Option<Uuid>,
+    ///the index of the position history of the parent ray bundle at which this ray bundle was generated
+    parent_pos_split_idx: usize,
+}
+
+impl Default for Rays {
+    fn default() -> Self {
+        Self {
+            rays: Vec::default(),
+            node_origin: Option::default(),
+            uuid: Uuid::new_v4(),
+            parent_id: Option::default(),
+            parent_pos_split_idx: usize::default(),
+        }
+    }
 }
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis) with uniform energy distribution.
@@ -84,7 +105,75 @@ impl Rays {
             let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
-        Ok(Self { rays })
+        Ok(Self {
+            rays,
+            node_origin: None,
+            uuid: Uuid::new_v4(),
+            parent_id: None,
+            parent_pos_split_idx: 0,
+        })
+    }
+    ///Returns the uuid of this ray bundle
+    #[must_use]
+    pub const fn uuid(&self) -> &Uuid {
+        &self.uuid
+    }
+    ///get the bounce level of this ray bundle
+    #[must_use]
+    pub fn bounce_lvl(&self) -> usize {
+        if self.rays.is_empty() {
+            0
+        } else {
+            let valid_rays = self.rays.iter().filter(|r| r.valid()).collect_vec();
+            if valid_rays.is_empty() {
+                0
+            } else {
+                valid_rays[0].number_of_bounces()
+            }
+        }
+    }
+    ///returns the length of the position history
+    #[must_use]
+    pub fn ray_history_len(&self) -> usize {
+        if self.rays.is_empty() {
+            0
+        } else {
+            let valid_rays = self.rays.iter().filter(|r| r.valid()).collect_vec();
+            if valid_rays.is_empty() {
+                0
+            } else {
+                valid_rays[0].ray_history_len()
+            }
+        }
+    }
+    ///Returns the uuid of node at which this ray bundle originated
+    #[must_use]
+    pub const fn node_origin(&self) -> &Option<Uuid> {
+        &self.node_origin
+    }
+    ///Returns the uuid of tha parent ray bundle of this ray bundle
+    #[must_use]
+    pub const fn parent_id(&self) -> &Option<Uuid> {
+        &self.parent_id
+    }
+    ///Returns the index of the position history of its parent ray bundle
+    #[must_use]
+    pub const fn parent_pos_split_idx(&self) -> &usize {
+        &self.parent_pos_split_idx
+    }
+    /// Sets the parent uuid of this ray bundle
+    pub fn set_parent_uuid(&mut self, parent_uuid: Uuid) {
+        self.parent_id = Some(parent_uuid);
+    }
+
+    /// Sets the node origin uuid of this ray bundle
+    pub fn set_node_origin_uuid(&mut self, node_uuid: Uuid) {
+        self.node_origin = Some(node_uuid);
+    }
+
+    /// Sets the parent node split index node origin uuid of this ray bundle
+    pub fn set_parent_node_split_idx(&mut self, split_idx: usize) {
+        self.parent_pos_split_idx = split_idx;
     }
 
     /// Generate a set of collimated rays (collinear with optical axis) with specified energy, spectral and position distribution.
@@ -124,7 +213,13 @@ impl Rays {
                 rays.push(ray);
             }
         }
-        Ok(Self { rays })
+        Ok(Self {
+            rays,
+            node_origin: None,
+            uuid: Uuid::new_v4(),
+            parent_id: None,
+            parent_pos_split_idx: 0,
+        })
     }
 
     /// Generate a set of collimated rays (collinear with optical axis) with specified energy distribution and position distribution.
@@ -162,7 +257,13 @@ impl Rays {
                 rays.push(ray);
             }
         }
-        Ok(Self { rays })
+        Ok(Self {
+            rays,
+            node_origin: None,
+            uuid: Uuid::new_v4(),
+            parent_id: None,
+            parent_pos_split_idx: 0,
+        })
     }
     /// Generate a ray cone (= point source)
     ///
@@ -206,7 +307,13 @@ impl Rays {
             let ray = Ray::new(position, direction, wave_length, energy_per_ray)?;
             rays.push(ray);
         }
-        Ok(Self { rays })
+        Ok(Self {
+            rays,
+            node_origin: None,
+            uuid: Uuid::new_v4(),
+            parent_id: None,
+            parent_pos_split_idx: 0,
+        })
     }
     /// Returns the total energy of this [`Rays`].
     ///
@@ -668,7 +775,7 @@ impl Rays {
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
     /// The refractive index of the surface is given by the `refractive_index` parameter. If this parameter is
-    /// set to `None`, the refractive index of the incoming individual beam is used. This way it is possibe to model
+    /// set to `None`, the refractive index of the incoming individual beam is used. This way it is possible to model
     /// a "passive" surface, which does not change the direction of the [`Ray`].
     ///
     /// # Warnings
@@ -695,7 +802,7 @@ impl Rays {
                 } else {
                     None
                 };
-                if let Some(reflected) = ray.refract_on_surface(surface, n2)? {
+                if let Some(reflected) = ray.refract_on_surface(surface, n2, &self.uuid)? {
                     reflected_rays.add_ray(reflected);
                 } else {
                     rays_missed = true;
@@ -710,6 +817,8 @@ impl Rays {
             warn!("ray bundle contains no valid rays - not propagating");
         }
         //surface.set_backwards_rays_cache(reflected_rays.clone());
+        reflected_rays.set_parent_uuid(self.uuid);
+        reflected_rays.set_parent_node_split_idx(self.ray_history_len());
         Ok(reflected_rays)
     }
     /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating
@@ -754,6 +863,7 @@ impl Rays {
         if !valid_rays_found {
             warn!("ray bundle contains no valid rays - not propagating");
         }
+        reflected_rays.set_parent_uuid(self.uuid);
         Ok(reflected_rays)
     }
     /// Filter a ray bundle by a given filter.
@@ -1114,7 +1224,13 @@ impl Display for Rays {
 
 impl From<Vec<Ray>> for Rays {
     fn from(value: Vec<Ray>) -> Self {
-        Self { rays: value }
+        Self {
+            rays: value,
+            node_origin: None,
+            uuid: Uuid::new_v4(),
+            parent_id: None,
+            parent_pos_split_idx: 0,
+        }
     }
 }
 

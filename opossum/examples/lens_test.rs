@@ -12,7 +12,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Lens Ray-trace test");
-    let src = scenery.add_node(collimated_line_ray_source(
+    let src = scenery.add_node(&collimated_line_ray_source(
         millimeter!(20.0),
         joule!(1.0),
         6,
@@ -24,7 +24,7 @@ fn main() -> OpmResult<()> {
         &RefrIndexConst::new(1.5068)?,
     )?
     .with_tilt(degree!(15.0, 0.0, 0.0))?;
-    let l1 = scenery.add_node(lens1)?;
+    let l1 = scenery.add_node(&lens1)?;
     let lens2 = Lens::new(
         "Lens 2",
         millimeter!(205.55),
@@ -33,8 +33,8 @@ fn main() -> OpmResult<()> {
         &RefrIndexConst::new(1.5068).unwrap(),
     )?
     .with_tilt(degree!(15.0, 0.0, 0.0))?;
-    let l2 = scenery.add_node(lens2)?;
-    let det = scenery.add_node(RayPropagationVisualizer::new("Ray plot", None)?)?;
+    let l2 = scenery.add_node(&lens2)?;
+    let det = scenery.add_node(&RayPropagationVisualizer::new("Ray plot", None)?)?;
     scenery.connect_nodes(src, "out1", l1, "front", millimeter!(50.0))?;
     scenery.connect_nodes(l1, "rear", l2, "front", millimeter!(50.0))?;
     scenery.connect_nodes(l2, "rear", det, "in1", millimeter!(50.0))?;

@@ -23,7 +23,7 @@ mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// An optical element with two flat surfaces, a given thickness and a  given wedge angle (= wedged window).
 ///
 ///

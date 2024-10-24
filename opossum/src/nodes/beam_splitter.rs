@@ -19,7 +19,7 @@ use crate::{
     utils::EnumProxy,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// An ideal beamsplitter node with a given splitting ratio.
 ///
 /// ## Optical Ports

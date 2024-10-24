@@ -1,56 +1,195 @@
 //! Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
 //! [`OpticalSurface`](crate::surface::OpticalSurface).
+use std::collections::HashMap;
+
+use log::warn;
 use nalgebra::{DVector, MatrixXx2, Point2, Point3};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Energy, Length};
+use uom::si::{
+    energy::joule,
+    f64::{Energy, Length},
+    length::centimeter,
+    radiant_exposure::joule_per_square_centimeter,
+};
+use uuid::Uuid;
 
 use crate::{
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
+    nodes::fluence_detector::Fluence,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
-    utils::unit_format::{
-        get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit,
-        get_unit_value_as_length_with_format_by_exponent,
+    utils::{
+        griddata::{calc_closed_poly_area, create_voronoi_cells, VoronoiedData},
+        unit_format::{
+            get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit,
+            get_unit_value_as_length_with_format_by_exponent,
+        },
     },
+    J_per_cm2,
 };
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+///Storage struct for `RaysHitMap` on a surface from a single bounce
+pub struct BouncedHitMap {
+    hit_map: HashMap<Uuid, RaysHitMap>,
+}
+
+impl BouncedHitMap {
+    /// Add intersection point (with energy) to this [`BouncedHitMap`].
+    pub fn add_to_hitmap(&mut self, hit_point: (Point3<Length>, Energy), uuid: &Uuid) {
+        if let Some(rays_hit_map) = self.hit_map.get_mut(uuid) {
+            rays_hit_map.add_to_hitmap(hit_point);
+        } else {
+            self.hit_map.insert(*uuid, RaysHitMap::new(vec![hit_point]));
+        }
+    }
+
+    /// creates a new [`BouncedHitMap`]
+    #[must_use]
+    pub const fn new(hit_points: HashMap<Uuid, RaysHitMap>) -> Self {
+        Self {
+            hit_map: hit_points,
+        }
+    }
+    ///returns a reference to a [`RaysHitMap`] in this [`BouncedHitMap`]
+    #[must_use]
+    pub fn get_rays_hit_map(&self, uuid: &Uuid) -> Option<&RaysHitMap> {
+        self.hit_map.get(uuid)
+    }
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+///Storage struct for hitpoints on a surface from a single raybundle
+pub struct RaysHitMap {
+    hit_map: Vec<(Point3<Length>, Energy)>,
+}
+
+impl RaysHitMap {
+    /// Add intersection point (with energy) to this [`HitMap`].
+    pub fn add_to_hitmap(&mut self, hit_point: (Point3<Length>, Energy)) {
+        self.hit_map.push(hit_point);
+    }
+
+    /// creates a new [`RaysHitMap`]
+    #[must_use]
+    pub fn new(hit_points: Vec<(Point3<Length>, Energy)>) -> Self {
+        Self {
+            hit_map: hit_points,
+        }
+    }
+
+    /// Calculates the fluence of a ray bundle that is stored in this hitmap
+    /// # Attributes
+    /// - `max_fluence`: the maximum allowed fluence on this surface
+    /// # Errors
+    /// This function errors if no reasonable axlimits  can be estimated due to only non-finite values in the positions
+    #[allow(clippy::type_complexity)]
+    pub fn calc_fluence(
+        &self,
+        max_fluence: Fluence,
+    ) -> OpmResult<Option<(VoronoiedData, AxLims, AxLims, Fluence, Fluence)>> {
+        let mut show_hitmap = false;
+        let max_fluence_jcm2 = max_fluence.get::<joule_per_square_centimeter>();
+        let mut pos_in_cm = MatrixXx2::<f64>::zeros(self.hit_map.len());
+        let mut energy = DVector::<f64>::zeros(self.hit_map.len());
+        let mut energy_in_ray_bundle = 0.;
+
+        for (row, p) in self.hit_map.iter().enumerate() {
+            pos_in_cm[(row, 0)] = p.0.x.get::<centimeter>();
+            pos_in_cm[(row, 1)] = p.0.y.get::<centimeter>();
+            energy[row] = p.1.get::<joule>();
+            energy_in_ray_bundle += energy[row];
+        }
+
+        let proj_ax1_lim = AxLims::finite_from_dvector(&pos_in_cm.column(0)).ok_or_else(|| {
+            OpossumError::Other(
+                "cannot construct voronoi cells with non-finite axes bounds!".into(),
+            )
+        })?;
+        let proj_ax2_lim = AxLims::finite_from_dvector(&pos_in_cm.column(1)).ok_or_else(|| {
+            OpossumError::Other(
+                "cannot construct voronoi cells with non-finite axes bounds!".into(),
+            )
+        })?;
+        let (voronoi, beam_area) = create_voronoi_cells(&pos_in_cm).map_err(|_| {
+            OpossumError::Other(
+                "Voronoi diagram for fluence estimation could not be created!".into(),
+            )
+        })?;
+
+        //get the voronoi cells
+        let v_cells = voronoi.cells();
+        let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), f64::NAN);
+        let mut max_fluence_val = f64::NEG_INFINITY;
+        for (i, v_cell) in v_cells.iter().enumerate() {
+            let v_neighbours = v_cell
+                .points()
+                .iter()
+                .map(|p| Point2::new(p.x, p.y))
+                .collect::<Vec<Point2<f64>>>();
+            if v_neighbours.len() >= 3 {
+                let poly_area = calc_closed_poly_area(&v_neighbours)?;
+                fluence_scatter[i] = energy[i] / poly_area;
+                if fluence_scatter[i] > max_fluence_jcm2 {
+                    if max_fluence_val < fluence_scatter[i] {
+                        max_fluence_val = fluence_scatter[i];
+                    }
+                    show_hitmap = true;
+                }
+            } else {
+                warn!(
+                    "polygon could not be created. number of neighbors {}",
+                    v_neighbours.len()
+                );
+            }
+        }
+        if show_hitmap {
+            Ok(Some((
+                VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)?,
+                proj_ax1_lim,
+                proj_ax2_lim,
+                J_per_cm2!(energy_in_ray_bundle / beam_area),
+                J_per_cm2!(max_fluence_val),
+            )))
+        } else {
+            Ok(None)
+        }
+    }
+}
 
 /// Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
 /// [`OpticalSurface`](crate::surface::OpticalSurface).
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct HitMap {
     /// Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle
-    /// First Vec stores a vector of hitmaps from different ray bundles, sorted by their bounce level
-    /// Second Vec stores the hitmaps of the individual ray bundle. No sorting.
-    /// Last vec stores the hitpoints of one ray bundle on this surface
-    #[allow(clippy::type_complexity)]
-    hit_map: Vec<Vec<Vec<(Point3<Length>, Energy)>>>,
+    hit_map: Vec<BouncedHitMap>,
+    /// Stores the fluence and position in the history of the ray bundles that create a critical fluence on this surface. key value is the uuid of the ray bundle
+    critical_fluence: HashMap<Uuid, (Fluence, usize)>,
 }
 impl HitMap {
     /// Returns a reference to the hit map of this [`HitMap`].
     ///
     /// This function returns a vector of intersection points (with energies) of [`Rays`](crate::rays::Rays) that hit the surface.
     #[must_use]
-    #[allow(clippy::type_complexity)]
-    pub fn hit_map(&self) -> &[Vec<Vec<(Point3<Length>, Energy)>>] {
+    pub fn hit_map(&self) -> &[BouncedHitMap] {
         &self.hit_map
     }
     /// Add intersection point (with energy) to this [`HitMap`].
     ///
-    pub fn add_to_hitmap(&mut self, hit_point: (Point3<Length>, Energy), bounce: usize) {
+    pub fn add_to_hitmap(
+        &mut self,
+        hit_point: (Point3<Length>, Energy),
+        bounce: usize,
+        uuid: &Uuid,
+    ) {
+        // make sure that vector is large enough to insert the data
         if self.hit_map.len() <= bounce {
-            for _i in 0..=bounce {
-                if self.hit_map.len() < bounce {
-                    self.hit_map.push(vec![vec![]]);
-                }
-            }
-            self.hit_map.push(vec![vec![hit_point]]);
-        } else {
-            let hm_len = self.hit_map[bounce].len();
-            if hm_len > 0 {
-                self.hit_map[bounce][hm_len - 1].push(hit_point);
+            for _i in 0..bounce + 1 - self.hit_map.len() {
+                self.hit_map.push(BouncedHitMap::default());
             }
         }
+        self.hit_map[bounce].add_to_hitmap(hit_point, uuid);
     }
     /// Reset this [`HitMap`].
     ///
@@ -62,6 +201,39 @@ impl HitMap {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.hit_map.is_empty()
+    }
+
+    /// returns a reference to the `critical_fluence` field of this [`HitMap`] which contains:
+    /// - the uuid of the ray bundle that causes this critical fluence on this surface as key
+    /// - a tuple containing the calculated peak fluence and the index of the position history which can be used to reconstruct the ray-propagation plot later on
+    #[must_use]
+    pub fn critical_fluences(&self) -> &HashMap<Uuid, (Fluence, usize)> {
+        &self.critical_fluence
+    }
+
+    // pub fn get_critical_fluences(&self) -> OpmResult<Vec<(Uuid, usize, Fluence, Fluence)>>{
+    //     let max_fluence = J_per_cm2!(0.02);
+    //     let mut critical_positions = Vec::<(Uuid, usize, Fluence, Fluence)>::new();
+    //     for (bounce, bounced_hit_map) in self.hit_map.iter().enumerate(){
+    //         for (uuid, rays_hit_map) in &bounced_hit_map.hit_map{
+    //             if let Some((_vdat, _x_lim, _y_lim, average_fluence, peak_fluence)) = rays_hit_map.calc_fluence(max_fluence)?{
+    //                 critical_positions.push((uuid.clone(), bounce, average_fluence, peak_fluence));
+    //             }
+    //         }
+    //     }
+    //     Ok(critical_positions)
+    // }
+
+    ///stores a critical fluence in a hitmap
+    pub fn add_critical_fluence(&mut self, uuid: &Uuid, rays_hist_pos: usize, fluence: Fluence) {
+        self.critical_fluence
+            .insert(*uuid, (fluence, rays_hist_pos));
+    }
+
+    ///returns a reference to a [`RaysHitMap`] in this [`HitMap`]
+    #[must_use]
+    pub fn get_rays_hit_map(&self, bounce: usize, uuid: &Uuid) -> Option<&RaysHitMap> {
+        self.hit_map[bounce].get_rays_hit_map(uuid)
     }
 }
 impl From<HitMap> for Proptype {
@@ -86,18 +258,17 @@ impl Plottable for HitMap {
             let mut x_min = f64::INFINITY;
             let mut y_min = f64::INFINITY;
 
-            for bounced_ray_bundles in &self.hit_map {
-                for ray_bundle in bounced_ray_bundles {
-                    let mut xy_pos = Vec::<Point2<Length>>::with_capacity(ray_bundle.len());
-                    for p in ray_bundle {
-                        xy_pos.push(Point2::new(p.0.x, p.0.y));
+            for (i, bounced_ray_bundles) in self.hit_map.iter().enumerate() {
+                xy_positions.push(Vec::<Point2<Length>>::new());
+                for rays_hitmap in bounced_ray_bundles.hit_map.values() {
+                    for p in &rays_hitmap.hit_map {
+                        xy_positions[i].push(Point2::new(p.0.x, p.0.y));
 
                         x_max = x_max.max(p.0.x.value);
                         y_max = y_max.max(p.0.y.value);
                         x_min = x_min.min(p.0.x.value);
                         y_min = y_min.min(p.0.y.value);
                     }
-                    xy_positions.push(xy_pos);
                 }
             }
             let x_exponent = get_exponent_for_base_unit_in_e3_steps(x_max);
@@ -165,8 +336,6 @@ impl Plottable for HitMap {
     }
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
-            // .set(&PlotArgs::XLabel("x position (b)".into()))?
-            // .set(&PlotArgs::YLabel("y position (b)".into()))?
             .set(&PlotArgs::AxisEqual(true))?
             .set(&PlotArgs::PlotAutoSize(true))?
             .set(&PlotArgs::PlotSize((800, 800)))?;

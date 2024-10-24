@@ -93,6 +93,7 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
         backward: bool,
         port_name: &str,
     ) -> OpmResult<()> {
+        let uuid = *self.node_attr().uuid();
         if backward {
             for rays in &mut *rays_bundle {
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
@@ -104,7 +105,13 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
                     return Err(OpossumError::OpticPort("output aperture not found".into()));
                 };
                 let surf = self.get_surface_mut(port_name);
-                let reflected_rear = rays.refract_on_surface(surf, Some(refri))?;
+                let mut reflected_rear = rays.refract_on_surface(surf, Some(refri))?;
+                reflected_rear.set_node_origin_uuid(uuid);
+
+                if let AnalyzerType::GhostFocus(_) = analyzer_type {
+                    surf.evaluate_fluence_of_ray_bundle(rays)?;
+                }
+
                 surf.add_to_forward_rays_cache(reflected_rear);
             }
             for rays in self.get_surface_mut(port_name).backwards_rays_cache() {
@@ -121,7 +128,11 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));
                 };
                 let surf = self.get_surface_mut(port_name);
-                let reflected_front = rays.refract_on_surface(surf, Some(refri))?;
+                let mut reflected_front = rays.refract_on_surface(surf, Some(refri))?;
+                reflected_front.set_node_origin_uuid(uuid);
+                if let AnalyzerType::GhostFocus(_) = analyzer_type {
+                    surf.evaluate_fluence_of_ray_bundle(rays)?;
+                }
                 surf.add_to_backward_rays_cache(reflected_front);
             }
             for rays in self.get_surface_mut(port_name).forward_rays_cache() {
@@ -142,10 +153,17 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
         backward: bool,
         port_name: &str,
     ) -> OpmResult<()> {
+        let uuid: uuid::Uuid = *self.node_attr().uuid();
         let surf = self.get_surface_mut(port_name);
         if backward {
             for rays in &mut *rays_bundle {
-                let reflected_front = rays.refract_on_surface(surf, Some(refri))?;
+                let mut reflected_front = rays.refract_on_surface(surf, Some(refri))?;
+                reflected_front.set_node_origin_uuid(uuid);
+
+                if let AnalyzerType::GhostFocus(_) = analyzer_type {
+                    surf.evaluate_fluence_of_ray_bundle(rays)?;
+                }
+
                 surf.add_to_forward_rays_cache(reflected_front);
             }
             for rays in surf.backwards_rays_cache() {
@@ -163,7 +181,11 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
             }
         } else {
             for rays in &mut *rays_bundle {
-                let reflected_rear = rays.refract_on_surface(surf, Some(refri))?;
+                let mut reflected_rear = rays.refract_on_surface(surf, Some(refri))?;
+                reflected_rear.set_node_origin_uuid(uuid);
+                if let AnalyzerType::GhostFocus(_) = analyzer_type {
+                    surf.evaluate_fluence_of_ray_bundle(rays)?;
+                }
                 surf.add_to_backward_rays_cache(reflected_rear);
             }
             for rays in surf.forward_rays_cache() {
@@ -188,12 +210,19 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
     /// This functionis used for the propagation through ideal detectors, such as a spot diagram
     /// # Errors
     /// This function errors if the effective isometry is not defined
-    fn pass_through_inert_surface(&mut self, rays_bundle: &mut Vec<Rays>) -> OpmResult<()> {
+    fn pass_through_inert_surface(
+        &mut self,
+        rays_bundle: &mut Vec<Rays>,
+        analyzer_type: &AnalyzerType,
+    ) -> OpmResult<()> {
         if let Some(iso) = self.effective_iso() {
             let surf = self.get_surface_mut("");
             surf.set_isometry(&iso);
             for rays in &mut *rays_bundle {
                 rays.refract_on_surface(surf, None)?;
+                if let AnalyzerType::GhostFocus(_) = analyzer_type {
+                    surf.evaluate_fluence_of_ray_bundle(rays)?;
+                }
             }
         } else {
             return Err(OpossumError::Analysis(
@@ -400,10 +429,10 @@ mod test {
         // simulate simple system for integration test
         let mut group = NodeGroup::default();
         let i_src = group
-            .add_node(round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 3).unwrap())
+            .add_node(&round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 3).unwrap())
             .unwrap();
         let i_l1 = group
-            .add_node(ParaxialSurface::new("f=100", millimeter!(100.0)).unwrap())
+            .add_node(&ParaxialSurface::new("f=100", millimeter!(100.0)).unwrap())
             .unwrap();
         group
             .connect_nodes(i_src, "out1", i_l1, "front", millimeter!(50.0))

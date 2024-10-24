@@ -63,6 +63,7 @@ impl From<Metertype> for Proptype {
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
+#[derive(Clone)]
 pub struct EnergyMeter {
     light_data: Option<LightData>,
     node_attr: NodeAttr,

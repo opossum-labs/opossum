@@ -53,6 +53,11 @@ impl Properties {
         self.props.insert(name.into(), new_property);
         Ok(())
     }
+    /// Returns the number of properties that have been set
+    #[must_use]
+    pub fn nr_of_props(&self) -> usize {
+        self.props.len()
+    }
     /// Set the value of the property with the given name.
     ///
     /// # Errors

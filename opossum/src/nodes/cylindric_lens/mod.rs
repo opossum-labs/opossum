@@ -26,7 +26,7 @@ mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A real cylindric lens with spherical (or flat) surfaces. By default, the curvature is aligned along the (local) y axis.
 ///
 ///

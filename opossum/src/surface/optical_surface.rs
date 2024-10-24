@@ -1,8 +1,15 @@
 use nalgebra::Point3;
 use uom::si::f64::{Energy, Length};
+use uuid::Uuid;
 
-use super::{hit_map::HitMap, GeoSurface, Plane};
-use crate::{coatings::CoatingType, rays::Rays, utils::geom_transformation::Isometry};
+use super::{
+    hit_map::{HitMap, RaysHitMap},
+    GeoSurface, Plane,
+};
+use crate::{
+    coatings::CoatingType, error::OpmResult, nodes::fluence_detector::Fluence, rays::Rays,
+    utils::geom_transformation::Isometry, J_per_cm2,
+};
 
 /// This struct represents an optical surface, which consists of the geometric surface shape ([`GeoSurface`]) and further
 /// properties such as the [`CoatingType`].
@@ -13,6 +20,7 @@ pub struct OpticalSurface {
     backward_rays_cache: Vec<Rays>,
     forward_rays_cache: Vec<Rays>,
     hit_map: HitMap,
+    lidt: Fluence,
 }
 impl Default for OpticalSurface {
     fn default() -> Self {
@@ -22,6 +30,7 @@ impl Default for OpticalSurface {
             backward_rays_cache: Vec::<Rays>::new(),
             forward_rays_cache: Vec::<Rays>::new(),
             hit_map: HitMap::default(),
+            lidt: J_per_cm2!(0.1),
         }
     }
 }
@@ -33,6 +42,7 @@ impl Clone for OpticalSurface {
             backward_rays_cache: self.backward_rays_cache.clone(),
             forward_rays_cache: self.forward_rays_cache.clone(),
             hit_map: self.hit_map.clone(),
+            lidt: self.lidt,
         }
     }
 }
@@ -46,6 +56,7 @@ impl OpticalSurface {
             backward_rays_cache: Vec::<Rays>::new(),
             forward_rays_cache: Vec::<Rays>::new(),
             hit_map: HitMap::default(),
+            lidt: J_per_cm2!(0.1),
         }
     }
     /// Returns a reference to the coating of this [`OpticalSurface`].
@@ -99,13 +110,41 @@ impl OpticalSurface {
     pub const fn hit_map(&self) -> &HitMap {
         &self.hit_map
     }
+    ///stores a critical fluence in a hitmap
+    pub fn add_critical_fluence(&mut self, uuid: &Uuid, rays_hist_pos: usize, fluence: Fluence) {
+        self.hit_map
+            .add_critical_fluence(uuid, rays_hist_pos, fluence);
+    }
+
+    ///returns a reference to a [`RaysHitMap`] in this [`OpticalSurface`]
+    #[must_use]
+    pub fn get_rays_hit_map(&self, bounce: usize, uuid: &Uuid) -> Option<&RaysHitMap> {
+        self.hit_map.get_rays_hit_map(bounce, uuid)
+    }
     /// Add intersection point (with energy) to hit map.
     ///
-    pub fn add_to_hit_map(&mut self, hit_point: (Point3<Length>, Energy), bounce: usize) {
-        self.hit_map.add_to_hitmap(hit_point, bounce);
+    pub fn add_to_hit_map(
+        &mut self,
+        hit_point: (Point3<Length>, Energy),
+        bounce: usize,
+        rays_uuid: &Uuid,
+    ) {
+        self.hit_map.add_to_hitmap(hit_point, bounce, rays_uuid);
     }
     /// Reset hit map of this [`OpticalSurface`].
     pub fn reset_hit_map(&mut self) {
         self.hit_map.reset();
+    }
+
+    /// Evaluate the fluence of a given ray bundle on this surface. If the fluence surpasses its lidt, store the critical fluence parameters in the hitmap
+    /// # Errors
+    /// This function errors  on error propagation of `calc_fluence`
+    pub fn evaluate_fluence_of_ray_bundle(&mut self, rays: &Rays) -> OpmResult<()> {
+        if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), rays.uuid()) {
+            if let Some((_, _, _, _, peak_fluence)) = rays_hit_map.calc_fluence(self.lidt)? {
+                self.add_critical_fluence(rays.uuid(), rays.ray_history_len(), peak_fluence);
+            }
+        }
+        Ok(())
     }
 }

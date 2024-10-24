@@ -214,7 +214,6 @@ impl OpticNode for Spectrometer {
         self.surface.reset_hit_map();
     }
 }
-
 impl Surface for Spectrometer {
     fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
         todo!()

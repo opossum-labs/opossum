@@ -62,11 +62,14 @@ impl OpticGraph {
                 "cannot add nodes if group is set as inverted".into(),
             ));
         }
+        let uuid = *node.node_attr().uuid();
+
         let idx = self.g.add_node(OpticRef::new(
             Rc::new(RefCell::new(node)),
-            None,
+            Some(uuid),
             self.global_confg.clone(),
         ));
+
         Ok(idx)
     }
     /// Connect two optical nodes within this [`OpticGraph`].
@@ -348,7 +351,9 @@ impl OpticGraph {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
-    fn node_by_uuid(&self, uuid: Uuid) -> Option<OpticRef> {
+    /// Returns Some(`OpticRef`) if the provided uuid is connected with a node in the graph. None, otherwise.
+    #[must_use]
+    pub fn node_by_uuid(&self, uuid: Uuid) -> Option<OpticRef> {
         self.g
             .node_weights()
             .find(|node| node.uuid() == uuid)
@@ -367,6 +372,21 @@ impl OpticGraph {
             .node_weight(node)
             .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
         Ok(node.clone())
+    }
+
+    /// Return a mutable reference to the optical node specified by its node index.
+    ///
+    /// This function is mainly useful for setting up a reference node.
+    ///
+    /// # Errors
+    ///
+    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
+    pub fn node_by_idx_mut(&mut self, node: NodeIndex) -> OpmResult<&mut OpticRef> {
+        let node = self
+            .g
+            .node_weight_mut(node)
+            .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
+        Ok(node)
     }
     fn node_idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
         self.g

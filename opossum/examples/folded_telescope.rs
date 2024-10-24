@@ -49,10 +49,10 @@ pub fn main() -> OpmResult<()> {
     src.set_alignment_wavelength(alignment_wvl)?;
     src.set_isometry(Isometry::identity());
 
-    let i_src = scenery.add_node(src)?;
+    let i_src = scenery.add_node(&src)?;
     // focal length = 996.7 mm (Thorlabs LA1779-B)
     let lens1 = scenery.add_node(
-        Lens::new(
+        &Lens::new(
             "Lens 1",
             millimeter!(515.1),
             millimeter!(f64::INFINITY),
@@ -63,12 +63,12 @@ pub fn main() -> OpmResult<()> {
     )?;
 
     let mir_1 = ThinMirror::new("mirr").align_like_node_at_distance(lens1, millimeter!(996.7));
-    let mir_1 = scenery.add_node(mir_1)?;
+    let mir_1 = scenery.add_node(&mir_1)?;
     let mut lens_1_ref = NodeReference::from_node(&scenery.node(lens1)?);
     lens_1_ref.set_inverted(true)?;
-    let lens_1_ref = scenery.add_node(lens_1_ref)?;
+    let lens_1_ref = scenery.add_node(&lens_1_ref)?;
 
-    let i_prop_vis = scenery.add_node(RayPropagationVisualizer::new(
+    let i_prop_vis = scenery.add_node(&RayPropagationVisualizer::new(
         "Ray_positions",
         Some(Vector3::y()),
     )?)?;

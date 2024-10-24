@@ -228,6 +228,8 @@ pub trait OpticNode: Dottable {
         }
         node_attr_mut.update_properties(node_attributes.properties().clone());
         node_attr_mut.set_ports(node_attributes.ports().clone());
+
+        node_attr_mut.set_uuid(node_attributes.uuid());
     }
     /// Get the node type of this [`OpticNode`]
     fn node_type(&self) -> String {

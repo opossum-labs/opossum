@@ -21,7 +21,7 @@ use crate::{
 
 use super::node_attr::NodeAttr;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A virtual component referring to another existing component.
 ///
 /// This node type is necessary in order to model resonators (loops) or double-pass systems.
@@ -199,7 +199,7 @@ mod test {
     #[test]
     fn from_node() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(Dummy::default()).unwrap();
+        let idx = scenery.add_node(&Dummy::default()).unwrap();
         let node_ref = scenery.node(idx).unwrap();
         let node = NodeReference::from_node(&node_ref);
         assert!(node.reference.is_some());
@@ -207,7 +207,7 @@ mod test {
     #[test]
     fn from_node_name() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(Dummy::default()).unwrap();
+        let idx = scenery.add_node(&Dummy::default()).unwrap();
         let node_ref = scenery.node(idx).unwrap();
         let node_name = format!("ref ({})", node_ref.optical_ref.borrow().name());
         let node = NodeReference::from_node(&node_ref);
@@ -217,7 +217,7 @@ mod test {
     #[test]
     fn assign_reference() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(Dummy::default()).unwrap();
+        let idx = scenery.add_node(&Dummy::default()).unwrap();
         let node_ref = scenery.node(idx).unwrap();
         let mut node = NodeReference::default();
         assert!(node.reference.is_none());
@@ -237,7 +237,7 @@ mod test {
     #[test]
     fn ports_non_empty() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(Dummy::default()).unwrap();
+        let idx = scenery.add_node(&Dummy::default()).unwrap();
         let node = NodeReference::from_node(&scenery.node(idx).unwrap());
         assert_eq!(node.ports().names(&PortType::Input), vec!["front"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["rear"]);
@@ -245,7 +245,7 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(Dummy::default()).unwrap();
+        let idx = scenery.add_node(&Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
         node.set_inverted(true.into()).unwrap();
         assert_eq!(node.ports().names(&PortType::Input), vec!["rear"]);
@@ -254,7 +254,7 @@ mod test {
     #[test]
     fn analyze_empty() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(Dummy::default()).unwrap();
+        let idx = scenery.add_node(&Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
         let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
         assert!(output.is_empty());
@@ -268,7 +268,7 @@ mod test {
     #[test]
     fn analyze() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(Dummy::default()).unwrap();
+        let idx = scenery.add_node(&Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
 
         let mut input = LightResult::default();
@@ -287,7 +287,7 @@ mod test {
     #[test]
     fn analyze_inverse() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(Dummy::default()).unwrap();
+        let idx = scenery.add_node(&Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
@@ -307,7 +307,7 @@ mod test {
     #[test]
     fn analyze_non_invertible_ref() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(Source::default()).unwrap();
+        let idx = scenery.add_node(&Source::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
