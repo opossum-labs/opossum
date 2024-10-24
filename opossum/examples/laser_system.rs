@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use num::Zero;
 use opossum::{
     analyzers::{AnalyzerType, RayTraceConfig},
@@ -12,16 +10,21 @@ use opossum::{
     ray::SplittingConfig,
     OpmDocument,
 };
+use std::path::Path;
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("laser system");
     // Main beam line
-    let i_src = scenery.add_node(&round_collimated_ray_source(
-        millimeter!(1.0),
-        joule!(1.0),
-        3,
-    )?)?;
+
+    // let source = Source::new(
+    //     "Source",
+    //     &LightData::Energy(DataEnergy {
+    //         spectrum: create_he_ne_spec(1.0)?,
+    //     }),
+    // );
+    let source = round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 3)?;
+    let i_src = scenery.add_node(&source)?;
     let i_l1 = scenery.add_node(&ParaxialSurface::new("f=100", millimeter!(100.0))?)?;
     let i_l2 = scenery.add_node(&ParaxialSurface::new("f=200", millimeter!(200.0))?)?;
     let i_bs = scenery.add_node(&BeamSplitter::new("1% BS", &SplittingConfig::Ratio(0.99))?)?;
@@ -83,5 +86,6 @@ fn main() -> OpmResult<()> {
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    // doc.add_analyzer(AnalyzerType::Energy);
     doc.save_to_file(Path::new("./opossum/playground/laser_system.opm"))
 }
