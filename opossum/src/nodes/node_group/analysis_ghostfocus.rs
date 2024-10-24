@@ -66,10 +66,6 @@ impl AnalysisGhostFocus for NodeGroup {
                 let outgoing_edges = light_rays_to_light_result(outgoing_edges);
 
                 for outgoing_edge in outgoing_edges {
-                    println!(
-                        "{}",
-                        self.graph.node_by_idx(idx)?.optical_ref.borrow().name()
-                    );
                     let no_sink =
                         self.graph
                             .set_outgoing_edge_data(idx, &outgoing_edge.0, &outgoing_edge.1);

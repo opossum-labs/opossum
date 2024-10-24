@@ -34,6 +34,7 @@ use std::fmt::Debug;
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different detector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
+#[derive(Clone)]
 pub struct Detector {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
@@ -168,6 +169,7 @@ impl AnalysisRayTrace for Detector {
         self.light_data = Some(ld);
     }
 }
+
 impl Surface for Detector {
     fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
         todo!()

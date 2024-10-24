@@ -5,6 +5,7 @@ scenery:
     ports:
       inputs: {}
       outputs: {}
+    uuid: b8cb049b-4eb9-4db8-8842-2fc7c70c27ba
     props:
       expand view: !Bool false
       graph: !OpticGraph
@@ -13,6 +14,7 @@ scenery:
           id: 180328fe-7ad4-4568-b501-183b88c4daee
           attributes:
             name: dummy1
+            uuid: 180328fe-7ad4-4568-b501-183b88c4daee
             ports:
               inputs:
                 front:
@@ -28,6 +30,7 @@ scenery:
           id: 642ce76e-b071-43c0-a77e-1bdbb99b40d8
           attributes:
             name: dummy2
+            uuid: 642ce76e-b071-43c0-a77e-1bdbb99b40d8
             ports:
               inputs:
                 front:

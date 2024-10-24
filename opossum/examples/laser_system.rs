@@ -17,19 +17,19 @@ use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("laser system");
     // Main beam line
-    let i_src = scenery.add_node(round_collimated_ray_source(
+    let i_src = scenery.add_node(&round_collimated_ray_source(
         millimeter!(1.0),
         joule!(1.0),
         3,
     )?)?;
-    let i_l1 = scenery.add_node(ParaxialSurface::new("f=100", millimeter!(100.0))?)?;
-    let i_l2 = scenery.add_node(ParaxialSurface::new("f=200", millimeter!(200.0))?)?;
-    let i_bs = scenery.add_node(BeamSplitter::new("1% BS", &SplittingConfig::Ratio(0.99))?)?;
-    let i_e1 = scenery.add_node(EnergyMeter::new(
+    let i_l1 = scenery.add_node(&ParaxialSurface::new("f=100", millimeter!(100.0))?)?;
+    let i_l2 = scenery.add_node(&ParaxialSurface::new("f=200", millimeter!(200.0))?)?;
+    let i_bs = scenery.add_node(&BeamSplitter::new("1% BS", &SplittingConfig::Ratio(0.99))?)?;
+    let i_e1 = scenery.add_node(&EnergyMeter::new(
         "Energy meter 1",
         opossum::nodes::Metertype::IdealEnergyMeter,
     ))?;
-    let i_sd1 = scenery.add_node(SpotDiagram::new("Output"))?;
+    let i_sd1 = scenery.add_node(&SpotDiagram::new("Output"))?;
 
     scenery.connect_nodes(i_src, "out1", i_l1, "front", Length::zero())?;
     scenery.connect_nodes(i_l1, "rear", i_l2, "front", millimeter!(300.0))?;
@@ -38,7 +38,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_e1, "out1", i_sd1, "in1", Length::zero())?;
 
     // Diagnostic beam line
-    let i_f = scenery.add_node(IdealFilter::new(
+    let i_f = scenery.add_node(&IdealFilter::new(
         "OD1 filter",
         &opossum::nodes::FilterType::Constant(0.1),
     )?)?;
@@ -47,11 +47,14 @@ fn main() -> OpmResult<()> {
     // Cam Box
     let mut cam_box = NodeGroup::new("CamBox");
 
-    let i_cb_bs = cam_box.add_node(BeamSplitter::new("50/50 BS", &SplittingConfig::Ratio(0.5))?)?;
-    let i_cb_l = cam_box.add_node(ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
-    let i_cb_sd1 = cam_box.add_node(SpotDiagram::new("Nearfield"))?;
-    let i_cb_sd2 = cam_box.add_node(SpotDiagram::new("Farfield"))?;
-    let i_cb_e = cam_box.add_node(EnergyMeter::new(
+    let i_cb_bs = cam_box.add_node(&BeamSplitter::new(
+        "50/50 BS",
+        &SplittingConfig::Ratio(0.5),
+    )?)?;
+    let i_cb_l = cam_box.add_node(&ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
+    let i_cb_sd1 = cam_box.add_node(&SpotDiagram::new("Nearfield"))?;
+    let i_cb_sd2 = cam_box.add_node(&SpotDiagram::new("Farfield"))?;
+    let i_cb_e = cam_box.add_node(&EnergyMeter::new(
         "Energy meter",
         opossum::nodes::Metertype::IdealEnergyMeter,
     ))?;
@@ -75,7 +78,7 @@ fn main() -> OpmResult<()> {
     cam_box.connect_nodes(i_cb_sd1, "out1", i_cb_e, "in1", Length::zero())?;
 
     cam_box.map_input_port(i_cb_bs, "input1", "input")?;
-    let i_cam_box = scenery.add_node(cam_box)?;
+    let i_cam_box = scenery.add_node(&cam_box)?;
     scenery.connect_nodes(i_f, "rear", i_cam_box, "input", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);

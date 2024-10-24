@@ -1,20 +1,26 @@
 //! Analyzer performing a ghost focus analysis using ray tracing
+use std::collections::{hash_map::Values, HashMap};
+
 use chrono::Local;
 use log::{info, warn};
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use uom::si::{f64::Length, length::millimeter};
+use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
+use uuid::Uuid;
 
 use crate::{
     error::{OpmResult, OpossumError},
     get_version,
     light_result::{LightRays, LightResult},
     millimeter,
-    nodes::NodeGroup,
+    nodes::{NodeGroup, OpticGraph},
     optic_node::OpticNode,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
-    properties::{Properties, Proptype},
+    properties::{
+        proptype::{count_str, format_value_with_prefix},
+        Properties, Proptype,
+    },
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
 };
@@ -98,7 +104,6 @@ impl Analyzer for GhostFocusAnalyzer {
                 scenery.add_to_accumulated_rays(rays, bounce);
             }
         }
-
         Ok(())
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
@@ -115,14 +120,64 @@ impl Analyzer for GhostFocusAnalyzer {
         analysis_report.add_node_report(node_report);
         for node in scenery.graph().nodes() {
             let node_name = &node.optical_ref.borrow().name();
-            let uuid = node.uuid().as_simple().to_string();
-            let mut props = Properties::default();
             let hit_maps = node.optical_ref.borrow().hit_maps();
             for hit_map in &hit_maps {
-                props.create(hit_map.0, "surface hit map", None, hit_map.1.clone().into())?;
+                let critical_positions = hit_map.1.critical_fluences();
+                if !critical_positions.is_empty() {
+                    for (i, (rays_uuid, (fluence, hist_idx))) in
+                        critical_positions.iter().enumerate()
+                    {
+                        let mut hit_map_props = Properties::default();
+
+                        hit_map_props.create(
+                            "Peak fluence",
+                            "Peak fluence on this surface",
+                            None,
+                            format!(
+                                "{}J/cm²",
+                                format_value_with_prefix(
+                                    fluence.get::<joule_per_square_centimeter>()
+                                )
+                            )
+                            .into(),
+                        )?;
+
+                        let critical_ghost_hist = GhostFocusHistory::from((
+                            scenery.accumulated_rays(),
+                            *rays_uuid,
+                            *hist_idx,
+                        ));
+                        hit_map_props.create(
+                            "Origin",
+                            "Surface bounces that enabled this fluence",
+                            None,
+                            critical_ghost_hist
+                                .rays_origin_report_str(scenery.graph())
+                                .into(),
+                        )?;
+
+                        hit_map_props.create(
+                            "Ray propagation",
+                            "ray propagation",
+                            None,
+                            Proptype::from(critical_ghost_hist),
+                        )?;
+                        let hit_map_report = NodeReport::new(
+                            "surface",
+                            &format!(
+                                "{} critical fluence on surface '{}' of node '{}'",
+                                count_str(i + 1),
+                                hit_map.0,
+                                node_name
+                            ),
+                            &Uuid::new_v4().as_simple().to_string(),
+                            hit_map_props,
+                        );
+
+                        analysis_report.add_node_report(hit_map_report);
+                    }
+                }
             }
-            let node_report = NodeReport::new("hitmap", node_name, &uuid, props);
-            analysis_report.add_node_report(node_report);
         }
         analysis_report.set_analysis_type("Ghost Focus Analysis");
         Ok(analysis_report)
@@ -154,13 +209,58 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     }
 }
 
+///Struct to store the node origin uuid and parent ray bundle Uuid of a ray bundle
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct RaysOrigin {
+    parent_rays: Option<Uuid>,
+    node_origin: Option<Uuid>,
+}
+impl RaysOrigin {
+    ///creates a new [`RaysOrigin`]
+    #[must_use]
+    pub const fn new(parent_rays: Option<Uuid>, node_origin: Option<Uuid>) -> Self {
+        Self {
+            parent_rays,
+            node_origin,
+        }
+    }
+}
+
+/// Struct to store the correlation between a ray bundle and its parent ray bundle as well as its node origin
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct RaysNodeCorrelation {
+    correlation: HashMap<Uuid, RaysOrigin>,
+}
+impl RaysNodeCorrelation {
+    ///creates a new [`RaysNodeCorrelation`]
+    #[must_use]
+    pub fn new(rays_uuid: &Uuid, rays_origin: &RaysOrigin) -> Self {
+        let mut correlation = HashMap::<Uuid, RaysOrigin>::new();
+        correlation.insert(*rays_uuid, rays_origin.clone());
+        Self { correlation }
+    }
+
+    /// inserts a key value pair in the correlation hashmap
+    pub fn insert(&mut self, k: &Uuid, v: &RaysOrigin) {
+        self.correlation.insert(*k, v.clone());
+    }
+
+    /// returns the values of the correlation hashmap
+    #[must_use]
+    pub fn values(&self) -> Values<'_, Uuid, RaysOrigin> {
+        self.correlation.values()
+    }
+}
+
 /// struct that holds the history of the ray positions that is needed for report generation
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GhostFocusHistory {
     /// vector of ray positions for each raybundle at a specifc spectral position
     pub rays_pos_history: Vec<Vec<Vec<MatrixXx3<Length>>>>,
-    /// view direction if the rayposition thistory is plotted
+    /// view direction if the ray position history is plotted
     pub plot_view_direction: Option<Vector3<f64>>,
+    ///stores the corrleation between a rays bundle and its parent node as well as parent ray bundle for each bounce in a vector
+    pub ray_node_correlation: Vec<RaysNodeCorrelation>,
 }
 impl GhostFocusHistory {
     /// Projects the positions o fthie [`GhostFocusHistory`] onto a 2D plane
@@ -236,29 +336,122 @@ impl GhostFocusHistory {
 
         Ok(projected_history)
     }
+
+    fn add_specific_ray_history(
+        &mut self,
+        accumulated_rays: &Vec<HashMap<Uuid, Rays>>,
+        rays_uuid: &Uuid,
+        hist_idx: usize,
+    ) {
+        for (bounce, ray_vecs_in_bounce) in accumulated_rays.iter().enumerate() {
+            if ray_vecs_in_bounce.contains_key(rays_uuid) {
+                let mut rays_per_bounce_history =
+                    Vec::<Vec<MatrixXx3<Length>>>::with_capacity(ray_vecs_in_bounce.len());
+                if let Some(rays) = ray_vecs_in_bounce.get(rays_uuid) {
+                    let mut rays_history =
+                        Vec::<MatrixXx3<Length>>::with_capacity(rays.nr_of_rays(true));
+                    for ray in rays {
+                        if let Some(ray_hist) = ray.position_history_from_to(0, hist_idx) {
+                            rays_history.push(ray_hist);
+                        }
+                    }
+                    rays_per_bounce_history.push(rays_history);
+                    self.ray_node_correlation[bounce].insert(
+                        rays.uuid(),
+                        &RaysOrigin::new(*rays.parent_id(), *rays.node_origin()),
+                    );
+
+                    self.rays_pos_history[bounce] = rays_per_bounce_history;
+                    if let Some(parent_uuid) = rays.parent_id() {
+                        self.add_specific_ray_history(
+                            accumulated_rays,
+                            parent_uuid,
+                            *rays.parent_pos_split_idx(),
+                        );
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    ///Returns the report string for the critical ray origin in the ghost focus analysis
+    #[must_use]
+    pub fn rays_origin_report_str(&self, graph: &OpticGraph) -> String {
+        let mut report_str = String::new();
+        for (bounce, rays_correlation) in self.ray_node_correlation.iter().enumerate() {
+            if bounce == 0 {
+                report_str += "Origin at node '";
+            } else {
+                report_str += format!("bounce {bounce} at node '").as_str();
+            }
+            for rays_origin in rays_correlation.values() {
+                if let Some(node_uuid) = rays_origin.node_origin {
+                    if let Some(opt_ref) = graph.node_by_uuid(node_uuid) {
+                        report_str +=
+                            format!("{}', ", opt_ref.optical_ref.borrow().name()).as_str();
+                    }
+                }
+            }
+        }
+        report_str
+    }
 }
 
-impl From<Vec<Vec<Rays>>> for GhostFocusHistory {
-    fn from(value: Vec<Vec<Rays>>) -> Self {
+impl From<Vec<HashMap<Uuid, Rays>>> for GhostFocusHistory {
+    fn from(value: Vec<HashMap<Uuid, Rays>>) -> Self {
         let mut ghost_focus_history =
             Vec::<Vec<Vec<MatrixXx3<Length>>>>::with_capacity(value.len());
+        let mut ray_node_correlation = Vec::<RaysNodeCorrelation>::with_capacity(value.len());
         for ray_vecs_in_bounce in &value {
             let mut rays_per_bounce_history =
                 Vec::<Vec<MatrixXx3<Length>>>::with_capacity(ray_vecs_in_bounce.len());
-            for rays in ray_vecs_in_bounce {
+            let mut ray_node_bounce_correlation = RaysNodeCorrelation::default();
+            for rays in ray_vecs_in_bounce.values() {
                 let mut rays_history =
                     Vec::<MatrixXx3<Length>>::with_capacity(rays.nr_of_rays(false));
                 for ray in rays {
                     rays_history.push(ray.position_history());
                 }
+                ray_node_bounce_correlation.insert(
+                    rays.uuid(),
+                    &RaysOrigin::new(*rays.parent_id(), *rays.node_origin()),
+                );
                 rays_per_bounce_history.push(rays_history);
             }
             ghost_focus_history.push(rays_per_bounce_history);
+            ray_node_correlation.push(ray_node_bounce_correlation);
         }
         Self {
             rays_pos_history: ghost_focus_history,
             plot_view_direction: None,
+            ray_node_correlation,
         }
+    }
+}
+
+impl From<(&Vec<HashMap<Uuid, Rays>>, Uuid, usize)> for GhostFocusHistory {
+    ///value contains :
+    /// 0: a vector of Hashmaps that contain Rays. Same structure as the `accumulated_rays` in [`NodeGroup`]
+    /// 1: the uuid of a ray bundle within field 0
+    /// 2: the index of the position in the ray position history up to which it should be displayed
+    fn from(value: (&Vec<HashMap<Uuid, Rays>>, Uuid, usize)) -> Self {
+        let (acc_rays, rays_uuid, hist_idx) = value;
+        let mut ray_pos_history = Vec::<Vec<Vec<MatrixXx3<Length>>>>::with_capacity(acc_rays.len());
+        let mut ray_node_correlation = Vec::<RaysNodeCorrelation>::with_capacity(acc_rays.len());
+        for _i in 0..acc_rays.len() {
+            ray_pos_history.push(Vec::<Vec<MatrixXx3<Length>>>::new());
+            ray_node_correlation.push(RaysNodeCorrelation::default());
+        }
+        let mut ghost_focus_history = Self {
+            rays_pos_history: ray_pos_history,
+            plot_view_direction: None,
+            ray_node_correlation,
+        };
+
+        ghost_focus_history.add_specific_ray_history(acc_rays, &rays_uuid, hist_idx);
+
+        ghost_focus_history
     }
 }
 

@@ -6,6 +6,7 @@ use std::{cell::RefCell, rc::Rc};
 use petgraph::graph::NodeIndex;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
+use uuid::Uuid;
 
 use crate::{
     error::{OpmResult, OpossumError},
@@ -22,6 +23,7 @@ pub struct NodeAttr {
     node_type: String,
     name: String,
     ports: OpticPorts,
+    uuid: Uuid,
     #[serde(default)]
     props: Properties,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,6 +70,7 @@ impl NodeAttr {
             inverted: false,
             alignment: None,
             align_like_node_at_distance: None,
+            uuid: Uuid::new_v4(),
         }
     }
     /// Returns the name property of this node.
@@ -196,6 +199,16 @@ impl NodeAttr {
     /// Sets the apertures of this [`NodeAttr`].
     pub fn set_ports(&mut self, ports: OpticPorts) {
         self.ports = ports;
+    }
+
+    /// Returns a reference to the uuid of this [`NodeAttr`].
+    #[must_use]
+    pub const fn uuid(&self) -> &Uuid {
+        &self.uuid
+    }
+    ///Sets the uuid of this [`NodeAttr`].
+    pub fn set_uuid(&mut self, uuid: &Uuid) {
+        self.uuid = *uuid;
     }
 
     /// set the nodeindex and distance of the node to which this node should be aligned to

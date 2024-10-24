@@ -18,32 +18,33 @@ pub fn folded_martinez_paraxial_lens(
     let mut cb = NodeGroup::new("Martinez stretcher");
 
     let i_g1 = cb.add_node(
-        ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
+        &ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
             .with_rot_from_littrow(alignment_wvl, degree!(-4.))?,
     )?;
     // focal length = 996.7 mm (Thorlabs LA1779-B)
     let lens1 = cb.add_node(
-        ParaxialSurface::new("paraxial lens", telescope_distance)?
+        &ParaxialSurface::new("paraxial lens", telescope_distance)?
             .with_decenter(centimeter!(0., 1., 0.))?,
     )?;
 
-    let mir_1 = cb
-        .add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance))?;
-    let mir_1_ref = cb.add_node(NodeReference::from_node(&cb.node(mir_1)?))?;
+    let mir_1 = cb.add_node(
+        &ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance),
+    )?;
+    let mir_1_ref = cb.add_node(&NodeReference::from_node(&cb.node(mir_1)?))?;
     let mut lens_1_ref1 = NodeReference::from_node(&cb.node(lens1)?);
     lens_1_ref1.set_inverted(true)?;
-    let lens_1_ref1 = cb.add_node(lens_1_ref1)?;
-    let lens_1_ref2 = cb.add_node(NodeReference::from_node(&cb.node(lens1)?))?;
+    let lens_1_ref1 = cb.add_node(&lens_1_ref1)?;
+    let lens_1_ref2 = cb.add_node(&NodeReference::from_node(&cb.node(lens1)?))?;
     let mut lens_1_ref3 = NodeReference::from_node(&cb.node(lens1)?);
     lens_1_ref3.set_inverted(true)?;
-    let lens_1_ref3 = cb.add_node(lens_1_ref3)?;
-    let g1ref1 = cb.add_node(NodeReference::from_node(&cb.node(i_g1)?))?;
-    let g1ref2 = cb.add_node(NodeReference::from_node(&cb.node(i_g1)?))?;
-    let g1ref3 = cb.add_node(NodeReference::from_node(&cb.node(i_g1)?))?;
+    let lens_1_ref3 = cb.add_node(&lens_1_ref3)?;
+    let g1ref1 = cb.add_node(&NodeReference::from_node(&cb.node(i_g1)?))?;
+    let g1ref2 = cb.add_node(&NodeReference::from_node(&cb.node(i_g1)?))?;
+    let g1ref3 = cb.add_node(&NodeReference::from_node(&cb.node(i_g1)?))?;
     let retro_mir1 =
-        cb.add_node(ThinMirror::new("retro_mir1").with_tilt(degree!(-45., 0., 0.))?)?;
+        cb.add_node(&ThinMirror::new("retro_mir1").with_tilt(degree!(-45., 0., 0.))?)?;
     let retro_mir2 =
-        cb.add_node(ThinMirror::new("retro_mir2").with_tilt(degree!(-45., 0., 0.))?)?;
+        cb.add_node(&ThinMirror::new("retro_mir2").with_tilt(degree!(-45., 0., 0.))?)?;
 
     //first grating pass up to 0° mirror
     cb.connect_nodes(i_g1, "diffracted", lens1, "front", millimeter!(800.))?;

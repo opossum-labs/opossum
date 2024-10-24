@@ -303,6 +303,7 @@ impl AnalysisGhostFocus for Source {
             self.surface.set_isometry(&iso);
             for r in &mut rays {
                 r.refract_on_surface(&mut self.surface, None)?;
+                self.surface.evaluate_fluence_of_ray_bundle(r)?;
             }
         } else {
             return Err(OpossumError::Analysis(

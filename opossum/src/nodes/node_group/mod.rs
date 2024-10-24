@@ -9,6 +9,7 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     get_version,
+    lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     optic_ref::OpticRef,
@@ -16,15 +17,22 @@ use crate::{
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
     surface::{OpticalSurface, Surface},
+    utils::EnumProxy,
     SceneryResources,
 };
 use chrono::Local;
 pub use optic_graph::OpticGraph;
 use petgraph::prelude::NodeIndex;
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, collections::BTreeMap, io::Write, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, HashMap},
+    io::Write,
+    rc::Rc,
+};
 use tempfile::NamedTempFile;
 use uom::si::f64::Length;
+use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// The basic building block of an optical system. It represents a group of other optical
 /// nodes ([`OpticNode`]s) arranged in a (sub)graph.
@@ -38,8 +46,8 @@ use uom::si::f64::Length;
 ///
 /// fn main() -> OpmResult<()> {
 ///   let mut scenery = NodeGroup::new("OpticScenery demo");
-///   let node1 = scenery.add_node(Dummy::new("dummy1"))?;
-///   let node2 = scenery.add_node(Dummy::new("dummy2"))?;
+///   let node1 = scenery.add_node(&Dummy::new("dummy1"))?;
+///   let node2 = scenery.add_node(&Dummy::new("dummy2"))?;
 ///   scenery.connect_nodes(node1, "rear", node2, "front", millimeter!(100.0))?;
 ///   Ok(())
 /// }
@@ -71,7 +79,7 @@ pub struct NodeGroup {
     #[serde(skip)]
     input_port_distances: BTreeMap<String, Length>,
     #[serde(skip)]
-    accumulated_rays: Vec<Vec<Rays>>,
+    accumulated_rays: Vec<HashMap<Uuid, Rays>>,
 }
 impl Default for NodeGroup {
     fn default() -> Self {
@@ -91,7 +99,7 @@ impl Default for NodeGroup {
             graph: OpticGraph::default(),
             input_port_distances: BTreeMap::default(),
             node_attr,
-            accumulated_rays: Vec::<Vec<Rays>>::new(),
+            accumulated_rays: Vec::<HashMap<Uuid, Rays>>::new(),
         }
     }
 }
@@ -116,12 +124,41 @@ impl NodeGroup {
     ///
     /// # Panics
     /// This function panics if the property "graph" can not be updated. Produces an error of type [`OpossumError::Properties`]
-    pub fn add_node<T: Analyzable + 'static>(&mut self, node: T) -> OpmResult<NodeIndex> {
-        let idx = self.graph.add_node(node);
+    pub fn add_node<T: Analyzable + Clone + 'static>(&mut self, node: &T) -> OpmResult<NodeIndex> {
+        let idx = self.graph.add_node(node.clone())?;
+
+        // save uuid of node in rays if present
+        self.store_node_uuid_in_rays_bundle(node, idx)?;
+
         self.node_attr
             .set_property("graph", self.graph.clone().into())
             .unwrap();
-        idx
+        Ok(idx)
+    }
+
+    fn store_node_uuid_in_rays_bundle<T: Analyzable + Clone + 'static>(
+        &mut self,
+        node: &T,
+        node_idx: NodeIndex,
+    ) -> OpmResult<()> {
+        if let Ok(Proptype::LightData(ld)) = node.node_attr().get_property("light data") {
+            if let Some(LightData::Geometric(rays)) = &ld.value {
+                let node_from_graph = self.graph_mut().node_by_idx_mut(node_idx)?;
+
+                let mut new_rays = rays.clone();
+                new_rays.set_node_origin_uuid(node_from_graph.uuid());
+
+                let mut node_ref = node_from_graph.optical_ref.borrow_mut();
+                node_ref.node_attr_mut().set_property(
+                    "light data",
+                    EnumProxy::<Option<LightData>> {
+                        value: Some(LightData::Geometric(new_rays)),
+                    }
+                    .into(),
+                )?;
+            }
+        }
+        Ok(())
     }
     /// Return a reference to the optical node specified by its [`NodeIndex`].
     ///
@@ -372,7 +409,7 @@ impl NodeGroup {
     /// This function returns a bundle of all rays that propagated in a group after a ghost focus analysis.
     /// This function is in particular helpful for generating a global ray propagation plot.
     #[must_use]
-    pub const fn accumulated_rays(&self) -> &Vec<Vec<Rays>> {
+    pub const fn accumulated_rays(&self) -> &Vec<HashMap<Uuid, Rays>> {
         &self.accumulated_rays
     }
 
@@ -382,9 +419,11 @@ impl NodeGroup {
     /// - bounce: bouncle level of these rays
     pub fn add_to_accumulated_rays(&mut self, rays: &Rays, bounce: usize) {
         if self.accumulated_rays.len() <= bounce {
-            self.accumulated_rays.push(vec![rays.clone()]);
+            let mut hashed_rays = HashMap::<Uuid, Rays>::new();
+            hashed_rays.insert(*rays.uuid(), rays.clone());
+            self.accumulated_rays.push(hashed_rays);
         } else {
-            self.accumulated_rays[bounce].push(rays.clone());
+            self.accumulated_rays[bounce].insert(*rays.uuid(), rays.clone());
         }
     }
 
@@ -466,7 +505,7 @@ impl OpticNode for NodeGroup {
         for node in nodes {
             node.optical_ref.borrow_mut().reset_data();
         }
-        self.accumulated_rays = Vec::<Vec<Rays>>::new();
+        self.accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
     }
 }
 
@@ -548,8 +587,8 @@ mod test {
     #[test]
     fn ports() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::default()).unwrap();
-        let sn2_i = og.add_node(Dummy::default()).unwrap();
+        let sn1_i = og.add_node(&Dummy::default()).unwrap();
+        let sn2_i = og.add_node(&Dummy::default()).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
             .unwrap();
         assert!(og.ports().names(&PortType::Input).is_empty());
@@ -568,8 +607,8 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(Dummy::default()).unwrap();
-        let sn2_i = og.add_node(Dummy::default()).unwrap();
+        let sn1_i = og.add_node(&Dummy::default()).unwrap();
+        let sn2_i = og.add_node(&Dummy::default()).unwrap();
         og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
             .unwrap();
         og.map_input_port(sn1_i, "front", "input").unwrap();
@@ -587,7 +626,7 @@ mod test {
     #[test]
     fn report() {
         let mut scenery = NodeGroup::default();
-        scenery.add_node(Detector::default()).unwrap();
+        scenery.add_node(&Detector::default()).unwrap();
         let report = scenery.toplevel_report().unwrap();
         assert!(serde_yaml::to_string(&report).is_ok());
         // How shall we further parse the output?
@@ -601,8 +640,8 @@ mod test {
     #[test]
     fn analyze_dummy() {
         let mut scenery = NodeGroup::default();
-        let node1 = scenery.add_node(Dummy::default()).unwrap();
-        let node2 = scenery.add_node(Dummy::default()).unwrap();
+        let node1 = scenery.add_node(&Dummy::default()).unwrap();
+        let node2 = scenery.add_node(&Dummy::default()).unwrap();
         scenery
             .connect_nodes(node1, "rear", node2, "front", Length::zero())
             .unwrap();
@@ -624,11 +663,11 @@ mod test {
         );
         let mut scenery = NodeGroup::default();
         let i_s = scenery
-            .add_node(Source::new("src", &LightData::Geometric(rays)))
+            .add_node(&Source::new("src", &LightData::Geometric(rays)))
             .unwrap();
         let mut em = EnergyMeter::default();
         em.set_isometry(Isometry::identity());
-        let i_e = scenery.add_node(em).unwrap();
+        let i_e = scenery.add_node(&em).unwrap();
         scenery
             .connect_nodes(i_s, "out1", i_e, "in1", Length::zero())
             .unwrap();

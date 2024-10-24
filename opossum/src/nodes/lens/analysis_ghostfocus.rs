@@ -46,7 +46,6 @@ impl AnalysisGhostFocus for Lens {
         };
 
         let mut rays_bundle = incoming_rays.clone();
-
         self.enter_through_surface(
             &mut rays_bundle,
             &AnalyzerType::GhostFocus(config.clone()),

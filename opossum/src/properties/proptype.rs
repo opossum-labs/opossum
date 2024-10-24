@@ -144,6 +144,7 @@ impl Proptype {
             Self::WaveFrontData(_) | Self::FluenceDetector(_) => {
                 tt.render("image", &format!("data/{id}_{property_name}.png"))
             }
+
             Self::NodeReport(report) => {
                 let html_node_report = HtmlNodeReport {
                     node_name: report.name().into(),
@@ -231,8 +232,21 @@ impl From<GhostFocusHistory> for Proptype {
         Self::GhostFocusHistory(value)
     }
 }
+#[must_use]
+pub fn count_str(i: usize) -> String {
+    if i == 1 {
+        "1st".to_owned()
+    } else if i == 2 {
+        "2nd".to_owned()
+    } else if i == 3 {
+        "3rd".to_owned()
+    } else {
+        format!("{i}th")
+    }
+}
 
-fn format_value_with_prefix(value: f64) -> String {
+#[must_use]
+pub fn format_value_with_prefix(value: f64) -> String {
     if value.is_nan() {
         return String::from("     nan ");
     }

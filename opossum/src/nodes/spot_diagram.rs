@@ -12,7 +12,7 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        Analyzable, AnalyzerType, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
@@ -214,7 +214,10 @@ impl AnalysisGhostFocus for SpotDiagram {
             return Ok(out_light_rays);
         };
         let mut rays = bouncing_rays.clone();
-        self.pass_through_inert_surface(&mut rays)?;
+        self.pass_through_inert_surface(
+            &mut rays,
+            &AnalyzerType::GhostFocus(GhostFocusConfig::default()),
+        )?;
 
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.to_string(), rays);

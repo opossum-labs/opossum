@@ -16,7 +16,7 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
 
-    let src = scenery.add_node(round_collimated_ray_source(
+    let src = scenery.add_node(&round_collimated_ray_source(
         millimeter!(20.0),
         joule!(1.0),
         3,
@@ -29,9 +29,9 @@ fn main() -> OpmResult<()> {
         &RefrIndexConst::new(1.5068)?,
     )?
     .with_tilt(degree!(0.0, 0.0, 45.0))?;
-    let l1 = scenery.add_node(lens)?;
-    let det = scenery.add_node(RayPropagationVisualizer::default())?;
-    let det2 = scenery.add_node(SpotDiagram::default())?;
+    let l1 = scenery.add_node(&lens)?;
+    let det = scenery.add_node(&RayPropagationVisualizer::default())?;
+    let det2 = scenery.add_node(&SpotDiagram::default())?;
     scenery.connect_nodes(src, "out1", l1, "front", millimeter!(50.0))?;
     scenery.connect_nodes(l1, "rear", det, "in1", millimeter!(100.0))?;
     scenery.connect_nodes(det, "out1", det2, "in1", millimeter!(0.0))?;

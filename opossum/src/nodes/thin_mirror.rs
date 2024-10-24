@@ -20,7 +20,7 @@ use crate::{
 use num::Zero;
 use uom::si::f64::Length;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// An infinitely thin mirror with a spherical (or flat) surface.
 ///
 ///
