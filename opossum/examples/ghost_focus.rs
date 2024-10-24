@@ -1,11 +1,11 @@
 use opossum::{
-    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
+    analyzers::{AnalyzerType, GhostFocusConfig},
     coatings::CoatingType,
     degree,
     error::OpmResult,
     joule, millimeter,
     nodes::{
-        collimated_line_ray_source, round_collimated_ray_source, Lens, NodeGroup, SpotDiagram,
+        round_collimated_ray_source, Lens, NodeGroup, SpotDiagram,
         Wedge,
     },
     optic_node::{Alignable, OpticNode},
