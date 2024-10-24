@@ -195,8 +195,10 @@ impl Property {
                 ghost_hist.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
                 ghost_hist.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
-            Proptype::WaveFrontData(_wf_data) => {
-                todo!()
+            Proptype::WaveFrontData(wf_data) => {
+                let file_path = report_path.join(Path::new(&format!("{id}.png")));
+                wf_data.wavefront_error_maps[0]
+                    .to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
             }
             Proptype::HitMap(hit_map) => {
                 let file_path = report_path.join(Path::new(&format!("{id}.svg")));
