@@ -4,10 +4,7 @@ use opossum::{
     degree,
     error::OpmResult,
     joule, millimeter,
-    nodes::{
-        round_collimated_ray_source, Lens, NodeGroup, SpotDiagram,
-        Wedge,
-    },
+    nodes::{round_collimated_ray_source, Lens, NodeGroup, SpotDiagram, Wedge},
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
     refractive_index::RefrIndexConst,
