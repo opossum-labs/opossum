@@ -31,7 +31,7 @@ fn main() -> OpmResult<()> {
     let i_m2 = scenery.add_node(
         &ThinMirror::new("mirror 2")
             .with_curvature(millimeter!(-100.0))?
-            .with_tilt(degree!(22.5, 0.0, 0.0))?,
+            .with_tilt(degree!(-22.5, 0.0, 0.0))?,
     )?;
     let i_prop_vis = scenery.add_node(&RayPropagationVisualizer::default())?;
     let i_sd = scenery.add_node(&SpotDiagram::default())?;
