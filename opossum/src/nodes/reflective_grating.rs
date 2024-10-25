@@ -13,12 +13,13 @@ use crate::{
     light_result::LightResult,
     lightdata::LightData,
     num_per_mm,
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     radian,
     refractive_index::refr_index_vaccuum,
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
+    utils::geom_transformation::Isometry,
 };
 use approx::relative_eq;
 use nalgebra::Vector3;
@@ -48,6 +49,7 @@ pub type LinearDensity = uom::si::f64::LinearNumberDensity;
 ///   - `line density`
 pub struct ReflectiveGrating {
     node_attr: NodeAttr,
+    surface: OpticalSurface,
 }
 impl Default for ReflectiveGrating {
     /// Create a reflective grating with a specified line density.
@@ -73,7 +75,10 @@ impl Default for ReflectiveGrating {
         ports.add(&PortType::Input, "input").unwrap();
         ports.add(&PortType::Output, "diffracted").unwrap();
         node_attr.set_ports(ports);
-        Self { node_attr }
+        Self {
+            node_attr,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+        }
     }
 }
 
@@ -161,11 +166,7 @@ impl Dottable for ReflectiveGrating {
         "cornsilk"
     }
 }
-impl Surface for ReflectiveGrating {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
-    }
-}
+impl LIDT for ReflectiveGrating {}
 impl Analyzable for ReflectiveGrating {}
 impl AnalysisGhostFocus for ReflectiveGrating {}
 impl AnalysisEnergy for ReflectiveGrating {
@@ -196,27 +197,29 @@ impl AnalysisRayTrace for ReflectiveGrating {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
-            let Ok(Proptype::I32(diffraction_order)) =
-                self.node_attr.get_property("diffraction order")
+            let Proptype::I32(diffraction_order) =
+                self.node_attr.get_property("diffraction order")?.clone()
             else {
                 return Err(OpossumError::Analysis(
                     "cannot read diffraction order".into(),
                 ));
             };
-            let Ok(Proptype::LinearDensity(line_density)) =
-                self.node_attr.get_property("line density")
+            let Proptype::LinearDensity(line_density) =
+                self.node_attr.get_property("line density")?.clone()
             else {
                 return Err(OpossumError::Analysis("cannot read line density".into()));
             };
 
             let diffracted = if let Some(iso) = self.effective_iso() {
+                let surf = self.get_surface_mut(inport);
+                surf.set_isometry(&iso);
                 let grating_vector =
                     2. * PI * line_density.value * iso.transform_vector_f64(&Vector3::x());
                 let mut diffracted_rays = rays.diffract_on_periodic_surface(
-                    &Plane::new(&iso),
+                    surf,
                     &refr_index_vaccuum(),
                     grating_vector,
-                    diffraction_order,
+                    &diffraction_order,
                 )?;
 
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
@@ -248,6 +251,9 @@ impl OpticNode for ReflectiveGrating {
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
+    }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
     }
 }
 

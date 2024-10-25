@@ -14,7 +14,10 @@ use crate::{
     optic_senery_rsc::SceneryResources,
     properties::{PropCondition, Properties, Proptype},
     utils::geom_transformation::Isometry,
+    J_per_cm2,
 };
+
+use super::fluence_detector::Fluence;
 
 /// Struct for sotring common attributes of optical nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +27,7 @@ pub struct NodeAttr {
     name: String,
     ports: OpticPorts,
     uuid: Uuid,
+    lidt: Fluence,
     #[serde(default)]
     props: Properties,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -71,6 +75,7 @@ impl NodeAttr {
             alignment: None,
             align_like_node_at_distance: None,
             uuid: Uuid::new_v4(),
+            lidt: J_per_cm2!(1.),
         }
     }
     /// Returns the name property of this node.
@@ -209,6 +214,16 @@ impl NodeAttr {
     ///Sets the uuid of this [`NodeAttr`].
     pub fn set_uuid(&mut self, uuid: &Uuid) {
         self.uuid = *uuid;
+    }
+
+    /// Returns a reference to the lidt of this [`NodeAttr`].
+    #[must_use]
+    pub const fn lidt(&self) -> &Fluence {
+        &self.lidt
+    }
+    ///Sets the lidt of this [`NodeAttr`].
+    pub fn set_lidt(&mut self, lidt: &Fluence) {
+        self.lidt = *lidt;
     }
 
     /// set the nodeindex and distance of the node to which this node should be aligned to

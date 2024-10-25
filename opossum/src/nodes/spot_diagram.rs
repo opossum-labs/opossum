@@ -19,13 +19,13 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     nanometer,
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
-    surface::{hit_map::HitMap, OpticalSurface, Plane, Surface},
+    surface::{hit_map::HitMap, OpticalSurface, Plane},
     utils::{
         geom_transformation::Isometry,
         unit_format::{
@@ -96,12 +96,6 @@ impl SpotDiagram {
         sd
     }
 }
-impl Surface for SpotDiagram {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        &mut self.surface
-    }
-}
-
 impl Alignable for SpotDiagram {}
 
 impl OpticNode for SpotDiagram {
@@ -190,6 +184,9 @@ impl OpticNode for SpotDiagram {
         self.light_data = None;
         self.surface.reset_hit_map();
     }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
+    }
 }
 
 impl Dottable for SpotDiagram {
@@ -197,6 +194,7 @@ impl Dottable for SpotDiagram {
         "darkorange"
     }
 }
+impl LIDT for SpotDiagram {}
 impl Analyzable for SpotDiagram {}
 impl AnalysisGhostFocus for SpotDiagram {
     fn analyze(

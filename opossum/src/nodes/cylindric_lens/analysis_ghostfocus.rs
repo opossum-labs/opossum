@@ -43,10 +43,9 @@ impl AnalysisGhostFocus for CylindricLens {
             )?;
         };
 
-        let Some(incoming_rays) = incoming_data.get(in_port) else {
-            return Ok(LightRays::default());
-        };
-        let mut rays_bundle = incoming_rays.clone();
+        let mut rays_bundle = incoming_data
+            .get(in_port)
+            .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
 
         self.enter_through_surface(
             &mut rays_bundle,

@@ -16,13 +16,13 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
-    optic_node::OpticNode,
+    optic_node::{OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
     utils::geom_transformation::Isometry,
 };
 
@@ -78,36 +78,11 @@ impl FluenceDetector {
         fld
     }
 }
-impl Surface for FluenceDetector {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
-    }
-}
+
 impl OpticNode for FluenceDetector {
-    // fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
-    //     self.light_data.as_ref().map_or_else(
-    //         || {
-    //             Err(OpossumError::Other(
-    //                 "Fluence detector: no light data for export available".into(),
-    //             ))
-    //         },
-    //         |rays| {
-    //             let file_path = PathBuf::from(report_dir).join(Path::new(&format!(
-    //                 "fluence_{}_{}.png",
-    //                 self.name(),
-    //                 uuid
-    //             )));
-    //             let _ = rays.calc_fluence_at_position().map_or_else(
-    //                 |_| {
-    //                     warn!("Fluence Detector diagram: no fluence data for export available",);
-    //                     Ok(None)
-    //                 },
-    //                 |fluence_data| fluence_data.to_plot(&file_path, PltBackEnd::Bitmap),
-    //             );
-    //             Ok(())
-    //         },
-    //     )
-    // }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
+    }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
@@ -152,12 +127,6 @@ impl OpticNode for FluenceDetector {
                 }
             }
         }
-        // else if let Some(LightData::GhostFocus(v_rays)) = data{
-        //     todo!()
-        // }
-        // else{
-        //     todo!()
-        // }
         Some(NodeReport::new(
             &self.node_type(),
             &self.name(),
@@ -182,6 +151,7 @@ impl Dottable for FluenceDetector {
         "hotpink"
     }
 }
+impl LIDT for FluenceDetector {}
 impl Analyzable for FluenceDetector {}
 impl AnalysisGhostFocus for FluenceDetector {
     fn analyze(

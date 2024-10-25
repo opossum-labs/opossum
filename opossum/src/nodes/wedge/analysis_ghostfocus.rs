@@ -27,9 +27,10 @@ impl AnalysisGhostFocus for Wedge {
         let in_port = &self.ports().names(&PortType::Input)[0];
         let out_port = &self.ports().names(&PortType::Output)[0];
 
-        let Some(incoming_rays) = incoming_data.get(in_port) else {
-            return Ok(LightRays::default());
-        };
+        let mut rays_bundle = incoming_data
+            .get(in_port)
+            .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
+
         let (eff_iso, refri, center_thickness, wedge) =
             self.get_node_attributes_ray_trace(&self.node_attr)?;
         let thickness_iso: Isometry = Isometry::new_along_z(center_thickness)?;
@@ -52,8 +53,6 @@ impl AnalysisGhostFocus for Wedge {
                 &PortType::Output,
             )?;
         };
-
-        let mut rays_bundle = incoming_rays.clone();
 
         self.enter_through_surface(
             &mut rays_bundle,

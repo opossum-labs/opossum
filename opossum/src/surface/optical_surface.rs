@@ -1,3 +1,4 @@
+use log::warn;
 use nalgebra::Point3;
 use uom::si::f64::{Energy, Length};
 use uuid::Uuid;
@@ -30,7 +31,7 @@ impl Default for OpticalSurface {
             backward_rays_cache: Vec::<Rays>::new(),
             forward_rays_cache: Vec::<Rays>::new(),
             hit_map: HitMap::default(),
-            lidt: J_per_cm2!(0.1),
+            lidt: J_per_cm2!(1.0),
         }
     }
 }
@@ -56,7 +57,7 @@ impl OpticalSurface {
             backward_rays_cache: Vec::<Rays>::new(),
             forward_rays_cache: Vec::<Rays>::new(),
             hit_map: HitMap::default(),
-            lidt: J_per_cm2!(0.1),
+            lidt: J_per_cm2!(1.0),
         }
     }
     /// Returns a reference to the coating of this [`OpticalSurface`].
@@ -146,5 +147,19 @@ impl OpticalSurface {
             }
         }
         Ok(())
+    }
+
+    ///returns a reference to the lidt value of this [`OpticalSurface`]
+    #[must_use]
+    pub fn lidt(&self) -> &Fluence {
+        &self.lidt
+    }
+    ///set the lidt of this [`OpticalSurface`]
+    pub fn set_lidt(&mut self, lidt: Fluence) {
+        if lidt.is_sign_negative() || !lidt.is_normal() {
+            warn!("LIDT values mut be > 0 and finite! Using default value of 1 J/cm²");
+            return;
+        }
+        self.lidt = lidt;
     }
 }

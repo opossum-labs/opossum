@@ -95,6 +95,11 @@ impl RaysHitMap {
         let mut energy = DVector::<f64>::zeros(self.hit_map.len());
         let mut energy_in_ray_bundle = 0.;
 
+        if self.hit_map.len() < 3 {
+            warn!("Too few points on hitmap to calculate fluence!");
+            return Ok(None);
+        }
+
         for (row, p) in self.hit_map.iter().enumerate() {
             pos_in_cm[(row, 0)] = p.0.x.get::<centimeter>();
             pos_in_cm[(row, 1)] = p.0.y.get::<centimeter>();
@@ -210,19 +215,6 @@ impl HitMap {
     pub fn critical_fluences(&self) -> &HashMap<Uuid, (Fluence, usize)> {
         &self.critical_fluence
     }
-
-    // pub fn get_critical_fluences(&self) -> OpmResult<Vec<(Uuid, usize, Fluence, Fluence)>>{
-    //     let max_fluence = J_per_cm2!(0.02);
-    //     let mut critical_positions = Vec::<(Uuid, usize, Fluence, Fluence)>::new();
-    //     for (bounce, bounced_hit_map) in self.hit_map.iter().enumerate(){
-    //         for (uuid, rays_hit_map) in &bounced_hit_map.hit_map{
-    //             if let Some((_vdat, _x_lim, _y_lim, average_fluence, peak_fluence)) = rays_hit_map.calc_fluence(max_fluence)?{
-    //                 critical_positions.push((uuid.clone(), bounce, average_fluence, peak_fluence));
-    //             }
-    //         }
-    //     }
-    //     Ok(critical_positions)
-    // }
 
     ///stores a critical fluence in a hitmap
     pub fn add_critical_fluence(&mut self, uuid: &Uuid, rays_hist_pos: usize, fluence: Fluence) {

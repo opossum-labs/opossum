@@ -14,12 +14,12 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     millimeter,
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    surface::{hit_map::HitMap, OpticalSurface, Plane, Surface},
+    surface::{hit_map::HitMap, OpticalSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use std::{collections::HashMap, fmt::Debug};
@@ -171,6 +171,9 @@ impl OpticNode for Source {
         maps.insert("out1".to_string(), self.surface.hit_map().to_owned());
         maps
     }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
+    }
 }
 
 impl Dottable for Source {
@@ -178,6 +181,7 @@ impl Dottable for Source {
         "slateblue"
     }
 }
+impl LIDT for Source {}
 impl Analyzable for Source {}
 impl AnalysisEnergy for Source {
     fn analyze(&mut self, _incoming_data: LightResult) -> OpmResult<LightResult> {
@@ -312,23 +316,10 @@ impl AnalysisGhostFocus for Source {
                 "no location for surface defined. Aborting".into(),
             ));
         }
-        // let outgoing = AnalysisRayTrace::analyze(
-        //     self,
-        //     light_rays_to_light_result(incoming_data),
-        //     &RayTraceConfig::default(),
-        // )?;
+
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert("out1".into(), rays);
         Ok(out_light_rays)
-
-        // let outgoing = LightResult::from([("out1".into(), LightData::Geometric(rays))]);
-        // light_result_to_light_rays(outgoing)
-    }
-}
-
-impl Surface for Source {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        &mut self.surface
     }
 }
 

@@ -8,18 +8,19 @@ use petgraph::stable_graph::NodeIndex;
 use uom::si::f64::{Angle, Length};
 
 use crate::{
+    analyzers::Analyzable,
     aperture::Aperture,
     coatings::CoatingType,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::LightData,
-    nodes::{NodeAttr, NodeGroup, NodeReference},
+    nodes::{fluence_detector::Fluence, NodeAttr, NodeGroup, NodeReference},
     optic_ports::{OpticPorts, PortType},
     optic_senery_rsc::SceneryResources,
     properties::{Properties, Proptype},
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
-    surface::hit_map::HitMap,
+    surface::{hit_map::HitMap, OpticalSurface},
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
@@ -134,7 +135,28 @@ pub trait OpticNode: Dottable {
     /// # Errors
     /// This function will return an error if the overwritten function generates an error.
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
+        self.update_lidt();
+        self.update_surfaces()?;
         Ok(())
+    }
+    ///update the surfaces of this node after deserialization
+    /// # Errors
+    /// this function might error in a non-default implementation
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        Ok(())
+    }
+    ///updates the lidt of the optical surfaces after deserialization
+    fn update_lidt(&mut self) {
+        let lidt = *self.node_attr().lidt();
+        let in_ports = self.ports().names(&PortType::Input);
+        let out_ports = self.ports().names(&PortType::Output);
+
+        for port_name in &in_ports {
+            self.get_surface_mut(port_name).set_lidt(lidt);
+        }
+        for port_name in &out_ports {
+            self.get_surface_mut(port_name).set_lidt(lidt);
+        }
     }
     /// Return a downcasted mutable reference of a [`NodeReference`].
     ///
@@ -230,6 +252,7 @@ pub trait OpticNode: Dottable {
         node_attr_mut.set_ports(node_attributes.ports().clone());
 
         node_attr_mut.set_uuid(node_attributes.uuid());
+        node_attr_mut.set_lidt(node_attributes.lidt());
     }
     /// Get the node type of this [`OpticNode`]
     fn node_type(&self) -> String {
@@ -309,6 +332,9 @@ pub trait OpticNode: Dottable {
             |conf| conf.borrow().ambient_refr_index.clone(),
         )
     }
+
+    ///returns a mutable reference to an optical surface
+    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface;
 }
 impl Debug for dyn OpticNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -358,6 +384,25 @@ pub trait Alignable: OpticNode + Sized {
     fn align_like_node_at_distance(mut self, node_idx: NodeIndex, distance: Length) -> Self {
         self.node_attr_mut()
             .set_align_like_node_at_distance(node_idx, distance);
+        self
+    }
+}
+
+///trait to define an LIDT for a node
+pub trait LIDT: OpticNode + Analyzable + Sized {
+    ///sets an LIDT value for all surfaces of this node
+    #[must_use]
+    fn with_lidt(mut self, lidt: Fluence) -> Self {
+        let in_ports = self.ports().names(&PortType::Input);
+        let out_ports = self.ports().names(&PortType::Output);
+
+        for port_name in &in_ports {
+            self.get_surface_mut(port_name).set_lidt(lidt);
+        }
+        for port_name in &out_ports {
+            self.get_surface_mut(port_name).set_lidt(lidt);
+        }
+        self.node_attr_mut().set_lidt(&lidt);
         self
     }
 }

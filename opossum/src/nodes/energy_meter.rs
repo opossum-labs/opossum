@@ -9,11 +9,11 @@ use crate::{
     joule,
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::OpticNode,
+    optic_node::{OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -196,12 +196,11 @@ impl OpticNode for EnergyMeter {
         self.light_data = None;
         self.surface.reset_hit_map();
     }
-}
-impl Surface for EnergyMeter {
     fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
+        &mut self.surface
     }
 }
+
 impl Debug for EnergyMeter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
@@ -215,6 +214,7 @@ impl Dottable for EnergyMeter {
         "whitesmoke"
     }
 }
+impl LIDT for EnergyMeter {}
 impl Analyzable for EnergyMeter {}
 impl AnalysisGhostFocus for EnergyMeter {}
 impl AnalysisEnergy for EnergyMeter {

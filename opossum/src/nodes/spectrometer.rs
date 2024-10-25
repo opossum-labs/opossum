@@ -14,13 +14,13 @@ use crate::{
     light_result::LightResult,
     lightdata::LightData,
     nanometer,
-    optic_node::OpticNode,
+    optic_node::{OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
     utils::geom_transformation::Isometry,
 };
 use std::fmt::{Debug, Display};
@@ -213,10 +213,8 @@ impl OpticNode for Spectrometer {
         self.light_data = None;
         self.surface.reset_hit_map();
     }
-}
-impl Surface for Spectrometer {
     fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
+        &mut self.surface
     }
 }
 
@@ -245,6 +243,7 @@ impl Dottable for Spectrometer {
         "lightseagreen"
     }
 }
+impl LIDT for Spectrometer {}
 impl Analyzable for Spectrometer {}
 impl AnalysisGhostFocus for Spectrometer {}
 impl AnalysisEnergy for Spectrometer {

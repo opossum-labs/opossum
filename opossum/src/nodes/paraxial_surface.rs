@@ -10,10 +10,11 @@ use crate::{
     light_result::LightResult,
     lightdata::LightData,
     millimeter,
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
+    utils::geom_transformation::Isometry,
 };
 use uom::{num_traits::Zero, si::f64::Length};
 
@@ -42,6 +43,7 @@ use super::node_attr::NodeAttr;
 #[derive(Debug, Clone)]
 pub struct ParaxialSurface {
     node_attr: NodeAttr,
+    surface: OpticalSurface,
 }
 impl Default for ParaxialSurface {
     /// Create a default paraxial surface (ideal thin lens) with a focal length of 10 mm.
@@ -61,7 +63,10 @@ impl Default for ParaxialSurface {
                 millimeter!(10.0).into(),
             )
             .unwrap();
-        Self { node_attr }
+        Self {
+            node_attr,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+        }
     }
 }
 impl ParaxialSurface {
@@ -94,6 +99,9 @@ impl OpticNode for ParaxialSurface {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
+    }
 }
 
 impl Alignable for ParaxialSurface {}
@@ -103,6 +111,7 @@ impl Dottable for ParaxialSurface {
         "palegreen"
     }
 }
+impl LIDT for ParaxialSurface {}
 impl Analyzable for ParaxialSurface {}
 impl AnalysisGhostFocus for ParaxialSurface {}
 impl AnalysisEnergy for ParaxialSurface {
@@ -118,22 +127,15 @@ impl AnalysisEnergy for ParaxialSurface {
         Ok(LightResult::from([(outport.into(), data.clone())]))
     }
 }
-impl Surface for ParaxialSurface {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
-    }
-}
 impl AnalysisRayTrace for ParaxialSurface {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (in_port, out_port) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+
         let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
