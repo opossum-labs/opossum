@@ -355,11 +355,12 @@ impl Rays {
     /// # Errors
     ///
     /// This function returns an error if a single ray cannot be properly apodized (e.g. filter factor outside (0.0..=1.0)).
-    pub fn apodize(&mut self, aperture: &Aperture) -> OpmResult<bool> {
+    pub fn apodize(&mut self, aperture: &Aperture, iso: &Isometry) -> OpmResult<bool> {
         let mut beams_invalided = false;
         for ray in &mut self.rays {
             if ray.valid() {
-                let ap_factor = aperture.apodization_factor(&ray.position().xy());
+                let ap_factor =
+                    aperture.apodization_factor(&ray.inverse_transformed_ray(iso).position().xy());
                 if ap_factor > 0.0 {
                     ray.filter_energy(&FilterType::Constant(ap_factor))?;
                 } else {
@@ -1908,7 +1909,7 @@ mod test {
         assert_eq!(rays.total_energy(), joule!(2.0));
         let circle_config = CircleConfig::new(millimeter!(0.5), millimeter!(0.0, 0.0)).unwrap();
         let aperture = Aperture::BinaryCircle(circle_config);
-        rays.apodize(&aperture).unwrap();
+        rays.apodize(&aperture, &Isometry::identity()).unwrap();
         assert_eq!(rays.total_energy(), joule!(1.0));
     }
     #[test]

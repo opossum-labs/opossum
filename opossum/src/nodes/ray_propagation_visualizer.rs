@@ -213,31 +213,31 @@ impl AnalysisRayTrace for RayPropagationVisualizer {
             if let Some(iso) = self.effective_iso() {
                 self.surface.set_isometry(&iso);
                 rays.refract_on_surface(&mut self.surface, None)?;
+                if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
+                    let rays_apodized = rays.apodize(aperture, &iso)?;
+                    if rays_apodized {
+                        warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
+                        self.apodization_warning = true;
+                    }
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                } else {
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                };
+                self.light_data = Some(LightData::Geometric(rays.clone()));
+                if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
+                    let rays_apodized = rays.apodize(aperture, &iso)?;
+                    if rays_apodized {
+                        warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
+                    }
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                } else {
+                    return Err(OpossumError::OpticPort("output aperture not found".into()));
+                };
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
                 ));
             }
-            if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
-                let rays_apodized = rays.apodize(aperture)?;
-                if rays_apodized {
-                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
-                    self.apodization_warning = true;
-                }
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            } else {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
-            };
-            self.light_data = Some(LightData::Geometric(rays.clone()));
-            if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
-                let rays_apodized = rays.apodize(aperture)?;
-                if rays_apodized {
-                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
-                }
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            } else {
-                return Err(OpossumError::OpticPort("output aperture not found".into()));
-            };
             Ok(LightResult::from([(
                 outport.into(),
                 LightData::Geometric(rays),

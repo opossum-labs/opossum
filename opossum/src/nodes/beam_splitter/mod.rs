@@ -199,19 +199,20 @@ impl BeamSplitter {
                     if let Some(iso) = self.effective_iso() {
                         let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
                         rays.refract_on_surface(&mut plane, None)?;
+                        if let Some(aperture) = self.ports().aperture(&PortType::Input, "input1") {
+                            rays.apodize(aperture, &iso)?;
+                            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                            }
+                        } else {
+                            return Err(OpossumError::OpticPort("input aperture not found".into()));
+                        };
                     } else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
                         ));
                     }
-                    if let Some(aperture) = self.ports().aperture(&PortType::Input, "input1") {
-                        rays.apodize(aperture)?;
-                        if let AnalyzerType::RayTrace(config) = analyzer_type {
-                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        }
-                    } else {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    };
+
                     let split_rays = rays.split(&splitting_config.value)?;
                     (rays, split_rays)
                 }
@@ -228,22 +229,23 @@ impl BeamSplitter {
             match input2 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    if let Some(iso) = self.effective_iso() {
-                        let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                        rays.refract_on_surface(&mut plane, None)?;
-                    } else {
+                    let Some(iso) = self.effective_iso() else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
                         ));
-                    }
+                    };
+
+                    let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
+                    rays.refract_on_surface(&mut plane, None)?;
                     if let Some(aperture) = self.ports().aperture(&PortType::Input, "input2") {
-                        rays.apodize(aperture)?;
+                        rays.apodize(aperture, &iso)?;
                         if let AnalyzerType::RayTrace(config) = analyzer_type {
                             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                         }
                     } else {
                         return Err(OpossumError::OpticPort("input aperture not found".into()));
                     };
+
                     let split_rays = rays.split(&splitting_config.value)?;
                     (rays, split_rays)
                 }
@@ -258,11 +260,16 @@ impl BeamSplitter {
         };
         in_ray1.merge(&split2);
         in_ray2.merge(&split1);
+        let Some(iso) = self.effective_iso() else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined. Aborting".into(),
+            ));
+        };
         if let Some(aperture) = self
             .ports()
             .aperture(&PortType::Output, "out1_trans1_refl2")
         {
-            in_ray1.apodize(aperture)?;
+            in_ray1.apodize(aperture, &iso)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 in_ray1.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             }
@@ -273,7 +280,7 @@ impl BeamSplitter {
             .ports()
             .aperture(&PortType::Output, "out2_trans2_refl1")
         {
-            in_ray2.apodize(aperture)?;
+            in_ray2.apodize(aperture, &iso)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 in_ray2.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             }
