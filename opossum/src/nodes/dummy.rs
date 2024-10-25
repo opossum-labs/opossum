@@ -9,9 +9,9 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::OpticNode,
+    optic_node::{OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
     utils::geom_transformation::Isometry,
 };
 
@@ -64,6 +64,8 @@ impl Dummy {
         dummy
     }
 }
+impl LIDT for Dummy {}
+
 impl Analyzable for Dummy {}
 impl AnalysisGhostFocus for Dummy {}
 impl AnalysisEnergy for Dummy {
@@ -79,11 +81,7 @@ impl AnalysisEnergy for Dummy {
         )
     }
 }
-impl Surface for Dummy {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
-    }
-}
+
 impl AnalysisRayTrace for Dummy {
     fn analyze(
         &mut self,
@@ -139,6 +137,9 @@ impl OpticNode for Dummy {
     }
     fn reset_data(&mut self) {
         self.surface.reset_hit_map();
+    }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
     }
 }
 

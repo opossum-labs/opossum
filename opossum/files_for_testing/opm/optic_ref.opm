@@ -5,6 +5,7 @@ attributes:
   isometry: null
   name: test123
   uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb
+  lidt: 10000.
   ports:
     inputs:
       front: 

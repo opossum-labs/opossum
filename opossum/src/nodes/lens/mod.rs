@@ -8,12 +8,12 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     millimeter,
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{hit_map::HitMap, OpticalSurface, Plane, Sphere, Surface},
+    surface::{hit_map::HitMap, OpticalSurface, Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -157,25 +157,7 @@ impl Lens {
         lens.update_surfaces()?;
         Ok(lens)
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        let Ok(Proptype::Length(front_roc)) = self.node_attr.get_property("front curvature") else {
-            return Err(OpossumError::Analysis("cannot read front curvature".into()));
-        };
-        self.front_surf = if front_roc.is_infinite() {
-            OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())))
-        } else {
-            OpticalSurface::new(Box::new(Sphere::new(*front_roc, &Isometry::identity())?))
-        };
-        let Ok(Proptype::Length(rear_roc)) = self.node_attr.get_property("rear curvature") else {
-            return Err(OpossumError::Analysis("cannot read rear curvature".into()));
-        };
-        self.rear_surf = if rear_roc.is_infinite() {
-            OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())))
-        } else {
-            OpticalSurface::new(Box::new(Sphere::new(*rear_roc, &Isometry::identity())?))
-        };
-        Ok(())
-    }
+
     /// create a default aperture: defined by
     ///  - intersection of two spheres
     ///  - intersection of sphere and plane
@@ -264,17 +246,26 @@ impl Lens {
     }
 }
 
-impl Surface for Lens {
-    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface {
-        if surf_name == "front" {
-            &mut self.front_surf
-        } else {
-            &mut self.rear_surf
-        }
-    }
-}
-
 impl OpticNode for Lens {
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        let Ok(Proptype::Length(front_roc)) = self.node_attr.get_property("front curvature") else {
+            return Err(OpossumError::Analysis("cannot read front curvature".into()));
+        };
+        self.front_surf = if front_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())))
+        } else {
+            OpticalSurface::new(Box::new(Sphere::new(*front_roc, &Isometry::identity())?))
+        };
+        let Ok(Proptype::Length(rear_roc)) = self.node_attr.get_property("rear curvature") else {
+            return Err(OpossumError::Analysis("cannot read rear curvature".into()));
+        };
+        self.rear_surf = if rear_roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())))
+        } else {
+            OpticalSurface::new(Box::new(Sphere::new(*rear_roc, &Isometry::identity())?))
+        };
+        Ok(())
+    }
     fn reset_data(&mut self) {
         self.front_surf.set_backwards_rays_cache(Vec::<Rays>::new());
         self.front_surf.set_forward_rays_cache(Vec::<Rays>::new());
@@ -296,8 +287,12 @@ impl OpticNode for Lens {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn after_deserialization_hook(&mut self) -> OpmResult<()> {
-        self.update_surfaces()
+    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface {
+        if surf_name == "front" {
+            &mut self.front_surf
+        } else {
+            &mut self.rear_surf
+        }
     }
 }
 // impl SDF for Lens
@@ -310,6 +305,7 @@ impl OpticNode for Lens {
 // }
 impl Alignable for Lens {}
 impl Analyzable for Lens {}
+impl LIDT for Lens {}
 
 impl Dottable for Lens {
     fn node_color(&self) -> &str {

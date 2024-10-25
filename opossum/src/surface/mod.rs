@@ -62,9 +62,3 @@ impl Debug for dyn GeoSurface {
         write!(f, "Surface")
     }
 }
-
-///Surface trait
-pub trait Surface {
-    ///returns a mutable reference to the surface with a given name
-    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface;
-}

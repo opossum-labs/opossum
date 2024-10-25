@@ -9,9 +9,9 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::OpticNode,
+    optic_node::{OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -82,6 +82,9 @@ impl OpticNode for Detector {
         self.light_data = None;
         self.surface.reset_hit_map();
     }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
+    }
 }
 
 impl Debug for Detector {
@@ -97,6 +100,8 @@ impl Dottable for Detector {
         "lemonchiffon"
     }
 }
+impl LIDT for Detector {}
+
 impl Analyzable for Detector {}
 impl AnalysisGhostFocus for Detector {}
 impl AnalysisEnergy for Detector {
@@ -170,11 +175,6 @@ impl AnalysisRayTrace for Detector {
     }
 }
 
-impl Surface for Detector {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;

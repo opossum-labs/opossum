@@ -16,12 +16,12 @@ use crate::{
     light_result::LightResult,
     lightdata::LightData,
     nanometer,
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
     utils::{
         geom_transformation::Isometry,
         griddata::{create_linspace_axes, interpolate_3d_scatter_data},
@@ -269,6 +269,9 @@ impl OpticNode for WaveFront {
         self.light_data = None;
         self.surface.reset_hit_map();
     }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
+    }
 }
 impl From<WaveFrontData> for Proptype {
     fn from(value: WaveFrontData) -> Self {
@@ -280,11 +283,8 @@ impl Dottable for WaveFront {
         "goldenrod1"
     }
 }
-impl Surface for WaveFront {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
-    }
-}
+
+impl LIDT for WaveFront {}
 impl Analyzable for WaveFront {}
 impl AnalysisGhostFocus for WaveFront {}
 impl AnalysisEnergy for WaveFront {

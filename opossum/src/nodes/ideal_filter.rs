@@ -9,11 +9,11 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::OpticNode,
+    optic_node::{OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     spectrum::Spectrum,
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use serde::{Deserialize, Serialize};
@@ -181,6 +181,9 @@ impl OpticNode for IdealFilter {
     fn reset_data(&mut self) {
         self.surface.reset_hit_map();
     }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
+    }
 }
 
 impl Dottable for IdealFilter {
@@ -188,6 +191,7 @@ impl Dottable for IdealFilter {
         "darkgray"
     }
 }
+impl LIDT for IdealFilter {}
 impl Analyzable for IdealFilter {}
 impl AnalysisGhostFocus for IdealFilter {}
 impl AnalysisEnergy for IdealFilter {
@@ -207,11 +211,6 @@ impl AnalysisEnergy for IdealFilter {
         } else {
             Err(OpossumError::Analysis("expected energy light data".into()))
         }
-    }
-}
-impl Surface for IdealFilter {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
     }
 }
 impl AnalysisRayTrace for IdealFilter {

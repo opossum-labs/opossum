@@ -138,6 +138,7 @@ mod test {
         assert_eq!(document.opm_file_version, env!("OPM_FILE_VERSION"));
         assert!(document.analyzers.is_empty());
     }
+
     #[test]
     fn from_file() {
         let result =
