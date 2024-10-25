@@ -10,10 +10,11 @@ use crate::{
     light_result::LightResult,
     lightdata::LightData,
     millimeter,
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
+    utils::geom_transformation::Isometry,
 };
 use uom::{num_traits::Zero, si::f64::Length};
 
@@ -42,6 +43,7 @@ use super::node_attr::NodeAttr;
 #[derive(Debug, Clone)]
 pub struct ParaxialSurface {
     node_attr: NodeAttr,
+    surface: OpticalSurface,
 }
 impl Default for ParaxialSurface {
     /// Create a default paraxial surface (ideal thin lens) with a focal length of 10 mm.
@@ -61,7 +63,10 @@ impl Default for ParaxialSurface {
                 millimeter!(10.0).into(),
             )
             .unwrap();
-        Self { node_attr }
+        Self {
+            node_attr,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+        }
     }
 }
 impl ParaxialSurface {
@@ -94,6 +99,9 @@ impl OpticNode for ParaxialSurface {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
+    }
 }
 
 impl Alignable for ParaxialSurface {}
@@ -103,6 +111,7 @@ impl Dottable for ParaxialSurface {
         "palegreen"
     }
 }
+impl LIDT for ParaxialSurface {}
 impl Analyzable for ParaxialSurface {}
 impl AnalysisGhostFocus for ParaxialSurface {}
 impl AnalysisEnergy for ParaxialSurface {
@@ -118,61 +127,55 @@ impl AnalysisEnergy for ParaxialSurface {
         Ok(LightResult::from([(outport.into(), data.clone())]))
     }
 }
-impl Surface for ParaxialSurface {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
-    }
-}
 impl AnalysisRayTrace for ParaxialSurface {
     fn analyze(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (in_port, out_port) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+
         let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
-        if let LightData::Geometric(mut rays) = data.clone() {
-            let Ok(Proptype::Length(focal_length)) = self.node_attr.get_property("focal length")
-            else {
-                return Err(OpossumError::Analysis("cannot read focal length".into()));
-            };
-            if let Some(iso) = self.effective_iso() {
-                rays.refract_on_surface(
-                    &mut OpticalSurface::new(Box::new(Plane::new(&iso))),
-                    None,
-                )?;
-                rays.refract_paraxial(*focal_length, &iso)?;
-            } else {
-                return Err(OpossumError::Analysis(
-                    "no location for surface defined. Aborting".into(),
-                ));
-            }
-            if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
-                rays.apodize(aperture)?;
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            } else {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
-            };
-            if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
-                rays.apodize(aperture)?;
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            } else {
-                return Err(OpossumError::OpticPort("output aperture not found".into()));
-            };
-            let mut light_result = LightResult::default();
-            light_result.insert(out_port.into(), LightData::Geometric(rays));
-            Ok(light_result)
+        let LightData::Geometric(mut rays) = data.clone() else {
+            return Err(OpossumError::Analysis(
+                "expected ray data at input port".into(),
+            ));
+        };
+
+        let Proptype::Length(focal_length) = self.node_attr.get_property("focal length")?.clone()
+        else {
+            return Err(OpossumError::Analysis("cannot read focal length".into()));
+        };
+        let Some(eff_iso) = self.effective_iso() else {
+            return Err(OpossumError::Analysis(
+                "no location for surface defined. Aborting".into(),
+            ));
+        };
+
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
+            rays.apodize(aperture)?;
+            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         } else {
-            Err(crate::error::OpossumError::Analysis(
-                "No LightData::Geometric for analyzer type RayTrace".into(),
-            ))
-        }
+            return Err(OpossumError::OpticPort("input aperture not found".into()));
+        };
+        let surf = self.get_surface_mut("");
+        surf.set_isometry(&eff_iso);
+
+        rays.refract_on_surface(surf, None)?;
+        rays.refract_paraxial(focal_length, &eff_iso)?;
+
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
+            rays.apodize(aperture)?;
+            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+        } else {
+            return Err(OpossumError::OpticPort("output aperture not found".into()));
+        };
+        let mut light_result = LightResult::default();
+        light_result.insert(out_port.into(), LightData::Geometric(rays));
+        Ok(light_result)
     }
 }
 

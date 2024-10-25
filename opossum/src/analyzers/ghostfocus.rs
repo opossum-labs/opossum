@@ -380,13 +380,13 @@ impl GhostFocusHistory {
     pub fn rays_origin_report_str(&self, graph: &OpticGraph) -> String {
         let mut report_str = String::new();
         for (bounce, rays_correlation) in self.ray_node_correlation.iter().enumerate() {
-            if bounce == 0 {
-                report_str += "Origin at node '";
-            } else {
-                report_str += format!("bounce {bounce} at node '").as_str();
-            }
             for rays_origin in rays_correlation.values() {
                 if let Some(node_uuid) = rays_origin.node_origin {
+                    if bounce == 0 {
+                        report_str += "Origin at node '";
+                    } else {
+                        report_str += format!("bounce {bounce} at node '").as_str();
+                    }
                     if let Some(opt_ref) = graph.node_by_uuid(node_uuid) {
                         report_str +=
                             format!("{}', ", opt_ref.optical_ref.borrow().name()).as_str();
@@ -511,11 +511,11 @@ impl Plottable for GhostFocusHistory {
                 let plt_data = PlotData::MultiDim2 {
                     vec_of_xy_data: proj_pos_mm,
                 };
-
                 let series_label = format!("Bounce: {i}");
+
                 plt_series.push(PlotSeries::new(
                     &plt_data,
-                    RGBAColor(c.r, c.g, c.b, 1.),
+                    RGBAColor(c.r, c.g, c.b, 0.1),
                     Some(series_label),
                 ));
             }

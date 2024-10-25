@@ -13,7 +13,6 @@ use crate::{
     rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::analysis_report::AnalysisReport,
-    surface::Surface,
     utils::geom_transformation::Isometry,
 };
 use log::info;
@@ -55,7 +54,7 @@ impl Analyzer for RayTracingAnalyzer {
     }
 }
 /// Trait for implementing the ray trace analysis.
-pub trait AnalysisRayTrace: OpticNode + Surface {
+pub trait AnalysisRayTrace: OpticNode {
     /// Perform a ray trace analysis an [`OpticNode`].
     ///
     /// # Errors

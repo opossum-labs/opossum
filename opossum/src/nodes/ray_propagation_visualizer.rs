@@ -20,13 +20,13 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     millimeter,
-    optic_node::OpticNode,
+    optic_node::{OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
-    surface::{OpticalSurface, Plane, Surface},
+    surface::{OpticalSurface, Plane},
     utils::geom_transformation::Isometry,
 };
 /// A ray-propagation monitor
@@ -92,11 +92,7 @@ impl RayPropagationVisualizer {
         Ok(rpv)
     }
 }
-impl Surface for RayPropagationVisualizer {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
-    }
-}
+
 impl OpticNode for RayPropagationVisualizer {
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
@@ -144,6 +140,9 @@ impl OpticNode for RayPropagationVisualizer {
         self.light_data = None;
         self.surface.reset_hit_map();
     }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        &mut self.surface
+    }
 }
 
 impl Dottable for RayPropagationVisualizer {
@@ -151,6 +150,7 @@ impl Dottable for RayPropagationVisualizer {
         "darkgreen"
     }
 }
+impl LIDT for RayPropagationVisualizer {}
 impl Analyzable for RayPropagationVisualizer {}
 impl AnalysisGhostFocus for RayPropagationVisualizer {
     fn analyze(

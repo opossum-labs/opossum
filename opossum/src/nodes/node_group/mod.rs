@@ -16,7 +16,7 @@ use crate::{
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
-    surface::{OpticalSurface, Surface},
+    surface::OpticalSurface,
     utils::EnumProxy,
     SceneryResources,
 };
@@ -507,9 +507,6 @@ impl OpticNode for NodeGroup {
         }
         self.accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
     }
-}
-
-impl Surface for NodeGroup {
     fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
         todo!()
     }

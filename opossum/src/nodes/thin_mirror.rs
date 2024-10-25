@@ -12,10 +12,11 @@ use crate::{
     light_result::LightResult,
     lightdata::LightData,
     millimeter,
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
-    surface::{OpticalSurface, Plane, Sphere, Surface},
+    surface::{OpticalSurface, Plane, Sphere},
+    utils::geom_transformation::Isometry,
 };
 use num::Zero;
 use uom::si::f64::Length;
@@ -36,6 +37,7 @@ use uom::si::f64::Length;
 ///   - `curvature`
 pub struct ThinMirror {
     node_attr: NodeAttr,
+    surface: OpticalSurface,
 }
 impl Default for ThinMirror {
     /// Create a thin mirror with a flat surface.
@@ -60,7 +62,11 @@ impl Default for ThinMirror {
             .unwrap();
         ports.add(&PortType::Output, "reflected").unwrap();
         node_attr.set_ports(ports);
-        Self { node_attr }
+
+        Self {
+            node_attr,
+            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
+        }
     }
 }
 impl ThinMirror {
@@ -89,6 +95,7 @@ impl ThinMirror {
             ));
         }
         self.node_attr.set_property("curvature", curvature.into())?;
+        self.update_surfaces()?;
         Ok(self)
     }
 }
@@ -98,6 +105,17 @@ impl OpticNode for ThinMirror {
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
+    }
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        let Ok(Proptype::Length(roc)) = self.node_attr.get_property("curvature") else {
+            return Err(OpossumError::Analysis("cannot read curvature".into()));
+        };
+        self.surface = if roc.is_infinite() {
+            OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())))
+        } else {
+            OpticalSurface::new(Box::new(Sphere::new(*roc, &Isometry::identity())?))
+        };
+        Ok(())
     }
     #[cfg(feature = "bevy")]
     fn mesh(&self) -> Mesh {
@@ -118,11 +136,8 @@ impl OpticNode for ThinMirror {
             mesh
         }
     }
-}
-
-impl Surface for ThinMirror {
     fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
+        &mut self.surface
     }
 }
 
@@ -133,6 +148,7 @@ impl Dottable for ThinMirror {
         "aliceblue"
     }
 }
+impl LIDT for ThinMirror {}
 impl Analyzable for ThinMirror {}
 impl AnalysisGhostFocus for ThinMirror {}
 impl AnalysisEnergy for ThinMirror {
@@ -163,23 +179,17 @@ impl AnalysisRayTrace for ThinMirror {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
-            let Ok(Proptype::Length(roc)) = self.node_attr.get_property("curvature") else {
-                return Err(OpossumError::Analysis("curvature".into()));
-            };
             let reflected = if let Some(iso) = self.effective_iso() {
-                let mut surface = if roc.is_infinite() {
-                    OpticalSurface::new(Box::new(Plane::new(&iso)))
-                } else {
-                    OpticalSurface::new(Box::new(Sphere::new(*roc, &iso)?))
-                };
-                surface.set_coating(
-                    self.node_attr()
-                        .ports()
-                        .coating(&PortType::Input, "input")
-                        .unwrap()
-                        .clone(),
-                );
-                let mut reflected_rays = rays.refract_on_surface(&mut surface, None)?;
+                let coating = self
+                    .node_attr()
+                    .ports()
+                    .coating(&PortType::Input, "input")
+                    .unwrap()
+                    .clone();
+                let surface = self.get_surface_mut("");
+                surface.set_isometry(&iso);
+                surface.set_coating(coating);
+                let mut reflected_rays = rays.refract_on_surface(surface, None)?;
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
                     reflected_rays.apodize(aperture)?;
                     reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;

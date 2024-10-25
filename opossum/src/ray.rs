@@ -17,7 +17,7 @@ use crate::{
     joule, meter,
     nodes::FilterType,
     spectrum::Spectrum,
-    surface::{GeoSurface, OpticalSurface},
+    surface::OpticalSurface,
     utils::geom_transformation::Isometry,
 };
 
@@ -368,7 +368,7 @@ impl Ray {
     /// This function panics if the diffraction order cannot be converted to f64
     pub fn diffract_on_periodic_surface(
         &mut self,
-        s: &dyn GeoSurface,
+        s: &OpticalSurface,
         n2: f64,
         grating_vector: Vector3<f64>,
         diffraction_order: &i32,
@@ -378,7 +378,9 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        if let Some((intersection_point, surface_normal)) = s.calc_intersect_and_normal(self) {
+        if let Some((intersection_point, surface_normal)) =
+            s.geo_surface().calc_intersect_and_normal(self)
+        {
             let surface_normal = surface_normal.normalize();
 
             // get correctly normalized k vector of ray
@@ -403,6 +405,7 @@ impl Ray {
                 self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
             //then add additional phase shift due to lateral displacement from the grating origin
             let dist_from_origin = s
+                .geo_surface()
                 .isometry()
                 .inverse_transform_point_f64(&intersection_in_m)
                 .x;

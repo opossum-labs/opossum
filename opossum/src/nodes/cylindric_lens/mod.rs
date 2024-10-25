@@ -8,12 +8,12 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     millimeter,
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{hit_map::HitMap, Cylinder, OpticalSurface, Plane, Surface},
+    surface::{hit_map::HitMap, Cylinder, OpticalSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -157,6 +157,9 @@ impl CylindricLens {
         lens.update_surfaces()?;
         Ok(lens)
     }
+}
+
+impl OpticNode for CylindricLens {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let Ok(Proptype::Length(front_roc)) = self.node_attr.get_property("front curvature") else {
             return Err(OpossumError::Analysis("cannot read front curvature".into()));
@@ -176,9 +179,6 @@ impl CylindricLens {
         };
         Ok(())
     }
-}
-
-impl OpticNode for CylindricLens {
     fn reset_data(&mut self) {
         self.front_surf.set_backwards_rays_cache(Vec::<Rays>::new());
         self.front_surf.set_forward_rays_cache(Vec::<Rays>::new());
@@ -201,8 +201,12 @@ impl OpticNode for CylindricLens {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn after_deserialization_hook(&mut self) -> OpmResult<()> {
-        self.update_surfaces()
+    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface {
+        if surf_name == "front" {
+            &mut self.front_surf
+        } else {
+            &mut self.rear_surf
+        }
     }
 }
 
@@ -213,15 +217,8 @@ impl Dottable for CylindricLens {
         "aqua"
     }
 }
-impl Surface for CylindricLens {
-    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface {
-        if surf_name == "front" {
-            &mut self.front_surf
-        } else {
-            &mut self.rear_surf
-        }
-    }
-}
+
+impl LIDT for CylindricLens {}
 impl Analyzable for CylindricLens {}
 
 #[cfg(test)]

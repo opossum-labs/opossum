@@ -24,9 +24,10 @@ impl AnalysisGhostFocus for Lens {
             self.get_node_attributes_ray_trace(&self.node_attr)?;
         let in_port = &self.ports().names(&PortType::Input)[0];
         let out_port = &self.ports().names(&PortType::Output)[0];
-        let Some(incoming_rays) = incoming_data.get(in_port) else {
-            return Ok(LightRays::default());
-        };
+        let mut rays_bundle = incoming_data
+            .get(in_port)
+            .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
+
         let thickness_iso: Isometry = Isometry::new_along_z(center_thickness)?;
 
         if self.inverted() {
@@ -45,7 +46,6 @@ impl AnalysisGhostFocus for Lens {
             )?;
         };
 
-        let mut rays_bundle = incoming_rays.clone();
         self.enter_through_surface(
             &mut rays_bundle,
             &AnalyzerType::GhostFocus(config.clone()),

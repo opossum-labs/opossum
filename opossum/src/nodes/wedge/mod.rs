@@ -6,11 +6,11 @@ use crate::{
     dottable::Dottable,
     error::OpmResult,
     millimeter,
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     rays::Rays,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{hit_map::HitMap, OpticalSurface, Plane, Surface},
+    surface::{hit_map::HitMap, OpticalSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use num::Zero;
@@ -124,16 +124,6 @@ impl Wedge {
     }
 }
 
-impl Surface for Wedge {
-    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface {
-        if surf_name == "front" {
-            &mut self.front_surf
-        } else {
-            &mut self.rear_surf
-        }
-    }
-}
-
 impl OpticNode for Wedge {
     fn reset_data(&mut self) {
         self.front_surf.set_backwards_rays_cache(Vec::<Rays>::new());
@@ -156,6 +146,13 @@ impl OpticNode for Wedge {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface {
+        if surf_name == "front" {
+            &mut self.front_surf
+        } else {
+            &mut self.rear_surf
+        }
+    }
 }
 
 impl Alignable for Wedge {}
@@ -166,6 +163,7 @@ impl Dottable for Wedge {
     }
 }
 impl Analyzable for Wedge {}
+impl LIDT for Wedge {}
 
 #[cfg(test)]
 mod test {

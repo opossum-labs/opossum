@@ -7,16 +7,13 @@ use crate::{
     error::{OpmResult, OpossumError},
     optic_node::OpticNode,
     optic_ports::PortType,
-    surface::Surface,
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
 use std::fmt::Display;
 
 /// Marker trait for an optical node that can be analyzed
-pub trait Analyzable:
-    OpticNode + AnalysisEnergy + AnalysisRayTrace + AnalysisGhostFocus + Surface
-{
+pub trait Analyzable: OpticNode + AnalysisEnergy + AnalysisRayTrace + AnalysisGhostFocus {
     ///Sets the coating and isometry of this surface
     /// # Errors
     /// This function errors if the coating cannot be accessed

@@ -12,10 +12,10 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
-    optic_node::OpticNode,
+    optic_node::{OpticNode, LIDT},
     optic_ports::OpticPorts,
     optic_ref::OpticRef,
-    surface::{OpticalSurface, Surface},
+    surface::OpticalSurface,
     utils::geom_transformation::Isometry,
 };
 
@@ -119,6 +119,14 @@ impl OpticNode for NodeReference {
         // setting an isometry is silently ignored. Isometry is defined by the refrenced node.
         // self.node_attr.set_isometry(isometry);
     }
+    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
+        todo!()
+        // self.reference.as_ref().and_then(|rf| {
+        //     let ref_node = rf.upgrade().unwrap();
+        //     let node = ref_node.borrow();
+        //     node.get_surface_mut()
+        // })
+    }
 }
 
 impl Dottable for NodeReference {
@@ -126,11 +134,8 @@ impl Dottable for NodeReference {
         "lightsalmon3"
     }
 }
-impl Surface for NodeReference {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
-    }
-}
+
+impl LIDT for NodeReference {}
 impl Analyzable for NodeReference {}
 impl AnalysisGhostFocus for NodeReference {}
 impl AnalysisEnergy for NodeReference {
