@@ -220,7 +220,7 @@ impl AnalysisRayTrace for ReflectiveGrating {
                 )?;
 
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
-                    diffracted_rays.apodize(aperture)?;
+                    diffracted_rays.apodize(aperture, &iso)?;
                     diffracted_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                     diffracted_rays
                 } else {

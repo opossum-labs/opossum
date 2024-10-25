@@ -9,7 +9,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::OpticNode,
+    optic_node::{Alignable, OpticNode},
     optic_ports::{OpticPorts, PortType},
     surface::{OpticalSurface, Plane, Surface},
     utils::geom_transformation::Isometry,
@@ -103,23 +103,24 @@ impl AnalysisRayTrace for Dummy {
             if let Some(iso) = self.effective_iso() {
                 self.surface.set_isometry(&iso);
                 rays.refract_on_surface(&mut self.surface, None)?;
+                if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
+                    rays.apodize(aperture, &iso)?;
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                } else {
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                };
+                if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
+                    rays.apodize(aperture, &iso)?;
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                } else {
+                    return Err(OpossumError::OpticPort("output aperture not found".into()));
+                };
             } else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
                 ));
             }
-            if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
-                rays.apodize(aperture)?;
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            } else {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
-            };
-            if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
-                rays.apodize(aperture)?;
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            } else {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
-            };
+
             Ok(LightResult::from([(
                 outport.into(),
                 LightData::Geometric(rays),
@@ -142,6 +143,7 @@ impl OpticNode for Dummy {
     }
 }
 
+impl Alignable for Dummy {}
 impl Dottable for Dummy {}
 
 #[cfg(test)]

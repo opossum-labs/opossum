@@ -210,15 +210,17 @@ impl AnalysisRayTrace for Source {
             if let LightData::Geometric(rays) = &mut data {
                 if let Some(iso) = self.effective_iso() {
                     *rays = rays.transformed_rays(&iso);
-                }
-                // consider aperture only if not inverted (there is only an output port)
-                if !self.inverted() {
-                    if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
-                        rays.apodize(aperture)?;
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    } else {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    };
+                    // consider aperture only if not inverted (there is only an output port)
+                    if !self.inverted() {
+                        if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
+                            rays.apodize(aperture, &iso)?;
+                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        } else {
+                            return Err(OpossumError::OpticPort(
+                                "output aperture not found".into(),
+                            ));
+                        };
+                    }
                 }
             }
             Ok(LightResult::from([("out1".into(), data)]))

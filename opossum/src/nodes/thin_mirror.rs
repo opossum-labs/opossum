@@ -181,7 +181,7 @@ impl AnalysisRayTrace for ThinMirror {
                 );
                 let mut reflected_rays = rays.refract_on_surface(&mut surface, None)?;
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
-                    reflected_rays.apodize(aperture)?;
+                    reflected_rays.apodize(aperture, &iso)?;
                     reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                     reflected_rays
                 } else {

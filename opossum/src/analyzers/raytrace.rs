@@ -94,10 +94,15 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
         port_name: &str,
     ) -> OpmResult<()> {
         let uuid = *self.node_attr().uuid();
+        let Some(iso) = &self.effective_iso() else {
+            return Err(OpossumError::Analysis(
+                "surface has no isometry defined".into(),
+            ));
+        };
         if backward {
             for rays in &mut *rays_bundle {
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
-                    rays.apodize(aperture)?;
+                    rays.apodize(aperture, iso)?;
                     if let AnalyzerType::RayTrace(ref config) = analyzer_type {
                         rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                     }
@@ -120,7 +125,7 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
         } else {
             for rays in &mut *rays_bundle {
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
-                    rays.apodize(aperture)?;
+                    rays.apodize(aperture, &self.effective_iso().unwrap())?;
                     if let AnalyzerType::RayTrace(ref config) = analyzer_type {
                         rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                     }
@@ -154,6 +159,11 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
         port_name: &str,
     ) -> OpmResult<()> {
         let uuid: uuid::Uuid = *self.node_attr().uuid();
+        let Some(iso) = &self.effective_iso() else {
+            return Err(OpossumError::Analysis(
+                "surface has no isometry defined".into(),
+            ));
+        };
         let surf = self.get_surface_mut(port_name);
         if backward {
             for rays in &mut *rays_bundle {
@@ -171,7 +181,7 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
             }
             for rays in &mut *rays_bundle {
                 if let Some(aperture) = self.ports().aperture(&PortType::Output, port_name) {
-                    rays.apodize(aperture)?;
+                    rays.apodize(aperture, iso)?;
                     if let AnalyzerType::RayTrace(config) = analyzer_type {
                         rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                     }
@@ -193,7 +203,7 @@ pub trait AnalysisRayTrace: OpticNode + Surface {
             }
             for rays in &mut *rays_bundle {
                 if let Some(aperture) = self.ports().aperture(&PortType::Output, port_name) {
-                    rays.apodize(aperture)?;
+                    rays.apodize(aperture, iso)?;
                     if let AnalyzerType::RayTrace(config) = analyzer_type {
                         rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                     }
