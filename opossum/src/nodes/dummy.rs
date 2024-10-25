@@ -9,7 +9,9 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::{{Alignable, OpticNode}, LIDT},
+    optic_node::{
+        LIDT, {Alignable, OpticNode},
+    },
     optic_ports::{OpticPorts, PortType},
     surface::{OpticalSurface, Plane},
     utils::geom_transformation::Isometry,
