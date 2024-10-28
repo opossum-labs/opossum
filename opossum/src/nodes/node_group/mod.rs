@@ -21,6 +21,7 @@ use crate::{
     SceneryResources,
 };
 use chrono::Local;
+use num::Zero;
 pub use optic_graph::OpticGraph;
 use petgraph::prelude::NodeIndex;
 use serde::{Deserialize, Serialize};
@@ -352,10 +353,15 @@ impl NodeGroup {
     pub fn toplevel_report(&self) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
         analysis_report.add_scenery(self);
+        let mut section_number: usize = 0;
         for node in self.graph.nodes() {
             let uuid = node.uuid().as_simple().to_string();
-            if let Some(node_report) = node.optical_ref.borrow().node_report(&uuid) {
+            if let Some(mut node_report) = node.optical_ref.borrow().node_report(&uuid) {
+                if section_number.is_zero() {
+                    node_report.set_show_item(true);
+                }
                 analysis_report.add_node_report(node_report);
+                section_number += 1;
             }
         }
         Ok(analysis_report)

@@ -115,8 +115,9 @@ impl Analyzer for GhostFocusAnalyzer {
         let proptype = Proptype::from(ghost_focus_history);
         props.create("propagation", "ray propagation", None, proptype)?;
 
-        let node_report =
+        let mut node_report =
             NodeReport::new("ray propagation", "Global ray propagation", "global", props);
+        node_report.set_show_item(true);
         analysis_report.add_node_report(node_report);
         for node in scenery.graph().nodes() {
             let node_name = &node.optical_ref.borrow().name();

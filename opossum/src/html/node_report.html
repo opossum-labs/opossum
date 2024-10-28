@@ -1,19 +1,19 @@
-<div class="row mb-1">
-  <div class="col">
-    <div class="card">
-      <div class="card-header">
-        <span class="h5">{node_name}</span> <small class="muted">{node_type}</small>
-      </div>
-      <div class="card-body">
-        <table class="table table-sm table-bordered">
-          <tbody>
-            {{for property in props}}<tr>
-              <th class="text-end" scope="row" style="width:20ch"><abbr title="{property.description}">{property.name}</abbr>:</th>
-              <td style="width:auto">{property.prop_value | unescaped}</td>
-            </tr>{{ endfor }}
-          </tbody>
-        </table>
-      </div>
+<div class="accordion-item">
+  <h5 class="accordion-header">
+    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#{uuid}">
+      <span class="h5 me-2">{node_name}</span><small class="muted">{node_type}</small>
+    </button>
+  </h5>
+  <div id="{uuid}" class="accordion-collapse collapse {{ if show_item }}show{{ endif }}">
+    <div class="accordion-body">
+      <table class="table table-sm table-bordered">
+        <tbody>
+          {{for property in props}}<tr>
+            <th class="text-end" scope="row" style="width:20ch"><abbr title="{property.description}">{property.name}</abbr>:</th>
+            <td style="width:auto">{property.prop_value | unescaped}</td>
+          </tr>{{ endfor }}
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
