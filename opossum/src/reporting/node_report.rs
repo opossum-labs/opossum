@@ -16,6 +16,7 @@ pub struct NodeReport {
     name: String,
     uuid: String,
     properties: Properties,
+    show_item: bool,
 }
 impl NodeReport {
     /// Creates a new [`NodeReport`].
@@ -26,6 +27,7 @@ impl NodeReport {
             name: name.to_owned(),
             uuid: uuid.to_string(),
             properties,
+            show_item: false,
         }
     }
     /// Returns a reference to the node type of this [`NodeReport`].
@@ -53,6 +55,7 @@ impl NodeReport {
                 .properties
                 .html_props(&format!("{id}_{}_{}", self.name, self.uuid)),
             uuid: self.uuid.clone(),
+            show_item: self.show_item,
         }
     }
     /// Returns a reference to the uuid of this [`NodeReport`].
@@ -68,6 +71,13 @@ impl NodeReport {
     pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
         self.properties
             .export_data(report_path, &format!("{id}_{}_{}", &self.name, &self.uuid))
+    }
+    #[must_use]
+    pub const fn show_item(&self) -> bool {
+        self.show_item
+    }
+    pub fn set_show_item(&mut self, show_item: bool) {
+        self.show_item = show_item;
     }
 }
 

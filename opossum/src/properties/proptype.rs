@@ -155,6 +155,7 @@ impl Proptype {
                         report.uuid()
                     )),
                     uuid: report.uuid().to_string(),
+                    show_item: report.show_item(),
                 };
                 tt.render("group", &html_node_report)
             }

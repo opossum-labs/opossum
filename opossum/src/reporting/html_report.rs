@@ -67,6 +67,8 @@ pub struct HtmlNodeReport {
     pub props: Vec<HtmlProperty>,
     /// uuid of the node (needed for constructing filenames)
     pub uuid: String,
+    /// show or hide item in report by default
+    pub show_item: bool,
 }
 
 #[derive(Serialize)]
