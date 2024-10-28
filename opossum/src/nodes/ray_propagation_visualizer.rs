@@ -20,7 +20,7 @@ use crate::{
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     millimeter,
-    optic_node::{OpticNode, LIDT},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
@@ -253,6 +253,7 @@ impl AnalysisRayTrace for RayPropagationVisualizer {
         self.light_data = Some(ld);
     }
 }
+impl Alignable for RayPropagationVisualizer {}
 
 /// struct that holds the history of the rays' positions for rays of a specific wavelength
 #[derive(Serialize, Deserialize, Clone, Debug)]

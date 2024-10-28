@@ -16,7 +16,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
-    optic_node::{OpticNode, LIDT},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
@@ -146,6 +146,7 @@ impl OpticNode for FluenceDetector {
     }
 }
 
+impl Alignable for FluenceDetector {}
 impl Dottable for FluenceDetector {
     fn node_color(&self) -> &str {
         "hotpink"

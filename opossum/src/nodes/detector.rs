@@ -9,7 +9,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::{OpticNode, LIDT},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     surface::{OpticalSurface, Plane},
     utils::geom_transformation::Isometry,
@@ -174,6 +174,7 @@ impl AnalysisRayTrace for Detector {
         self.light_data = Some(ld);
     }
 }
+impl Alignable for Detector {}
 
 #[cfg(test)]
 mod test {

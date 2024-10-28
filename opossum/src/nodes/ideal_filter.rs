@@ -9,7 +9,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::{OpticNode, LIDT},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     spectrum::Spectrum,
@@ -185,7 +185,7 @@ impl OpticNode for IdealFilter {
         &mut self.surface
     }
 }
-
+impl Alignable for IdealFilter {}
 impl Dottable for IdealFilter {
     fn node_color(&self) -> &str {
         "darkgray"
