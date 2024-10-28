@@ -5,6 +5,7 @@ use crate::{
     optic_node::OpticNode,
     SceneryResources,
 };
+use log::warn;
 use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
@@ -57,6 +58,15 @@ impl OpmDocument {
         })?;
         let mut document: Self = serde_yaml::from_str(&contents)
             .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
+        if document.opm_file_version != env!("OPM_FILE_VERSION") {
+            warn!("OPM file version does not match the used OPOSSUM version.");
+            warn!(
+                "read version '{}' <-> program file version '{}'",
+                document.opm_file_version,
+                env!("OPM_FILE_VERSION")
+            );
+            warn!("This file might haven been written by an older or newer version of OPOSSUM. The model import might not be correct.");
+        }
         document.scenery.after_deserialization_hook()?;
         document
             .scenery
@@ -74,7 +84,7 @@ impl OpmDocument {
     ///   - it cannot write into the file (e.g. no space).
     pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
         let serialized = serde_yaml::to_string(&self).map_err(|e| {
-            OpossumError::OpticScenery(format!("deserialization of OpmDocument failed: {e}"))
+            OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
         })?;
         let mut output = File::create(path).map_err(|e| {
             OpossumError::OpticScenery(format!(
