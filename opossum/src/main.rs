@@ -56,11 +56,7 @@ fn create_dot_file(dot_path: &Path, scenery: &NodeGroup) -> OpmResult<()> {
         .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))?;
     Ok(())
 }
-fn create_report_and_data_files(
-    report_directory: &Path,
-    analyzer: &dyn Analyzer,
-    scenery: &NodeGroup,
-) -> OpmResult<()> {
+fn create_data_dir(report_directory: &Path) -> OpmResult<()> {
     let data_dir = report_directory.join("data/");
     if data_dir.exists() {
         info!("Delete old report data dir");
@@ -68,9 +64,20 @@ fn create_report_and_data_files(
             .map_err(|e| OpossumError::Other(format!("removing old data directory failed: {e}")))?;
     }
     create_dir(&data_dir)
-        .map_err(|e| OpossumError::Other(format!("creating data directory failed: {e}")))?;
-    let mut output =
-        create_dot_or_report_file_instance(report_directory, "report", "yaml", "detector report")?;
+        .map_err(|e| OpossumError::Other(format!("creating data directory failed: {e}")))
+}
+fn create_report_and_data_files(
+    report_directory: &Path,
+    analyzer: &dyn Analyzer,
+    report_number: usize,
+    scenery: &NodeGroup,
+) -> OpmResult<()> {
+    let mut output = create_dot_or_report_file_instance(
+        report_directory,
+        &format!("report_{report_number}"),
+        "yaml",
+        "analysis report",
+    )?;
     let analysis_report = analyzer.report(scenery)?;
     write!(
         output,
@@ -80,7 +87,8 @@ fn create_report_and_data_files(
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let mut report_path = report_directory.to_path_buf();
     analysis_report.export_data(&report_path)?;
-    report_path.push("report.html");
+    report_path.push(&format!("report_{report_number}.html"));
+    info!("Write html report to {}", report_path.display());
     analysis_report
         .to_html_report()?
         .generate_html(&report_path)?;
@@ -106,9 +114,9 @@ fn opossum() -> OpmResult<()> {
     if analyzers.is_empty() {
         info!("No analyzer defined in document. Stopping here.");
     } else {
-        info!("Analyzing...");
-        for ana in &analyzers {
-            let analyzer: &dyn Analyzer = match ana {
+        create_data_dir(&opossum_args.report_directory)?;
+        for ana in analyzers.iter().enumerate() {
+            let analyzer: &dyn Analyzer = match ana.1 {
                 AnalyzerType::Energy => &EnergyAnalyzer::default(),
                 AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
                 AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config.clone()),
@@ -118,6 +126,7 @@ fn opossum() -> OpmResult<()> {
                     ))
                 }
             };
+            info!("Analysis #{}", ana.0);
             analyzer.analyze(scenery)?;
             #[cfg(feature = "bevy")]
             let analysis_report = create_report_and_data_files(
@@ -127,7 +136,7 @@ fn opossum() -> OpmResult<()> {
                 &opossum_args.analyzer,
             )?;
             #[cfg(not(feature = "bevy"))]
-            create_report_and_data_files(&opossum_args.report_directory, analyzer, scenery)?;
+            create_report_and_data_files(&opossum_args.report_directory, analyzer, ana.0, scenery)?;
             #[cfg(feature = "bevy")]
             bevy_main::bevy_main(SceneryBevyData::from_report(&analysis_report));
         }
@@ -166,6 +175,7 @@ mod test {
         let report_file = create_report_and_data_files(
             &Path::new("./files_for_testing/report/_not_valid/"),
             &EnergyAnalyzer::default(),
+            0,
             &scenery,
         );
         assert!(report_file.is_err());
