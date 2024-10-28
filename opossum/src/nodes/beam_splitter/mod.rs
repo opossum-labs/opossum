@@ -9,7 +9,7 @@ use crate::{
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{DataEnergy, LightData},
-    optic_node::OpticNode,
+    optic_node::{Alignable, OpticNode},
     optic_ports::{OpticPorts, PortType},
     properties::Proptype,
     ray::SplittingConfig,
@@ -316,6 +316,7 @@ impl Dottable for BeamSplitter {
 impl Analyzable for BeamSplitter {}
 impl AnalysisGhostFocus for BeamSplitter {}
 
+impl Alignable for BeamSplitter {}
 #[cfg(test)]
 mod test {
     use super::*;

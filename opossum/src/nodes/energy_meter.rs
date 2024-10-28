@@ -9,7 +9,7 @@ use crate::{
     joule,
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::{OpticNode, LIDT},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
@@ -289,6 +289,7 @@ impl AnalysisRayTrace for EnergyMeter {
         self.light_data = Some(ld);
     }
 }
+impl Alignable for EnergyMeter {}
 #[cfg(test)]
 mod test {
     use super::*;

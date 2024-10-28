@@ -14,7 +14,7 @@ use crate::{
     light_result::LightResult,
     lightdata::LightData,
     nanometer,
-    optic_node::{OpticNode, LIDT},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::{OpticPorts, PortType},
     plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
@@ -217,7 +217,7 @@ impl OpticNode for Spectrometer {
         &mut self.surface
     }
 }
-
+impl Alignable for Spectrometer {}
 impl Debug for Spectrometer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
