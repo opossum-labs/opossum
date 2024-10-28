@@ -1,7 +1,5 @@
-use std::{fs, path::Path};
-
-use log::info;
 use serde::Serialize;
+use std::{fs, path::Path};
 use tinytemplate::TinyTemplate;
 
 use crate::error::{OpmResult, OpossumError};
@@ -43,7 +41,6 @@ impl HtmlReport {
     ///   - the base file name could not be determined.
     ///   - the conversion
     pub fn generate_html(&self, path: &Path) -> OpmResult<()> {
-        info!("Write html report to {}", path.display());
         let mut tt = TinyTemplate::new();
         tt.add_template("report", HTML_REPORT)
             .map_err(|e| OpossumError::Other(e.to_string()))?;

@@ -4,10 +4,7 @@ use opossum::{
     degree,
     error::OpmResult,
     joule, millimeter,
-    nodes::{
-        round_collimated_ray_source, Lens, NodeGroup, SpotDiagram,
-        Wedge,
-    },
+    nodes::{round_collimated_ray_source, Lens, NodeGroup, SpotDiagram, Wedge},
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
     refractive_index::RefrIndexConst,
@@ -17,9 +14,11 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(
-        &round_collimated_ray_source(millimeter!(50.0), joule!(2.0), 10)?            
-    )?;
+    let i_src = scenery.add_node(&round_collimated_ray_source(
+        millimeter!(50.0),
+        joule!(2.0),
+        10,
+    )?)?;
     let i_sd = scenery.add_node(&SpotDiagram::default())?;
 
     let mut lens = Lens::default();
