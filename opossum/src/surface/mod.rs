@@ -4,6 +4,7 @@
 //! This module handles only the geometric aspect of an optical surface. So a [`GeoSurface`] has no [`Coating`](crate::coatings::Coating) or
 //! [`Aperture`](crate::aperture::Aperture)s.
 mod cylinder;
+mod parabola;
 mod plane;
 mod sphere;
 
@@ -11,6 +12,7 @@ pub mod hit_map;
 mod optical_surface;
 pub use cylinder::Cylinder;
 pub use optical_surface::OpticalSurface;
+pub use parabola::Parabola;
 pub use plane::Plane;
 pub use sphere::Sphere;
 

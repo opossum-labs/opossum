@@ -62,11 +62,6 @@ impl Sphere {
         let isometry = isometry.append(&anchor_isometry);
         Ok(Self { radius, isometry })
     }
-    /// Returns the center position of this [`Sphere`]
-    #[must_use]
-    pub fn get_pos(&self) -> Point3<Length> {
-        self.isometry.transform_point(&Point3::origin())
-    }
 }
 impl GeoSurface for Sphere {
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
@@ -194,11 +189,9 @@ mod test {
 
         let s = Sphere::new(millimeter!(2.0), &iso).unwrap();
         assert_eq!(s.radius, millimeter!(2.0));
-        assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, 3.0));
 
         let s = Sphere::new(millimeter!(-2.0), &iso).unwrap();
         assert_eq!(s.radius, millimeter!(-2.0));
-        assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, -1.0));
     }
     #[test]
     fn new_at_position() {
@@ -229,7 +222,6 @@ mod test {
 
         let s = Sphere::new_at_position(millimeter!(2.0), millimeter!(1.0, 2.0, 3.0)).unwrap();
         assert_eq!(s.radius, millimeter!(2.0));
-        assert_eq!(s.get_pos(), millimeter!(1.0, 2.0, 5.0));
     }
     #[test]
     fn intersect_positive_on_axis_forward() {

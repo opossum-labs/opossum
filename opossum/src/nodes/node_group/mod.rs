@@ -29,9 +29,9 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap},
     io::Write,
+    process::Stdio,
     rc::Rc,
 };
-use tempfile::NamedTempFile;
 use uom::si::f64::Length;
 use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -396,17 +396,29 @@ impl NodeGroup {
     /// This function will return an error if the image generation fails (e.g. program not found, no memory left etc.).
     pub fn toplevel_dot_svg(&self) -> OpmResult<String> {
         let dot_string = self.toplevel_dot("")?;
-        let mut f = NamedTempFile::new()
-            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
-        f.write_all(dot_string.as_bytes())
-            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
-        let r = std::process::Command::new("dot")
-            .arg(f.path())
+        let mut child = std::process::Command::new("dot")
             .arg("-Tsvg:cairo")
             .arg("-Kdot")
-            .output()
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
             .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
-        let svg_string = String::from_utf8(r.stdout)
+
+        let Some(child_stdin) = child.stdin.as_mut() else {
+            return Err(OpossumError::Other(
+                "conversion to image failed: could not set stdin for graphviz command".into(),
+            ));
+        };
+        child_stdin
+            .write_all(dot_string.as_bytes())
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
+
+        let output = child
+            .wait_with_output()
+            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
+
+        let svg_string = String::from_utf8(output.stdout)
             .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
         Ok(svg_string)
     }
