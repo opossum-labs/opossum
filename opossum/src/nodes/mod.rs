@@ -10,6 +10,7 @@ mod ideal_filter;
 mod lens;
 mod node_attr;
 mod node_group;
+mod parabolic_mirror;
 mod paraxial_surface;
 mod reference;
 mod source;
@@ -34,6 +35,7 @@ pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::Lens;
 pub use node_attr::NodeAttr;
 pub use node_group::{NodeGroup, OpticGraph};
+pub use parabolic_mirror::ParabolicMirror;
 pub use paraxial_surface::ParaxialSurface;
 pub use ray_propagation_visualizer::RayPropagationVisualizer;
 pub use reference::NodeReference;
@@ -62,6 +64,7 @@ use uuid::Uuid;
 /// # Errors
 ///
 /// This function will return an [`OpossumError`] if there is no node with the given type.
+#[allow(clippy::too_many_lines)]
 pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRef> {
     match node_type {
         "dummy" => Ok(OpticRef::new(
@@ -156,6 +159,11 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
         )),
         "mirror" => Ok(OpticRef::new(
             Rc::new(RefCell::new(ThinMirror::default())),
+            uuid,
+            None,
+        )),
+        "parabolic mirror" => Ok(OpticRef::new(
+            Rc::new(RefCell::new(ParabolicMirror::default())),
             uuid,
             None,
         )),

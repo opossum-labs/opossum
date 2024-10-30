@@ -110,11 +110,11 @@ fn opossum() -> OpmResult<()> {
     let analyzers = document.analyzers();
     let scenery = document.scenery_mut();
     //create the dot file of the scenery
+    create_data_dir(&opossum_args.report_directory)?;
     create_dot_file(&opossum_args.report_directory, scenery)?;
     if analyzers.is_empty() {
         info!("No analyzer defined in document. Stopping here.");
     } else {
-        create_data_dir(&opossum_args.report_directory)?;
         for ana in analyzers.iter().enumerate() {
             let analyzer: &dyn Analyzer = match ana.1 {
                 AnalyzerType::Energy => &EnergyAnalyzer::default(),
