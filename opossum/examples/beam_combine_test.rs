@@ -7,7 +7,7 @@ use opossum::{
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
     nanometer,
-    nodes::{BeamSplitter, Detector, FilterType, IdealFilter, NodeGroup, Source},
+    nodes::{BeamSplitter, Dummy, FilterType, IdealFilter, NodeGroup, Source},
     ray::SplittingConfig,
     spectrum_helper::{self, create_he_ne_spec, create_nd_glass_spec, generate_filter_spectrum},
     OpmDocument,
@@ -40,7 +40,7 @@ fn main() -> OpmResult<()> {
         "filter",
         &FilterType::Spectrum(filter_spectrum),
     )?)?;
-    let i_d1 = scenery.add_node(&Detector::default())?; // Detector 1
+    let i_d1 = scenery.add_node(&Dummy::default())?;
 
     scenery.connect_nodes(i_s1, "out1", i_bs, "input1", Length::zero())?;
     scenery.connect_nodes(i_s2, "out1", i_bs, "input2", Length::zero())?;

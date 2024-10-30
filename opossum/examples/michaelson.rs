@@ -3,7 +3,7 @@ use opossum::{
     analyzers::AnalyzerType,
     error::OpmResult,
     lightdata::{DataEnergy, LightData},
-    nodes::{BeamSplitter, Detector, Dummy, NodeGroup, NodeReference, Source},
+    nodes::{BeamSplitter, Dummy, NodeGroup, NodeReference, Source},
     spectrum_helper::create_he_ne_spec,
     OpmDocument,
 };
@@ -26,7 +26,7 @@ fn main() -> OpmResult<()> {
     let m2 = scenery.add_node(&Dummy::new("Mirror"))?;
     let rf = NodeReference::from_node(&scenery.node(bs)?);
     let r_bs = scenery.add_node(&rf)?;
-    let det = scenery.add_node(&Detector::default())?;
+    let det = scenery.add_node(&Dummy::new("Detector"))?;
 
     scenery.connect_nodes(src, "out1", bs, "input1", Length::zero())?;
     scenery.connect_nodes(bs, "out1_trans1_refl2", sample, "front", Length::zero())?;

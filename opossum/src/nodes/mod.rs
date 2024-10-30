@@ -3,7 +3,6 @@
 
 mod beam_splitter;
 mod cylindric_lens;
-mod detector;
 mod dummy;
 mod energy_meter;
 mod ideal_filter;
@@ -27,7 +26,6 @@ pub mod ray_propagation_visualizer;
 pub mod reflective_grating;
 pub use beam_splitter::BeamSplitter;
 pub use cylindric_lens::CylindricLens;
-pub use detector::Detector;
 pub use dummy::Dummy;
 pub use energy_meter::{EnergyMeter, Metertype};
 pub use fluence_detector::{FluenceData, FluenceDetector};
@@ -69,11 +67,6 @@ pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRe
     match node_type {
         "dummy" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Dummy::default())),
-            uuid,
-            None,
-        )),
-        "detector" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(Detector::default())),
             uuid,
             None,
         )),
