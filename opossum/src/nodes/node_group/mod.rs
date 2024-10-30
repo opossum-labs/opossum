@@ -563,7 +563,7 @@ mod test {
         light_result::LightResult,
         lightdata::LightData,
         millimeter, nanometer,
-        nodes::{test_helper::test_helper::*, Detector, Dummy, EnergyMeter, Source},
+        nodes::{test_helper::test_helper::*, Dummy, EnergyMeter, Source},
         optic_node::OpticNode,
         ray::Ray,
         rays::Rays,
@@ -641,7 +641,7 @@ mod test {
     #[test]
     fn report() {
         let mut scenery = NodeGroup::default();
-        scenery.add_node(&Detector::default()).unwrap();
+        scenery.add_node(&Dummy::default()).unwrap();
         let report = scenery.toplevel_report().unwrap();
         assert!(serde_yaml::to_string(&report).is_ok());
         // How shall we further parse the output?
