@@ -10,13 +10,14 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::{DataEnergy, LightData},
     optic_node::{Alignable, OpticNode},
-    optic_ports::{OpticPorts, PortType},
+    optic_ports::PortType,
+    optic_surface::OpticSurface,
     properties::Proptype,
     ray::SplittingConfig,
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
-    surface::{OpticalSurface, Plane},
-    utils::EnumProxy,
+    surface::{GeometricSurface, Plane},
+    utils::{geom_transformation::Isometry, EnumProxy},
 };
 
 #[derive(Debug, Clone)]
@@ -53,13 +54,9 @@ impl Default for BeamSplitter {
                 .into(),
             )
             .unwrap();
-        let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "input1").unwrap();
-        ports.add(&PortType::Input, "input2").unwrap();
-        ports.add(&PortType::Output, "out1_trans1_refl2").unwrap();
-        ports.add(&PortType::Output, "out2_trans2_refl1").unwrap();
-        node_attr.set_ports(ports);
-        Self { node_attr }
+        let mut bs = Self { node_attr };
+        bs.update_surfaces().unwrap();
+        bs
     }
 }
 impl BeamSplitter {
@@ -74,6 +71,7 @@ impl BeamSplitter {
             ));
         }
         let mut bs = Self::default();
+        bs.node_attr.set_name(name);
         bs.node_attr.set_property(
             "splitter config",
             EnumProxy::<SplittingConfig> {
@@ -81,7 +79,7 @@ impl BeamSplitter {
             }
             .into(),
         )?;
-        bs.node_attr.set_name(name);
+        bs.update_surfaces()?;
         Ok(bs)
     }
     /// Returns the splitting config of this [`BeamSplitter`].
@@ -177,7 +175,7 @@ impl BeamSplitter {
     }
     #[allow(clippy::too_many_lines)]
     fn analyze_raytrace(
-        &self,
+        &mut self,
         in1: Option<&LightData>,
         in2: Option<&LightData>,
         analyzer_type: &AnalyzerType,
@@ -185,8 +183,8 @@ impl BeamSplitter {
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
         };
-        let Ok(Proptype::SplitterType(splitting_config)) =
-            self.node_attr.get_property("splitter config")
+        let Proptype::SplitterType(splitting_config) =
+            self.node_attr.get_property("splitter config")?.clone()
         else {
             return Err(OpossumError::Analysis(
                 "could not read splitter config property".into(),
@@ -196,9 +194,17 @@ impl BeamSplitter {
             match input1 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    if let Some(iso) = self.effective_iso() {
-                        let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                        rays.refract_on_surface(&mut plane, None)?;
+                    let Some(iso) = self.effective_iso() else {
+                        return Err(OpossumError::Analysis(
+                            "no location for surface defined. Aborting".into(),
+                        ));
+                    };
+
+                    if let Some(surf) = self.get_optic_surface_mut("input1") {
+                        surf.set_isometry(&iso);
+
+                        rays.refract_on_surface(surf, None)?;
+
                         if let Some(aperture) = self.ports().aperture(&PortType::Input, "input1") {
                             rays.apodize(aperture, &iso)?;
                             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -208,8 +214,8 @@ impl BeamSplitter {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
                         };
                     } else {
-                        return Err(OpossumError::Analysis(
-                            "no location for surface defined. Aborting".into(),
+                        return Err(OpossumError::OpticPort(
+                            "input optic surface not found".into(),
                         ));
                     }
 
@@ -235,19 +241,26 @@ impl BeamSplitter {
                         ));
                     };
 
-                    let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                    rays.refract_on_surface(&mut plane, None)?;
-                    if let Some(aperture) = self.ports().aperture(&PortType::Input, "input2") {
-                        rays.apodize(aperture, &iso)?;
-                        if let AnalyzerType::RayTrace(config) = analyzer_type {
-                            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        }
-                    } else {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    };
+                    if let Some(surf) = self.get_optic_surface_mut("input2") {
+                        surf.set_isometry(&iso);
 
-                    let split_rays = rays.split(&splitting_config.value)?;
-                    (rays, split_rays)
+                        rays.refract_on_surface(surf, None)?;
+                        if let Some(aperture) = self.ports().aperture(&PortType::Input, "input2") {
+                            rays.apodize(aperture, &iso)?;
+                            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                            }
+                        } else {
+                            return Err(OpossumError::OpticPort("input aperture not found".into()));
+                        };
+
+                        let split_rays = rays.split(&splitting_config.value)?;
+                        (rays, split_rays)
+                    } else {
+                        return Err(OpossumError::OpticPort(
+                            "input optic surface not found".into(),
+                        ));
+                    }
                 }
                 _ => {
                     return Err(OpossumError::Analysis(
@@ -302,8 +315,45 @@ impl OpticNode for BeamSplitter {
         &mut self.node_attr
     }
 
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        let input_surf_name_list = vec!["input1", "input2"];
+        let output_surf_name_list = vec!["out1_trans1_refl2", "out2_trans2_refl1"];
+        let input_geosurface = GeometricSurface::Flat {
+            s: Plane::new(&Isometry::identity()),
+        };
+        for in_surf_name in &input_surf_name_list {
+            if let Some(optic_surf) = self
+                .ports_mut()
+                .get_optic_surface_mut(&(*in_surf_name).to_string())
+            {
+                optic_surf.set_geo_surface(input_geosurface.clone());
+            } else {
+                let mut optic_surf_front = OpticSurface::default();
+                optic_surf_front.set_geo_surface(input_geosurface.clone());
+                self.ports_mut().add_optic_surface(
+                    &PortType::Input,
+                    in_surf_name,
+                    optic_surf_front,
+                )?;
+            }
+        }
+        for out_surf_name in &output_surf_name_list {
+            if let Some(optic_surf) = self
+                .ports_mut()
+                .get_optic_surface_mut(&(*out_surf_name).to_string())
+            {
+                optic_surf.set_geo_surface(input_geosurface.clone());
+            } else {
+                let mut optic_surf_front = OpticSurface::default();
+                optic_surf_front.set_geo_surface(input_geosurface.clone());
+                self.ports_mut().add_optic_surface(
+                    &PortType::Output,
+                    out_surf_name,
+                    optic_surf_front,
+                )?;
+            }
+        }
+        Ok(())
     }
 }
 

@@ -11,6 +11,7 @@ use crate::{
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
         FilterType, FluenceData, WaveFrontData, WaveFrontErrorMap,
     },
+    optic_surface::OpticSurface,
     plottable::AxLims,
     position_distributions::{Hexapolar, PositionDistribution},
     properties::Proptype,
@@ -18,7 +19,6 @@ use crate::{
     refractive_index::RefractiveIndexType,
     spectral_distribution::SpectralDistribution,
     spectrum::Spectrum,
-    surface::OpticalSurface,
     utils::{
         filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
         geom_transformation::Isometry,
@@ -788,9 +788,44 @@ impl Rays {
     /// This function will return an error if
     ///   - the refractive index of the surface for a given ray cannot be determined (e.g. wavelength out of range, etc.).
     ///   - the underlying function for refraction of a single [`Ray`] on the surface fails.
+    // pub fn refract_on_surface(
+    //     &mut self,
+    //     surface: &mut OpticalSurface,
+    //     refractive_index: Option<&RefractiveIndexType>,
+    // ) -> OpmResult<Self> {
+    //     let mut valid_rays_found = false;
+    //     let mut rays_missed = false;
+    //     let mut reflected_rays = Self::default();
+    //     for ray in &mut self.rays {
+    //         if ray.valid() {
+    //             let n2 = if let Some(refractive_index) = refractive_index {
+    //                 Some(refractive_index.get_refractive_index(ray.wavelength())?)
+    //             } else {
+    //                 None
+    //             };
+    //             if let Some(reflected) = ray.refract_on_surface(surface, n2, &self.uuid)? {
+    //                 reflected_rays.add_ray(reflected);
+    //             } else {
+    //                 rays_missed = true;
+    //             };
+    //             valid_rays_found = true;
+    //         }
+    //     }
+    //     if rays_missed {
+    //         warn!("rays totally reflected or missed a surface");
+    //     }
+    //     if !valid_rays_found {
+    //         warn!("ray bundle contains no valid rays - not propagating");
+    //     }
+    //     //surface.set_backwards_rays_cache(reflected_rays.clone());
+    //     reflected_rays.set_parent_uuid(self.uuid);
+    //     reflected_rays.set_parent_node_split_idx(self.ray_history_len());
+    //     Ok(reflected_rays)
+    // }
+
     pub fn refract_on_surface(
         &mut self,
-        surface: &mut OpticalSurface,
+        surface: &mut OpticSurface,
         refractive_index: Option<&RefractiveIndexType>,
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
@@ -834,7 +869,7 @@ impl Rays {
     /// This function only propagates errors of contained functions.
     pub fn diffract_on_periodic_surface(
         &mut self,
-        surface: &OpticalSurface,
+        surface: &OpticSurface,
         refractive_index: &RefractiveIndexType,
         grating_vector: Vector3<f64>,
         diffraction_order: &i32,
@@ -1271,7 +1306,6 @@ mod test {
         radian,
         ray::SplittingConfig,
         refractive_index::{refr_index_vaccuum, RefrIndexConst},
-        surface::Plane,
         utils::test_helper::test_helper::check_warnings,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
@@ -1781,10 +1815,7 @@ mod test {
         let mut rays = Rays::default();
         testing_logger::setup();
         let reflected = rays
-            .refract_on_surface(
-                &mut OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-                Some(&refr_index_vaccuum()),
-            )
+            .refract_on_surface(&mut OpticSurface::default(), Some(&refr_index_vaccuum()))
             .unwrap();
         check_warnings(vec!["ray bundle contains no valid rays - not propagating"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
@@ -1810,11 +1841,8 @@ mod test {
         ray1.set_refractive_index(2.0).unwrap();
         rays.add_ray(ray0);
         rays.add_ray(ray1);
-        rays.refract_on_surface(
-            &mut OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-            None,
-        )
-        .unwrap();
+        rays.refract_on_surface(&mut OpticSurface::default(), None)
+            .unwrap();
         for ray in rays.iter() {
             assert_abs_diff_eq!(ray.direction(), vector![0.0, 1.0, 1.0].normalize())
         }
@@ -1828,10 +1856,7 @@ mod test {
         );
         testing_logger::setup();
         let reflected = rays
-            .refract_on_surface(
-                &mut OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-                Some(&refr_index_vaccuum()),
-            )
+            .refract_on_surface(&mut OpticSurface::default(), Some(&refr_index_vaccuum()))
             .unwrap();
         check_warnings(vec!["rays totally reflected or missed a surface"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
@@ -1843,7 +1868,7 @@ mod test {
             Ray::new_collimated(millimeter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))
                 .unwrap(),
         );
-        let mut s = OpticalSurface::new(Box::new(Plane::new(&Isometry::identity())));
+        let mut s = OpticSurface::default();
         s.set_coating(CoatingType::ConstantR { reflectivity: 0.2 });
         let reflected = rays
             .refract_on_surface(&mut s, Some(&refr_index_vaccuum()))
@@ -2102,10 +2127,9 @@ mod test {
         )
         .unwrap();
 
-        let mut plane = OpticalSurface::new(Box::new(Plane::new(
-            &Isometry::new_along_z(millimeter!(10.0)).unwrap(),
-        )));
-        rays.refract_on_surface(&mut plane, Some(&refr_index_vaccuum()))
+        let mut s = OpticSurface::default();
+        s.set_isometry(&Isometry::new_along_z(millimeter!(10.0)).unwrap());
+        rays.refract_on_surface(&mut s, Some(&refr_index_vaccuum()))
             .unwrap();
         let wf_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.), &Isometry::identity());
@@ -2128,7 +2152,7 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        rays.refract_on_surface(&mut plane, Some(&refr_index_vaccuum()))
+        rays.refract_on_surface(&mut s, Some(&refr_index_vaccuum()))
             .unwrap();
         let wf_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.), &Isometry::identity());

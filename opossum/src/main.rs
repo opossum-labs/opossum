@@ -5,6 +5,7 @@ use env_logger::Env;
 use log::{error, info, warn};
 #[cfg(feature = "bevy")]
 use opossum::bevy_main;
+use opossum::optic_node::OpticNode;
 #[cfg(feature = "bevy")]
 use opossum::SceneryBevyData;
 use opossum::{
@@ -127,6 +128,8 @@ fn opossum() -> OpmResult<()> {
                 }
             };
             info!("Analysis #{}", ana.0);
+            scenery.clear_edges();
+            scenery.reset_data();
             analyzer.analyze(scenery)?;
             #[cfg(feature = "bevy")]
             let analysis_report = create_report_and_data_files(

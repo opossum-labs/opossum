@@ -23,9 +23,9 @@ fn main() -> OpmResult<()> {
     )?;
     let i_sd3 = scenery.add_node(&RayPropagationVisualizer::default())?;
 
-    scenery.connect_nodes(i_src, "out1", i_m1, "input", millimeter!(100.0))?;
-    scenery.connect_nodes(i_m1, "reflected", i_m2, "input", millimeter!(100.0))?;
-    scenery.connect_nodes(i_m2, "reflected", i_sd3, "in1", millimeter!(100.0))?;
+    scenery.connect_nodes(i_src, "output_1", i_m1, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(i_m2, "output_1", i_sd3, "input_1", millimeter!(100.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

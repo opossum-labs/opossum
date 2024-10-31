@@ -38,16 +38,20 @@ fn main() -> OpmResult<()> {
         &RefrIndexConst::new(2.0).unwrap(),
     )?;
     let circle = CircleConfig::new(millimeter!(3.0), millimeter!(0., 0.))?;
-    lens.set_aperture(&PortType::Output, "rear", &Aperture::BinaryCircle(circle))?;
+    lens.set_aperture(
+        &PortType::Output,
+        "output_1",
+        &Aperture::BinaryCircle(circle),
+    )?;
     let l2 = scenery.add_node(&lens)?;
     let det = scenery.add_node(&RayPropagationVisualizer::default())?;
     let wf = scenery.add_node(&WaveFront::default())?;
     let sd = scenery.add_node(&SpotDiagram::default())?;
-    scenery.connect_nodes(src, "out1", l1, "front", millimeter!(30.0))?;
-    scenery.connect_nodes(l1, "rear", l2, "front", millimeter!(197.22992))?;
-    scenery.connect_nodes(l2, "rear", wf, "in1", millimeter!(30.0))?;
-    scenery.connect_nodes(wf, "out1", det, "in1", Length::zero())?;
-    scenery.connect_nodes(det, "out1", sd, "in1", Length::zero())?;
+    scenery.connect_nodes(src, "output_1", l1, "input_1", millimeter!(30.0))?;
+    scenery.connect_nodes(l1, "output_1", l2, "input_1", millimeter!(197.22992))?;
+    scenery.connect_nodes(l2, "output_1", wf, "input_1", millimeter!(30.0))?;
+    scenery.connect_nodes(wf, "output_1", det, "input_1", Length::zero())?;
+    scenery.connect_nodes(det, "output_1", sd, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

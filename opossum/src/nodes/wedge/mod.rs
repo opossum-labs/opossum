@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use super::NodeAttr;
 use crate::{
     analyzers::Analyzable,
@@ -7,10 +5,10 @@ use crate::{
     error::OpmResult,
     millimeter,
     optic_node::{Alignable, OpticNode, LIDT},
-    optic_ports::{OpticPorts, PortType},
-    rays::Rays,
+    optic_ports::PortType,
+    optic_surface::OpticSurface,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{hit_map::HitMap, OpticalSurface, Plane},
+    surface::{GeometricSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use num::Zero;
@@ -41,8 +39,8 @@ mod analysis_raytrace;
 ///   - `wedge`
 pub struct Wedge {
     node_attr: NodeAttr,
-    front_surf: OpticalSurface,
-    rear_surf: OpticalSurface,
+    // front_surf: OpticalSurface,
+    // rear_surf: OpticalSurface,
 }
 impl Default for Wedge {
     /// Create a wedge with a center thickness of 10.0 mm, refractive index of 1.5 and no wedge angle (flat windows)
@@ -70,16 +68,10 @@ impl Default for Wedge {
         node_attr
             .create_property("wedge", "wedge angle", None, Angle::zero().into())
             .unwrap();
-        let mut ports = OpticPorts::new();
 
-        ports.add(&PortType::Input, "front").unwrap();
-        ports.add(&PortType::Output, "rear").unwrap();
-        node_attr.set_ports(ports);
-        Self {
-            node_attr,
-            front_surf: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-            rear_surf: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-        }
+        let mut wedge = Self { node_attr };
+        wedge.update_surfaces().unwrap();
+        wedge
     }
 }
 impl Wedge {
@@ -119,39 +111,52 @@ impl Wedge {
                 "wedge angle must be within the interval ]-90 deg; 90 deg[ and finite".into(),
             ));
         }
+
+        wedge.update_surfaces()?;
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
         Ok(wedge)
     }
 }
 
 impl OpticNode for Wedge {
-    fn reset_data(&mut self) {
-        self.front_surf.set_backwards_rays_cache(Vec::<Rays>::new());
-        self.front_surf.set_forward_rays_cache(Vec::<Rays>::new());
-        self.front_surf.reset_hit_map();
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        let front_geosurface = GeometricSurface::Flat {
+            s: Plane::new(&Isometry::identity()),
+        };
+        if let Some(optic_surf) = self
+            .ports_mut()
+            .get_optic_surface_mut(&"input_1".to_string())
+        {
+            optic_surf.set_geo_surface(front_geosurface);
+        } else {
+            let mut optic_surf_front = OpticSurface::default();
+            optic_surf_front.set_geo_surface(front_geosurface);
+            self.ports_mut()
+                .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
+        }
 
-        self.rear_surf.set_backwards_rays_cache(Vec::<Rays>::new());
-        self.rear_surf.set_forward_rays_cache(Vec::<Rays>::new());
-        self.rear_surf.reset_hit_map();
+        let rear_geosurface = GeometricSurface::Flat {
+            s: Plane::new(&Isometry::identity()),
+        };
+        if let Some(optic_surf) = self
+            .ports_mut()
+            .get_optic_surface_mut(&"output_1".to_string())
+        {
+            optic_surf.set_geo_surface(rear_geosurface);
+        } else {
+            let mut optic_surf_rear = OpticSurface::default();
+            optic_surf_rear.set_geo_surface(rear_geosurface);
+            self.ports_mut()
+                .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
+        }
+        Ok(())
     }
-    fn hit_maps(&self) -> HashMap<String, HitMap> {
-        let mut map: HashMap<String, HitMap> = HashMap::default();
-        map.insert("front".to_string(), self.front_surf.hit_map().to_owned());
-        map.insert("rear".to_string(), self.rear_surf.hit_map().to_owned());
-        map
-    }
+
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
-    }
-    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface {
-        if surf_name == "front" {
-            &mut self.front_surf
-        } else {
-            &mut self.rear_surf
-        }
     }
 }
 
@@ -323,12 +328,12 @@ mod test {
     #[test]
     fn ports() {
         let node = Wedge::default();
-        assert_eq!(node.ports().names(&PortType::Input), vec!["front"]);
-        assert_eq!(node.ports().names(&PortType::Output), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
     fn set_aperture() {
-        test_set_aperture::<Wedge>("front", "rear");
+        test_set_aperture::<Wedge>("input_1", "output_1");
     }
     #[test]
     fn inverted() {
@@ -343,7 +348,7 @@ mod test {
         let mut node = Wedge::default();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
-        input.insert("rear".into(), input_light.clone());
+        input.insert("output_1".into(), input_light.clone());
         let output =
             AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         assert!(output.is_empty());
@@ -355,18 +360,18 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("front".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
-        assert!(output.contains_key("rear"));
+        assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear");
+        let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
     #[test]
     fn analyze_geometric_wrong_data_type() {
-        test_analyze_wrong_data_type::<Wedge>("front");
+        test_analyze_wrong_data_type::<Wedge>("input_1");
     }
     #[test]
     fn analyze_geometric_ok() {
@@ -378,10 +383,10 @@ mod test {
         let mut rays = Rays::default();
         rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
         let input_light = LightData::Geometric(rays);
-        input.insert("front".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         let output =
             AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
-        if let Some(LightData::Geometric(rays)) = output.get("rear") {
+        if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
             assert_eq!(ray.position(), millimeter!(0.0, 0.0, 20.0));

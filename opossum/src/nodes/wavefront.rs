@@ -13,15 +13,15 @@ use crate::{
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
+    light_result::{LightRays, LightResult},
     lightdata::LightData,
     nanometer,
     optic_node::{Alignable, OpticNode, LIDT},
-    optic_ports::{OpticPorts, PortType},
+    optic_ports::PortType,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
+    rays::Rays,
     reporting::node_report::NodeReport,
-    surface::{OpticalSurface, Plane},
     utils::{
         geom_transformation::Isometry,
         griddata::{create_linspace_axes, interpolate_3d_scatter_data},
@@ -50,31 +50,30 @@ pub struct WaveFront {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
     apodization_warning: bool,
-    #[serde(skip)]
-    surface: OpticalSurface,
 }
 impl Default for WaveFront {
     /// create a wavefront monitor.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("wavefront monitor");
-        let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "in1").unwrap();
-        ports.add(&PortType::Output, "out1").unwrap();
-        node_attr.set_ports(ports);
-        Self {
+        let mut wf = Self {
             light_data: None,
-            node_attr,
+            node_attr: NodeAttr::new("wavefront monitor"),
             apodization_warning: false,
-            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-        }
+        };
+        wf.update_surfaces().unwrap();
+        wf
     }
 }
 impl WaveFront {
     /// Creates a new [`WaveFront`] Monitor with the given `name`.
+    /// # Attributes
+    /// - `name`: name of the [`WaveFront`] Monitor
+    /// # Panics
+    /// This function panics if `update_surfaces` fails.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut wf = Self::default();
         wf.node_attr.set_name(name);
+        wf.update_surfaces().unwrap();
         wf
     }
 }
@@ -166,33 +165,12 @@ impl WaveFrontErrorMap {
     }
 }
 impl OpticNode for WaveFront {
-    // fn export_data(&self, report_dir: &Path, uuid: &str) -> OpmResult<()> {
-    //     if let Some(LightData::Geometric(rays)) = &self.light_data {
-    //         let wf_data_opt = rays
-    //             .get_wavefront_data_in_units_of_wvl(
-    //                 true,
-    //                 nanometer!(1.),
-    //                 &self.effective_iso().map_or_else(Isometry::identity, |v| v),
-    //             )
-    //             .ok();
-
-    //         let mut file_path = PathBuf::from(report_dir);
-    //         file_path.push(format!("wavefront_diagram_{}_{}.png", self.name(), uuid));
-    //         if let Some(wf_data) = wf_data_opt {
-    //             //todo! for all wavelengths
-    //             if let Err(e) =
-    //                 wf_data.wavefront_error_maps[0].to_plot(&file_path, PltBackEnd::Bitmap)
-    //             {
-    //                 warn!("Could not export wavefront diagram: {}", e.to_string());
-    //             }
-    //         } else {
-    //             warn!("Wavefront diagram: no wavefront data for export available",);
-    //         }
-    //     } else {
-    //         warn!("Wavefront diagram: no light data for export available",);
-    //     }
-    //     Ok(())
-    // }
+    fn set_apodization_warning(&mut self, apodized: bool) {
+        self.apodization_warning = apodized;
+    }
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        self.update_flat_single_surfaces()
+    }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
         let data = &self.light_data;
@@ -267,10 +245,7 @@ impl OpticNode for WaveFront {
     }
     fn reset_data(&mut self) {
         self.light_data = None;
-        self.surface.reset_hit_map();
-    }
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        &mut self.surface
+        self.reset_optic_surfaces();
     }
 }
 impl From<WaveFrontData> for Proptype {
@@ -286,19 +261,26 @@ impl Dottable for WaveFront {
 
 impl LIDT for WaveFront {}
 impl Analyzable for WaveFront {}
-impl AnalysisGhostFocus for WaveFront {}
+impl AnalysisGhostFocus for WaveFront {
+    fn analyze(
+        &mut self,
+        incoming_data: LightRays,
+        config: &crate::analyzers::GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
+        _bounce_lvl: usize,
+    ) -> OpmResult<LightRays> {
+        self.analyze_single_surface_detector(incoming_data, config)
+    }
+}
 impl AnalysisEnergy for WaveFront {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
-        let Some(data) = incoming_data.get(inport) else {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
         self.light_data = Some(data.clone());
-        Ok(LightResult::from([(outport.into(), data.clone())]))
+        Ok(LightResult::from([(out_port.into(), data.clone())]))
     }
 }
 impl AnalysisRayTrace for WaveFront {
@@ -307,48 +289,7 @@ impl AnalysisRayTrace for WaveFront {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
-        let Some(data) = incoming_data.get(inport) else {
-            return Ok(LightResult::default());
-        };
-        if let LightData::Geometric(rays) = data {
-            let mut rays = rays.clone();
-            if let Some(iso) = self.effective_iso() {
-                self.surface.set_isometry(&iso);
-                rays.refract_on_surface(&mut self.surface, None)?;
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
-                    let rays_apodized = rays.apodize(aperture, &iso)?;
-                    if rays_apodized {
-                        warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
-                        self.apodization_warning = true;
-                    }
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-                self.light_data = Some(LightData::Geometric(rays.clone()));
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
-                    rays.apodize(aperture, &iso)?;
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-            } else {
-                return Err(OpossumError::Analysis(
-                    "no location for surface defined. Aborting".into(),
-                ));
-            }
-            Ok(LightResult::from([(
-                outport.into(),
-                LightData::Geometric(rays),
-            )]))
-        } else {
-            Ok(LightResult::from([(outport.into(), data.clone())]))
-        }
+        self.raytrace_single_surface_detector(incoming_data, config)
     }
 
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
@@ -476,15 +417,15 @@ mod test {
     #[test]
     fn ports() {
         let meter = WaveFront::default();
-        assert_eq!(meter.ports().names(&PortType::Input), vec!["in1"]);
-        assert_eq!(meter.ports().names(&PortType::Output), vec!["out1"]);
+        assert_eq!(meter.ports().names(&PortType::Input), vec!["input_1"]);
+        assert_eq!(meter.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
     fn ports_inverted() {
         let mut meter = WaveFront::default();
         meter.set_inverted(true).unwrap();
-        assert_eq!(meter.ports().names(&PortType::Input), vec!["out1"]);
-        assert_eq!(meter.ports().names(&PortType::Output), vec!["in1"]);
+        assert_eq!(meter.ports().names(&PortType::Input), vec!["output_1"]);
+        assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
     }
     #[test]
     fn inverted() {
@@ -499,7 +440,7 @@ mod test {
         let mut node = WaveFront::default();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
-        input.insert("out1".into(), input_light.clone());
+        input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
     }
@@ -516,15 +457,15 @@ mod test {
             )
             .unwrap(),
         );
-        input.insert("in1".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input.clone());
         assert!(output.is_ok());
         let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default());
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("out1"));
+        assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("out1");
+        let output = output.get("output_1");
         assert!(output.is_some());
     }
     #[test]
@@ -539,14 +480,14 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("out1".into(), input_light.clone());
+        input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("in1"));
+        assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("in1");
+        let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);

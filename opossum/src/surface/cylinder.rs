@@ -14,9 +14,10 @@ use nalgebra::{vector, Point3};
 use num::Zero;
 use roots::find_roots_quadratic;
 use roots::Roots;
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 /// A spherical surface with its anchor point on the optical axis.
 pub struct Cylinder {
     radius: Length,

@@ -31,34 +31,26 @@ impl AnalysisGhostFocus for Lens {
         let thickness_iso: Isometry = Isometry::new_along_z(center_thickness)?;
 
         if self.inverted() {
-            self.set_surface_iso_and_coating(out_port, &eff_iso, &PortType::Input)?;
-            self.set_surface_iso_and_coating(
-                in_port,
-                &eff_iso.append(&thickness_iso),
-                &PortType::Output,
-            )?;
+            self.set_surface_iso(out_port, &eff_iso)?;
+            self.set_surface_iso(in_port, &eff_iso.append(&thickness_iso))?;
         } else {
-            self.set_surface_iso_and_coating(in_port, &eff_iso, &PortType::Input)?;
-            self.set_surface_iso_and_coating(
-                out_port,
-                &eff_iso.append(&thickness_iso),
-                &PortType::Output,
-            )?;
+            self.set_surface_iso(in_port, &eff_iso)?;
+            self.set_surface_iso(out_port, &eff_iso.append(&thickness_iso))?;
         };
 
-        self.enter_through_surface(
-            &mut rays_bundle,
-            &AnalyzerType::GhostFocus(config.clone()),
-            &refri,
-            self.inverted(),
+        self.pass_through_surface(
             in_port,
-        )?;
-        self.exit_through_surface(
+            &refri,
             &mut rays_bundle,
             &AnalyzerType::GhostFocus(config.clone()),
-            &self.ambient_idx(),
             self.inverted(),
+        )?;
+        self.pass_through_surface(
             out_port,
+            &self.ambient_idx(),
+            &mut rays_bundle,
+            &AnalyzerType::GhostFocus(config.clone()),
+            self.inverted(),
         )?;
 
         let mut out_light_rays = LightRays::default();

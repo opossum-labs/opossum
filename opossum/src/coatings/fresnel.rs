@@ -15,7 +15,7 @@ pub struct Fresnel;
 impl Coating for Fresnel {
     /// Formulas taken from [german wikipedia](https://de.wikipedia.org/wiki/Fresnelsche_Formeln).
     fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: Vector3<f64>, n2: f64) -> f64 {
-        // Note: invert surface normal, since it is the "reflected" direction.
+        // Note: invert surface normal, since it is the "output_1" direction.
         let alpha = incoming_ray.direction().angle(&(-1.0 * surface_normal));
         let n1 = incoming_ray.refractive_index();
         let beta = f64::acos(

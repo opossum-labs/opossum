@@ -6,7 +6,6 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     optic_node::OpticNode,
-    optic_ports::PortType,
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
@@ -17,23 +16,34 @@ pub trait Analyzable: OpticNode + AnalysisEnergy + AnalysisRayTrace + AnalysisGh
     ///Sets the coating and isometry of this surface
     /// # Errors
     /// This function errors if the coating cannot be accessed
-    fn set_surface_iso_and_coating(
-        &mut self,
-        port_str: &str,
-        iso: &Isometry,
-        port_type: &PortType,
-    ) -> OpmResult<()> {
-        let node_attr = self.node_attr().clone();
+    // fn set_surface_iso_and_coating(
+    //     &mut self,
+    //     port_str: &str,
+    //     iso: &Isometry,
+    //     port_type: &PortType,
+    // ) -> OpmResult<()> {
+    //     let node_attr = self.node_attr().clone();
 
-        let input_surf = self.get_surface_mut(port_str);
-        input_surf.set_isometry(iso);
-        input_surf.set_coating(
-            node_attr
-                .ports()
-                .coating(port_type, port_str)
-                .ok_or_else(|| OpossumError::Other("cannot access coating!".into()))?
-                .clone(),
-        );
+    //     let input_surf = self.get_optic_surface_mut(port_str);
+    //     input_surf.set_isometry(iso);
+    //     input_surf.set_coating(
+    //         node_attr
+    //             .ports()
+    //             .coating(port_type, port_str)
+    //             .ok_or_else(|| OpossumError::Other("cannot access coating!".into()))?
+    //             .clone(),
+    //     );
+
+    //     Ok(())
+    // }
+
+    fn set_surface_iso(&mut self, port_str: &str, iso: &Isometry) -> OpmResult<()> {
+        if let Some(input_surf) = self.get_optic_surface_mut(port_str) {
+            input_surf.set_isometry(iso);
+        } else {
+            return Err(OpossumError::OpticPort("No surface found.".into()));
+        }
+
         Ok(())
     }
 }

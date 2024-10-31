@@ -400,13 +400,13 @@ mod test {
             .unwrap();
 
         scenery
-            .connect_nodes(i_s, "out1", i_bs, "input1", Length::zero())
+            .connect_nodes(i_s, "output_1", i_bs, "input1", Length::zero())
             .unwrap();
         scenery
-            .connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "in1", Length::zero())
+            .connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "input_1", Length::zero())
             .unwrap();
         scenery
-            .connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "in1", Length::zero())
+            .connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "input_1", Length::zero())
             .unwrap();
 
         let scenery_dot_str_tb = scenery.toplevel_dot("TB").unwrap();
@@ -424,10 +424,10 @@ mod test {
         let g1_n1 = group1.add_node(&Dummy::new("node1")).unwrap();
         let g1_n2 = group1.add_node(&BeamSplitter::default()).unwrap();
         group1
-            .map_output_port(g1_n2, "out1_trans1_refl2", "out1")
+            .map_output_port(g1_n2, "out1_trans1_refl2", "output_1")
             .unwrap();
         group1
-            .connect_nodes(g1_n1, "rear", g1_n2, "input1", Length::zero())
+            .connect_nodes(g1_n1, "output_1", g1_n2, "input1", Length::zero())
             .unwrap();
 
         let mut nested_group = NodeGroup::new("group 1_1");
@@ -436,28 +436,40 @@ mod test {
         nested_group.set_expand_view(true).unwrap();
 
         nested_group
-            .connect_nodes(nested_g_n1, "rear", nested_g_n2, "front", Length::zero())
+            .connect_nodes(
+                nested_g_n1,
+                "output_1",
+                nested_g_n2,
+                "input_1",
+                Length::zero(),
+            )
             .unwrap();
         nested_group
-            .map_input_port(nested_g_n1, "front", "in1")
+            .map_input_port(nested_g_n1, "input_1", "input_1")
             .unwrap();
         nested_group
-            .map_output_port(nested_g_n2, "rear", "out1")
+            .map_output_port(nested_g_n2, "output_1", "output_1")
             .unwrap();
 
         let nested_group_index = group1.add_node(&nested_group).unwrap();
         group1
-            .connect_nodes(nested_group_index, "out1", g1_n1, "front", Length::zero())
+            .connect_nodes(
+                nested_group_index,
+                "output_1",
+                g1_n1,
+                "input_1",
+                Length::zero(),
+            )
             .unwrap();
 
         let mut group2: NodeGroup = NodeGroup::new("group 2");
         group2.set_expand_view(false).unwrap();
         let g2_n1 = group2.add_node(&Dummy::new("node2_1")).unwrap();
         let g2_n2 = group2.add_node(&Dummy::new("node2_2")).unwrap();
-        group2.map_input_port(g2_n1, "front", "in1").unwrap();
+        group2.map_input_port(g2_n1, "input_1", "input_1").unwrap();
 
         group2
-            .connect_nodes(g2_n1, "rear", g2_n2, "front", Length::zero())
+            .connect_nodes(g2_n1, "output_1", g2_n2, "input_1", Length::zero())
             .unwrap();
 
         let scene_g1 = scenery.add_node(&group1).unwrap();
@@ -465,7 +477,7 @@ mod test {
 
         // set_output_port
         scenery
-            .connect_nodes(scene_g1, "out1", scene_g2, "in1", Length::zero())
+            .connect_nodes(scene_g1, "output_1", scene_g2, "input_1", Length::zero())
             .unwrap();
         let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot");
         let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot");

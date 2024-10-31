@@ -201,6 +201,12 @@ impl NodeAttr {
     pub const fn ports(&self) -> &OpticPorts {
         &self.ports
     }
+
+    /// Returns a mutable reference to the optic ports of this [`NodeAttr`].
+    #[must_use]
+    pub fn ports_mut(&mut self) -> &mut OpticPorts {
+        &mut self.ports
+    }
     /// Sets the apertures of this [`NodeAttr`].
     pub fn set_ports(&mut self, ports: OpticPorts) {
         self.ports = ports;

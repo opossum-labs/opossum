@@ -15,14 +15,15 @@ use crate::{
     lightdata::LightData,
     millimeter,
     optic_node::{Alignable, OpticNode, LIDT},
-    optic_ports::{OpticPorts, PortType},
+    optic_ports::PortType,
+    optic_surface::OpticSurface,
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    surface::{hit_map::HitMap, OpticalSurface, Plane},
+    surface::{GeometricSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
-use std::{collections::HashMap, fmt::Debug};
+use std::fmt::Debug;
 
 /// A general light source
 ///
@@ -43,7 +44,6 @@ use std::{collections::HashMap, fmt::Debug};
 #[derive(Clone)]
 pub struct Source {
     node_attr: NodeAttr,
-    surface: OpticalSurface,
 }
 impl Default for Source {
     fn default() -> Self {
@@ -66,14 +66,9 @@ impl Default for Source {
             )
             .unwrap();
 
-        let mut ports = OpticPorts::new();
-        ports.add(&PortType::Output, "out1").unwrap();
-        ports.add(&PortType::Input, "in1").unwrap();
-        node_attr.set_ports(ports);
-        Self {
-            node_attr,
-            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-        }
+        let mut src = Self { node_attr };
+        src.update_surfaces().unwrap();
+        src
     }
 }
 impl Source {
@@ -108,6 +103,7 @@ impl Source {
                 .into(),
             )
             .unwrap();
+        source.update_surfaces().unwrap();
         source
     }
 
@@ -166,13 +162,33 @@ impl OpticNode for Source {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn hit_maps(&self) -> HashMap<String, HitMap> {
-        let mut maps = HashMap::default();
-        maps.insert("out1".to_string(), self.surface.hit_map().to_owned());
-        maps
-    }
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        &mut self.surface
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        let geosurface = GeometricSurface::Flat {
+            s: Plane::new(&Isometry::identity()),
+        };
+        if let Some(optic_surf) = self
+            .ports_mut()
+            .get_optic_surface_mut(&"input_1".to_string())
+        {
+            optic_surf.set_geo_surface(geosurface.clone());
+        } else {
+            let mut optic_surf_front = OpticSurface::default();
+            optic_surf_front.set_geo_surface(geosurface.clone());
+            self.ports_mut()
+                .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
+        }
+        if let Some(optic_surf) = self
+            .ports_mut()
+            .get_optic_surface_mut(&"output_1".to_string())
+        {
+            optic_surf.set_geo_surface(geosurface);
+        } else {
+            let mut optic_surf_front = OpticSurface::default();
+            optic_surf_front.set_geo_surface(geosurface);
+            self.ports_mut()
+                .add_optic_surface(&PortType::Output, "output_1", optic_surf_front)?;
+        }
+        Ok(())
     }
 }
 
@@ -191,7 +207,7 @@ impl AnalysisEnergy for Source {
                     "source has empty light data defined".into(),
                 ));
             };
-            Ok(LightResult::from([("out1".into(), data)]))
+            Ok(LightResult::from([("output_1".into(), data)]))
         } else {
             Err(OpossumError::Analysis(
                 "source has no light data defined".into(),
@@ -216,7 +232,8 @@ impl AnalysisRayTrace for Source {
                     *rays = rays.transformed_rays(&iso);
                     // consider aperture only if not inverted (there is only an output port)
                     if !self.inverted() {
-                        if let Some(aperture) = self.ports().aperture(&PortType::Output, "out1") {
+                        if let Some(aperture) = self.ports().aperture(&PortType::Output, "output_1")
+                        {
                             rays.apodize(aperture, &iso)?;
                             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                         } else {
@@ -227,7 +244,7 @@ impl AnalysisRayTrace for Source {
                     }
                 }
             }
-            Ok(LightResult::from([("out1".into(), data)]))
+            Ok(LightResult::from([("output_1".into(), data)]))
         } else {
             Err(OpossumError::Analysis(
                 "source has no light data defined".into(),
@@ -278,7 +295,7 @@ impl AnalysisGhostFocus for Source {
         bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
         let mut rays = if self.inverted() {
-            let Some(bouncing_rays) = incoming_data.get("out1") else {
+            let Some(bouncing_rays) = incoming_data.get("output_1") else {
                 return Err(OpossumError::Analysis("no light at port".into()));
             };
             bouncing_rays.clone()
@@ -306,10 +323,14 @@ impl AnalysisGhostFocus for Source {
             Vec::<Rays>::new()
         };
         if let Some(iso) = self.effective_iso() {
-            self.surface.set_isometry(&iso);
-            for r in &mut rays {
-                r.refract_on_surface(&mut self.surface, None)?;
-                self.surface.evaluate_fluence_of_ray_bundle(r)?;
+            if let Some(surf) = self.get_optic_surface_mut("input_1") {
+                surf.set_isometry(&iso);
+                for r in &mut rays {
+                    r.refract_on_surface(surf, None)?;
+                    surf.evaluate_fluence_of_ray_bundle(r)?;
+                }
+            } else {
+                return Err(OpossumError::Analysis("no surface found. Aborting".into()));
             }
         } else {
             return Err(OpossumError::Analysis(
@@ -318,7 +339,7 @@ impl AnalysisGhostFocus for Source {
         }
 
         let mut out_light_rays = LightRays::default();
-        out_light_rays.insert("out1".into(), rays);
+        out_light_rays.insert("output_1".into(), rays);
         Ok(out_light_rays)
     }
 }
@@ -357,8 +378,8 @@ mod test {
     #[test]
     fn ports() {
         let node = Source::default();
-        assert_eq!(node.ports().names(&PortType::Input), vec!["in1"]);
-        assert_eq!(node.ports().names(&PortType::Output), vec!["out1"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
     fn test_set_light_data() {
@@ -384,9 +405,9 @@ mod test {
         });
         let mut node = Source::new("test", &light);
         let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
-        assert!(output.contains_key("out1"));
+        assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("out1");
+        let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, light);

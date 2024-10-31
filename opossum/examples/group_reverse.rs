@@ -26,16 +26,16 @@ fn main() -> OpmResult<()> {
     let g_n1 = group.add_node(&Dummy::new("node1"))?;
     let g_n2 = group.add_node(&Dummy::new("node2"))?;
 
-    group.connect_nodes(g_n1, "rear", g_n2, "front", Length::zero())?;
-    group.map_input_port(g_n1, "front", "in1")?;
-    group.map_output_port(g_n2, "rear", "out1")?;
+    group.connect_nodes(g_n1, "output_1", g_n2, "input_1", Length::zero())?;
+    group.map_input_port(g_n1, "input_1", "input_1")?;
+    group.map_output_port(g_n2, "output_1", "output_1")?;
     group.set_inverted(true)?;
 
     let i_g = scenery.add_node(&group)?;
     let i_d = scenery.add_node(&EnergyMeter::default())?;
 
-    scenery.connect_nodes(i_s, "out1", i_g, "out1", Length::zero())?;
-    scenery.connect_nodes(i_g, "in1", i_d, "in1", Length::zero())?;
+    scenery.connect_nodes(i_s, "output_1", i_g, "output_1", Length::zero())?;
+    scenery.connect_nodes(i_g, "input_1", i_d, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::Energy);

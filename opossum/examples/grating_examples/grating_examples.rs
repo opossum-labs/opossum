@@ -70,12 +70,18 @@ fn main() -> OpmResult<()> {
     let compressor_node = scenery.add_node(&treacy_compressor(alignment_wvl)?)?;
     let detectors = scenery.add_node(&detector_group()?)?;
 
-    scenery.connect_nodes(i_src, "out1", compressor_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        i_src,
+        "output_1",
+        compressor_node,
+        "input_1",
+        millimeter!(400.0),
+    )?;
     scenery.connect_nodes(
         compressor_node,
-        "output",
+        "output_1",
         detectors,
-        "input",
+        "input_1",
         millimeter!(400.),
     )?;
 
@@ -96,13 +102,19 @@ fn main() -> OpmResult<()> {
         scenery.add_node(&folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
     let detectors = scenery.add_node(&detector_group()?)?;
 
-    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        i_src,
+        "output_1",
+        stretcher_node,
+        "input_1",
+        millimeter!(400.0),
+    )?;
     scenery.connect_nodes(
         stretcher_node,
-        "output",
+        "output_1",
         detectors,
-        "input",
-        millimeter!(1500.),
+        "input_1",
+        millimeter!(0.),
     )?;
 
     let mut doc = OpmDocument::new(scenery);
@@ -124,12 +136,18 @@ fn main() -> OpmResult<()> {
         scenery.add_node(&folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
     let detectors = scenery.add_node(&detector_group()?)?;
 
-    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        i_src,
+        "output_1",
+        stretcher_node,
+        "input_1",
+        millimeter!(400.0),
+    )?;
     scenery.connect_nodes(
         stretcher_node,
-        "output",
+        "output_1",
         detectors,
-        "input",
+        "input_1",
         millimeter!(1500.),
     )?;
 
@@ -150,12 +168,18 @@ fn main() -> OpmResult<()> {
         scenery.add_node(&folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
     let detectors = scenery.add_node(&detector_group()?)?;
 
-    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        i_src,
+        "output_1",
+        stretcher_node,
+        "input_1",
+        millimeter!(400.0),
+    )?;
     scenery.connect_nodes(
         stretcher_node,
-        "output",
+        "output_1",
         detectors,
-        "input",
+        "input_1",
         millimeter!(1500.),
     )?;
 
@@ -181,12 +205,18 @@ fn main() -> OpmResult<()> {
     )?)?;
     let detectors = scenery.add_node(&detector_group()?)?;
 
-    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        i_src,
+        "output_1",
+        stretcher_node,
+        "input_1",
+        millimeter!(400.0),
+    )?;
     scenery.connect_nodes(
         stretcher_node,
-        "output",
+        "output_1",
         detectors,
-        "input",
+        "input_1",
         millimeter!(1500.),
     )?;
 
@@ -212,12 +242,18 @@ fn main() -> OpmResult<()> {
     )?)?;
     let detectors = scenery.add_node(&detector_group()?)?;
 
-    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        i_src,
+        "output_1",
+        stretcher_node,
+        "input_1",
+        millimeter!(400.0),
+    )?;
     scenery.connect_nodes(
         stretcher_node,
-        "output",
+        "output_1",
         detectors,
-        "input",
+        "input_1",
         millimeter!(1500.),
     )?;
 
@@ -242,19 +278,25 @@ fn main() -> OpmResult<()> {
     )?)?;
     let detectors = scenery.add_node(&detector_group()?)?;
 
-    scenery.connect_nodes(i_src, "out1", stretcher_node, "input", millimeter!(400.0))?;
+    scenery.connect_nodes(
+        i_src,
+        "output_1",
+        stretcher_node,
+        "input_1",
+        millimeter!(400.0),
+    )?;
     scenery.connect_nodes(
         stretcher_node,
-        "output",
+        "output_1",
         detectors,
-        "input",
+        "input_1",
         millimeter!(1500.),
     )?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new(
-        "./opossum/playground/paraxial_folded_martinez.opm",
+        "./opossum/playground/achromat_ideal_folded_martinez.opm",
     ))?;
 
     ////////////////////////////
@@ -310,24 +352,36 @@ fn main() -> OpmResult<()> {
         "Ray_positions",
         Some(Vector3::y()),
     )?)?;
-    scenery.connect_nodes(i_src, "out1", lens1, "front", millimeter!(100.0))?;
-    scenery.connect_nodes(lens1, "rear", mir_1, "input", millimeter!(1017.14885))?;
+    scenery.connect_nodes(i_src, "output_1", lens1, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(lens1, "output_1", mir_1, "input_1", millimeter!(1017.14885))?;
     scenery.connect_nodes(
         mir_1,
-        "reflected",
+        "output_1",
         lens_1_ref1,
-        "rear",
+        "output_1",
         millimeter!(1017.14885),
     )?;
     scenery.connect_nodes(
         lens_1_ref1,
-        "front",
+        "input_1",
         paraxial_lens,
-        "front",
+        "input_1",
         millimeter!(500.0),
     )?;
-    scenery.connect_nodes(paraxial_lens, "rear", spot_diag, "in1", millimeter!(500.0))?;
-    scenery.connect_nodes(spot_diag, "out1", i_prop_vis, "in1", millimeter!(0.0))?;
+    scenery.connect_nodes(
+        paraxial_lens,
+        "output_1",
+        spot_diag,
+        "input_1",
+        millimeter!(500.0),
+    )?;
+    scenery.connect_nodes(
+        spot_diag,
+        "output_1",
+        i_prop_vis,
+        "input_1",
+        millimeter!(0.0),
+    )?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

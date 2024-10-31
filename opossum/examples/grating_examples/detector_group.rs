@@ -20,23 +20,29 @@ pub fn detector_group() -> OpmResult<NodeGroup> {
     let spot_monitor = SpotDiagram::new("spot diagram");
     // let rect_config = RectangleConfig::new(millimeter!(150.), millimeter!(150.), micrometer!(0.,0.))?;
     // let aperture = Aperture::BinaryRectangle(rect_config);
-    // spot_monitor.set_aperture(&PortType::Input, "in1", &aperture)?;
+    // spot_monitor.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // spot_monitor.set_property("plot_aperture", true.into())?;
     let spot_diag = cb.add_node(&spot_monitor)?;
 
-    cb.connect_nodes(paraxial_lens, "rear", spot_diag, "in1", millimeter!(500.0))?;
+    cb.connect_nodes(
+        paraxial_lens,
+        "output_1",
+        spot_diag,
+        "input_1",
+        millimeter!(500.0),
+    )?;
     cb.connect_nodes(
         spot_diag,
-        "out1",
+        "output_1",
         i_prop_vis_top_view,
-        "in1",
+        "input_1",
         millimeter!(0.0),
     )?;
     cb.connect_nodes(
         i_prop_vis_top_view,
-        "out1",
+        "output_1",
         i_prop_vis_side_view,
-        "in1",
+        "input_1",
         millimeter!(0.0),
     )?;
 
@@ -45,8 +51,8 @@ pub fn detector_group() -> OpmResult<NodeGroup> {
         Some(Vector3::x()),
     )?)?;
 
-    cb.map_input_port(paraxial_lens, "front", "input")?;
-    cb.map_output_port(i_prop_vis_side_view, "out1", "output")?;
+    cb.map_input_port(paraxial_lens, "input_1", "input_1")?;
+    cb.map_output_port(i_prop_vis_side_view, "output_1", "output_1")?;
 
     Ok(cb)
 }

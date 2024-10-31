@@ -4,7 +4,6 @@ use crate::{
     light_result::LightResult,
     lightdata::LightData,
     optic_node::OpticNode,
-    surface::{OpticalSurface, Plane},
 };
 
 use super::BeamSplitter;
@@ -54,12 +53,17 @@ impl AnalysisRayTrace for BeamSplitter {
             match input1 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    if let Some(iso) = self.effective_iso() {
-                        let mut plane = OpticalSurface::new(Box::new(Plane::new(&iso)));
-                        rays.refract_on_surface(&mut plane, None)?;
-                    } else {
+                    let Some(iso) = self.effective_iso() else {
                         return Err(OpossumError::Analysis(
                             "no location for surface defined. Aborting".into(),
+                        ));
+                    };
+                    if let Some(surf) = self.get_optic_surface_mut("input1") {
+                        surf.set_isometry(&iso);
+                        rays.refract_on_surface(surf, None)?;
+                    } else {
+                        return Err(OpossumError::OpticPort(
+                            "input optic surface not found".into(),
                         ));
                     }
                     rays

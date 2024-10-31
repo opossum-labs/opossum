@@ -9,12 +9,70 @@ attributes:
   ports:
     inputs:
       front: 
+        geo_surface: !Flat
+          s:
+            isometry:
+              transform:
+                rotation:
+                - 0.0
+                - 0.0
+                - 0.0
+                - 1.0
+                translation:
+                - 0.0
+                - 0.0
+                - 0.0
+              inverse:
+                rotation:
+                - 0.0
+                - 0.0
+                - 0.0
+                - 1.0
+                translation:
+                - 0.0
+                - 0.0
+                - 0.0
         aperture: None
-        coating: Fresnel
+        coating: IdealAR
+        lidt: 10000.
+        backward_rays_cache: []
+        forward_rays_cache: []
+        hit_map:
+          hit_map: []
+          critical_fluence: {}
     outputs:
       rear:
+        geo_surface: !Flat
+          s:
+            isometry:
+              transform:
+                rotation:
+                - 0.0
+                - 0.0
+                - 0.0
+                - 1.0
+                translation:
+                - 0.0
+                - 0.0
+                - 0.0
+              inverse:
+                rotation:
+                - 0.0
+                - 0.0
+                - 0.0
+                - 1.0
+                translation:
+                - 0.0
+                - 0.0
+                - 0.0
         aperture: None
-        coating: Fresnel
+        coating: IdealAR
+        lidt: 10000.
+        backward_rays_cache: []
+        forward_rays_cache: []
+        hit_map:
+          hit_map: []
+          critical_fluence: {}
   inverted: false
   props:
       

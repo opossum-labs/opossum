@@ -9,12 +9,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::{
-        LIDT, {Alignable, OpticNode},
-    },
-    optic_ports::{OpticPorts, PortType},
-    surface::{OpticalSurface, Plane},
-    utils::geom_transformation::Isometry,
+    optic_node::{Alignable, OpticNode, LIDT},
+    optic_ports::PortType,
 };
 
 #[derive(Debug, Clone)]
@@ -37,19 +33,14 @@ use crate::{
 ///   - `inverted`
 pub struct Dummy {
     node_attr: NodeAttr,
-    surface: OpticalSurface,
 }
 impl Default for Dummy {
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("dummy");
-        let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "front").unwrap();
-        ports.add(&PortType::Output, "rear").unwrap();
-        node_attr.set_ports(ports);
-        Self {
-            node_attr,
-            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-        }
+        let mut d = Self {
+            node_attr: NodeAttr::new("dummy"),
+        };
+        d.update_surfaces().unwrap();
+        d
     }
 }
 impl Dummy {
@@ -72,14 +63,11 @@ impl Analyzable for Dummy {}
 impl AnalysisGhostFocus for Dummy {}
 impl AnalysisEnergy for Dummy {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
-        incoming_data.get(inport).map_or_else(
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        incoming_data.get(in_port).map_or_else(
             || Ok(LightResult::default()),
-            |data| Ok(LightResult::from([(outport.into(), data.clone())])),
+            |data| Ok(LightResult::from([(out_port.into(), data.clone())])),
         )
     }
 }
@@ -91,257 +79,44 @@ impl AnalysisRayTrace for Dummy {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("rear", "front")
-        } else {
-            ("front", "rear")
-        };
-        let Some(data) = incoming_data.get(inport) else {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
-            if let Some(iso) = self.effective_iso() {
-                self.surface.set_isometry(&iso);
-                rays.refract_on_surface(&mut self.surface, None)?;
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
-                    rays.apodize(aperture, &iso)?;
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
-                    rays.apodize(aperture, &iso)?;
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-            } else {
+            let Some(iso) = self.effective_iso() else {
                 return Err(OpossumError::Analysis(
                     "no location for surface defined. Aborting".into(),
                 ));
-            }
-
-            Ok(LightResult::from([(
-                outport.into(),
-                LightData::Geometric(rays),
-            )]))
-        } else {
-            Ok(LightResult::from([(outport.into(), data.clone())]))
-        }
-    }
-
-    fn calc_node_position(
-        &mut self,
-        incoming_data: LightResult,
-        config: &RayTraceConfig,
-    ) -> OpmResult<LightResult> {
-        AnalysisRayTrace::analyze(self, incoming_data, config)
-    }
-
-    fn enter_through_surface(
-        &mut self,
-        rays_bundle: &mut Vec<crate::rays::Rays>,
-        analyzer_type: &crate::analyzers::AnalyzerType,
-        refri: &crate::refractive_index::RefractiveIndexType,
-        backward: bool,
-        port_name: &str,
-    ) -> OpmResult<()> {
-        let uuid = *self.node_attr().uuid();
-        let Some(iso) = &self.effective_iso() else {
-            return Err(OpossumError::Analysis(
-                "surface has no isometry defined".into(),
-            ));
-        };
-        if backward {
-            for rays in &mut *rays_bundle {
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
-                    rays.apodize(aperture, iso)?;
-                    if let crate::analyzers::AnalyzerType::RayTrace(ref config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-                let surf = self.get_surface_mut(port_name);
-                let mut reflected_rear = rays.refract_on_surface(surf, Some(refri))?;
-                reflected_rear.set_node_origin_uuid(uuid);
-
-                if let crate::analyzers::AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
-                }
-
-                surf.add_to_forward_rays_cache(reflected_rear);
-            }
-            for rays in self.get_surface_mut(port_name).backwards_rays_cache() {
-                rays_bundle.push(rays.clone());
-            }
-        } else {
-            for rays in &mut *rays_bundle {
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
-                    rays.apodize(aperture, &self.effective_iso().unwrap())?;
-                    if let crate::analyzers::AnalyzerType::RayTrace(ref config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-                let surf = self.get_surface_mut(port_name);
-                let mut reflected_front = rays.refract_on_surface(surf, Some(refri))?;
-                reflected_front.set_node_origin_uuid(uuid);
-                if let crate::analyzers::AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
-                }
-                surf.add_to_backward_rays_cache(reflected_front);
-            }
-            for rays in self.get_surface_mut(port_name).forward_rays_cache() {
-                rays_bundle.push(rays.clone());
-            }
-        }
-        Ok(())
-    }
-
-    fn exit_through_surface(
-        &mut self,
-        rays_bundle: &mut Vec<crate::rays::Rays>,
-        analyzer_type: &crate::analyzers::AnalyzerType,
-        refri: &crate::refractive_index::RefractiveIndexType,
-        backward: bool,
-        port_name: &str,
-    ) -> OpmResult<()> {
-        let uuid: uuid::Uuid = *self.node_attr().uuid();
-        let Some(iso) = &self.effective_iso() else {
-            return Err(OpossumError::Analysis(
-                "surface has no isometry defined".into(),
-            ));
-        };
-        let surf = self.get_surface_mut(port_name);
-        if backward {
-            for rays in &mut *rays_bundle {
-                let mut reflected_front = rays.refract_on_surface(surf, Some(refri))?;
-                reflected_front.set_node_origin_uuid(uuid);
-
-                if let crate::analyzers::AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
-                }
-
-                surf.add_to_forward_rays_cache(reflected_front);
-            }
-            for rays in surf.backwards_rays_cache() {
-                rays_bundle.push(rays.clone());
-            }
-            for rays in &mut *rays_bundle {
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, port_name) {
-                    rays.apodize(aperture, iso)?;
-                    if let crate::analyzers::AnalyzerType::RayTrace(config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-            }
-        } else {
-            for rays in &mut *rays_bundle {
-                let mut reflected_rear = rays.refract_on_surface(surf, Some(refri))?;
-                reflected_rear.set_node_origin_uuid(uuid);
-                if let crate::analyzers::AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
-                }
-                surf.add_to_backward_rays_cache(reflected_rear);
-            }
-            for rays in surf.forward_rays_cache() {
-                rays_bundle.push(rays.clone());
-            }
-            for rays in &mut *rays_bundle {
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, port_name) {
-                    rays.apodize(aperture, iso)?;
-                    if let crate::analyzers::AnalyzerType::RayTrace(config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-            }
-        }
-        Ok(())
-    }
-
-    fn pass_through_inert_surface(
-        &mut self,
-        rays_bundle: &mut Vec<crate::rays::Rays>,
-        analyzer_type: &crate::analyzers::AnalyzerType,
-    ) -> OpmResult<()> {
-        if let Some(iso) = self.effective_iso() {
-            let surf = self.get_surface_mut("");
-            surf.set_isometry(&iso);
-            for rays in &mut *rays_bundle {
+            };
+            if let Some(surf) = self.get_optic_surface_mut(in_port) {
+                surf.set_isometry(&iso);
                 rays.refract_on_surface(surf, None)?;
-                if let crate::analyzers::AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
-                }
+                if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
+                    rays.apodize(aperture, &iso)?;
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                } else {
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                };
+                if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
+                    rays.apodize(aperture, &iso)?;
+                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                } else {
+                    return Err(OpossumError::OpticPort("output aperture not found".into()));
+                };
+
+                Ok(LightResult::from([(
+                    out_port.into(),
+                    LightData::Geometric(rays),
+                )]))
+            } else {
+                Err(OpossumError::Analysis("no surface found. Aborting".into()))
             }
         } else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined. Aborting".into(),
-            ));
+            Ok(LightResult::from([(out_port.into(), data.clone())]))
         }
-        // merge all rays
-        if let Some(ld) = self.get_light_data_mut() {
-            if let LightData::GhostFocus(rays) = ld {
-                for r in rays_bundle {
-                    rays.push(r.clone());
-                }
-            }
-        } else {
-            self.set_light_data(LightData::GhostFocus(rays_bundle.clone()));
-        }
-        Ok(())
-    }
-
-    fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
-        None
-    }
-
-    fn set_light_data(&mut self, _ld: LightData) {}
-
-    fn get_node_attributes_ray_trace(
-        &self,
-        node_attr: &NodeAttr,
-    ) -> OpmResult<(
-        Isometry,
-        crate::refractive_index::RefractiveIndexType,
-        uom::si::f64::Length,
-        uom::si::f64::Angle,
-    )> {
-        let Some(eff_iso) = self.effective_iso() else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined".into(),
-            ));
-        };
-        let Ok(crate::properties::Proptype::RefractiveIndex(index_model)) =
-            node_attr.get_property("refractive index")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read refractive index".into(),
-            ));
-        };
-        let Ok(crate::properties::Proptype::Length(center_thickness)) =
-            node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-
-        let angle = if let Ok(crate::properties::Proptype::Angle(wedge)) =
-            node_attr.get_property("wedge")
-        {
-            *wedge
-        } else {
-            crate::degree!(0.)
-        };
-
-        Ok((eff_iso, index_model.value.clone(), *center_thickness, angle))
     }
 }
 
@@ -352,11 +127,8 @@ impl OpticNode for Dummy {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn reset_data(&mut self) {
-        self.surface.reset_hit_map();
-    }
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        &mut self.surface
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        self.update_flat_single_surfaces()
     }
 }
 impl Dottable for Dummy {}
@@ -396,12 +168,12 @@ mod test {
     #[test]
     fn ports() {
         let node = Dummy::default();
-        assert_eq!(node.ports().names(&PortType::Input), vec!["front"]);
-        assert_eq!(node.ports().names(&PortType::Output), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
     fn set_aperture() {
-        test_set_aperture::<Dummy>("front", "rear");
+        test_set_aperture::<Dummy>("input_1", "output_1");
     }
     #[test]
     fn as_ref_node_mut() {
@@ -417,8 +189,8 @@ mod test {
     fn ports_inverted() {
         let mut node = Dummy::default();
         node.set_inverted(true).unwrap();
-        assert_eq!(node.ports().names(&PortType::Input), vec!["rear"]);
-        assert_eq!(node.ports().names(&PortType::Output), vec!["front"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["output_1"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["input_1"]);
     }
     #[test]
     fn analyze_empty() {
@@ -431,7 +203,7 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("rear".into(), input_light.clone());
+        input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
         assert!(output.is_empty());
     }
@@ -442,11 +214,11 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("front".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
-        assert!(output.contains_key("rear"));
+        assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear");
+        let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
@@ -459,12 +231,12 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("rear".into(), input_light.clone());
+        input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut dummy, input).unwrap();
-        assert!(output.contains_key("front"));
+        assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("front");
+        let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);

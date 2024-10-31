@@ -5,16 +5,14 @@ use crate::{
         Analyzable, RayTraceConfig,
     },
     dottable::Dottable,
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     joule,
     light_result::LightResult,
     lightdata::LightData,
     optic_node::{Alignable, OpticNode, LIDT},
-    optic_ports::{OpticPorts, PortType},
+    optic_ports::PortType,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
-    surface::{OpticalSurface, Plane},
-    utils::geom_transformation::Isometry,
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -68,7 +66,6 @@ pub struct EnergyMeter {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
     apodization_warning: bool,
-    surface: OpticalSurface,
 }
 impl Default for EnergyMeter {
     fn default() -> Self {
@@ -81,16 +78,13 @@ impl Default for EnergyMeter {
                 Metertype::default().into(),
             )
             .unwrap();
-        let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "in1").unwrap();
-        ports.add(&PortType::Output, "out1").unwrap();
-        node_attr.set_ports(ports);
-        Self {
+        let mut em = Self {
             light_data: None,
             node_attr,
             apodization_warning: false,
-            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-        }
+        };
+        em.update_surfaces().unwrap();
+        em
     }
 }
 impl EnergyMeter {
@@ -134,6 +128,9 @@ impl EnergyMeter {
     }
 }
 impl OpticNode for EnergyMeter {
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        self.update_flat_single_surfaces()
+    }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut energy: Option<Energy> = None;
         if let Some(light_data) = &self.light_data {
@@ -194,10 +191,11 @@ impl OpticNode for EnergyMeter {
     }
     fn reset_data(&mut self) {
         self.light_data = None;
-        self.surface.reset_hit_map();
+        self.reset_optic_surfaces();
     }
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        &mut self.surface
+
+    fn set_apodization_warning(&mut self, apodized: bool) {
+        self.apodization_warning = apodized;
     }
 }
 
@@ -216,19 +214,26 @@ impl Dottable for EnergyMeter {
 }
 impl LIDT for EnergyMeter {}
 impl Analyzable for EnergyMeter {}
-impl AnalysisGhostFocus for EnergyMeter {}
+impl AnalysisGhostFocus for EnergyMeter {
+    fn analyze(
+        &mut self,
+        incoming_data: crate::light_result::LightRays,
+        config: &crate::analyzers::GhostFocusConfig,
+        _ray_collection: &mut Vec<crate::rays::Rays>,
+        _bounce_lvl: usize,
+    ) -> OpmResult<crate::light_result::LightRays> {
+        self.analyze_single_surface_detector(incoming_data, config)
+    }
+}
 impl AnalysisEnergy for EnergyMeter {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
-        let Some(data) = incoming_data.get(inport) else {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
         self.light_data = Some(data.clone());
-        Ok(LightResult::from([(outport.into(), data.clone())]))
+        Ok(LightResult::from([(out_port.into(), data.clone())]))
     }
 }
 impl AnalysisRayTrace for EnergyMeter {
@@ -237,49 +242,7 @@ impl AnalysisRayTrace for EnergyMeter {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
-        let Some(data) = incoming_data.get(inport) else {
-            return Ok(LightResult::default());
-        };
-        self.light_data = Some(data.clone());
-        if let LightData::Geometric(rays) = data {
-            let mut rays = rays.clone();
-            if let Some(iso) = self.effective_iso() {
-                self.surface.set_isometry(&iso);
-                rays.refract_on_surface(&mut self.surface, None)?;
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
-                    let rays_apodized = rays.apodize(aperture, &iso)?;
-                    if rays_apodized {
-                        warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
-                        self.apodization_warning = true;
-                    }
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-                self.light_data = Some(LightData::Geometric(rays.clone()));
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
-                    rays.apodize(aperture, &iso)?;
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-            } else {
-                return Err(OpossumError::Analysis(
-                    "no location for surface defined. Aborting".into(),
-                ));
-            }
-            Ok(LightResult::from([(
-                outport.into(),
-                LightData::Geometric(rays),
-            )]))
-        } else {
-            Ok(LightResult::from([(outport.into(), data.clone())]))
-        }
+        self.raytrace_single_surface_detector(incoming_data, config)
     }
 
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
@@ -328,19 +291,19 @@ mod test {
     #[test]
     fn ports() {
         let meter = EnergyMeter::default();
-        assert_eq!(meter.ports().names(&PortType::Input), vec!["in1"]);
-        assert_eq!(meter.ports().names(&PortType::Output), vec!["out1"]);
+        assert_eq!(meter.ports().names(&PortType::Input), vec!["input_1"]);
+        assert_eq!(meter.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
     fn ports_inverted() {
         let mut meter = EnergyMeter::default();
         meter.set_inverted(true).unwrap();
-        assert_eq!(meter.ports().names(&PortType::Input), vec!["out1"]);
-        assert_eq!(meter.ports().names(&PortType::Output), vec!["in1"]);
+        assert_eq!(meter.ports().names(&PortType::Input), vec!["output_1"]);
+        assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
     }
     #[test]
     fn set_aperture() {
-        test_set_aperture::<EnergyMeter>("in1", "out1");
+        test_set_aperture::<EnergyMeter>("input_1", "output_1");
     }
     #[test]
     fn analyze_empty() {
@@ -353,7 +316,7 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("out1".into(), input_light.clone());
+        input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
     }
@@ -364,10 +327,10 @@ mod test {
         let input_data = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("in1".into(), input_data.clone());
+        input.insert("input_1".into(), input_data.clone());
         let result = AnalysisEnergy::analyze(&mut meter, input).unwrap();
-        assert!(result.contains_key("out1"));
-        assert_eq!(result.get("out1").unwrap(), &input_data);
+        assert!(result.contains_key("output_1"));
+        assert_eq!(result.get("output_1").unwrap(), &input_data);
     }
     #[test]
     fn analyze_apodization_warning() {
@@ -381,10 +344,10 @@ mod test {
         let input_data = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("out1".into(), input_data.clone());
+        input.insert("output_1".into(), input_data.clone());
         let result = AnalysisEnergy::analyze(&mut meter, input).unwrap();
-        assert!(result.contains_key("in1"));
-        assert_eq!(result.get("in1").unwrap(), &input_data);
+        assert!(result.contains_key("input_1"));
+        assert_eq!(result.get("input_1").unwrap(), &input_data);
     }
     #[test]
     fn debug() {
@@ -394,7 +357,7 @@ mod test {
         let input_data = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("in1".into(), input_data.clone());
+        input.insert("input_1".into(), input_data.clone());
         AnalysisEnergy::analyze(&mut meter, input).unwrap();
         assert_eq!(format!("{meter:?}"), "Energy: 1 J (Type: IdealEnergyMeter)");
     }
@@ -420,7 +383,7 @@ mod test {
         let input_data = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("in1".into(), input_data.clone());
+        input.insert("input_1".into(), input_data.clone());
         AnalysisEnergy::analyze(&mut meter, input).unwrap();
         let report = meter.node_report("123").unwrap();
         if let Ok(Proptype::Energy(e)) = report.properties().get("Energy") {

@@ -17,10 +17,12 @@ use crate::{
     nodes::{fluence_detector::Fluence, NodeAttr, NodeGroup, NodeReference},
     optic_ports::{OpticPorts, PortType},
     optic_senery_rsc::SceneryResources,
+    optic_surface::OpticSurface,
     properties::{Properties, Proptype},
+    rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
-    surface::{hit_map::HitMap, OpticalSurface},
+    surface::{hit_map::HitMap, GeometricSurface, Plane},
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
@@ -31,16 +33,94 @@ use std::rc::Rc;
 
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait OpticNode: Dottable {
+    ///Sets the apodization warning on nodes that have that attribute
+    fn set_apodization_warning(&mut self, _apodized: bool) {
+        warn!(
+            "\"set_apodization_warning\" is not implemented for '{}' ({})",
+            self.name(),
+            self.node_type()
+        );
+    }
     /// Return all hit maps (if any) of this [`OpticNode`].
     fn hit_maps(&self) -> HashMap<String, HitMap> {
-        HashMap::default()
+        let mut map: HashMap<String, HitMap> = HashMap::default();
+        for (port_name, optic_surf) in self.ports().ports(&PortType::Input) {
+            if !optic_surf.hit_map().is_empty() {
+                map.insert(port_name.clone(), optic_surf.hit_map().to_owned());
+            }
+        }
+        for (port_name, optic_surf) in self.ports().ports(&PortType::Output) {
+            if !optic_surf.hit_map().is_empty() {
+                map.insert(port_name.clone(), optic_surf.hit_map().to_owned());
+            }
+        }
+        map
     }
     /// Reset internal data (e.g. internal state of detector nodes)
-    fn reset_data(&mut self) {}
+    fn reset_data(&mut self) {
+        self.reset_optic_surfaces();
+    }
+
+    /// Update the surfaces of nodes with a single interacting surface. E.g. detectors
+    /// # Errors
+    /// This function errors if the function `add_optic_surface` fails
+    fn update_flat_single_surfaces(&mut self) -> OpmResult<()> {
+        let geosurface = GeometricSurface::Flat {
+            s: Plane::new(&Isometry::identity()),
+        };
+        if let Some(optic_surf) = self
+            .ports_mut()
+            .get_optic_surface_mut(&"input_1".to_string())
+        {
+            optic_surf.set_geo_surface(geosurface.clone());
+        } else {
+            let mut optic_surf_in = OpticSurface::default();
+            optic_surf_in.set_geo_surface(geosurface.clone());
+            self.ports_mut()
+                .add_optic_surface(&PortType::Input, "input_1", optic_surf_in)?;
+        }
+        if let Some(optic_surf) = self
+            .ports_mut()
+            .get_optic_surface_mut(&"output_1".to_string())
+        {
+            optic_surf.set_geo_surface(geosurface);
+        } else {
+            let mut optic_surf_out = OpticSurface::default();
+            optic_surf_out.set_geo_surface(geosurface);
+            self.ports_mut()
+                .add_optic_surface(&PortType::Output, "output_1", optic_surf_out)?;
+        }
+        Ok(())
+    }
+
+    /// Resets the data-holding fields of all [`OpticSurface`]s of this node
+    /// This includes the forward and backward rays cache, as well as the hitmaps
+    fn reset_optic_surfaces(&mut self) {
+        for optic_surf in self.ports_mut().ports_mut(&PortType::Input).values_mut() {
+            optic_surf.set_backwards_rays_cache(Vec::<Rays>::new());
+            optic_surf.set_forward_rays_cache(Vec::<Rays>::new());
+            optic_surf.reset_hit_map();
+        }
+        for optic_surf in self.ports_mut().ports_mut(&PortType::Output).values_mut() {
+            optic_surf.set_backwards_rays_cache(Vec::<Rays>::new());
+            optic_surf.set_forward_rays_cache(Vec::<Rays>::new());
+            optic_surf.reset_hit_map();
+        }
+    }
     /// Return the available (input & output) ports of this [`OpticNode`].
     fn ports(&self) -> OpticPorts {
         let mut ports = self.node_attr().ports().clone();
         if self.node_attr().inverted() {
+            ports.set_inverted(true);
+        }
+        ports
+    }
+
+    /// Return the available (input & output) ports of this [`OpticNode`] as mutables.
+    fn ports_mut(&mut self) -> &mut OpticPorts {
+        let inverted = self.node_attr().inverted();
+        let ports = self.node_attr_mut().ports_mut();
+        if inverted {
             ports.set_inverted(true);
         }
         ports
@@ -148,14 +228,11 @@ pub trait OpticNode: Dottable {
     ///updates the lidt of the optical surfaces after deserialization
     fn update_lidt(&mut self) {
         let lidt = *self.node_attr().lidt();
-        let in_ports = self.ports().names(&PortType::Input);
-        let out_ports = self.ports().names(&PortType::Output);
-
-        for port_name in &in_ports {
-            self.get_surface_mut(port_name).set_lidt(lidt);
+        for optic_surf in self.ports_mut().ports_mut(&PortType::Input).values_mut() {
+            optic_surf.set_lidt(lidt);
         }
-        for port_name in &out_ports {
-            self.get_surface_mut(port_name).set_lidt(lidt);
+        for optic_surf in self.ports_mut().ports_mut(&PortType::Output).values_mut() {
+            optic_surf.set_lidt(lidt);
         }
     }
     /// Return a downcasted mutable reference of a [`NodeReference`].
@@ -249,6 +326,7 @@ pub trait OpticNode: Dottable {
             node_attr_mut.set_align_like_node_at_distance(*node_idx, *distance);
         }
         node_attr_mut.update_properties(node_attributes.properties().clone());
+
         node_attr_mut.set_ports(node_attributes.ports().clone());
 
         node_attr_mut.set_uuid(node_attributes.uuid());
@@ -334,7 +412,13 @@ pub trait OpticNode: Dottable {
     }
 
     ///returns a mutable reference to an optical surface
-    fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface;
+    // fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface;
+
+    fn get_optic_surface_mut(&mut self, surf_name: &str) -> Option<&mut OpticSurface> {
+        self.node_attr_mut()
+            .ports_mut()
+            .get_optic_surface_mut(&surf_name.to_owned())
+    }
 }
 impl Debug for dyn OpticNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -397,10 +481,14 @@ pub trait LIDT: OpticNode + Analyzable + Sized {
         let out_ports = self.ports().names(&PortType::Output);
 
         for port_name in &in_ports {
-            self.get_surface_mut(port_name).set_lidt(lidt);
+            if let Some(surf) = self.get_optic_surface_mut(port_name) {
+                surf.set_lidt(lidt);
+            }
         }
         for port_name in &out_ports {
-            self.get_surface_mut(port_name).set_lidt(lidt);
+            if let Some(surf) = self.get_optic_surface_mut(port_name) {
+                surf.set_lidt(lidt);
+            }
         }
         self.node_attr_mut().set_lidt(&lidt);
         self
