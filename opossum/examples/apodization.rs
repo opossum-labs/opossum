@@ -24,14 +24,14 @@ fn main() -> OpmResult<()> {
     let rect_config =
         RectangleConfig::new(millimeter!(15.), millimeter!(15.), millimeter!(0.0, 0.0))?;
     let aperture = Aperture::BinaryRectangle(rect_config);
-    dummy.set_aperture(&PortType::Input, "front", &aperture)?;
+    dummy.set_aperture(&PortType::Input, "input_1", &aperture)?;
     let dummy = dummy.with_decenter(millimeter!(-5.0, 5.0, 0.0))?;
 
     let i_d = scenery.add_node(&dummy)?;
     let i_sd = scenery.add_node(&SpotDiagram::default())?;
 
-    scenery.connect_nodes(i_src, "out1", i_d, "front", millimeter!(50.0))?;
-    scenery.connect_nodes(i_d, "rear", i_sd, "in1", millimeter!(50.0))?;
+    scenery.connect_nodes(i_src, "output_1", i_d, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(i_d, "output_1", i_sd, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

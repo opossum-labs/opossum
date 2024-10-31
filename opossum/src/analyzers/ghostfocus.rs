@@ -16,6 +16,7 @@ use crate::{
     millimeter,
     nodes::{NodeGroup, OpticGraph},
     optic_node::OpticNode,
+    optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{
         proptype::{count_str, format_value_with_prefix},
@@ -25,7 +26,7 @@ use crate::{
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
 };
 
-use super::{raytrace::AnalysisRayTrace, Analyzer, RayTraceConfig};
+use super::{raytrace::AnalysisRayTrace, Analyzer, AnalyzerType, RayTraceConfig};
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
@@ -207,6 +208,37 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
             self.node_type()
         );
         Ok(LightRays::default())
+    }
+
+    /// Effectively the analyze function of detector nodes with a single surface for a ghost-focus analysis
+    /// Helper function to reduce code-doubling
+    /// # Attributes
+    /// - `incoming_data`: the incoming data for this anaylsis in form of a [`LightResult`]
+    /// - `config`: the [`RayTraceConfig`] of this analysis
+    /// # Errors
+    /// This function errors if `pass_through_detector_surface` fails    
+    fn analyze_single_surface_detector(
+        &mut self,
+        incoming_data: LightRays,
+        config: &GhostFocusConfig,
+    ) -> OpmResult<LightRays> {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        let Some(bouncing_rays) = incoming_data.get(in_port) else {
+            let mut out_light_rays = LightRays::default();
+            out_light_rays.insert(out_port.into(), Vec::<Rays>::new());
+            return Ok(out_light_rays);
+        };
+        let mut rays = bouncing_rays.clone();
+        self.pass_through_detector_surface(
+            in_port,
+            &mut rays,
+            &AnalyzerType::GhostFocus(config.clone()),
+        )?;
+
+        let mut out_light_rays = LightRays::default();
+        out_light_rays.insert(out_port.to_string(), rays);
+        Ok(out_light_rays)
     }
 }
 

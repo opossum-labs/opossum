@@ -6,9 +6,10 @@ use super::GeoSurface;
 use crate::{meter, ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use num::Zero;
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 /// An infinitely large flat surface with its normal collinear to the optical axis.
 pub struct Plane {
     isometry: Isometry,

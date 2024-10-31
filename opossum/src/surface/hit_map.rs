@@ -137,10 +137,10 @@ impl RaysHitMap {
                 let poly_area = calc_closed_poly_area(&v_neighbours)?;
                 fluence_scatter[i] = energy[i] / poly_area;
                 if fluence_scatter[i] > max_fluence_jcm2 {
-                    if max_fluence_val < fluence_scatter[i] {
-                        max_fluence_val = fluence_scatter[i];
-                    }
                     show_hitmap = true;
+                }
+                if max_fluence_val < fluence_scatter[i] {
+                    max_fluence_val = fluence_scatter[i];
                 }
             } else {
                 warn!(

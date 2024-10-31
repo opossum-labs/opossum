@@ -32,9 +32,9 @@ fn main() -> OpmResult<()> {
         opossum::nodes::Metertype::IdealEnergyMeter,
     ))?;
 
-    scenery.connect_nodes(i_s, "out1", i_bs, "out1_trans1_refl2", Length::zero())?;
-    scenery.connect_nodes(i_bs, "input1", i_d1, "in1", Length::zero())?;
-    scenery.connect_nodes(i_bs, "input2", i_d2, "in1", Length::zero())?;
+    scenery.connect_nodes(i_s, "output_1", i_bs, "out1_trans1_refl2", Length::zero())?;
+    scenery.connect_nodes(i_bs, "input1", i_d1, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_bs, "input2", i_d2, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::Energy);

@@ -13,10 +13,10 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     optic_ref::OpticRef,
+    optic_surface::OpticSurface,
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
-    surface::OpticalSurface,
     utils::EnumProxy,
     SceneryResources,
 };
@@ -49,7 +49,7 @@ use uuid::Uuid;
 ///   let mut scenery = NodeGroup::new("OpticScenery demo");
 ///   let node1 = scenery.add_node(&Dummy::new("dummy1"))?;
 ///   let node2 = scenery.add_node(&Dummy::new("dummy2"))?;
-///   scenery.connect_nodes(node1, "rear", node2, "front", millimeter!(100.0))?;
+///   scenery.connect_nodes(node1, "output_1", node2, "input_1", millimeter!(100.0))?;
 ///   Ok(())
 /// }
 ///
@@ -525,8 +525,8 @@ impl OpticNode for NodeGroup {
         }
         self.accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
     }
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
+    fn get_optic_surface_mut(&mut self, _surf_name: &str) -> Option<&mut OpticSurface> {
+        None
     }
 }
 
@@ -604,39 +604,39 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(&Dummy::default()).unwrap();
         let sn2_i = og.add_node(&Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
         assert!(og.ports().names(&PortType::Input).is_empty());
         assert!(og.ports().names(&PortType::Output).is_empty());
-        og.map_input_port(sn1_i, "front", "input").unwrap();
+        og.map_input_port(sn1_i, "input_1", "input_1").unwrap();
         assert!(og
             .ports()
             .names(&PortType::Input)
-            .contains(&("input".to_string())));
-        og.map_output_port(sn2_i, "rear", "output").unwrap();
+            .contains(&("input_1".to_string())));
+        og.map_output_port(sn2_i, "output_1", "output_1").unwrap();
         assert!(og
             .ports()
             .names(&PortType::Output)
-            .contains(&("output".to_string())));
+            .contains(&("output_1".to_string())));
     }
     #[test]
     fn ports_inverted() {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(&Dummy::default()).unwrap();
         let sn2_i = og.add_node(&Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
-        og.map_input_port(sn1_i, "front", "input").unwrap();
-        og.map_output_port(sn2_i, "rear", "output").unwrap();
+        og.map_input_port(sn1_i, "input_1", "input_1").unwrap();
+        og.map_output_port(sn2_i, "output_1", "output_1").unwrap();
         og.set_inverted(true).unwrap();
         assert!(og
             .ports()
             .names(&PortType::Output)
-            .contains(&("input".to_string())));
+            .contains(&("input_1".to_string())));
         assert!(og
             .ports()
             .names(&PortType::Input)
-            .contains(&("output".to_string())));
+            .contains(&("output_1".to_string())));
     }
     #[test]
     fn report() {
@@ -658,7 +658,7 @@ mod test {
         let node1 = scenery.add_node(&Dummy::default()).unwrap();
         let node2 = scenery.add_node(&Dummy::default()).unwrap();
         scenery
-            .connect_nodes(node1, "rear", node2, "front", Length::zero())
+            .connect_nodes(node1, "output_1", node2, "input_1", Length::zero())
             .unwrap();
         AnalysisEnergy::analyze(&mut scenery, LightResult::default()).unwrap();
     }
@@ -684,7 +684,7 @@ mod test {
         em.set_isometry(Isometry::identity());
         let i_e = scenery.add_node(&em).unwrap();
         scenery
-            .connect_nodes(i_s, "out1", i_e, "in1", Length::zero())
+            .connect_nodes(i_s, "output_1", i_e, "input_1", Length::zero())
             .unwrap();
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();

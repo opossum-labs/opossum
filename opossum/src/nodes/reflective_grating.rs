@@ -14,12 +14,10 @@ use crate::{
     lightdata::LightData,
     num_per_mm,
     optic_node::{Alignable, OpticNode, LIDT},
-    optic_ports::{OpticPorts, PortType},
+    optic_ports::PortType,
     properties::Proptype,
     radian,
     refractive_index::refr_index_vaccuum,
-    surface::{OpticalSurface, Plane},
-    utils::geom_transformation::Isometry,
 };
 use approx::relative_eq;
 use nalgebra::Vector3;
@@ -49,7 +47,6 @@ pub type LinearDensity = uom::si::f64::LinearNumberDensity;
 ///   - `line density`
 pub struct ReflectiveGrating {
     node_attr: NodeAttr,
-    surface: OpticalSurface,
 }
 impl Default for ReflectiveGrating {
     /// Create a reflective grating with a specified line density.
@@ -71,14 +68,9 @@ impl Default for ReflectiveGrating {
                 (-1).into(),
             )
             .unwrap();
-        let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "input").unwrap();
-        ports.add(&PortType::Output, "diffracted").unwrap();
-        node_attr.set_ports(ports);
-        Self {
-            node_attr,
-            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-        }
+        let mut g = Self { node_attr };
+        g.update_surfaces().unwrap();
+        g
     }
 }
 
@@ -171,15 +163,12 @@ impl Analyzable for ReflectiveGrating {}
 impl AnalysisGhostFocus for ReflectiveGrating {}
 impl AnalysisEnergy for ReflectiveGrating {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("diffracted", "input")
-        } else {
-            ("input", "diffracted")
-        };
-        let Some(data) = incoming_data.get(inport) else {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
-        Ok(LightResult::from([(outport.into(), data.clone())]))
+        Ok(LightResult::from([(out_port.into(), data.clone())]))
     }
 }
 impl AnalysisRayTrace for ReflectiveGrating {
@@ -188,12 +177,9 @@ impl AnalysisRayTrace for ReflectiveGrating {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("diffracted", "input")
-        } else {
-            ("input", "diffracted")
-        };
-        let Some(data) = incoming_data.get(inport) else {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
@@ -210,8 +196,13 @@ impl AnalysisRayTrace for ReflectiveGrating {
                 return Err(OpossumError::Analysis("cannot read line density".into()));
             };
 
-            let diffracted = if let Some(iso) = self.effective_iso() {
-                let surf = self.get_surface_mut(inport);
+            let Some(iso) = self.effective_iso() else {
+                return Err(OpossumError::Analysis(
+                    "no location for surface defined. Aborting".into(),
+                ));
+            };
+
+            if let Some(surf) = self.get_optic_surface_mut(in_port) {
                 surf.set_isometry(&iso);
                 let grating_vector =
                     2. * PI * line_density.value * iso.transform_vector_f64(&Vector3::x());
@@ -222,21 +213,19 @@ impl AnalysisRayTrace for ReflectiveGrating {
                     &diffraction_order,
                 )?;
 
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
+                if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
                     diffracted_rays.apodize(aperture, &iso)?;
                     diffracted_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    diffracted_rays
                 } else {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));
                 }
+
+                let light_result =
+                    LightResult::from([(out_port.into(), LightData::Geometric(diffracted_rays))]);
+                Ok(light_result)
             } else {
-                return Err(OpossumError::Analysis(
-                    "no location for surface defined. Aborting".into(),
-                ));
-            };
-            let light_result =
-                LightResult::from([(outport.into(), LightData::Geometric(diffracted))]);
-            Ok(light_result)
+                Err(OpossumError::Analysis("no surface found. Aborting".into()))
+            }
         } else {
             Err(OpossumError::Analysis(
                 "expected ray data at input port".into(),
@@ -246,14 +235,14 @@ impl AnalysisRayTrace for ReflectiveGrating {
 }
 
 impl OpticNode for ReflectiveGrating {
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        self.update_flat_single_surfaces()
+    }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
-    }
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        &mut self.surface
     }
 }
 
@@ -315,12 +304,12 @@ mod test {
     #[test]
     fn ports() {
         let node = ReflectiveGrating::default();
-        assert_eq!(node.ports().names(&PortType::Input), vec!["input"]);
-        assert_eq!(node.ports().names(&PortType::Output), vec!["diffracted"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
     fn set_aperture() {
-        test_set_aperture::<ReflectiveGrating>("input", "diffracted");
+        test_set_aperture::<ReflectiveGrating>("input_1", "output_1");
     }
     #[test]
     fn inverted() {
@@ -337,7 +326,7 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("diffracted".into(), input_light.clone());
+        input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
     }
@@ -348,22 +337,22 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("input".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
-        assert!(output.contains_key("diffracted"));
+        assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("diffracted");
+        let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
     #[test]
     fn analyze_geometric_wrong_data_type() {
-        test_analyze_wrong_data_type::<ReflectiveGrating>("input");
+        test_analyze_wrong_data_type::<ReflectiveGrating>("input_1");
     }
     #[test]
     fn analyze_geometric_no_isometery() {
-        test_analyze_geometric_no_isometry::<ReflectiveGrating>("input");
+        test_analyze_geometric_no_isometry::<ReflectiveGrating>("input_1");
     }
     #[test]
     fn analyze_geometric_littrow_ok() {
@@ -375,10 +364,10 @@ mod test {
         let mut rays = Rays::default();
         rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
         let input_light = LightData::Geometric(rays);
-        input.insert("input".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         let output =
             AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
-        if let Some(LightData::Geometric(rays)) = output.get("diffracted") {
+        if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
             assert_eq!(ray.position(), millimeter!(0.0, 0.0, 0.0));
@@ -402,10 +391,10 @@ mod test {
         let mut rays = Rays::default();
         rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
         let input_light = LightData::Geometric(rays);
-        input.insert("input".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         let output =
             AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
-        if let Some(LightData::Geometric(rays)) = output.get("diffracted") {
+        if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
             assert_eq!(ray.position(), millimeter!(0.0, 0.0, 0.0));

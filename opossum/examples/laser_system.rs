@@ -32,20 +32,20 @@ fn main() -> OpmResult<()> {
         "Energy meter 1",
         opossum::nodes::Metertype::IdealEnergyMeter,
     ))?;
-    let i_sd1 = scenery.add_node(&SpotDiagram::new("Output"))?;
+    let i_sd1 = scenery.add_node(&SpotDiagram::new("output_1"))?;
 
-    scenery.connect_nodes(i_src, "out1", i_l1, "front", Length::zero())?;
-    scenery.connect_nodes(i_l1, "rear", i_l2, "front", millimeter!(300.0))?;
-    scenery.connect_nodes(i_l2, "rear", i_bs, "input1", Length::zero())?;
-    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_e1, "in1", Length::zero())?;
-    scenery.connect_nodes(i_e1, "out1", i_sd1, "in1", Length::zero())?;
+    scenery.connect_nodes(i_src, "output_1", i_l1, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_l1, "output_1", i_l2, "input_1", millimeter!(300.0))?;
+    scenery.connect_nodes(i_l2, "output_1", i_bs, "input1", Length::zero())?;
+    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_e1, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_e1, "output_1", i_sd1, "input_1", Length::zero())?;
 
     // Diagnostic beam line
     let i_f = scenery.add_node(&IdealFilter::new(
         "OD1 filter",
         &opossum::nodes::FilterType::Constant(0.1),
     )?)?;
-    scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "front", Length::zero())?;
+    scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "input_1", Length::zero())?;
 
     // Cam Box
     let mut cam_box = NodeGroup::new("CamBox");
@@ -66,23 +66,23 @@ fn main() -> OpmResult<()> {
         i_cb_bs,
         "out1_trans1_refl2",
         i_cb_l,
-        "front",
+        "input_1",
         Length::zero(),
     )?;
-    cam_box.connect_nodes(i_cb_l, "rear", i_cb_sd2, "in1", millimeter!(100.0))?;
+    cam_box.connect_nodes(i_cb_l, "output_1", i_cb_sd2, "input_1", millimeter!(100.0))?;
 
     cam_box.connect_nodes(
         i_cb_bs,
         "out2_trans2_refl1",
         i_cb_sd1,
-        "in1",
+        "input_1",
         Length::zero(),
     )?;
-    cam_box.connect_nodes(i_cb_sd1, "out1", i_cb_e, "in1", Length::zero())?;
+    cam_box.connect_nodes(i_cb_sd1, "output_1", i_cb_e, "input_1", Length::zero())?;
 
-    cam_box.map_input_port(i_cb_bs, "input1", "input")?;
+    cam_box.map_input_port(i_cb_bs, "input1", "input_1")?;
     let i_cam_box = scenery.add_node(&cam_box)?;
-    scenery.connect_nodes(i_f, "rear", i_cam_box, "input", Length::zero())?;
+    scenery.connect_nodes(i_f, "output_1", i_cam_box, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

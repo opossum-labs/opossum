@@ -208,8 +208,8 @@ impl OpticGraph {
         external_name: &str,
     ) -> OpmResult<()> {
         let name_type = match port_type {
-            PortType::Input => "input",
-            PortType::Output => "output",
+            PortType::Input => "input_1",
+            PortType::Output => "output_1",
         };
         let port_map = match port_type {
             PortType::Input => &self.input_port_map,
@@ -602,6 +602,11 @@ impl OpticGraph {
                 group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
             }
             if let LightData::Geometric(rays) = incoming_edge.1 {
+                if rays.nr_of_rays(false) == 0 {
+                    return Err(OpossumError::Analysis(
+                        "no rays in this ray bundle. cannot position nodes".into(),
+                    ));
+                }
                 let mut ray = rays.into_iter().next().unwrap().to_owned();
                 ray.propagate(distance_from_predecessor)?;
                 let node_iso = ray.to_isometry(up_direction);
@@ -957,7 +962,7 @@ mod test {
         let n1 = graph.add_node(Dummy::default()).unwrap();
         let n2 = graph.add_node(Dummy::default()).unwrap();
         assert!(graph
-            .connect_nodes(n1, "rear", n2, "front", Length::zero())
+            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
             .is_ok());
         assert_eq!(graph.g.edge_count(), 1);
     }
@@ -968,11 +973,11 @@ mod test {
         let sn2_i = og.add_node(Dummy::default()).unwrap();
         // wrong port names
         assert!(og
-            .connect_nodes(sn1_i, "wrong", sn2_i, "front", Length::zero())
+            .connect_nodes(sn1_i, "wrong", sn2_i, "input_1", Length::zero())
             .is_err());
         assert_eq!(og.g.edge_count(), 0);
         assert!(og
-            .connect_nodes(sn1_i, "rear", sn2_i, "wrong", Length::zero())
+            .connect_nodes(sn1_i, "output_1", sn2_i, "wrong", Length::zero())
             .is_err());
         assert_eq!(og.g.edge_count(), 0);
     }
@@ -982,10 +987,10 @@ mod test {
         let n1 = graph.add_node(Dummy::default()).unwrap();
         let n2 = graph.add_node(Dummy::default()).unwrap();
         assert!(graph
-            .connect_nodes(n1, "rear", 5.into(), "front", Length::zero())
+            .connect_nodes(n1, "output_1", 5.into(), "input_1", Length::zero())
             .is_err());
         assert!(graph
-            .connect_nodes(5.into(), "rear", n2, "front", Length::zero())
+            .connect_nodes(5.into(), "output_1", n2, "input_1", Length::zero())
             .is_err());
     }
     #[test]
@@ -994,13 +999,19 @@ mod test {
         let n1 = graph.add_node(Dummy::default()).unwrap();
         let n2 = graph.add_node(Dummy::default()).unwrap();
         assert!(graph
-            .connect_nodes(n1, "rear", n2, "front", millimeter!(f64::NAN))
+            .connect_nodes(n1, "output_1", n2, "input_1", millimeter!(f64::NAN))
             .is_err());
         assert!(graph
-            .connect_nodes(n1, "rear", n2, "front", millimeter!(f64::INFINITY))
+            .connect_nodes(n1, "output_1", n2, "input_1", millimeter!(f64::INFINITY))
             .is_err());
         assert!(graph
-            .connect_nodes(n1, "rear", n2, "front", millimeter!(f64::NEG_INFINITY))
+            .connect_nodes(
+                n1,
+                "output_1",
+                n2,
+                "input_1",
+                millimeter!(f64::NEG_INFINITY)
+            )
             .is_err());
     }
     #[test]
@@ -1010,13 +1021,13 @@ mod test {
         let n2 = graph.add_node(Dummy::default()).unwrap();
         let n3 = graph.add_node(Dummy::default()).unwrap();
         assert!(graph
-            .connect_nodes(n1, "rear", n2, "front", Length::zero())
+            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
             .is_ok());
         assert!(graph
-            .connect_nodes(n3, "rear", n2, "front", Length::zero())
+            .connect_nodes(n3, "output_1", n2, "input_1", Length::zero())
             .is_err());
         assert!(graph
-            .connect_nodes(n1, "rear", n3, "front", Length::zero())
+            .connect_nodes(n1, "output_1", n3, "input_1", Length::zero())
             .is_err());
     }
     #[test]
@@ -1025,10 +1036,10 @@ mod test {
         let n1 = graph.add_node(Dummy::default()).unwrap();
         let n2 = graph.add_node(Dummy::default()).unwrap();
         assert!(graph
-            .connect_nodes(n1, "rear", n2, "front", Length::zero())
+            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
             .is_ok());
         assert!(graph
-            .connect_nodes(n2, "rear", n1, "front", Length::zero())
+            .connect_nodes(n2, "output_1", n1, "input_1", Length::zero())
             .is_err());
         assert_eq!(graph.g.edge_count(), 1);
     }
@@ -1039,7 +1050,7 @@ mod test {
         let sn2_i = og.add_node(Dummy::default()).unwrap();
         og.set_is_inverted(true);
         assert!(og
-            .connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+            .connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .is_err());
     }
     #[test]
@@ -1048,13 +1059,13 @@ mod test {
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(Dummy::default()).unwrap();
 
-        og.map_port(sn2_i, &PortType::Input, "front", "input")
+        og.map_port(sn2_i, &PortType::Input, "input_1", "input_1")
             .unwrap();
-        og.map_port(sn1_i, &PortType::Output, "rear", "output")
+        og.map_port(sn1_i, &PortType::Output, "output_1", "output_1")
             .unwrap();
         assert_eq!(og.input_port_map.len(), 1);
         assert_eq!(og.output_port_map.len(), 1);
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
         // delete no longer valid port mapping
         assert_eq!(og.input_port_map.len(), 0);
@@ -1065,31 +1076,31 @@ mod test {
         let mut og = OpticGraph::default();
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
         // wrong port name
         assert!(og
-            .map_port(sn1_i, &PortType::Input, "wrong", "input")
+            .map_port(sn1_i, &PortType::Input, "wrong", "input_1")
             .is_err());
         assert_eq!(og.input_port_map.len(), 0);
         // wrong node index
         assert!(og
-            .map_port(5.into(), &PortType::Input, "front", "input")
+            .map_port(5.into(), &PortType::Input, "input_1", "input_1")
             .is_err());
         assert_eq!(og.input_port_map.len(), 0);
         // map output port
         assert!(og
-            .map_port(sn2_i, &PortType::Input, "rear", "input")
+            .map_port(sn2_i, &PortType::Input, "output_1", "input_1")
             .is_err());
         assert_eq!(og.input_port_map.len(), 0);
         // map internal node
         assert!(og
-            .map_port(sn2_i, &PortType::Input, "front", "input")
+            .map_port(sn2_i, &PortType::Input, "input_1", "input_1")
             .is_err());
         assert_eq!(og.input_port_map.len(), 0);
         // correct usage
         assert!(og
-            .map_port(sn1_i, &PortType::Input, "front", "input")
+            .map_port(sn1_i, &PortType::Input, "input_1", "input_1")
             .is_ok());
         assert_eq!(og.input_port_map.len(), 1);
     }
@@ -1098,7 +1109,7 @@ mod test {
         let mut og = OpticGraph::default();
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(BeamSplitter::default()).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "input1", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input1", Length::zero())
             .unwrap();
 
         // node port already internally connected
@@ -1108,7 +1119,7 @@ mod test {
 
         // correct usage
         assert!(og
-            .map_port(sn1_i, &PortType::Input, "front", "input")
+            .map_port(sn1_i, &PortType::Input, "input_1", "input_1")
             .is_ok());
         assert!(og
             .map_port(sn2_i, &PortType::Input, "input2", "bs_input")
@@ -1120,32 +1131,32 @@ mod test {
         let mut og = OpticGraph::default();
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
 
         // wrong port name
         assert!(og
-            .map_port(sn2_i, &PortType::Output, "wrong", "output")
+            .map_port(sn2_i, &PortType::Output, "wrong", "output_1")
             .is_err());
         assert_eq!(og.output_port_map.len(), 0);
         // wrong node index
         assert!(og
-            .map_port(5.into(), &PortType::Output, "rear", "output")
+            .map_port(5.into(), &PortType::Output, "output_1", "output_1")
             .is_err());
         assert_eq!(og.output_port_map.len(), 0);
         // map input port
         assert!(og
-            .map_port(sn1_i, &PortType::Output, "front", "output")
+            .map_port(sn1_i, &PortType::Output, "input_1", "output_1")
             .is_err());
         assert_eq!(og.output_port_map.len(), 0);
         // map internal node
         assert!(og
-            .map_port(sn1_i, &PortType::Output, "rear", "output")
+            .map_port(sn1_i, &PortType::Output, "output_1", "output_1")
             .is_err());
         assert_eq!(og.output_port_map.len(), 0);
         // correct usage
         assert!(og
-            .map_port(sn2_i, &PortType::Output, "rear", "output")
+            .map_port(sn2_i, &PortType::Output, "output_1", "output_1")
             .is_ok());
         assert_eq!(og.output_port_map.len(), 1);
     }
@@ -1154,7 +1165,7 @@ mod test {
         let mut og = OpticGraph::default();
         let sn1_i = og.add_node(BeamSplitter::default()).unwrap();
         let sn2_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "front", Length::zero())
+        og.connect_nodes(sn1_i, "out1_trans1_refl2", sn2_i, "input_1", Length::zero())
             .unwrap();
 
         // node port already internally connected
@@ -1167,7 +1178,7 @@ mod test {
             .map_port(sn1_i, &PortType::Output, "out2_trans2_refl1", "bs_output")
             .is_ok());
         assert!(og
-            .map_port(sn2_i, &PortType::Output, "rear", "output")
+            .map_port(sn2_i, &PortType::Output, "output_1", "output_1")
             .is_ok());
         assert_eq!(og.output_port_map.len(), 2);
     }
@@ -1178,9 +1189,9 @@ mod test {
         let sn2_i = og.add_node(Dummy::default()).unwrap();
         let sub_node3 = BeamSplitter::new("test", &SplittingConfig::Ratio(0.5)).unwrap();
         let sn3_i = og.add_node(sub_node3).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "front", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
-        og.connect_nodes(sn2_i, "rear", sn3_i, "input1", Length::zero())
+        og.connect_nodes(sn2_i, "output_1", sn3_i, "input1", Length::zero())
             .unwrap();
         assert_eq!(
             og.external_nodes(&PortType::Input),
@@ -1194,9 +1205,9 @@ mod test {
         let sub_node1 = BeamSplitter::new("test", &SplittingConfig::Ratio(0.5)).unwrap();
         let sn2_i = og.add_node(sub_node1).unwrap();
         let sn3_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "rear", sn2_i, "input1", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input1", Length::zero())
             .unwrap();
-        og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "front", Length::zero())
+        og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "input_1", Length::zero())
             .unwrap();
         assert_eq!(
             og.external_nodes(&PortType::Input),
@@ -1227,14 +1238,14 @@ mod test {
         let n3 = graph.add_node(Dummy::default()).unwrap();
         let n4 = graph.add_node(Dummy::default()).unwrap();
         graph
-            .connect_nodes(n1, "rear", n2, "front", Length::zero())
+            .connect_nodes(n1, "output_1", n2, "input_1", Length::zero())
             .unwrap();
         graph
-            .connect_nodes(n3, "rear", n4, "front", Length::zero())
+            .connect_nodes(n3, "output_1", n4, "input_1", Length::zero())
             .unwrap();
         assert_eq!(graph.is_single_tree(), false);
         graph
-            .connect_nodes(n2, "rear", n3, "front", Length::zero())
+            .connect_nodes(n2, "output_1", n3, "input_1", Length::zero())
             .unwrap();
         assert_eq!(graph.is_single_tree(), true);
     }
@@ -1254,13 +1265,13 @@ mod test {
         let d3 = graph.add_node(dummy.clone()).unwrap();
         let d4 = graph.add_node(dummy).unwrap();
         graph
-            .connect_nodes(d1, "rear", d2, "front", Length::zero())
+            .connect_nodes(d1, "output_1", d2, "input_1", Length::zero())
             .unwrap();
         graph
-            .connect_nodes(d3, "rear", d4, "front", Length::zero())
+            .connect_nodes(d3, "output_1", d4, "input_1", Length::zero())
             .unwrap();
         graph
-            .map_port(d1, &PortType::Input, "front", "input")
+            .map_port(d1, &PortType::Input, "input_1", "input_1")
             .unwrap();
         let input = LightResult::default();
         testing_logger::setup();
@@ -1277,10 +1288,10 @@ mod test {
         let d1 = graph.add_node(dummy).unwrap();
         let _ = graph.add_node(Dummy::new("stale node")).unwrap();
         graph
-            .map_port(d1, &PortType::Input, "front", "input")
+            .map_port(d1, &PortType::Input, "input_1", "input_1")
             .unwrap();
         let mut input = LightResult::default();
-        input.insert("input".into(), LightData::Fourier);
+        input.insert("input_1".into(), LightData::Fourier);
         testing_logger::setup();
         assert!(graph.analyze_energy(&input).is_ok());
         check_warnings(vec![
@@ -1295,13 +1306,13 @@ mod test {
             .add_node(BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap())
             .unwrap();
         graph
-            .map_port(g1_n2, &PortType::Output, "out1_trans1_refl2", "output")
+            .map_port(g1_n2, &PortType::Output, "out1_trans1_refl2", "output_1")
             .unwrap();
         graph
-            .map_port(g1_n1, &PortType::Input, "front", "input")
+            .map_port(g1_n1, &PortType::Input, "input_1", "input_1")
             .unwrap();
         graph
-            .connect_nodes(g1_n1, "rear", g1_n2, "input1", Length::zero())
+            .connect_nodes(g1_n1, "output_1", g1_n2, "input1", Length::zero())
             .unwrap();
         graph
     }
@@ -1312,12 +1323,12 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("input".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         let output = graph.analyze_energy(&input);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("output"));
-        let output = output.get("output").unwrap().clone();
+        assert!(output.contains_key("output_1"));
+        let output = output.get("output_1").unwrap().clone();
         let energy = if let LightData::Energy(data) = output {
             data.spectrum.total_energy()
         } else {
@@ -1345,12 +1356,12 @@ mod test {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
         graph.set_is_inverted(true);
-        input.insert("output".into(), input_light);
+        input.insert("output_1".into(), input_light);
         let output = graph.analyze_energy(&input);
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert!(output.contains_key("input"));
-        let output = output.get("input").unwrap().clone();
+        assert!(output.contains_key("input_1"));
+        let output = output.get("input_1").unwrap().clone();
         let energy = if let LightData::Energy(data) = output {
             data.spectrum.total_energy()
         } else {
@@ -1364,17 +1375,17 @@ mod test {
         let g1_n1 = graph.add_node(Source::default()).unwrap();
         let g1_n2 = graph.add_node(Dummy::default()).unwrap();
         graph
-            .map_port(g1_n2, &PortType::Output, "rear", "output")
+            .map_port(g1_n2, &PortType::Output, "output_1", "output_1")
             .unwrap();
         graph
-            .connect_nodes(g1_n1, "out1", g1_n2, "front", Length::zero())
+            .connect_nodes(g1_n1, "output_1", g1_n2, "input_1", Length::zero())
             .unwrap();
         graph.set_is_inverted(true);
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("output".into(), input_light);
+        input.insert("output_1".into(), input_light);
         let output = graph.analyze_energy(&input);
         assert!(output.is_err());
     }
@@ -1384,10 +1395,10 @@ mod test {
         let i_d1 = graph.add_node(Dummy::default()).unwrap();
         let i_d2 = graph.add_node(Dummy::default()).unwrap();
         graph
-            .map_port(i_d1, &PortType::Input, "front", "input1")
+            .map_port(i_d1, &PortType::Input, "input_1", "input1")
             .unwrap();
         graph
-            .map_port(i_d2, &PortType::Input, "front", "input2")
+            .map_port(i_d2, &PortType::Input, "input_1", "input2")
             .unwrap();
         assert_eq!(
             graph.port_map(&PortType::Input).port_names(),

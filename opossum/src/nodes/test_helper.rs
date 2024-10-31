@@ -72,7 +72,7 @@ pub mod test_helper {
         let config = CircleConfig::new(millimeter!(1.0), millimeter!(0.0, 0.0)).unwrap();
         node.set_aperture(
             &PortType::Input,
-            "in1",
+            "input_1",
             &crate::aperture::Aperture::BinaryCircle(config),
         )
         .unwrap();
@@ -84,7 +84,7 @@ pub mod test_helper {
         )
         .unwrap();
         let input_light = LightData::Geometric(rays);
-        input.insert("in1".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
         let msg=format!("Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.", 
             node.node_attr().name(),

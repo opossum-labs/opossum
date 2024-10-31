@@ -5,13 +5,16 @@ mod beam_splitter;
 mod cylindric_lens;
 mod dummy;
 mod energy_meter;
+pub mod fluence_detector;
 mod ideal_filter;
 mod lens;
 mod node_attr;
 mod node_group;
 mod parabolic_mirror;
 mod paraxial_surface;
+pub mod ray_propagation_visualizer;
 mod reference;
+pub mod reflective_grating;
 mod source;
 mod source_helper;
 mod spectrometer;
@@ -20,10 +23,6 @@ mod test_helper;
 mod thin_mirror;
 mod wavefront;
 mod wedge;
-
-pub mod fluence_detector;
-pub mod ray_propagation_visualizer;
-pub mod reflective_grating;
 pub use beam_splitter::BeamSplitter;
 pub use cylindric_lens::CylindricLens;
 pub use dummy::Dummy;
@@ -38,15 +37,16 @@ pub use paraxial_surface::ParaxialSurface;
 pub use ray_propagation_visualizer::RayPropagationVisualizer;
 pub use reference::NodeReference;
 pub use reflective_grating::ReflectiveGrating;
+pub use spectrometer::{Spectrometer, SpectrometerType};
+pub use thin_mirror::ThinMirror;
+pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
+
 pub use source::Source;
 pub use source_helper::{
     collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
 };
-pub use spectrometer::{Spectrometer, SpectrometerType};
 pub use spot_diagram::SpotDiagram;
 use std::{cell::RefCell, rc::Rc};
-pub use thin_mirror::ThinMirror;
-pub use wavefront::{WaveFront, WaveFrontData, WaveFrontErrorMap};
 pub use wedge::Wedge;
 
 use crate::{

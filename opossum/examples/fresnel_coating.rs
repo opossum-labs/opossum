@@ -36,17 +36,17 @@ fn main() -> OpmResult<()> {
         millimeter!(1.0),
         &RefrIndexConst::new(1.5)?,
     )?;
-    lens1.set_coating(&PortType::Input, "front", &CoatingType::Fresnel)?;
+    lens1.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
     let l1 = scenery.add_node(&lens1)?;
     let fd2 = scenery.add_node(&FluenceDetector::new("after lens"))?;
     let ed = scenery.add_node(&EnergyMeter::default())?;
     let det = scenery.add_node(&RayPropagationVisualizer::default())?;
 
-    scenery.connect_nodes(src, "out1", fd1, "in1", millimeter!(10.0))?;
-    scenery.connect_nodes(fd1, "out1", l1, "front", millimeter!(1.0))?;
-    scenery.connect_nodes(l1, "rear", fd2, "in1", millimeter!(1.0))?;
-    scenery.connect_nodes(fd2, "out1", ed, "in1", millimeter!(1.0))?;
-    scenery.connect_nodes(ed, "out1", det, "in1", millimeter!(10.0))?;
+    scenery.connect_nodes(src, "output_1", fd1, "input_1", millimeter!(10.0))?;
+    scenery.connect_nodes(fd1, "output_1", l1, "input_1", millimeter!(1.0))?;
+    scenery.connect_nodes(l1, "output_1", fd2, "input_1", millimeter!(1.0))?;
+    scenery.connect_nodes(fd2, "output_1", ed, "input_1", millimeter!(1.0))?;
+    scenery.connect_nodes(ed, "output_1", det, "input_1", millimeter!(10.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

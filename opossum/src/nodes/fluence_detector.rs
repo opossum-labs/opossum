@@ -10,20 +10,18 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, AnalyzerType, GhostFocusConfig, RayTraceConfig,
+        Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     optic_node::{Alignable, OpticNode, LIDT},
-    optic_ports::{OpticPorts, PortType},
+    optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
-    surface::{OpticalSurface, Plane},
-    utils::geom_transformation::Isometry,
 };
 
 ///alias for uom `RadiantExposure`, as this name is rather uncommon to use for laser scientists
@@ -49,22 +47,17 @@ pub struct FluenceDetector {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
     apodization_warning: bool,
-    surface: OpticalSurface,
 }
 impl Default for FluenceDetector {
     /// creates a fluence detector.
     fn default() -> Self {
-        let mut node_attr = NodeAttr::new("fluence detector");
-        let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "in1").unwrap();
-        ports.add(&PortType::Output, "out1").unwrap();
-        node_attr.set_ports(ports);
-        Self {
+        let mut fld = Self {
             light_data: None,
-            node_attr,
+            node_attr: NodeAttr::new("fluence detector"),
             apodization_warning: false,
-            surface: OpticalSurface::new(Box::new(Plane::new(&Isometry::identity()))),
-        }
+        };
+        fld.update_surfaces().unwrap();
+        fld
     }
 }
 impl FluenceDetector {
@@ -80,8 +73,11 @@ impl FluenceDetector {
 }
 
 impl OpticNode for FluenceDetector {
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        &mut self.surface
+    fn set_apodization_warning(&mut self, apodized: bool) {
+        self.apodization_warning = apodized;
+    }
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        self.update_flat_single_surfaces()
     }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
@@ -142,7 +138,7 @@ impl OpticNode for FluenceDetector {
     }
     fn reset_data(&mut self) {
         self.light_data = None;
-        self.surface.reset_hit_map();
+        self.reset_optic_surfaces();
     }
 }
 
@@ -158,40 +154,22 @@ impl AnalysisGhostFocus for FluenceDetector {
     fn analyze(
         &mut self,
         incoming_data: LightRays,
-        _config: &GhostFocusConfig,
+        config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let in_port = &self.ports().names(&PortType::Input)[0];
-        let out_port = &self.ports().names(&PortType::Output)[0];
-        let Some(bouncing_rays) = incoming_data.get(in_port) else {
-            let mut out_light_rays = LightRays::default();
-            out_light_rays.insert(out_port.into(), Vec::<Rays>::new());
-            return Ok(out_light_rays);
-        };
-        let mut rays = bouncing_rays.clone();
-        self.pass_through_inert_surface(
-            &mut rays,
-            &AnalyzerType::GhostFocus(GhostFocusConfig::default()),
-        )?;
-
-        let mut out_light_rays = LightRays::default();
-        out_light_rays.insert(out_port.to_string(), rays.clone());
-        Ok(out_light_rays)
+        self.analyze_single_surface_detector(incoming_data, config)
     }
 }
 impl AnalysisEnergy for FluenceDetector {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
-        let Some(data) = incoming_data.get(inport) else {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
         // self.light_data = Some(data.clone());
-        Ok(LightResult::from([(outport.into(), data.clone())]))
+        Ok(LightResult::from([(out_port.into(), data.clone())]))
     }
 }
 impl AnalysisRayTrace for FluenceDetector {
@@ -200,48 +178,7 @@ impl AnalysisRayTrace for FluenceDetector {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("out1", "in1")
-        } else {
-            ("in1", "out1")
-        };
-        let Some(data) = incoming_data.get(inport) else {
-            return Ok(LightResult::default());
-        };
-        if let LightData::Geometric(rays) = data {
-            let mut rays = rays.clone();
-            if let Some(iso) = self.effective_iso() {
-                self.surface.set_isometry(&iso);
-                rays.refract_on_surface(&mut self.surface, None)?;
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
-                    let rays_apodized = rays.apodize(aperture, &iso)?;
-                    if rays_apodized {
-                        warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", self as &mut dyn OpticNode);
-                        self.apodization_warning = true;
-                    }
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-                self.light_data = Some(LightData::Geometric(rays.clone()));
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, outport) {
-                    rays.apodize(aperture, &iso)?;
-                    rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-            } else {
-                return Err(OpossumError::Analysis(
-                    "no location for surface defined. Aborting".into(),
-                ));
-            }
-            Ok(LightResult::from([(
-                outport.into(),
-                LightData::Geometric(rays),
-            )]))
-        } else {
-            Ok(LightResult::from([(outport.into(), data.clone())]))
-        }
+        self.raytrace_single_surface_detector(incoming_data, config)
     }
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
         self.light_data.as_mut()
@@ -412,15 +349,15 @@ mod test {
     #[test]
     fn ports() {
         let meter = FluenceDetector::default();
-        assert_eq!(meter.ports().names(&PortType::Input), vec!["in1"]);
-        assert_eq!(meter.ports().names(&PortType::Output), vec!["out1"]);
+        assert_eq!(meter.ports().names(&PortType::Input), vec!["input_1"]);
+        assert_eq!(meter.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
     fn ports_inverted() {
         let mut meter = FluenceDetector::default();
         meter.set_inverted(true).unwrap();
-        assert_eq!(meter.ports().names(&PortType::Input), vec!["out1"]);
-        assert_eq!(meter.ports().names(&PortType::Output), vec!["in1"]);
+        assert_eq!(meter.ports().names(&PortType::Input), vec!["output_1"]);
+        assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
     }
     #[test]
     fn inverted() {
@@ -448,11 +385,11 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("in1".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
-        assert!(output.contains_key("out1"));
+        assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("out1");
+        let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
@@ -469,12 +406,12 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("out1".into(), input_light.clone());
+        input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
-        assert!(output.contains_key("in1"));
+        assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("in1");
+        let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);

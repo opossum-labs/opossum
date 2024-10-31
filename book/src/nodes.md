@@ -26,9 +26,9 @@ Nodes form the building blocks of the optical model. Maybe it makes sense to int
 
 ## Ports
 
-Ports are the connector points between nodes and can be connected by [edges](edges.md). Ports are strictly distinguished as "input" and "output" ports. Output ports can only be connected to input ports of another node and vice versa while it is forbidden to connect two input or two output ports. In addition, output ports do not need to be connected to other nodes. During analysis, any result will be simply discarded.
+Ports are the connector points between nodes and can be connected by [edges](edges.md). Ports are strictly distinguished as "input_1" and "output_1" ports. Output ports can only be connected to input ports of another node and vice versa while it is forbidden to connect two input or two output ports. In addition, output ports do not need to be connected to other nodes. During analysis, any result will be simply discarded.
 
-Ports have a specific name in order to distinguish them. For example, a beamsplitter cube might have one input port (e.g. named "input") and two output ports named "reflected" and "transmitted" for the two outgoing beams.
+Ports have a specific name in order to distinguish them. For example, a beamsplitter cube might have one input port (e.g. named "input_1") and two output ports named "output_1" and "transmitted" for the two outgoing beams.
 
 Nodes with output ports only form the optical sources while nodes containing (usually only one) input source will be called detectors. In most cases, a simulation of the model traverses the graph from all sources to a detector node using all possible paths (see [Analyzers](analyzers.md)).
 

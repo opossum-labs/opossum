@@ -15,7 +15,7 @@ use crate::{
     reporting::analysis_report::AnalysisReport,
     utils::geom_transformation::Isometry,
 };
-use log::info;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Energy, Length};
 
@@ -81,16 +81,25 @@ pub trait AnalysisRayTrace: OpticNode {
         self.analyze(incoming_data, config)
     }
 
-    /// Pass a bundle of rays through an "input"-surface: Rays from outside a node which enter the node.
+    /// Pass a bundle of rays through a surface
+    /// # Arguments
+    /// - `optic_surf_name`: the name of the surface
+    /// - `refri_after_surf`: the refractive index after the surface
+    /// - `rays_bundle`: a mutable reference to a vector of rays
+    /// - `analyzer_type`: the analyzer type. needed to only evaluate fluences and store rays in caches for ghost focus analysis
+    /// - `backward`: a flag that defines if the rays propagate in backward (true) or forward (false) direction
     /// # Errors
-    /// This function errors on error propagation
-    fn enter_through_surface(
+    /// This function errors if
+    /// - no effctive isometry is defined for this node
+    /// - the surface cannot be found
+    /// - on error propagation
+    fn pass_through_surface(
         &mut self,
+        optic_surf_name: &str,
+        refri_after_surf: &RefractiveIndexType,
         rays_bundle: &mut Vec<Rays>,
         analyzer_type: &AnalyzerType,
-        refri: &RefractiveIndexType,
         backward: bool,
-        port_name: &str,
     ) -> OpmResult<()> {
         let uuid = *self.node_attr().uuid();
         let Some(iso) = &self.effective_iso() else {
@@ -98,157 +107,130 @@ pub trait AnalysisRayTrace: OpticNode {
                 "surface has no isometry defined".into(),
             ));
         };
-        if backward {
-            for rays in &mut *rays_bundle {
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
-                    rays.apodize(aperture, iso)?;
-                    if let AnalyzerType::RayTrace(ref config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-                let surf = self.get_surface_mut(port_name);
-                let mut reflected_rear = rays.refract_on_surface(surf, Some(refri))?;
-                reflected_rear.set_node_origin_uuid(uuid);
-
-                if let AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
-                }
-
-                surf.add_to_forward_rays_cache(reflected_rear);
-            }
-            for rays in self.get_surface_mut(port_name).backwards_rays_cache() {
-                rays_bundle.push(rays.clone());
-            }
-        } else {
-            for rays in &mut *rays_bundle {
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
-                    rays.apodize(aperture, &self.effective_iso().unwrap())?;
-                    if let AnalyzerType::RayTrace(ref config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-                let surf = self.get_surface_mut(port_name);
-                let mut reflected_front = rays.refract_on_surface(surf, Some(refri))?;
-                reflected_front.set_node_origin_uuid(uuid);
-                if let AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
-                }
-                surf.add_to_backward_rays_cache(reflected_front);
-            }
-            for rays in self.get_surface_mut(port_name).forward_rays_cache() {
-                rays_bundle.push(rays.clone());
-            }
-        }
-        Ok(())
-    }
-
-    /// Pass a bundle of rays through an "exit"-surface: rays from inside a node which leave the node.
-    /// # Errors
-    /// this function errors on error propagation
-    fn exit_through_surface(
-        &mut self,
-        rays_bundle: &mut Vec<Rays>,
-        analyzer_type: &AnalyzerType,
-        refri: &RefractiveIndexType,
-        backward: bool,
-        port_name: &str,
-    ) -> OpmResult<()> {
-        let uuid: uuid::Uuid = *self.node_attr().uuid();
-        let Some(iso) = &self.effective_iso() else {
-            return Err(OpossumError::Analysis(
-                "surface has no isometry defined".into(),
-            ));
+        let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
+            return Err(OpossumError::Analysis(format!(
+                "Cannot find surface: \"{optic_surf_name}\" of node: \"{}\"",
+                self.node_attr().name()
+            )));
         };
-        let surf = self.get_surface_mut(port_name);
-        if backward {
-            for rays in &mut *rays_bundle {
-                let mut reflected_front = rays.refract_on_surface(surf, Some(refri))?;
-                reflected_front.set_node_origin_uuid(uuid);
+        for rays in &mut *rays_bundle {
+            let mut reflected = rays.refract_on_surface(surf, Some(refri_after_surf))?;
+            reflected.set_node_origin_uuid(uuid);
+            if let AnalyzerType::GhostFocus(_) = analyzer_type {
+                surf.evaluate_fluence_of_ray_bundle(rays)?;
+                surf.add_to_rays_cache(reflected, backward);
+            }
 
-                if let AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
-                }
-
-                surf.add_to_forward_rays_cache(reflected_front);
-            }
-            for rays in surf.backwards_rays_cache() {
-                rays_bundle.push(rays.clone());
-            }
-            for rays in &mut *rays_bundle {
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, port_name) {
-                    rays.apodize(aperture, iso)?;
-                    if let AnalyzerType::RayTrace(config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
-            }
-        } else {
-            for rays in &mut *rays_bundle {
-                let mut reflected_rear = rays.refract_on_surface(surf, Some(refri))?;
-                reflected_rear.set_node_origin_uuid(uuid);
-                if let AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
-                }
-                surf.add_to_backward_rays_cache(reflected_rear);
-            }
-            for rays in surf.forward_rays_cache() {
-                rays_bundle.push(rays.clone());
-            }
-            for rays in &mut *rays_bundle {
-                if let Some(aperture) = self.ports().aperture(&PortType::Output, port_name) {
-                    rays.apodize(aperture, iso)?;
-                    if let AnalyzerType::RayTrace(config) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                } else {
-                    return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
+            rays.apodize(surf.aperture(), iso)?;
+            if let AnalyzerType::RayTrace(config) = analyzer_type {
+                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             }
         }
+        for rays in surf.get_rays_cache(backward) {
+            rays_bundle.push(rays.clone());
+        }
+
         Ok(())
     }
 
-    /// Function to pass a bundle of rays through an "inert" surface.
-    /// Here, "inert" refers to a surface that does not mutate the rays in a sense of refraction or reflection, but only adds a new position to its history.
-    /// This functionis used for the propagation through ideal detectors, such as a spot diagram
+    /// Function to pass a bundle of rays through a detector surface.
+    /// This function is used for the propagation through single surface detectors, such as a spot diagram
+    /// # Attributes
+    /// - `optic_surf_name`: the name of the [`OpticSurface`]
+    /// - `rays_bundle`: a mutable reference to a vector of [`Rays`],
+    /// - `analyzer_type`: the analyzer type
     /// # Errors
     /// This function errors if the effective isometry is not defined
-    fn pass_through_inert_surface(
+    fn pass_through_detector_surface(
         &mut self,
+        optic_surf_name: &str,
         rays_bundle: &mut Vec<Rays>,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<()> {
+        let optic_name = format!("'{}' ({})", self.name(), self.node_type());
         if let Some(iso) = self.effective_iso() {
-            let surf = self.get_surface_mut("");
-            surf.set_isometry(&iso);
-            for rays in &mut *rays_bundle {
-                rays.refract_on_surface(surf, None)?;
-                if let AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
+            let mut apodized = false;
+            if let Some(surf) = self.get_optic_surface_mut(optic_surf_name) {
+                surf.set_isometry(&iso);
+                for rays in &mut *rays_bundle {
+                    rays.refract_on_surface(surf, None)?;
+
+                    apodized |= rays.apodize(surf.aperture(), &iso)?;
+                    if apodized {
+                        warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", optic_name);
+                    }
+                    if let AnalyzerType::GhostFocus(_) = analyzer_type {
+                        surf.evaluate_fluence_of_ray_bundle(rays)?;
+                    }
+                    if let AnalyzerType::RayTrace(c) = analyzer_type {
+                        rays.invalidate_by_threshold_energy(c.min_energy_per_ray)?;
+                    }
                 }
+            } else {
+                return Err(OpossumError::Analysis("no surface found".into()));
             }
+            self.set_apodization_warning(apodized);
         } else {
             return Err(OpossumError::Analysis(
                 "no location for surface defined. Aborting".into(),
             ));
         }
+
         // merge all rays
         if let Some(ld) = self.get_light_data_mut() {
             if let LightData::GhostFocus(rays) = ld {
-                for r in rays_bundle {
+                for r in &*rays_bundle {
                     rays.push(r.clone());
                 }
             }
+            if let LightData::Geometric(rays) = ld {
+                for r in &*rays_bundle {
+                    rays.merge(r);
+                }
+            }
         } else {
-            self.set_light_data(LightData::GhostFocus(rays_bundle.clone()));
+            if let AnalyzerType::GhostFocus(_) = analyzer_type {
+                self.set_light_data(LightData::GhostFocus(rays_bundle.clone()));
+            }
+            if let AnalyzerType::RayTrace(_) = analyzer_type {
+                self.set_light_data(LightData::Geometric(rays_bundle[0].clone()));
+            }
         }
         Ok(())
+    }
+
+    /// Effectively the analyze function of detector nodes with a single surface for a ray-tracing analysis
+    /// Helper function to reduce code-doubling
+    /// # Attributes
+    /// - `incoming_data`: the incoming data for this anaylsis in form of a [`LightResult`]
+    /// - `config`: the [`RayTraceConfig`] of this analysis
+    /// # Errors
+    /// This function errors if `pass_through_detector_surface` fails
+    fn raytrace_single_surface_detector(
+        &mut self,
+        incoming_data: LightResult,
+        config: &RayTraceConfig,
+    ) -> OpmResult<LightResult> {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+
+        let Some(data) = incoming_data.get(in_port) else {
+            return Ok(LightResult::default());
+        };
+        if let LightData::Geometric(rays) = data {
+            self.pass_through_detector_surface(
+                in_port,
+                &mut vec![rays.clone()],
+                &AnalyzerType::RayTrace(config.clone()),
+            )?;
+
+            Ok(LightResult::from([(
+                out_port.into(),
+                self.get_light_data_mut().unwrap().clone(),
+            )]))
+        } else {
+            Ok(LightResult::from([(out_port.into(), data.clone())]))
+        }
     }
 
     ///returns a mutable reference to the light data.
@@ -444,7 +426,7 @@ mod test {
             .add_node(&ParaxialSurface::new("f=100", millimeter!(100.0)).unwrap())
             .unwrap();
         group
-            .connect_nodes(i_src, "out1", i_l1, "front", millimeter!(50.0))
+            .connect_nodes(i_src, "output_1", i_l1, "input_1", millimeter!(50.0))
             .unwrap();
         let analyzer = RayTracingAnalyzer::default();
         analyzer.analyze(&mut group).unwrap();

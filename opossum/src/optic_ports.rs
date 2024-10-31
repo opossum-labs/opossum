@@ -20,7 +20,7 @@ use crate::{
     aperture::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
-    optic_port::OpticPort,
+    optic_surface::OpticSurface,
     properties::Proptype,
 };
 use serde::{Deserialize, Serialize};
@@ -35,8 +35,8 @@ pub enum PortType {
 /// Structure defining the optical ports (input / output terminals) of an [`OpticNode`](crate::optic_node::OpticNode).
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct OpticPorts {
-    inputs: BTreeMap<String, OpticPort>,
-    outputs: BTreeMap<String, OpticPort>,
+    inputs: BTreeMap<String, OpticSurface>,
+    outputs: BTreeMap<String, OpticSurface>,
     #[serde(skip)]
     inverted: bool,
 }
@@ -59,7 +59,7 @@ impl OpticPorts {
             PortType::Input => &mut self.inputs,
             PortType::Output => &mut self.outputs,
         };
-        if table.insert(name.into(), OpticPort::default()).is_none() {
+        if table.insert(name.into(), OpticSurface::default()).is_none() {
             Ok(())
         } else {
             Err(OpossumError::OpticPort(format!(
@@ -67,9 +67,36 @@ impl OpticPorts {
             )))
         }
     }
+
+    /// Adds an [`OpticSurface`] to the [`OpticPorts`] of a node
+    /// # Attributes
+    /// - `port_type`: [`PortType`] of the [`OpticSurface`]
+    /// - `surf_name`: name of the [`OpticSurface`]
+    /// - `optic_surf`: the [`OpticSurface`] to add
+    /// # Errors
+    /// This function errors if an already exisiting [`OpticSurface`] should be added
+    pub fn add_optic_surface(
+        &mut self,
+        port_type: &PortType,
+        surf_name: &str,
+        optic_surf: OpticSurface,
+    ) -> OpmResult<()> {
+        let table = match port_type {
+            PortType::Input => &mut self.inputs,
+            PortType::Output => &mut self.outputs,
+        };
+        if table.insert(surf_name.into(), optic_surf).is_none() {
+            Ok(())
+        } else {
+            Err(OpossumError::OpticPort(format!(
+                "optic surface with name {surf_name} already exists",
+            )))
+        }
+    }
+
     /// Returns a reference to the input / output ports of this [`OpticPorts`].
     #[must_use]
-    pub const fn ports(&self, port_type: &PortType) -> &BTreeMap<String, OpticPort> {
+    pub const fn ports(&self, port_type: &PortType) -> &BTreeMap<String, OpticSurface> {
         let (mut input_ports, mut output_ports) = (&self.inputs, &self.outputs);
         if self.inverted {
             (input_ports, output_ports) = (output_ports, input_ports);
@@ -79,6 +106,33 @@ impl OpticPorts {
             PortType::Output => output_ports,
         }
     }
+
+    /// Returns a mutable reference to an [`OpticSurface`] with the key `surf_name`
+    /// # Attributes
+    /// - `surf_name`: name of the optical surface, which is the key in the [`OpticPorts`] hashmap stat stores the surfaces
+    pub fn get_optic_surface_mut(&mut self, surf_name: &String) -> Option<&mut OpticSurface> {
+        if let Some(surf) = self.inputs.get_mut(surf_name) {
+            Some(surf)
+        } else if let Some(surf) = self.outputs.get_mut(surf_name) {
+            Some(surf)
+        } else {
+            None
+        }
+    }
+
+    /// Returns a reference to the input / output ports of this [`OpticPorts`].
+    #[must_use]
+    pub fn ports_mut(&mut self, port_type: &PortType) -> &mut BTreeMap<String, OpticSurface> {
+        let (mut input_ports, mut output_ports) = (&mut self.inputs, &mut self.outputs);
+        if self.inverted {
+            (input_ports, output_ports) = (output_ports, input_ports);
+        }
+        match port_type {
+            PortType::Input => input_ports,
+            PortType::Output => output_ports,
+        }
+    }
+
     /// Returns the input / output port names of this [`OpticPorts`].
     #[must_use]
     pub fn names(&self, port_type: &PortType) -> Vec<String> {
@@ -104,7 +158,7 @@ impl OpticPorts {
         if self.inverted {
             (input_ports, output_ports) = (output_ports, input_ports);
         }
-        let ports: &mut BTreeMap<String, OpticPort> = match port_type {
+        let ports: &mut BTreeMap<String, OpticSurface> = match port_type {
             PortType::Input => input_ports,
             PortType::Output => output_ports,
         };
@@ -137,7 +191,7 @@ impl OpticPorts {
         if self.inverted {
             (input_ports, output_ports) = (output_ports, input_ports);
         }
-        let ports: &mut BTreeMap<String, OpticPort> = match port_type {
+        let ports: &mut BTreeMap<String, OpticSurface> = match port_type {
             PortType::Input => input_ports,
             PortType::Output => output_ports,
         };
@@ -147,8 +201,8 @@ impl OpticPorts {
                     "port <{port_name}> does not exist",
                 )))
             },
-            |optic_port| {
-                optic_port.set_coating(coating.clone());
+            |optic_surf| {
+                optic_surf.set_coating(coating.clone());
                 Ok(())
             },
         )
@@ -176,14 +230,16 @@ impl OpticPorts {
     pub fn aperture(&self, port_type: &PortType, port_name: &str) -> Option<&Aperture> {
         self.ports(port_type)
             .get(port_name)
-            .map(OpticPort::aperture)
+            .map(OpticSurface::aperture)
     }
     /// Get the coating of the given input port.
     ///
     /// This function returns `None` if the given port name was not found.
     #[must_use]
     pub fn coating(&self, port_type: &PortType, port_name: &str) -> Option<&CoatingType> {
-        self.ports(port_type).get(port_name).map(OpticPort::coating)
+        self.ports(port_type)
+            .get(port_name)
+            .map(OpticSurface::coating)
     }
     /// Mark the [`OpticPorts`] as `inverted`.
     ///
@@ -321,27 +377,22 @@ mod test {
     fn display_entries() {
         let mut ports = OpticPorts::new();
         ports.add(&PortType::Input, "test1").unwrap();
-        ports.add(&PortType::Input, "test2").unwrap();
-        ports.add(&PortType::Output, "test3").unwrap();
-        ports.add(&PortType::Output, "test4").unwrap();
+        ports.add(&PortType::Output, "test2").unwrap();
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1> OpticPort { aperture: None, coating: IdealAR }\n  <test2> OpticPort { aperture: None, coating: IdealAR }\noutput:\n  <test3> OpticPort { aperture: None, coating: IdealAR }\n  <test4> OpticPort { aperture: None, coating: IdealAR }\n"
-                .to_owned()
+            "inputs:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: Flat { s: Plane { isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } } }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\noutput:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: Flat { s: Plane { isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } } }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\n".to_owned()
         );
     }
     #[test]
     fn display_entries_inverted() {
         let mut ports = OpticPorts::new();
         ports.add(&PortType::Input, "test1").unwrap();
-        ports.add(&PortType::Input, "test2").unwrap();
-        ports.add(&PortType::Output, "test3").unwrap();
-        ports.add(&PortType::Output, "test4").unwrap();
+
+        ports.add(&PortType::Output, "test2").unwrap();
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test3> OpticPort { aperture: None, coating: IdealAR }\n  <test4> OpticPort { aperture: None, coating: IdealAR }\noutput:\n  <test1> OpticPort { aperture: None, coating: IdealAR }\n  <test2> OpticPort { aperture: None, coating: IdealAR }\nports are inverted\n"
-                .to_owned()
+            "inputs:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: Flat { s: Plane { isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } } }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\noutput:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: Flat { s: Plane { isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } } }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\nports are inverted\n".to_owned()
         );
     }
 }

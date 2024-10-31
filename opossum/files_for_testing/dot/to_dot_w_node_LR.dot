@@ -30,8 +30,8 @@ digraph {
 				<TD FIXEDSIZE="TRUE" ALIGN="CENTER" WIDTH="16" HEIGHT="16"> </TD>
 			</TR>
 			<TR BORDER="0">
-				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="front" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: front">1</TD>
-				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="rear" BORDER="1" BGCOLOR="lightblue" HREF="" TOOLTIP="Output port 1: rear">1</TD>
+				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="input_1" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: front">1</TD>
+				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="output_1" BORDER="1" BGCOLOR="lightblue" HREF="" TOOLTIP="Output port 1: rear">1</TD>
 			</TR>
 			<TR BORDER="0">
 				<TD FIXEDSIZE="TRUE" ALIGN="CENTER" WIDTH="16" HEIGHT="16"> </TD>

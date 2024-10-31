@@ -28,12 +28,12 @@ fn main() -> OpmResult<()> {
     let i_sd = scenery.add_node(&SpotDiagram::default())?;
     let sd_ref = NodeReference::from_node(&scenery.node(i_sd)?);
     let i_sd_ref = scenery.add_node(&sd_ref)?;
-    scenery.connect_nodes(i_src, "out1", i_sd, "in1", millimeter!(40.0))?;
-    scenery.connect_nodes(i_sd, "out1", i_m1, "input", millimeter!(40.0))?;
-    scenery.connect_nodes(i_m1, "reflected", i_m2, "input", millimeter!(50.0))?;
-    scenery.connect_nodes(i_m2, "reflected", i_m1_ref, "input", millimeter!(0.0))?;
-    scenery.connect_nodes(i_m1_ref, "reflected", i_sd_ref, "in1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_sd_ref, "out1", i_sd3, "in1", millimeter!(20.0))?;
+    scenery.connect_nodes(i_src, "output_1", i_sd, "input_1", millimeter!(40.0))?;
+    scenery.connect_nodes(i_sd, "output_1", i_m1, "input_1", millimeter!(40.0))?;
+    scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(i_m2, "output_1", i_m1_ref, "input_1", millimeter!(0.0))?;
+    scenery.connect_nodes(i_m1_ref, "output_1", i_sd_ref, "input_1", millimeter!(0.0))?;
+    scenery.connect_nodes(i_sd_ref, "output_1", i_sd3, "input_1", millimeter!(20.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

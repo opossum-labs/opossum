@@ -14,9 +14,10 @@ use crate::{
     lightdata::LightData,
     meter,
     optic_node::{Alignable, OpticNode, LIDT},
-    optic_ports::{OpticPorts, PortType},
+    optic_ports::PortType,
+    optic_surface::OpticSurface,
     properties::Proptype,
-    surface::{OpticalSurface, Parabola},
+    surface::{GeometricSurface, Parabola},
     utils::geom_transformation::Isometry,
 };
 
@@ -38,7 +39,6 @@ use super::NodeAttr;
 ///   - `curvature`
 pub struct ParabolicMirror {
     node_attr: NodeAttr,
-    surface: OpticalSurface,
 }
 impl Default for ParabolicMirror {
     /// Create a parabolic mirror with a focal length of 1 meter.
@@ -63,24 +63,19 @@ impl Default for ParabolicMirror {
                 degree!(0.0).into(),
             )
             .unwrap();
-        let mut ports = OpticPorts::new();
-        ports.add(&PortType::Input, "input").unwrap();
-        ports
+
+        let mut parabola = Self { node_attr };
+        parabola.update_surfaces().unwrap();
+
+        parabola
+            .ports_mut()
             .set_coating(
                 &PortType::Input,
-                "input",
+                "input_1",
                 &CoatingType::ConstantR { reflectivity: 1.0 },
             )
             .unwrap();
-        ports.add(&PortType::Output, "reflected").unwrap();
-        node_attr.set_ports(ports);
-
-        Self {
-            node_attr,
-            surface: OpticalSurface::new(Box::new(
-                Parabola::new(meter!(-1.0), &Isometry::identity()).unwrap(),
-            )),
-        }
+        parabola
     }
 }
 impl ParabolicMirror {
@@ -144,11 +139,30 @@ impl OpticNode for ParabolicMirror {
         };
         let mut parabola = Parabola::new(*focal_length, &Isometry::identity())?;
         parabola.set_off_axis_angles((*oap_angle_x, *oap_angle_y));
-        self.surface = OpticalSurface::new(Box::new(parabola));
+        let para_geo_surface = GeometricSurface::Parabolic { s: parabola };
+        if let Some(optic_surf) = self
+            .ports_mut()
+            .get_optic_surface_mut(&"input_1".to_string())
+        {
+            optic_surf.set_geo_surface(para_geo_surface.clone());
+        } else {
+            let mut optic_surf_rear = OpticSurface::default();
+            optic_surf_rear.set_geo_surface(para_geo_surface.clone());
+            self.ports_mut()
+                .add_optic_surface(&PortType::Input, "input_1", optic_surf_rear)?;
+        }
+        if let Some(optic_surf) = self
+            .ports_mut()
+            .get_optic_surface_mut(&"output_1".to_string())
+        {
+            optic_surf.set_geo_surface(para_geo_surface);
+        } else {
+            let mut optic_surf_rear = OpticSurface::default();
+            optic_surf_rear.set_geo_surface(para_geo_surface);
+            self.ports_mut()
+                .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
+        }
         Ok(())
-    }
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        &mut self.surface
     }
 }
 impl Alignable for ParabolicMirror {}
@@ -162,15 +176,12 @@ impl Analyzable for ParabolicMirror {}
 impl AnalysisGhostFocus for ParabolicMirror {}
 impl AnalysisEnergy for ParabolicMirror {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("reflected", "input")
-        } else {
-            ("input", "reflected")
-        };
-        let Some(data) = incoming_data.get(inport) else {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
-        Ok(LightResult::from([(outport.into(), data.clone())]))
+        Ok(LightResult::from([(out_port.into(), data.clone())]))
     }
 }
 impl AnalysisRayTrace for ParabolicMirror {
@@ -179,32 +190,26 @@ impl AnalysisRayTrace for ParabolicMirror {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (inport, outport) = if self.inverted() {
-            ("reflected", "input")
-        } else {
-            ("input", "reflected")
-        };
-        let Some(data) = incoming_data.get(inport) else {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
             let reflected = if let Some(iso) = self.effective_iso() {
-                let coating = self
-                    .node_attr()
-                    .ports()
-                    .coating(&PortType::Input, "input")
-                    .unwrap()
-                    .clone();
-                let surface = self.get_surface_mut("");
-                surface.set_isometry(&iso);
-                surface.set_coating(coating);
-                let mut reflected_rays = rays.refract_on_surface(surface, None)?;
-                if let Some(aperture) = self.ports().aperture(&PortType::Input, inport) {
-                    reflected_rays.apodize(aperture, &iso)?;
-                    reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    reflected_rays
+                if let Some(surf) = self.get_optic_surface_mut(in_port) {
+                    surf.set_isometry(&iso);
+                    let mut reflected_rays = rays.refract_on_surface(surf, None)?;
+                    if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
+                        reflected_rays.apodize(aperture, &iso)?;
+                        reflected_rays
+                            .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                        reflected_rays
+                    } else {
+                        return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    }
                 } else {
-                    return Err(OpossumError::OpticPort("input aperture not found".into()));
+                    return Err(OpossumError::Analysis("no surface found. Aborting".into()));
                 }
             } else {
                 return Err(OpossumError::Analysis(
@@ -212,7 +217,7 @@ impl AnalysisRayTrace for ParabolicMirror {
                 ));
             };
             let light_data = LightData::Geometric(reflected);
-            let light_result = LightResult::from([(outport.into(), light_data)]);
+            let light_result = LightResult::from([(out_port.into(), light_data)]);
             Ok(light_result)
         } else {
             Err(OpossumError::Analysis(

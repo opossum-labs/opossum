@@ -62,6 +62,7 @@ fn main() -> OpmResult<()> {
     println!("{:?}", fluence_data.get_peak_fluence());
     println!("{:?}", fluence_data.get_average_fluence());
     let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
+
     let plt_dat = PlotData::ColorMesh {
         x_dat_n: DVector::from_iterator(
             fl_x.len(),

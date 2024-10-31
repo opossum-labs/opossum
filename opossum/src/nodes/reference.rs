@@ -15,7 +15,6 @@ use crate::{
     optic_node::{OpticNode, LIDT},
     optic_ports::OpticPorts,
     optic_ref::OpticRef,
-    surface::OpticalSurface,
     utils::geom_transformation::Isometry,
 };
 
@@ -118,14 +117,6 @@ impl OpticNode for NodeReference {
     fn set_isometry(&mut self, _isometry: crate::utils::geom_transformation::Isometry) {
         // setting an isometry is silently ignored. Isometry is defined by the refrenced node.
         // self.node_attr.set_isometry(isometry);
-    }
-    fn get_surface_mut(&mut self, _surf_name: &str) -> &mut OpticalSurface {
-        todo!()
-        // self.reference.as_ref().and_then(|rf| {
-        //     let ref_node = rf.upgrade().unwrap();
-        //     let node = ref_node.borrow();
-        //     node.get_surface_mut()
-        // })
     }
 }
 
@@ -244,8 +235,8 @@ mod test {
         let mut scenery = NodeGroup::default();
         let idx = scenery.add_node(&Dummy::default()).unwrap();
         let node = NodeReference::from_node(&scenery.node(idx).unwrap());
-        assert_eq!(node.ports().names(&PortType::Input), vec!["front"]);
-        assert_eq!(node.ports().names(&PortType::Output), vec!["rear"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
     fn ports_inverted() {
@@ -253,8 +244,8 @@ mod test {
         let idx = scenery.add_node(&Dummy::default()).unwrap();
         let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
         node.set_inverted(true.into()).unwrap();
-        assert_eq!(node.ports().names(&PortType::Input), vec!["rear"]);
-        assert_eq!(node.ports().names(&PortType::Output), vec!["front"]);
+        assert_eq!(node.ports().names(&PortType::Input), vec!["output_1"]);
+        assert_eq!(node.ports().names(&PortType::Output), vec!["input_1"]);
     }
     #[test]
     fn analyze_empty() {
@@ -280,11 +271,11 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("front".into(), input_light.clone());
+        input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
-        assert!(output.contains_key("rear"));
+        assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("rear");
+        let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
@@ -299,12 +290,12 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("rear".into(), input_light.clone());
+        input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
-        assert!(output.contains_key("front"));
+        assert!(output.contains_key("input_1"));
         assert_eq!(output.len(), 1);
-        let output = output.get("front");
+        let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
@@ -319,7 +310,7 @@ mod test {
         let input_light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
-        input.insert("rear".into(), input_light.clone());
+        input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input);
         assert!(output.is_err());

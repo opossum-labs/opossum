@@ -142,7 +142,7 @@ fn main() -> OpmResult<()> {
     src.set_isometry(Isometry::identity());
     let src = scenery.add_node(&src)?;
     let input_group = scenery.add_node(&hhts_input()?)?;
-    scenery.connect_nodes(src, "out1", input_group, "input", Length::zero())?;
+    scenery.connect_nodes(src, "output_1", input_group, "input_1", Length::zero())?;
 
     // T1
     let mut group_t1 = NodeGroup::new("T1");
@@ -167,8 +167,8 @@ fn main() -> OpmResult<()> {
         millimeter!(5.77736),
         &refr_index_hzf52,
     )?;
-    // node.set_aperture(&PortType::Input, "front", &a_2inch)?;
-    // node.set_aperture(&PortType::Output, "rear", &a_2inch)?;
+    // node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
+    // node.set_aperture(&PortType::Output, "output_1", &a_2inch)?;
     let t1_l2a = group_t1.add_node(&node)?;
     let t1_l2b = group_t1.add_node(&Lens::new(
         "T1 L2b",
@@ -185,18 +185,24 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf2,
     )?)?;
 
-    group_t1.connect_nodes(t1_l1a, "rear", t1_l1b, "front", millimeter!(10.0))?;
-    group_t1.connect_nodes(t1_l1b, "rear", t1_l2a, "front", millimeter!(937.23608))?;
-    group_t1.connect_nodes(t1_l2a, "rear", t1_l2b, "front", millimeter!(8.85423))?;
-    group_t1.connect_nodes(t1_l2b, "rear", t1_l2c, "front", millimeter!(14.78269))?;
+    group_t1.connect_nodes(t1_l1a, "output_1", t1_l1b, "input_1", millimeter!(10.0))?;
+    group_t1.connect_nodes(
+        t1_l1b,
+        "output_1",
+        t1_l2a,
+        "input_1",
+        millimeter!(937.23608),
+    )?;
+    group_t1.connect_nodes(t1_l2a, "output_1", t1_l2b, "input_1", millimeter!(8.85423))?;
+    group_t1.connect_nodes(t1_l2b, "output_1", t1_l2c, "input_1", millimeter!(14.78269))?;
 
-    group_t1.map_input_port(t1_l1a, "front", "input")?;
-    group_t1.map_output_port(t1_l2c, "rear", "output")?;
+    group_t1.map_input_port(t1_l1a, "input_1", "input_1")?;
+    group_t1.map_output_port(t1_l2c, "output_1", "output_1")?;
 
     group_t1.set_expand_view(false)?;
     let t1 = scenery.add_node(&group_t1)?;
 
-    scenery.connect_nodes(input_group, "output", t1, "input", millimeter!(100.0))?;
+    scenery.connect_nodes(input_group, "output_1", t1, "input_1", millimeter!(100.0))?;
 
     // Dichroic beam splitter + filters (1w/2w)
 
@@ -222,26 +228,38 @@ fn main() -> OpmResult<()> {
         "opossum/examples/hhts/FELH1000_Transmission.csv",
     )?);
     let mut node = IdealFilter::new("1w Longpass filter", &felh1000)?;
-    node.set_aperture(&PortType::Input, "front", &a_1inch)?;
+    node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
     let filter_1w = group_bs.add_node(&node)?;
-    group_bs.connect_nodes(bs, "out2_trans2_refl1", filter_1w, "front", Length::zero())?;
+    group_bs.connect_nodes(
+        bs,
+        "out2_trans2_refl1",
+        filter_1w,
+        "input_1",
+        Length::zero(),
+    )?;
 
     // Long pass filter (2w)
     let fesh0700 = FilterType::Spectrum(Spectrum::from_csv(
         "opossum/examples/hhts/FESH0700_Transmission.csv",
     )?);
     let mut node = IdealFilter::new("2w Shortpass filter", &fesh0700)?;
-    node.set_aperture(&PortType::Input, "front", &a_1inch)?;
+    node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
     let filter_2w = group_bs.add_node(&node)?;
-    group_bs.connect_nodes(bs, "out1_trans1_refl2", filter_2w, "front", Length::zero())?;
+    group_bs.connect_nodes(
+        bs,
+        "out1_trans1_refl2",
+        filter_2w,
+        "input_1",
+        Length::zero(),
+    )?;
 
-    group_bs.map_input_port(bs, "input1", "input")?;
-    group_bs.map_output_port(filter_1w, "rear", "output_1w")?;
-    group_bs.map_output_port(filter_2w, "rear", "output_2w")?;
+    group_bs.map_input_port(bs, "input1", "input_1")?;
+    group_bs.map_output_port(filter_1w, "output_1", "output_1w")?;
+    group_bs.map_output_port(filter_2w, "output_1", "output_2w")?;
 
     let bs_group = scenery.add_node(&group_bs)?;
 
-    scenery.connect_nodes(t1, "output", bs_group, "input", millimeter!(100.0))?;
+    scenery.connect_nodes(t1, "output_1", bs_group, "input_1", millimeter!(100.0))?;
     // 1w branch
 
     // T2_1w
@@ -270,21 +288,21 @@ fn main() -> OpmResult<()> {
 
     group_t2_1w.connect_nodes(
         t2_1w_in,
-        "rear",
+        "output_1",
         t2_1w_field,
-        "front",
+        "input_1",
         millimeter!(442.29480),
     )?;
     group_t2_1w.connect_nodes(
         t2_1w_field,
-        "rear",
+        "output_1",
         t2_1w_exit,
-        "front",
+        "input_1",
         millimeter!(429.20520),
     )?;
 
-    group_t2_1w.map_input_port(t2_1w_in, "front", "input")?;
-    group_t2_1w.map_output_port(t2_1w_exit, "rear", "output")?;
+    group_t2_1w.map_input_port(t2_1w_in, "input_1", "input_1")?;
+    group_t2_1w.map_output_port(t2_1w_exit, "output_1", "output_1")?;
     let t2_1w = scenery.add_node(&group_t2_1w)?;
 
     // T3_1w
@@ -307,19 +325,31 @@ fn main() -> OpmResult<()> {
     let d_1w_12 = group_t3_1w.add_node(&Dummy::new("1w d12"))?;
     group_t3_1w.connect_nodes(
         t3_1w_input,
-        "rear",
+        "output_1",
         t3_1w_exit,
-        "front",
+        "input_1",
         millimeter!(1181.0000),
     )?;
-    group_t3_1w.connect_nodes(t3_1w_exit, "rear", d_1w_12, "front", millimeter!(279.86873))?;
+    group_t3_1w.connect_nodes(
+        t3_1w_exit,
+        "output_1",
+        d_1w_12,
+        "input_1",
+        millimeter!(279.86873),
+    )?;
 
-    group_t3_1w.map_input_port(t3_1w_input, "front", "input")?;
-    group_t3_1w.map_output_port(d_1w_12, "rear", "output")?;
+    group_t3_1w.map_input_port(t3_1w_input, "input_1", "input_1")?;
+    group_t3_1w.map_output_port(d_1w_12, "output_1", "output_1")?;
     let t3_1w = scenery.add_node(&group_t3_1w)?;
 
-    scenery.connect_nodes(bs_group, "output_1w", t2_1w, "input", millimeter!(537.5190))?;
-    scenery.connect_nodes(t2_1w, "output", t3_1w, "input", millimeter!(664.58900))?;
+    scenery.connect_nodes(
+        bs_group,
+        "output_1w",
+        t2_1w,
+        "input_1",
+        millimeter!(537.5190),
+    )?;
+    scenery.connect_nodes(t2_1w, "output_1", t3_1w, "input_1", millimeter!(664.58900))?;
 
     let mut group_det_1w = NodeGroup::new("Detectors 1w");
 
@@ -329,20 +359,32 @@ fn main() -> OpmResult<()> {
     let det_energy_1w =
         group_det_1w.add_node(&EnergyMeter::new("Energy", Metertype::IdealEnergyMeter))?;
 
-    group_det_1w.connect_nodes(det_prop, "out1", det_wavefront_1w, "in1", Length::zero())?;
     group_det_1w.connect_nodes(
+        det_prop,
+        "output_1",
         det_wavefront_1w,
-        "out1",
-        det_energy_1w,
-        "in1",
+        "input_1",
         Length::zero(),
     )?;
-    group_det_1w.connect_nodes(det_energy_1w, "out1", cambox_1w, "input", Length::zero())?;
+    group_det_1w.connect_nodes(
+        det_wavefront_1w,
+        "output_1",
+        det_energy_1w,
+        "input_1",
+        Length::zero(),
+    )?;
+    group_det_1w.connect_nodes(
+        det_energy_1w,
+        "output_1",
+        cambox_1w,
+        "input_1",
+        Length::zero(),
+    )?;
 
-    group_det_1w.map_input_port(det_prop, "in1", "input")?;
+    group_det_1w.map_input_port(det_prop, "input_1", "input_1")?;
 
     let det_1w = scenery.add_node(&group_det_1w)?;
-    scenery.connect_nodes(t3_1w, "output", det_1w, "input", Length::zero())?;
+    scenery.connect_nodes(t3_1w, "output_1", det_1w, "input_1", Length::zero())?;
 
     // 2w branch
 
@@ -372,21 +414,21 @@ fn main() -> OpmResult<()> {
     )?)?;
     group_t2_2w.connect_nodes(
         t2_2w_in,
-        "rear",
+        "output_1",
         t2_2w_field,
-        "front",
+        "input_1",
         millimeter!(409.38829),
     )?;
     group_t2_2w.connect_nodes(
         t2_2w_field,
-        "rear",
+        "output_1",
         t2_2w_exit,
-        "front",
+        "input_1",
         millimeter!(512.11171),
     )?;
 
-    group_t2_2w.map_input_port(t2_2w_in, "front", "input")?;
-    group_t2_2w.map_output_port(t2_2w_exit, "rear", "output")?;
+    group_t2_2w.map_input_port(t2_2w_in, "input_1", "input_1")?;
+    group_t2_2w.map_output_port(t2_2w_exit, "output_1", "output_1")?;
     let t2_2w = scenery.add_node(&group_t2_2w)?;
 
     // T3_2w
@@ -409,19 +451,31 @@ fn main() -> OpmResult<()> {
     let d_2w_12 = group_t3_2w.add_node(&Dummy::new("2w d12"))?;
     group_t3_2w.connect_nodes(
         t3_2w_input,
-        "rear",
+        "output_1",
         t3_2w_exit,
-        "front",
+        "input_1",
         millimeter!(1181.0000),
     )?;
-    group_t3_2w.connect_nodes(t3_2w_exit, "rear", d_2w_12, "front", millimeter!(250.35850))?;
+    group_t3_2w.connect_nodes(
+        t3_2w_exit,
+        "output_1",
+        d_2w_12,
+        "input_1",
+        millimeter!(250.35850),
+    )?;
 
-    group_t3_2w.map_input_port(t3_2w_input, "front", "input")?;
-    group_t3_2w.map_output_port(d_2w_12, "rear", "output")?;
+    group_t3_2w.map_input_port(t3_2w_input, "input_1", "input_1")?;
+    group_t3_2w.map_output_port(d_2w_12, "output_1", "output_1")?;
     let t3_2w = scenery.add_node(&group_t3_2w)?;
 
-    scenery.connect_nodes(bs_group, "output_2w", t2_2w, "input", millimeter!(474.589))?;
-    scenery.connect_nodes(t2_2w, "output", t3_2w, "input", millimeter!(622.09000))?;
+    scenery.connect_nodes(
+        bs_group,
+        "output_2w",
+        t2_2w,
+        "input_1",
+        millimeter!(474.589),
+    )?;
+    scenery.connect_nodes(t2_2w, "output_1", t3_2w, "input_1", millimeter!(622.09000))?;
 
     // 2w detectors
     let mut group_det_2w = NodeGroup::new("Detectors 2w");
@@ -433,20 +487,32 @@ fn main() -> OpmResult<()> {
         group_det_2w.add_node(&EnergyMeter::new("Energy", Metertype::IdealEnergyMeter))?;
     let cambox_2w = group_det_2w.add_node(&cambox_2w()?)?;
 
-    group_det_2w.connect_nodes(det_prop_2w, "out1", det_wavefront_2w, "in1", Length::zero())?;
     group_det_2w.connect_nodes(
+        det_prop_2w,
+        "output_1",
         det_wavefront_2w,
-        "out1",
-        det_energy_2w,
-        "in1",
+        "input_1",
         Length::zero(),
     )?;
-    group_det_2w.connect_nodes(det_energy_2w, "out1", cambox_2w, "input", Length::zero())?;
+    group_det_2w.connect_nodes(
+        det_wavefront_2w,
+        "output_1",
+        det_energy_2w,
+        "input_1",
+        Length::zero(),
+    )?;
+    group_det_2w.connect_nodes(
+        det_energy_2w,
+        "output_1",
+        cambox_2w,
+        "input_1",
+        Length::zero(),
+    )?;
 
-    group_det_2w.map_input_port(det_prop_2w, "in1", "input")?;
+    group_det_2w.map_input_port(det_prop_2w, "input_1", "input_1")?;
     let det_2w = scenery.add_node(&group_det_2w)?;
 
-    scenery.connect_nodes(t3_2w, "output", det_2w, "input", Length::zero())?;
+    scenery.connect_nodes(t3_2w, "output_1", det_2w, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

@@ -14,6 +14,7 @@ pub use cylinder::Cylinder;
 pub use optical_surface::OpticalSurface;
 pub use parabola::Parabola;
 pub use plane::Plane;
+use serde::{Deserialize, Serialize};
 pub use sphere::Sphere;
 
 use crate::{ray::Ray, utils::geom_transformation::Isometry};
@@ -57,6 +58,72 @@ pub trait GeoSurface {
     ///
     /// **Note**: This has to be done explicitly since there is no `clone` for a trait.
     fn box_clone(&self) -> Box<dyn GeoSurface>;
+}
+
+/// Enum for geometric surfaces, used in [`OpticSurface`]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum GeometricSurface {
+    ///Spherical surface. Holds a [`Sphere`] and a a flag that defines whether this surface is to be used as convex or concave
+    Spherical {
+        /// surface: [`Sphere`]
+        s: Sphere,
+    },
+    /// flat surface that holds a [`Plane`]
+    Flat {
+        /// surface: [`Plane`]
+        s: Plane,
+    },
+    /// parabolic surface that holds a [`Parabola`]
+    Parabolic {
+        /// surface: [`Parabola`]
+        s: Parabola,
+    },
+    /// cylindrical surface that holds a [`Cylinder`]
+    Cylindrical {
+        /// surface: [`Cylinder`]
+        s: Cylinder,
+    }, //todo for sdf: SurfaceCombination
+}
+
+impl GeoSurface for GeometricSurface {
+    fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
+        match self {
+            Self::Spherical { s } => s.calc_intersect_and_normal_do(ray),
+            Self::Flat { s } => s.calc_intersect_and_normal_do(ray),
+            Self::Cylindrical { s } => s.calc_intersect_and_normal_do(ray),
+            Self::Parabolic { s } => s.calc_intersect_and_normal_do(ray),
+        }
+    }
+
+    fn isometry(&self) -> &Isometry {
+        match self {
+            Self::Spherical { s } => s.isometry(),
+            Self::Flat { s } => s.isometry(),
+            Self::Cylindrical { s } => s.isometry(),
+            Self::Parabolic { s } => s.isometry(),
+        }
+    }
+
+    fn set_isometry(&mut self, isometry: &Isometry) {
+        match self {
+            Self::Spherical { s } => s.set_isometry(isometry),
+            Self::Flat { s } => s.set_isometry(isometry),
+            Self::Cylindrical { s } => s.set_isometry(isometry),
+            Self::Parabolic { s } => s.set_isometry(isometry),
+        }
+    }
+
+    fn box_clone(&self) -> Box<dyn GeoSurface> {
+        todo!()
+    }
+}
+
+impl Default for GeometricSurface {
+    fn default() -> Self {
+        Self::Flat {
+            s: Plane::new(&Isometry::identity()),
+        }
+    }
 }
 
 impl Debug for dyn GeoSurface {

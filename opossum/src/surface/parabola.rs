@@ -11,6 +11,7 @@ use crate::{
 use nalgebra::{vector, Point3, Vector3};
 use num::Zero;
 use roots::{find_roots_quadratic, Roots};
+use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::{Angle, Length, Ratio},
     ratio::basis_point,
@@ -18,7 +19,7 @@ use uom::si::{
 
 use super::GeoSurface;
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 /// A spherical surface with its anchor point on the optical axis.
 pub struct Parabola {
     focal_length: Length,

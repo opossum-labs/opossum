@@ -1,7 +1,9 @@
 #![warn(missing_docs)]
 //! Module for handling optical rays
+use core::f64;
 use std::{f64::consts::PI, fmt::Display};
 
+use approx::relative_ne;
 use nalgebra::{vector, MatrixXx3, Point3, Rotation3, Vector3};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
@@ -16,8 +18,9 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule, meter,
     nodes::FilterType,
+    optic_surface::OpticSurface,
     spectrum::Spectrum,
-    surface::OpticalSurface,
+    surface::GeoSurface,
     utils::geom_transformation::Isometry,
 };
 
@@ -368,7 +371,7 @@ impl Ray {
     /// This function panics if the diffraction order cannot be converted to f64
     pub fn diffract_on_periodic_surface(
         &mut self,
-        s: &OpticalSurface,
+        s: &OpticSurface,
         n2: f64,
         grating_vector: Vector3<f64>,
         diffraction_order: &i32,
@@ -452,9 +455,77 @@ impl Ray {
     /// # Errors
     ///
     /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
+    // pub fn refract_on_surface(
+    //     &mut self,
+    //     os: &mut OpticalSurface,
+    //     n2: Option<f64>,
+    //     ray_bundle_uuid: &Uuid,
+    // ) -> OpmResult<Option<Self>> {
+    //     let n2 = n2.unwrap_or_else(|| self.refractive_index());
+    //     if n2 < 1.0 || !n2.is_finite() {
+    //         return Err(OpossumError::Other(
+    //             "the refractive index must be >=1.0 and finite".into(),
+    //         ));
+    //     }
+    //     if let Some((intersection_point, surface_normal)) =
+    //         os.geo_surface().calc_intersect_and_normal(self)
+    //     {
+    //         // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
+    //         // mu=n_1 / n_2
+    //         // s1: incoming direction (normalized??)
+    //         // n: surface normal (normalized??)
+    //         // s2: refracted dir
+    //         //
+    //         // s2 = mu * [ n x ( -n x s1) ] - n* sqrt(1 - mu^2 * (n x s1) dot (n x s1))
+    //         let mu = self.refractive_index / n2;
+    //         let s1 = self.dir.normalize();
+    //         let n = surface_normal.normalize();
+    //         let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
+    //         let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
+    //         let pos_in_m = self.pos.map(|c| c.value);
+    //         let intersection_in_m = intersection_point.map(|c| c.value);
+    //         self.path_length +=
+    //             self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
+    //         self.pos_hist.push(self.pos);
+    //         self.pos = intersection_point;
+    //         // check, if total reflection
+    //         if dis.is_sign_positive() {
+    //             // handle energy (due to coating)
+    //             let reflectivity = os.coating().calc_reflectivity(self, surface_normal, n2)?;
+    //             let input_energy = self.energy();
+    //             let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
+    //                 - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
+    //             self.dir = refract_dir;
+    //             self.e = input_energy * (1. - reflectivity);
+    //             let mut reflected_ray = self.clone();
+    //             // reflected_ray.pos_hist.clear();
+    //             reflected_ray.dir = reflected_dir;
+    //             reflected_ray.e = input_energy * reflectivity;
+    //             reflected_ray.number_of_bounces += 1;
+    //             self.refractive_index = n2;
+    //             self.number_of_refractions += 1;
+    //             // save on hit map of surface
+    //             os.add_to_hit_map(
+    //                 (intersection_point, input_energy),
+    //                 self.number_of_bounces,
+    //                 ray_bundle_uuid,
+    //             );
+
+    //             Ok(Some(reflected_ray))
+    //         } else {
+    //             self.number_of_bounces += 1;
+    //             self.dir = reflected_dir;
+    //             Ok(None)
+    //         }
+    //     } else {
+    //         self.set_invalid();
+    //         Ok(None)
+    //     }
+    // }
+
     pub fn refract_on_surface(
         &mut self,
-        os: &mut OpticalSurface,
+        os: &mut OpticSurface,
         n2: Option<f64>,
         ray_bundle_uuid: &Uuid,
     ) -> OpmResult<Option<Self>> {
@@ -680,13 +751,21 @@ impl Ray {
                     .map(uom::si::f64::Length::get::<millimeter>)
                     .collect::<Vec<f64>>(),
             )
+            .normalize()
         } else {
             return Err(OpossumError::Other(
                 "cannot extract last position to calculate new up-direction!".into(),
             ));
         };
-        if let Some(rotation_mat) = Rotation3::rotation_between(&old_dir, &self.dir) {
-            *up_direction = rotation_mat * *up_direction;
+
+        if relative_ne!(
+            (old_dir - self.dir).norm(),
+            0.,
+            epsilon = f64::EPSILON * 1000.
+        ) {
+            if let Some(rotation_mat) = Rotation3::rotation_between(&old_dir, &self.dir) {
+                *up_direction = rotation_mat * *up_direction;
+            }
         }
 
         Ok(())
@@ -719,7 +798,6 @@ mod test {
         coatings::CoatingType,
         degree, joule, millimeter, nanometer,
         spectrum_helper::{self, generate_filter_spectrum},
-        surface::Plane,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use core::f64;
@@ -1042,7 +1120,8 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let mut s = OpticSurface::default();
+        s.set_isometry(&isometry);
         s.set_coating(CoatingType::ConstantR { reflectivity });
         assert!(ray
             .refract_on_surface(&mut s, Some(0.9), &Uuid::new_v4())
@@ -1103,7 +1182,8 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let mut s = OpticSurface::default();
+        s.set_isometry(&isometry);
         ray.refract_on_surface(&mut s, None, &Uuid::new_v4())
             .unwrap();
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
@@ -1127,7 +1207,8 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let mut s = OpticSurface::default();
+        s.set_isometry(&isometry);
         ray.refract_on_surface(&mut s, Some(1.5), &Uuid::new_v4())
             .unwrap();
         assert_eq!(ray.pos, millimeter!(0., 0., 0.));
@@ -1150,7 +1231,8 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let mut s = OpticSurface::default();
+        s.set_isometry(&isometry);
         assert!(ray
             .refract_on_surface(&mut s, Some(0.9), &Uuid::new_v4())
             .is_err());
@@ -1198,7 +1280,8 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )
         .unwrap();
-        let mut s = OpticalSurface::new(Box::new(Plane::new(&isometry)));
+        let mut s = OpticSurface::default();
+        s.set_isometry(&isometry);
         let reflected = ray
             .refract_on_surface(&mut s, Some(1.0), &Uuid::new_v4())
             .unwrap();

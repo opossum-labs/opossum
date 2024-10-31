@@ -35,9 +35,9 @@ fn main() -> OpmResult<()> {
     .with_tilt(degree!(15.0, 0.0, 0.0))?;
     let l2 = scenery.add_node(&lens2)?;
     let det = scenery.add_node(&RayPropagationVisualizer::new("Ray plot", None)?)?;
-    scenery.connect_nodes(src, "out1", l1, "front", millimeter!(50.0))?;
-    scenery.connect_nodes(l1, "rear", l2, "front", millimeter!(50.0))?;
-    scenery.connect_nodes(l2, "rear", det, "in1", millimeter!(50.0))?;
+    scenery.connect_nodes(src, "output_1", l1, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(l1, "output_1", l2, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(l2, "output_1", det, "input_1", millimeter!(50.0))?;
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new("./opossum/playground/lens_test.opm"))
