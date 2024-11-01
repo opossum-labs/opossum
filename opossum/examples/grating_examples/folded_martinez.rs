@@ -2,7 +2,7 @@ use opossum::{
     centimeter, degree,
     error::OpmResult,
     millimeter,
-    nodes::{Dummy, Lens, NodeGroup, NodeReference, ReflectiveGrating, ThinMirror},
+    nodes::{Lens, NodeGroup, NodeReference, ReflectiveGrating, ThinMirror},
     num_per_mm,
     optic_node::{Alignable, OpticNode},
     refractive_index::RefractiveIndex,

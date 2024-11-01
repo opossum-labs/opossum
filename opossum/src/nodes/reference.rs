@@ -15,6 +15,7 @@ use crate::{
     optic_node::{OpticNode, LIDT},
     optic_ports::OpticPorts,
     optic_ref::OpticRef,
+    properties::Proptype,
     utils::geom_transformation::Isometry,
 };
 
@@ -70,7 +71,10 @@ impl NodeReference {
     pub fn from_node(node: &OpticRef) -> Self {
         let mut refr = Self::default();
         refr.node_attr
-            .set_property("reference id", node.uuid().into())
+            .set_property(
+                "reference id",
+                Proptype::Uuid(*node.optical_ref.borrow().node_attr().uuid()),
+            )
             .unwrap();
         let ref_name = format!("ref ({})", node.optical_ref.borrow().name());
         refr.node_attr.set_name(&ref_name);

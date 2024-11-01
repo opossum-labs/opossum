@@ -1,10 +1,10 @@
 digraph {
-	fontsize = 8;
+	fontsize = 10;
 	compound = true;
 	rankdir = "TB";
 	label="Test"
 	fontname="Courier-monospace"
-	node [fontname="Courier-monospace" fontsize = 8]
-	edge [fontname="Courier-monospace"]
+	node [fontname="Courier-monospace" fontsize = 10]
+	edge [fontname="Courier-monospace" fontsize = 10]
 
 }

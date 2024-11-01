@@ -62,11 +62,8 @@ impl OpticGraph {
                 "cannot add nodes if group is set as inverted".into(),
             ));
         }
-        let uuid = *node.node_attr().uuid();
-
         let idx = self.g.add_node(OpticRef::new(
             Rc::new(RefCell::new(node)),
-            Some(uuid),
             self.global_confg.clone(),
         ));
 
@@ -682,11 +679,14 @@ impl OpticGraph {
                 .ok_or_else(|| OpossumError::Other("could not get edge_endpoints".into()))?;
 
             let dist = self.distance_from_predecessor(end_nodes.1, light.target_port())?;
-            
+
             let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port())?;
             let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port())?;
 
-            dot_string.push_str(&format!("  {src_edge_str} -> {target_edge_str} [label=\"{}\"]\n", format_quantity(meter, dist)));
+            dot_string.push_str(&format!(
+                "  {src_edge_str} -> {target_edge_str} [label=\"{}\"]\n",
+                format_quantity(meter, dist)
+            ));
         }
         dot_string.push_str("}\n");
         Ok(dot_string)
