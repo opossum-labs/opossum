@@ -266,7 +266,7 @@ pub fn format_value_with_prefix(value: f64) -> String {
 
     format!("{:8.3} {prefix}", value / f64::powi(10.0, exponent))
 }
-fn format_quantity<D, U, V, N>(_: N, q: Quantity<D, U, V>) -> String
+pub fn format_quantity<D, U, V, N>(_: N, q: Quantity<D, U, V>) -> String
 where
     D: Dimension + ?Sized,
     U: Units<V> + ?Sized,

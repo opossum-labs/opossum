@@ -368,13 +368,13 @@ impl NodeGroup {
     }
     /// Returns the dot-file header of this [`NodeGroup`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
-        let mut dot_string = String::from("digraph {\n\tfontsize = 8;\n");
+        let mut dot_string = String::from("digraph {\n\tfontsize = 10;\n");
         dot_string.push_str("\tcompound = true;\n");
         dot_string.push_str(&format!("\trankdir = \"{rankdir}\";\n"));
         dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.node_attr.name()));
         dot_string.push_str("\tfontname=\"Courier-monospace\"\n");
-        dot_string.push_str("\tnode [fontname=\"Courier-monospace\" fontsize = 8]\n");
-        dot_string.push_str("\tedge [fontname=\"Courier-monospace\"]\n\n");
+        dot_string.push_str("\tnode [fontname=\"Courier-monospace\" fontsize = 10]\n");
+        dot_string.push_str("\tedge [fontname=\"Courier-monospace\" fontsize = 10]\n\n");
         dot_string
     }
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with
