@@ -11,7 +11,7 @@ use crate::{
     optic_ref::OpticRef,
     optic_senery_rsc::SceneryResources,
     port_map::PortMap,
-    properties::Proptype,
+    properties::{proptype::format_quantity, Proptype},
     rays::Rays,
 };
 use log::warn;
@@ -34,7 +34,7 @@ use std::{
     collections::BTreeMap,
     rc::Rc,
 };
-use uom::si::f64::Length;
+use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
 
 /// Data structure representing an optical graph
@@ -681,10 +681,12 @@ impl OpticGraph {
                 .edge_endpoints(edge_idx)
                 .ok_or_else(|| OpossumError::Other("could not get edge_endpoints".into()))?;
 
+            let dist = self.distance_from_predecessor(end_nodes.1, light.target_port())?;
+            
             let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port())?;
             let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port())?;
 
-            dot_string.push_str(&format!("  {src_edge_str} -> {target_edge_str} \n"));
+            dot_string.push_str(&format!("  {src_edge_str} -> {target_edge_str} [label=\"{}\"]\n", format_quantity(meter, dist)));
         }
         dot_string.push_str("}\n");
         Ok(dot_string)
