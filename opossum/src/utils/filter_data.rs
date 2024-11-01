@@ -38,6 +38,8 @@ pub fn get_min_max_filter_nonfinite(ax_vals: &[f64]) -> Option<(f64, f64)> {
         Some((min, max))
     }
 }
+/// Gets all unique values in an array
+///
 /// This method returns a vector of all unique values in an array ignoring non finite values
 /// Here, unique means that the values only differ by a marginal amount according to the `relative_eq`! macro from the approx crate
 /// # Attributes

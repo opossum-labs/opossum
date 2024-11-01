@@ -242,7 +242,7 @@ impl Plottable for SpotDiagram {
         plt_params
             .set(&PlotArgs::XLabel("x position (m)".into()))?
             .set(&PlotArgs::YLabel("y position (m)".into()))?
-            .set(&PlotArgs::AxisEqual(true))?
+            .set(&PlotArgs::AxisEqual(false))?
             .set(&PlotArgs::PlotAutoSize(true))?
             .set(&PlotArgs::PlotSize((800, 800)))?;
         Ok(())

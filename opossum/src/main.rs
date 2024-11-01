@@ -88,7 +88,7 @@ fn create_report_and_data_files(
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let mut report_path = report_directory.to_path_buf();
     analysis_report.export_data(&report_path)?;
-    report_path.push(&format!("report_{report_number}.html"));
+    report_path.push(format!("report_{report_number}.html"));
     info!("Write html report to {}", report_path.display());
     analysis_report
         .to_html_report()?

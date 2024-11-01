@@ -67,8 +67,8 @@ tinytemplate = "1"
 
 bevy={ version="0.14", optional=true }
 bevy_flycam = { version= "0.14", optional =true }
-triangulate = "0.2"
 spade = "2.12"
+earcutr = "0.4.3"
 
 [lints.rust]
 # missing_docs = "warn"

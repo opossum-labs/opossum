@@ -17,7 +17,7 @@ pub struct HtmlReport {
 }
 impl HtmlReport {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         opossum_version: String,
         analysis_timestamp: String,
         analysis_type: String,

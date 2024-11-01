@@ -32,17 +32,20 @@
 //! assert_eq!(ap.apodization_factor(&millimeter!(0.0, 0.0)), 1.0);
 //! ```
 
+use core::f64;
+
 use crate::{
     error::{OpmResult, OpossumError},
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
     utils::math_distribution_functions::ellipse,
 };
+use earcutr::earcut;
 use itertools::Itertools;
-use nalgebra::{Isometry2, Matrix2xX, Matrix3xX, MatrixXx2, Point2, Vector2};
+use nalgebra::{Isometry2, Matrix2xX, MatrixXx2, Point2, Vector2};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use triangulate::{formats, ListFormat, Polygon};
+// use triangulate::{formats, ListFormat, Polygon};
 use uom::si::{
     f64::Length,
     length::{meter, millimeter},
@@ -242,6 +245,7 @@ impl Apodize for RectangleConfig {
 pub struct PolygonConfig {
     points: Vec<Point2<Length>>,
     aperture_type: ApertureType,
+    triangle_indices: Vec<Vec<usize>>,
 }
 impl PolygonConfig {
     /// Create a new polygonal aperture configuration by a set of given 2D points.
@@ -257,9 +261,25 @@ impl PolygonConfig {
             return Err(OpossumError::Other("less than 3 points given".into()));
         }
         Ok(Self {
+            triangle_indices: Self::triangulate(&points)?,
             points,
             aperture_type: ApertureType::default(),
         })
+    }
+
+    fn triangulate(points: &[Point2<Length>]) -> OpmResult<Vec<Vec<usize>>> {
+        let polygon_vertices_flat = points
+            .iter()
+            .flat_map(|p| vec![p.x.get::<meter>(), p.y.get::<meter>()])
+            .collect_vec();
+
+        let triangulated_indices = earcut(polygon_vertices_flat.as_slice(), &[], 2)
+            .map_err(|e| OpossumError::Other(format!("Triangulation of polygon failed:{e}")))?;
+        let mut chunked_indices = Vec::<Vec<usize>>::with_capacity(triangulated_indices.len() / 3);
+        for chunk in triangulated_indices.chunks(3) {
+            chunked_indices.push(Vec::<usize>::from(chunk));
+        }
+        Ok(chunked_indices)
     }
 
     /// checks, if a point lies within this [`PolygonConfig`]
@@ -267,37 +287,22 @@ impl PolygonConfig {
     /// This function panics if the triangulation fails
     #[must_use]
     pub fn in_polygon(&self, point: &Point2<Length>) -> bool {
-        let polygon: Vec<[f64; 2]> = self
-            .points
-            .iter()
-            .map(|p| [p.x.get::<meter>(), p.y.get::<meter>()])
-            .collect_vec();
-        let point_meter = Point2::<f64>::new(point.x.get::<meter>(), point.y.get::<meter>());
-
-        let mut triangulated_indices = Vec::<usize>::new();
-        polygon
-            .triangulate(
-                formats::IndexedListFormat::new(&mut triangulated_indices).into_fan_format(),
-            )
-            .expect("Triangulation failed");
-        let triangle_idx = Matrix3xX::from_vec(triangulated_indices.clone()).transpose();
-
         let mut in_polygon = false;
-        for tri in triangle_idx.row_iter() {
-            let p1 = polygon[tri[0]];
-            let p2 = polygon[tri[1]];
-            let p3 = polygon[tri[2]];
+        for tri in &self.triangle_indices {
+            let p1 = self.points[tri[0]];
+            let p2 = self.points[tri[1]];
+            let p3 = self.points[tri[2]];
 
             let denominator =
                 (p2[1] - p3[1]).mul_add(p1[0] - p3[0], (p3[0] - p2[0]) * (p1[1] - p3[1]));
-            let a = ((p2[1] - p3[1]).mul_add(
-                point_meter.x - p3[0],
-                (p3[0] - p2[0]) * (point_meter.y - p3[1]),
-            )) / denominator;
-            let b = ((p3[1] - p1[1]).mul_add(
-                point_meter.x - p3[0],
-                (p1[0] - p3[0]) * (point_meter.y - p3[1]),
-            )) / denominator;
+            let a = (((p2[1] - p3[1])
+                .mul_add(point.x - p3[0], (p3[0] - p2[0]) * (point.y - p3[1])))
+                / denominator)
+                .value;
+            let b = (((p3[1] - p1[1])
+                .mul_add(point.x - p3[0], (p1[0] - p3[0]) * (point.y - p3[1])))
+                / denominator)
+                .value;
             let c = 1. - a - b;
 
             if (0. ..=1.).contains(&a) && (0. ..=1.).contains(&b) && (0. ..=1.).contains(&c) {

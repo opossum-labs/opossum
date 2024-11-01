@@ -54,7 +54,6 @@ pub fn folded_martinez(
     g1ref3.set_inverted(true)?;
     let g1ref3 = cb.add_node(&g1ref3)?;
     let retro_mir1 = cb.add_node(&ThinMirror::new("retro_mir1"))?;
-    let dummy = cb.add_node(&Dummy::default())?;
     // let retro_mir1 =
     //     cb.add_node(&ThinMirror::new("retro_mir1").with_tilt(degree!(-45., 0., 0.))?)?;
     // let retro_mir2 =
