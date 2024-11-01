@@ -16,7 +16,7 @@ use spade::{
     DelaunayTriangulation, FloatTriangulation, HasPosition, Point2 as SpadeP, Triangulation,
 };
 use std::ops::Add;
-use triangulate::Mappable;
+// use triangulate::Mappable;
 use voronator::{
     delaunator::{Coord, Point as VPoint},
     polygon, VoronoiDiagram,
@@ -134,6 +134,8 @@ pub fn calc_closed_poly_area(poly_coords: &[Point2<f64>]) -> OpmResult<f64> {
     }
 }
 
+/// Interpolation of scattered 3d data
+///
 /// Interpolation of scattered 3d data (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
 /// The interpolation is done via delaunay triangulation of the data points and interpolating on the desired points (`x_interp`, `y_interp`) using barycentric coordinates of the triangles
 /// # Attributes
@@ -167,7 +169,8 @@ pub fn interpolate_3d_scatter_data(
     interpolate_3d_triangulated_scatter_data(&voronoi_data, &x_interp_filtered, &y_interp_filtered)
 }
 
-/// Creation of arrays from `x` and `y` coordinates.
+/// Creation of arrays from `x` and `y` coordinates
+///
 /// The new arrays size have a number of rows according to the length of the y input coordinates and number of columns according to the length of the x input coordinates
 /// # Attributes
 /// `x`: Vector of x-coordinates
@@ -327,19 +330,31 @@ pub fn create_voronoi_cells(xy_coord: &MatrixXx2<f64>) -> OpmResult<(VoronoiDiag
     } else {
         //create the voronoi diagram with the minimum and maximum values of the axes as bounds
         // let convex_hull_points =
-        let triangulation = voronator::delaunator::triangulate(&points);
-        let (convex_hull_points, num_triangles) = triangulation
-            .ok_or_else(|| OpossumError::Other("Could not create voronoi diagram!".into()))?
-            .map(|triag| {
-                let convex_hull = triag.hull;
-                (
-                    Iterator::map(convex_hull.iter().rev(), |idx| {
-                        Point2::new(points[*idx].x, points[*idx].y)
-                    })
-                    .collect_vec(),
-                    triag.triangles.len() / 3,
-                )
-            });
+        let triangulation = voronator::delaunator::triangulate(&points)
+            .ok_or_else(|| OpossumError::Other("Could not create voronoi diagram!".into()))?;
+        let (convex_hull_points, num_triangles) = {
+            let convex_hull = triangulation.hull;
+            (
+                Iterator::map(convex_hull.iter().rev(), |idx| {
+                    Point2::new(points[*idx].x, points[*idx].y)
+                })
+                .collect_vec(),
+                triangulation.triangles.len() / 3,
+            )
+        };
+
+        // triangulation
+        //     .ok_or_else(|| OpossumError::Other("Could not create voronoi diagram!".into()))?.
+        //     .map(|triag| {
+        //         let convex_hull = triag.hull;
+        //         (
+        //             Iterator::map(convex_hull.iter().rev(), |idx| {
+        //                 Point2::new(points[*idx].x, points[*idx].y)
+        //             })
+        //             .collect_vec(),
+        //             triag.triangles.len() / 3,
+        //         )
+        //     });
 
         let area_hull = calc_closed_poly_area(convex_hull_points.as_slice())?;
         let area_triangle = area_hull / num_triangles.to_f64().unwrap();
@@ -414,7 +429,9 @@ pub fn create_valued_voronoi_cells(xyz_data: &MatrixXx3<f64>) -> OpmResult<Voron
     VoronoiedData::combine_data_with_voronoi_diagram(voronoi_diagram, z_data_voronoi)
 }
 
-/// Interpolation of scattered 3d data (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
+/// Interpolation of scattered 3d data
+///
+/// Interpolation of scattered 3d data  (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
 /// The interpolation is done via delaunay triangulation (retrieved from a voronoi diagram, created with voronator) of the data points and interpolating on the desired points (`x_interp`, `y_interp`) using barycentric coordinates of the triangles
 /// # Attributes
 /// `voronoi`: Reference to a `VoronoiDiagram` struct

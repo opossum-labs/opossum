@@ -370,6 +370,7 @@ impl From<Isometry> for Transform {
     }
 }
 /// This function defines the coordinate axes on a plane.
+///
 /// This may be useful if points are projected onto that plane and should be represented by values of two coordinate axes that span the plane
 /// If the plane normal is parallel to one of the main coordinate axes (x,y,z), the respective other axes are used.
 /// Else if the plane normal is perpendicular to one of the main coordinate axes (x,y,z), this axis is used and the cross prouct with the plane normal and that axis
@@ -468,6 +469,8 @@ pub fn project_points_to_plane(
     Ok(pos_projection)
 }
 
+/// Projects points onto a defined plane
+///
 /// Projects points onto a defined plane and represents their position as combination of distances along the base vectors of that plane.
 /// If both base vectors are None, `define_plane_coordinate_axes_directions` is used to define these axes. If only one of them is None, the cross product of the defined axis and the plane normal is used.
 /// # Attributes

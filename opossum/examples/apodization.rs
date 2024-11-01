@@ -2,7 +2,7 @@ use std::path::Path;
 
 use opossum::{
     analyzers::{AnalyzerType, RayTraceConfig},
-    aperture::{Aperture, RectangleConfig},
+    aperture::{Aperture, PolygonConfig, RectangleConfig},
     error::OpmResult,
     joule, millimeter,
     nodes::{round_collimated_ray_source, Dummy, NodeGroup, SpotDiagram},
@@ -15,16 +15,24 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
 
     let i_src = scenery.add_node(&round_collimated_ray_source(
-        millimeter!(20.0),
+        millimeter!(1.0),
         joule!(1.0),
-        10,
+        25,
     )?)?;
+    let poly = PolygonConfig::new(vec![
+        millimeter!(-1.0, 0.0),
+        millimeter!(0.0, 0.5),
+        millimeter!(1.0, 0.0),
+        millimeter!(0.0, 1.0),
+    ])
+    .unwrap();
 
     let mut dummy = Dummy::default();
     let rect_config =
         RectangleConfig::new(millimeter!(15.), millimeter!(15.), millimeter!(0.0, 0.0))?;
     let aperture = Aperture::BinaryRectangle(rect_config);
-    dummy.set_aperture(&PortType::Input, "input_1", &aperture)?;
+
+    dummy.set_aperture(&PortType::Input, "front", &aperture)?;
     let dummy = dummy.with_decenter(millimeter!(-5.0, 5.0, 0.0))?;
 
     let i_d = scenery.add_node(&dummy)?;
