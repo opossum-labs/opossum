@@ -5,21 +5,18 @@ scenery:
     ports:
       inputs: {}
       outputs: {}
-    uuid: b8cb049b-4eb9-4db8-8842-2fc7c70c27ba
-    lidt: 10000.
+    uuid: 7743e13b-7c3f-44fe-90f7-61e0ba6fa4d3
+    lidt: 10000.0
     props:
       expand view: !Bool false
       graph: !OpticGraph
         nodes:
         - type: dummy
-          id: 180328fe-7ad4-4568-b501-183b88c4daee
           attributes:
             name: dummy1
-            uuid: 180328fe-7ad4-4568-b501-183b88c4daee
-            lidt: 10000.
             ports:
               inputs:
-                front:
+                input_1:
                   geo_surface: !Flat
                     s:
                       isometry:
@@ -45,14 +42,14 @@ scenery:
                           - 0.0
                   aperture: None
                   coating: IdealAR
-                  lidt: 10000.
+                  lidt: 10000.0
                   backward_rays_cache: []
                   forward_rays_cache: []
                   hit_map:
                     hit_map: []
                     critical_fluence: {}
               outputs:
-                rear:
+                output_1:
                   geo_surface: !Flat
                     s:
                       isometry:
@@ -78,23 +75,22 @@ scenery:
                           - 0.0
                   aperture: None
                   coating: IdealAR
-                  lidt: 10000.
+                  lidt: 10000.0
                   backward_rays_cache: []
                   forward_rays_cache: []
                   hit_map:
                     hit_map: []
                     critical_fluence: {}
+            uuid: d8c43481-43b7-4bad-8305-7246a62e4016
+            lidt: 10000.0
             props: {}
             inverted: false
         - type: dummy
-          id: 642ce76e-b071-43c0-a77e-1bdbb99b40d8
           attributes:
             name: dummy2
-            uuid: 642ce76e-b071-43c0-a77e-1bdbb99b40d8
-            lidt: 10000.
             ports:
               inputs:
-                front:
+                input_1:
                   geo_surface: !Flat
                     s:
                       isometry:
@@ -120,14 +116,14 @@ scenery:
                           - 0.0
                   aperture: None
                   coating: IdealAR
-                  lidt: 10000.
+                  lidt: 10000.0
                   backward_rays_cache: []
                   forward_rays_cache: []
                   hit_map:
                     hit_map: []
                     critical_fluence: {}
               outputs:
-                rear:
+                output_1:
                   geo_surface: !Flat
                     s:
                       isometry:
@@ -153,23 +149,30 @@ scenery:
                           - 0.0
                   aperture: None
                   coating: IdealAR
-                  lidt: 10000.
+                  lidt: 10000.0
                   backward_rays_cache: []
                   forward_rays_cache: []
                   hit_map:
                     hit_map: []
                     critical_fluence: {}
+            uuid: e6729ff1-e14a-468d-a08f-d0b9dd131dab
+            lidt: 10000.0
             props: {}
             inverted: false
         edges:
-        - - 180328fe-7ad4-4568-b501-183b88c4daee
-          - 642ce76e-b071-43c0-a77e-1bdbb99b40d8
-          - rear
-          - front
+        - - d8c43481-43b7-4bad-8305-7246a62e4016
+          - e6729ff1-e14a-468d-a08f-d0b9dd131dab
+          - output_1
+          - input_1
           - 0.0
         input_map: {}
         output_map: {}
     inverted: false
-  input_port_distances: {}
+global:
+  ambient_refr_index: !Const
+    refractive_index: 1.0
 analyzers:
-- Energy
+- !RayTrace
+  min_energy_per_ray: 1e-12
+  max_number_of_bounces: 1000
+  max_number_of_refractions: 1000

@@ -53,7 +53,6 @@ use crate::{
     error::{OpmResult, OpossumError},
     optic_ref::OpticRef,
 };
-use uuid::Uuid;
 /// Factory function creating a new reference of an optical node of the given type.
 ///
 /// If a uuid is given, the optical node is created using this id. Otherwise a new (random) id is generated. This
@@ -63,101 +62,73 @@ use uuid::Uuid;
 ///
 /// This function will return an [`OpossumError`] if there is no node with the given type.
 #[allow(clippy::too_many_lines)]
-pub fn create_node_ref(node_type: &str, uuid: Option<Uuid>) -> OpmResult<OpticRef> {
+pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
     match node_type {
-        "dummy" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(Dummy::default())),
-            uuid,
-            None,
-        )),
+        "dummy" => Ok(OpticRef::new(Rc::new(RefCell::new(Dummy::default())), None)),
         "beam splitter" => Ok(OpticRef::new(
             Rc::new(RefCell::new(BeamSplitter::default())),
-            uuid,
             None,
         )),
         "energy meter" => Ok(OpticRef::new(
             Rc::new(RefCell::new(EnergyMeter::default())),
-            uuid,
             None,
         )),
         "group" => Ok(OpticRef::new(
             Rc::new(RefCell::new(NodeGroup::default())),
-            uuid,
             None,
         )),
         "ideal filter" => Ok(OpticRef::new(
             Rc::new(RefCell::new(IdealFilter::default())),
-            uuid,
             None,
         )),
         "reflective grating" => Ok(OpticRef::new(
             Rc::new(RefCell::new(ReflectiveGrating::default())),
-            uuid,
             None,
         )),
         "reference" => Ok(OpticRef::new(
             Rc::new(RefCell::new(NodeReference::default())),
-            uuid,
             None,
         )),
-        "lens" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(Lens::default())),
-            uuid,
-            None,
-        )),
+        "lens" => Ok(OpticRef::new(Rc::new(RefCell::new(Lens::default())), None)),
         "cylindric lens" => Ok(OpticRef::new(
             Rc::new(RefCell::new(CylindricLens::default())),
-            uuid,
             None,
         )),
         "source" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Source::default())),
-            uuid,
             None,
         )),
         "spectrometer" => Ok(OpticRef::new(
             Rc::new(RefCell::new(Spectrometer::default())),
-            uuid,
             None,
         )),
         "spot diagram" => Ok(OpticRef::new(
             Rc::new(RefCell::new(SpotDiagram::default())),
-            uuid,
             None,
         )),
         "wavefront monitor" => Ok(OpticRef::new(
             Rc::new(RefCell::new(WaveFront::default())),
-            uuid,
             None,
         )),
         "paraxial surface" => Ok(OpticRef::new(
             Rc::new(RefCell::new(ParaxialSurface::default())),
-            uuid,
             None,
         )),
         "ray propagation" => Ok(OpticRef::new(
             Rc::new(RefCell::new(RayPropagationVisualizer::default())),
-            uuid,
             None,
         )),
         "fluence detector" => Ok(OpticRef::new(
             Rc::new(RefCell::new(FluenceDetector::default())),
-            uuid,
             None,
         )),
-        "wedge" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(Wedge::default())),
-            uuid,
-            None,
-        )),
+        "wedge" => Ok(OpticRef::new(Rc::new(RefCell::new(Wedge::default())), None)),
         "mirror" => Ok(OpticRef::new(
             Rc::new(RefCell::new(ThinMirror::default())),
-            uuid,
             None,
         )),
         "parabolic mirror" => Ok(OpticRef::new(
             Rc::new(RefCell::new(ParabolicMirror::default())),
-            uuid,
             None,
         )),
         _ => Err(OpossumError::Other(format!(
@@ -170,15 +141,6 @@ mod test {
     use super::*;
     #[test]
     fn create_node_ref_error() {
-        assert!(create_node_ref("test", None).is_err());
-    }
-    #[test]
-    fn create_dummy() {
-        assert!(create_node_ref("dummy", None).is_ok());
-        let id = Uuid::new_v4();
-        let node = create_node_ref("dummy", Some(id));
-        assert!(node.is_ok());
-        let node = node.unwrap();
-        assert_eq!(node.uuid(), id);
+        assert!(create_node_ref("test").is_err());
     }
 }

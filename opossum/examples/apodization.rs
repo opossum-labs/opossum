@@ -2,7 +2,7 @@ use std::path::Path;
 
 use opossum::{
     analyzers::{AnalyzerType, RayTraceConfig},
-    aperture::{Aperture, PolygonConfig, RectangleConfig},
+    aperture::{Aperture, RectangleConfig},
     error::OpmResult,
     joule, millimeter,
     nodes::{round_collimated_ray_source, Dummy, NodeGroup, SpotDiagram},
@@ -19,13 +19,6 @@ fn main() -> OpmResult<()> {
         joule!(1.0),
         25,
     )?)?;
-    let poly = PolygonConfig::new(vec![
-        millimeter!(-1.0, 0.0),
-        millimeter!(0.0, 0.5),
-        millimeter!(1.0, 0.0),
-        millimeter!(0.0, 1.0),
-    ])
-    .unwrap();
 
     let mut dummy = Dummy::default();
     let rect_config =
