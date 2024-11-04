@@ -659,7 +659,9 @@ impl OpticGraph {
         //check direction
         let rankdir = if rankdir == "LR" { "LR" } else { "TB" };
         let mut dot_string = String::default();
-        for node in self.nodes() {
+        let sorted = self.topologically_sorted()?;
+        for idx in &sorted {
+            let node = self.node_by_idx(*idx)?;
             let node_name = node.optical_ref.borrow().name();
             let inverted = node.optical_ref.borrow().node_attr().inverted();
             let ports = node.optical_ref.borrow().ports();
