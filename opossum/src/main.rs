@@ -22,12 +22,19 @@ use std::{
     env,
     fs::{create_dir, remove_dir_all, File},
     io::{self, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 fn read_and_parse_model(path: &Path) -> OpmResult<OpmDocument> {
     info!("Reading model...");
     OpmDocument::from_file(path)
+}
+
+fn create_f_path(path: &Path, f_name: &str, f_ext: &str) -> PathBuf {
+    let mut f_path = path.to_path_buf();
+    f_path.push(f_name);
+    f_path.set_extension(f_ext);
+    f_path
 }
 
 fn create_dot_or_report_file_instance(
@@ -36,9 +43,8 @@ fn create_dot_or_report_file_instance(
     f_ext: &str,
     print_str: &str,
 ) -> OpmResult<File> {
-    let mut f_path = path.to_path_buf();
-    f_path.push(f_name);
-    f_path.set_extension(f_ext);
+    let f_path = create_f_path(path, f_name, f_ext);
+
     info!("Write {print_str} to {}...", f_path.display());
     let _ = io::stdout().flush();
 
@@ -53,8 +59,10 @@ fn create_dot_file(dot_path: &Path, scenery: &NodeGroup) -> OpmResult<()> {
         .map_err(|e| OpossumError::Other(format!("writing diagram file (.dot) failed: {e}")))?;
 
     let mut output = create_dot_or_report_file_instance(dot_path, "scenery", "svg", "diagram")?;
-    write!(output, "{}", scenery.toplevel_dot_svg()?)
-        .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))?;
+
+    let f_path = create_f_path(dot_path, "scenery", "dot");
+    scenery.toplevel_dot_svg(&f_path, &mut output)?;
+
     Ok(())
 }
 fn create_data_dir(report_directory: &Path) -> OpmResult<()> {

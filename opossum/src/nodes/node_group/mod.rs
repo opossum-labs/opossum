@@ -28,7 +28,9 @@ use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap},
+    fs::{self, File},
     io::Write,
+    path::PathBuf,
     process::Stdio,
     rc::Rc,
 };
@@ -394,8 +396,25 @@ impl NodeGroup {
     /// # Errors
     ///
     /// This function will return an error if the image generation fails (e.g. program not found, no memory left etc.).
-    pub fn toplevel_dot_svg(&self) -> OpmResult<String> {
-        let dot_string = self.toplevel_dot("")?;
+    pub fn toplevel_dot_svg(&self, dot_str_file: &PathBuf, svg_file: &mut File) -> OpmResult<()> {
+        let dot_string = fs::read_to_string(dot_str_file)
+            .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))?;
+        let svg_str = Self::dot_string_to_svg_str(dot_string.as_str())?;
+        write!(svg_file, "{svg_str}")
+            .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))
+    }
+
+    /// Converts a dot string to an svg string
+    /// # Attributes
+    /// `dot_string`: string that constains the dot information
+    /// # Errors
+    /// This function errors if
+    /// - the spawn of a childprocess fails
+    /// - the mutable stdin handle creation fails
+    /// - writing to child stdin fails
+    /// - output collection fails
+    /// - string to utf8 conversion fails
+    fn dot_string_to_svg_str(dot_string: &str) -> OpmResult<String> {
         let mut child = std::process::Command::new("dot")
             .arg("-Tsvg:cairo")
             .arg("-Kdot")
