@@ -302,28 +302,7 @@ impl Ray {
     pub fn to_isometry(&self, up_direction: Vector3<f64>) -> Isometry {
         Isometry::new_from_view(self.position(), self.direction(), up_direction)
     }
-    /// Propagate a ray freely along its direction. The length is given as the projection on the z-axis (=optical axis).
-    ///
-    /// This function also respects the refractive index stored in the ray while calculating the optical path length.
-    ///
-    /// # Errors
-    /// This functions returns an error if the initial ray direction has a zero z component (= ray not propagating in z direction).
-    // pub fn propagate_along_z(&mut self, length_along_z: Length) -> OpmResult<()> {
-    //     if self.dir[2].abs() < f64::EPSILON {
-    //         return Err(OpossumError::Other(
-    //             "z-Axis of direction vector must be != 0.0".into(),
-    //         ));
-    //     }
-    //     self.pos_hist.push(self.pos);
-    //     let length_in_ray_dir = length_along_z / self.dir[2];
-    //     self.pos += vector![
-    //         length_in_ray_dir * self.dir.x,
-    //         length_in_ray_dir * self.dir.y,
-    //         length_in_ray_dir * self.dir.z
-    //     ];
-    //     self.path_length += length_in_ray_dir * self.refractive_index * self.dir.norm();
-    //     Ok(())
-    // }
+
     /// Refract a ray on a paraxial surface of a given focal length.
     ///
     /// Modify the ray direction in order to simulate a perfect lens. **Note**: This function also
