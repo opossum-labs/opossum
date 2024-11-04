@@ -242,7 +242,7 @@ impl Plottable for SpotDiagram {
         plt_params
             .set(&PlotArgs::XLabel("x position (m)".into()))?
             .set(&PlotArgs::YLabel("y position (m)".into()))?
-            .set(&PlotArgs::AxisEqual(false))?
+            .set(&PlotArgs::AxisEqual(true))?
             .set(&PlotArgs::PlotAutoSize(true))?
             .set(&PlotArgs::PlotSize((800, 800)))?;
         Ok(())
@@ -306,20 +306,16 @@ impl Plottable for SpotDiagram {
                 }
 
                 let min_window = wavelengths[0].get::<meter>() / 2.;
-                if x_max < min_window {
-                    x_max = min_window;
-                }
-                if y_max < min_window {
-                    y_max = min_window;
-                }
+                x_max = x_max.max(min_window);
+                y_max = y_max.max(min_window);
 
                 let x_exponent = get_exponent_for_base_unit_in_e3_steps(x_max);
                 let y_exponent = get_exponent_for_base_unit_in_e3_steps(y_max);
                 let y_prefix = get_prefix_for_base_unit(y_max);
                 let x_prefix = get_prefix_for_base_unit(x_max);
 
-                plt_type.set_plot_param(&PlotArgs::YLabel(format!("x position ({y_prefix}m)")))?;
-                plt_type.set_plot_param(&PlotArgs::XLabel(format!("y position ({x_prefix}m)")))?;
+                plt_type.set_plot_param(&PlotArgs::YLabel(format!("y in {y_prefix}m")))?;
+                plt_type.set_plot_param(&PlotArgs::XLabel(format!("x in {x_prefix}m")))?;
 
                 for (idx, xy_pos) in xy_pos_series.iter().enumerate() {
                     let grad_val =
