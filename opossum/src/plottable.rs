@@ -2409,13 +2409,17 @@ impl Plot {
         if let (Some(x_range), Some(y_range), Some(x_bounds), Some(y_bounds)) =
             (x_range, y_range, &mut self.bounds.x, &mut self.bounds.y)
         {
-            let points_per_pixel_x = x_range / plot_width.to_f64().unwrap();
-            let points_per_pixel_y = y_range / plot_height.to_f64().unwrap();
-            let ratio_xy = points_per_pixel_x / points_per_pixel_y;
-            if x_range > y_range {
-                y_bounds.expand_lim_range_by_factor(ratio_xy);
+            if (y_range / x_range).log10().abs() > 1. {
+                warn!("Too large difference in axes limits! Axes ranges won't be set to equal to avoid too strong plot distortion");
             } else {
-                x_bounds.expand_lim_range_by_factor(1. / ratio_xy);
+                let points_per_pixel_x = x_range / plot_width.to_f64().unwrap();
+                let points_per_pixel_y = y_range / plot_height.to_f64().unwrap();
+                let ratio_xy = points_per_pixel_x / points_per_pixel_y;
+                if x_range > y_range {
+                    y_bounds.expand_lim_range_by_factor(ratio_xy);
+                } else {
+                    x_bounds.expand_lim_range_by_factor(1. / ratio_xy);
+                }
             }
         } else if x_range.is_some() {
             self.bounds.y = self.bounds.x;
