@@ -148,7 +148,7 @@ impl Analyzer for GhostFocusAnalyzer {
                             .1
                             .get_rays_hit_map(*bounce, rays_uuid)
                             .unwrap()
-                            .calc_fluence_with_kde((100, 100))?;
+                            .calc_fluence_with_kde((100, 100), None)?;
                         hit_map_props.create(
                             "Peak fluence (Voronoi)",
                             "Peak fluence on this surface using Voronoi estimator",

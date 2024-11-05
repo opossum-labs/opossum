@@ -1,6 +1,6 @@
 //! Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
 //! [`OpticalSurface`](crate::surface::OpticalSurface).
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use log::warn;
 use nalgebra::{DVector, MatrixXx2, Point2, Point3};
@@ -166,7 +166,7 @@ impl RaysHitMap {
             Ok(None)
         }
     }
-    fn calc_bounding_box(&self) -> OpmResult<(Point2<Length>, Point2<Length>)> {
+    fn calc_bounding_box(&self, margin: Length) -> OpmResult<(Length, Length, Length, Length)> {
         self.hit_map.first().map_or_else(
             || {
                 Err(OpossumError::Other(
@@ -174,23 +174,29 @@ impl RaysHitMap {
                 ))
             },
             |hit_point| {
-                let mut bottom_left = hit_point.0.xy();
-                let mut top_right = hit_point.0.xy();
+                let mut left = hit_point.0.x;
+                let mut right = hit_point.0.x;
+                let mut top = hit_point.0.y;
+                let mut bottom = hit_point.0.y;
                 for point in &self.hit_map {
-                    if point.0.x < bottom_left.x {
-                        bottom_left.x = point.0.x;
+                    if point.0.x < left {
+                        left = point.0.x;
                     }
-                    if point.0.y < bottom_left.y {
-                        bottom_left.y = point.0.y;
+                    if point.0.y < bottom {
+                        bottom = point.0.y;
                     }
-                    if point.0.x > top_right.x {
-                        top_right.x = point.0.x;
+                    if point.0.x > right {
+                        right = point.0.x;
                     }
-                    if point.0.y > top_right.y {
-                        top_right.y = point.0.y;
+                    if point.0.y > top {
+                        top = point.0.y;
                     }
                 }
-                Ok((bottom_left, top_right))
+                left -= margin;
+                right += margin;
+                bottom -= margin;
+                top += margin;
+                Ok((left, right, top, bottom))
             },
         )
     }
@@ -199,23 +205,26 @@ impl RaysHitMap {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub fn calc_fluence_with_kde(&self, nr_of_points: (usize, usize)) -> OpmResult<FluenceData> {
+    pub fn calc_fluence_with_kde(
+        &self,
+        nr_of_points: (usize, usize),
+        ranges: Option<(Range<Length>, Range<Length>)>,
+    ) -> OpmResult<FluenceData> {
+        dbg!("KDE");
         let mut kde = Kde::default();
-        let (bottom_left, top_right) = self.calc_bounding_box()?;
         let hitmap_2d = self.hit_map.iter().map(|p| (p.0.xy(), p.1)).collect();
         kde.set_hit_map(hitmap_2d);
         let est_bandwidth = kde.bandwidth_estimate();
         kde.set_band_width(est_bandwidth);
-        let fluence_matrix = kde.kde_2d(
-            &(bottom_left.x..top_right.x, bottom_left.y..top_right.y),
-            nr_of_points,
-        );
-        let fluence_data = FluenceData::new(
-            J_per_cm2!(0.0),
-            fluence_matrix,
-            bottom_left.x..top_right.x,
-            bottom_left.y..top_right.y,
-        );
+        let (left, right, top, bottom) = if let Some((x_range, y_range)) = ranges {
+            (x_range.start, x_range.end, y_range.end, y_range.start)
+        } else {
+            self.calc_bounding_box(3. * est_bandwidth)?
+        };
+        dbg!("Done bounding box & bandwidth");
+        let fluence_matrix = kde.kde_2d(&(left..right, bottom..top), nr_of_points);
+        let fluence_data =
+            FluenceData::new(J_per_cm2!(0.0), fluence_matrix, left..right, bottom..top);
         Ok(fluence_data)
     }
 }
