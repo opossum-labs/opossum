@@ -100,6 +100,7 @@ pub trait AnalysisRayTrace: OpticNode {
         rays_bundle: &mut Vec<Rays>,
         analyzer_type: &AnalyzerType,
         backward: bool,
+        refraction_intended: bool,
     ) -> OpmResult<()> {
         let uuid = *self.node_attr().uuid();
         let Some(iso) = &self.effective_iso() else {
@@ -114,7 +115,8 @@ pub trait AnalysisRayTrace: OpticNode {
             )));
         };
         for rays in &mut *rays_bundle {
-            let mut reflected = rays.refract_on_surface(surf, Some(refri_after_surf))?;
+            let mut reflected =
+                rays.refract_on_surface(surf, Some(refri_after_surf), refraction_intended)?;
             reflected.set_node_origin_uuid(uuid);
             if let AnalyzerType::GhostFocus(_) = analyzer_type {
                 surf.evaluate_fluence_of_ray_bundle(rays)?;
@@ -153,7 +155,7 @@ pub trait AnalysisRayTrace: OpticNode {
             if let Some(surf) = self.get_optic_surface_mut(optic_surf_name) {
                 surf.set_isometry(&iso);
                 for rays in &mut *rays_bundle {
-                    rays.refract_on_surface(surf, None)?;
+                    rays.refract_on_surface(surf, None, true)?;
 
                     apodized |= rays.apodize(surf.aperture(), &iso)?;
                     if apodized {

@@ -203,6 +203,7 @@ impl AnalysisRayTrace for ReflectiveGrating {
             };
 
             if let Some(surf) = self.get_optic_surface_mut(in_port) {
+                let refraction_intended = false;
                 surf.set_isometry(&iso);
                 let grating_vector =
                     2. * PI * line_density.value * iso.transform_vector_f64(&Vector3::x());
@@ -211,6 +212,7 @@ impl AnalysisRayTrace for ReflectiveGrating {
                     &refr_index_vaccuum(),
                     grating_vector,
                     &diffraction_order,
+                    refraction_intended,
                 )?;
 
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {

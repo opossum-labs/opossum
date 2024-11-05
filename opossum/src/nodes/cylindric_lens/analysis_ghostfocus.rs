@@ -39,12 +39,14 @@ impl AnalysisGhostFocus for CylindricLens {
             .get(in_port)
             .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
 
+        let refraction_intended = true;
         self.pass_through_surface(
             in_port,
             &refri,
             &mut rays_bundle,
             &AnalyzerType::GhostFocus(config.clone()),
             self.inverted(),
+            refraction_intended,
         )?;
         self.pass_through_surface(
             out_port,
@@ -52,6 +54,7 @@ impl AnalysisGhostFocus for CylindricLens {
             &mut rays_bundle,
             &AnalyzerType::GhostFocus(config.clone()),
             self.inverted(),
+            refraction_intended,
         )?;
 
         let mut out_light_rays = LightRays::default();

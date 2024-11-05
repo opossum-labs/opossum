@@ -48,12 +48,14 @@ impl AnalysisRayTrace for Wedge {
         };
 
         let mut rays_bundle = vec![rays];
+        let refraction_intended = true;
         self.pass_through_surface(
             in_port,
             &refri,
             &mut rays_bundle,
             &AnalyzerType::RayTrace(config.clone()),
             self.inverted(),
+            refraction_intended,
         )?;
         self.pass_through_surface(
             out_port,
@@ -61,6 +63,7 @@ impl AnalysisRayTrace for Wedge {
             &mut rays_bundle,
             &AnalyzerType::RayTrace(config.clone()),
             self.inverted(),
+            refraction_intended,
         )?;
 
         let light_result = LightResult::from([(

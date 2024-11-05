@@ -47,6 +47,8 @@ impl AnalysisRayTrace for BeamSplitter {
         } else {
             ("input1", "input2")
         };
+        //todo: generally bullshit
+        let refraction_intended = true;
         let in1 = incoming_data.get(input_port1);
         // todo: do this also for in2 and check for position inconsistencies....
         let out_rays = if let Some(input1) = in1 {
@@ -60,7 +62,7 @@ impl AnalysisRayTrace for BeamSplitter {
                     };
                     if let Some(surf) = self.get_optic_surface_mut("input1") {
                         surf.set_isometry(&iso);
-                        rays.refract_on_surface(surf, None)?;
+                        rays.refract_on_surface(surf, None, refraction_intended)?;
                     } else {
                         return Err(OpossumError::OpticPort(
                             "input optic surface not found".into(),

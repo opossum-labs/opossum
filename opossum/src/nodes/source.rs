@@ -325,8 +325,9 @@ impl AnalysisGhostFocus for Source {
         if let Some(iso) = self.effective_iso() {
             if let Some(surf) = self.get_optic_surface_mut("input_1") {
                 surf.set_isometry(&iso);
+                let refraction_intended = true;
                 for r in &mut rays {
-                    r.refract_on_surface(surf, None)?;
+                    r.refract_on_surface(surf, None, refraction_intended)?;
                     surf.evaluate_fluence_of_ray_bundle(r)?;
                 }
             } else {

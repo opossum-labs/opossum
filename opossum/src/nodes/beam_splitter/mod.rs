@@ -190,6 +190,8 @@ impl BeamSplitter {
                 "could not read splitter config property".into(),
             ));
         };
+        //todo, not clear
+        let refraction_intended = true;
         let (mut in_ray1, split1) = if let Some(input1) = in1 {
             match input1 {
                 LightData::Geometric(r) => {
@@ -203,7 +205,7 @@ impl BeamSplitter {
                     if let Some(surf) = self.get_optic_surface_mut("input1") {
                         surf.set_isometry(&iso);
 
-                        rays.refract_on_surface(surf, None)?;
+                        rays.refract_on_surface(surf, None, refraction_intended)?;
 
                         if let Some(aperture) = self.ports().aperture(&PortType::Input, "input1") {
                             rays.apodize(aperture, &iso)?;
@@ -244,7 +246,7 @@ impl BeamSplitter {
                     if let Some(surf) = self.get_optic_surface_mut("input2") {
                         surf.set_isometry(&iso);
 
-                        rays.refract_on_surface(surf, None)?;
+                        rays.refract_on_surface(surf, None, refraction_intended)?;
                         if let Some(aperture) = self.ports().aperture(&PortType::Input, "input2") {
                             rays.apodize(aperture, &iso)?;
                             if let AnalyzerType::RayTrace(config) = analyzer_type {

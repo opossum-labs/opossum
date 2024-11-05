@@ -219,8 +219,8 @@ impl AnalysisRayTrace for IdealFilter {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
         surf.set_isometry(&iso);
-
-        rays.refract_on_surface(surf, None)?;
+        let refraction_intended = true;
+        rays.refract_on_surface(surf, None, refraction_intended)?;
         rays.filter_energy(&self.filter_type())?;
         if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
             rays.apodize(aperture, &iso)?;

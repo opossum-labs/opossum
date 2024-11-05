@@ -225,7 +225,11 @@ impl HitMap {
     ///returns a reference to a [`RaysHitMap`] in this [`HitMap`]
     #[must_use]
     pub fn get_rays_hit_map(&self, bounce: usize, uuid: &Uuid) -> Option<&RaysHitMap> {
-        self.hit_map[bounce].get_rays_hit_map(uuid)
+        if bounce >= self.hit_map.len() {
+            None
+        } else {
+            self.hit_map[bounce].get_rays_hit_map(uuid)
+        }
     }
 }
 impl From<HitMap> for Proptype {
