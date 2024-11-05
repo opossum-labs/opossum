@@ -461,8 +461,8 @@ impl Ray {
         n2: Option<f64>,
         ray_bundle_uuid: &Uuid,
     ) -> OpmResult<Option<Self>> {
-        let n2 = n2.unwrap_or_else(|| self.refractive_index());
-        if n2 < 1.0 || !n2.is_finite() {
+        let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
+        if n_refri_2 < 1.0 || !n_refri_2.is_finite() {
             return Err(OpossumError::Other(
                 "the refractive index must be >=1.0 and finite".into(),
             ));
@@ -477,7 +477,7 @@ impl Ray {
             // s2: refracted dir
             //
             // s2 = mu * [ n x ( -n x s1) ] - n* sqrt(1 - mu^2 * (n x s1) dot (n x s1))
-            let mu = self.refractive_index / n2;
+            let mu = self.refractive_index / n_refri_2;
             let s1 = self.dir.normalize();
             let n = surface_normal.normalize();
             let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
@@ -491,7 +491,9 @@ impl Ray {
             // check, if total reflection
             if dis.is_sign_positive() {
                 // handle energy (due to coating)
-                let reflectivity = os.coating().calc_reflectivity(self, surface_normal, n2)?;
+                let reflectivity =
+                    os.coating()
+                        .calc_reflectivity(self, surface_normal, n_refri_2)?;
                 let input_energy = self.energy();
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
                     - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
@@ -503,8 +505,11 @@ impl Ray {
                 reflected_ray.dir = reflected_dir;
                 reflected_ray.e = input_energy * reflectivity;
                 reflected_ray.number_of_bounces += 1;
-                self.refractive_index = n2;
-                self.number_of_refractions += 1;
+                self.refractive_index = n_refri_2;
+                if n2.is_some() {
+                    self.number_of_refractions += 1;
+                }
+
                 // save on hit map of surface
                 os.add_to_hit_map(
                     (intersection_point, input_energy),
