@@ -4,9 +4,11 @@ use crate::{
     error::{OpmResult, OpossumError},
     lightdata::LightData,
     nodes::{
-        fluence_detector::Fluence, ray_propagation_visualizer::RayPositionHistories,
-        reflective_grating::LinearDensity, FilterType, FluenceData, Metertype, OpticGraph,
-        Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
+        fluence_detector::{fluence_data::FluenceData, Fluence},
+        ray_propagation_visualizer::RayPositionHistories,
+        reflective_grating::LinearDensity,
+        FilterType, Metertype, OpticGraph, Spectrometer, SpectrometerType, SpotDiagram,
+        WaveFrontData,
     },
     optic_ports::OpticPorts,
     ray::SplittingConfig,
@@ -79,7 +81,7 @@ pub enum Proptype {
     /// This property stores optical [`Rays`](crate::rays::Rays)
     SpotDiagram(SpotDiagram),
     /// This property stores the fluence information [`FluenceData`]
-    FluenceDetector(FluenceData),
+    FluenceData(FluenceData),
     /// This property stores the wavefront Information [`WaveFrontData`]
     WaveFrontData(WaveFrontData),
     /// This property stores the ray position history of all [`Rays`](crate::rays::Rays) during propagation through the optic scenery
@@ -141,7 +143,7 @@ impl Proptype {
             | Self::GhostFocusHistory(_) => {
                 tt.render("image", &format!("data/{id}_{property_name}.svg"))
             }
-            Self::WaveFrontData(_) | Self::FluenceDetector(_) => {
+            Self::WaveFrontData(_) | Self::FluenceData(_) => {
                 tt.render("image", &format!("data/{id}_{property_name}.png"))
             }
 

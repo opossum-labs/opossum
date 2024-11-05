@@ -16,7 +16,8 @@ use uuid::Uuid;
 
 use crate::{
     error::{OpmResult, OpossumError},
-    nodes::fluence_detector::Fluence,
+    kde::Kde,
+    nodes::fluence_detector::{fluence_data::FluenceData, Fluence},
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
     utils::{
@@ -60,11 +61,10 @@ impl BouncedHitMap {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-///Storage struct for hitpoints on a surface from a single raybundle
+///Storage struct for hitpoints on a surface from a single ray bundle
 pub struct RaysHitMap {
     hit_map: Vec<(Point3<Length>, Energy)>,
 }
-
 impl RaysHitMap {
     /// Add intersection point (with energy) to this [`HitMap`].
     pub fn add_to_hitmap(&mut self, hit_point: (Point3<Length>, Energy)) {
@@ -78,14 +78,19 @@ impl RaysHitMap {
             hit_map: hit_points,
         }
     }
-
+    /// Merge this [`RaysHitMap`] with another [`RaysHitMap`].
+    pub fn merge(&mut self, other_map: &Self) {
+        for hit_point in &other_map.hit_map {
+            self.add_to_hitmap(*hit_point);
+        }
+    }
     /// Calculates the fluence of a ray bundle that is stored in this hitmap
     /// # Attributes
     /// - `max_fluence`: the maximum allowed fluence on this surface
     /// # Errors
     /// This function errors if no reasonable axlimits  can be estimated due to only non-finite values in the positions
     #[allow(clippy::type_complexity)]
-    pub fn calc_fluence(
+    pub fn calc_fluence_with_voronoi_method(
         &self,
         max_fluence: Fluence,
     ) -> OpmResult<Option<(VoronoiedData, AxLims, AxLims, Fluence, Fluence)>> {
@@ -161,6 +166,58 @@ impl RaysHitMap {
             Ok(None)
         }
     }
+    fn calc_bounding_box(&self) -> OpmResult<(Point2<Length>, Point2<Length>)> {
+        self.hit_map.first().map_or_else(
+            || {
+                Err(OpossumError::Other(
+                    "could not calculate bounding box".into(),
+                ))
+            },
+            |hit_point| {
+                let mut bottom_left = hit_point.0.xy();
+                let mut top_right = hit_point.0.xy();
+                for point in &self.hit_map {
+                    if point.0.x < bottom_left.x {
+                        bottom_left.x = point.0.x;
+                    }
+                    if point.0.y < bottom_left.y {
+                        bottom_left.y = point.0.y;
+                    }
+                    if point.0.x > top_right.x {
+                        top_right.x = point.0.x;
+                    }
+                    if point.0.y > top_right.y {
+                        top_right.y = point.0.y;
+                    }
+                }
+                Ok((bottom_left, top_right))
+            },
+        )
+    }
+    /// Returns the calc fluence with kde of this [`RaysHitMap`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn calc_fluence_with_kde(&self, nr_of_points: (usize, usize)) -> OpmResult<FluenceData> {
+        let mut kde = Kde::default();
+        let (bottom_left, top_right) = self.calc_bounding_box()?;
+        let hitmap_2d = self.hit_map.iter().map(|p| (p.0.xy(), p.1)).collect();
+        kde.set_hit_map(hitmap_2d);
+        let est_bandwidth = kde.bandwidth_estimate();
+        kde.set_band_width(est_bandwidth);
+        let fluence_matrix = kde.kde_2d(
+            &(bottom_left.x..top_right.x, bottom_left.y..top_right.y),
+            nr_of_points,
+        );
+        let fluence_data = FluenceData::new(
+            J_per_cm2!(0.0),
+            fluence_matrix,
+            bottom_left.x..top_right.x,
+            bottom_left.y..top_right.y,
+        );
+        Ok(fluence_data)
+    }
 }
 
 /// Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
@@ -169,8 +226,8 @@ impl RaysHitMap {
 pub struct HitMap {
     /// Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle
     hit_map: Vec<BouncedHitMap>,
-    /// Stores the fluence and position in the history of the ray bundles that create a critical fluence on this surface. key value is the uuid of the ray bundle
-    critical_fluence: HashMap<Uuid, (Fluence, usize)>,
+    /// Stores the fluence, position in the history of the ray bundles that create a critical fluence on this surface and the bounce level. key value is the uuid of the ray bundle
+    critical_fluence: HashMap<Uuid, (Fluence, usize, usize)>,
 }
 impl HitMap {
     /// Returns a reference to the hit map of this [`HitMap`].
@@ -207,19 +264,24 @@ impl HitMap {
     pub fn is_empty(&self) -> bool {
         self.hit_map.is_empty()
     }
-
     /// returns a reference to the `critical_fluence` field of this [`HitMap`] which contains:
     /// - the uuid of the ray bundle that causes this critical fluence on this surface as key
-    /// - a tuple containing the calculated peak fluence and the index of the position history which can be used to reconstruct the ray-propagation plot later on
+    /// - a tuple containing the calculated peak fluence, the index of the position history and the bounce level which can be used to reconstruct the ray-propagation plot later on
     #[must_use]
-    pub fn critical_fluences(&self) -> &HashMap<Uuid, (Fluence, usize)> {
+    pub fn critical_fluences(&self) -> &HashMap<Uuid, (Fluence, usize, usize)> {
         &self.critical_fluence
     }
 
     ///stores a critical fluence in a hitmap
-    pub fn add_critical_fluence(&mut self, uuid: &Uuid, rays_hist_pos: usize, fluence: Fluence) {
+    pub fn add_critical_fluence(
+        &mut self,
+        uuid: &Uuid,
+        rays_hist_pos: usize,
+        fluence: Fluence,
+        bounce: usize,
+    ) {
         self.critical_fluence
-            .insert(*uuid, (fluence, rays_hist_pos));
+            .insert(*uuid, (fluence, rays_hist_pos, bounce));
     }
 
     ///returns a reference to a [`RaysHitMap`] in this [`HitMap`]
@@ -230,6 +292,17 @@ impl HitMap {
         } else {
             self.hit_map[bounce].get_rays_hit_map(uuid)
         }
+    }
+    /// Returns a merged [`RaysHitMap`] containing all bounces and uuid's of this [`HitMap`].
+    #[must_use]
+    pub fn get_merged_rays_hit_map(&self) -> RaysHitMap {
+        let mut merged_rays_hit_map = RaysHitMap::default();
+        for bounced_hit_map in &self.hit_map {
+            for hit_map in &bounced_hit_map.hit_map {
+                merged_rays_hit_map.merge(hit_map.1);
+            }
+        }
+        merged_rays_hit_map
     }
 }
 impl From<HitMap> for Proptype {

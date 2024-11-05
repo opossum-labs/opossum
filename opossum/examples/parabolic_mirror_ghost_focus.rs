@@ -4,9 +4,7 @@ use opossum::{
     degree,
     error::OpmResult,
     joule, millimeter,
-    nodes::{
-        round_collimated_ray_source, NodeGroup, ParabolicMirror, SpotDiagram, ThinMirror, Wedge,
-    },
+    nodes::{round_collimated_ray_source, NodeGroup, ParabolicMirror, ThinMirror, Wedge},
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
     refractive_index::RefrIndexConst,

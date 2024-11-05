@@ -7,9 +7,9 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule, micrometer, millimeter, nanometer,
     nodes::{
-        fluence_detector::Fluence,
+        fluence_detector::{fluence_data::FluenceData, Fluence},
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
-        FilterType, FluenceData, WaveFrontData, WaveFrontErrorMap,
+        FilterType, WaveFrontData, WaveFrontErrorMap,
     },
     optic_surface::OpticSurface,
     plottable::AxLims,
@@ -720,24 +720,15 @@ impl Rays {
         let (interp_fluence, _) =
             interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter, &co_ax1, &co_ax2)?;
 
-        let peak_fluence = interp_fluence.iter().fold(f64::NEG_INFINITY, |arg0, v| {
-            if v.is_finite() {
-                f64::max(arg0, *v)
-            } else {
-                arg0
-            }
-        });
-
         Ok(FluenceData::new(
-            J_per_cm2!(peak_fluence),
             average_fluence,
             DMatrix::from_iterator(
                 co_ax1.len(),
                 co_ax2.len(),
                 interp_fluence.iter().map(|val| J_per_cm2!(*val)),
             ),
-            DVector::from_iterator(co_ax1.len(), co_ax1.iter().map(|val| centimeter!(*val))),
-            DVector::from_iterator(co_ax2.len(), co_ax2.iter().map(|val| centimeter!(*val))),
+            centimeter!(co_ax1_lim.min)..centimeter!(co_ax1_lim.max),
+            centimeter!(co_ax2_lim.min)..centimeter!(co_ax2_lim.max),
         ))
     }
 

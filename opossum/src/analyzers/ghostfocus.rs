@@ -120,49 +120,72 @@ impl Analyzer for GhostFocusAnalyzer {
             NodeReport::new("ray propagation", "Global ray propagation", "global", props);
         node_report.set_show_item(true);
         analysis_report.add_node_report(node_report);
+
         for node in scenery.graph().nodes() {
             let node_name = &node.optical_ref.borrow().name();
             let hit_maps = node.optical_ref.borrow().hit_maps();
             for hit_map in &hit_maps {
                 let critical_positions = hit_map.1.critical_fluences();
                 if !critical_positions.is_empty() {
-                    for (i, (rays_uuid, (fluence, hist_idx))) in
+                    for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
                         critical_positions.iter().enumerate()
                     {
+                        let critical_ghost_hist = GhostFocusHistory::from((
+                            scenery.accumulated_rays(),
+                            *rays_uuid,
+                            *hist_idx,
+                        ));
+                        let origin_str =
+                            critical_ghost_hist.rays_origin_report_str(scenery.graph());
                         let mut hit_map_props = Properties::default();
-
                         hit_map_props.create(
-                            "Peak fluence",
-                            "Peak fluence on this surface",
+                            "Origin",
+                            "Surface bounces that enabled this fluence",
+                            None,
+                            origin_str.clone().into(),
+                        )?;
+                        let fluence_data = hit_map
+                            .1
+                            .get_rays_hit_map(*bounce, rays_uuid)
+                            .unwrap()
+                            .calc_fluence_with_kde((100, 100))?;
+                        hit_map_props.create(
+                            "Peak fluence (Voronoi)",
+                            "Peak fluence on this surface using Voronoi estimator",
                             None,
                             format!(
-                                "{}J/cm²",
+                                "{} J/cm²",
                                 format_value_with_prefix(
                                     fluence.get::<joule_per_square_centimeter>()
                                 )
                             )
                             .into(),
                         )?;
-
-                        let critical_ghost_hist = GhostFocusHistory::from((
-                            scenery.accumulated_rays(),
-                            *rays_uuid,
-                            *hist_idx,
-                        ));
-                        hit_map_props.create(
-                            "Origin",
-                            "Surface bounces that enabled this fluence",
-                            None,
-                            critical_ghost_hist
-                                .rays_origin_report_str(scenery.graph())
-                                .into(),
-                        )?;
-
                         hit_map_props.create(
                             "Ray propagation",
                             "ray propagation",
                             None,
                             Proptype::from(critical_ghost_hist),
+                        )?;
+                        hit_map_props.create(
+                            "Peak fluence (KDE)",
+                            "Peak fluence on this surface using kernel density estimator",
+                            None,
+                            format!(
+                                "{} J/cm²",
+                                format_value_with_prefix(
+                                    fluence_data
+                                        .get_peak_fluence()
+                                        .get::<joule_per_square_centimeter>()
+                                )
+                            )
+                            .into(),
+                        )?;
+                        hit_map_props.create(
+                            "Fluence",
+                            "2D spatial energy distribution",
+                            None,
+                            fluence_data.into(),
                         )?;
                         let hit_map_report = NodeReport::new(
                             "surface",

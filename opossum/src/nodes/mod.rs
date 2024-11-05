@@ -27,7 +27,7 @@ pub use beam_splitter::BeamSplitter;
 pub use cylindric_lens::CylindricLens;
 pub use dummy::Dummy;
 pub use energy_meter::{EnergyMeter, Metertype};
-pub use fluence_detector::{FluenceData, FluenceDetector};
+pub use fluence_detector::FluenceDetector;
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::Lens;
 pub use node_attr::NodeAttr;

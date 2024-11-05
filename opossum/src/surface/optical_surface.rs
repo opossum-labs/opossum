@@ -8,7 +8,7 @@ use super::{
     GeoSurface, Plane,
 };
 use crate::{
-    coatings::CoatingType, error::OpmResult, nodes::fluence_detector::Fluence, rays::Rays,
+    coatings::CoatingType, nodes::fluence_detector::Fluence, rays::Rays,
     utils::geom_transformation::Isometry, J_per_cm2,
 };
 
@@ -112,9 +112,15 @@ impl OpticalSurface {
         &self.hit_map
     }
     ///stores a critical fluence in a hitmap
-    pub fn add_critical_fluence(&mut self, uuid: &Uuid, rays_hist_pos: usize, fluence: Fluence) {
+    pub fn add_critical_fluence(
+        &mut self,
+        uuid: &Uuid,
+        rays_hist_pos: usize,
+        fluence: Fluence,
+        bounce: usize,
+    ) {
         self.hit_map
-            .add_critical_fluence(uuid, rays_hist_pos, fluence);
+            .add_critical_fluence(uuid, rays_hist_pos, fluence, bounce);
     }
 
     ///returns a reference to a [`RaysHitMap`] in this [`OpticalSurface`]
@@ -136,19 +142,6 @@ impl OpticalSurface {
     pub fn reset_hit_map(&mut self) {
         self.hit_map.reset();
     }
-
-    /// Evaluate the fluence of a given ray bundle on this surface. If the fluence surpasses its lidt, store the critical fluence parameters in the hitmap
-    /// # Errors
-    /// This function errors  on error propagation of `calc_fluence`
-    pub fn evaluate_fluence_of_ray_bundle(&mut self, rays: &Rays) -> OpmResult<()> {
-        if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), rays.uuid()) {
-            if let Some((_, _, _, _, peak_fluence)) = rays_hit_map.calc_fluence(self.lidt)? {
-                self.add_critical_fluence(rays.uuid(), rays.ray_history_len(), peak_fluence);
-            }
-        }
-        Ok(())
-    }
-
     ///returns a reference to the lidt value of this [`OpticalSurface`]
     #[must_use]
     pub fn lidt(&self) -> &Fluence {

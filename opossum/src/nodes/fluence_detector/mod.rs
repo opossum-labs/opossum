@@ -1,10 +1,6 @@
 #![warn(missing_docs)]
 //! fluence measurement node
-use log::warn;
-use nalgebra::{DMatrix, DVector};
-use plotters::style::RGBAColor;
-use serde::{Deserialize, Serialize};
-use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
+pub mod fluence_data;
 
 use super::node_attr::NodeAttr;
 use crate::{
@@ -18,13 +14,13 @@ use crate::{
     lightdata::LightData,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
-    plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
 };
+use log::warn;
 
-///alias for uom `RadiantExposure`, as this name is rather uncommon to use for laser scientists
+/// alias for uom `RadiantExposure`, as this name is rather uncommon to use for laser scientists
 pub type Fluence = uom::si::f64::RadiantExposure;
 
 /// A fluence monitor
@@ -81,10 +77,16 @@ impl OpticNode for FluenceDetector {
     }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
-        let data = &self.light_data;
-        if let Some(LightData::Geometric(rays)) = data {
-            let fluence_data_res = rays.calc_fluence_at_position();
-            if let Ok(fluence_data) = fluence_data_res {
+        if let Some(LightData::Geometric(rays)) = &self.light_data {
+            // let hit_maps = self.hit_maps();
+            // let Some(hit_map) = hit_maps.get("input_1") else {
+            //     warn!("could not get surface hitmap using default");
+            //     return None;
+            // };
+            // if let Ok(fluence_data) = hit_map
+            //     .get_merged_rays_hit_map()
+            //     .calc_fluence_with_kde((50, 50))
+            if let Ok(fluence_data) = rays.calc_fluence_at_position() {
                 props
                     .create(
                         "Fluence",
@@ -99,7 +101,7 @@ impl OpticNode for FluenceDetector {
                         "Peak Fluence",
                         "Peak fluence of the distribution",
                         None,
-                        Proptype::Fluence(fluence_data.peak),
+                        Proptype::Fluence(fluence_data.peak()),
                     )
                     .unwrap();
 
@@ -108,7 +110,7 @@ impl OpticNode for FluenceDetector {
                         "Average Fluence",
                         "Average Fluence of the distribution",
                         None,
-                        Proptype::Fluence(fluence_data.average),
+                        Proptype::Fluence(fluence_data.average()),
                     )
                     .unwrap();
                 if self.apodization_warning {
@@ -185,140 +187,6 @@ impl AnalysisRayTrace for FluenceDetector {
     }
     fn set_light_data(&mut self, ld: LightData) {
         self.light_data = Some(ld);
-    }
-}
-
-impl From<FluenceData> for Proptype {
-    fn from(value: FluenceData) -> Self {
-        Self::FluenceDetector(value)
-    }
-}
-
-/// Struct to hold the fluence information of a beam
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FluenceData {
-    /// peak fluence of the beam
-    peak: Fluence,
-    /// average fluence of the beam
-    average: Fluence,
-    /// 2d fluence distribution of the beam.
-    interp_distribution: DMatrix<Fluence>,
-    /// x coordinates of the fluence distribution
-    x_data: DVector<Length>,
-    /// y coordinates of the fluence distribution
-    y_data: DVector<Length>,
-}
-
-impl FluenceData {
-    /// Constructs a new [`FluenceData`] struct
-    #[must_use]
-    pub const fn new(
-        peak: Fluence,
-        average: Fluence,
-        interp_distribution: DMatrix<Fluence>,
-        x_data: DVector<Length>,
-        y_data: DVector<Length>,
-    ) -> Self {
-        Self {
-            peak,
-            average,
-            interp_distribution,
-            x_data,
-            y_data,
-        }
-    }
-
-    /// Returns the peak fluence value
-    #[must_use]
-    pub const fn get_peak_fluence(&self) -> Fluence {
-        self.peak
-    }
-
-    /// Returns the average fluence value
-    #[must_use]
-    pub const fn get_average_fluence(&self) -> Fluence {
-        self.average
-    }
-
-    /// Returns the fluence distribution and the corresponding x and y axes in a tuple (x, y, distribution)
-    #[must_use]
-    pub fn get_fluence_distribution(&self) -> (DVector<Length>, DVector<Length>, DMatrix<Fluence>) {
-        (
-            self.x_data.clone(),
-            self.y_data.clone(),
-            self.interp_distribution.clone(),
-        )
-    }
-
-    /// Returns length of the x data points (columns)
-    #[must_use]
-    pub fn len_x(&self) -> usize {
-        self.x_data.len()
-    }
-
-    /// Returns length of the y data points (rows)
-    #[must_use]
-    pub fn len_y(&self) -> usize {
-        self.y_data.len()
-    }
-
-    /// Returns the shape of the interpolation distribution in pixels
-    #[must_use]
-    pub fn shape(&self) -> (usize, usize) {
-        self.interp_distribution.shape()
-    }
-}
-impl Plottable for FluenceData {
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("distance in mm".into()))?
-            .set(&PlotArgs::YLabel("distance in mm".into()))?
-            .set(&PlotArgs::CBarLabel("fluence in J/cm²".into()))?
-            .set(&PlotArgs::PlotSize((800, 800)))?
-            .set(&PlotArgs::ExpandBounds(false))?;
-
-        Ok(())
-    }
-
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::ColorMesh(plt_params.clone())
-    }
-
-    fn get_plot_series(
-        &self,
-        plt_type: &mut PlotType,
-        _legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let (nrows, ncols) = self.interp_distribution.shape();
-
-        match plt_type {
-            PlotType::ColorMesh(_) => {
-                let plt_data = PlotData::ColorMesh {
-                    x_dat_n: DVector::from_iterator(
-                        self.len_x(),
-                        self.x_data
-                            .iter()
-                            .map(uom::si::f64::Length::get::<millimeter>),
-                    ),
-                    y_dat_m: DVector::from_iterator(
-                        self.len_y(),
-                        self.y_data
-                            .iter()
-                            .map(uom::si::f64::Length::get::<millimeter>),
-                    ),
-                    z_dat_nxm: DMatrix::from_iterator(
-                        nrows,
-                        ncols,
-                        self.interp_distribution
-                            .iter()
-                            .map(uom::si::f64::RadiantExposure::get::<joule_per_square_centimeter>),
-                    ),
-                };
-                let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
-                Ok(Some(vec![plt_series]))
-            }
-            _ => Ok(None),
-        }
     }
 }
 
@@ -416,23 +284,6 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-    // #[test]
-    // fn export_data() {
-    //     let mut fd = FluenceDetector::default();
-    //     assert!(fd.export_data(Path::new(""), "").is_err());
-    //     fd.light_data = Some(Rays::default());
-    //     let path = NamedTempFile::new().unwrap();
-    //     assert!(fd.export_data(path.path().parent().unwrap(), "").is_ok());
-    //     fd.light_data = Some(
-    //         Rays::new_uniform_collimated(
-    //             nanometer!(1053.0),
-    //             joule!(1.0),
-    //             &Hexapolar::new(Length::zero(), 1).unwrap(),
-    //         )
-    //         .unwrap(),
-    //     );
-    //     assert!(fd.export_data(path.path().parent().unwrap(), "").is_ok());
-    // }
     #[test]
     fn report() {
         let mut fd = FluenceDetector::default();

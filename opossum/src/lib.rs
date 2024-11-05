@@ -46,6 +46,7 @@ pub mod refractive_index;
 pub mod spectral_distribution;
 // pub mod render;
 pub mod coatings;
+pub mod kde;
 pub mod reporting;
 pub mod spectrum;
 pub mod spectrum_helper;
