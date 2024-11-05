@@ -28,7 +28,11 @@ mod analysis_raytrace;
 #[derive(Debug, Clone)]
 /// A real lens with spherical (or flat) surfaces.
 ///
-///
+/// # Curvature convention:
+/// - negative curvature on the input will be a concave (defocusing) surface
+/// - positive curvature on the input will be a convex (focusing) surface
+/// - negative curvature on the output will be a convex (focusing) surface
+/// - positive curvature on the output will be a concave (defocusing) surface
 /// ## Optical Ports
 ///   - Inputs
 ///     - `front`

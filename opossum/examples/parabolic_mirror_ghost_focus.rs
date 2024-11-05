@@ -29,11 +29,11 @@ fn main() -> OpmResult<()> {
     )?;
     let i_m1 = scenery.add_node(&mirror1)?;
     let i_m2 = scenery.add_node(
-        &ParabolicMirror::new("parabola", millimeter!(-50.0))?
+        &ParabolicMirror::new("parabola", millimeter!(50.0))?
             .with_oap_angles(degree!(90.0, 0.0))?,
     )?;
     let i_m3 = scenery.add_node(
-        &ParabolicMirror::new("parabola", millimeter!(-50.0))?
+        &ParabolicMirror::new("parabola", millimeter!(50.0))?
             .with_oap_angles(degree!(-90.0, 0.0))?,
     )?;
     let mut wedge = Wedge::new(
