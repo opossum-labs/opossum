@@ -26,7 +26,9 @@ use uom::si::f64::Length;
 #[derive(Debug, Clone)]
 /// An infinitely thin mirror with a spherical (or flat) surface.
 ///
-///
+/// Curvature convention:
+/// - negative curvature will be a concave (focusing) mirror
+/// - positive curvature will be a convex (defocusing) mirror
 /// ## Optical Ports
 ///   - Inputs
 ///     - `in1`

@@ -27,7 +27,9 @@ use super::NodeAttr;
 #[derive(Debug, Clone)]
 /// An infinitely thin mirror with a spherical (or flat) surface.
 ///
-///
+/// # Focal length convention:
+/// - positive focal length will be a common focusing parabola
+/// - negative focal length will be a defocusing parabola
 /// ## Optical Ports
 ///   - Inputs
 ///     - `input`
@@ -46,7 +48,7 @@ impl Default for ParabolicMirror {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("parabolic mirror");
         node_attr
-            .create_property("focal length", "focal length", None, meter!(-1.0).into())
+            .create_property("focal length", "focal length", None, meter!(1.0).into())
             .unwrap();
         node_attr
             .create_property(

@@ -40,7 +40,7 @@ impl Parabola {
             ));
         }
         let anchor_isometry = Isometry::new(
-            Point3::new(Length::zero(), Length::zero(), focal_length),
+            Point3::new(Length::zero(), Length::zero(), -focal_length),
             radian!(0., 0., 0.),
         )?;
         let isometry = isometry.append(&anchor_isometry);
@@ -61,10 +61,10 @@ impl Parabola {
         self.off_axis_angles
     }
     fn calc_oap_decenter(&self) -> (Length, Length) {
-        let f_x =
-            2. * self.focal_length / (Ratio::new::<basis_point>(1.) + self.off_axis_angles.0.cos());
-        let f_y =
-            2. * self.focal_length / (Ratio::new::<basis_point>(1.) + self.off_axis_angles.0.cos());
+        let f_x = -2. * self.focal_length
+            / (Ratio::new::<basis_point>(1.) + self.off_axis_angles.0.cos());
+        let f_y = -2. * self.focal_length
+            / (Ratio::new::<basis_point>(1.) + self.off_axis_angles.0.cos());
         let oad_x = f_y * (self.off_axis_angles.1.sin());
         let oad_y = f_x * (self.off_axis_angles.0.sin());
         (oad_x, oad_y)
@@ -82,7 +82,7 @@ impl GeoSurface for Parabola {
             ray.position().y.value,
             ray.position().z.value
         ];
-        let f_length = self.focal_length.value;
+        let f_length = -self.focal_length.value;
         let is_back_propagating = dir.z.is_sign_negative();
         // parabola formula (at origin)
         // x^2 + y^2 - 4fz = 0
@@ -112,7 +112,7 @@ impl GeoSurface for Parabola {
             }
             // "regular" intersection
             Roots::Two(t) => {
-                let real_t = if self.focal_length.is_sign_positive() {
+                let real_t = if self.focal_length.is_sign_negative() {
                     // convex surface => use min t
                     if is_back_propagating {
                         f64::max(t[0], t[1])
@@ -181,7 +181,7 @@ mod test {
 
     #[test]
     fn intersect() {
-        let parabola = Parabola::new(meter!(-1.0), &Isometry::identity()).unwrap();
+        let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
         let ray = Ray::new_collimated(meter!(-1.0, -1.0, -10.0), nanometer!(1000.0), joule!(1.0))
             .unwrap();
         let intersection = parabola.calc_intersect_and_normal_do(&ray).unwrap();
@@ -190,7 +190,7 @@ mod test {
     }
     #[test]
     fn intersect_ray_through_focus() {
-        let parabola = Parabola::new(meter!(-1.0), &Isometry::identity()).unwrap();
+        let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
         let direction = vector![0.0, 1.0, 1. - 0.25];
         let ray = Ray::new(
             meter!(0.0, 0.0, -1.0),
@@ -203,7 +203,7 @@ mod test {
     }
     #[test]
     fn off_axis_decenter() {
-        let mut parabola = Parabola::new(millimeter!(-50.0), &Isometry::identity()).unwrap();
+        let mut parabola = Parabola::new(millimeter!(50.0), &Isometry::identity()).unwrap();
         parabola.set_off_axis_angles((degree!(22.5), degree!(0.0)));
         dbg!(parabola.calc_oap_decenter());
     }
