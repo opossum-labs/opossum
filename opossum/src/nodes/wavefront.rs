@@ -150,7 +150,6 @@ impl WaveFrontErrorMap {
             let ptv = max - min;
             #[allow(clippy::cast_precision_loss)]
             let avg = wf_dat.sum() / wf_dat.len() as f64;
-            // let avg=0.0;
             let rms = f64::sqrt(
                 wf_dat
                     .iter()

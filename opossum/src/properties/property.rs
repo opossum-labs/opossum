@@ -177,7 +177,7 @@ impl Property {
                 let file_path = report_path.join(Path::new(&format!("{id}.svg")));
                 spot_diagram.to_plot(&file_path, crate::plottable::PltBackEnd::SVG)?;
             }
-            Proptype::FluenceDetector(fluence) => {
+            Proptype::FluenceData(fluence) => {
                 let file_path = report_path.join(Path::new(&format!("{id}.png")));
                 fluence.to_plot(&file_path, crate::plottable::PltBackEnd::Bitmap)?;
             }

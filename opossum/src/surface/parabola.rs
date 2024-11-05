@@ -14,7 +14,7 @@ use roots::{find_roots_quadratic, Roots};
 use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::{Angle, Length, Ratio},
-    ratio::basis_point,
+    ratio::ratio,
 };
 
 use super::GeoSurface;
@@ -61,10 +61,10 @@ impl Parabola {
         self.off_axis_angles
     }
     fn calc_oap_decenter(&self) -> (Length, Length) {
-        let f_x = -2. * self.focal_length
-            / (Ratio::new::<basis_point>(1.) + self.off_axis_angles.0.cos());
-        let f_y = -2. * self.focal_length
-            / (Ratio::new::<basis_point>(1.) + self.off_axis_angles.0.cos());
+        let f_x =
+            -2. * self.focal_length / (Ratio::new::<ratio>(1.) + self.off_axis_angles.0.cos());
+        let f_y =
+            -2. * self.focal_length / (Ratio::new::<ratio>(1.) + self.off_axis_angles.0.cos());
         let oad_x = f_y * (self.off_axis_angles.1.sin());
         let oad_y = f_x * (self.off_axis_angles.0.sin());
         (oad_x, oad_y)

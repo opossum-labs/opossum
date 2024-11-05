@@ -141,9 +141,15 @@ impl OpticSurface {
         &self.hit_map
     }
     ///stores a critical fluence in a hitmap
-    pub fn add_critical_fluence(&mut self, uuid: &Uuid, rays_hist_pos: usize, fluence: Fluence) {
+    pub fn add_critical_fluence(
+        &mut self,
+        uuid: &Uuid,
+        rays_hist_pos: usize,
+        fluence: Fluence,
+        bounce: usize,
+    ) {
         self.hit_map
-            .add_critical_fluence(uuid, rays_hist_pos, fluence);
+            .add_critical_fluence(uuid, rays_hist_pos, fluence, bounce);
     }
 
     ///returns a reference to a [`RaysHitMap`] in this [`OpticalSurface`]
@@ -171,8 +177,15 @@ impl OpticSurface {
     /// This function errors  on error propagation of `calc_fluence`
     pub fn evaluate_fluence_of_ray_bundle(&mut self, rays: &Rays) -> OpmResult<()> {
         if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), rays.uuid()) {
-            if let Some((_, _, _, _, peak_fluence)) = rays_hit_map.calc_fluence(self.lidt)? {
-                self.add_critical_fluence(rays.uuid(), rays.ray_history_len(), peak_fluence);
+            if let Some((_, _, _, _, peak_fluence)) =
+                rays_hit_map.calc_fluence_with_voronoi_method(self.lidt)?
+            {
+                self.add_critical_fluence(
+                    rays.uuid(),
+                    rays.ray_history_len(),
+                    peak_fluence,
+                    rays.bounce_lvl(),
+                );
             }
         }
         Ok(())
