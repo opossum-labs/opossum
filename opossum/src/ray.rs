@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
-    length::{meter, millimeter, nanometer},
+    length::{meter, nanometer},
 };
 use uuid::Uuid;
 
@@ -53,6 +53,8 @@ pub struct Ray {
     pos_hist: Vec<Point3<Length>>,
     /// Stores the current propagation direction of the ray (stored as direction cosine)
     dir: Vector3<f64>,
+    /// Stores the last propagation direction of the ray. necessary for node positioning
+    prev_dir: Option<Vector3<f64>>,
     // ///stores the polarization vector (Jones vector) of the ray
     // pol: Vector2<Complex<f64>>,
     /// Energy of the ray
@@ -99,6 +101,7 @@ impl Ray {
             pos: position,
             pos_hist: Vec::<Point3<Length>>::with_capacity(50),
             dir: direction.normalize(),
+            prev_dir: None,
             //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
             e: energy,
             wvl: wave_length,
@@ -123,6 +126,19 @@ impl Ray {
         energy: Energy,
     ) -> OpmResult<Self> {
         Self::new(position, Vector3::z(), wave_length, energy)
+    }
+
+    /// Clears the position history of this [`Ray`]
+    pub fn clear_pos_hist(&mut self) {
+        self.pos_hist.clear();
+    }
+
+    /// Reduces the number of bounces of this [`Ray`] by 1
+    ///
+    /// Necessary for ghost focus analysis of reflective optics
+    //todo: nicer way around this "hack" would be cool
+    pub fn reduce_bounce_counter(&mut self) {
+        self.number_of_bounces -= 1;
     }
 
     ///Returns the number of positions in the position history, ergo the length of the history vector
@@ -211,6 +227,9 @@ impl Ray {
         end_idx: usize,
     ) -> Option<MatrixXx3<Length>> {
         if start_idx >= self.pos_hist.len() {
+            return None;
+        }
+        if end_idx == 0 {
             return None;
         }
 
@@ -317,6 +336,7 @@ impl Ray {
             ));
         }
         //to origin of paraxial surface
+        self.prev_dir = Some(self.dir);
         self.pos = iso.inverse_transform_point(&self.pos);
         self.dir = iso.inverse_transform_vector_f64(&self.dir);
         let optical_power = 1.0 / focal_length;
@@ -335,7 +355,7 @@ impl Ray {
         self.number_of_refractions += 1;
         //back to original position
         self.pos = iso.transform_point(&self.pos);
-        self.dir = iso.transform_vector_f64(&self.dir);
+        self.dir = iso.transform_vector_f64(&self.dir).normalize();
         Ok(())
     }
     /// Diffract a bundle of [`Rays`](crate::rays::Rays) on a periodic surface, e.g., a grating.
@@ -400,6 +420,7 @@ impl Ray {
             self.pos = intersection_point;
             if k_perp_norm_out.is_finite() {
                 let k_perp_out = -k_perp.normalize() * k_perp_norm_out;
+                self.prev_dir = Some(self.dir);
                 self.dir = (k_perp_out + k_para_out).normalize();
                 self.number_of_bounces += 1;
                 //currently only reflection
@@ -434,74 +455,6 @@ impl Ray {
     /// # Errors
     ///
     /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
-    // pub fn refract_on_surface(
-    //     &mut self,
-    //     os: &mut OpticalSurface,
-    //     n2: Option<f64>,
-    //     ray_bundle_uuid: &Uuid,
-    // ) -> OpmResult<Option<Self>> {
-    //     let n2 = n2.unwrap_or_else(|| self.refractive_index());
-    //     if n2 < 1.0 || !n2.is_finite() {
-    //         return Err(OpossumError::Other(
-    //             "the refractive index must be >=1.0 and finite".into(),
-    //         ));
-    //     }
-    //     if let Some((intersection_point, surface_normal)) =
-    //         os.geo_surface().calc_intersect_and_normal(self)
-    //     {
-    //         // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
-    //         // mu=n_1 / n_2
-    //         // s1: incoming direction (normalized??)
-    //         // n: surface normal (normalized??)
-    //         // s2: refracted dir
-    //         //
-    //         // s2 = mu * [ n x ( -n x s1) ] - n* sqrt(1 - mu^2 * (n x s1) dot (n x s1))
-    //         let mu = self.refractive_index / n2;
-    //         let s1 = self.dir.normalize();
-    //         let n = surface_normal.normalize();
-    //         let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
-    //         let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
-    //         let pos_in_m = self.pos.map(|c| c.value);
-    //         let intersection_in_m = intersection_point.map(|c| c.value);
-    //         self.path_length +=
-    //             self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
-    //         self.pos_hist.push(self.pos);
-    //         self.pos = intersection_point;
-    //         // check, if total reflection
-    //         if dis.is_sign_positive() {
-    //             // handle energy (due to coating)
-    //             let reflectivity = os.coating().calc_reflectivity(self, surface_normal, n2)?;
-    //             let input_energy = self.energy();
-    //             let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
-    //                 - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
-    //             self.dir = refract_dir;
-    //             self.e = input_energy * (1. - reflectivity);
-    //             let mut reflected_ray = self.clone();
-    //             // reflected_ray.pos_hist.clear();
-    //             reflected_ray.dir = reflected_dir;
-    //             reflected_ray.e = input_energy * reflectivity;
-    //             reflected_ray.number_of_bounces += 1;
-    //             self.refractive_index = n2;
-    //             self.number_of_refractions += 1;
-    //             // save on hit map of surface
-    //             os.add_to_hit_map(
-    //                 (intersection_point, input_energy),
-    //                 self.number_of_bounces,
-    //                 ray_bundle_uuid,
-    //             );
-
-    //             Ok(Some(reflected_ray))
-    //         } else {
-    //             self.number_of_bounces += 1;
-    //             self.dir = reflected_dir;
-    //             Ok(None)
-    //         }
-    //     } else {
-    //         self.set_invalid();
-    //         Ok(None)
-    //     }
-    // }
-
     pub fn refract_on_surface(
         &mut self,
         os: &mut OpticSurface,
@@ -542,10 +495,11 @@ impl Ray {
                 let input_energy = self.energy();
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
                     - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
+                self.prev_dir = Some(self.dir);
                 self.dir = refract_dir;
                 self.e = input_energy * (1. - reflectivity);
                 let mut reflected_ray = self.clone();
-                // reflected_ray.pos_hist.clear();
+                reflected_ray.prev_dir = Some(reflected_ray.dir);
                 reflected_ray.dir = reflected_dir;
                 reflected_ray.e = input_energy * reflectivity;
                 reflected_ray.number_of_bounces += 1;
@@ -561,6 +515,7 @@ impl Ray {
                 Ok(Some(reflected_ray))
             } else {
                 self.number_of_bounces += 1;
+                self.prev_dir = Some(self.dir);
                 self.dir = reflected_dir;
                 Ok(None)
             }
@@ -718,24 +673,24 @@ impl Ray {
     /// - if the position history is empty and therefore, the last direction cannot be calulated
     /// - if the last postion cannot be unwrapped
     pub fn calc_new_up_direction(&self, up_direction: &mut Vector3<f64>) -> OpmResult<()> {
-        if self.pos_hist.is_empty() {
+        let Some(old_dir) = self.prev_dir else {
             return Err(OpossumError::Other(
-                "not enough positions to calculate new up-direction!".into(),
-            ));
-        }
-        let old_dir = if let Some(last_pos) = self.pos_hist.last() {
-            Vector3::from_vec(
-                (self.pos - last_pos)
-                    .iter()
-                    .map(uom::si::f64::Length::get::<millimeter>)
-                    .collect::<Vec<f64>>(),
-            )
-            .normalize()
-        } else {
-            return Err(OpossumError::Other(
-                "cannot extract last position to calculate new up-direction!".into(),
+                "no previous direction of ray defined to calculate new up-direction!".into(),
             ));
         };
+        // let old_dir = if let Some(last_pos) = self.pos_hist.last() {
+        //     Vector3::from_vec(
+        //         (self.pos - last_pos)
+        //             .iter()
+        //             .map(uom::si::f64::Length::get::<millimeter>)
+        //             .collect::<Vec<f64>>(),
+        //     )
+        //     .normalize()
+        // } else {
+        //     return Err(OpossumError::Other(
+        //         "cannot extract last position to calculate new up-direction!".into(),
+        //     ));
+        // };
 
         if relative_ne!(
             (old_dir - self.dir).norm(),
@@ -1035,7 +990,7 @@ mod test {
         ray.refract_paraxial(millimeter!(100.0), &Isometry::identity())
             .unwrap();
         assert_eq!(ray.pos, pos);
-        let test_ray_dir = vector![-1.0, -2.0, 100.0] / 100.0;
+        let test_ray_dir = vector![-1.0, -2.0, 100.0].normalize();
         assert_abs_diff_eq!(ray.dir.x, test_ray_dir.x);
         assert_abs_diff_eq!(ray.dir.y, test_ray_dir.y);
         assert_abs_diff_eq!(ray.dir.z, test_ray_dir.z);
@@ -1044,7 +999,7 @@ mod test {
         ray.refract_paraxial(millimeter!(-100.0), &Isometry::identity())
             .unwrap();
         assert_eq!(ray.pos, pos);
-        let test_ray_dir = vector![1.0, 2.0, 100.0] / 100.0;
+        let test_ray_dir = vector![1.0, 2.0, 100.0].normalize();
         assert_abs_diff_eq!(ray.dir.x, test_ray_dir.x);
         assert_abs_diff_eq!(ray.dir.y, test_ray_dir.y);
         assert_abs_diff_eq!(ray.dir.z, test_ray_dir.z);
@@ -1063,7 +1018,7 @@ mod test {
         ray.refract_paraxial(millimeter!(100.0), &Isometry::identity())
             .unwrap();
         assert_eq!(ray.pos, pos);
-        let test_ray_dir = vector![0.0, -100.0, 100.0] / 100.0;
+        let test_ray_dir = vector![0.0, -100.0, 100.0].normalize();
         assert_abs_diff_eq!(ray.dir, test_ray_dir);
     }
     #[test]
@@ -1583,18 +1538,21 @@ mod test {
         //propagation
         ray.propagate(meter!(1.)).unwrap();
         //45° reflection to y
+        ray.prev_dir = Some(ray.dir);
         ray.dir = Vector3::y();
 
         ray.calc_new_up_direction(&mut up_direction).unwrap();
         assert_relative_eq!(up_direction, -Vector3::z());
 
         ray.propagate(meter!(1.)).unwrap();
+        ray.prev_dir = Some(ray.dir);
         ray.dir = Vector3::new(0., 0., 1.);
 
         ray.calc_new_up_direction(&mut up_direction).unwrap();
         assert_relative_eq!(up_direction, Vector3::y());
 
         ray.propagate(meter!(1.)).unwrap();
+        ray.prev_dir = Some(ray.dir);
         ray.dir = Vector3::new(1., 0., 0.);
 
         ray.calc_new_up_direction(&mut up_direction).unwrap();

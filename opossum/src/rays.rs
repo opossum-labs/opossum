@@ -166,6 +166,11 @@ impl Rays {
         self.parent_id = Some(parent_uuid);
     }
 
+    /// Sets the uuid of this ray bundle
+    pub fn set_uuid(&mut self, uuid: Uuid) {
+        self.uuid = uuid;
+    }
+
     /// Sets the node origin uuid of this ray bundle
     pub fn set_node_origin_uuid(&mut self, node_uuid: Uuid) {
         self.node_origin = Some(node_uuid);
@@ -788,49 +793,16 @@ impl Rays {
     /// This function will return an error if
     ///   - the refractive index of the surface for a given ray cannot be determined (e.g. wavelength out of range, etc.).
     ///   - the underlying function for refraction of a single [`Ray`] on the surface fails.
-    // pub fn refract_on_surface(
-    //     &mut self,
-    //     surface: &mut OpticalSurface,
-    //     refractive_index: Option<&RefractiveIndexType>,
-    // ) -> OpmResult<Self> {
-    //     let mut valid_rays_found = false;
-    //     let mut rays_missed = false;
-    //     let mut reflected_rays = Self::default();
-    //     for ray in &mut self.rays {
-    //         if ray.valid() {
-    //             let n2 = if let Some(refractive_index) = refractive_index {
-    //                 Some(refractive_index.get_refractive_index(ray.wavelength())?)
-    //             } else {
-    //                 None
-    //             };
-    //             if let Some(reflected) = ray.refract_on_surface(surface, n2, &self.uuid)? {
-    //                 reflected_rays.add_ray(reflected);
-    //             } else {
-    //                 rays_missed = true;
-    //             };
-    //             valid_rays_found = true;
-    //         }
-    //     }
-    //     if rays_missed {
-    //         warn!("rays totally reflected or missed a surface");
-    //     }
-    //     if !valid_rays_found {
-    //         warn!("ray bundle contains no valid rays - not propagating");
-    //     }
-    //     //surface.set_backwards_rays_cache(reflected_rays.clone());
-    //     reflected_rays.set_parent_uuid(self.uuid);
-    //     reflected_rays.set_parent_node_split_idx(self.ray_history_len());
-    //     Ok(reflected_rays)
-    // }
-
     pub fn refract_on_surface(
         &mut self,
         surface: &mut OpticSurface,
         refractive_index: Option<&RefractiveIndexType>,
+        refraction_intended: bool,
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
         let mut reflected_rays = Self::default();
+
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = if let Some(refractive_index) = refractive_index {
@@ -838,7 +810,13 @@ impl Rays {
                 } else {
                     None
                 };
-                if let Some(reflected) = ray.refract_on_surface(surface, n2, &self.uuid)? {
+                if let Some(mut reflected) = ray.refract_on_surface(surface, n2, &self.uuid)? {
+                    if refraction_intended {
+                        reflected.clear_pos_hist();
+                    } else {
+                        reflected.reduce_bounce_counter();
+                        ray.clear_pos_hist();
+                    }
                     reflected_rays.add_ray(reflected);
                 } else {
                     rays_missed = true;
@@ -853,8 +831,19 @@ impl Rays {
             warn!("ray bundle contains no valid rays - not propagating");
         }
         //surface.set_backwards_rays_cache(reflected_rays.clone());
-        reflected_rays.set_parent_uuid(self.uuid);
-        reflected_rays.set_parent_node_split_idx(self.ray_history_len());
+        if refraction_intended {
+            reflected_rays.set_parent_uuid(self.uuid);
+            reflected_rays.set_parent_node_split_idx(self.ray_history_len());
+        } else {
+            reflected_rays.set_uuid(self.uuid);
+            if let Some(node_origin) = self.node_origin {
+                reflected_rays.set_node_origin_uuid(node_origin);
+            }
+            if let Some(parent_id) = self.parent_id {
+                reflected_rays.set_parent_uuid(parent_id);
+                reflected_rays.set_parent_node_split_idx(self.parent_pos_split_idx);
+            }
+        }
         Ok(reflected_rays)
     }
     /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating
@@ -873,6 +862,7 @@ impl Rays {
         refractive_index: &RefractiveIndexType,
         grating_vector: Vector3<f64>,
         diffraction_order: &i32,
+        refraction_intended: bool,
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
@@ -880,12 +870,18 @@ impl Rays {
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength())?;
-                if let Some(reflected) = ray.diffract_on_periodic_surface(
+                if let Some(mut reflected) = ray.diffract_on_periodic_surface(
                     surface,
                     n2,
                     grating_vector,
                     diffraction_order,
                 )? {
+                    if refraction_intended {
+                        reflected.clear_pos_hist();
+                    } else {
+                        reflected.reduce_bounce_counter();
+                        ray.clear_pos_hist();
+                    }
                     reflected_rays.add_ray(reflected);
                 } else {
                     rays_missed = true;
@@ -899,7 +895,19 @@ impl Rays {
         if !valid_rays_found {
             warn!("ray bundle contains no valid rays - not propagating");
         }
-        reflected_rays.set_parent_uuid(self.uuid);
+        if refraction_intended {
+            reflected_rays.set_parent_uuid(self.uuid);
+            reflected_rays.set_parent_node_split_idx(self.ray_history_len());
+        } else {
+            reflected_rays.set_uuid(self.uuid);
+            if let Some(node_origin) = self.node_origin {
+                reflected_rays.set_node_origin_uuid(node_origin);
+            }
+            if let Some(parent_id) = self.parent_id {
+                reflected_rays.set_parent_uuid(parent_id);
+                reflected_rays.set_parent_node_split_idx(self.parent_pos_split_idx);
+            }
+        }
         Ok(reflected_rays)
     }
     /// Filter a ray bundle by a given filter.
@@ -1805,7 +1813,7 @@ mod test {
         assert_eq!(rays.rays[0].position(), ray0.position());
         assert_eq!(rays.rays[0].direction(), ray0.direction());
         assert_eq!(rays.rays[1].position(), ray1.position());
-        let new_dir = vector![0.0, -1.0, 100.0] / 100.0;
+        let new_dir = vector![0.0, -1.0, 100.0].normalize();
         assert_abs_diff_eq!(rays.rays[1].direction().x, new_dir.x);
         assert_abs_diff_eq!(rays.rays[1].direction().y, new_dir.y);
         assert_abs_diff_eq!(rays.rays[1].direction().z, new_dir.z);
@@ -1815,7 +1823,11 @@ mod test {
         let mut rays = Rays::default();
         testing_logger::setup();
         let reflected = rays
-            .refract_on_surface(&mut OpticSurface::default(), Some(&refr_index_vaccuum()))
+            .refract_on_surface(
+                &mut OpticSurface::default(),
+                Some(&refr_index_vaccuum()),
+                true,
+            )
             .unwrap();
         check_warnings(vec!["ray bundle contains no valid rays - not propagating"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
@@ -1841,7 +1853,7 @@ mod test {
         ray1.set_refractive_index(2.0).unwrap();
         rays.add_ray(ray0);
         rays.add_ray(ray1);
-        rays.refract_on_surface(&mut OpticSurface::default(), None)
+        rays.refract_on_surface(&mut OpticSurface::default(), None, true)
             .unwrap();
         for ray in rays.iter() {
             assert_abs_diff_eq!(ray.direction(), vector![0.0, 1.0, 1.0].normalize())
@@ -1856,7 +1868,11 @@ mod test {
         );
         testing_logger::setup();
         let reflected = rays
-            .refract_on_surface(&mut OpticSurface::default(), Some(&refr_index_vaccuum()))
+            .refract_on_surface(
+                &mut OpticSurface::default(),
+                Some(&refr_index_vaccuum()),
+                true,
+            )
             .unwrap();
         check_warnings(vec!["rays totally reflected or missed a surface"]);
         assert_eq!(reflected.nr_of_rays(false), 0);
@@ -1871,7 +1887,7 @@ mod test {
         let mut s = OpticSurface::default();
         s.set_coating(CoatingType::ConstantR { reflectivity: 0.2 });
         let reflected = rays
-            .refract_on_surface(&mut s, Some(&refr_index_vaccuum()))
+            .refract_on_surface(&mut s, Some(&refr_index_vaccuum()), true)
             .unwrap();
         assert_eq!(rays.total_energy(), joule!(0.8));
         assert_eq!(reflected.total_energy(), joule!(0.2));
@@ -2129,7 +2145,7 @@ mod test {
 
         let mut s = OpticSurface::default();
         s.set_isometry(&Isometry::new_along_z(millimeter!(10.0)).unwrap());
-        rays.refract_on_surface(&mut s, Some(&refr_index_vaccuum()))
+        rays.refract_on_surface(&mut s, Some(&refr_index_vaccuum()), true)
             .unwrap();
         let wf_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.), &Isometry::identity());
@@ -2152,7 +2168,7 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        rays.refract_on_surface(&mut s, Some(&refr_index_vaccuum()))
+        rays.refract_on_surface(&mut s, Some(&refr_index_vaccuum()), true)
             .unwrap();
         let wf_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.), &Isometry::identity());

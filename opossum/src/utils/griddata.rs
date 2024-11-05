@@ -343,19 +343,6 @@ pub fn create_voronoi_cells(xy_coord: &MatrixXx2<f64>) -> OpmResult<(VoronoiDiag
             )
         };
 
-        // triangulation
-        //     .ok_or_else(|| OpossumError::Other("Could not create voronoi diagram!".into()))?.
-        //     .map(|triag| {
-        //         let convex_hull = triag.hull;
-        //         (
-        //             Iterator::map(convex_hull.iter().rev(), |idx| {
-        //                 Point2::new(points[*idx].x, points[*idx].y)
-        //             })
-        //             .collect_vec(),
-        //             triag.triangles.len() / 3,
-        //         )
-        //     });
-
         let area_hull = calc_closed_poly_area(convex_hull_points.as_slice())?;
         let area_triangle = area_hull / num_triangles.to_f64().unwrap();
         let side_length_triangle = (area_triangle * 4. / (3.).sqrt()).sqrt();

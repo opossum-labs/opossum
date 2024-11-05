@@ -4,19 +4,20 @@ use uom::si::f64::{Angle, Length};
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, RayTraceConfig,
+        Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     coatings::CoatingType,
     degree,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
+    light_result::{LightRays, LightResult},
     lightdata::LightData,
     meter,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
     optic_surface::OpticSurface,
     properties::Proptype,
+    rays::Rays,
     surface::{GeometricSurface, Parabola},
     utils::geom_transformation::Isometry,
 };
@@ -72,6 +73,15 @@ impl Default for ParabolicMirror {
             .set_coating(
                 &PortType::Input,
                 "input_1",
+                &CoatingType::ConstantR { reflectivity: 1.0 },
+            )
+            .unwrap();
+
+        parabola
+            .ports_mut()
+            .set_coating(
+                &PortType::Output,
+                "output_1",
                 &CoatingType::ConstantR { reflectivity: 1.0 },
             )
             .unwrap();
@@ -173,7 +183,46 @@ impl Dottable for ParabolicMirror {
 }
 impl LIDT for ParabolicMirror {}
 impl Analyzable for ParabolicMirror {}
-impl AnalysisGhostFocus for ParabolicMirror {}
+impl AnalysisGhostFocus for ParabolicMirror {
+    fn analyze(
+        &mut self,
+        incoming_data: LightRays,
+        _config: &GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
+        _bounce_lvl: usize,
+    ) -> OpmResult<LightRays> {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+
+        let mut rays_bundle = incoming_data
+            .get(in_port)
+            .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
+
+        for rays in &mut rays_bundle {
+            let mut input = LightResult::default();
+            input.insert(in_port.clone(), LightData::Geometric(rays.clone()));
+            let out = AnalysisRayTrace::analyze(self, input, &RayTraceConfig::default())?;
+
+            if let Some(LightData::Geometric(r)) = out.get(out_port) {
+                *rays = r.clone();
+            }
+        }
+
+        let Some(surf) = self.get_optic_surface_mut(in_port) else {
+            return Err(OpossumError::Analysis(format!(
+                "Cannot find surface: \"{in_port}\" of node: \"{}\"",
+                self.node_attr().name()
+            )));
+        };
+        for rays in &mut rays_bundle {
+            surf.evaluate_fluence_of_ray_bundle(rays)?;
+        }
+
+        let mut out_light_rays = LightRays::default();
+        out_light_rays.insert(out_port.to_string(), rays_bundle.clone());
+        Ok(out_light_rays)
+    }
+}
 impl AnalysisEnergy for ParabolicMirror {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let in_port = &self.ports().names(&PortType::Input)[0];
@@ -198,8 +247,11 @@ impl AnalysisRayTrace for ParabolicMirror {
         if let LightData::Geometric(mut rays) = data.clone() {
             let reflected = if let Some(iso) = self.effective_iso() {
                 if let Some(surf) = self.get_optic_surface_mut(in_port) {
+                    let refraction_intended = false;
+
                     surf.set_isometry(&iso);
-                    let mut reflected_rays = rays.refract_on_surface(surf, None)?;
+                    let mut reflected_rays =
+                        rays.refract_on_surface(surf, None, refraction_intended)?;
                     if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
                         reflected_rays.apodize(aperture, &iso)?;
                         reflected_rays

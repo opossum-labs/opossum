@@ -139,11 +139,13 @@ impl AnalysisRayTrace for ParaxialSurface {
                 ));
             };
             if let Some(surf) = self.get_optic_surface_mut(in_port) {
+                let refraction_intended = true;
                 surf.set_isometry(&iso);
 
                 rays.refract_on_surface(
                     surf, //&mut OpticalSurface::new(Box::new(Plane::new(&iso))),
                     None,
+                    refraction_intended,
                 )?;
                 rays.refract_paraxial(focal_length, &iso)?;
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
@@ -304,7 +306,7 @@ mod test {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
             assert_eq!(ray.position(), millimeter!(0.0, 0.0, 10.0));
-            assert_eq!(ray.direction(), Vector3::new(1., 0., 1.));
+            assert_eq!(ray.direction(), Vector3::new(1., 0., 1.).normalize());
         } else {
             assert!(false, "could not get LightData");
         }
@@ -329,7 +331,7 @@ mod test {
             assert_eq!(rays.nr_of_rays(true), 1);
             let ray = rays.iter().next().unwrap();
             assert_eq!(ray.position(), millimeter!(0.0, 0.0, 10.0));
-            assert_eq!(ray.direction(), Vector3::new(0., 1., 1.));
+            assert_eq!(ray.direction(), Vector3::new(0., 1., 1.).normalize());
         } else {
             assert!(false, "could not get LightData");
         }
