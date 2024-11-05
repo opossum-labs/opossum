@@ -19,10 +19,13 @@ fn main() -> OpmResult<()> {
     for p in points {
         hit_map.add_to_hitmap((point!(p.x, p.y, millimeter!(0.0)), weight));
     }
-    let fluence_data = hit_map.calc_fluence_with_kde((100, 100))?;
+    dbg!("Done Add HitMap");
+    let fluence_data = hit_map.calc_fluence_with_kde((100, 100), None)?;
+    dbg!("Done KDE");
     fluence_data.to_plot(
         Path::new("./opossum/playground/kde.png"),
         opossum::plottable::PltBackEnd::Bitmap,
     )?;
+    dbg!("Done PNG");
     Ok(())
 }
