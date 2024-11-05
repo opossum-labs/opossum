@@ -20,7 +20,7 @@ use crate::{
     nodes::FilterType,
     optic_surface::OpticSurface,
     spectrum::Spectrum,
-    surface::GeoSurface,
+    surface::geo_surface::GeoSurface,
     utils::geom_transformation::Isometry,
 };
 

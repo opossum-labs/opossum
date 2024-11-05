@@ -17,7 +17,7 @@ use crate::{
     optic_surface::OpticSurface,
     properties::Proptype,
     rays::Rays,
-    surface::{GeometricSurface, Plane, Sphere},
+    surface::{geo_surface::GeometricSurface, Plane, Sphere},
     utils::geom_transformation::Isometry,
 };
 use num::Zero;

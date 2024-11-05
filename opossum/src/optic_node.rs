@@ -22,7 +22,7 @@ use crate::{
     rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
-    surface::{hit_map::HitMap, GeometricSurface, Plane},
+    surface::{geo_surface::GeometricSurface, hit_map::HitMap, Plane},
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;

@@ -18,7 +18,7 @@ use crate::{
     optic_surface::OpticSurface,
     properties::Proptype,
     rays::Rays,
-    surface::{GeometricSurface, Parabola},
+    surface::{geo_surface::GeometricSurface, Parabola},
     utils::geom_transformation::Isometry,
 };
 

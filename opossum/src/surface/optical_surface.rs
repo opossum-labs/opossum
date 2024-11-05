@@ -1,11 +1,15 @@
+//! Module for hnadling optical surfaces.
+//!
+
 use log::warn;
 use nalgebra::Point3;
 use uom::si::f64::{Energy, Length};
 use uuid::Uuid;
 
 use super::{
+    geo_surface::GeoSurface,
     hit_map::{HitMap, RaysHitMap},
-    GeoSurface, Plane,
+    Plane,
 };
 use crate::{
     coatings::CoatingType, nodes::fluence_detector::Fluence, rays::Rays,

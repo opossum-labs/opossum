@@ -1,13 +1,11 @@
 //! Spherical surface
 //!
 //! This module implements a cylindrical surface with a given radius of curvature and a given position / alignment in 3D space.
-use super::GeoSurface;
-use crate::radian;
-use crate::ray::Ray;
-use crate::utils::geom_transformation::Isometry;
 use crate::{
     error::{OpmResult, OpossumError},
-    meter,
+    meter, radian,
+    ray::Ray,
+    utils::geom_transformation::Isometry,
 };
 use nalgebra::Vector3;
 use nalgebra::{vector, Point3};
@@ -16,6 +14,8 @@ use roots::find_roots_quadratic;
 use roots::Roots;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
+
+use super::geo_surface::GeoSurface;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A spherical surface with its anchor point on the optical axis.

@@ -1,13 +1,11 @@
 //! Spherical surface
 //!
-//! This module implements a spherical surface with a given radius of curvature and a given z position on the optical axis.
-use super::GeoSurface;
-use crate::radian;
-use crate::ray::Ray;
-use crate::utils::geom_transformation::Isometry;
+//! This module implements a spherical surface with a given radius of curvature.
 use crate::{
     error::{OpmResult, OpossumError},
-    meter,
+    meter, radian,
+    ray::Ray,
+    utils::geom_transformation::Isometry,
 };
 use nalgebra::Vector3;
 use nalgebra::{vector, Point3};
@@ -17,8 +15,10 @@ use roots::Roots;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
+use super::geo_surface::GeoSurface;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-/// A spherical surface with its anchor point on the optical axis.
+/// A spherical surface with its anchor point directly on the surface.
 pub struct Sphere {
     radius: Length,
     isometry: Isometry,

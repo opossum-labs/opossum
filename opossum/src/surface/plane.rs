@@ -1,27 +1,42 @@
 //! Flat surface
 //!
-//! An infinitely large flat 2D surface oriented perpendicular to the optical axis (xy plane) and positioned a the given z position.
-
-use super::GeoSurface;
+//! An infinitely large and perfectly flat 2D surface
 use crate::{meter, ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use num::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
+use super::geo_surface::GeoSurface;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-/// An infinitely large flat surface with its normal collinear to the optical axis.
+/// An infinitely large and perfectly flat surface
+///
+/// By default (using `Isometry::identity()`), the surface is oriented
+/// with its normal along the optical axis (= xy surface) and positioned at the origin.
+/// In addition, the surface normal vector is collinear to the optical axis but
+/// pointing to the negative z direction: `vector(0.0, 0.0, -1.0)`.
 pub struct Plane {
     isometry: Isometry,
 }
 impl Plane {
-    /// Create a new [`Plane`] located at the given z position on the optical axis.
+    /// Create a new [`Plane`].
     ///
-    /// By default (all rotation angles zero), the plane is oriented vertical with respect to the optical axis (xy plane).
+    /// The located and orientation is defined by the given [`Isometry`]. By default
+    /// (using `Isometry::identity()`), the surface is oriented with its normal along the
+    /// optical axis (= xy surface) and positioned at the origin (z=0)
     #[must_use]
     pub fn new(isometry: &Isometry) -> Self {
         Self {
             isometry: isometry.clone(),
+        }
+    }
+}
+impl Default for Plane {
+    /// Create a new [`Plane`] aligned in the xy plane at position z = 0.
+    fn default() -> Self {
+        Self {
+            isometry: Isometry::default(),
         }
     }
 }
@@ -50,7 +65,6 @@ impl GeoSurface for Plane {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
-
     fn box_clone(&self) -> Box<dyn GeoSurface> {
         Box::new(self.clone())
     }
@@ -72,11 +86,33 @@ impl GeoSurface for Plane {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{joule, millimeter, nanometer};
+    use crate::{degree, joule, millimeter, nanometer};
+    #[test]
+    fn default() {
+        let p = Plane::default();
+        let t = p.isometry.translation_vec();
+        assert_eq!(t.x, millimeter!(0.0));
+        assert_eq!(t.y, millimeter!(0.0));
+        assert_eq!(t.z, millimeter!(0.0));
+        let r = p.isometry.rotation();
+        assert_eq!(r.x, degree!(0.0));
+        assert_eq!(r.y, degree!(0.0));
+        assert_eq!(r.z, degree!(0.0));
+    }
     #[test]
     fn new() {
         let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
         let p = Plane::new(&iso);
+        let t = p.isometry.translation_vec();
+        assert_eq!(t.x, millimeter!(0.0));
+        assert_eq!(t.y, millimeter!(0.0));
+        assert_eq!(t.z, millimeter!(1.0));
+    }
+    #[test]
+    fn set_isometry() {
+        let mut p = Plane::default();
+        let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
+        p.set_isometry(&iso);
         let t = p.isometry.translation_vec();
         assert_eq!(t.x, millimeter!(0.0));
         assert_eq!(t.y, millimeter!(0.0));

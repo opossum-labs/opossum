@@ -8,7 +8,7 @@ use crate::{
     optic_ports::PortType,
     optic_surface::OpticSurface,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{GeometricSurface, Plane},
+    surface::{geo_surface::GeometricSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use num::Zero;

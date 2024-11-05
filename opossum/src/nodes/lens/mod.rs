@@ -12,7 +12,7 @@ use crate::{
     optic_surface::OpticSurface,
     properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{GeometricSurface, Plane, Sphere},
+    surface::{geo_surface::GeometricSurface, Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]

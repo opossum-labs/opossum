@@ -16,7 +16,7 @@ use crate::{
     ray::SplittingConfig,
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
-    surface::{GeometricSurface, Plane},
+    surface::{geo_surface::GeometricSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 

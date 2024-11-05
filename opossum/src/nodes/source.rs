@@ -20,7 +20,7 @@ use crate::{
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    surface::{GeometricSurface, Plane},
+    surface::{geo_surface::GeometricSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use std::fmt::Debug;

@@ -17,10 +17,10 @@ use uom::si::{
     ratio::ratio,
 };
 
-use super::GeoSurface;
+use super::geo_surface::GeoSurface;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-/// A spherical surface with its anchor point on the optical axis.
+/// A parabolic surface with a given focal length and a given z position on the optical axis.
 pub struct Parabola {
     focal_length: Length,
     isometry: Isometry,
@@ -171,13 +171,12 @@ impl GeoSurface for Parabola {
 
 #[cfg(test)]
 mod test {
-    use nalgebra::vector;
-
     use super::Parabola;
     use crate::{
-        degree, joule, meter, millimeter, nanometer, ray::Ray, surface::GeoSurface,
+        degree, joule, meter, millimeter, nanometer, ray::Ray, surface::geo_surface::GeoSurface,
         utils::geom_transformation::Isometry,
     };
+    use nalgebra::vector;
 
     #[test]
     fn intersect() {

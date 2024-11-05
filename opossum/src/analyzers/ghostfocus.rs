@@ -214,7 +214,7 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     /// Perform a ghost focus analysis of an [`OpticNode`].
     ///
     /// This function is similar to the corresponding [`AnalysisRayTrace`] function but also
-    /// considers possible reflected [`Rays`](crate::rays::Rays).
+    /// considers possible reflected [`Rays`].
     ///
     /// # Errors
     ///

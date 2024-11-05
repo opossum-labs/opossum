@@ -11,8 +11,8 @@ use crate::{
     nodes::fluence_detector::Fluence,
     rays::Rays,
     surface::{
+        geo_surface::{GeoSurface, GeometricSurface},
         hit_map::{HitMap, RaysHitMap},
-        GeoSurface, GeometricSurface,
     },
     utils::geom_transformation::Isometry,
     J_per_cm2,
