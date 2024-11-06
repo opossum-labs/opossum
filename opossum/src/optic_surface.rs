@@ -22,13 +22,16 @@ use core::fmt::Debug;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct OpticSurface {
+    #[serde(skip)]
     geo_surface: GeometricSurface,
     aperture: Aperture,
     coating: CoatingType,
     lidt: Fluence,
-
+    #[serde(skip)]
     backward_rays_cache: Vec<Rays>,
+    #[serde(skip)]
     forward_rays_cache: Vec<Rays>,
+    #[serde(skip)]
     hit_map: HitMap,
 }
 

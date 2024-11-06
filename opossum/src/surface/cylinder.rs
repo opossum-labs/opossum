@@ -10,14 +10,12 @@ use crate::{
 use nalgebra::Vector3;
 use nalgebra::{vector, Point3};
 use num::Zero;
-use roots::find_roots_quadratic;
-use roots::Roots;
-use serde::{Deserialize, Serialize};
+use roots::{find_roots_quadratic, Roots};
 use uom::si::f64::Length;
 
 use super::geo_surface::GeoSurface;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 /// A spherical surface with its anchor point on the optical axis.
 pub struct Cylinder {
     radius: Length,

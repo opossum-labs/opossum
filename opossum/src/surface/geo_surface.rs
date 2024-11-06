@@ -6,7 +6,6 @@
 use super::{Cylinder, Parabola, Plane, Sphere};
 use crate::{ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
-use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use uom::si::f64::Length;
 
@@ -47,7 +46,7 @@ pub trait GeoSurface {
 }
 
 /// Enum for geometric surfaces, used in [`OpticSurface`]
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum GeometricSurface {
     /// spherical surface. Holds a [`Sphere`] and a a flag that defines whether this surface is to be used as convex or concave
     Spherical {

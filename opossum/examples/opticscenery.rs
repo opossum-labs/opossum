@@ -15,7 +15,6 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(node1, "output_1", node2, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    //doc.add_analyzer(AnalyzerType::Energy);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new("./opossum/playground/opticscenery.opm"))
 }
