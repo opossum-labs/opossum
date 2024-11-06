@@ -285,7 +285,9 @@ mod test {
             .set_off_axis_angles((degree!(0.0), degree!(180.0)))
             .is_err());
 
-        parabola.set_off_axis_angles((degree!(10.0), degree!(15.0))).unwrap();
+        parabola
+            .set_off_axis_angles((degree!(10.0), degree!(15.0)))
+            .unwrap();
         assert_eq!(parabola.off_axis_angles(), (degree!(10.0), degree!(15.0)));
     }
     #[test]

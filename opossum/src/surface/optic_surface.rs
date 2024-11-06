@@ -1,5 +1,4 @@
 //! Module handling optical surfaces
-use log::warn;
 use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Energy, Length};
@@ -8,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     aperture::Aperture,
     coatings::CoatingType,
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     nodes::fluence_detector::Fluence,
     rays::Rays,
     surface::{
@@ -39,6 +38,10 @@ pub struct OpticSurface {
 }
 
 impl Default for OpticSurface {
+    /// Returns a default [`OpticSurface`].
+    ///
+    /// The default is a flat surface with an ideal antireflective caoting (=no reflection), no limiting aperture
+    /// and a lidt of 1 J/cm².
     fn default() -> Self {
         Self {
             geo_surface: GeometricSurface::default(),
@@ -53,20 +56,31 @@ impl Default for OpticSurface {
 }
 impl OpticSurface {
     /// Creates a new [`OpticSurface`].
-    #[must_use]
+    ///
+    /// **Note**: The laser induced damage threshold (LIDT) can be set to infinity to model an
+    /// "unbreakable" optical surface.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given lidt is negative or NaN.
     pub fn new(
         geo_surface: GeometricSurface,
         coating: CoatingType,
         aperture: Aperture,
         lidt: Fluence,
-    ) -> Self {
-        Self {
+    ) -> OpmResult<Self> {
+        if lidt.is_sign_negative() || lidt.is_nan() {
+            return Err(OpossumError::Other(
+                "LIDT must be positive and not NaN".into(),
+            ));
+        }
+        Ok(Self {
             geo_surface,
             aperture,
             coating,
             lidt,
             ..Default::default()
-        }
+        })
     }
     /// Gets a mutable reference to the forward / backward rays cache of this [`OpticSurface`].
     pub fn get_rays_cache_mut(&mut self, get_back_ward_cache: bool) -> &mut Vec<Rays> {
@@ -215,13 +229,19 @@ impl OpticSurface {
     pub fn lidt(&self) -> &Fluence {
         &self.lidt
     }
-    ///set the lidt of this [`OpticSurface`]
-    pub fn set_lidt(&mut self, lidt: Fluence) {
-        if lidt.is_sign_negative() || !lidt.is_normal() {
-            warn!("LIDT values mut be > 0 and finite! Using default value of 1 J/cm²");
-            return;
+    /// Sets the laser induced damage threshold (LIDT) [`OpticSurface`]
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given LIDT is negative or NaN.
+    pub fn set_lidt(&mut self, lidt: Fluence) -> OpmResult<()> {
+        if lidt.is_sign_negative() || lidt.is_nan() {
+            return Err(OpossumError::Other(
+                "LIDT must be positive and not NaN".into(),
+            ));
         }
         self.lidt = lidt;
+        Ok(())
     }
 }
 
@@ -236,5 +256,89 @@ impl Debug for OpticSurface {
             .field("hitmap", &self.hit_map)
             .field("lidt", &self.lidt)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use core::f64;
+
+    use super::OpticSurface;
+    use crate::{
+        aperture::{Aperture, CircleConfig},
+        coatings::CoatingType,
+        meter,
+        surface::{geo_surface::GeometricSurface, Sphere},
+        utils::geom_transformation::Isometry,
+        J_per_cm2,
+    };
+
+    #[test]
+    fn default() {
+        let os = OpticSurface::default();
+        assert!(matches!(os.aperture, Aperture::None));
+        assert!(matches!(os.coating, CoatingType::IdealAR));
+        assert_eq!(os.backward_rays_cache.len(), 0);
+        assert_eq!(os.forward_rays_cache.len(), 0);
+        assert!(os.hit_map.is_empty());
+        assert_eq!(os.lidt, J_per_cm2!(1.0));
+    }
+    #[test]
+    fn new() {
+        let gs = GeometricSurface::default();
+        assert!(OpticSurface::new(
+            gs.clone(),
+            CoatingType::IdealAR,
+            Aperture::None,
+            J_per_cm2!(f64::NAN)
+        )
+        .is_err());
+        assert!(OpticSurface::new(
+            gs.clone(),
+            CoatingType::IdealAR,
+            Aperture::None,
+            J_per_cm2!(f64::NEG_INFINITY)
+        )
+        .is_err());
+        assert!(OpticSurface::new(
+            gs.clone(),
+            CoatingType::IdealAR,
+            Aperture::None,
+            J_per_cm2!(-0.1)
+        )
+        .is_err());
+        assert!(OpticSurface::new(
+            gs.clone(),
+            CoatingType::IdealAR,
+            Aperture::None,
+            J_per_cm2!(f64::INFINITY)
+        )
+        .is_ok());
+
+        let aperture =
+            Aperture::BinaryCircle(CircleConfig::new(meter!(1.0), meter!(0.0, 0.0)).unwrap());
+        let os = OpticSurface::new(
+            GeometricSurface::Spherical {
+                s: Sphere::new(meter!(1.0), &Isometry::identity()).unwrap(),
+            },
+            CoatingType::Fresnel,
+            aperture,
+            J_per_cm2!(2.0),
+        )
+        .unwrap();
+        assert_eq!(os.lidt, J_per_cm2!(2.0));
+        assert!(matches!(os.coating, CoatingType::Fresnel));
+        assert!(matches!(os.aperture, _aperture));
+    }
+    #[test]
+    fn set_lidt() {
+        let mut os = OpticSurface::default();
+        assert!(os.set_lidt(J_per_cm2!(f64::NAN)).is_err());
+        assert!(os.set_lidt(J_per_cm2!(f64::NEG_INFINITY)).is_err());
+        assert!(os.set_lidt(J_per_cm2!(-0.1)).is_err());
+        assert!(os.set_lidt(J_per_cm2!(f64::INFINITY)).is_ok());
+        assert!(os.set_lidt(J_per_cm2!(2.5)).is_ok());
+
+        assert_eq!(os.lidt, J_per_cm2!(2.5));
     }
 }

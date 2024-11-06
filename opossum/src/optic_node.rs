@@ -214,25 +214,32 @@ pub trait OpticNode: Dottable {
     /// # Errors
     /// This function will return an error if the overwritten function generates an error.
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
-        self.update_lidt();
+        self.update_lidt()?;
         self.update_surfaces()?;
         Ok(())
     }
-    ///update the surfaces of this node after deserialization
+    /// Updates the surfaces of this node after deserialization
+    /// 
     /// # Errors
-    /// this function might error in a non-default implementation
+    /// 
+    /// This function might return an error in a non-default implementation
     fn update_surfaces(&mut self) -> OpmResult<()> {
         Ok(())
     }
-    ///updates the lidt of the optical surfaces after deserialization
-    fn update_lidt(&mut self) {
+    /// Updates the LIDT of the optical surfaces after deserialization
+    ///
+    /// # Errors
+    ///
+    /// This funtion returns an error if the LIDTs to be sdeserialized are invalid.
+    fn update_lidt(&mut self) -> OpmResult<()> {
         let lidt = *self.node_attr().lidt();
         for optic_surf in self.ports_mut().ports_mut(&PortType::Input).values_mut() {
-            optic_surf.set_lidt(lidt);
+            optic_surf.set_lidt(lidt)?;
         }
         for optic_surf in self.ports_mut().ports_mut(&PortType::Output).values_mut() {
-            optic_surf.set_lidt(lidt);
+            optic_surf.set_lidt(lidt)?;
         }
+        Ok(())
     }
     /// Return a downcasted mutable reference of a [`NodeReference`].
     ///
@@ -473,23 +480,26 @@ pub trait Alignable: OpticNode + Sized {
 
 ///trait to define an LIDT for a node
 pub trait LIDT: OpticNode + Analyzable + Sized {
-    ///sets an LIDT value for all surfaces of this node
-    #[must_use]
-    fn with_lidt(mut self, lidt: Fluence) -> Self {
+    /// Sets an LIDT value for all surfaces of this node
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given LIDT is negative or NaN.
+    fn with_lidt(mut self, lidt: Fluence) -> OpmResult<Self> {
         let in_ports = self.ports().names(&PortType::Input);
         let out_ports = self.ports().names(&PortType::Output);
 
         for port_name in &in_ports {
             if let Some(surf) = self.get_optic_surface_mut(port_name) {
-                surf.set_lidt(lidt);
+                surf.set_lidt(lidt)?;
             }
         }
         for port_name in &out_ports {
             if let Some(surf) = self.get_optic_surface_mut(port_name) {
-                surf.set_lidt(lidt);
+                surf.set_lidt(lidt)?;
             }
         }
         self.node_attr_mut().set_lidt(&lidt);
-        self
+        Ok(self)
     }
 }
