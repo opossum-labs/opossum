@@ -155,9 +155,6 @@ impl GeoSurface for Sphere {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
-    fn box_clone(&self) -> Box<dyn GeoSurface> {
-        Box::new(self.clone())
-    }
 }
 
 // impl Color for Sphere {

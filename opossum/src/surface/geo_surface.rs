@@ -44,10 +44,6 @@ pub trait GeoSurface {
     ///
     /// This function can be used to place and align the [`GeoSurface`] in 3D space.
     fn set_isometry(&mut self, isometry: &Isometry);
-    /// Create a clone of this [`GeoSurface`].
-    ///
-    /// **Note**: This has to be done explicitly since there is no `clone` for a trait.
-    fn box_clone(&self) -> Box<dyn GeoSurface>;
 }
 
 /// Enum for geometric surfaces, used in [`OpticSurface`]
@@ -101,10 +97,6 @@ impl GeoSurface for GeometricSurface {
             Self::Cylindrical { s } => s.set_isometry(isometry),
             Self::Parabolic { s } => s.set_isometry(isometry),
         }
-    }
-
-    fn box_clone(&self) -> Box<dyn GeoSurface> {
-        todo!()
     }
 }
 

@@ -1,6 +1,8 @@
 //! Module for hnadling optical surfaces.
 //!
 
+use std::{cell::RefCell, rc::Rc};
+
 use log::warn;
 use nalgebra::Point3;
 use uom::si::f64::{Energy, Length};
@@ -18,9 +20,9 @@ use crate::{
 
 /// This struct represents an optical surface, which consists of the geometric surface shape ([`GeoSurface`]) and further
 /// properties such as the [`CoatingType`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OpticalSurface {
-    geo_surface: Box<dyn GeoSurface>,
+    geo_surface: Rc<RefCell<dyn GeoSurface>>,
     coating: CoatingType,
     backward_rays_cache: Vec<Rays>,
     forward_rays_cache: Vec<Rays>,
@@ -30,7 +32,7 @@ pub struct OpticalSurface {
 impl Default for OpticalSurface {
     fn default() -> Self {
         Self {
-            geo_surface: Box::new(Plane::new(&Isometry::identity())),
+            geo_surface: Rc::new(RefCell::new(Plane::new(&Isometry::identity()))),
             coating: CoatingType::IdealAR,
             backward_rays_cache: Vec::<Rays>::new(),
             forward_rays_cache: Vec::<Rays>::new(),
@@ -39,22 +41,10 @@ impl Default for OpticalSurface {
         }
     }
 }
-impl Clone for OpticalSurface {
-    fn clone(&self) -> Self {
-        Self {
-            geo_surface: self.geo_surface.box_clone(),
-            coating: self.coating.clone(),
-            backward_rays_cache: self.backward_rays_cache.clone(),
-            forward_rays_cache: self.forward_rays_cache.clone(),
-            hit_map: self.hit_map.clone(),
-            lidt: self.lidt,
-        }
-    }
-}
 impl OpticalSurface {
     /// Creates a new [`OpticalSurface`].
     #[must_use]
-    pub fn new(geo_surface: Box<dyn GeoSurface>) -> Self {
+    pub fn new(geo_surface: Rc<RefCell<dyn GeoSurface>>) -> Self {
         Self {
             geo_surface,
             coating: CoatingType::IdealAR,
@@ -75,8 +65,8 @@ impl OpticalSurface {
     }
     /// Returns a reference to the geo surface of this [`OpticalSurface`].
     #[must_use]
-    pub fn geo_surface(&self) -> &dyn GeoSurface {
-        &(*self.geo_surface)
+    pub fn geo_surface(&self) -> Rc<RefCell<dyn GeoSurface>> {
+        self.geo_surface.clone()
     }
     /// Sets the backwards rays cache of this [`OpticalSurface`].
     pub fn set_backwards_rays_cache(&mut self, backward_rays_cache: Vec<Rays>) {
@@ -105,8 +95,8 @@ impl OpticalSurface {
         &self.forward_rays_cache
     }
     /// Sets the isometry of this [`OpticalSurface`].
-    pub fn set_isometry(&mut self, iso: &Isometry) {
-        self.geo_surface.set_isometry(iso);
+    pub fn set_isometry(&self, iso: &Isometry) {
+        self.geo_surface.borrow_mut().set_isometry(iso);
     }
     /// Returns a reference to the hit map of this [`OpticalSurface`].
     ///

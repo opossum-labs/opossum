@@ -164,9 +164,6 @@ impl GeoSurface for Parabola {
         let total_iso = isometry.append(&oap_iso);
         self.isometry = total_iso;
     }
-    fn box_clone(&self) -> Box<dyn GeoSurface> {
-        Box::new(self.clone())
-    }
 }
 
 #[cfg(test)]

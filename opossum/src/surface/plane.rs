@@ -65,9 +65,6 @@ impl GeoSurface for Plane {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
-    fn box_clone(&self) -> Box<dyn GeoSurface> {
-        Box::new(self.clone())
-    }
 }
 // impl Color for Plane {
 //     fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {
