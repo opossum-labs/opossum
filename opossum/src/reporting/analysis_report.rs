@@ -45,7 +45,7 @@ impl AnalysisReport {
     /// Add a [`NodeReport`] to this [`AnalysisReport`].
     ///
     /// After analysis of a [`NodeGroup`], each node can generate a [`NodeReport`] using the
-    /// [`report`](crate::optic_node::OpticNode::report) trait function. While assembling a report this
+    /// [`report`](crate::analyzers::Analyzer::report) trait function. While assembling a report this
     /// function adds the node data to it. This is mostly interesting for detector nodes which deliver
     /// their particular analysis result.
     pub fn add_node_report(&mut self, report: NodeReport) {

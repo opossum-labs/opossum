@@ -17,12 +17,11 @@ use crate::{
     nodes::{fluence_detector::Fluence, NodeAttr, NodeGroup, NodeReference},
     optic_ports::{OpticPorts, PortType},
     optic_senery_rsc::SceneryResources,
-    optic_surface::OpticSurface,
     properties::{Properties, Proptype},
     rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
-    surface::{geo_surface::GeometricSurface, hit_map::HitMap, Plane},
+    surface::{geo_surface::GeometricSurface, hit_map::HitMap, optic_surface::OpticSurface, Plane},
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
@@ -412,7 +411,7 @@ pub trait OpticNode: Dottable {
     }
 
     ///returns a mutable reference to an optical surface
-    // fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticalSurface;
+    // fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticSurface;
 
     fn get_optic_surface_mut(&mut self, surf_name: &str) -> Option<&mut OpticSurface> {
         self.node_attr_mut()

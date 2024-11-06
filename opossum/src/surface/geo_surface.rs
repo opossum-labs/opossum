@@ -45,7 +45,7 @@ pub trait GeoSurface {
     fn set_isometry(&mut self, isometry: &Isometry);
 }
 
-/// Enum for geometric surfaces, used in [`OpticSurface`]
+/// Enum for geometric surfaces, used in [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
 #[derive(Clone, Debug)]
 pub enum GeometricSurface {
     /// spherical surface. Holds a [`Sphere`] and a a flag that defines whether this surface is to be used as convex or concave

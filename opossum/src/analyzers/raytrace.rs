@@ -138,7 +138,7 @@ pub trait AnalysisRayTrace: OpticNode {
     /// Function to pass a bundle of rays through a detector surface.
     /// This function is used for the propagation through single surface detectors, such as a spot diagram
     /// # Attributes
-    /// - `optic_surf_name`: the name of the [`OpticSurface`]
+    /// - `optic_surf_name`: the name of the [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
     /// - `rays_bundle`: a mutable reference to a vector of [`Rays`],
     /// - `analyzer_type`: the analyzer type
     /// # Errors
@@ -302,7 +302,7 @@ pub trait AnalysisRayTrace: OpticNode {
 /// Configuration data for a rays tracing analysis.
 ///
 /// The config contains the following info
-///   - ray tracing mode (see [`RayTracingMode`])
+// ///  - ray tracing mode (see [`RayTracingMode`])
 ///   - minimum energy / ray
 ///   - maximum number of bounces (reflections) / ray
 ///   - maximum number of refractions / ray
@@ -314,8 +314,8 @@ pub struct RayTraceConfig {
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
-    ///   - ray tracing mode: [`RayTracingMode::Sequential`]
-    ///   - mininum energy / ray: `1 p`
+    // ///   - ray tracing mode: [`RayTracingMode::Sequential`]
+    ///   - mininum energy / ray: `1 pJ`
     ///   - maximum number of bounces / ray: `1000`
     ///   - maximum number od refractions / ray: `1000`
     fn default() -> Self {

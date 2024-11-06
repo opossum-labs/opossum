@@ -32,7 +32,7 @@ impl HtmlReport {
             node_reports,
         }
     }
-    /// Generate an html report from this [`AnalysisReport`].
+    /// Generate an html report from this [`HtmlReport`].
     ///
     /// # Errors
     ///

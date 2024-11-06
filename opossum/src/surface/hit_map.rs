@@ -1,5 +1,5 @@
 //! Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
-//! [`OpticalSurface`](crate::surface::OpticalSurface).
+//! [`OpticSurface`](crate::surface::optic_surface::OpticSurface).
 use std::{collections::HashMap, ops::Range};
 
 use log::warn;
@@ -230,7 +230,7 @@ impl RaysHitMap {
 }
 
 /// Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
-/// [`OpticalSurface`](crate::surface::OpticalSurface).
+/// [`OpticSurface`](crate::surface::optic_surface::OpticSurface).
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct HitMap {
     /// Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle

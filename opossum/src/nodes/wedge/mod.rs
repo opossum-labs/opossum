@@ -6,9 +6,8 @@ use crate::{
     millimeter,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
-    optic_surface::OpticSurface,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{geo_surface::GeometricSurface, Plane},
+    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use num::Zero;
@@ -39,8 +38,6 @@ mod analysis_raytrace;
 ///   - `wedge`
 pub struct Wedge {
     node_attr: NodeAttr,
-    // front_surf: OpticalSurface,
-    // rear_surf: OpticalSurface,
 }
 impl Default for Wedge {
     /// Create a wedge with a center thickness of 10.0 mm, refractive index of 1.5 and no wedge angle (flat windows)

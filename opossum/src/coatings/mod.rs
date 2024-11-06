@@ -22,7 +22,7 @@ pub enum CoatingType {
     Fresnel,
 }
 impl CoatingType {
-    /// Calculate the reflectivity of a coating hit by a given [`Ray`] on a [`GeoSurface`](crate::surface::GeoSurface)
+    /// Calculate the reflectivity of a coating hit by a given [`Ray`] on a [`GeoSurface`](crate::surface::geo_surface::GeoSurface)
     /// characterized by the given surface normal at the intersection point.
     ///
     /// # Errors

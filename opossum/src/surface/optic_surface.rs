@@ -1,3 +1,4 @@
+//! Module handling optical surfaces
 use log::warn;
 use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,8 @@ use crate::{
 
 use core::fmt::Debug;
 
+/// This struct represents an optical surface, which consists of the geometric surface shape ([`GeoSurface`]) and further
+/// properties such as the [`CoatingType`].
 #[derive(Serialize, Deserialize, Clone)]
 pub struct OpticSurface {
     #[serde(skip)]
@@ -49,6 +52,8 @@ impl Default for OpticSurface {
     }
 }
 impl OpticSurface {
+    /// Creates a new [`OpticSurface`].
+    #[must_use]
     pub fn new(
         geo_surface: GeometricSurface,
         coating: CoatingType,
@@ -63,6 +68,7 @@ impl OpticSurface {
             ..Default::default()
         }
     }
+    /// Gets a mutable reference to the forward / backward rays cache of this [`OpticSurface`].
     pub fn get_rays_cache_mut(&mut self, get_back_ward_cache: bool) -> &mut Vec<Rays> {
         if get_back_ward_cache {
             &mut self.backward_rays_cache
@@ -70,7 +76,8 @@ impl OpticSurface {
             &mut self.forward_rays_cache
         }
     }
-
+    /// Gets a reference to the forward / backward rays cache of this [`OpticSurface`].
+    #[must_use]
     pub const fn get_rays_cache(&self, get_back_ward_cache: bool) -> &Vec<Rays> {
         if get_back_ward_cache {
             &self.backward_rays_cache
@@ -78,53 +85,62 @@ impl OpticSurface {
             &self.forward_rays_cache
         }
     }
+    /// Sets the geo surface of this [`OpticSurface`].
     pub fn set_geo_surface(&mut self, geo_surface: GeometricSurface) {
         self.geo_surface = geo_surface;
     }
+    /// Sets the aperture of this [`OpticSurface`].
     pub fn set_aperture(&mut self, aperture: Aperture) {
         self.aperture = aperture;
     }
+    /// Sets the coating of this [`OpticSurface`].
     pub fn set_coating(&mut self, coating: CoatingType) {
         self.coating = coating;
     }
+    /// Returns a reference to the geo surface of this [`OpticSurface`].
+    #[must_use]
     pub const fn geo_surface(&self) -> &GeometricSurface {
         &self.geo_surface
     }
+    /// Returns a reference to the aperture of this [`OpticSurface`].
+    #[must_use]
     pub const fn aperture(&self) -> &Aperture {
         &self.aperture
     }
+    /// Returns a reference to the coating of this [`OpticSurface`].
+    #[must_use]
     pub const fn coating(&self) -> &CoatingType {
         &self.coating
     }
 
-    /// Sets the backwards rays cache of this [`OpticalSurface`].
+    /// Sets the backwards rays cache of this [`OpticSurface`].
     pub fn set_backwards_rays_cache(&mut self, backward_rays_cache: Vec<Rays>) {
         self.backward_rays_cache = backward_rays_cache;
     }
-    /// Adds a rays bundle to the backwards rays cache of this [`OpticalSurface`].
+    /// Adds a rays bundle to the backwards rays cache of this [`OpticSurface`].
     pub fn add_to_backward_rays_cache(&mut self, rays: Rays) {
         self.backward_rays_cache.push(rays);
     }
-    /// Returns a reference to the backwards rays cache of this [`OpticalSurface`].
+    /// Returns a reference to the backwards rays cache of this [`OpticSurface`].
     #[must_use]
     pub const fn backwards_rays_cache(&self) -> &Vec<Rays> {
         &self.backward_rays_cache
     }
-    /// Sets the forward rays cache of this [`OpticalSurface`].
+    /// Sets the forward rays cache of this [`OpticSurface`].
     pub fn set_forward_rays_cache(&mut self, forward_rays_cache: Vec<Rays>) {
         self.forward_rays_cache = forward_rays_cache;
     }
-    /// Adds a rays bundle to the forward rays cache of this [`OpticalSurface`].
+    /// Adds a rays bundle to the forward rays cache of this [`OpticSurface`].
     pub fn add_to_forward_rays_cache(&mut self, rays: Rays) {
         self.forward_rays_cache.push(rays);
     }
-    /// Returns a reference to the forward rays cache of this [`OpticalSurface`].
+    /// Returns a reference to the forward rays cache of this [`OpticSurface`].
     #[must_use]
     pub const fn forward_rays_cache(&self) -> &Vec<Rays> {
         &self.forward_rays_cache
     }
 
-    /// Adds a rays bundle to the rays cache of this [`OpticalSurface`].
+    /// Adds a rays bundle to the rays cache of this [`OpticSurface`].
     pub fn add_to_rays_cache(&mut self, rays: Rays, add_to_forward_cache: bool) {
         if add_to_forward_cache {
             self.forward_rays_cache.push(rays);
@@ -132,11 +148,11 @@ impl OpticSurface {
             self.backward_rays_cache.push(rays);
         }
     }
-    /// Sets the isometry of this [`OpticalSurface`].
+    /// Sets the isometry of this [`OpticSurface`].
     pub fn set_isometry(&mut self, iso: &Isometry) {
         self.geo_surface.set_isometry(iso);
     }
-    /// Returns a reference to the hit map of this [`OpticalSurface`].
+    /// Returns a reference to the hit map of this [`OpticSurface`].
     ///
     /// This function returns a vector of intersection points (with energies) of [`Rays`] that hit the surface.
     #[must_use]
@@ -155,7 +171,7 @@ impl OpticSurface {
             .add_critical_fluence(uuid, rays_hist_pos, fluence, bounce);
     }
 
-    ///returns a reference to a [`RaysHitMap`] in this [`OpticalSurface`]
+    ///returns a reference to a [`RaysHitMap`] in this [`OpticSurface`]
     #[must_use]
     pub fn get_rays_hit_map(&self, bounce: usize, uuid: &Uuid) -> Option<&RaysHitMap> {
         self.hit_map.get_rays_hit_map(bounce, uuid)
@@ -170,7 +186,7 @@ impl OpticSurface {
     ) {
         self.hit_map.add_to_hitmap(hit_point, bounce, rays_uuid);
     }
-    /// Reset hit map of this [`OpticalSurface`].
+    /// Reset hit map of this [`OpticSurface`].
     pub fn reset_hit_map(&mut self) {
         self.hit_map.reset();
     }
@@ -194,12 +210,12 @@ impl OpticSurface {
         Ok(())
     }
 
-    ///returns a reference to the lidt value of this [`OpticalSurface`]
+    ///returns a reference to the lidt value of this [`OpticSurface`]
     #[must_use]
     pub fn lidt(&self) -> &Fluence {
         &self.lidt
     }
-    ///set the lidt of this [`OpticalSurface`]
+    ///set the lidt of this [`OpticSurface`]
     pub fn set_lidt(&mut self, lidt: Fluence) {
         if lidt.is_sign_negative() || !lidt.is_normal() {
             warn!("LIDT values mut be > 0 and finite! Using default value of 1 J/cm²");

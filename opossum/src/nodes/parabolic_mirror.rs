@@ -15,10 +15,9 @@ use crate::{
     meter,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
-    optic_surface::OpticSurface,
     properties::Proptype,
     rays::Rays,
-    surface::{geo_surface::GeometricSurface, Parabola},
+    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Parabola},
     utils::geom_transformation::Isometry,
 };
 

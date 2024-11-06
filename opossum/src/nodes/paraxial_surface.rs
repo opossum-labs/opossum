@@ -66,14 +66,9 @@ impl ParaxialSurface {
     /// # Errors
     /// This function returns an error if
     ///  - the given `focal_length` is 0.0 or not finite.
-    /// # Panics
-    /// This function panics if
-    /// - the input port name already exists. (Theoretically impossible at this point, as the [`OpticPorts`] are created just before in this function)
-    /// - the output port name already exists. (Theoretically impossible at this point, as the [`OpticPorts`] are created just before in this function)
-    /// - the property `apertures` can not be set.
     pub fn new(name: &str, focal_length: Length) -> OpmResult<Self> {
         if focal_length.is_zero() || !focal_length.is_normal() {
-            return Err(OpossumError::Other("focal length must be finite".into()));
+            return Err(OpossumError::Other("focal length must be != 0.0 and finite".into()));
         }
         let mut parsurf = Self::default();
         parsurf.node_attr.set_name(name);
@@ -142,11 +137,7 @@ impl AnalysisRayTrace for ParaxialSurface {
                 let refraction_intended = true;
                 surf.set_isometry(&iso);
 
-                rays.refract_on_surface(
-                    surf, //&mut OpticalSurface::new(Box::new(Plane::new(&iso))),
-                    None,
-                    refraction_intended,
-                )?;
+                rays.refract_on_surface(surf, None, refraction_intended)?;
                 rays.refract_paraxial(focal_length, &iso)?;
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
                     rays.apodize(aperture, &iso)?;

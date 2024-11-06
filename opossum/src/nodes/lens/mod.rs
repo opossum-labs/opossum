@@ -9,10 +9,9 @@ use crate::{
     millimeter,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
-    optic_surface::OpticSurface,
     properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{geo_surface::GeometricSurface, Plane, Sphere},
+    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]

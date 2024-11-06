@@ -1,16 +1,13 @@
-use std::path::Path;
-
-use serde::{Deserialize, Serialize};
-
+use super::html_report::HtmlNodeReport;
 use crate::{
     error::OpmResult,
     properties::{Properties, Proptype},
 };
-
-use super::html_report::HtmlNodeReport;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-/// Structure for storing node specific data to be integrated in the [`AnalysisReport`].
+/// Structure for storing node specific data to be integrated in an [`AnalysisReport`](crate::reporting::analysis_report::AnalysisReport).
 pub struct NodeReport {
     node_type: String,
     name: String,
