@@ -68,7 +68,9 @@ impl ParaxialSurface {
     ///  - the given `focal_length` is 0.0 or not finite.
     pub fn new(name: &str, focal_length: Length) -> OpmResult<Self> {
         if focal_length.is_zero() || !focal_length.is_normal() {
-            return Err(OpossumError::Other("focal length must be != 0.0 and finite".into()));
+            return Err(OpossumError::Other(
+                "focal length must be != 0.0 and finite".into(),
+            ));
         }
         let mut parsurf = Self::default();
         parsurf.node_attr.set_name(name);

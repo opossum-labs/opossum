@@ -148,8 +148,8 @@ impl OpticNode for ParabolicMirror {
                 "cannot read off axis angle y".into(),
             ));
         };
-        let mut parabola = Parabola::new(*focal_length, &Isometry::identity())?;
-        parabola.set_off_axis_angles((*oap_angle_x, *oap_angle_y));
+        let mut parabola = Parabola::new(-1. * *focal_length, &Isometry::identity())?;
+        parabola.set_off_axis_angles((*oap_angle_x, *oap_angle_y))?;
         let para_geo_surface = GeometricSurface::Parabolic { s: parabola };
         if let Some(optic_surf) = self
             .ports_mut()
