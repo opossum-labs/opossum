@@ -82,14 +82,6 @@ impl OpticSurface {
             ..Default::default()
         })
     }
-    /// Gets a mutable reference to the forward / backward rays cache of this [`OpticSurface`].
-    pub fn get_rays_cache_mut(&mut self, get_back_ward_cache: bool) -> &mut Vec<Rays> {
-        if get_back_ward_cache {
-            &mut self.backward_rays_cache
-        } else {
-            &mut self.forward_rays_cache
-        }
-    }
     /// Gets a reference to the forward / backward rays cache of this [`OpticSurface`].
     #[must_use]
     pub const fn get_rays_cache(&self, get_back_ward_cache: bool) -> &Vec<Rays> {
@@ -131,29 +123,10 @@ impl OpticSurface {
     pub fn set_backwards_rays_cache(&mut self, backward_rays_cache: Vec<Rays>) {
         self.backward_rays_cache = backward_rays_cache;
     }
-    /// Adds a rays bundle to the backwards rays cache of this [`OpticSurface`].
-    pub fn add_to_backward_rays_cache(&mut self, rays: Rays) {
-        self.backward_rays_cache.push(rays);
-    }
-    /// Returns a reference to the backwards rays cache of this [`OpticSurface`].
-    #[must_use]
-    pub const fn backwards_rays_cache(&self) -> &Vec<Rays> {
-        &self.backward_rays_cache
-    }
     /// Sets the forward rays cache of this [`OpticSurface`].
     pub fn set_forward_rays_cache(&mut self, forward_rays_cache: Vec<Rays>) {
         self.forward_rays_cache = forward_rays_cache;
     }
-    /// Adds a rays bundle to the forward rays cache of this [`OpticSurface`].
-    pub fn add_to_forward_rays_cache(&mut self, rays: Rays) {
-        self.forward_rays_cache.push(rays);
-    }
-    /// Returns a reference to the forward rays cache of this [`OpticSurface`].
-    #[must_use]
-    pub const fn forward_rays_cache(&self) -> &Vec<Rays> {
-        &self.forward_rays_cache
-    }
-
     /// Adds a rays bundle to the rays cache of this [`OpticSurface`].
     pub fn add_to_rays_cache(&mut self, rays: Rays, add_to_forward_cache: bool) {
         if add_to_forward_cache {
@@ -192,13 +165,16 @@ impl OpticSurface {
     }
     /// Add intersection point (with energy) to hit map.
     ///
+    /// # Errors
+    ///
+    /// This function retruns an error if the given hit point is invalid.
     pub fn add_to_hit_map(
         &mut self,
         hit_point: (Point3<Length>, Energy),
         bounce: usize,
         rays_uuid: &Uuid,
-    ) {
-        self.hit_map.add_to_hitmap(hit_point, bounce, rays_uuid);
+    ) -> OpmResult<()> {
+        self.hit_map.add_to_hitmap(hit_point, bounce, rays_uuid)
     }
     /// Reset hit map of this [`OpticSurface`].
     pub fn reset_hit_map(&mut self) {
@@ -261,17 +237,19 @@ impl Debug for OpticSurface {
 
 #[cfg(test)]
 mod test {
-    use core::f64;
-
     use super::OpticSurface;
     use crate::{
         aperture::{Aperture, CircleConfig},
         coatings::CoatingType,
-        meter,
+        joule, meter, nanometer,
+        ray::Ray,
+        rays::Rays,
         surface::{geo_surface::GeometricSurface, Sphere},
         utils::geom_transformation::Isometry,
         J_per_cm2,
     };
+    use core::f64;
+    use uuid::Uuid;
 
     #[test]
     fn default() {
@@ -340,5 +318,60 @@ mod test {
         assert!(os.set_lidt(J_per_cm2!(2.5)).is_ok());
 
         assert_eq!(os.lidt, J_per_cm2!(2.5));
+        assert_eq!(*os.lidt(), J_per_cm2!(2.5));
+    }
+    #[test]
+    fn add_to_rays_cache() {
+        let mut os = OpticSurface::default();
+        let ray =
+            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap();
+        let mut rays = Rays::default();
+        rays.add_ray(ray);
+        os.add_to_rays_cache(rays.clone(), true);
+        assert_eq!(os.backward_rays_cache.len(), 0);
+        assert_eq!(os.forward_rays_cache.len(), 1);
+        os.add_to_rays_cache(rays.clone(), false);
+        assert_eq!(os.backward_rays_cache.len(), 1);
+        assert_eq!(os.forward_rays_cache.len(), 1);
+    }
+    #[test]
+    fn set_backwards_rays_cache() {
+        let mut os = OpticSurface::default();
+        let ray =
+            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap();
+        let mut rays = Rays::default();
+        rays.add_ray(ray);
+        os.set_backwards_rays_cache(vec![rays]);
+        assert_eq!(os.backward_rays_cache.len(), 1);
+        assert_eq!(os.forward_rays_cache.len(), 0);
+        os.set_backwards_rays_cache(vec![]);
+        assert_eq!(os.backward_rays_cache.len(), 0);
+        assert_eq!(os.forward_rays_cache.len(), 0);
+    }
+    #[test]
+    fn set_forwards_rays_cache() {
+        let mut os = OpticSurface::default();
+        let ray =
+            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap();
+        let mut rays = Rays::default();
+        rays.add_ray(ray);
+        os.set_forward_rays_cache(vec![rays]);
+        assert_eq!(os.backward_rays_cache.len(), 0);
+        assert_eq!(os.forward_rays_cache.len(), 1);
+        os.set_forward_rays_cache(vec![]);
+        assert_eq!(os.backward_rays_cache.len(), 0);
+        assert_eq!(os.forward_rays_cache.len(), 0);
+    }
+    #[test]
+    fn add_critical_fluence() {
+        let mut os = OpticSurface::default();
+        let uuid = Uuid::new_v4();
+        os.add_critical_fluence(&uuid, 1, J_per_cm2!(1.0), 2);
+        let hit_map = os.hit_map();
+        assert!(hit_map.critical_fluences().get(&Uuid::nil()).is_none());
+        let critical_fluence = hit_map.critical_fluences().get(&uuid).unwrap();
+        assert_eq!(critical_fluence.0, J_per_cm2!(1.0));
+        assert_eq!(critical_fluence.1, 1);
+        assert_eq!(critical_fluence.2, 2);
     }
 }

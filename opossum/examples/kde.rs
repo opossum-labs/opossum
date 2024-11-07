@@ -17,7 +17,7 @@ fn main() -> OpmResult<()> {
     let weight = joule!(1.0) / Ratio::new::<uom::si::ratio::ratio>(points.len() as f64);
     let mut hit_map = RaysHitMap::default();
     for p in points {
-        hit_map.add_to_hitmap((point!(p.x, p.y, millimeter!(0.0)), weight));
+        hit_map.add_to_hitmap((point!(p.x, p.y, millimeter!(0.0)), weight))?
     }
     dbg!("Done Add HitMap");
     let fluence_data = hit_map.calc_fluence_with_kde((100, 100), None)?;

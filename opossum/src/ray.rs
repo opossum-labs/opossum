@@ -514,7 +514,7 @@ impl Ray {
                     (intersection_point, input_energy),
                     self.number_of_bounces,
                     ray_bundle_uuid,
-                );
+                )?;
 
                 Ok(Some(reflected_ray))
             } else {

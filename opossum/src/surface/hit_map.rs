@@ -38,11 +38,20 @@ pub struct BouncedHitMap {
 
 impl BouncedHitMap {
     /// Add intersection point (with energy) to this [`BouncedHitMap`].
-    pub fn add_to_hitmap(&mut self, hit_point: (Point3<Length>, Energy), uuid: &Uuid) {
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given hit point is invalid.
+    pub fn add_to_hitmap(
+        &mut self,
+        hit_point: (Point3<Length>, Energy),
+        uuid: &Uuid,
+    ) -> OpmResult<()> {
         if let Some(rays_hit_map) = self.hit_map.get_mut(uuid) {
-            rays_hit_map.add_to_hitmap(hit_point);
+            rays_hit_map.add_to_hitmap(hit_point)
         } else {
-            self.hit_map.insert(*uuid, RaysHitMap::new(vec![hit_point]));
+            self.hit_map.insert(*uuid, RaysHitMap::new(&[hit_point])?);
+            Ok(())
         }
     }
 
@@ -60,28 +69,77 @@ impl BouncedHitMap {
     }
 }
 
+/// A hit point as part of a [`RaysHitMap`].
+///
+/// It stores the position and the energy of a [`Ray`](crate::ray::Ray) that
+/// has hit an [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HitPoint {
+    position: Point3<Length>,
+    energy: Energy,
+}
+impl HitPoint {
+    /// Create a new [`HitPoint`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///   - the given energy is negative or not finite.
+    ///   - the position coordinates (x/y/z) are not finite.
+    pub fn new(position: Point3<Length>, energy: Energy) -> OpmResult<Self> {
+        if !energy.is_finite() | energy.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "energy must be positive and finite".into(),
+            ));
+        }
+        if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
+            return Err(OpossumError::Other("position must be finite".into()));
+        }
+        Ok(Self { position, energy })
+    }
+    /// Returns the position of this [`HitPoint`].
+    #[must_use]
+    pub fn position(&self) -> Point3<Length> {
+        self.position
+    }
+    /// Returns the energy of this [`HitPoint`].
+    #[must_use]
+    pub fn energy(&self) -> Energy {
+        self.energy
+    }
+}
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 ///Storage struct for hitpoints on a surface from a single ray bundle
 pub struct RaysHitMap {
-    hit_map: Vec<(Point3<Length>, Energy)>,
+    hit_map: Vec<HitPoint>,
 }
 impl RaysHitMap {
     /// Add intersection point (with energy) to this [`HitMap`].
-    pub fn add_to_hitmap(&mut self, hit_point: (Point3<Length>, Energy)) {
-        self.hit_map.push(hit_point);
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given hit point is invalid.
+    pub fn add_to_hitmap(&mut self, hit_point: (Point3<Length>, Energy)) -> OpmResult<()> {
+        let hp = HitPoint::new(hit_point.0, hit_point.1)?;
+        self.hit_map.push(hp);
+        Ok(())
     }
-
-    /// creates a new [`RaysHitMap`]
-    #[must_use]
-    pub fn new(hit_points: Vec<(Point3<Length>, Energy)>) -> Self {
-        Self {
-            hit_map: hit_points,
+    /// Creates a new [`RaysHitMap`]
+    ///
+    /// # Errors
+    ///
+    /// This funtion returns an error if the given hit points contain invalid values.
+    pub fn new(hit_points: &[(Point3<Length>, Energy)]) -> OpmResult<Self> {
+        let mut hps = Vec::with_capacity(hit_points.len());
+        for hit_point in hit_points {
+            hps.push(HitPoint::new(hit_point.0, hit_point.1)?);
         }
+        Ok(Self { hit_map: hps })
     }
     /// Merge this [`RaysHitMap`] with another [`RaysHitMap`].
     pub fn merge(&mut self, other_map: &Self) {
         for hit_point in &other_map.hit_map {
-            self.add_to_hitmap(*hit_point);
+            let _ = self.add_to_hitmap((hit_point.position, hit_point.energy));
         }
     }
     /// Calculates the fluence of a ray bundle that is stored in this hitmap
@@ -106,9 +164,9 @@ impl RaysHitMap {
         }
 
         for (row, p) in self.hit_map.iter().enumerate() {
-            pos_in_cm[(row, 0)] = p.0.x.get::<centimeter>();
-            pos_in_cm[(row, 1)] = p.0.y.get::<centimeter>();
-            energy[row] = p.1.get::<joule>();
+            pos_in_cm[(row, 0)] = p.position.x.get::<centimeter>();
+            pos_in_cm[(row, 1)] = p.position.y.get::<centimeter>();
+            energy[row] = p.energy.get::<joule>();
             energy_in_ray_bundle += energy[row];
         }
 
@@ -174,22 +232,22 @@ impl RaysHitMap {
                 ))
             },
             |hit_point| {
-                let mut left = hit_point.0.x;
-                let mut right = hit_point.0.x;
-                let mut top = hit_point.0.y;
-                let mut bottom = hit_point.0.y;
+                let mut left = hit_point.position.x;
+                let mut right = hit_point.position.x;
+                let mut top = hit_point.position.y;
+                let mut bottom = hit_point.position.y;
                 for point in &self.hit_map {
-                    if point.0.x < left {
-                        left = point.0.x;
+                    if point.position.x < left {
+                        left = point.position.x;
                     }
-                    if point.0.y < bottom {
-                        bottom = point.0.y;
+                    if point.position.y < bottom {
+                        bottom = point.position.y;
                     }
-                    if point.0.x > right {
-                        right = point.0.x;
+                    if point.position.x > right {
+                        right = point.position.x;
                     }
-                    if point.0.y > top {
-                        top = point.0.y;
+                    if point.position.y > top {
+                        top = point.position.y;
                     }
                 }
                 left -= margin;
@@ -212,7 +270,11 @@ impl RaysHitMap {
     ) -> OpmResult<FluenceData> {
         dbg!("KDE");
         let mut kde = Kde::default();
-        let hitmap_2d = self.hit_map.iter().map(|p| (p.0.xy(), p.1)).collect();
+        let hitmap_2d = self
+            .hit_map
+            .iter()
+            .map(|p| (p.position.xy(), p.energy))
+            .collect();
         kde.set_hit_map(hitmap_2d);
         let est_bandwidth = kde.bandwidth_estimate();
         kde.set_band_width(est_bandwidth);
@@ -248,19 +310,22 @@ impl HitMap {
     }
     /// Add intersection point (with energy) to this [`HitMap`].
     ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given hit point is invalid.
     pub fn add_to_hitmap(
         &mut self,
         hit_point: (Point3<Length>, Energy),
         bounce: usize,
         uuid: &Uuid,
-    ) {
+    ) -> OpmResult<()> {
         // make sure that vector is large enough to insert the data
         if self.hit_map.len() <= bounce {
             for _i in 0..bounce + 1 - self.hit_map.len() {
                 self.hit_map.push(BouncedHitMap::default());
             }
         }
-        self.hit_map[bounce].add_to_hitmap(hit_point, uuid);
+        self.hit_map[bounce].add_to_hitmap(hit_point, uuid)
     }
     /// Reset this [`HitMap`].
     ///
@@ -340,12 +405,12 @@ impl Plottable for HitMap {
                 xy_positions.push(Vec::<Point2<Length>>::new());
                 for rays_hitmap in bounced_ray_bundles.hit_map.values() {
                     for p in &rays_hitmap.hit_map {
-                        xy_positions[i].push(Point2::new(p.0.x, p.0.y));
+                        xy_positions[i].push(Point2::new(p.position.x, p.position.y));
 
-                        x_max = x_max.max(p.0.x.value);
-                        y_max = y_max.max(p.0.y.value);
-                        x_min = x_min.min(p.0.x.value);
-                        y_min = y_min.min(p.0.y.value);
+                        x_max = x_max.max(p.position.x.value);
+                        y_max = y_max.max(p.position.y.value);
+                        x_min = x_min.min(p.position.x.value);
+                        y_min = y_min.min(p.position.y.value);
                     }
                 }
             }
@@ -421,5 +486,15 @@ impl Plottable for HitMap {
     }
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
         PlotType::Scatter2D(plt_params.clone())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::RaysHitMap;
+    #[test]
+    fn rays_hit_map_new() {
+        let rhm = RaysHitMap::new(&vec![]).unwrap();
+        assert_eq!(rhm.hit_map.len(), 0);
     }
 }

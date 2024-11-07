@@ -219,9 +219,9 @@ pub trait OpticNode: Dottable {
         Ok(())
     }
     /// Updates the surfaces of this node after deserialization
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// This function might return an error in a non-default implementation
     fn update_surfaces(&mut self) -> OpmResult<()> {
         Ok(())
