@@ -2,7 +2,7 @@
 //! [`OpticSurface`](crate::surface::optic_surface::OpticSurface).
 //!
 //! A [`HitMap`] not only stores the hit points but also the number of bounces a [`Ray`](crate::ray::Ray) has
-//! undergone before hitting a surface and the [`Uuid`] of the node which cuased the reflection.
+//! undergone before hitting a surface and the [`Uuid`] of the ray bundle that caused the hit.
 //!
 //! The overall structure is a follows (in ascending hierarchy):
 //!
@@ -10,8 +10,10 @@
 //!    a surface and its energy.
 //!  - A [`RaysHitMap`] simply stores a vector of [`HitPoint`]s. It also implements functions for calculating a fluence
 //!    map (using either the Voronoi or the KDE method).
-//!  - A [`BouncedHitMap`] stores a [`RaysHitMap`] together with an [`Uuid`] of the node which caused the reflection.
-//!  - A [`HitMap`] stores a vector of [`BouncedHitMap`]s.
+//!  - A [`BouncedHitMap`] stores a [`RaysHitMap`] together with an [`Uuid`] of the ray bundle ([`Rays`](crate::rays::Rays)).
+//!  - A [`HitMap`] stores a vector of [`BouncedHitMap`]s. The vector index represents the number of ray bounces. So, the
+//!    first entry contains all [`BouncedHitMap`]s caused by rays wih zero bounces, the second entry all [`BouncedHitMap`]s
+//!    caused by rays wih one bounce, ...
 //!  
 use crate::{
     error::{OpmResult, OpossumError},
@@ -46,7 +48,6 @@ use uuid::Uuid;
 pub struct BouncedHitMap {
     hit_map: HashMap<Uuid, RaysHitMap>,
 }
-
 impl BouncedHitMap {
     /// Add a hit point to this [`BouncedHitMap`].
     pub fn add_to_hitmap(&mut self, hit_point: HitPoint, uuid: &Uuid) {
@@ -56,20 +57,12 @@ impl BouncedHitMap {
             self.hit_map.insert(*uuid, RaysHitMap::new(&[hit_point]));
         }
     }
-    /// creates a new [`BouncedHitMap`]
-    #[must_use]
-    pub const fn new(hit_points: HashMap<Uuid, RaysHitMap>) -> Self {
-        Self {
-            hit_map: hit_points,
-        }
-    }
-    ///returns a reference to a [`RaysHitMap`] in this [`BouncedHitMap`]
+    /// Returns a reference to a [`RaysHitMap`] in this [`BouncedHitMap`]
     #[must_use]
     pub fn get_rays_hit_map(&self, uuid: &Uuid) -> Option<&RaysHitMap> {
         self.hit_map.get(uuid)
     }
 }
-
 /// A hit point as part of a [`RaysHitMap`].
 ///
 /// It stores the position (intersection point) and the energy of a [`Ray`](crate::ray::Ray) that
@@ -262,7 +255,6 @@ impl RaysHitMap {
         nr_of_points: (usize, usize),
         ranges: Option<(Range<Length>, Range<Length>)>,
     ) -> OpmResult<FluenceData> {
-        dbg!("KDE");
         let mut kde = Kde::default();
         let hitmap_2d = self
             .hit_map
@@ -277,7 +269,6 @@ impl RaysHitMap {
         } else {
             self.calc_2d_bounding_box(3. * est_bandwidth)?
         };
-        dbg!("Done bounding box & bandwidth");
         let fluence_matrix = kde.kde_2d(&(left..right, bottom..top), nr_of_points);
         let fluence_data =
             FluenceData::new(J_per_cm2!(0.0), fluence_matrix, left..right, bottom..top);
@@ -558,10 +549,203 @@ mod test_rays_hit_map {
             rhm.calc_2d_bounding_box(meter!(0.5)).unwrap(),
             (meter!(-1.5), meter!(0.5), meter!(1.5), meter!(-0.5))
         );
-        rhm.add_hit_point(HitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0)).unwrap());
-
+        rhm.add_hit_point(HitPoint::new(meter!(-1.0, -1.0, 0.0), joule!(1.0)).unwrap());
+        assert_eq!(
+            rhm.calc_2d_bounding_box(meter!(0.5)).unwrap(),
+            (meter!(-1.5), meter!(0.5), meter!(1.5), meter!(-1.5))
+        );
+        rhm.add_hit_point(HitPoint::new(meter!(-1.0, 2.0, 0.0), joule!(1.0)).unwrap());
+        assert_eq!(
+            rhm.calc_2d_bounding_box(meter!(0.5)).unwrap(),
+            (meter!(-1.5), meter!(0.5), meter!(2.5), meter!(-1.5))
+        );
+        rhm.add_hit_point(HitPoint::new(meter!(1.0, 2.0, 0.0), joule!(1.0)).unwrap());
+        assert_eq!(
+            rhm.calc_2d_bounding_box(meter!(0.5)).unwrap(),
+            (meter!(-1.5), meter!(1.5), meter!(2.5), meter!(-1.5))
+        );
         assert!(rhm.calc_2d_bounding_box(meter!(f64::NAN)).is_err());
         assert!(rhm.calc_2d_bounding_box(meter!(f64::INFINITY)).is_err());
         assert!(rhm.calc_2d_bounding_box(meter!(f64::NEG_INFINITY)).is_err());
+    }
+}
+
+#[cfg(test)]
+mod test_bounced_hit_map {
+    use crate::{
+        joule, meter,
+        surface::hit_map::{BouncedHitMap, HitPoint},
+    };
+    use uuid::Uuid;
+
+    #[test]
+    fn add_to_hitmap() {
+        let mut bhm = BouncedHitMap::default();
+        let uuid1 = Uuid::new_v4();
+        let uuid2 = Uuid::new_v4();
+        bhm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            &uuid1,
+        );
+        assert_eq!(bhm.hit_map.get(&uuid1).unwrap().hit_map.len(), 1);
+        assert!(bhm.hit_map.get(&uuid2).is_none());
+        bhm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            &uuid1,
+        );
+        assert_eq!(bhm.hit_map.get(&uuid1).unwrap().hit_map.len(), 2);
+        assert!(bhm.hit_map.get(&uuid2).is_none());
+        bhm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            &uuid2,
+        );
+        assert_eq!(bhm.hit_map.get(&uuid1).unwrap().hit_map.len(), 2);
+        assert_eq!(bhm.hit_map.get(&uuid2).unwrap().hit_map.len(), 1);
+    }
+    #[test]
+    fn get_rays_hit_map() {
+        let mut bhm = BouncedHitMap::default();
+        let uuid1 = Uuid::new_v4();
+        let uuid2 = Uuid::new_v4();
+        bhm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            &uuid1,
+        );
+        bhm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            &uuid1,
+        );
+        bhm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            &uuid2,
+        );
+        assert_eq!(bhm.get_rays_hit_map(&uuid1).unwrap().hit_map.len(), 2);
+        assert_eq!(bhm.get_rays_hit_map(&uuid2).unwrap().hit_map.len(), 1);
+        assert!(bhm.get_rays_hit_map(&Uuid::nil()).is_none());
+    }
+}
+#[cfg(test)]
+mod test_hit_map {
+    use uuid::Uuid;
+
+    use crate::{
+        joule, meter,
+        properties::Proptype,
+        surface::hit_map::{HitMap, HitPoint},
+    };
+
+    #[test]
+    fn hit_map() {
+        let mut hm = HitMap::default();
+        let uuid1 = Uuid::new_v4();
+        let uuid2 = Uuid::new_v4();
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            1,
+            &uuid1,
+        );
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            1,
+            &uuid2,
+        );
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            0,
+            &uuid1,
+        );
+        assert_eq!(hm.hit_map().len(), 2);
+    }
+    #[test]
+    fn add_to_hitmap() {
+        let mut hm = HitMap::default();
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            1,
+            &Uuid::new_v4(),
+        );
+        assert_eq!(hm.hit_map.len(), 2);
+        assert_eq!(hm.hit_map[0].hit_map.len(), 0);
+        assert_eq!(hm.hit_map[1].hit_map.len(), 1);
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            0,
+            &Uuid::new_v4(),
+        );
+        assert_eq!(hm.hit_map.len(), 2);
+        assert_eq!(hm.hit_map[0].hit_map.len(), 1);
+        assert_eq!(hm.hit_map[1].hit_map.len(), 1);
+    }
+    #[test]
+    fn reset() {
+        let mut hm = HitMap::default();
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            1,
+            &Uuid::new_v4(),
+        );
+        hm.reset();
+        assert!(hm.is_empty());
+    }
+    #[test]
+    fn is_empty() {
+        let mut hm = HitMap::default();
+        assert!(hm.is_empty());
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            1,
+            &Uuid::new_v4(),
+        );
+        assert!(!hm.is_empty());
+    }
+    #[test]
+    fn get_rays_hit_map() {
+        let mut hm = HitMap::default();
+        let uuid1 = Uuid::new_v4();
+        let uuid2 = Uuid::new_v4();
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            1,
+            &uuid1,
+        );
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            1,
+            &uuid2,
+        );
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            0,
+            &uuid1,
+        );
+        assert!(hm.get_rays_hit_map(2, &uuid1).is_none());
+        assert!(hm.get_rays_hit_map(0, &uuid2).is_none());
+    }
+    #[test]
+    fn get_merged_rays_hit_map() {
+        let mut hm = HitMap::default();
+        let uuid1 = Uuid::new_v4();
+        let uuid2 = Uuid::new_v4();
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            1,
+            &uuid1,
+        );
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            1,
+            &uuid2,
+        );
+        hm.add_to_hitmap(
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap(),
+            0,
+            &uuid1,
+        );
+        assert_eq!(hm.get_merged_rays_hit_map().hit_map.len(), 3);
+    }
+    #[test]
+    fn proptype_from() {
+        let prop_type: Proptype = HitMap::default().into();
+        assert!(matches!(prop_type, Proptype::HitMap(_)));
     }
 }
