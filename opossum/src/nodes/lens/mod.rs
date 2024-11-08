@@ -9,10 +9,9 @@ use crate::{
     millimeter,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
-    optic_surface::OpticSurface,
     properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{geo_surface::GeometricSurface, Plane, Sphere},
+    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -298,23 +297,23 @@ impl OpticNode for Lens {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-
     ///updates the lidt of the optical surfaces after deserialization
-    fn update_lidt(&mut self) {
+    fn update_lidt(&mut self) -> OpmResult<()> {
         let lidt = *self.node_attr().lidt();
         let in_ports = self.ports().names(&PortType::Input);
         let out_ports = self.ports().names(&PortType::Output);
 
         for port_name in &in_ports {
             if let Some(opt_surf) = self.get_optic_surface_mut(port_name) {
-                opt_surf.set_lidt(lidt);
+                opt_surf.set_lidt(lidt)?;
             }
         }
         for port_name in &out_ports {
             if let Some(opt_surf) = self.get_optic_surface_mut(port_name) {
-                opt_surf.set_lidt(lidt);
+                opt_surf.set_lidt(lidt)?;
             }
         }
+        Ok(())
     }
 }
 // impl SDF for Lens

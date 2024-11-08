@@ -1,15 +1,13 @@
 //! Flat surface
 //!
 //! An infinitely large and perfectly flat 2D surface
+use super::geo_surface::GeoSurface;
 use crate::{meter, ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use num::Zero;
-use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-use super::geo_surface::GeoSurface;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 /// An infinitely large and perfectly flat surface
 ///
 /// By default (using `Isometry::identity()`), the surface is oriented
@@ -64,9 +62,6 @@ impl GeoSurface for Plane {
     }
     fn isometry(&self) -> &Isometry {
         &self.isometry
-    }
-    fn box_clone(&self) -> Box<dyn GeoSurface> {
-        Box::new(self.clone())
     }
 }
 // impl Color for Plane {

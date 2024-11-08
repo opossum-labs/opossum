@@ -6,7 +6,6 @@
 use super::{Cylinder, Parabola, Plane, Sphere};
 use crate::{ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
-use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use uom::si::f64::Length;
 
@@ -44,14 +43,10 @@ pub trait GeoSurface {
     ///
     /// This function can be used to place and align the [`GeoSurface`] in 3D space.
     fn set_isometry(&mut self, isometry: &Isometry);
-    /// Create a clone of this [`GeoSurface`].
-    ///
-    /// **Note**: This has to be done explicitly since there is no `clone` for a trait.
-    fn box_clone(&self) -> Box<dyn GeoSurface>;
 }
 
-/// Enum for geometric surfaces, used in [`OpticSurface`]
-#[derive(Serialize, Deserialize, Clone, Debug)]
+/// Enum for geometric surfaces, used in [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
+#[derive(Clone, Debug)]
 pub enum GeometricSurface {
     /// spherical surface. Holds a [`Sphere`] and a a flag that defines whether this surface is to be used as convex or concave
     Spherical {
@@ -101,10 +96,6 @@ impl GeoSurface for GeometricSurface {
             Self::Cylindrical { s } => s.set_isometry(isometry),
             Self::Parabolic { s } => s.set_isometry(isometry),
         }
-    }
-
-    fn box_clone(&self) -> Box<dyn GeoSurface> {
-        todo!()
     }
 }
 

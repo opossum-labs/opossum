@@ -11,12 +11,11 @@ use crate::{
     lightdata::{DataEnergy, LightData},
     optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
-    optic_surface::OpticSurface,
     properties::Proptype,
     ray::SplittingConfig,
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
-    surface::{geo_surface::GeometricSurface, Plane},
+    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 

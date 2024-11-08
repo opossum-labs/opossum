@@ -10,39 +10,18 @@ use crate::{
 use nalgebra::Vector3;
 use nalgebra::{vector, Point3};
 use num::Zero;
-use roots::find_roots_quadratic;
-use roots::Roots;
-use serde::{Deserialize, Serialize};
+use roots::{find_roots_quadratic, Roots};
 use uom::si::f64::Length;
 
 use super::geo_surface::GeoSurface;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 /// A spherical surface with its anchor point on the optical axis.
 pub struct Cylinder {
     radius: Length,
     isometry: Isometry,
 }
 impl Cylinder {
-    /// Create a new [`Cylinder`] located at a given position.
-    ///
-    /// **Note**: The anchor point is not the center of the cylinder but a point on the cylinder surface.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if any components of the `pos` are not finite or if the radius is not normal.
-    pub fn new_from_position(radius: Length, pos: Point3<Length>) -> OpmResult<Self> {
-        if !radius.is_normal() {
-            return Err(OpossumError::Other(
-                "radius of curvature must be != 0.0 and finite".into(),
-            ));
-        }
-        let isometry = Isometry::new(
-            Point3::new(pos.x, pos.y, pos.z + radius),
-            radian!(0., 0., 0.),
-        )?;
-        Ok(Self { radius, isometry })
-    }
     /// Create a new [`Cylinder`] located and oriented by the given [`Isometry`].
     ///
     /// **Note**: The anchor point is not the center of the cylinder but a point on the cylindric surface.
@@ -150,9 +129,6 @@ impl GeoSurface for Cylinder {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
-    fn box_clone(&self) -> Box<dyn GeoSurface> {
-        Box::new(self.clone())
-    }
 }
 
 #[cfg(test)]
@@ -178,7 +154,8 @@ mod test {
     }
     #[test]
     fn intersect_positive_on_axis() {
-        let s = Cylinder::new_from_position(millimeter!(1.0), millimeter!(0.0, 0.0, 10.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let s = Cylinder::new(millimeter!(1.0), &iso).unwrap();
         let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
         assert_abs_diff_eq!(intersection_point.x.value, 0.0);
@@ -201,16 +178,16 @@ mod test {
     #[test]
     fn intersect_positive_on_axis_behind() {
         let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
-        let s =
-            Cylinder::new_from_position(millimeter!(1.0), millimeter!(0.0, 0.0, -10.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(-10.0)).unwrap();
+        let s = Cylinder::new(millimeter!(1.0), &iso).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
-        let s =
-            Cylinder::new_from_position(millimeter!(-1.0), millimeter!(0.0, 0.0, -10.0)).unwrap();
+        let s = Cylinder::new(millimeter!(-1.0), &iso).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
     fn intersect_positive_collinear_no_intersect() {
-        let s = Cylinder::new_from_position(millimeter!(1.0), millimeter!(0.0, 0.0, 10.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let s = Cylinder::new(millimeter!(1.0), &iso).unwrap();
         let ray = Ray::new_collimated(millimeter!(1.1, 0.0, 0.0), nanometer!(1053.0), joule!(1.0))
             .unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
@@ -219,7 +196,8 @@ mod test {
     fn intersect_positive_collinear_touch() {
         let wvl = nanometer!(1053.0);
         let ray = Ray::new_collimated(millimeter!(1.0, 0.0, 0.0), wvl, joule!(1.0)).unwrap();
-        let s = Cylinder::new_from_position(millimeter!(1.0), millimeter!(0.0, 0.0, 10.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let s = Cylinder::new(millimeter!(1.0), &iso).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
             Some((millimeter!(1.0, 0.0, 11.0), Vector3::x()))
@@ -239,8 +217,8 @@ mod test {
     }
     #[test]
     fn intersect_negative_on_axis() {
-        let s =
-            Cylinder::new_from_position(millimeter!(-1.0), millimeter!(0.0, 0.0, 10.0)).unwrap();
+        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let s = Cylinder::new(millimeter!(-1.0), &iso).unwrap();
         let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
         assert_abs_diff_eq!(intersection_point.x.value, 0.0);

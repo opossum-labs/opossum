@@ -1,13 +1,11 @@
-use std::path::Path;
-
-use nalgebra::point;
 use opossum::{
     error::OpmResult,
     joule, millimeter,
     plottable::Plottable,
     position_distributions::{Hexapolar, PositionDistribution},
-    surface::hit_map::RaysHitMap,
+    surface::hit_map::{HitPoint, RaysHitMap},
 };
+use std::path::Path;
 use uom::si::f64::Ratio;
 
 fn main() -> OpmResult<()> {
@@ -17,7 +15,8 @@ fn main() -> OpmResult<()> {
     let weight = joule!(1.0) / Ratio::new::<uom::si::ratio::ratio>(points.len() as f64);
     let mut hit_map = RaysHitMap::default();
     for p in points {
-        hit_map.add_to_hitmap((point!(p.x, p.y, millimeter!(0.0)), weight));
+        let hit_point = HitPoint::new(p, weight)?;
+        hit_map.add_hit_point(hit_point);
     }
     dbg!("Done Add HitMap");
     let fluence_data = hit_map.calc_fluence_with_kde((100, 100), None)?;

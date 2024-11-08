@@ -20,12 +20,12 @@ use crate::{
     aperture::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
-    optic_surface::OpticSurface,
     properties::Proptype,
+    surface::optic_surface::OpticSurface,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
-/// Type of an [`OpticPort`]
+/// Type of an [`OpticPorts`]
 pub enum PortType {
     /// input port, receiving [`LightData`](crate::lightdata::LightData)
     Input,

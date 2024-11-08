@@ -13,10 +13,10 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     optic_ref::OpticRef,
-    optic_surface::OpticSurface,
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
+    surface::optic_surface::OpticSurface,
     utils::EnumProxy,
     SceneryResources,
 };

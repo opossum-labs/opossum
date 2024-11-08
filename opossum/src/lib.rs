@@ -35,7 +35,6 @@ pub mod optic_node;
 pub mod optic_ports;
 pub mod optic_ref;
 mod optic_senery_rsc;
-mod optic_surface;
 pub mod plottable;
 mod port_map;
 pub mod position_distributions;

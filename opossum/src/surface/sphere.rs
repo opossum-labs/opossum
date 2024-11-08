@@ -1,23 +1,19 @@
 //! Spherical surface
 //!
 //! This module implements a spherical surface with a given radius of curvature.
+use super::geo_surface::GeoSurface;
 use crate::{
     error::{OpmResult, OpossumError},
     meter, radian,
     ray::Ray,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::Vector3;
-use nalgebra::{vector, Point3};
+use nalgebra::{vector, Point3, Vector3};
 use num::Zero;
-use roots::find_roots_quadratic;
-use roots::Roots;
-use serde::{Deserialize, Serialize};
+use roots::{find_roots_quadratic, Roots};
 use uom::si::f64::Length;
 
-use super::geo_surface::GeoSurface;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 /// A spherical surface with its anchor point directly on the surface.
 pub struct Sphere {
     radius: Length,
@@ -154,9 +150,6 @@ impl GeoSurface for Sphere {
     }
     fn isometry(&self) -> &Isometry {
         &self.isometry
-    }
-    fn box_clone(&self) -> Box<dyn GeoSurface> {
-        Box::new(self.clone())
     }
 }
 

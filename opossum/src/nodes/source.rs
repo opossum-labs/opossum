@@ -16,11 +16,10 @@ use crate::{
     millimeter,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
-    optic_surface::OpticSurface,
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    surface::{geo_surface::GeometricSurface, Plane},
+    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use std::fmt::Debug;

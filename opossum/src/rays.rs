@@ -11,7 +11,6 @@ use crate::{
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
         FilterType, WaveFrontData, WaveFrontErrorMap,
     },
-    optic_surface::OpticSurface,
     plottable::AxLims,
     position_distributions::{Hexapolar, PositionDistribution},
     properties::Proptype,
@@ -19,6 +18,7 @@ use crate::{
     refractive_index::RefractiveIndexType,
     spectral_distribution::SpectralDistribution,
     spectrum::Spectrum,
+    surface::optic_surface::OpticSurface,
     utils::{
         filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
         geom_transformation::Isometry,
@@ -767,7 +767,7 @@ impl Rays {
         }
         Ok(())
     }
-    /// Refract a ray bundle on a [`GeoSurface`] and returns a reflected [`Ray`] bundle.
+    /// Refract a ray bundle on a [`GeoSurface`](crate::surface::geo_surface::GeoSurface) and returns a reflected [`Ray`] bundle.
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
@@ -1305,6 +1305,7 @@ mod test {
         radian,
         ray::SplittingConfig,
         refractive_index::{refr_index_vaccuum, RefrIndexConst},
+        surface::optic_surface::OpticSurface,
         utils::test_helper::test_helper::check_warnings,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
