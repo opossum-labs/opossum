@@ -72,6 +72,59 @@ impl Isometry {
             rotation_iso.into(),
         )))
     }
+
+    /// Creates a new translation [`Isometry`]
+    /// 
+    /// Internally, translation is handled in meter
+    /// # Attributes
+    /// - `translation`: vector of translation for each axis as [`Length`]
+    ///
+    /// # Errors
+    /// his function return an error if the
+    ///  - the translation coordinates are not finite
+    pub fn new_translation(translation: Point3<Length>) -> OpmResult<Self> {
+        if translation.iter().any(|x| !x.is_finite()) {
+            return Err(OpossumError::Other(
+                "translation coordinates must be finite".into(),
+            ));
+        }
+        let trans_in_m = Vector3::from_vec(
+            translation
+                .iter()
+                .map(Length::get::<meter>)
+                .collect::<Vec<f64>>(),
+        );
+        let translation_iso = Translation3::new(trans_in_m[0], trans_in_m[1], trans_in_m[2]);
+
+        Ok(Self::new_from_transform(translation_iso.into()))
+    }
+    /// Creates a new rotation [`Isometry`] 
+    /// 
+    /// Internally, rotation is handled in radians
+    /// # Attributes
+    /// - `axes_angles`: rotation [`Angle`]s for each axis
+    ///    Note: the rotation is applied in the order x -> y -> z
+    ///
+    /// # Errors
+    /// his function return an error if the
+    ///  - the axis angles are not finite
+    pub fn new_rotation(axes_angles: Point3<Angle>) -> OpmResult<Self> {
+        if axes_angles.iter().any(|x| !x.is_finite()) {
+            return Err(OpossumError::Other("axis angles must be finite".into()));
+        }
+        let rot_in_radian = Vector3::from_vec(
+            axes_angles
+                .iter()
+                .map(Angle::get::<radian>)
+                .collect::<Vec<f64>>(),
+        );
+        let rotation_iso =
+            Rotation3::from_euler_angles(rot_in_radian[0], rot_in_radian[1], rot_in_radian[2]);
+            
+        Ok(Self::new_from_transform(Isometry3::from_parts(Translation3::identity(), rotation_iso.into())
+    ))
+    }
+
     /// Create a "identiy" Isometry, which represents a zero translation and rotation.
     #[must_use]
     pub fn identity() -> Self {

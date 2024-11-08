@@ -27,12 +27,12 @@ fn main() -> OpmResult<()> {
     )?;
     let i_m1 = scenery.add_node(&mirror1)?;
     let i_m2 = scenery.add_node(
-        &ParabolicMirror::new("parabola", millimeter!(50.0))?
-            .with_oap_angles(degree!(90.0, 0.0))?,
+        &ParabolicMirror::new_with_off_axis_y("parabola", millimeter!(100.0), degree!(90.))?
+            // .with_oap_angle(degree!(90.0))?,
     )?;
     let i_m3 = scenery.add_node(
-        &ParabolicMirror::new("parabola", millimeter!(50.0))?
-            .with_oap_angles(degree!(-90.0, 0.0))?,
+        &ParabolicMirror::new_with_off_axis_y("parabola", millimeter!(100.0), degree!(-90.))?
+            // .with_oap_angle(degree!(-90.0))?,
     )?;
     let mut wedge = Wedge::new(
         "wedge",
@@ -46,7 +46,7 @@ fn main() -> OpmResult<()> {
     let i_w = scenery.add_node(&wedge)?;
     scenery.connect_nodes(i_src, "output_1", i_m1, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(100.0))?;
-    scenery.connect_nodes(i_m2, "output_1", i_m3, "input_1", millimeter!(250.0))?;
+    scenery.connect_nodes(i_m2, "output_1", i_m3, "input_1", millimeter!(200.0))?;
     scenery.connect_nodes(i_m3, "output_1", i_w, "input_1", millimeter!(200.0))?;
 
     let mut doc = OpmDocument::new(scenery);
