@@ -19,7 +19,7 @@ use crate::{
     joule, meter,
     nodes::FilterType,
     spectrum::Spectrum,
-    surface::{geo_surface::GeoSurface, optic_surface::OpticSurface},
+    surface::{geo_surface::GeoSurface, hit_map::HitPoint, optic_surface::OpticSurface},
     utils::geom_transformation::Isometry,
 };
 
@@ -511,10 +511,10 @@ impl Ray {
 
                 // save on hit map of surface
                 os.add_to_hit_map(
-                    (intersection_point, input_energy),
+                    HitPoint::new(intersection_point, input_energy)?,
                     self.number_of_bounces,
                     ray_bundle_uuid,
-                )?;
+                );
 
                 Ok(Some(reflected_ray))
             } else {

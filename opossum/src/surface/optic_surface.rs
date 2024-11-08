@@ -1,7 +1,5 @@
 //! Module handling optical surfaces
-use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Energy, Length};
 use uuid::Uuid;
 
 use crate::{
@@ -19,6 +17,8 @@ use crate::{
 };
 
 use core::fmt::Debug;
+
+use super::hit_map::HitPoint;
 
 /// This struct represents an optical surface, which consists of the geometric surface shape ([`GeoSurface`]) and further
 /// properties such as the [`CoatingType`].
@@ -146,8 +146,8 @@ impl OpticSurface {
     pub const fn hit_map(&self) -> &HitMap {
         &self.hit_map
     }
-    ///stores a critical fluence in a hitmap
-    pub fn add_critical_fluence(
+    /// Stores a critical fluence in a hitmap
+    fn add_critical_fluence(
         &mut self,
         uuid: &Uuid,
         rays_hist_pos: usize,
@@ -164,26 +164,19 @@ impl OpticSurface {
         self.hit_map.get_rays_hit_map(bounce, uuid)
     }
     /// Add intersection point (with energy) to hit map.
-    ///
-    /// # Errors
-    ///
-    /// This function retruns an error if the given hit point is invalid.
-    pub fn add_to_hit_map(
-        &mut self,
-        hit_point: (Point3<Length>, Energy),
-        bounce: usize,
-        rays_uuid: &Uuid,
-    ) -> OpmResult<()> {
-        self.hit_map.add_to_hitmap(hit_point, bounce, rays_uuid)
+    pub fn add_to_hit_map(&mut self, hit_point: HitPoint, bounce: usize, rays_uuid: &Uuid) {
+        self.hit_map.add_to_hitmap(hit_point, bounce, rays_uuid);
     }
     /// Reset hit map of this [`OpticSurface`].
     pub fn reset_hit_map(&mut self) {
         self.hit_map.reset();
     }
-
-    /// Evaluate the fluence of a given ray bundle on this surface. If the fluence surpasses its lidt, store the critical fluence parameters in the hitmap
+    /// Evaluate the fluence of a given ray bundle on this surface. If the fluence
+    /// surpasses its lidt, store the critical fluence parameters in the hitmap
+    ///
     /// # Errors
-    /// This function errors  on error propagation of `calc_fluence`
+    ///
+    /// This function errors on error propagation of `calc_fluence`
     pub fn evaluate_fluence_of_ray_bundle(&mut self, rays: &Rays) -> OpmResult<()> {
         if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), rays.uuid()) {
             if let Some((_, _, _, _, peak_fluence)) =
@@ -199,7 +192,6 @@ impl OpticSurface {
         }
         Ok(())
     }
-
     ///returns a reference to the lidt value of this [`OpticSurface`]
     #[must_use]
     pub fn lidt(&self) -> &Fluence {
@@ -373,5 +365,16 @@ mod test {
         assert_eq!(critical_fluence.0, J_per_cm2!(1.0));
         assert_eq!(critical_fluence.1, 1);
         assert_eq!(critical_fluence.2, 2);
+    }
+    #[test]
+    fn get_rays_cache() {
+        let mut os = OpticSurface::default();
+        let ray =
+            Ray::new_collimated(meter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0)).unwrap();
+        let mut rays = Rays::default();
+        rays.add_ray(ray);
+        os.add_to_rays_cache(rays.clone(), true);
+        assert_eq!(os.get_rays_cache(true).len(), 0);
+        assert_eq!(os.get_rays_cache(false).len(), 1);
     }
 }

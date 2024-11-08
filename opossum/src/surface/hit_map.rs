@@ -31,30 +31,20 @@ use crate::{
 };
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-///Storage struct for `RaysHitMap` on a surface from a single bounce
+/// Storage struct for `RaysHitMap` on a surface from a single bounce
 pub struct BouncedHitMap {
     hit_map: HashMap<Uuid, RaysHitMap>,
 }
 
 impl BouncedHitMap {
-    /// Add intersection point (with energy) to this [`BouncedHitMap`].
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the given hit point is invalid.
-    pub fn add_to_hitmap(
-        &mut self,
-        hit_point: (Point3<Length>, Energy),
-        uuid: &Uuid,
-    ) -> OpmResult<()> {
+    /// Add a hit point to this [`BouncedHitMap`].
+    pub fn add_to_hitmap(&mut self, hit_point: HitPoint, uuid: &Uuid) {
         if let Some(rays_hit_map) = self.hit_map.get_mut(uuid) {
-            rays_hit_map.add_to_hitmap(hit_point)
+            rays_hit_map.add_hit_point(hit_point);
         } else {
-            self.hit_map.insert(*uuid, RaysHitMap::new(&[hit_point])?);
-            Ok(())
+            self.hit_map.insert(*uuid, RaysHitMap::new(&[hit_point]));
         }
     }
-
     /// creates a new [`BouncedHitMap`]
     #[must_use]
     pub const fn new(hit_points: HashMap<Uuid, RaysHitMap>) -> Self {
@@ -71,7 +61,7 @@ impl BouncedHitMap {
 
 /// A hit point as part of a [`RaysHitMap`].
 ///
-/// It stores the position and the energy of a [`Ray`](crate::ray::Ray) that
+/// It stores the position (intersection point) and the energy of a [`Ray`](crate::ray::Ray) that
 /// has hit an [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HitPoint {
@@ -114,32 +104,22 @@ pub struct RaysHitMap {
     hit_map: Vec<HitPoint>,
 }
 impl RaysHitMap {
-    /// Add intersection point (with energy) to this [`HitMap`].
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the given hit point is invalid.
-    pub fn add_to_hitmap(&mut self, hit_point: (Point3<Length>, Energy)) -> OpmResult<()> {
-        let hp = HitPoint::new(hit_point.0, hit_point.1)?;
-        self.hit_map.push(hp);
-        Ok(())
-    }
     /// Creates a new [`RaysHitMap`]
-    ///
-    /// # Errors
-    ///
-    /// This funtion returns an error if the given hit points contain invalid values.
-    pub fn new(hit_points: &[(Point3<Length>, Energy)]) -> OpmResult<Self> {
+    fn new(hit_points: &[HitPoint]) -> Self {
         let mut hps = Vec::with_capacity(hit_points.len());
         for hit_point in hit_points {
-            hps.push(HitPoint::new(hit_point.0, hit_point.1)?);
+            hps.push(hit_point.clone());
         }
-        Ok(Self { hit_map: hps })
+        Self { hit_map: hps }
+    }
+    /// Add intersection point (with energy) to this [`HitMap`].
+    pub fn add_hit_point(&mut self, hit_point: HitPoint) {
+        self.hit_map.push(hit_point);
     }
     /// Merge this [`RaysHitMap`] with another [`RaysHitMap`].
     pub fn merge(&mut self, other_map: &Self) {
         for hit_point in &other_map.hit_map {
-            let _ = self.add_to_hitmap((hit_point.position, hit_point.energy));
+            self.add_hit_point(hit_point.to_owned());
         }
     }
     /// Calculates the fluence of a ray bundle that is stored in this hitmap
@@ -224,7 +204,10 @@ impl RaysHitMap {
             Ok(None)
         }
     }
-    fn calc_bounding_box(&self, margin: Length) -> OpmResult<(Length, Length, Length, Length)> {
+    fn calc_2d_bounding_box(&self, margin: Length) -> OpmResult<(Length, Length, Length, Length)> {
+        if !margin.is_finite() {
+            return Err(OpossumError::Other("margin must be finite".into()));
+        }
         self.hit_map.first().map_or_else(
             || {
                 Err(OpossumError::Other(
@@ -281,7 +264,7 @@ impl RaysHitMap {
         let (left, right, top, bottom) = if let Some((x_range, y_range)) = ranges {
             (x_range.start, x_range.end, y_range.end, y_range.start)
         } else {
-            self.calc_bounding_box(3. * est_bandwidth)?
+            self.calc_2d_bounding_box(3. * est_bandwidth)?
         };
         dbg!("Done bounding box & bandwidth");
         let fluence_matrix = kde.kde_2d(&(left..right, bottom..top), nr_of_points);
@@ -309,23 +292,14 @@ impl HitMap {
         &self.hit_map
     }
     /// Add intersection point (with energy) to this [`HitMap`].
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the given hit point is invalid.
-    pub fn add_to_hitmap(
-        &mut self,
-        hit_point: (Point3<Length>, Energy),
-        bounce: usize,
-        uuid: &Uuid,
-    ) -> OpmResult<()> {
+    pub fn add_to_hitmap(&mut self, hit_point: HitPoint, bounce: usize, uuid: &Uuid) {
         // make sure that vector is large enough to insert the data
         if self.hit_map.len() <= bounce {
             for _i in 0..bounce + 1 - self.hit_map.len() {
                 self.hit_map.push(BouncedHitMap::default());
             }
         }
-        self.hit_map[bounce].add_to_hitmap(hit_point, uuid)
+        self.hit_map[bounce].add_to_hitmap(hit_point, uuid);
     }
     /// Reset this [`HitMap`].
     ///
@@ -490,11 +464,95 @@ impl Plottable for HitMap {
 }
 
 #[cfg(test)]
-mod test {
-    use super::RaysHitMap;
+mod test_hitpoint {
+    use core::f64;
+
+    use super::HitPoint;
+    use crate::{joule, meter};
     #[test]
-    fn rays_hit_map_new() {
-        let rhm = RaysHitMap::new(&vec![]).unwrap();
+    fn new() {
+        assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(f64::NAN)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(f64::INFINITY)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(-0.1)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(f64::NEG_INFINITY)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(0.0)).is_ok());
+
+        assert!(HitPoint::new(meter!(f64::NAN, 1.0, 1.0), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(f64::INFINITY, 1.0, 1.0), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(f64::NEG_INFINITY, 1.0, 1.0), joule!(1.0)).is_err());
+
+        assert!(HitPoint::new(meter!(1.0, f64::NAN, 1.0), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(1.0, f64::INFINITY, 1.0), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(1.0, f64::NEG_INFINITY, 1.0), joule!(1.0)).is_err());
+
+        assert!(HitPoint::new(meter!(1.0, 1.0, f64::NAN), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, f64::INFINITY), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, f64::NEG_INFINITY), joule!(1.0)).is_err());
+    }
+    #[test]
+    fn getters() {
+        let hm = HitPoint::new(meter!(1.0, 2.0, 3.0), joule!(4.0)).unwrap();
+        assert_eq!(hm.position().x, meter!(1.0));
+        assert_eq!(hm.position().y, meter!(2.0));
+        assert_eq!(hm.position().z, meter!(3.0));
+        assert_eq!(hm.energy(), joule!(4.0));
+    }
+}
+#[cfg(test)]
+mod test_rays_hit_map {
+    use core::f64;
+
+    use super::RaysHitMap;
+    use crate::{joule, meter, surface::hit_map::HitPoint};
+    #[test]
+    fn new() {
+        let rhm = RaysHitMap::new(&vec![]);
         assert_eq!(rhm.hit_map.len(), 0);
+
+        let hp = HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap();
+        let rhm = RaysHitMap::new(&vec![hp]);
+        assert_eq!(rhm.hit_map.len(), 1);
+    }
+    #[test]
+    fn add_to_hitmap() {
+        let mut rhm = RaysHitMap::default();
+        assert_eq!(rhm.hit_map.len(), 0);
+        let hp = HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap();
+        rhm.add_hit_point(hp);
+        assert_eq!(rhm.hit_map.len(), 1);
+    }
+    #[test]
+    fn merge() {
+        let hp = HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap();
+        let mut rhm = RaysHitMap::new(&vec![hp]);
+        let hp2 = HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(1.0)).unwrap();
+        let rhm2 = RaysHitMap::new(&vec![hp2]);
+        rhm.merge(&rhm2);
+        assert_eq!(rhm.hit_map.len(), 2);
+    }
+    #[test]
+    fn calc_2d_bounding_box() {
+        let mut rhm = RaysHitMap::default();
+        assert!(rhm.calc_2d_bounding_box(meter!(0.0)).is_err());
+        rhm.add_hit_point(HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap());
+        assert_eq!(
+            rhm.calc_2d_bounding_box(meter!(0.0)).unwrap(),
+            (meter!(0.0), meter!(0.0), meter!(0.0), meter!(0.0))
+        );
+        rhm.add_hit_point(HitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0)).unwrap());
+        assert_eq!(
+            rhm.calc_2d_bounding_box(meter!(0.0)).unwrap(),
+            (meter!(-1.0), meter!(0.0), meter!(1.0), meter!(0.0))
+        );
+        rhm.add_hit_point(HitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0)).unwrap());
+        assert_eq!(
+            rhm.calc_2d_bounding_box(meter!(0.5)).unwrap(),
+            (meter!(-1.5), meter!(0.5), meter!(1.5), meter!(-0.5))
+        );
+        rhm.add_hit_point(HitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0)).unwrap());
+
+        assert!(rhm.calc_2d_bounding_box(meter!(f64::NAN)).is_err());
+        assert!(rhm.calc_2d_bounding_box(meter!(f64::INFINITY)).is_err());
+        assert!(rhm.calc_2d_bounding_box(meter!(f64::NEG_INFINITY)).is_err());
     }
 }
