@@ -1,19 +1,18 @@
 //! Data structure for storing intersection points (and energies) of [`Rays`](crate::rays::Rays) hitting an
 //! [`OpticSurface`](crate::surface::optic_surface::OpticSurface).
-use std::{collections::HashMap, ops::Range};
-
-use log::warn;
-use nalgebra::{DVector, MatrixXx2, Point2, Point3};
-use plotters::style::RGBAColor;
-use serde::{Deserialize, Serialize};
-use uom::si::{
-    energy::joule,
-    f64::{Energy, Length},
-    length::centimeter,
-    radiant_exposure::joule_per_square_centimeter,
-};
-use uuid::Uuid;
-
+//!
+//! A [`HitMap`] not only stores the hit points but also the number of bounces a [`Ray`](crate::ray::Ray) has
+//! undergone before hitting a surface and the [`Uuid`] of the node which cuased the reflection.
+//!
+//! The overall structure is a follows (in ascending hierarchy):
+//!
+//!  - The most basic structure is a [`HitPoint`] storing a [`Ray`s](crate::ray::Ray) intersection point with
+//!    a surface and its energy.
+//!  - A [`RaysHitMap`] simply stores a vector of [`HitPoint`]s. It also implements functions for calculating a fluence
+//!    map (using either the Voronoi or the KDE method).
+//!  - A [`BouncedHitMap`] stores a [`RaysHitMap`] together with an [`Uuid`] of the node which caused the reflection.
+//!  - A [`HitMap`] stores a vector of [`BouncedHitMap`]s.
+//!  
 use crate::{
     error::{OpmResult, OpossumError},
     kde::Kde,
@@ -29,6 +28,18 @@ use crate::{
     },
     J_per_cm2,
 };
+use log::warn;
+use nalgebra::{DVector, MatrixXx2, Point2, Point3};
+use plotters::style::RGBAColor;
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, ops::Range};
+use uom::si::{
+    energy::joule,
+    f64::{Energy, Length},
+    length::centimeter,
+    radiant_exposure::joule_per_square_centimeter,
+};
+use uuid::Uuid;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 /// Storage struct for `RaysHitMap` on a surface from a single bounce
@@ -465,10 +476,9 @@ impl Plottable for HitMap {
 
 #[cfg(test)]
 mod test_hitpoint {
-    use core::f64;
-
     use super::HitPoint;
     use crate::{joule, meter};
+    use core::f64;
     #[test]
     fn new() {
         assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(f64::NAN)).is_err());
@@ -500,10 +510,9 @@ mod test_hitpoint {
 }
 #[cfg(test)]
 mod test_rays_hit_map {
-    use core::f64;
-
     use super::RaysHitMap;
     use crate::{joule, meter, surface::hit_map::HitPoint};
+    use core::f64;
     #[test]
     fn new() {
         let rhm = RaysHitMap::new(&vec![]);
