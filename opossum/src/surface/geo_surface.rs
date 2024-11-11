@@ -6,7 +6,7 @@
 use super::{Cylinder, Parabola, Plane, Sphere};
 use crate::{ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
-use std::fmt::Debug;
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 use uom::si::f64::Length;
 
 /// Trait for handling geometric surfaces.
@@ -45,6 +45,20 @@ pub trait GeoSurface {
     fn set_isometry(&mut self, isometry: &Isometry);
 }
 
+impl Debug for dyn GeoSurface {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Surface")
+    }
+}
+
+#[derive(Clone)]
+pub struct GeoSurfaceRef(pub Rc<RefCell<dyn GeoSurface>>);
+
+impl Default for GeoSurfaceRef {
+    fn default() -> Self {
+        Self(Rc::new(RefCell::new(Plane::default())))
+    }
+}
 /// Enum for geometric surfaces, used in [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
 #[derive(Clone, Debug)]
 pub enum GeometricSurface {
@@ -107,8 +121,23 @@ impl Default for GeometricSurface {
     }
 }
 
-impl Debug for dyn GeoSurface {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Surface")
+#[cfg(test)]
+mod test_geometric_surface {
+    use crate::surface::{
+        geo_surface::{GeoSurface, GeometricSurface},
+        Plane,
+    };
+
+    #[test]
+    fn default() {
+        assert!(matches!(
+            GeometricSurface::default(),
+            GeometricSurface::Flat { s: _ }
+        ));
+    }
+    #[test]
+    fn debug() {
+        let gs = &Plane::default() as &dyn GeoSurface;
+        assert_eq!(format!("{gs:?}"), "Surface");
     }
 }

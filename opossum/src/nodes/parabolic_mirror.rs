@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use nalgebra::Point2;
 use uom::si::f64::{Angle, Length};
 
@@ -17,7 +19,11 @@ use crate::{
     optic_ports::PortType,
     properties::Proptype,
     rays::Rays,
-    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Parabola},
+    surface::{
+        geo_surface::{GeoSurfaceRef, GeometricSurface},
+        optic_surface::OpticSurface,
+        Parabola,
+    },
     utils::geom_transformation::Isometry,
 };
 
@@ -155,10 +161,14 @@ impl OpticNode for ParabolicMirror {
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
-            optic_surf.set_geo_surface(para_geo_surface.clone());
+            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(
+                para_geo_surface.clone(),
+            ))));
         } else {
             let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(para_geo_surface.clone());
+            optic_surf_rear.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(
+                para_geo_surface.clone(),
+            ))));
             self.ports_mut()
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf_rear)?;
         }
@@ -166,10 +176,10 @@ impl OpticNode for ParabolicMirror {
             .ports_mut()
             .get_optic_surface_mut(&"output_1".to_string())
         {
-            optic_surf.set_geo_surface(para_geo_surface);
+            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(para_geo_surface))));
         } else {
             let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(para_geo_surface);
+            optic_surf_rear.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(para_geo_surface))));
             self.ports_mut()
                 .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
         }

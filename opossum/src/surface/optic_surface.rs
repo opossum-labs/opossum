@@ -8,24 +8,20 @@ use crate::{
     error::{OpmResult, OpossumError},
     nodes::fluence_detector::Fluence,
     rays::Rays,
-    surface::{
-        geo_surface::{GeoSurface, GeometricSurface},
-        hit_map::{HitMap, RaysHitMap},
-    },
+    surface::hit_map::{HitMap, RaysHitMap},
     utils::geom_transformation::Isometry,
     J_per_cm2,
 };
 
+use super::{geo_surface::GeoSurfaceRef, hit_map::HitPoint};
 use core::fmt::Debug;
-
-use super::hit_map::HitPoint;
 
 /// This struct represents an optical surface, which consists of the geometric surface shape ([`GeoSurface`]) and further
 /// properties such as the [`CoatingType`].
 #[derive(Serialize, Deserialize, Clone)]
 pub struct OpticSurface {
     #[serde(skip)]
-    geo_surface: GeometricSurface,
+    geo_surface: GeoSurfaceRef,
     aperture: Aperture,
     coating: CoatingType,
     lidt: Fluence,
@@ -36,7 +32,6 @@ pub struct OpticSurface {
     #[serde(skip)]
     hit_map: HitMap,
 }
-
 impl Default for OpticSurface {
     /// Returns a default [`OpticSurface`].
     ///
@@ -44,7 +39,7 @@ impl Default for OpticSurface {
     /// and a lidt of 1 J/cm².
     fn default() -> Self {
         Self {
-            geo_surface: GeometricSurface::default(),
+            geo_surface: GeoSurfaceRef::default(),
             aperture: Aperture::default(),
             coating: CoatingType::IdealAR,
             lidt: J_per_cm2!(1.),
@@ -64,7 +59,7 @@ impl OpticSurface {
     ///
     /// This function returns an error if the given lidt is negative or NaN.
     pub fn new(
-        geo_surface: GeometricSurface,
+        geo_surface: GeoSurfaceRef,
         coating: CoatingType,
         aperture: Aperture,
         lidt: Fluence,
@@ -92,7 +87,7 @@ impl OpticSurface {
         }
     }
     /// Sets the geo surface of this [`OpticSurface`].
-    pub fn set_geo_surface(&mut self, geo_surface: GeometricSurface) {
+    pub fn set_geo_surface(&mut self, geo_surface: GeoSurfaceRef) {
         self.geo_surface = geo_surface;
     }
     /// Sets the aperture of this [`OpticSurface`].
@@ -105,8 +100,8 @@ impl OpticSurface {
     }
     /// Returns a reference to the geo surface of this [`OpticSurface`].
     #[must_use]
-    pub const fn geo_surface(&self) -> &GeometricSurface {
-        &self.geo_surface
+    pub fn geo_surface(&self) -> GeoSurfaceRef {
+        self.geo_surface.clone()
     }
     /// Returns a reference to the aperture of this [`OpticSurface`].
     #[must_use]
@@ -136,8 +131,8 @@ impl OpticSurface {
         }
     }
     /// Sets the isometry of this [`OpticSurface`].
-    pub fn set_isometry(&mut self, iso: &Isometry) {
-        self.geo_surface.set_isometry(iso);
+    pub fn set_isometry(&self, iso: &Isometry) {
+        self.geo_surface.0.borrow_mut().set_isometry(iso);
     }
     /// Returns a reference to the hit map of this [`OpticSurface`].
     ///
@@ -218,7 +213,7 @@ impl Debug for OpticSurface {
         f.debug_struct("OpticSurface")
             .field("aperture", &self.aperture)
             .field("coating", &self.coating)
-            .field("geometric surface", &self.geo_surface)
+            .field("geometric surface", &self.geo_surface.0)
             .field("backward rays cache", &self.backward_rays_cache)
             .field("forward rays cache", &self.forward_rays_cache)
             .field("hitmap", &self.hit_map)
@@ -236,11 +231,12 @@ mod test {
         joule, meter, nanometer,
         ray::Ray,
         rays::Rays,
-        surface::{geo_surface::GeometricSurface, Sphere},
+        surface::{geo_surface::GeoSurfaceRef, Sphere},
         utils::geom_transformation::Isometry,
         J_per_cm2,
     };
     use core::f64;
+    use std::{cell::RefCell, rc::Rc};
     use uuid::Uuid;
 
     #[test]
@@ -255,7 +251,7 @@ mod test {
     }
     #[test]
     fn new() {
-        let gs = GeometricSurface::default();
+        let gs = GeoSurfaceRef::default();
         assert!(OpticSurface::new(
             gs.clone(),
             CoatingType::IdealAR,
@@ -288,9 +284,9 @@ mod test {
         let aperture =
             Aperture::BinaryCircle(CircleConfig::new(meter!(1.0), meter!(0.0, 0.0)).unwrap());
         let os = OpticSurface::new(
-            GeometricSurface::Spherical {
-                s: Sphere::new(meter!(1.0), &Isometry::identity()).unwrap(),
-            },
+            GeoSurfaceRef(Rc::new(RefCell::new(
+                Sphere::new(meter!(1.0), &Isometry::identity()).unwrap(),
+            ))),
             CoatingType::Fresnel,
             aperture,
             J_per_cm2!(2.0),

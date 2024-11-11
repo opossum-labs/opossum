@@ -19,10 +19,14 @@ use crate::{
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane},
+    surface::{
+        geo_surface::{GeoSurfaceRef, GeometricSurface},
+        optic_surface::OpticSurface,
+        Plane,
+    },
     utils::{geom_transformation::Isometry, EnumProxy},
 };
-use std::fmt::Debug;
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 /// A general light source
 ///
@@ -169,10 +173,11 @@ impl OpticNode for Source {
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
-            optic_surf.set_geo_surface(geosurface.clone());
+            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface.clone()))));
         } else {
             let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front.set_geo_surface(geosurface.clone());
+            optic_surf_front
+                .set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface.clone()))));
             self.ports_mut()
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
         }
@@ -180,10 +185,10 @@ impl OpticNode for Source {
             .ports_mut()
             .get_optic_surface_mut(&"output_1".to_string())
         {
-            optic_surf.set_geo_surface(geosurface);
+            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface))));
         } else {
             let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front.set_geo_surface(geosurface);
+            optic_surf_front.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface))));
             self.ports_mut()
                 .add_optic_surface(&PortType::Output, "output_1", optic_surf_front)?;
         }

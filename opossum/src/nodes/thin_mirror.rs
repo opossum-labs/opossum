@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 //! Infinitely thin mirror with spherical or flat surface
+use std::{cell::RefCell, rc::Rc};
+
 use super::NodeAttr;
 use crate::{
     analyzers::{
@@ -16,7 +18,11 @@ use crate::{
     optic_ports::PortType,
     properties::Proptype,
     rays::Rays,
-    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane, Sphere},
+    surface::{
+        geo_surface::{GeoSurfaceRef, GeometricSurface},
+        optic_surface::OpticSurface,
+        Plane, Sphere,
+    },
     utils::geom_transformation::Isometry,
 };
 use num::Zero;
@@ -130,10 +136,11 @@ impl OpticNode for ThinMirror {
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
-            optic_surf.set_geo_surface(geosurface.clone());
+            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface.clone()))));
         } else {
             let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front.set_geo_surface(geosurface.clone());
+            optic_surf_front
+                .set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface.clone()))));
             self.ports_mut()
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
         }
@@ -142,10 +149,10 @@ impl OpticNode for ThinMirror {
             .ports_mut()
             .get_optic_surface_mut(&"output_1".to_string())
         {
-            optic_surf.set_geo_surface(geosurface);
+            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface))));
         } else {
             let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(geosurface);
+            optic_surf_rear.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface))));
             self.ports_mut()
                 .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
         }

@@ -3,6 +3,8 @@
 mod analysis_energy;
 mod analysis_raytrace;
 
+use std::{cell::RefCell, rc::Rc};
+
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{ghostfocus::AnalysisGhostFocus, Analyzable, AnalyzerType},
@@ -15,7 +17,11 @@ use crate::{
     ray::SplittingConfig,
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
-    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane},
+    surface::{
+        geo_surface::{GeoSurfaceRef, GeometricSurface},
+        optic_surface::OpticSurface,
+        Plane,
+    },
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 
@@ -327,10 +333,14 @@ impl OpticNode for BeamSplitter {
                 .ports_mut()
                 .get_optic_surface_mut(&(*in_surf_name).to_string())
             {
-                optic_surf.set_geo_surface(input_geosurface.clone());
+                optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(
+                    input_geosurface.clone(),
+                ))));
             } else {
                 let mut optic_surf_front = OpticSurface::default();
-                optic_surf_front.set_geo_surface(input_geosurface.clone());
+                optic_surf_front.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(
+                    input_geosurface.clone(),
+                ))));
                 self.ports_mut().add_optic_surface(
                     &PortType::Input,
                     in_surf_name,
@@ -343,10 +353,14 @@ impl OpticNode for BeamSplitter {
                 .ports_mut()
                 .get_optic_surface_mut(&(*out_surf_name).to_string())
             {
-                optic_surf.set_geo_surface(input_geosurface.clone());
+                optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(
+                    input_geosurface.clone(),
+                ))));
             } else {
                 let mut optic_surf_front = OpticSurface::default();
-                optic_surf_front.set_geo_surface(input_geosurface.clone());
+                optic_surf_front.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(
+                    input_geosurface.clone(),
+                ))));
                 self.ports_mut().add_optic_surface(
                     &PortType::Output,
                     out_surf_name,

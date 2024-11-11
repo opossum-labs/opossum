@@ -19,7 +19,7 @@ use crate::{
     joule, meter,
     nodes::FilterType,
     spectrum::Spectrum,
-    surface::{geo_surface::GeoSurface, hit_map::HitPoint, optic_surface::OpticSurface},
+    surface::{hit_map::HitPoint, optic_surface::OpticSurface},
     utils::geom_transformation::Isometry,
 };
 
@@ -380,7 +380,7 @@ impl Ray {
             ));
         }
         if let Some((intersection_point, surface_normal)) =
-            s.geo_surface().calc_intersect_and_normal(self)
+            s.geo_surface().0.borrow().calc_intersect_and_normal(self)
         {
             let surface_normal = surface_normal.normalize();
 
@@ -407,6 +407,8 @@ impl Ray {
             //then add additional phase shift due to lateral displacement from the grating origin
             let dist_from_origin = s
                 .geo_surface()
+                .0
+                .borrow()
                 .isometry()
                 .inverse_transform_point_f64(&intersection_in_m)
                 .x;
@@ -467,7 +469,7 @@ impl Ray {
             ));
         }
         if let Some((intersection_point, surface_normal)) =
-            os.geo_surface().calc_intersect_and_normal(self)
+            os.geo_surface().0.borrow().calc_intersect_and_normal(self)
         {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
