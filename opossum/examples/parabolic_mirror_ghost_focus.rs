@@ -17,13 +17,11 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(
-        &round_collimated_ray_source(
-                                                                             millimeter!(20.0),
-                                                                             joule!(1.0),
-                                                                             10,
-                                                                         )?
-    )?;
+    let i_src = scenery.add_node(&round_collimated_ray_source(
+        millimeter!(20.0),
+        joule!(1.0),
+        10,
+    )?)?;
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(45., 0.0, 0.0))?;
     mirror1.set_coating(
         &PortType::Input,
@@ -46,10 +44,20 @@ fn main() -> OpmResult<()> {
     // )?;
     // let i_m3 = scenery.add_node(&mirror3.clone())?;
     let i_m2 = scenery.add_node(
-        &ParabolicMirror::new_with_off_axis_y("parabola 1", millimeter!(100.0), false, degree!(-90.))?, // .with_oap_angle(degree!(90.0))?,
+        &ParabolicMirror::new_with_off_axis_y(
+            "parabola 1",
+            millimeter!(100.0),
+            false,
+            degree!(-90.),
+        )?, // .with_oap_angle(degree!(90.0))?,
     )?;
     let i_m3 = scenery.add_node(
-        &ParabolicMirror::new_with_off_axis_y("parabola 2", millimeter!(100.0), true, degree!(90.))?, // .with_oap_angle(degree!(-90.0))?,
+        &ParabolicMirror::new_with_off_axis_y(
+            "parabola 2",
+            millimeter!(100.0),
+            true,
+            degree!(90.),
+        )?, // .with_oap_angle(degree!(-90.0))?,
     )?;
     // let mut wedge = Wedge::new(
     //     "wedge",

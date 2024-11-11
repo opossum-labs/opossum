@@ -1,11 +1,7 @@
 use core::f64;
 
-use nalgebra::{vector, Isometry3, Point2, Point3, Rotation3, UnitQuaternion, Vector2, Vector3};
-use num::Num;
-use uom::si::{
-    f64::{Angle, Length, Ratio},
-    ratio,
-};
+use nalgebra::{vector, Isometry3, Point3, Vector2, Vector3};
+use uom::si::f64::{Angle, Length};
 
 use crate::{
     analyzers::{
@@ -60,9 +56,14 @@ impl Default for ParabolicMirror {
             .create_property("oa angle", "off axis angle", None, degree!(0.0).into())
             .unwrap();
         node_attr
-            .create_property("collimating", "collimation flag. True if the parabola should collimate, false otherwise", None, false.into())
+            .create_property(
+                "collimating",
+                "collimation flag. True if the parabola should collimate, false otherwise",
+                None,
+                false.into(),
+            )
             .unwrap();
-        
+
         node_attr
             .create_property(
                 "oa direction",
@@ -140,11 +141,16 @@ impl ParabolicMirror {
         collimating: bool,
         oa_angle: Angle,
     ) -> OpmResult<Self> {
-        Self::check_attributes(&focal_length, Some(&oa_angle), None)?;
+        Self::check_attributes(focal_length, Some(&oa_angle), None)?;
 
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
-        parabola.set_properties(focal_length, collimating, Some(oa_angle), Some(Vector2::new(1., 0.)))?;
+        parabola.set_properties(
+            focal_length,
+            collimating,
+            Some(oa_angle),
+            Some(Vector2::new(1., 0.)),
+        )?;
         parabola.update_surfaces()?;
         Ok(parabola)
     }
@@ -169,11 +175,16 @@ impl ParabolicMirror {
         collimating: bool,
         oa_angle: Angle,
     ) -> OpmResult<Self> {
-        Self::check_attributes(&focal_length, Some(&oa_angle), None)?;
+        Self::check_attributes(focal_length, Some(&oa_angle), None)?;
 
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
-        parabola.set_properties(focal_length, collimating, Some(oa_angle), Some(Vector2::new(0., 1.)))?;
+        parabola.set_properties(
+            focal_length,
+            collimating,
+            Some(oa_angle),
+            Some(Vector2::new(0., 1.)),
+        )?;
 
         parabola.update_surfaces()?;
         Ok(parabola)
@@ -202,7 +213,7 @@ impl ParabolicMirror {
         oa_angle: Angle,
         oa_dir: Vector2<f64>,
     ) -> OpmResult<Self> {
-        Self::check_attributes(&focal_length, Some(&oa_angle), Some(&oa_dir))?;
+        Self::check_attributes(focal_length, Some(&oa_angle), Some(&oa_dir))?;
 
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
@@ -214,7 +225,7 @@ impl ParabolicMirror {
 
     /// checks the validity of the provided node attributes of thie parabola
     fn check_attributes(
-        focal_length: &Length,
+        focal_length: Length,
         oa_angle_opt: Option<&Angle>,
         oa_dir_opt: Option<&Vector2<f64>>,
     ) -> OpmResult<()> {
@@ -227,8 +238,10 @@ impl ParabolicMirror {
             if !oa_angle.is_finite() {
                 return Err(OpossumError::Other("off-axis angle and finite".into()));
             }
-            if oa_angle.value.abs() > f64::consts::PI{
-                return Err(OpossumError::Other("off-axis angle must be smaller than 180°".into()));
+            if oa_angle.value.abs() > f64::consts::PI {
+                return Err(OpossumError::Other(
+                    "off-axis angle must be smaller than 180°".into(),
+                ));
             }
         };
         if let Some(oa_dir) = oa_dir_opt {
@@ -268,17 +281,24 @@ impl ParabolicMirror {
         let (focal_length, oa_angle, oa_dir, collimating) = self.get_parabola_attributes()?;
         let tan_val = (oa_angle / 2.).tan().value;
         let decenter_x = oa_angle.sin() * focal_length;
-        let z_shift = focal_length * (1. / (1. + tan_val * tan_val) - oa_angle.cos().value);
+        let z_shift = focal_length * (1. / tan_val.mul_add(tan_val, 1.) - oa_angle.cos().value);
         let z_rot_angle = f64::atan2(oa_dir.y, oa_dir.x);
 
         let iso = Isometry::new_translation(Point3::new(decenter_x, meter!(0.), z_shift))?;
         let rot_iso = Isometry::new_rotation(radian!(0., 0., z_rot_angle))?;
-        let mut tot_iso  =rot_iso.append(&iso);
-        if collimating{
-            let normal_vector = vector![decenter_x.value, 0., -2. * self.calc_parent_focal_length()?.value];
+        let mut tot_iso = rot_iso.append(&iso);
+        if collimating {
+            let normal_vector = vector![
+                decenter_x.value,
+                0.,
+                -2. * self.calc_parent_focal_length()?.value
+            ];
             let trans_normal_vector = tot_iso.transform_vector_f64(&normal_vector);
-            let rot  = Isometry::new_from_transform(Isometry3::new(Vector3::zeros(), trans_normal_vector.normalize() * std::f64::consts::PI));
-            tot_iso = rot.append(&tot_iso)
+            let rot = Isometry::new_from_transform(Isometry3::new(
+                Vector3::zeros(),
+                trans_normal_vector.normalize() * std::f64::consts::PI,
+            ));
+            tot_iso = rot.append(&tot_iso);
         }
         Ok(tot_iso)
     }
@@ -291,7 +311,7 @@ impl ParabolicMirror {
             return Err(OpossumError::Analysis("cannot read off-axis angle".into()));
         };
         let tan_val = (*oa_angle / 2.).tan().value;
-        Ok(*focal_length / (1. + tan_val * tan_val))
+        Ok(*focal_length / tan_val.mul_add(tan_val, 1.))
     }
 
     /// Returns / modifies a [`ParabolicMirror`] with a given off-axis angle.
@@ -322,6 +342,16 @@ impl ParabolicMirror {
         Ok(self)
     }
 
+    /// Returns the parabola-specific node attributed
+    ///
+    /// This function returns a tuple containing:
+    /// - 0: the focal length
+    /// - 1: the off-axis-angle
+    /// - 2: the off-axis direction
+    /// - 3: the collimating flag
+    ///
+    /// # Errors
+    /// This function errors if one of the attributes cannot be read from the properties.
     pub fn get_parabola_attributes(&self) -> OpmResult<(Length, Angle, Vector2<f64>, bool)> {
         let Ok(Proptype::Length(focal_length)) = self.node_attr.get_property("focal length") else {
             return Err(OpossumError::Analysis("cannot read focal length".into()));
@@ -335,7 +365,9 @@ impl ParabolicMirror {
             ));
         };
         let Ok(Proptype::Bool(collimating)) = self.node_attr.get_property("collimating") else {
-            return Err(OpossumError::Analysis("cannot read collimation flag".into()));
+            return Err(OpossumError::Analysis(
+                "cannot read collimation flag".into(),
+            ));
         };
 
         Ok((*focal_length, *oa_angle, *oa_dir, *collimating))

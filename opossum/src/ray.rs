@@ -4,7 +4,7 @@ use core::f64;
 use std::{f64::consts::PI, fmt::Display};
 
 use approx::relative_ne;
-use nalgebra::{vector, MatrixXx3, Point3, Rotation3, Unit, UnitQuaternion, Vector3};
+use nalgebra::{vector, MatrixXx3, Point3, Rotation3, Vector3};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -688,11 +688,9 @@ impl Ray {
             0.,
             epsilon = f64::EPSILON * 1000.
         ) {
-            let axis = old_dir.cross(&self.dir);
-            let angle = f64::atan2(axis.norm(), old_dir.dot(&self.dir));
-            let rot: Unit<nalgebra::Quaternion<f64>> =
-                UnitQuaternion::new(axis.normalize() * angle);
-            *up_direction = rot.transform_vector(up_direction);
+            if let Some(rot) = Rotation3::rotation_between(&old_dir, &self.dir) {
+                *up_direction = rot.transform_vector(up_direction);
+            }
         }
 
         Ok(())
