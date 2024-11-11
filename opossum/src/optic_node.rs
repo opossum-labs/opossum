@@ -21,12 +21,7 @@ use crate::{
     rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
-    surface::{
-        geo_surface::{GeoSurfaceRef, GeometricSurface},
-        hit_map::HitMap,
-        optic_surface::OpticSurface,
-        Plane,
-    },
+    surface::{geo_surface::GeoSurfaceRef, hit_map::HitMap, optic_surface::OpticSurface, Plane},
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
@@ -69,17 +64,15 @@ pub trait OpticNode: Dottable {
     /// # Errors
     /// This function errors if the function `add_optic_surface` fails
     fn update_flat_single_surfaces(&mut self) -> OpmResult<()> {
-        let geosurface = GeometricSurface::Flat {
-            s: Plane::new(&Isometry::identity()),
-        };
+        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
-            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface.clone()))));
+            optic_surf.set_geo_surface(geosurface.clone());
         } else {
             let mut optic_surf_in = OpticSurface::default();
-            optic_surf_in.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface.clone()))));
+            optic_surf_in.set_geo_surface(geosurface.clone());
             self.ports_mut()
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf_in)?;
         }
@@ -87,10 +80,10 @@ pub trait OpticNode: Dottable {
             .ports_mut()
             .get_optic_surface_mut(&"output_1".to_string())
         {
-            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface))));
+            optic_surf.set_geo_surface(geosurface);
         } else {
             let mut optic_surf_out = OpticSurface::default();
-            optic_surf_out.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface))));
+            optic_surf_out.set_geo_surface(geosurface);
             self.ports_mut()
                 .add_optic_surface(&PortType::Output, "output_1", optic_surf_out)?;
         }

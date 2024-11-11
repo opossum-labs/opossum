@@ -13,11 +13,7 @@ use crate::{
     optic_ports::PortType,
     properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{
-        geo_surface::{GeoSurfaceRef, GeometricSurface},
-        optic_surface::OpticSurface,
-        Plane, Sphere,
-    },
+    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane, Sphere},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -251,23 +247,21 @@ impl OpticNode for Lens {
             return Err(OpossumError::Analysis("cannot read front curvature".into()));
         };
         let front_geosurface = if front_curvature.is_infinite() {
-            GeometricSurface::Flat {
-                s: Plane::new(&Isometry::identity()),
-            }
+            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))))
         } else {
-            GeometricSurface::Spherical {
-                s: Sphere::new(*front_curvature, &Isometry::identity())?,
-            }
+            GeoSurfaceRef(Rc::new(RefCell::new(Sphere::new(
+                *front_curvature,
+                &Isometry::identity(),
+            )?)))
         };
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
-            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(front_geosurface))));
+            optic_surf.set_geo_surface(front_geosurface);
         } else {
             let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front
-                .set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(front_geosurface))));
+            optic_surf_front.set_geo_surface(front_geosurface);
             self.ports_mut()
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
         }
@@ -277,22 +271,21 @@ impl OpticNode for Lens {
             return Err(OpossumError::Analysis("cannot read rear curvature".into()));
         };
         let rear_geosurface = if rear_curvature.is_infinite() {
-            GeometricSurface::Flat {
-                s: Plane::new(&Isometry::identity()),
-            }
+            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))))
         } else {
-            GeometricSurface::Spherical {
-                s: Sphere::new(*rear_curvature, &Isometry::identity())?,
-            }
+            GeoSurfaceRef(Rc::new(RefCell::new(Sphere::new(
+                *rear_curvature,
+                &Isometry::identity(),
+            )?)))
         };
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"output_1".to_string())
         {
-            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(rear_geosurface))));
+            optic_surf.set_geo_surface(rear_geosurface);
         } else {
             let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(rear_geosurface))));
+            optic_surf_rear.set_geo_surface(rear_geosurface);
             self.ports_mut()
                 .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
         }

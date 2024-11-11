@@ -19,11 +19,7 @@ use crate::{
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    surface::{
-        geo_surface::{GeoSurfaceRef, GeometricSurface},
-        optic_surface::OpticSurface,
-        Plane,
-    },
+    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use std::{cell::RefCell, fmt::Debug, rc::Rc};
@@ -166,18 +162,15 @@ impl OpticNode for Source {
         &mut self.node_attr
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let geosurface = GeometricSurface::Flat {
-            s: Plane::new(&Isometry::identity()),
-        };
+        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
-            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface.clone()))));
+            optic_surf.set_geo_surface(geosurface.clone());
         } else {
             let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front
-                .set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface.clone()))));
+            optic_surf_front.set_geo_surface(geosurface.clone());
             self.ports_mut()
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
         }
@@ -185,10 +178,10 @@ impl OpticNode for Source {
             .ports_mut()
             .get_optic_surface_mut(&"output_1".to_string())
         {
-            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface))));
+            optic_surf.set_geo_surface(geosurface);
         } else {
             let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(geosurface))));
+            optic_surf_front.set_geo_surface(geosurface);
             self.ports_mut()
                 .add_optic_surface(&PortType::Output, "output_1", optic_surf_front)?;
         }

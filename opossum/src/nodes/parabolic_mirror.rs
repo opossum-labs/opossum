@@ -22,11 +22,7 @@ use crate::{
     properties::Proptype,
     radian,
     rays::Rays,
-    surface::{
-        geo_surface::{GeoSurfaceRef, GeometricSurface},
-        optic_surface::OpticSurface,
-        Parabola,
-    },
+    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Parabola},
     utils::geom_transformation::Isometry,
 };
 
@@ -389,19 +385,15 @@ impl OpticNode for ParabolicMirror {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let iso = self.calc_off_axis_isometry()?;
         let parabola = Parabola::new(-1. * self.calc_parent_focal_length()?, &iso)?;
-        let para_geo_surface = GeometricSurface::Parabolic { s: parabola };
+        let para_geo_surface = GeoSurfaceRef(Rc::new(RefCell::new(parabola)));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
-            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(
-                para_geo_surface.clone(),
-            ))));
+            optic_surf.set_geo_surface(para_geo_surface.clone());
         } else {
             let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(
-                para_geo_surface.clone(),
-            ))));
+            optic_surf_rear.set_geo_surface(para_geo_surface.clone());
             self.ports_mut()
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf_rear)?;
         }
@@ -409,10 +401,10 @@ impl OpticNode for ParabolicMirror {
             .ports_mut()
             .get_optic_surface_mut(&"output_1".to_string())
         {
-            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(para_geo_surface))));
+            optic_surf.set_geo_surface(para_geo_surface);
         } else {
             let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(para_geo_surface))));
+            optic_surf_rear.set_geo_surface(para_geo_surface);
             self.ports_mut()
                 .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
         }

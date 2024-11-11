@@ -3,7 +3,7 @@
 //! This module contains the [`GeoSurface`] trait which handles the interface for calculating things like intersection
 //! points etc. and an enum containing the concrete surface types.
 
-use super::{Cylinder, Parabola, Plane, Sphere};
+use super::Plane;
 use crate::{ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use std::{cell::RefCell, fmt::Debug, rc::Rc};
@@ -61,85 +61,6 @@ impl Default for GeoSurfaceRef {
         Self(Rc::new(RefCell::new(Plane::default())))
     }
 }
-/// Enum for geometric surfaces, used in [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
-#[derive(Clone, Debug)]
-pub enum GeometricSurface {
-    /// spherical surface. Holds a [`Sphere`] and a a flag that defines whether this surface is to be used as convex or concave
-    Spherical {
-        /// surface: [`Sphere`]
-        s: Sphere,
-    },
-    /// flat surface that holds a [`Plane`]
-    Flat {
-        /// surface: [`Plane`]
-        s: Plane,
-    },
-    /// parabolic surface that holds a [`Parabola`]
-    Parabolic {
-        /// surface: [`Parabola`]
-        s: Parabola,
-    },
-    /// cylindrical surface that holds a [`Cylinder`]
-    Cylindrical {
-        /// surface: [`Cylinder`]
-        s: Cylinder,
-    },
-}
-
-impl GeoSurface for GeometricSurface {
-    fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
-        match self {
-            Self::Spherical { s } => s.calc_intersect_and_normal_do(ray),
-            Self::Flat { s } => s.calc_intersect_and_normal_do(ray),
-            Self::Cylindrical { s } => s.calc_intersect_and_normal_do(ray),
-            Self::Parabolic { s } => s.calc_intersect_and_normal_do(ray),
-        }
-    }
-
-    fn isometry(&self) -> &Isometry {
-        match self {
-            Self::Spherical { s } => s.isometry(),
-            Self::Flat { s } => s.isometry(),
-            Self::Cylindrical { s } => s.isometry(),
-            Self::Parabolic { s } => s.isometry(),
-        }
-    }
-
-    fn set_isometry(&mut self, isometry: &Isometry) {
-        match self {
-            Self::Spherical { s } => s.set_isometry(isometry),
-            Self::Flat { s } => s.set_isometry(isometry),
-            Self::Cylindrical { s } => s.set_isometry(isometry),
-            Self::Parabolic { s } => s.set_isometry(isometry),
-        }
-    }
-}
-
-impl Default for GeometricSurface {
-    fn default() -> Self {
-        Self::Flat {
-            s: Plane::new(&Isometry::identity()),
-        }
-    }
-}
 
 #[cfg(test)]
-mod test_geometric_surface {
-    use crate::surface::{
-        geo_surface::{GeoSurface, GeometricSurface},
-        Plane,
-    };
-
-    #[test]
-    fn default() {
-        assert!(matches!(
-            GeometricSurface::default(),
-            GeometricSurface::Flat { s: _ }
-        ));
-    }
-    #[test]
-    fn debug() {
-        let gs = &Plane::default() as &dyn GeoSurface;
-        assert_eq!(format!("{gs:?}"), "Surface");
-    }
-}
+mod test_geo_surface_ref {}

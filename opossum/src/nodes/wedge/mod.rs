@@ -9,11 +9,7 @@ use crate::{
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{
-        geo_surface::{GeoSurfaceRef, GeometricSurface},
-        optic_surface::OpticSurface,
-        Plane,
-    },
+    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use num::Zero;
@@ -123,33 +119,30 @@ impl Wedge {
 
 impl OpticNode for Wedge {
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let front_geosurface = GeometricSurface::Flat {
-            s: Plane::new(&Isometry::identity()),
-        };
+        let front_geosurface =
+            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
-            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(front_geosurface))));
+            optic_surf.set_geo_surface(front_geosurface);
         } else {
             let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front
-                .set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(front_geosurface))));
+            optic_surf_front.set_geo_surface(front_geosurface);
             self.ports_mut()
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
         }
 
-        let rear_geosurface = GeometricSurface::Flat {
-            s: Plane::new(&Isometry::identity()),
-        };
+        let rear_geosurface =
+            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"output_1".to_string())
         {
-            optic_surf.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(rear_geosurface))));
+            optic_surf.set_geo_surface(rear_geosurface);
         } else {
             let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(GeoSurfaceRef(Rc::new(RefCell::new(rear_geosurface))));
+            optic_surf_rear.set_geo_surface(rear_geosurface);
             self.ports_mut()
                 .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
         }
