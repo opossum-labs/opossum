@@ -50,7 +50,9 @@ impl Debug for dyn GeoSurface {
         write!(f, "Surface")
     }
 }
-
+/// Reference for a [`GeoSurface`].
+///
+/// This struct is necessary in order to implement a Default trait on a `Rc<RefCell<GeoSurface>>`.
 #[derive(Clone)]
 pub struct GeoSurfaceRef(pub Rc<RefCell<dyn GeoSurface>>);
 
