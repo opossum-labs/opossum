@@ -227,8 +227,8 @@ impl ParabolicMirror {
             if !oa_angle.is_finite() {
                 return Err(OpossumError::Other("off-axis angle and finite".into()));
             }
-            if oa_angle.abs() > f64::consts::PI{
-                return Err(OpossumError::Other("off-axis angle must be smaller than 180 °".into()));
+            if oa_angle.value.abs() > f64::consts::PI{
+                return Err(OpossumError::Other("off-axis angle must be smaller than 180°".into()));
             }
         };
         if let Some(oa_dir) = oa_dir_opt {
