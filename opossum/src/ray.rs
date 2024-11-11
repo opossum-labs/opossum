@@ -4,7 +4,7 @@ use core::f64;
 use std::{f64::consts::PI, fmt::Display};
 
 use approx::relative_ne;
-use nalgebra::{vector, MatrixXx3, Point3, Rotation3, Vector3};
+use nalgebra::{vector, MatrixXx3, Point3, Rotation3, Unit, UnitQuaternion, Vector3};
 use num::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -489,6 +489,7 @@ impl Ray {
             self.pos = intersection_point;
             // check, if total reflection
             if dis.is_sign_positive() {
+                let mut reflected_ray = self.clone();
                 // handle energy (due to coating)
                 let reflectivity =
                     os.coating()
@@ -499,7 +500,6 @@ impl Ray {
                 self.prev_dir = Some(self.dir);
                 self.dir = refract_dir;
                 self.e = input_energy * (1. - reflectivity);
-                let mut reflected_ray = self.clone();
                 reflected_ray.prev_dir = Some(reflected_ray.dir);
                 reflected_ray.dir = reflected_dir;
                 reflected_ray.e = input_energy * reflectivity;
@@ -682,28 +682,17 @@ impl Ray {
                 "no previous direction of ray defined to calculate new up-direction!".into(),
             ));
         };
-        // let old_dir = if let Some(last_pos) = self.pos_hist.last() {
-        //     Vector3::from_vec(
-        //         (self.pos - last_pos)
-        //             .iter()
-        //             .map(uom::si::f64::Length::get::<millimeter>)
-        //             .collect::<Vec<f64>>(),
-        //     )
-        //     .normalize()
-        // } else {
-        //     return Err(OpossumError::Other(
-        //         "cannot extract last position to calculate new up-direction!".into(),
-        //     ));
-        // };
 
         if relative_ne!(
             (old_dir - self.dir).norm(),
             0.,
             epsilon = f64::EPSILON * 1000.
         ) {
-            if let Some(rotation_mat) = Rotation3::rotation_between(&old_dir, &self.dir) {
-                *up_direction = rotation_mat * *up_direction;
-            }
+            let axis = old_dir.cross(&self.dir);
+            let angle = f64::atan2(axis.norm(), old_dir.dot(&self.dir));
+            let rot: Unit<nalgebra::Quaternion<f64>> =
+                UnitQuaternion::new(axis.normalize() * angle);
+            *up_direction = rot.transform_vector(up_direction);
         }
 
         Ok(())

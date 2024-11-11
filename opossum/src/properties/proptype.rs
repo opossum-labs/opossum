@@ -113,7 +113,7 @@ pub enum Proptype {
     /// a hit map (position fo rays hitting a given surface)
     HitMap(HitMap),
     /// 2-dimenstional vector
-    Vec2(Vector2<f64>)
+    Vec2(Vector2<f64>),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -238,8 +238,8 @@ impl From<GhostFocusHistory> for Proptype {
     }
 }
 
-impl From<Vector2<f64>> for Proptype{
-    fn from(value: Vector2<f64>) -> Self{
+impl From<Vector2<f64>> for Proptype {
+    fn from(value: Vector2<f64>) -> Self {
         Self::Vec2(value)
     }
 }

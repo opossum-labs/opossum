@@ -92,7 +92,6 @@ impl GeoSurface for Parabola {
             ray.position().z.value
         ];
         let f_length = self.focal_length.value;
-        let is_back_propagating = dir.z.is_sign_negative();
         // parabola formula (at origin)
         // x^2 + y^2 - 4fz = 0
         //
@@ -123,18 +122,10 @@ impl GeoSurface for Parabola {
             Roots::Two(t) => {
                 let real_t = if self.focal_length.is_sign_negative() {
                     // concave surface => use max t
-                    if is_back_propagating {
-                        f64::min(t[0], t[1])
-                    } else {
-                        f64::max(t[0], t[1])
-                    }
+                    f64::max(t[0], t[1])
                 } else {
                     // convex surface => use min t
-                    if is_back_propagating {
-                        f64::max(t[0], t[1])
-                    } else {
-                        f64::min(t[0], t[1])
-                    }
+                    f64::min(t[0], t[1])
                 };
                 if real_t.is_sign_negative() {
                     // surface behind beam
@@ -160,7 +151,6 @@ impl GeoSurface for Parabola {
         &self.isometry
     }
     fn set_isometry(&mut self, isometry: &Isometry) {
-
         // todo!();
         // let oap_decenter = self.calc_oap_decenter();
         // let oap_iso = Isometry::new(

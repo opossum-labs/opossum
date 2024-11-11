@@ -74,7 +74,7 @@ impl Isometry {
     }
 
     /// Creates a new translation [`Isometry`]
-    /// 
+    ///
     /// Internally, translation is handled in meter
     /// # Attributes
     /// - `translation`: vector of translation for each axis as [`Length`]
@@ -98,8 +98,8 @@ impl Isometry {
 
         Ok(Self::new_from_transform(translation_iso.into()))
     }
-    /// Creates a new rotation [`Isometry`] 
-    /// 
+    /// Creates a new rotation [`Isometry`]
+    ///
     /// Internally, rotation is handled in radians
     /// # Attributes
     /// - `axes_angles`: rotation [`Angle`]s for each axis
@@ -120,9 +120,11 @@ impl Isometry {
         );
         let rotation_iso =
             Rotation3::from_euler_angles(rot_in_radian[0], rot_in_radian[1], rot_in_radian[2]);
-            
-        Ok(Self::new_from_transform(Isometry3::from_parts(Translation3::identity(), rotation_iso.into())
-    ))
+
+        Ok(Self::new_from_transform(Isometry3::from_parts(
+            Translation3::identity(),
+            rotation_iso.into(),
+        )))
     }
 
     /// Create a "identiy" Isometry, which represents a zero translation and rotation.
