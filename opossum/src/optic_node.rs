@@ -21,7 +21,7 @@ use crate::{
     rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
-    surface::{geo_surface::GeometricSurface, hit_map::HitMap, optic_surface::OpticSurface, Plane},
+    surface::{geo_surface::GeoSurfaceRef, hit_map::HitMap, optic_surface::OpticSurface, Plane},
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
@@ -64,9 +64,7 @@ pub trait OpticNode: Dottable {
     /// # Errors
     /// This function errors if the function `add_optic_surface` fails
     fn update_flat_single_surfaces(&mut self) -> OpmResult<()> {
-        let geosurface = GeometricSurface::Flat {
-            s: Plane::new(&Isometry::identity()),
-        };
+        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())

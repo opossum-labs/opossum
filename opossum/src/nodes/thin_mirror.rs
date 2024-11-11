@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 //! Infinitely thin mirror with spherical or flat surface
+use std::{cell::RefCell, rc::Rc};
+
 use super::NodeAttr;
 use crate::{
     analyzers::{
@@ -16,7 +18,7 @@ use crate::{
     optic_ports::PortType,
     properties::Proptype,
     rays::Rays,
-    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane, Sphere},
+    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane, Sphere},
     utils::geom_transformation::Isometry,
 };
 use num::Zero;
@@ -117,13 +119,12 @@ impl OpticNode for ThinMirror {
             return Err(OpossumError::Analysis("cannot read curvature".into()));
         };
         let geosurface = if curvature.is_infinite() {
-            GeometricSurface::Flat {
-                s: Plane::new(&Isometry::identity()),
-            }
+            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))))
         } else {
-            GeometricSurface::Spherical {
-                s: Sphere::new(*curvature, &Isometry::identity())?,
-            }
+            GeoSurfaceRef(Rc::new(RefCell::new(Sphere::new(
+                *curvature,
+                &Isometry::identity(),
+            )?)))
         };
 
         if let Some(optic_surf) = self

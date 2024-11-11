@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use super::NodeAttr;
 use crate::{
     analyzers::Analyzable,
@@ -7,7 +9,7 @@ use crate::{
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane},
+    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use num::Zero;
@@ -117,9 +119,8 @@ impl Wedge {
 
 impl OpticNode for Wedge {
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let front_geosurface = GeometricSurface::Flat {
-            s: Plane::new(&Isometry::identity()),
-        };
+        let front_geosurface =
+            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
@@ -132,9 +133,8 @@ impl OpticNode for Wedge {
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
         }
 
-        let rear_geosurface = GeometricSurface::Flat {
-            s: Plane::new(&Isometry::identity()),
-        };
+        let rear_geosurface =
+            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"output_1".to_string())

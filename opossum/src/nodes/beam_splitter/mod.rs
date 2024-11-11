@@ -3,6 +3,8 @@
 mod analysis_energy;
 mod analysis_raytrace;
 
+use std::{cell::RefCell, rc::Rc};
+
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{ghostfocus::AnalysisGhostFocus, Analyzable, AnalyzerType},
@@ -15,7 +17,7 @@ use crate::{
     ray::SplittingConfig,
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
-    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane},
+    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 
@@ -319,9 +321,8 @@ impl OpticNode for BeamSplitter {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let input_surf_name_list = vec!["input1", "input2"];
         let output_surf_name_list = vec!["out1_trans1_refl2", "out2_trans2_refl1"];
-        let input_geosurface = GeometricSurface::Flat {
-            s: Plane::new(&Isometry::identity()),
-        };
+        let input_geosurface =
+            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
         for in_surf_name in &input_surf_name_list {
             if let Some(optic_surf) = self
                 .ports_mut()

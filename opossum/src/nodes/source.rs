@@ -19,10 +19,10 @@ use crate::{
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Plane},
+    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
-use std::fmt::Debug;
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 /// A general light source
 ///
@@ -162,9 +162,7 @@ impl OpticNode for Source {
         &mut self.node_attr
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let geosurface = GeometricSurface::Flat {
-            s: Plane::new(&Isometry::identity()),
-        };
+        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
