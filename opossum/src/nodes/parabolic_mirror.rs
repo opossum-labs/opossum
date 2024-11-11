@@ -1,3 +1,5 @@
+use core::f64;
+
 use nalgebra::{vector, Isometry3, Point2, Point3, Rotation3, UnitQuaternion, Vector2, Vector3};
 use num::Num;
 use uom::si::{
@@ -224,6 +226,9 @@ impl ParabolicMirror {
         if let Some(oa_angle) = oa_angle_opt {
             if !oa_angle.is_finite() {
                 return Err(OpossumError::Other("off-axis angle and finite".into()));
+            }
+            if oa_angle.abs() > f64::consts::PI{
+                return Err(OpossumError::Other("off-axis angle must be smaller than 180 °".into()));
             }
         };
         if let Some(oa_dir) = oa_dir_opt {
