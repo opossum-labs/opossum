@@ -380,7 +380,7 @@ mod test {
         ports.add(&PortType::Output, "test2").unwrap();
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: Flat { s: Plane { isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } } }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\noutput:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: Flat { s: Plane { isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } } }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\n".to_owned()
+            "inputs:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: RefCell { value: Surface }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\noutput:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: RefCell { value: Surface }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\n".to_owned()
         );
     }
     #[test]
@@ -392,7 +392,7 @@ mod test {
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: Flat { s: Plane { isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } } }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\noutput:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: Flat { s: Plane { isometry: Isometry { transform: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] }, inverse: Isometry { rotation: [0.0, 0.0, 0.0, 1.0], translation: [0.0, 0.0, 0.0] } } } }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\nports are inverted\n".to_owned()
+            "inputs:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: RefCell { value: Surface }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\noutput:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: RefCell { value: Surface }, backward rays cache: [], forward rays cache: [], hitmap: HitMap { hit_map: [], critical_fluence: {} }, lidt: 10000.0 kg^1 s^-2 }\nports are inverted\n".to_owned()
         );
     }
 }

@@ -19,7 +19,7 @@ use crate::{
     joule, meter,
     nodes::FilterType,
     spectrum::Spectrum,
-    surface::{geo_surface::GeoSurface, hit_map::HitPoint, optic_surface::OpticSurface},
+    surface::{hit_map::HitPoint, optic_surface::OpticSurface},
     utils::geom_transformation::Isometry,
 };
 
@@ -380,7 +380,7 @@ impl Ray {
             ));
         }
         if let Some((intersection_point, surface_normal)) =
-            s.geo_surface().calc_intersect_and_normal(self)
+            s.geo_surface().0.borrow().calc_intersect_and_normal(self)
         {
             let surface_normal = surface_normal.normalize();
 
@@ -407,6 +407,8 @@ impl Ray {
             //then add additional phase shift due to lateral displacement from the grating origin
             let dist_from_origin = s
                 .geo_surface()
+                .0
+                .borrow()
                 .isometry()
                 .inverse_transform_point_f64(&intersection_in_m)
                 .x;
@@ -467,7 +469,7 @@ impl Ray {
             ));
         }
         if let Some((intersection_point, surface_normal)) =
-            os.geo_surface().calc_intersect_and_normal(self)
+            os.geo_surface().0.borrow().calc_intersect_and_normal(self)
         {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
@@ -489,6 +491,7 @@ impl Ray {
             self.pos = intersection_point;
             // check, if total reflection
             if dis.is_sign_positive() {
+                let mut reflected_ray = self.clone();
                 // handle energy (due to coating)
                 let reflectivity =
                     os.coating()
@@ -499,7 +502,6 @@ impl Ray {
                 self.prev_dir = Some(self.dir);
                 self.dir = refract_dir;
                 self.e = input_energy * (1. - reflectivity);
-                let mut reflected_ray = self.clone();
                 reflected_ray.prev_dir = Some(reflected_ray.dir);
                 reflected_ray.dir = reflected_dir;
                 reflected_ray.e = input_energy * reflectivity;
@@ -682,27 +684,14 @@ impl Ray {
                 "no previous direction of ray defined to calculate new up-direction!".into(),
             ));
         };
-        // let old_dir = if let Some(last_pos) = self.pos_hist.last() {
-        //     Vector3::from_vec(
-        //         (self.pos - last_pos)
-        //             .iter()
-        //             .map(uom::si::f64::Length::get::<millimeter>)
-        //             .collect::<Vec<f64>>(),
-        //     )
-        //     .normalize()
-        // } else {
-        //     return Err(OpossumError::Other(
-        //         "cannot extract last position to calculate new up-direction!".into(),
-        //     ));
-        // };
 
         if relative_ne!(
             (old_dir - self.dir).norm(),
             0.,
             epsilon = f64::EPSILON * 1000.
         ) {
-            if let Some(rotation_mat) = Rotation3::rotation_between(&old_dir, &self.dir) {
-                *up_direction = rotation_mat * *up_direction;
+            if let Some(rot) = Rotation3::rotation_between(&old_dir, &self.dir) {
+                *up_direction = rot.transform_vector(up_direction);
             }
         }
 

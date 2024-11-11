@@ -3,10 +3,10 @@
 //! This module contains the [`GeoSurface`] trait which handles the interface for calculating things like intersection
 //! points etc. and an enum containing the concrete surface types.
 
-use super::{Cylinder, Parabola, Plane, Sphere};
+use super::Plane;
 use crate::{ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
-use std::fmt::Debug;
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 use uom::si::f64::Length;
 
 /// Trait for handling geometric surfaces.
@@ -45,70 +45,22 @@ pub trait GeoSurface {
     fn set_isometry(&mut self, isometry: &Isometry);
 }
 
-/// Enum for geometric surfaces, used in [`OpticSurface`](crate::surface::optic_surface::OpticSurface)
-#[derive(Clone, Debug)]
-pub enum GeometricSurface {
-    /// spherical surface. Holds a [`Sphere`] and a a flag that defines whether this surface is to be used as convex or concave
-    Spherical {
-        /// surface: [`Sphere`]
-        s: Sphere,
-    },
-    /// flat surface that holds a [`Plane`]
-    Flat {
-        /// surface: [`Plane`]
-        s: Plane,
-    },
-    /// parabolic surface that holds a [`Parabola`]
-    Parabolic {
-        /// surface: [`Parabola`]
-        s: Parabola,
-    },
-    /// cylindrical surface that holds a [`Cylinder`]
-    Cylindrical {
-        /// surface: [`Cylinder`]
-        s: Cylinder,
-    },
-}
-
-impl GeoSurface for GeometricSurface {
-    fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
-        match self {
-            Self::Spherical { s } => s.calc_intersect_and_normal_do(ray),
-            Self::Flat { s } => s.calc_intersect_and_normal_do(ray),
-            Self::Cylindrical { s } => s.calc_intersect_and_normal_do(ray),
-            Self::Parabolic { s } => s.calc_intersect_and_normal_do(ray),
-        }
-    }
-
-    fn isometry(&self) -> &Isometry {
-        match self {
-            Self::Spherical { s } => s.isometry(),
-            Self::Flat { s } => s.isometry(),
-            Self::Cylindrical { s } => s.isometry(),
-            Self::Parabolic { s } => s.isometry(),
-        }
-    }
-
-    fn set_isometry(&mut self, isometry: &Isometry) {
-        match self {
-            Self::Spherical { s } => s.set_isometry(isometry),
-            Self::Flat { s } => s.set_isometry(isometry),
-            Self::Cylindrical { s } => s.set_isometry(isometry),
-            Self::Parabolic { s } => s.set_isometry(isometry),
-        }
-    }
-}
-
-impl Default for GeometricSurface {
-    fn default() -> Self {
-        Self::Flat {
-            s: Plane::new(&Isometry::identity()),
-        }
-    }
-}
-
 impl Debug for dyn GeoSurface {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Surface")
     }
 }
+/// Reference for a [`GeoSurface`].
+///
+/// This struct is necessary in order to implement a Default trait on a `Rc<RefCell<GeoSurface>>`.
+#[derive(Clone)]
+pub struct GeoSurfaceRef(pub Rc<RefCell<dyn GeoSurface>>);
+
+impl Default for GeoSurfaceRef {
+    fn default() -> Self {
+        Self(Rc::new(RefCell::new(Plane::default())))
+    }
+}
+
+#[cfg(test)]
+mod test_geo_surface_ref {}

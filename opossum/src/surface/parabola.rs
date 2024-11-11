@@ -3,18 +3,13 @@
 //! This module implements a parabolic surface with a given focal length and a given z position on the optical axis.
 
 use crate::{
-    degree,
     error::{OpmResult, OpossumError},
     meter,
     utils::geom_transformation::Isometry,
 };
 use nalgebra::{vector, Point3, Vector3};
-use num::Zero;
 use roots::{find_roots_quadratic, Roots};
-use uom::si::{
-    f64::{Angle, Length, Ratio},
-    ratio::ratio,
-};
+use uom::si::f64::Length;
 
 use super::geo_surface::GeoSurface;
 
@@ -23,7 +18,6 @@ use super::geo_surface::GeoSurface;
 pub struct Parabola {
     focal_length: Length,
     isometry: Isometry,
-    off_axis_angles: (Angle, Angle),
 }
 
 impl Parabola {
@@ -43,44 +37,7 @@ impl Parabola {
         Ok(Self {
             focal_length,
             isometry: isometry.clone(),
-            off_axis_angles: (Angle::zero(), Angle::zero()),
         })
-    }
-    /// Sets the off-axis angles (full reflection) of this [`Parabola`].
-    ///
-    /// The `off_axis_angles` tuple denotes the full deflection angle around the x and y axis.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the given angles are not finite or their absolute
-    /// value is >= 180°.
-    pub fn set_off_axis_angles(&mut self, off_axis_angles: (Angle, Angle)) -> OpmResult<()> {
-        if !off_axis_angles.0.is_finite() || off_axis_angles.0.abs() >= degree!(180.0) {
-            return Err(OpossumError::Other(
-                "deflection angle around x axis must be finite and the absolute value < 180°"
-                    .into(),
-            ));
-        }
-        if !off_axis_angles.1.is_finite() || off_axis_angles.1.abs() >= degree!(180.0) {
-            return Err(OpossumError::Other(
-                "deflection angle around y axis must be finite and the absolute value < 180°"
-                    .into(),
-            ));
-        }
-        self.off_axis_angles = (off_axis_angles.0, off_axis_angles.1);
-        Ok(())
-    }
-    /// Returns the off axis angles of this [`Parabola`].
-    #[must_use]
-    pub fn off_axis_angles(&self) -> (Angle, Angle) {
-        self.off_axis_angles
-    }
-    fn calc_oap_decenter(&self) -> (Length, Length) {
-        let f_x = 2. * self.focal_length / (Ratio::new::<ratio>(1.) + self.off_axis_angles.0.cos());
-        let f_y = 2. * self.focal_length / (Ratio::new::<ratio>(1.) + self.off_axis_angles.1.cos());
-        let oad_x = f_y * (self.off_axis_angles.1.sin());
-        let oad_y = f_x * (self.off_axis_angles.0.sin());
-        (oad_x, oad_y)
     }
 }
 
@@ -96,7 +53,6 @@ impl GeoSurface for Parabola {
             ray.position().z.value
         ];
         let f_length = self.focal_length.value;
-        let is_back_propagating = dir.z.is_sign_negative();
         // parabola formula (at origin)
         // x^2 + y^2 - 4fz = 0
         //
@@ -127,18 +83,10 @@ impl GeoSurface for Parabola {
             Roots::Two(t) => {
                 let real_t = if self.focal_length.is_sign_negative() {
                     // concave surface => use max t
-                    if is_back_propagating {
-                        f64::min(t[0], t[1])
-                    } else {
-                        f64::max(t[0], t[1])
-                    }
+                    f64::max(t[0], t[1])
                 } else {
                     // convex surface => use min t
-                    if is_back_propagating {
-                        f64::max(t[0], t[1])
-                    } else {
-                        f64::min(t[0], t[1])
-                    }
+                    f64::min(t[0], t[1])
                 };
                 if real_t.is_sign_negative() {
                     // surface behind beam
@@ -164,14 +112,7 @@ impl GeoSurface for Parabola {
         &self.isometry
     }
     fn set_isometry(&mut self, isometry: &Isometry) {
-        let oap_decenter = self.calc_oap_decenter();
-        let oap_iso = Isometry::new(
-            Point3::new(oap_decenter.0, oap_decenter.1, Length::zero()),
-            degree!(0.0, 0.0, 0.0),
-        )
-        .unwrap();
-        let total_iso = isometry.append(&oap_iso);
-        self.isometry = total_iso;
+        self.isometry = isometry.clone();
     }
 }
 
@@ -179,7 +120,7 @@ impl GeoSurface for Parabola {
 mod test {
     use super::Parabola;
     use crate::{
-        degree, joule, meter, millimeter, nanometer, ray::Ray, surface::geo_surface::GeoSurface,
+        joule, meter, nanometer, ray::Ray, surface::geo_surface::GeoSurface,
         utils::geom_transformation::Isometry,
     };
     use core::f64;
@@ -190,9 +131,6 @@ mod test {
         assert!(Parabola::new(meter!(f64::NAN), &Isometry::identity()).is_err());
         assert!(Parabola::new(meter!(f64::INFINITY), &Isometry::identity()).is_err());
         assert!(Parabola::new(meter!(f64::NEG_INFINITY), &Isometry::identity()).is_err());
-        let p = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
-        assert_eq!(p.off_axis_angles.0, degree!(0.0));
-        assert_eq!(p.off_axis_angles.1, degree!(0.0));
     }
     #[test]
     fn intersect() {
@@ -204,7 +142,7 @@ mod test {
         assert_eq!(intersection.1, vector![-1., -1., -2.]);
     }
     #[test]
-    fn intersect_ray_through_focus() {
+    fn intersect_ray_through_focus_concave() {
         let parabola = Parabola::new(meter!(-1.0), &Isometry::identity()).unwrap();
         let direction = vector![0.0, 1.0, 1. - 0.25];
         let ray = Ray::new(
@@ -216,6 +154,19 @@ mod test {
         .unwrap();
         assert!(parabola.calc_intersect_and_normal_do(&ray).is_some());
     }
+    // #[test]
+    // fn intersect_ray_through_focus_convex() {
+    //     let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
+    //     let direction = vector![0.0, 0.05, -1.];
+    //     let ray = Ray::new(
+    //         meter!(0.0, 0.0, 1.0),
+    //         direction,
+    //         nanometer!(1000.0),
+    //         joule!(1.0),
+    //     )
+    //     .unwrap();
+    //     assert!(parabola.calc_intersect_and_normal_do(&ray).is_some());
+    // }
     #[test]
     fn intersect_touching() {
         let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
@@ -255,40 +206,6 @@ mod test {
         )
         .unwrap();
         assert!(parabola.calc_intersect_and_normal_do(&ray).is_none());
-    }
-    #[test]
-    fn set_off_axis_angles() {
-        let mut parabola = Parabola::new(millimeter!(50.0), &Isometry::identity()).unwrap();
-        assert!(parabola
-            .set_off_axis_angles((degree!(f64::NAN), degree!(0.0)))
-            .is_err());
-        assert!(parabola
-            .set_off_axis_angles((degree!(f64::INFINITY), degree!(0.0)))
-            .is_err());
-        assert!(parabola
-            .set_off_axis_angles((degree!(f64::NEG_INFINITY), degree!(0.0)))
-            .is_err());
-        assert!(parabola
-            .set_off_axis_angles((degree!(180.0), degree!(0.0)))
-            .is_err());
-
-        assert!(parabola
-            .set_off_axis_angles((degree!(0.0), degree!(f64::NAN)))
-            .is_err());
-        assert!(parabola
-            .set_off_axis_angles((degree!(0.0), degree!(f64::INFINITY)))
-            .is_err());
-        assert!(parabola
-            .set_off_axis_angles((degree!(0.0), degree!(f64::NEG_INFINITY)))
-            .is_err());
-        assert!(parabola
-            .set_off_axis_angles((degree!(0.0), degree!(180.0)))
-            .is_err());
-
-        parabola
-            .set_off_axis_angles((degree!(10.0), degree!(15.0)))
-            .unwrap();
-        assert_eq!(parabola.off_axis_angles(), (degree!(10.0), degree!(15.0)));
     }
     #[test]
     fn isometry() {

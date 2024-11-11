@@ -21,7 +21,7 @@ use crate::{
         EnumProxy,
     },
 };
-use nalgebra::Vector3;
+use nalgebra::{Vector2, Vector3};
 use num::Float;
 use serde::{Deserialize, Serialize};
 use tinytemplate::TinyTemplate;
@@ -112,6 +112,8 @@ pub enum Proptype {
     LengthOption(Option<Length>),
     /// a hit map (position fo rays hitting a given surface)
     HitMap(HitMap),
+    /// 2-dimenstional vector
+    Vec2(Vector2<f64>),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -233,6 +235,12 @@ impl From<Angle> for Proptype {
 impl From<GhostFocusHistory> for Proptype {
     fn from(value: GhostFocusHistory) -> Self {
         Self::GhostFocusHistory(value)
+    }
+}
+
+impl From<Vector2<f64>> for Proptype {
+    fn from(value: Vector2<f64>) -> Self {
+        Self::Vec2(value)
     }
 }
 #[must_use]

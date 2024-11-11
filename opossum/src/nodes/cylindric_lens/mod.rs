@@ -1,6 +1,8 @@
 #![warn(missing_docs)]
 //! Cylindric lens with spherical or flat surfaces.
 
+use std::{cell::RefCell, rc::Rc};
+
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::Analyzable,
@@ -11,7 +13,7 @@ use crate::{
     optic_ports::PortType,
     properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{geo_surface::GeometricSurface, optic_surface::OpticSurface, Cylinder, Plane},
+    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Cylinder, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -158,13 +160,12 @@ impl OpticNode for CylindricLens {
             return Err(OpossumError::Analysis("cannot read front curvature".into()));
         };
         let front_geosurface = if front_curvature.is_infinite() {
-            GeometricSurface::Flat {
-                s: Plane::new(&Isometry::identity()),
-            }
+            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))))
         } else {
-            GeometricSurface::Cylindrical {
-                s: Cylinder::new(*front_curvature, &Isometry::identity())?,
-            }
+            GeoSurfaceRef(Rc::new(RefCell::new(Cylinder::new(
+                *front_curvature,
+                &Isometry::identity(),
+            )?)))
         };
         if let Some(optic_surf) = self
             .ports_mut()
@@ -183,13 +184,12 @@ impl OpticNode for CylindricLens {
             return Err(OpossumError::Analysis("cannot read rear curvature".into()));
         };
         let rear_geosurface = if rear_curvature.is_infinite() {
-            GeometricSurface::Flat {
-                s: Plane::new(&Isometry::identity()),
-            }
+            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))))
         } else {
-            GeometricSurface::Cylindrical {
-                s: Cylinder::new(*rear_curvature, &Isometry::identity())?,
-            }
+            GeoSurfaceRef(Rc::new(RefCell::new(Cylinder::new(
+                *rear_curvature,
+                &Isometry::identity(),
+            )?)))
         };
         if let Some(optic_surf) = self
             .ports_mut()
