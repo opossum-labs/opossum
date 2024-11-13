@@ -359,13 +359,32 @@ pub trait OpticNode: Dottable {
     /// Return the effective input isometry of this optical node.
     ///
     /// The effective input isometry is the base isometry modified by the local alignment isometry (if any).
-    fn effective_iso(&self) -> Option<Isometry> {
+    fn effective_node_iso(&self) -> Option<Isometry> {
         self.isometry().as_ref().and_then(|iso| {
             self.node_attr().alignment().as_ref().map_or_else(
                 || Some(iso.clone()),
                 |local_iso| Some(iso.append(local_iso)),
             )
         })
+    }
+    /// Return the effective input isometry of an [`OpticSurface`].
+    ///
+    /// The effective input isometry is the base isometry modified by the local alignment isometry (if any) and the anchor point isometry.  
+    ///
+    /// # Errors
+    /// This function errors if
+    /// - no effective node isometry is defined  
+    /// - the surface with the specified name cannot be found
+    fn effective_surface_iso(&self, surf_name: &str) -> OpmResult<Isometry> {
+        let Some(eff_node_iso) = self.effective_node_iso() else {
+            return Err(OpossumError::Other("no effective node iso defined".into()));
+        };
+        let Some(surf) = self.get_optic_surface(surf_name) else {
+            return Err(OpossumError::Other(format!(
+                "no surface with name {surf_name} defined"
+            )));
+        };
+        Ok(eff_node_iso.append(surf.anchor_point_iso()))
     }
     /// Set local alignment (decenter, tilt) of an optical node.
     ///
@@ -415,13 +434,21 @@ pub trait OpticNode: Dottable {
         )
     }
 
-    ///returns a mutable reference to an optical surface
-    // fn get_surface_mut(&mut self, surf_name: &str) -> &mut OpticSurface;
-
+    /// Returns a mutable reference to an [`OpticSurface`] of this [`OpticNode`] with the key `surf_name`
+    /// # Attributes
+    /// - `surf_name`: name of the optical surface, which is the key in the [`OpticPorts`] hashmap stat stores the surfaces
     fn get_optic_surface_mut(&mut self, surf_name: &str) -> Option<&mut OpticSurface> {
         self.node_attr_mut()
             .ports_mut()
             .get_optic_surface_mut(&surf_name.to_owned())
+    }
+    /// Returns a reference to an [`OpticSurface`] of this [`OpticNode`] with the key `surf_name`
+    /// # Attributes
+    /// - `surf_name`: name of the optical surface, which is the key in the [`OpticPorts`] hashmap stat stores the surfaces
+    fn get_optic_surface(&self, surf_name: &str) -> Option<&OpticSurface> {
+        self.node_attr()
+            .ports()
+            .get_optic_surface(&surf_name.to_owned())
     }
 }
 impl Debug for dyn OpticNode {

@@ -20,8 +20,7 @@ impl AnalysisGhostFocus for Lens {
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let (eff_iso, refri, center_thickness, _) =
-            self.get_node_attributes_ray_trace(&self.node_attr)?;
+        let (refri, center_thickness, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
         let in_port = &self.ports().names(&PortType::Input)[0];
         let out_port = &self.ports().names(&PortType::Output)[0];
         let mut rays_bundle = incoming_data
@@ -29,13 +28,12 @@ impl AnalysisGhostFocus for Lens {
             .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
 
         let thickness_iso: Isometry = Isometry::new_along_z(center_thickness)?;
-
         if self.inverted() {
-            self.set_surface_iso(out_port, &eff_iso)?;
-            self.set_surface_iso(in_port, &eff_iso.append(&thickness_iso))?;
+            self.set_surface_iso(out_port, &Isometry::identity())?;
+            self.set_surface_iso(in_port, &thickness_iso)?;
         } else {
-            self.set_surface_iso(in_port, &eff_iso)?;
-            self.set_surface_iso(out_port, &eff_iso.append(&thickness_iso))?;
+            self.set_surface_iso(in_port, &Isometry::identity())?;
+            self.set_surface_iso(out_port, &thickness_iso)?;
         };
 
         let refraction_intended = true;

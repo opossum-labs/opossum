@@ -73,6 +73,17 @@ impl Isometry {
         )))
     }
 
+    ///Returns the transform matrix of this [`Isometry`]
+    #[must_use]
+    pub const fn get_transform(&self) -> Isometry3<f64> {
+        self.transform
+    }
+    ///Returns the inverse transform matrix of this [`Isometry`]
+    #[must_use]
+    pub const fn get_inv_transform(&self) -> Isometry3<f64> {
+        self.inverse
+    }
+
     /// Creates a new translation [`Isometry`]
     ///
     /// Internally, translation is handled in meter

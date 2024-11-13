@@ -168,6 +168,19 @@ mod test {
     //     assert!(parabola.calc_intersect_and_normal_do(&ray).is_some());
     // }
     #[test]
+    fn intersect_ray_through_focus_convex() {
+        let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
+        let direction = vector![0.0, 0.5, 2.];
+        let ray = Ray::new(
+            meter!(0.0, -0.5, -1.0),
+            direction,
+            nanometer!(1000.0),
+            joule!(1.0),
+        )
+        .unwrap();
+        assert!(parabola.calc_intersect_and_normal_do(&ray).is_some());
+    }
+    #[test]
     fn intersect_touching() {
         let parabola = Parabola::new(meter!(1.0), &Isometry::identity()).unwrap();
         let direction = vector![0.0, 1.0, 0.0];
