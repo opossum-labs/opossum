@@ -130,11 +130,7 @@ impl AnalysisRayTrace for ParaxialSurface {
             else {
                 return Err(OpossumError::Analysis("cannot read focal length".into()));
             };
-            let Some(iso) = self.effective_iso() else {
-                return Err(OpossumError::Analysis(
-                    "no location for surface defined. Aborting".into(),
-                ));
-            };
+            let iso = self.effective_surface_iso(in_port)?;
             if let Some(surf) = self.get_optic_surface_mut(in_port) {
                 let refraction_intended = true;
                 surf.set_isometry(&iso);

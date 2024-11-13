@@ -28,16 +28,15 @@ impl AnalysisRayTrace for CylindricLens {
             ));
         };
 
-        let (eff_iso, refri, center_thickness, _) =
-            self.get_node_attributes_ray_trace(&self.node_attr)?;
+        let (refri, center_thickness, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
         let thickness_iso = Isometry::new_along_z(center_thickness)?;
 
         if self.inverted() {
-            self.set_surface_iso(out_port, &eff_iso)?;
-            self.set_surface_iso(in_port, &eff_iso.append(&thickness_iso))?;
+            self.set_surface_iso(out_port, &Isometry::identity())?;
+            self.set_surface_iso(in_port, &thickness_iso)?;
         } else {
-            self.set_surface_iso(in_port, &eff_iso)?;
-            self.set_surface_iso(out_port, &eff_iso.append(&thickness_iso))?;
+            self.set_surface_iso(in_port, &Isometry::identity())?;
+            self.set_surface_iso(out_port, &thickness_iso)?;
         };
 
         let mut rays_bundle = vec![rays];

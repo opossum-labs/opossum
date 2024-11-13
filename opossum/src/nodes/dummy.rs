@@ -86,11 +86,8 @@ impl AnalysisRayTrace for Dummy {
         };
         if let LightData::Geometric(rays) = data {
             let mut rays = rays.clone();
-            let Some(iso) = self.effective_iso() else {
-                return Err(OpossumError::Analysis(
-                    "no location for surface defined. Aborting".into(),
-                ));
-            };
+            let iso = self.effective_surface_iso(in_port)?;
+
             let refraction_intended = true;
             if let Some(surf) = self.get_optic_surface_mut(in_port) {
                 surf.set_isometry(&iso);

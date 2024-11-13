@@ -144,6 +144,7 @@ impl NodeAttr {
     pub fn get_property(&self, name: &str) -> OpmResult<&Proptype> {
         self.props.get(name)
     }
+
     /// Return the value of a boolean property.
     ///
     /// # Errors

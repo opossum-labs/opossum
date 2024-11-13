@@ -22,6 +22,7 @@ use core::fmt::Debug;
 pub struct OpticSurface {
     #[serde(skip)]
     geo_surface: GeoSurfaceRef,
+    anchor_point_iso: Isometry,
     aperture: Aperture,
     coating: CoatingType,
     lidt: Fluence,
@@ -40,6 +41,7 @@ impl Default for OpticSurface {
     fn default() -> Self {
         Self {
             geo_surface: GeoSurfaceRef::default(),
+            anchor_point_iso: Isometry::identity(),
             aperture: Aperture::default(),
             coating: CoatingType::IdealAR,
             lidt: J_per_cm2!(1.),
@@ -192,7 +194,7 @@ impl OpticSurface {
     pub fn lidt(&self) -> &Fluence {
         &self.lidt
     }
-    /// Sets the laser induced damage threshold (LIDT) [`OpticSurface`]
+    /// Sets the laser induced damage threshold (LIDT) of this [`OpticSurface`]
     ///
     /// # Errors
     ///
@@ -206,6 +208,17 @@ impl OpticSurface {
         self.lidt = lidt;
         Ok(())
     }
+
+    /// Sets the anchor point isometry of this [`OpticSurface`]
+    pub fn set_anchor_point_iso(&mut self, iso: Isometry) {
+        self.anchor_point_iso = iso;
+    }
+
+    ///Returns a reference to the anchor point isometry of this [`OpticSurface`]
+    #[must_use]
+    pub const fn anchor_point_iso(&self) -> &Isometry {
+        &self.anchor_point_iso
+    }
 }
 
 impl Debug for OpticSurface {
@@ -214,11 +227,8 @@ impl Debug for OpticSurface {
             .field("aperture", &self.aperture)
             .field("coating", &self.coating)
             .field("geometric surface", &self.geo_surface.0)
-            .field("backward rays cache", &self.backward_rays_cache)
-            .field("forward rays cache", &self.forward_rays_cache)
-            .field("hitmap", &self.hit_map)
             .field("lidt", &self.lidt)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

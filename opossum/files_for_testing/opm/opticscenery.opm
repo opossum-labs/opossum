@@ -5,7 +5,7 @@ scenery:
     ports:
       inputs: {}
       outputs: {}
-    uuid: 7743e13b-7c3f-44fe-90f7-61e0ba6fa4d3
+    uuid: e112dc7b-235d-4779-a8fe-81daec52dc85
     lidt: 10000.0
     props:
       expand view: !Bool false
@@ -17,71 +17,57 @@ scenery:
             ports:
               inputs:
                 input_1:
-                  geo_surface: !Flat
-                    s:
-                      isometry:
-                        transform:
-                          rotation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                          - 1.0
-                          translation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                        inverse:
-                          rotation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                          - 1.0
-                          translation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
+                  anchor_point_iso:
+                    transform:
+                      rotation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                      - 1.0
+                      translation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                    inverse:
+                      rotation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                      - 1.0
+                      translation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
                   aperture: None
                   coating: IdealAR
                   lidt: 10000.0
-                  backward_rays_cache: []
-                  forward_rays_cache: []
-                  hit_map:
-                    hit_map: []
-                    critical_fluence: {}
               outputs:
                 output_1:
-                  geo_surface: !Flat
-                    s:
-                      isometry:
-                        transform:
-                          rotation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                          - 1.0
-                          translation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                        inverse:
-                          rotation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                          - 1.0
-                          translation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
+                  anchor_point_iso:
+                    transform:
+                      rotation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                      - 1.0
+                      translation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                    inverse:
+                      rotation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                      - 1.0
+                      translation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
                   aperture: None
                   coating: IdealAR
                   lidt: 10000.0
-                  backward_rays_cache: []
-                  forward_rays_cache: []
-                  hit_map:
-                    hit_map: []
-                    critical_fluence: {}
-            uuid: d8c43481-43b7-4bad-8305-7246a62e4016
+            uuid: 587fa699-5e98-4d08-b5a5-f9885151f3d1
             lidt: 10000.0
             props: {}
             inverted: false
@@ -91,77 +77,63 @@ scenery:
             ports:
               inputs:
                 input_1:
-                  geo_surface: !Flat
-                    s:
-                      isometry:
-                        transform:
-                          rotation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                          - 1.0
-                          translation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                        inverse:
-                          rotation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                          - 1.0
-                          translation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
+                  anchor_point_iso:
+                    transform:
+                      rotation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                      - 1.0
+                      translation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                    inverse:
+                      rotation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                      - 1.0
+                      translation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
                   aperture: None
                   coating: IdealAR
                   lidt: 10000.0
-                  backward_rays_cache: []
-                  forward_rays_cache: []
-                  hit_map:
-                    hit_map: []
-                    critical_fluence: {}
               outputs:
                 output_1:
-                  geo_surface: !Flat
-                    s:
-                      isometry:
-                        transform:
-                          rotation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                          - 1.0
-                          translation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                        inverse:
-                          rotation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
-                          - 1.0
-                          translation:
-                          - 0.0
-                          - 0.0
-                          - 0.0
+                  anchor_point_iso:
+                    transform:
+                      rotation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                      - 1.0
+                      translation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                    inverse:
+                      rotation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
+                      - 1.0
+                      translation:
+                      - 0.0
+                      - 0.0
+                      - 0.0
                   aperture: None
                   coating: IdealAR
                   lidt: 10000.0
-                  backward_rays_cache: []
-                  forward_rays_cache: []
-                  hit_map:
-                    hit_map: []
-                    critical_fluence: {}
-            uuid: e6729ff1-e14a-468d-a08f-d0b9dd131dab
+            uuid: a81f485c-26f7-4b3c-a6ac-4a62746f6cad
             lidt: 10000.0
             props: {}
             inverted: false
         edges:
-        - - d8c43481-43b7-4bad-8305-7246a62e4016
-          - e6729ff1-e14a-468d-a08f-d0b9dd131dab
+        - - 587fa699-5e98-4d08-b5a5-f9885151f3d1
+          - a81f485c-26f7-4b3c-a6ac-4a62746f6cad
           - output_1
           - input_1
           - 0.0

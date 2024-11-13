@@ -197,11 +197,7 @@ impl BeamSplitter {
             match input1 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    let Some(iso) = self.effective_iso() else {
-                        return Err(OpossumError::Analysis(
-                            "no location for surface defined. Aborting".into(),
-                        ));
-                    };
+                    let iso = self.effective_surface_iso("input1")?;
 
                     if let Some(surf) = self.get_optic_surface_mut("input1") {
                         surf.set_isometry(&iso);
@@ -238,11 +234,7 @@ impl BeamSplitter {
             match input2 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    let Some(iso) = self.effective_iso() else {
-                        return Err(OpossumError::Analysis(
-                            "no location for surface defined. Aborting".into(),
-                        ));
-                    };
+                    let iso = self.effective_surface_iso("input2")?;
 
                     if let Some(surf) = self.get_optic_surface_mut("input2") {
                         surf.set_isometry(&iso);
@@ -276,11 +268,8 @@ impl BeamSplitter {
         };
         in_ray1.merge(&split2);
         in_ray2.merge(&split1);
-        let Some(iso) = self.effective_iso() else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined. Aborting".into(),
-            ));
-        };
+        let iso = self.effective_surface_iso("out1_trans1_refl2")?;
+
         if let Some(aperture) = self
             .ports()
             .aperture(&PortType::Output, "out1_trans1_refl2")

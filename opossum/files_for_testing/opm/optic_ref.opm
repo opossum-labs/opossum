@@ -7,71 +7,57 @@ attributes:
   lidt: 10000.
   ports:
     inputs:
-      front: 
-        geo_surface: !Flat
-          s:
-            isometry:
-              transform:
-                rotation:
-                - 0.0
-                - 0.0
-                - 0.0
-                - 1.0
-                translation:
-                - 0.0
-                - 0.0
-                - 0.0
-              inverse:
-                rotation:
-                - 0.0
-                - 0.0
-                - 0.0
-                - 1.0
-                translation:
-                - 0.0
-                - 0.0
-                - 0.0
+      input_1:
+        anchor_point_iso:
+          transform:
+            rotation:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 1.0
+            translation:
+            - 0.0
+            - 0.0
+            - 0.0
+          inverse:
+            rotation:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 1.0
+            translation:
+            - 0.0
+            - 0.0
+            - 0.0
         aperture: None
         coating: IdealAR
-        lidt: 10000.
-        backward_rays_cache: []
-        forward_rays_cache: []
-        hit_map:
-          hit_map: []
-          critical_fluence: {}
+        lidt: 10000.0
     outputs:
-      rear:
-        geo_surface: !Flat
-          s:
-            isometry:
-              transform:
-                rotation:
-                - 0.0
-                - 0.0
-                - 0.0
-                - 1.0
-                translation:
-                - 0.0
-                - 0.0
-                - 0.0
-              inverse:
-                rotation:
-                - 0.0
-                - 0.0
-                - 0.0
-                - 1.0
-                translation:
-                - 0.0
-                - 0.0
-                - 0.0
+      output_1:
+        anchor_point_iso:
+          transform:
+            rotation:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 1.0
+            translation:
+            - 0.0
+            - 0.0
+            - 0.0
+          inverse:
+            rotation:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 1.0
+            translation:
+            - 0.0
+            - 0.0
+            - 0.0
         aperture: None
         coating: IdealAR
-        lidt: 10000.
-        backward_rays_cache: []
-        forward_rays_cache: []
-        hit_map:
-          hit_map: []
-          critical_fluence: {}
+        lidt: 10000.0
   inverted: false
   props:
       

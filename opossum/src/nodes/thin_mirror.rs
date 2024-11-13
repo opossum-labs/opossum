@@ -245,27 +245,21 @@ impl AnalysisRayTrace for ThinMirror {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
-            let reflected = if let Some(iso) = self.effective_iso() {
-                if let Some(surf) = self.get_optic_surface_mut(in_port) {
-                    surf.set_isometry(&iso);
-                    let refraction_intended = false;
-                    let mut reflected_rays =
-                        rays.refract_on_surface(surf, None, refraction_intended)?;
-                    if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
-                        reflected_rays.apodize(aperture, &iso)?;
-                        reflected_rays
-                            .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        reflected_rays
-                    } else {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    }
+            let iso = self.effective_surface_iso(in_port)?;
+            let reflected = if let Some(surf) = self.get_optic_surface_mut(in_port) {
+                surf.set_isometry(&iso);
+                let refraction_intended = false;
+                let mut reflected_rays =
+                    rays.refract_on_surface(surf, None, refraction_intended)?;
+                if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
+                    reflected_rays.apodize(aperture, &iso)?;
+                    reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+                    reflected_rays
                 } else {
-                    return Err(OpossumError::Analysis("no surface found. Aborting".into()));
+                    return Err(OpossumError::OpticPort("input aperture not found".into()));
                 }
             } else {
-                return Err(OpossumError::Analysis(
-                    "no location for surface defined. Aborting".into(),
-                ));
+                return Err(OpossumError::Analysis("no surface found. Aborting".into()));
             };
             let light_data = LightData::Geometric(reflected);
             let light_result = LightResult::from([(out_port.into(), light_data)]);
