@@ -8,12 +8,13 @@ use crate::{
     analyzers::Analyzable,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    millimeter,
+    meter, millimeter,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
     properties::Proptype,
+    radian,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Cylinder, Plane},
+    surface::{geo_surface::GeoSurfaceRef, Cylinder, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 #[cfg(feature = "bevy")]
@@ -155,53 +156,76 @@ impl CylindricLens {
 
 impl OpticNode for CylindricLens {
     fn update_surfaces(&mut self) -> OpmResult<()> {
+        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
+
         let Ok(Proptype::Length(front_curvature)) = self.node_attr.get_property("front curvature")
         else {
             return Err(OpossumError::Analysis("cannot read front curvature".into()));
         };
-        let front_geosurface = if front_curvature.is_infinite() {
-            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))))
+        let (front_geosurface, anchor_point_iso_front) = if front_curvature.is_infinite() {
+            (
+                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso)))),
+                Isometry::identity(),
+            )
         } else {
-            GeoSurfaceRef(Rc::new(RefCell::new(Cylinder::new(
-                *front_curvature,
-                &Isometry::identity(),
-            )?)))
+            let anchor_point_iso_front =
+                Isometry::new(meter!(0., 0., front_curvature.value), radian!(0., 0., 0.))?;
+            (
+                GeoSurfaceRef(Rc::new(RefCell::new(Cylinder::new(
+                    *front_curvature,
+                    &node_iso.append(&anchor_point_iso_front),
+                )?))),
+                anchor_point_iso_front,
+            )
         };
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"input_1".to_string())
-        {
-            optic_surf.set_geo_surface(front_geosurface);
-        } else {
-            let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front.set_geo_surface(front_geosurface);
-            self.ports_mut()
-                .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
-        }
+        self.update_surface(
+            &"input_1".to_string(),
+            front_geosurface,
+            anchor_point_iso_front,
+            &PortType::Input,
+        )?;
 
         let Ok(Proptype::Length(rear_curvature)) = self.node_attr.get_property("rear curvature")
         else {
             return Err(OpossumError::Analysis("cannot read rear curvature".into()));
         };
-        let rear_geosurface = if rear_curvature.is_infinite() {
-            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))))
-        } else {
-            GeoSurfaceRef(Rc::new(RefCell::new(Cylinder::new(
-                *rear_curvature,
-                &Isometry::identity(),
-            )?)))
+        let Ok(Proptype::Length(center_thickness)) =
+            self.node_attr.get_property("center thickness")
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read center thickness".into(),
+            ));
         };
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"output_1".to_string())
-        {
-            optic_surf.set_geo_surface(rear_geosurface);
+        let (rear_geosurface, anchor_point_iso_rear) = if rear_curvature.is_infinite() {
+            let anchor_point_iso_rear =
+                Isometry::new(meter!(0., 0., center_thickness.value), radian!(0., 0., 0.))?;
+            (
+                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(
+                    &node_iso.append(&anchor_point_iso_rear),
+                )))),
+                anchor_point_iso_rear,
+            )
         } else {
-            let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(rear_geosurface);
-            self.ports_mut()
-                .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
-        }
+            let anchor_point_iso_rear = Isometry::new(
+                meter!(0., 0., (*rear_curvature + *center_thickness).value),
+                radian!(0., 0., 0.),
+            )?;
+            (
+                GeoSurfaceRef(Rc::new(RefCell::new(Cylinder::new(
+                    *rear_curvature,
+                    &node_iso.append(&anchor_point_iso_rear),
+                )?))),
+                anchor_point_iso_rear,
+            )
+        };
+
+        self.update_surface(
+            &"output_1".to_string(),
+            rear_geosurface,
+            anchor_point_iso_rear,
+            &PortType::Output,
+        )?;
+
         Ok(())
     }
     fn node_attr(&self) -> &NodeAttr {
@@ -356,7 +380,8 @@ mod test {
             &RefrIndexConst::new(2.0).unwrap(),
         )
         .unwrap();
-        node.set_isometry(Isometry::new_along_z(millimeter!(10.0)).unwrap());
+        node.set_isometry(Isometry::new_along_z(millimeter!(10.0)).unwrap())
+            .unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
@@ -388,7 +413,7 @@ mod test {
             &RefrIndexConst::new(1.0).unwrap(),
         )
         .unwrap();
-        node.set_isometry(Isometry::identity());
+        node.set_isometry(Isometry::identity()).unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),

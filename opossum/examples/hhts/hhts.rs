@@ -139,7 +139,7 @@ fn main() -> OpmResult<()> {
 
     let mut scenery = NodeGroup::new("HHT Sensor");
     let mut src = Source::new("Source", &LightData::Geometric(rays));
-    src.set_isometry(Isometry::identity());
+    src.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(&src)?;
     let input_group = scenery.add_node(&hhts_input()?)?;
     scenery.connect_nodes(src, "output_1", input_group, "input_1", Length::zero())?;

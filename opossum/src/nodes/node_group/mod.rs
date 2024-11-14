@@ -545,6 +545,10 @@ impl OpticNode for NodeGroup {
     fn get_optic_surface_mut(&mut self, _surf_name: &str) -> Option<&mut OpticSurface> {
         None
     }
+
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        Ok(())
+    }
 }
 
 impl Dottable for NodeGroup {
@@ -698,7 +702,7 @@ mod test {
             .add_node(&Source::new("src", &LightData::Geometric(rays)))
             .unwrap();
         let mut em = EnergyMeter::default();
-        em.set_isometry(Isometry::identity());
+        em.set_isometry(Isometry::identity()).unwrap();
         let i_e = scenery.add_node(&em).unwrap();
         scenery
             .connect_nodes(i_s, "output_1", i_e, "input_1", Length::zero())

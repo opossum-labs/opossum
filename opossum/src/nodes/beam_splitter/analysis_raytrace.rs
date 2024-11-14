@@ -55,9 +55,7 @@ impl AnalysisRayTrace for BeamSplitter {
             match input1 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    let iso = self.effective_surface_iso(input_port1)?;
                     if let Some(surf) = self.get_optic_surface_mut(input_port1) {
-                        surf.set_isometry(&iso);
                         rays.refract_on_surface(surf, None, refraction_intended)?;
                     } else {
                         return Err(OpossumError::OpticPort(
@@ -118,7 +116,7 @@ mod test {
     #[test]
     fn analyze_raytrace_one_input() {
         let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
-        node.set_isometry(Isometry::identity());
+        node.set_isometry(Isometry::identity()).unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         let ray =
@@ -145,7 +143,7 @@ mod test {
     #[test]
     fn analyze_raytrace_two_input() {
         let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
-        node.set_isometry(Isometry::identity());
+        node.set_isometry(Isometry::identity()).unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         let ray =

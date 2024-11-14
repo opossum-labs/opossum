@@ -118,9 +118,16 @@ impl OpticNode for NodeReference {
             node.isometry()
         })
     }
-    fn set_isometry(&mut self, _isometry: crate::utils::geom_transformation::Isometry) {
+    fn set_isometry(
+        &mut self,
+        _isometry: crate::utils::geom_transformation::Isometry,
+    ) -> OpmResult<()> {
+        Ok(())
         // setting an isometry is silently ignored. Isometry is defined by the refrenced node.
-        // self.node_attr.set_isometry(isometry);
+    }
+
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        Ok(())
     }
 }
 

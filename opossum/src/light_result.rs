@@ -14,6 +14,10 @@ pub type LightResult = LightDings<LightData>;
 pub type LightRays = LightDings<Vec<Rays>>;
 //pub type LightBouncingRays = LightDings<Vec<Rays>>;
 
+/// converts a lightresult to lightrays
+///
+/// # Errors
+/// This function errors if the light data is not ghost focus
 pub fn light_result_to_light_rays(light_result: LightResult) -> OpmResult<LightRays> {
     let mut light_dings_rays = LightDings::<Vec<Rays>>::new();
     for lr in light_result {
@@ -26,7 +30,7 @@ pub fn light_result_to_light_rays(light_result: LightResult) -> OpmResult<LightR
     }
     Ok(light_dings_rays)
 }
-
+#[must_use]
 pub fn light_rays_to_light_result(light_rays: LightRays) -> LightResult {
     let mut light_result = LightResult::default();
     for ld in light_rays {

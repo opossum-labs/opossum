@@ -448,7 +448,7 @@ mod test {
     #[test]
     fn analyze_ok() {
         let mut node = WaveFront::default();
-        node.set_isometry(Isometry::identity());
+        node.set_isometry(Isometry::identity()).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
             Rays::new_uniform_collimated(

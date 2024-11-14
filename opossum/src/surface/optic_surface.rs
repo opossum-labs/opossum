@@ -92,6 +92,7 @@ impl OpticSurface {
     pub fn set_geo_surface(&mut self, geo_surface: GeoSurfaceRef) {
         self.geo_surface = geo_surface;
     }
+
     /// Sets the aperture of this [`OpticSurface`].
     pub fn set_aperture(&mut self, aperture: Aperture) {
         self.aperture = aperture;
@@ -295,7 +296,7 @@ mod test {
             Aperture::BinaryCircle(CircleConfig::new(meter!(1.0), meter!(0.0, 0.0)).unwrap());
         let os = OpticSurface::new(
             GeoSurfaceRef(Rc::new(RefCell::new(
-                Sphere::new(meter!(1.0), &Isometry::identity()).unwrap(),
+                Sphere::new(meter!(1.0), Isometry::identity()).unwrap(),
             ))),
             CoatingType::Fresnel,
             aperture,

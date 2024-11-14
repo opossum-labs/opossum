@@ -1,19 +1,13 @@
-use nalgebra::Point3;
-use num::Zero;
-use uom::si::f64::Angle;
-
 use super::Wedge;
 use crate::{
     analyzers::{
-        ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace, Analyzable, AnalyzerType,
-        GhostFocusConfig,
+        ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace, AnalyzerType, GhostFocusConfig,
     },
     error::OpmResult,
     light_result::LightRays,
     optic_node::OpticNode,
     optic_ports::PortType,
     rays::Rays,
-    utils::geom_transformation::Isometry,
 };
 
 impl AnalysisGhostFocus for Wedge {
@@ -31,21 +25,7 @@ impl AnalysisGhostFocus for Wedge {
             .get(in_port)
             .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
 
-        let (refri, center_thickness, wedge) =
-            self.get_node_attributes_ray_trace(&self.node_attr)?;
-        let thickness_iso: Isometry = Isometry::new_along_z(center_thickness)?;
-        let wedge_iso = Isometry::new(
-            Point3::origin(),
-            Point3::new(wedge, Angle::zero(), Angle::zero()),
-        )?;
-
-        if self.inverted() {
-            self.set_surface_iso(out_port, &Isometry::identity())?;
-            self.set_surface_iso(in_port, &thickness_iso.append(&wedge_iso))?;
-        } else {
-            self.set_surface_iso(in_port, &Isometry::identity())?;
-            self.set_surface_iso(out_port, &thickness_iso.append(&wedge_iso))?;
-        };
+        let (refri, _, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
 
         let refraction_intended = true;
         self.pass_through_surface(

@@ -392,22 +392,21 @@ impl OpticNode for ParabolicMirror {
         &mut self.node_attr
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let iso = self.calc_off_axis_isometry()?;
-        let parabola = Parabola::new(
-            -1. * self.calc_parent_focal_length()?,
-            &Isometry::identity(),
-        )?;
+        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let anchor_point_iso = self.calc_off_axis_isometry()?;
+        let total_iso = node_iso.append(&anchor_point_iso);
+        let parabola = Parabola::new(-1. * self.calc_parent_focal_length()?, &total_iso)?;
         let para_geo_surface = GeoSurfaceRef(Rc::new(RefCell::new(parabola)));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
             optic_surf.set_geo_surface(para_geo_surface.clone());
-            optic_surf.set_anchor_point_iso(iso.clone());
+            optic_surf.set_anchor_point_iso(anchor_point_iso.clone());
         } else {
             let mut optic_surf = OpticSurface::default();
             optic_surf.set_geo_surface(para_geo_surface.clone());
-            optic_surf.set_anchor_point_iso(iso.clone());
+            optic_surf.set_anchor_point_iso(anchor_point_iso.clone());
             self.ports_mut()
                 .add_optic_surface(&PortType::Input, "input_1", optic_surf)?;
         }
@@ -416,11 +415,11 @@ impl OpticNode for ParabolicMirror {
             .get_optic_surface_mut(&"output_1".to_string())
         {
             optic_surf.set_geo_surface(para_geo_surface);
-            optic_surf.set_anchor_point_iso(iso);
+            optic_surf.set_anchor_point_iso(anchor_point_iso);
         } else {
             let mut optic_surf = OpticSurface::default();
             optic_surf.set_geo_surface(para_geo_surface);
-            optic_surf.set_anchor_point_iso(iso);
+            optic_surf.set_anchor_point_iso(anchor_point_iso);
             self.ports_mut()
                 .add_optic_surface(&PortType::Output, "output_1", optic_surf)?;
         }
@@ -516,9 +515,6 @@ impl AnalysisRayTrace for ParabolicMirror {
             return Ok(LightResult::default());
         };
 
-        let iso = self.effective_surface_iso(in_port)?;
-        self.set_surface_iso(in_port, &Isometry::identity())?;
-
         let Some(surf) = self.get_optic_surface_mut(in_port) else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
@@ -526,7 +522,7 @@ impl AnalysisRayTrace for ParabolicMirror {
         let refraction_intended = false;
         let mut reflected_rays = rays.refract_on_surface(surf, None, refraction_intended)?;
         if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
-            reflected_rays.apodize(aperture, &iso)?;
+            reflected_rays.apodize(aperture, &self.effective_surface_iso(in_port)?)?;
             reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
@@ -1017,7 +1013,7 @@ mod test {
     #[test]
     fn analysis_raytrace() {
         let mut node = ParabolicMirror::default();
-        node.set_isometry(Isometry::identity());
+        node.set_isometry(Isometry::identity()).unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
@@ -1132,7 +1128,7 @@ mod test {
     #[test]
     fn analysis_ghost_focus() {
         let mut node = ParabolicMirror::default();
-        node.set_isometry(Isometry::identity());
+        node.set_isometry(Isometry::identity()).unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
@@ -1155,7 +1151,7 @@ mod test {
     #[test]
     fn calc_node_position() {
         let mut node = ParabolicMirror::default();
-        node.set_isometry(Isometry::identity());
+        node.set_isometry(Isometry::identity()).unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),

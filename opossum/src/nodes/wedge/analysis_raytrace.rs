@@ -1,16 +1,11 @@
-use nalgebra::Point3;
-use num::Zero;
-use uom::si::angle::Angle;
-
 use super::Wedge;
 use crate::{
-    analyzers::{raytrace::AnalysisRayTrace, Analyzable, AnalyzerType, RayTraceConfig},
+    analyzers::{raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::PortType,
-    utils::geom_transformation::Isometry,
 };
 
 impl AnalysisRayTrace for Wedge {
@@ -31,21 +26,7 @@ impl AnalysisRayTrace for Wedge {
             ));
         };
 
-        let (refri, center_thickness, wedge) =
-            self.get_node_attributes_ray_trace(&self.node_attr)?;
-        let thickness_iso = Isometry::new_along_z(center_thickness)?;
-        let wedge_iso = Isometry::new(
-            Point3::origin(),
-            Point3::new(wedge, Angle::zero(), Angle::zero()),
-        )?;
-
-        if self.inverted() {
-            self.set_surface_iso(out_port, &Isometry::identity())?;
-            self.set_surface_iso(in_port, &thickness_iso.append(&wedge_iso))?;
-        } else {
-            self.set_surface_iso(in_port, &Isometry::identity())?;
-            self.set_surface_iso(out_port, &thickness_iso.append(&wedge_iso))?;
-        };
+        let (refri, _, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
 
         let mut rays_bundle = vec![rays];
         let refraction_intended = true;
