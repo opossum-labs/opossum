@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Module handling analysis reports and converting them to HTML.
 
-use std::path::Path;
+use std::{fs, path::Path};
 
 use super::{
     html_report::{HtmlNodeReport, HtmlReport},
@@ -9,6 +9,7 @@ use super::{
 };
 use crate::{
     error::{OpmResult, OpossumError},
+    get_version,
     nodes::NodeGroup,
     optic_node::OpticNode,
 };
@@ -23,6 +24,17 @@ pub struct AnalysisReport {
     analysis_type: String,
     scenery: Option<NodeGroup>,
     node_reports: Vec<NodeReport>,
+}
+impl Default for AnalysisReport {
+    fn default() -> Self {
+        Self {
+            opossum_version: get_version(),
+            analysis_timestamp: Local::now(),
+            analysis_type: String::default(),
+            scenery: None,
+            node_reports: Vec::default(),
+        }
+    }
 }
 impl AnalysisReport {
     /// Creates a new [`AnalysisReport`].
@@ -55,9 +67,22 @@ impl AnalysisReport {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if the individual `export_data` function of the individual
+    /// nodes fails.
     pub fn export_data(&self, report_path: &Path) -> OpmResult<()> {
         let report_path = report_path.join(Path::new("data"));
+        if !report_path.exists() {
+            return Err(OpossumError::Other("report path does not exist".into()));
+        }
+        let md = fs::metadata(&report_path).map_err(|e| {
+            OpossumError::Other(format!("could not check directory permissions: {e}"))
+        })?;
+        let permissions = md.permissions();
+        if permissions.readonly() {
+            return Err(OpossumError::Other(
+                "report path dow not have write permissions".into(),
+            ));
+        }
         for node_report in &self.node_reports {
             node_report.export_data(&report_path, "")?;
         }
@@ -67,7 +92,7 @@ impl AnalysisReport {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if the report has no scenery set.
     pub fn to_html_report(&self) -> OpmResult<HtmlReport> {
         let Some(scenery) = &self.scenery else {
             return Err(OpossumError::Other("no scenery found".into()));
@@ -95,11 +120,14 @@ impl AnalysisReport {
 
 #[cfg(test)]
 mod test {
-    use crate::properties::Properties;
+    use std::fs;
+
+    use tempfile::TempDir;
 
     use super::*;
+    use crate::properties::Properties;
     #[test]
-    fn analysis_report_new() {
+    fn new() {
         let timestamp = Local::now();
         let report = AnalysisReport::new(String::from("test"), timestamp);
         assert!(report.scenery.is_none());
@@ -108,13 +136,27 @@ mod test {
         assert_eq!(report.analysis_timestamp, timestamp);
     }
     #[test]
-    fn analysis_report_add_scenery() {
+    fn default() {
+        let report = AnalysisReport::default();
+        assert!(report.scenery.is_none());
+        assert_eq!(report.opossum_version, get_version());
+        assert!(report.node_reports.is_empty());
+    }
+    #[test]
+    fn set_analysis_type() {
+        let timestamp = Local::now();
+        let mut report = AnalysisReport::new(String::from("test"), timestamp);
+        report.set_analysis_type("my type");
+        assert_eq!(report.analysis_type, "my type");
+    }
+    #[test]
+    fn add_scenery() {
         let mut report = AnalysisReport::new(String::from("test"), DateTime::default());
         report.add_scenery(&NodeGroup::default());
         assert!(report.scenery.is_some());
     }
     #[test]
-    fn analysis_report_add_detector() {
+    fn add_node_report() {
         let mut report = AnalysisReport::new(String::from("test"), DateTime::default());
         report.add_node_report(NodeReport::new(
             "test detector",
@@ -123,5 +165,21 @@ mod test {
             Properties::default(),
         ));
         assert_eq!(report.node_reports.len(), 1);
+    }
+    #[test]
+    fn to_html_report() {
+        let mut report = AnalysisReport::default();
+        assert!(report.to_html_report().is_err());
+        report.add_scenery(&NodeGroup::default());
+        assert!(report.to_html_report().is_ok());
+        // further details to be checked in html_reports module (private fields...)
+    }
+    #[test]
+    fn export_data() {
+        let report = AnalysisReport::default();
+        assert!(report.export_data(Path::new("")).is_err());
+        let tmp_dir = TempDir::new().unwrap();
+        fs::create_dir(tmp_dir.path().join("data")).unwrap();
+        assert!(report.export_data(tmp_dir.path()).is_ok());
     }
 }

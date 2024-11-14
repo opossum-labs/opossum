@@ -8,7 +8,6 @@ use crate::{
     analyzers::Analyzable,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    get_version,
     lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
@@ -20,7 +19,6 @@ use crate::{
     utils::EnumProxy,
     SceneryResources,
 };
-use chrono::Local;
 use num::Zero;
 pub use optic_graph::OpticGraph;
 use petgraph::prelude::NodeIndex;
@@ -353,7 +351,7 @@ impl NodeGroup {
     /// # Errors
     /// This function will return an error if the individual export function of a node fails.
     pub fn toplevel_report(&self) -> OpmResult<AnalysisReport> {
-        let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
+        let mut analysis_report = AnalysisReport::default();
         analysis_report.add_scenery(self);
         let mut section_number: usize = 0;
         for node in self.graph.nodes() {

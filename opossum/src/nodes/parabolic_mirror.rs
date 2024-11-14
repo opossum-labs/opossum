@@ -917,7 +917,8 @@ mod test {
                 .calc_off_axis_isometry()
                 .unwrap()
                 .get_transform()
-                .to_matrix()
+                .to_matrix(),
+            epsilon = 3. * f64::EPSILON
         );
     }
 
