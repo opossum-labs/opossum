@@ -48,7 +48,7 @@ impl NodeReport {
         &self.uuid
     }
     /// Return an [`HtmlNodeReport`] from this [`NodeReport`].
-    /// 
+    ///
     /// This function is necessary, since TinyTemplates cannot deal with [`Properties`] correctly. Maybe this can be changes later.
     #[must_use]
     pub fn to_html_node_report(&self, id: &str) -> HtmlNodeReport {
@@ -63,10 +63,10 @@ impl NodeReport {
         }
     }
     /// Export data files for the properties of this [`NodeReport`].
-    /// 
+    ///
     /// This function exports data (mostly as data files) for each property. This is necessary if a report is exported to HTML.
     /// In this case, the [`HtmlNodeReport`] often only conatins a link to the corresponding data file (i.e. image of a plot).
-    /// 
+    ///
     /// **Todo**: This function should be rather moved to the [`HtmlNodeReport`] struct.
     ///
     /// # Errors
