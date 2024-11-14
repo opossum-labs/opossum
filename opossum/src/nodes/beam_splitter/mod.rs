@@ -17,7 +17,7 @@ use crate::{
     ray::SplittingConfig,
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
-    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane},
+    surface::{geo_surface::GeoSurfaceRef, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 
@@ -197,15 +197,15 @@ impl BeamSplitter {
             match input1 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    let iso = self.effective_surface_iso("input1")?;
+                    // let iso = self.effective_surface_iso("input1")?;
 
                     if let Some(surf) = self.get_optic_surface_mut("input1") {
-                        surf.set_isometry(&iso);
+                        // surf.set_isometry(&self.effective_surface_iso("input1")?);
 
                         rays.refract_on_surface(surf, None, refraction_intended)?;
 
                         if let Some(aperture) = self.ports().aperture(&PortType::Input, "input1") {
-                            rays.apodize(aperture, &iso)?;
+                            rays.apodize(aperture, &self.effective_surface_iso("input1")?)?;
                             if let AnalyzerType::RayTrace(config) = analyzer_type {
                                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                             }
@@ -234,14 +234,14 @@ impl BeamSplitter {
             match input2 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    let iso = self.effective_surface_iso("input2")?;
+                    // let iso = self.effective_surface_iso("input2")?;
 
                     if let Some(surf) = self.get_optic_surface_mut("input2") {
-                        surf.set_isometry(&iso);
+                        // surf.set_isometry(&iso);
 
                         rays.refract_on_surface(surf, None, refraction_intended)?;
                         if let Some(aperture) = self.ports().aperture(&PortType::Input, "input2") {
-                            rays.apodize(aperture, &iso)?;
+                            rays.apodize(aperture, &self.effective_surface_iso("input2")?)?;
                             if let AnalyzerType::RayTrace(config) = analyzer_type {
                                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                             }
@@ -308,41 +308,27 @@ impl OpticNode for BeamSplitter {
     }
 
     fn update_surfaces(&mut self) -> OpmResult<()> {
+        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
+
         let input_surf_name_list = vec!["input1", "input2"];
         let output_surf_name_list = vec!["out1_trans1_refl2", "out2_trans2_refl1"];
-        let input_geosurface =
-            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
+        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso))));
+        let anchor_point_iso = Isometry::identity();
         for in_surf_name in &input_surf_name_list {
-            if let Some(optic_surf) = self
-                .ports_mut()
-                .get_optic_surface_mut(&(*in_surf_name).to_string())
-            {
-                optic_surf.set_geo_surface(input_geosurface.clone());
-            } else {
-                let mut optic_surf_front = OpticSurface::default();
-                optic_surf_front.set_geo_surface(input_geosurface.clone());
-                self.ports_mut().add_optic_surface(
-                    &PortType::Input,
-                    in_surf_name,
-                    optic_surf_front,
-                )?;
-            }
+            self.update_surface(
+                &(*in_surf_name).to_string(),
+                geosurface.clone(),
+                anchor_point_iso.clone(),
+                &PortType::Input,
+            )?;
         }
         for out_surf_name in &output_surf_name_list {
-            if let Some(optic_surf) = self
-                .ports_mut()
-                .get_optic_surface_mut(&(*out_surf_name).to_string())
-            {
-                optic_surf.set_geo_surface(input_geosurface.clone());
-            } else {
-                let mut optic_surf_front = OpticSurface::default();
-                optic_surf_front.set_geo_surface(input_geosurface.clone());
-                self.ports_mut().add_optic_surface(
-                    &PortType::Output,
-                    out_surf_name,
-                    optic_surf_front,
-                )?;
-            }
+            self.update_surface(
+                &(*out_surf_name).to_string(),
+                geosurface.clone(),
+                anchor_point_iso.clone(),
+                &PortType::Output,
+            )?;
         }
         Ok(())
     }

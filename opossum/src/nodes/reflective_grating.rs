@@ -200,7 +200,6 @@ impl AnalysisRayTrace for ReflectiveGrating {
 
             if let Some(surf) = self.get_optic_surface_mut(in_port) {
                 let refraction_intended = false;
-                surf.set_isometry(&iso);
                 let grating_vector =
                     2. * PI * line_density.value * iso.transform_vector_f64(&Vector3::x());
                 let mut diffracted_rays = rays.diffract_on_periodic_surface(
@@ -357,7 +356,8 @@ mod test {
         let mut node = ReflectiveGrating::default()
             .with_rot_from_littrow(nanometer!(1000.), degree!(0.))
             .unwrap();
-        node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.)).unwrap());
+        node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.)).unwrap())
+            .unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());
@@ -384,7 +384,8 @@ mod test {
         let mut node = ReflectiveGrating::default()
             .with_rot_from_littrow(wvl, angle_from_littrow)
             .unwrap();
-        node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.)).unwrap());
+        node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.)).unwrap())
+            .unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());

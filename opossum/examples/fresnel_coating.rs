@@ -25,7 +25,7 @@ fn main() -> OpmResult<()> {
         &Grid::new((millimeter!(9.), millimeter!(9.)), (100, 100))?,
     )?;
     let mut source = Source::new("src", &LightData::Geometric(rays));
-    source.set_isometry(Isometry::identity());
+    source.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(&source)?;
     let fd1 = scenery.add_node(&FluenceDetector::new("before lens"))?;
 

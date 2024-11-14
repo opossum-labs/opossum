@@ -1,15 +1,13 @@
 use super::Lens;
 use crate::{
     analyzers::{
-        ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace, Analyzable, AnalyzerType,
-        GhostFocusConfig,
+        ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace, AnalyzerType, GhostFocusConfig,
     },
     error::OpmResult,
     light_result::LightRays,
     optic_node::OpticNode,
     optic_ports::PortType,
     rays::Rays,
-    utils::geom_transformation::Isometry,
 };
 
 impl AnalysisGhostFocus for Lens {
@@ -20,21 +18,12 @@ impl AnalysisGhostFocus for Lens {
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let (refri, center_thickness, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
+        let (refri, _, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
         let in_port = &self.ports().names(&PortType::Input)[0];
         let out_port = &self.ports().names(&PortType::Output)[0];
         let mut rays_bundle = incoming_data
             .get(in_port)
             .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
-
-        let thickness_iso: Isometry = Isometry::new_along_z(center_thickness)?;
-        if self.inverted() {
-            self.set_surface_iso(out_port, &Isometry::identity())?;
-            self.set_surface_iso(in_port, &thickness_iso)?;
-        } else {
-            self.set_surface_iso(in_port, &Isometry::identity())?;
-            self.set_surface_iso(out_port, &thickness_iso)?;
-        };
 
         let refraction_intended = true;
         self.pass_through_surface(

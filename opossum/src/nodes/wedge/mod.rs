@@ -4,14 +4,16 @@ use super::NodeAttr;
 use crate::{
     analyzers::Analyzable,
     dottable::Dottable,
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     millimeter,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
+    properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
-    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane},
+    surface::{geo_surface::GeoSurfaceRef, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
+use nalgebra::Point3;
 use num::Zero;
 use uom::si::{
     angle::degree,
@@ -119,33 +121,47 @@ impl Wedge {
 
 impl OpticNode for Wedge {
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let front_geosurface =
-            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"input_1".to_string())
-        {
-            optic_surf.set_geo_surface(front_geosurface);
-        } else {
-            let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front.set_geo_surface(front_geosurface);
-            self.ports_mut()
-                .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
-        }
+        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
 
-        let rear_geosurface =
-            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"output_1".to_string())
-        {
-            optic_surf.set_geo_surface(rear_geosurface);
+        let front_geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso))));
+
+        self.update_surface(
+            &"input_1".to_string(),
+            front_geosurface,
+            Isometry::identity(),
+            &PortType::Input,
+        )?;
+
+        let Ok(Proptype::Length(center_thickness)) =
+            self.node_attr.get_property("center thickness")
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read center thickness".into(),
+            ));
+        };
+
+        let angle = if let Ok(Proptype::Angle(wedge)) = self.node_attr.get_property("wedge") {
+            *wedge
         } else {
-            let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(rear_geosurface);
-            self.ports_mut()
-                .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
-        }
+            return Err(OpossumError::Analysis("cannot read wedge angle".into()));
+        };
+
+        let thickness_iso = Isometry::new_along_z(*center_thickness)?;
+        let wedge_iso = Isometry::new(
+            Point3::origin(),
+            Point3::new(angle, Angle::zero(), Angle::zero()),
+        )?;
+        let anchor_point_iso = thickness_iso.append(&wedge_iso);
+        let rear_geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(
+            &node_iso.append(&anchor_point_iso),
+        ))));
+
+        self.update_surface(
+            &"output_1".to_string(),
+            rear_geosurface,
+            anchor_point_iso,
+            &PortType::Output,
+        )?;
         Ok(())
     }
 
@@ -375,7 +391,8 @@ mod test {
         let mut node = Wedge::default();
         node.set_isometry(
             Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
-        );
+        )
+        .unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());

@@ -133,8 +133,6 @@ impl AnalysisRayTrace for ParaxialSurface {
             let iso = self.effective_surface_iso(in_port)?;
             if let Some(surf) = self.get_optic_surface_mut(in_port) {
                 let refraction_intended = true;
-                surf.set_isometry(&iso);
-
                 rays.refract_on_surface(surf, None, refraction_intended)?;
                 rays.refract_paraxial(focal_length, &iso)?;
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
@@ -255,7 +253,8 @@ mod test {
         let mut node = ParaxialSurface::default();
         node.set_isometry(
             Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
-        );
+        )
+        .unwrap();
         let mut rays = Rays::default();
         rays.add_ray(
             Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
@@ -280,7 +279,8 @@ mod test {
         let mut node = ParaxialSurface::new("test", millimeter!(10.)).unwrap();
         node.set_isometry(
             Isometry::new(millimeter!(10.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
-        );
+        )
+        .unwrap();
         let mut rays = Rays::default();
         rays.add_ray(
             Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
@@ -305,7 +305,8 @@ mod test {
         let mut node = ParaxialSurface::new("test", millimeter!(10.)).unwrap();
         node.set_isometry(
             Isometry::new(millimeter!(0.0, 10.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
-        );
+        )
+        .unwrap();
         let mut rays = Rays::default();
         rays.add_ray(
             Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
@@ -331,7 +332,8 @@ mod test {
         let mut node = ParaxialSurface::new("test", millimeter!(10.)).unwrap();
         node.set_isometry(
             Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(45.0, 0.0, 0.0)).unwrap(),
-        );
+        )
+        .unwrap();
         let mut rays = Rays::default();
         rays.add_ray(
             Ray::new_collimated(
@@ -363,7 +365,8 @@ mod test {
         let mut node = ParaxialSurface::new("test", millimeter!(10.)).unwrap();
         node.set_isometry(
             Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 45.0, 0.0)).unwrap(),
-        );
+        )
+        .unwrap();
         let mut rays = Rays::default();
         rays.add_ray(
             Ray::new_collimated(

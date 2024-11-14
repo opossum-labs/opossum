@@ -36,7 +36,7 @@ pub fn round_collimated_ray_source(
     )?;
     let light = LightData::Geometric(rays);
     let mut src = Source::new("collimated ray source", &light);
-    src.set_isometry(Isometry::identity());
+    src.set_isometry(Isometry::identity())?;
     Ok(src)
 }
 /// Create a [`Source`] containing a line of collimated rays.
@@ -62,7 +62,7 @@ pub fn collimated_line_ray_source(
     )?;
     let light = LightData::Geometric(rays);
     let mut src = Source::new("collimated line ray source", &light);
-    src.set_isometry(Isometry::identity());
+    src.set_isometry(Isometry::identity())?;
     Ok(src)
 }
 /// Create a point [`Source`] on the optical axis with a given cone angle.
@@ -86,7 +86,7 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
     )?;
     let light = LightData::Geometric(rays);
     let mut src = Source::new("point ray source", &light);
-    src.set_isometry(Isometry::identity());
+    src.set_isometry(Isometry::identity())?;
     Ok(src)
 }
 #[cfg(test)]
