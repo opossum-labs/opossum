@@ -225,7 +225,7 @@ impl AnalysisRayTrace for Source {
                 ));
             };
             if let LightData::Geometric(rays) = &mut data {
-                if let Some(iso) = self.effective_iso() {
+                if let Ok(iso) = self.effective_surface_iso("input_1") {
                     *rays = rays.transformed_rays(&iso);
                     // consider aperture only if not inverted (there is only an output port)
                     if !self.inverted() {
@@ -266,9 +266,9 @@ impl AnalysisRayTrace for Source {
                     info!("No alignment wavelength defined, using energy-weighted central wavelength for alignment");
                     rays.get_optical_axis_ray()
                 }?;
-                if let Some(iso) = self.effective_iso() {
-                    axis_ray = axis_ray.transformed_ray(&iso);
-                }
+                let iso = self.effective_surface_iso("input_1")?;
+                axis_ray = axis_ray.transformed_ray(&iso);
+
                 let mut new_rays = Rays::default();
                 new_rays.add_ray(axis_ray);
                 new_outgoing_edges
@@ -304,9 +304,9 @@ impl AnalysisGhostFocus for Source {
                     ));
                 };
                 if let LightData::Geometric(rays) = &mut data {
-                    if let Some(iso) = self.effective_iso() {
-                        *rays = rays.transformed_rays(&iso);
-                    }
+                    let iso = self.effective_surface_iso("output_1")?;
+                    *rays = rays.transformed_rays(&iso);
+
                     vec![rays.clone()]
                 } else {
                     return Err(OpossumError::Analysis(
@@ -319,21 +319,17 @@ impl AnalysisGhostFocus for Source {
         } else {
             Vec::<Rays>::new()
         };
-        if let Some(iso) = self.effective_iso() {
-            if let Some(surf) = self.get_optic_surface_mut("input_1") {
-                surf.set_isometry(&iso);
-                let refraction_intended = true;
-                for r in &mut rays {
-                    r.refract_on_surface(surf, None, refraction_intended)?;
-                    surf.evaluate_fluence_of_ray_bundle(r)?;
-                }
-            } else {
-                return Err(OpossumError::Analysis("no surface found. Aborting".into()));
+        let iso = self.effective_surface_iso("input_1")?;
+
+        if let Some(surf) = self.get_optic_surface_mut("input_1") {
+            surf.set_isometry(&iso);
+            let refraction_intended = true;
+            for r in &mut rays {
+                r.refract_on_surface(surf, None, refraction_intended)?;
+                surf.evaluate_fluence_of_ray_bundle(r)?;
             }
         } else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined. Aborting".into(),
-            ));
+            return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         }
 
         let mut out_light_rays = LightRays::default();

@@ -118,7 +118,7 @@ impl ParabolicMirror {
         }
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
-        parabola.set_properties(focal_length, collimating, None, None)?;
+        parabola.set_parabola_properties(focal_length, collimating, None, None)?;
         parabola.update_surfaces()?;
         Ok(parabola)
     }
@@ -147,11 +147,11 @@ impl ParabolicMirror {
 
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
-        parabola.set_properties(
+        parabola.set_parabola_properties(
             focal_length,
             collimating,
-            Some(oa_angle),
-            Some(Vector2::new(1., 0.)),
+            Some(&oa_angle),
+            Some(&Vector2::new(1., 0.)),
         )?;
         parabola.update_surfaces()?;
         Ok(parabola)
@@ -181,11 +181,11 @@ impl ParabolicMirror {
 
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
-        parabola.set_properties(
+        parabola.set_parabola_properties(
             focal_length,
             collimating,
-            Some(oa_angle),
-            Some(Vector2::new(0., 1.)),
+            Some(&oa_angle),
+            Some(&Vector2::new(0., 1.)),
         )?;
 
         parabola.update_surfaces()?;
@@ -219,7 +219,12 @@ impl ParabolicMirror {
 
         let mut parabola = Self::default();
         parabola.node_attr.set_name(name);
-        parabola.set_properties(focal_length, collimating, Some(oa_angle), Some(oa_dir))?;
+        parabola.set_parabola_properties(
+            focal_length,
+            collimating,
+            Some(&oa_angle),
+            Some(&oa_dir),
+        )?;
 
         parabola.update_surfaces()?;
         Ok(parabola)
@@ -240,7 +245,7 @@ impl ParabolicMirror {
             if !oa_angle.is_finite() {
                 return Err(OpossumError::Other("off-axis angle and finite".into()));
             }
-            if oa_angle.value.abs() > f64::consts::PI {
+            if oa_angle.value.abs() >= f64::consts::PI {
                 return Err(OpossumError::Other(
                     "off-axis angle must be smaller than 180°".into(),
                 ));
@@ -257,24 +262,28 @@ impl ParabolicMirror {
     }
 
     /// sets the properties of this parabola
-    fn set_properties(
+    fn set_parabola_properties(
         &mut self,
         focal_length: Length,
         collimating: bool,
-        oa_angle_opt: Option<Angle>,
-        oa_dir_opt: Option<Vector2<f64>>,
+        oa_angle_opt: Option<&Angle>,
+        oa_dir_opt: Option<&Vector2<f64>>,
     ) -> OpmResult<()> {
+        Self::check_attributes(focal_length, oa_angle_opt, oa_dir_opt)?;
+
         self.node_attr
             .set_property("focal length", focal_length.into())?;
         self.node_attr
             .set_property("collimating", collimating.into())?;
 
         if let Some(oa_angle) = oa_angle_opt {
-            self.node_attr.set_property("oa angle", oa_angle.into())?;
+            self.node_attr
+                .set_property("oa angle", (*oa_angle).into())?;
         }
 
         if let Some(oa_dir) = oa_dir_opt {
-            self.node_attr.set_property("oa direction", oa_dir.into())?;
+            self.node_attr
+                .set_property("oa direction", oa_dir.normalize().into())?;
         }
         Ok(())
     }
@@ -339,7 +348,7 @@ impl ParabolicMirror {
     ///
     /// This function will return an error if the node properties cannot be set.
     pub fn with_oap_direction(mut self, oa_dir: Vector2<f64>) -> OpmResult<Self> {
-        self.set_property("oa direction", oa_dir.into())?;
+        self.set_property("oa direction", oa_dir.normalize().into())?;
         self.update_surfaces()?;
         Ok(self)
     }
@@ -384,29 +393,36 @@ impl OpticNode for ParabolicMirror {
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let iso = self.calc_off_axis_isometry()?;
-        let parabola = Parabola::new(-1. * self.calc_parent_focal_length()?, &iso)?;
+        let parabola = Parabola::new(
+            -1. * self.calc_parent_focal_length()?,
+            &Isometry::identity(),
+        )?;
         let para_geo_surface = GeoSurfaceRef(Rc::new(RefCell::new(parabola)));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())
         {
             optic_surf.set_geo_surface(para_geo_surface.clone());
+            optic_surf.set_anchor_point_iso(iso.clone());
         } else {
-            let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(para_geo_surface.clone());
+            let mut optic_surf = OpticSurface::default();
+            optic_surf.set_geo_surface(para_geo_surface.clone());
+            optic_surf.set_anchor_point_iso(iso.clone());
             self.ports_mut()
-                .add_optic_surface(&PortType::Input, "input_1", optic_surf_rear)?;
+                .add_optic_surface(&PortType::Input, "input_1", optic_surf)?;
         }
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"output_1".to_string())
         {
             optic_surf.set_geo_surface(para_geo_surface);
+            optic_surf.set_anchor_point_iso(iso);
         } else {
-            let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(para_geo_surface);
+            let mut optic_surf = OpticSurface::default();
+            optic_surf.set_geo_surface(para_geo_surface);
+            optic_surf.set_anchor_point_iso(iso);
             self.ports_mut()
-                .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
+                .add_optic_surface(&PortType::Output, "output_1", optic_surf)?;
         }
         Ok(())
     }
@@ -419,15 +435,15 @@ impl Dottable for ParabolicMirror {
 }
 impl LIDT for ParabolicMirror {}
 impl Analyzable for ParabolicMirror {
-    fn set_surface_iso(&mut self, port_str: &str, iso: &Isometry) -> OpmResult<()> {
-        let parabola_iso = self.calc_off_axis_isometry()?;
-        if let Some(input_surf) = self.get_optic_surface_mut(port_str) {
-            input_surf.set_isometry(&iso.append(&parabola_iso));
-        } else {
-            return Err(OpossumError::OpticPort("No surface found.".into()));
-        }
-        Ok(())
-    }
+    // fn set_surface_iso(&mut self, port_str: &str, iso: &Isometry) -> OpmResult<()> {
+    //     let parabola_iso = self.calc_and_set_off_axis_isometry()?;
+    //     if let Some(input_surf) = self.get_optic_surface_mut(port_str) {
+    //         input_surf.set_isometry(&iso.append(&parabola_iso));
+    //     } else {
+    //         return Err(OpossumError::OpticPort("No surface found.".into()));
+    //     }
+    //     Ok(())
+    // }
 }
 impl AnalysisGhostFocus for ParabolicMirror {
     fn analyze(
@@ -487,40 +503,38 @@ impl AnalysisRayTrace for ParabolicMirror {
     ) -> OpmResult<LightResult> {
         let in_port = &self.ports().names(&PortType::Input)[0];
         let out_port = &self.ports().names(&PortType::Output)[0];
+
         let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
-        if let LightData::Geometric(mut rays) = data.clone() {
-            let reflected = if let Some(iso) = self.effective_iso() {
-                self.set_surface_iso(in_port, &iso)?;
-                if let Some(surf) = self.get_optic_surface_mut(in_port) {
-                    let refraction_intended = false;
-                    let mut reflected_rays =
-                        rays.refract_on_surface(surf, None, refraction_intended)?;
-                    if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
-                        reflected_rays.apodize(aperture, &iso)?;
-                        reflected_rays
-                            .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        reflected_rays
-                    } else {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    }
-                } else {
-                    return Err(OpossumError::Analysis("no surface found. Aborting".into()));
-                }
-            } else {
-                return Err(OpossumError::Analysis(
-                    "no location for surface defined. Aborting".into(),
-                ));
-            };
-            let light_data = LightData::Geometric(reflected);
-            let light_result = LightResult::from([(out_port.into(), light_data)]);
-            Ok(light_result)
-        } else {
-            Err(OpossumError::Analysis(
+        let LightData::Geometric(mut rays) = data.clone() else {
+            return Err(OpossumError::Analysis(
                 "expected ray data at input port".into(),
-            ))
+            ));
+        };
+        if rays.is_empty() {
+            return Ok(LightResult::default());
+        };
+
+        let iso = self.effective_surface_iso(in_port)?;
+        self.set_surface_iso(in_port, &Isometry::identity())?;
+
+        let Some(surf) = self.get_optic_surface_mut(in_port) else {
+            return Err(OpossumError::Analysis("no surface found. Aborting".into()));
+        };
+
+        let refraction_intended = false;
+        let mut reflected_rays = rays.refract_on_surface(surf, None, refraction_intended)?;
+        if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
+            reflected_rays.apodize(aperture, &iso)?;
+            reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+        } else {
+            return Err(OpossumError::OpticPort("input aperture not found".into()));
         }
+
+        let light_data = LightData::Geometric(reflected_rays);
+        let light_result = LightResult::from([(out_port.into(), light_data)]);
+        Ok(light_result)
     }
 
     fn calc_node_position(
@@ -529,5 +543,628 @@ impl AnalysisRayTrace for ParabolicMirror {
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
         AnalysisRayTrace::analyze(self, incoming_data, config)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        analyzers::{
+            energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+            GhostFocusConfig, RayTraceConfig,
+        },
+        degree, joule,
+        light_result::{light_result_to_light_rays, LightResult},
+        lightdata::{DataEnergy, LightData},
+        meter, millimeter, nanometer,
+        nodes::ParabolicMirror,
+        optic_node::OpticNode,
+        position_distributions::Hexapolar,
+        properties::Proptype,
+        rays::Rays,
+        spectrum_helper::create_he_ne_spec,
+        utils::geom_transformation::Isometry,
+    };
+    use approx::assert_relative_eq;
+    use core::f64;
+    use nalgebra::{Matrix4, Vector2};
+    #[test]
+    fn default() {
+        let parabola = ParabolicMirror::default();
+        assert_eq!(parabola.node_attr.name().as_str(), "parabolic mirror");
+
+        let Proptype::Length(focal_length) =
+            parabola.node_attr.get_property("focal length").unwrap()
+        else {
+            panic!()
+        };
+        assert_relative_eq!(focal_length.value, 1.);
+        let Proptype::Bool(collimate) = parabola.node_attr.get_property("collimating").unwrap()
+        else {
+            panic!()
+        };
+        assert!(!collimate);
+
+        let Proptype::Angle(angle) = parabola.node_attr.get_property("oa angle").unwrap() else {
+            panic!()
+        };
+        assert_relative_eq!(angle.value, 0.);
+        let Proptype::Vec2(dir) = parabola.node_attr.get_property("oa direction").unwrap() else {
+            panic!()
+        };
+        assert_relative_eq!(*dir, Vector2::new(1., 0.));
+    }
+    #[test]
+    fn new() {
+        assert!(ParabolicMirror::new("Parabola", meter!(1.), true).is_ok());
+        assert!(ParabolicMirror::new("Parabola", meter!(-1.), true).is_ok());
+        assert!(ParabolicMirror::new("Parabola", meter!(-1.), false).is_ok());
+        assert!(ParabolicMirror::new("Parabola", meter!(1.), false).is_ok());
+
+        assert!(ParabolicMirror::new("Parabola", meter!(0.), false).is_err());
+        assert!(ParabolicMirror::new("Parabola", meter!(f64::NAN), false).is_err());
+        assert!(ParabolicMirror::new("Parabola", meter!(f64::INFINITY), false).is_err());
+        assert!(ParabolicMirror::new("Parabola", meter!(f64::NEG_INFINITY), false).is_err());
+    }
+    #[test]
+    fn name() {
+        let p = ParabolicMirror::new("Parabola", meter!(1.), true).unwrap();
+        assert_eq!(p.node_attr.name().as_str(), "Parabola");
+    }
+    #[test]
+    fn new_with_off_axis_x() {
+        assert!(
+            ParabolicMirror::new_with_off_axis_x("Parabola", meter!(1.), true, degree!(45.))
+                .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_x("Parabola", meter!(1.), true, degree!(-45.))
+                .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_x("Parabola", meter!(1.), true, degree!(0.)).is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_x("Parabola", meter!(1.), true, degree!(180.))
+                .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_x("Parabola", meter!(1.), true, degree!(190.))
+                .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_x("Parabola", meter!(1.), true, degree!(-180.))
+                .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_x("Parabola", meter!(1.), true, degree!(-190.))
+                .is_err()
+        );
+        assert!(ParabolicMirror::new_with_off_axis_x(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(f64::NAN)
+        )
+        .is_err());
+        assert!(ParabolicMirror::new_with_off_axis_x(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(f64::INFINITY)
+        )
+        .is_err());
+        assert!(ParabolicMirror::new_with_off_axis_x(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(f64::NEG_INFINITY)
+        )
+        .is_err());
+    }
+    #[test]
+    fn new_with_off_axis_y() {
+        assert!(
+            ParabolicMirror::new_with_off_axis_y("Parabola", meter!(1.), true, degree!(45.))
+                .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_y("Parabola", meter!(1.), true, degree!(-45.))
+                .is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_y("Parabola", meter!(1.), true, degree!(0.)).is_ok()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_y("Parabola", meter!(1.), true, degree!(180.))
+                .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_y("Parabola", meter!(1.), true, degree!(190.))
+                .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_y("Parabola", meter!(1.), true, degree!(-180.))
+                .is_err()
+        );
+        assert!(
+            ParabolicMirror::new_with_off_axis_y("Parabola", meter!(1.), true, degree!(-190.))
+                .is_err()
+        );
+        assert!(ParabolicMirror::new_with_off_axis_y(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(f64::NAN)
+        )
+        .is_err());
+        assert!(ParabolicMirror::new_with_off_axis_y(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(f64::INFINITY)
+        )
+        .is_err());
+        assert!(ParabolicMirror::new_with_off_axis_y(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(f64::NEG_INFINITY)
+        )
+        .is_err());
+    }
+    #[test]
+    fn new_with_off_axis() {
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(1., 0.)
+        )
+        .is_ok());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(-1., 0.)
+        )
+        .is_ok());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(0., 1.)
+        )
+        .is_ok());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(0., -1.)
+        )
+        .is_ok());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(-1., -1.)
+        )
+        .is_ok());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(1., -1.)
+        )
+        .is_ok());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(1., 1.)
+        )
+        .is_ok());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(-1., 1.)
+        )
+        .is_ok());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(0., 0.)
+        )
+        .is_err());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(f64::NAN, 0.)
+        )
+        .is_err());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(f64::INFINITY, 0.)
+        )
+        .is_err());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(f64::NEG_INFINITY, 0.)
+        )
+        .is_err());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(0., f64::NAN)
+        )
+        .is_err());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(0., f64::INFINITY)
+        )
+        .is_err());
+        assert!(ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(0., f64::NEG_INFINITY)
+        )
+        .is_err());
+    }
+    #[test]
+    fn set_parabola_properties() {
+        let mut parabola = ParabolicMirror::default();
+
+        assert!(parabola
+            .set_parabola_properties(meter!(10.), true, None, None)
+            .is_ok());
+        let Proptype::Length(focal_length) =
+            parabola.node_attr.get_property("focal length").unwrap()
+        else {
+            panic!()
+        };
+        assert_relative_eq!(focal_length.value, 10.);
+        let Proptype::Bool(collimate) = parabola.node_attr.get_property("collimating").unwrap()
+        else {
+            panic!()
+        };
+        assert!(collimate);
+
+        let Proptype::Angle(angle) = parabola.node_attr.get_property("oa angle").unwrap() else {
+            panic!()
+        };
+        assert_relative_eq!(angle.value, 0.);
+        let Proptype::Vec2(dir) = parabola.node_attr.get_property("oa direction").unwrap() else {
+            panic!()
+        };
+        assert_relative_eq!(*dir, Vector2::new(1., 0.));
+
+        assert!(parabola
+            .set_parabola_properties(
+                meter!(10.),
+                true,
+                Some(&degree!(45.)),
+                Some(&Vector2::new(3., 2.))
+            )
+            .is_ok());
+
+        let Proptype::Angle(angle) = parabola.node_attr.get_property("oa angle").unwrap() else {
+            panic!()
+        };
+        assert_relative_eq!(angle.value, degree!(45.).value);
+        let Proptype::Vec2(dir) = parabola.node_attr.get_property("oa direction").unwrap() else {
+            panic!()
+        };
+        assert_relative_eq!(*dir, Vector2::new(3., 2.).normalize());
+    }
+    #[test]
+    fn calc_off_axis_isometry() {
+        let parabola = ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(45.),
+            Vector2::new(0., 1.),
+        )
+        .unwrap();
+        let transform_mat = Matrix4::from_vec(vec![
+            -0.,
+            1.,
+            -0.,
+            -0.,
+            -0.7071067811865475,
+            -0.,
+            -0.7071067811865476,
+            -0.6035533905932736,
+            -0.7071067811865476,
+            0.,
+            0.7071067811865475,
+            -0.3964466094067264,
+            0.,
+            0.,
+            0.,
+            1.,
+        ])
+        .transpose();
+        assert_relative_eq!(
+            transform_mat,
+            parabola
+                .calc_off_axis_isometry()
+                .unwrap()
+                .get_transform()
+                .to_matrix()
+        );
+    }
+
+    #[test]
+    fn calc_parent_focal_length() {
+        let parabola = ParabolicMirror::new_with_off_axis(
+            "Parabola",
+            meter!(1.),
+            true,
+            degree!(90.),
+            Vector2::new(0., 1.),
+        )
+        .unwrap();
+        assert_relative_eq!(parabola.calc_parent_focal_length().unwrap().value, 0.5);
+    }
+
+    #[test]
+    fn with_oap_angle() {
+        let parabola = ParabolicMirror::default()
+            .with_oap_angle(degree!(45.))
+            .unwrap();
+        let Proptype::Angle(angle) = parabola.node_attr.get_property("oa angle").unwrap() else {
+            panic!()
+        };
+        assert_relative_eq!(angle.value, 45. / 180. * f64::consts::PI);
+    }
+    #[test]
+    fn with_oap_direction() {
+        let parabola = ParabolicMirror::default()
+            .with_oap_direction(Vector2::new(0.35, 8.35))
+            .unwrap();
+        let Proptype::Vec2(oa_dir) = parabola.node_attr.get_property("oa direction").unwrap()
+        else {
+            panic!()
+        };
+        assert_relative_eq!(*oa_dir, Vector2::new(0.35, 8.35).normalize());
+    }
+    #[test]
+    fn analysis_raytrace_empty_input() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::Geometric(Rays::default());
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn analysis_raytrace_no_input() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::Fourier;
+        let input = LightResult::from([("output_1".into(), light_data)]);
+        let output =
+            AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).unwrap();
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn analysis_raytrace_lightdata_energy() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
+    }
+    #[test]
+    fn analysis_raytrace_lightdata_ghost_focus() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::GhostFocus(vec![Rays::default()]);
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
+    }
+
+    #[test]
+    fn analysis_raytrace_lightdata_fourier() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::Fourier;
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
+    }
+
+    #[test]
+    fn analysis_raytrace_no_iso() {
+        let mut node = ParabolicMirror::default();
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.),
+            joule!(1.),
+            &Hexapolar::new(millimeter!(1.), 3).unwrap(),
+        )
+        .unwrap();
+        let light_data = LightData::Geometric(rays);
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
+    }
+    #[test]
+    fn analysis_raytrace() {
+        let mut node = ParabolicMirror::default();
+        node.set_isometry(Isometry::identity());
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.),
+            joule!(1.),
+            &Hexapolar::new(millimeter!(1.), 3).unwrap(),
+        )
+        .unwrap();
+        let light_data = LightData::Geometric(rays);
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_ok());
+    }
+
+    #[test]
+    fn analysis_energy() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::Energy(DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        });
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        let output = AnalysisEnergy::analyze(&mut node, input);
+        assert!(output.is_ok());
+        assert!(!output.unwrap().is_empty());
+    }
+
+    #[test]
+    fn analysis_energy_no_input() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::Fourier;
+        let input = LightResult::from([("output_1".into(), light_data)]);
+        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn analysis_energy_lightdata_raytrace() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::Geometric(Rays::default());
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        assert!(AnalysisEnergy::analyze(&mut node, input).is_ok());
+    }
+    #[test]
+    fn analysis_energy_lightdata_ghost_focus() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::GhostFocus(vec![Rays::default()]);
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        assert!(AnalysisEnergy::analyze(&mut node, input).is_ok());
+    }
+
+    #[test]
+    fn analysis_energy_lightdata_fourier() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::Fourier;
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        assert!(AnalysisEnergy::analyze(&mut node, input).is_ok());
+    }
+
+    #[test]
+    fn analysis_ghost_focus_empty_input() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::GhostFocus(Vec::<Rays>::new());
+        let input = light_result_to_light_rays(LightResult::from([("input_1".into(), light_data)]))
+            .unwrap();
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            input,
+            &GhostFocusConfig::default(),
+            &mut Vec::<Rays>::new(),
+            0,
+        )
+        .unwrap();
+        assert!(output.values().last().unwrap().is_empty());
+    }
+
+    #[test]
+    fn analysis_ghost_focus_no_input() {
+        let mut node = ParabolicMirror::default();
+        let light_data = LightData::GhostFocus(vec![Rays::default()]);
+        let input =
+            light_result_to_light_rays(LightResult::from([("output_1".into(), light_data)]))
+                .unwrap();
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            input,
+            &GhostFocusConfig::default(),
+            &mut Vec::<Rays>::new(),
+            0,
+        )
+        .unwrap();
+        assert!(output.values().last().unwrap().is_empty());
+    }
+
+    #[test]
+    fn analysis_ghost_focus_no_iso() {
+        let mut node = ParabolicMirror::default();
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.),
+            joule!(1.),
+            &Hexapolar::new(millimeter!(1.), 3).unwrap(),
+        )
+        .unwrap();
+        let light_data = LightData::GhostFocus(vec![rays]);
+        let input = light_result_to_light_rays(LightResult::from([("input_1".into(), light_data)]))
+            .unwrap();
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            input,
+            &GhostFocusConfig::default(),
+            &mut Vec::<Rays>::new(),
+            0,
+        );
+        assert!(output.is_err());
+    }
+    #[test]
+    fn analysis_ghost_focus() {
+        let mut node = ParabolicMirror::default();
+        node.set_isometry(Isometry::identity());
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.),
+            joule!(1.),
+            &Hexapolar::new(millimeter!(1.), 3).unwrap(),
+        )
+        .unwrap();
+        let light_data = LightData::GhostFocus(vec![rays]);
+        let input = light_result_to_light_rays(LightResult::from([("input_1".into(), light_data)]))
+            .unwrap();
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            input,
+            &GhostFocusConfig::default(),
+            &mut Vec::<Rays>::new(),
+            0,
+        );
+        assert!(output.is_ok());
+    }
+
+    #[test]
+    fn calc_node_position() {
+        let mut node = ParabolicMirror::default();
+        node.set_isometry(Isometry::identity());
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.),
+            joule!(1.),
+            &Hexapolar::new(millimeter!(1.), 3).unwrap(),
+        )
+        .unwrap();
+        let light_data = LightData::Geometric(rays);
+        let input = LightResult::from([("input_1".into(), light_data)]);
+        assert!(node
+            .calc_node_position(input, &RayTraceConfig::default())
+            .is_ok());
     }
 }

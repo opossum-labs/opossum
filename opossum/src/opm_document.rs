@@ -169,11 +169,11 @@ mod test {
         let node1 = document.scenery.node(NodeIndex::from(0)).unwrap();
         let node2 = document.scenery.node(NodeIndex::from(1)).unwrap();
         assert_eq!(
-            "d8c43481-43b7-4bad-8305-7246a62e4016",
+            "587fa699-5e98-4d08-b5a5-f9885151f3d1",
             node1.uuid().to_string()
         );
         assert_eq!(
-            "e6729ff1-e14a-468d-a08f-d0b9dd131dab",
+            "a81f485c-26f7-4b3c-a6ac-4a62746f6cad",
             node2.uuid().to_string()
         );
     }

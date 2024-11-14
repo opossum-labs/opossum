@@ -210,11 +210,7 @@ impl AnalysisRayTrace for IdealFilter {
             ));
         };
         let mut rays = r.clone();
-        let Some(iso) = self.effective_iso() else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined. Aborting".into(),
-            ));
-        };
+        let iso = self.effective_surface_iso(in_port)?;
         let Some(surf) = self.get_optic_surface_mut(in_port) else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };

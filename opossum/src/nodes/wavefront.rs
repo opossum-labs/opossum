@@ -174,7 +174,9 @@ impl OpticNode for WaveFront {
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
-            let iso = self.effective_iso().map_or_else(Isometry::identity, |v| v);
+            let iso = self
+                .effective_surface_iso("input_1")
+                .unwrap_or_else(|_| Isometry::identity());
             let wf_data_opt = rays.get_wavefront_data_in_units_of_wvl(true, nanometer!(1.), &iso);
 
             if wf_data_opt.is_ok()

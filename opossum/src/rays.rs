@@ -113,6 +113,11 @@ impl Rays {
             parent_pos_split_idx: 0,
         })
     }
+    ///Checks if ray bundle contains no rays
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.rays.is_empty()
+    }
     ///Returns the uuid of this ray bundle
     #[must_use]
     pub const fn uuid(&self) -> &Uuid {
@@ -1327,6 +1332,16 @@ mod test {
     #[test]
     fn test_default() {
         assert_eq!(Rays::default().nr_of_rays(false), 0);
+    }
+    #[test]
+    fn is_empty() {
+        assert!(Rays::default().is_empty());
+        let mut rays = Rays::default();
+        rays.add_ray(
+            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))
+                .unwrap(),
+        );
+        assert!(!rays.is_empty());
     }
     #[test]
     fn display() {

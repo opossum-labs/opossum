@@ -13,7 +13,6 @@ use crate::{
     rays::Rays,
     refractive_index::RefractiveIndexType,
     reporting::analysis_report::AnalysisReport,
-    utils::geom_transformation::Isometry,
 };
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -103,11 +102,7 @@ pub trait AnalysisRayTrace: OpticNode {
         refraction_intended: bool,
     ) -> OpmResult<()> {
         let uuid = *self.node_attr().uuid();
-        let Some(iso) = &self.effective_iso() else {
-            return Err(OpossumError::Analysis(
-                "surface has no isometry defined".into(),
-            ));
-        };
+        let iso = &self.effective_surface_iso(optic_surf_name)?;
         let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
             return Err(OpossumError::Analysis(format!(
                 "Cannot find surface: \"{optic_surf_name}\" of node: \"{}\"",
@@ -150,33 +145,28 @@ pub trait AnalysisRayTrace: OpticNode {
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<()> {
         let optic_name = format!("'{}' ({})", self.name(), self.node_type());
-        if let Some(iso) = self.effective_iso() {
-            let mut apodized = false;
-            if let Some(surf) = self.get_optic_surface_mut(optic_surf_name) {
-                surf.set_isometry(&iso);
-                for rays in &mut *rays_bundle {
-                    rays.refract_on_surface(surf, None, true)?;
+        let iso = self.effective_surface_iso(optic_surf_name)?;
+        let mut apodized = false;
+        if let Some(surf) = self.get_optic_surface_mut(optic_surf_name) {
+            surf.set_isometry(&iso);
+            for rays in &mut *rays_bundle {
+                rays.refract_on_surface(surf, None, true)?;
 
-                    apodized |= rays.apodize(surf.aperture(), &iso)?;
-                    if apodized {
-                        warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", optic_name);
-                    }
-                    if let AnalyzerType::GhostFocus(_) = analyzer_type {
-                        surf.evaluate_fluence_of_ray_bundle(rays)?;
-                    }
-                    if let AnalyzerType::RayTrace(c) = analyzer_type {
-                        rays.invalidate_by_threshold_energy(c.min_energy_per_ray)?;
-                    }
+                apodized |= rays.apodize(surf.aperture(), &iso)?;
+                if apodized {
+                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", optic_name);
                 }
-            } else {
-                return Err(OpossumError::Analysis("no surface found".into()));
+                if let AnalyzerType::GhostFocus(_) = analyzer_type {
+                    surf.evaluate_fluence_of_ray_bundle(rays)?;
+                }
+                if let AnalyzerType::RayTrace(c) = analyzer_type {
+                    rays.invalidate_by_threshold_energy(c.min_energy_per_ray)?;
+                }
             }
-            self.set_apodization_warning(apodized);
         } else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined. Aborting".into(),
-            ));
+            return Err(OpossumError::Analysis("no surface found".into()));
         }
+        self.set_apodization_warning(apodized);
 
         // merge all rays
         if let Some(ld) = self.get_light_data_mut() {
@@ -249,12 +239,7 @@ pub trait AnalysisRayTrace: OpticNode {
     fn get_node_attributes_ray_trace(
         &self,
         node_attr: &NodeAttr,
-    ) -> OpmResult<(Isometry, RefractiveIndexType, Length, Angle)> {
-        let Some(eff_iso) = self.effective_iso() else {
-            return Err(OpossumError::Analysis(
-                "no location for surface defined".into(),
-            ));
-        };
+    ) -> OpmResult<(RefractiveIndexType, Length, Angle)> {
         let Ok(Proptype::RefractiveIndex(index_model)) = node_attr.get_property("refractive index")
         else {
             return Err(OpossumError::Analysis(
@@ -274,7 +259,7 @@ pub trait AnalysisRayTrace: OpticNode {
             degree!(0.)
         };
 
-        Ok((eff_iso, index_model.value.clone(), *center_thickness, angle))
+        Ok((index_model.value.clone(), *center_thickness, angle))
     }
 }
 // /// enum to define the mode of the raytracing analysis.

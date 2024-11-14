@@ -103,7 +103,9 @@ impl OpticNode for SpotDiagram {
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
             let mut transformed_rays = Rays::default();
-            let iso = self.effective_iso().unwrap_or_else(Isometry::identity);
+            let iso = self
+                .effective_surface_iso("input_1")
+                .unwrap_or_else(|_| Isometry::identity());
             for ray in rays {
                 transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
             }
@@ -290,7 +292,7 @@ impl Plottable for SpotDiagram {
 
                 let mut xy_pos_series = Vec::<MatrixXx2<Length>>::with_capacity(num_series);
                 for ray_bundle in &split_rays_bundles {
-                    let iso = self.effective_iso().unwrap_or_else(Isometry::identity);
+                    let iso = self.effective_surface_iso("input_1")?;
                     let xy_pos = ray_bundle.get_xy_rays_pos(true, &iso);
                     x_max = xy_pos
                         .column(0)
