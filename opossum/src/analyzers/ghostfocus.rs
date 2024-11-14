@@ -1,7 +1,6 @@
 //! Analyzer performing a ghost focus analysis using ray tracing
 use std::collections::{hash_map::Values, HashMap};
 
-use chrono::Local;
 use log::{info, warn};
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
 use plotters::style::RGBAColor;
@@ -11,7 +10,6 @@ use uuid::Uuid;
 
 use crate::{
     error::{OpmResult, OpossumError},
-    get_version,
     light_result::{LightRays, LightResult},
     millimeter,
     nodes::{NodeGroup, OpticGraph},
@@ -108,7 +106,7 @@ impl Analyzer for GhostFocusAnalyzer {
         Ok(())
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
-        let mut analysis_report = AnalysisReport::new(get_version(), Local::now());
+        let mut analysis_report = AnalysisReport::default();
         analysis_report.add_scenery(scenery);
         let mut props = Properties::default();
         let ghost_focus_history = GhostFocusHistory::from(scenery.accumulated_rays().clone());

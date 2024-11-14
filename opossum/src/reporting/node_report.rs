@@ -37,12 +37,19 @@ impl NodeReport {
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
-    /// Returns a reference to the properties of this [`NodeReport`].
+    /// Returns a reference to the [`Properties`] of this [`NodeReport`].
     #[must_use]
     pub const fn properties(&self) -> &Properties {
         &self.properties
     }
+    /// Returns a reference to the uuid of this [`NodeReport`].
+    #[must_use]
+    pub fn uuid(&self) -> &str {
+        &self.uuid
+    }
     /// Return an [`HtmlNodeReport`] from this [`NodeReport`].
+    /// 
+    /// This function is necessary, since TinyTemplates cannot deal with [`Properties`] correctly. Maybe this can be changes later.
     #[must_use]
     pub fn to_html_node_report(&self, id: &str) -> HtmlNodeReport {
         HtmlNodeReport {
@@ -55,16 +62,16 @@ impl NodeReport {
             show_item: self.show_item,
         }
     }
-    /// Returns a reference to the uuid of this [`NodeReport`].
-    #[must_use]
-    pub fn uuid(&self) -> &str {
-        &self.uuid
-    }
-    /// .
+    /// Export data files for the properties of this [`NodeReport`].
+    /// 
+    /// This function exports data (mostly as data files) for each property. This is necessary if a report is exported to HTML.
+    /// In this case, the [`HtmlNodeReport`] often only conatins a link to the corresponding data file (i.e. image of a plot).
+    /// 
+    /// **Todo**: This function should be rather moved to the [`HtmlNodeReport`] struct.
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if the underlying export function of a property returns an error.
     pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
         self.properties
             .export_data(report_path, &format!("{id}_{}_{}", &self.name, &self.uuid))
@@ -88,7 +95,7 @@ impl From<NodeReport> for Proptype {
 mod test {
     use super::*;
     #[test]
-    fn node_report_new() {
+    fn new() {
         let report = NodeReport::new(
             "test detector",
             "detector name",
@@ -97,5 +104,12 @@ mod test {
         );
         assert_eq!(report.node_type, "test detector");
         assert_eq!(report.name, "detector name");
+        assert_eq!(report.uuid, "123");
+        assert_eq!(report.properties.nr_of_props(), 0);
+
+        assert_eq!(report.node_type(), "test detector");
+        assert_eq!(report.name(), "detector name");
+        assert_eq!(report.uuid(), "123");
+        assert_eq!(report.properties().nr_of_props(), 0);
     }
 }
