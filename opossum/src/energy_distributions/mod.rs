@@ -1,13 +1,13 @@
 //! Module for handling energy distributions
 use nalgebra::Point2;
-use uom::si::f64::Energy;
+use uom::si::f64::{Energy, Length};
 
 pub mod general_gaussian;
 pub mod uniform;
 use kahan::KahanSummator;
 
 pub trait EnergyDistribution {
-    fn apply(&self, input: &[Point2<f64>]) -> Vec<Energy>;
+    fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy>;
     fn get_total_energy(&self) -> Energy;
     fn renormalize(&self, energy_dist: &mut Vec<Energy>) {
         //sum up energy of rays that are valid: energy is larger than machine epsilon times total energy

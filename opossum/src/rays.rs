@@ -208,8 +208,8 @@ impl Rays {
         //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
         let ray_pos_plane = ray_pos
             .iter()
-            .map(|p| Point2::<f64>::new(p.x.get::<millimeter>(), p.y.get::<millimeter>()))
-            .collect::<Vec<Point2<f64>>>();
+            .map(|p| Point2::<Length>::new(p.x, p.y))
+            .collect::<Vec<Point2<Length>>>();
         //apply distribution strategy
         let mut ray_energies = energy_strategy.apply(&ray_pos_plane);
         energy_strategy.renormalize(&mut ray_energies);
@@ -252,8 +252,8 @@ impl Rays {
         //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
         let ray_pos_plane = ray_pos
             .iter()
-            .map(|p| Point2::<f64>::new(p.x.get::<millimeter>(), p.y.get::<millimeter>()))
-            .collect::<Vec<Point2<f64>>>();
+            .map(|p| Point2::<Length>::new(p.x, p.y))
+            .collect::<Vec<Point2<Length>>>();
         //apply distribution strategy
         let mut ray_energies = energy_strategy.apply(&ray_pos_plane);
         energy_strategy.renormalize(&mut ray_energies);
@@ -1570,8 +1570,8 @@ mod test {
         let pos_strategy = &Hexapolar::new(millimeter!(1.0), 2).unwrap();
         let energy_strategy = &General2DGaussian::new(
             joule!(1.),
-            Point2::new(0., 0.),
-            Point2::new(1., 1.),
+            millimeter!(0., 0.),
+            millimeter!(1., 1.),
             1.,
             radian!(0.),
             true,
