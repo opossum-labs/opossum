@@ -61,7 +61,7 @@ impl NodeReport {
     }
     /// Return an [`HtmlNodeReport`] from this [`NodeReport`].
     ///
-    /// This function is necessary, since TinyTemplates cannot deal with [`Properties`] correctly. Maybe this can be changes later.
+    /// This function is necessary, since `TinyTemplates` cannot deal with [`Properties`] directly. Maybe this can be changes later.
     #[must_use]
     pub fn to_html_node_report(&self, id: &str) -> HtmlNodeReport {
         HtmlNodeReport {

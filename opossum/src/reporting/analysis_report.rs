@@ -74,7 +74,7 @@ impl AnalysisReport {
         if !report_path.exists() {
             return Err(OpossumError::Other("report path does not exist".into()));
         }
-        let md = fs::metadata(report_path.to_path_buf()).map_err(|e| {
+        let md = fs::metadata(&report_path).map_err(|e| {
             OpossumError::Other(format!("could not check directory permissions: {e}"))
         })?;
         let permissions = md.permissions();
