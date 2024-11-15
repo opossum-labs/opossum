@@ -241,20 +241,10 @@ impl Ray {
         let nr_of_pos = end_idx - start_idx;
         let mut positions = MatrixXx3::<Length>::zeros(nr_of_pos);
 
-        for (idx, hist_idx) in (start_idx..end_idx - 1).enumerate() {
+        for (idx, hist_idx) in (start_idx..end_idx).enumerate() {
             positions[(idx, 0)] = self.pos_hist[hist_idx].x;
             positions[(idx, 1)] = self.pos_hist[hist_idx].y;
             positions[(idx, 2)] = self.pos_hist[hist_idx].z;
-        }
-
-        if end_idx == self.pos_hist.len() {
-            positions[(nr_of_pos - 1, 0)] = self.pos.x;
-            positions[(nr_of_pos - 1, 1)] = self.pos.y;
-            positions[(nr_of_pos - 1, 2)] = self.pos.z;
-        } else {
-            positions[(nr_of_pos - 1, 0)] = self.pos_hist[end_idx].x;
-            positions[(nr_of_pos - 1, 1)] = self.pos_hist[end_idx].y;
-            positions[(nr_of_pos - 1, 2)] = self.pos_hist[end_idx].z;
         }
         Some(positions)
     }
@@ -487,8 +477,8 @@ impl Ray {
             let intersection_in_m = intersection_point.map(|c| c.value);
             self.path_length +=
                 self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
-            self.pos_hist.push(self.pos);
             self.pos = intersection_point;
+            self.pos_hist.push(self.pos);
             // check, if total reflection
             if dis.is_sign_positive() {
                 let mut reflected_ray = self.clone();
@@ -1068,7 +1058,7 @@ mod test {
         assert_eq!(ray.pos, millimeter!(0., 0., 10.));
         assert_eq!(ray.refractive_index, 1.5);
         assert_eq!(ray.dir, Vector3::z());
-        assert_eq!(ray.pos_hist, vec![Point3::origin()]);
+        assert_eq!(ray.pos_hist, vec![millimeter!(0., 0., 10.)]);
         assert_eq!(ray.path_length(), plane_z_pos);
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.number_of_refractions(), 1);
@@ -1078,7 +1068,7 @@ mod test {
         assert_eq!(reflected_ray.pos, millimeter!(0., 0., 10.));
         assert_eq!(reflected_ray.refractive_index, 1.0);
         assert_eq!(reflected_ray.dir, -1.0 * Vector3::z());
-        assert_eq!(reflected_ray.pos_hist, vec![millimeter!(0., 0., 0.)]);
+        assert_eq!(reflected_ray.pos_hist, vec![millimeter!(0., 0., 10.)]);
         assert_eq!(reflected_ray.path_length(), plane_z_pos);
         assert_eq!(reflected_ray.number_of_bounces(), 1);
         assert_eq!(reflected_ray.number_of_refractions(), 0);
