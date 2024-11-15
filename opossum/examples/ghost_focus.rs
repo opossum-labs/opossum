@@ -8,10 +8,10 @@ use opossum::{
         round_collimated_ray_source, Lens, NodeGroup, RayPropagationVisualizer, SpotDiagram,
         ThinMirror, Wedge,
     },
-    optic_node::{Alignable, OpticNode},
+    optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
     refractive_index::RefrIndexConst,
-    OpmDocument,
+    J_per_cm2, OpmDocument,
 };
 use std::path::Path;
 
@@ -19,7 +19,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(&round_collimated_ray_source(
         millimeter!(50.0),
-        joule!(200.0),
+        joule!(200.),
         8,
     )?)?;
     let i_sd = scenery.add_node(&SpotDiagram::default())?;
