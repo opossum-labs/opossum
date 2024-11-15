@@ -173,7 +173,7 @@ impl RaysHitMap {
         //get the voronoi cells
         let v_cells = voronoi.cells();
         let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), f64::NAN);
-        let mut max_fluence_val = f64::NEG_INFINITY;
+        let mut max_fluence_val = 0.;
         for (i, v_cell) in v_cells.iter().enumerate() {
             let v_neighbours = v_cell
                 .points()
@@ -186,7 +186,7 @@ impl RaysHitMap {
                 if fluence_scatter[i] > max_fluence_jcm2 {
                     show_hitmap = true;
                 }
-                if max_fluence_val < fluence_scatter[i] {
+                if max_fluence_val < fluence_scatter[i] || i == 0 {
                     max_fluence_val = fluence_scatter[i];
                 }
             } else {
