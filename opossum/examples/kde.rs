@@ -3,7 +3,7 @@ use opossum::{
     joule, millimeter,
     plottable::Plottable,
     position_distributions::{Hexapolar, PositionDistribution},
-    surface::hit_map::{HitPoint, RaysHitMap},
+    surface::hit_map::{FluenceEstimator, HitPoint, RaysHitMap},
 };
 use std::path::Path;
 use uom::si::f64::Ratio;
@@ -19,7 +19,7 @@ fn main() -> OpmResult<()> {
         hit_map.add_hit_point(hit_point);
     }
     dbg!("Done Add HitMap");
-    let fluence_data = hit_map.calc_fluence_with_kde((100, 100), None)?;
+    let fluence_data = hit_map.calc_fluence_map((100, 100), &FluenceEstimator::KDE)?;
     dbg!("Done KDE");
     fluence_data.to_plot(
         Path::new("./opossum/playground/kde.png"),

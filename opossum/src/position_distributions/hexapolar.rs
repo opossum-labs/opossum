@@ -41,11 +41,11 @@ impl PositionDistribution for Hexapolar {
         // add rings if radius > 0.0
         if !self.radius.is_zero() {
             let radius_step = self.radius / f64::from(self.nr_of_rings);
-            for ring in 0u8..self.nr_of_rings {
+            for ring in 0..self.nr_of_rings {
                 let radius = f64::from(ring + 1) * radius_step;
-                let points_per_ring = 6 * (ring + 1);
+                let points_per_ring = 6 * u16::from(ring + 1);
                 let angle_step = 2.0 * std::f64::consts::PI / f64::from(points_per_ring);
-                for point_nr in 0u8..points_per_ring {
+                for point_nr in 0..points_per_ring {
                     let point = (f64::from(point_nr) * angle_step).sin_cos();
                     points.push(point![radius * point.0, radius * point.1, Length::zero()]);
                 }
@@ -56,9 +56,9 @@ impl PositionDistribution for Hexapolar {
 }
 #[cfg(test)]
 mod test {
-    use crate::millimeter;
-
     use super::*;
+    use crate::millimeter;
+    use std::u8;
     #[test]
     fn new_wrong() {
         assert!(Hexapolar::new(millimeter!(-0.1), 1).is_err());
@@ -78,5 +78,17 @@ mod test {
         assert_eq!(g.generate().len(), 7);
         let g = Hexapolar::new(millimeter!(1.0), 2).unwrap();
         assert_eq!(g.generate().len(), 19);
+    }
+    #[test]
+    fn generate_max() {
+        let g = Hexapolar::new(millimeter!(1.0), u8::MAX).unwrap();
+        assert_eq!(g.generate().len(), 195841);
+    }
+    #[test]
+    fn generate_rounding() {
+        let g = Hexapolar::new(millimeter!(1.0), 6).unwrap();
+        assert_eq!(g.generate().len(), 127);
+        let g = Hexapolar::new(millimeter!(1.0), 7).unwrap();
+        assert_eq!(g.generate().len(), 169);
     }
 }

@@ -262,10 +262,8 @@ impl Rays {
         let nr_of_rays = ray_pos.len();
         let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
         for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
-            if *energy > f64::EPSILON * energy_strategy.get_total_energy() {
-                let ray = Ray::new_collimated(*pos, wave_length, *energy)?;
-                rays.push(ray);
-            }
+            let ray = Ray::new_collimated(*pos, wave_length, *energy)?;
+            rays.push(ray);
         }
         Ok(Self {
             rays,
@@ -2267,14 +2265,10 @@ mod test {
         let fluence = rays.calc_fluence_at_position().unwrap();
         println!(
             "{:?}",
-            fluence
-                .get_average_fluence()
-                .get::<joule_per_square_centimeter>()
+            fluence.average().get::<joule_per_square_centimeter>()
         );
         assert!(approx::RelativeEq::relative_eq(
-            &fluence
-                .get_average_fluence()
-                .get::<joule_per_square_centimeter>(),
+            &fluence.average().get::<joule_per_square_centimeter>(),
             &1.,
             0.01,
             0.01
@@ -2289,9 +2283,7 @@ mod test {
 
         let fluence = rays.calc_fluence_at_position().unwrap();
         assert!(approx::RelativeEq::relative_eq(
-            &fluence
-                .get_average_fluence()
-                .get::<joule_per_square_centimeter>(),
+            &fluence.average().get::<joule_per_square_centimeter>(),
             &0.5,
             0.01,
             0.01

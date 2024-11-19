@@ -4,6 +4,7 @@ use std::ops::Range;
 use super::Fluence;
 use crate::{
     error::OpmResult,
+    joule,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
     utils::griddata::linspace,
@@ -13,7 +14,7 @@ use nalgebra::{DMatrix, DVector};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::{
-    f64::Length,
+    f64::{Energy, Length},
     length::{meter, millimeter},
     radiant_exposure::joule_per_square_centimeter,
 };
@@ -37,7 +38,6 @@ pub struct FluenceData {
     /// y coordinates of the fluence distribution
     y_range: Range<Length>,
 }
-
 impl FluenceData {
     /// Constructs a new [`FluenceData`] struct
     #[must_use]
@@ -65,19 +65,6 @@ impl FluenceData {
             y_range,
         }
     }
-
-    /// Returns the peak fluence value
-    #[must_use]
-    pub const fn get_peak_fluence(&self) -> Fluence {
-        self.peak
-    }
-
-    /// Returns the average fluence value
-    #[must_use]
-    pub const fn get_average_fluence(&self) -> Fluence {
-        self.average
-    }
-
     /// Returns the fluence distribution and the corresponding x and y axes in a tuple (x, y, distribution)
     ///
     /// # Panics
@@ -127,6 +114,22 @@ impl FluenceData {
     #[must_use]
     pub fn average(&self) -> Fluence {
         self.average
+    }
+    /// Returns the total energy of this [`FluenceData`].
+    #[must_use]
+    pub fn total_energy(&self) -> Energy {
+        #[allow(clippy::cast_precision_loss)]
+        let dx = (self.x_range.end - self.x_range.start) / (self.len_x() as f64);
+        #[allow(clippy::cast_precision_loss)]
+        let dy = (self.y_range.end - self.y_range.start) / (self.len_y() as f64);
+        let area = dx * dy;
+        let mut energy = joule!(0.0);
+        for fluence in &self.interp_distribution {
+            if !fluence.is_nan() {
+                energy += area * (*fluence);
+            }
+        }
+        energy
     }
 }
 

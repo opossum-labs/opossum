@@ -8,10 +8,10 @@ use opossum::{
         round_collimated_ray_source, Lens, NodeGroup, RayPropagationVisualizer, SpotDiagram,
         ThinMirror, Wedge,
     },
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::{Alignable, OpticNode},
     optic_ports::PortType,
     refractive_index::RefrIndexConst,
-    J_per_cm2, OpmDocument,
+    OpmDocument,
 };
 use std::path::Path;
 

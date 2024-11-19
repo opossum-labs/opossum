@@ -1,4 +1,5 @@
-//! [`LightResult`] represents the [`LightData`], which arrives at a given (`OpticPort`)[`OpticPorts`] of an optical node.
+//! [`LightResult`] represents the [`LightData`], which arrives at a given
+//! [`OpticPort`](crate::optic_ports::OpticPorts) of an optical node.
 
 use crate::{
     error::{OpmResult, OpossumError},

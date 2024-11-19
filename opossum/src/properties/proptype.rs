@@ -14,7 +14,7 @@ use crate::{
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
-    surface::hit_map::HitMap,
+    surface::hit_map::{FluenceEstimator, HitMap},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
@@ -82,6 +82,8 @@ pub enum Proptype {
     SpotDiagram(SpotDiagram),
     /// This property stores the fluence information [`FluenceData`]
     FluenceData(FluenceData),
+    /// This property stores the fluence estimator strategy [`FluenceEstimator`]
+    FluenceEstimator(FluenceEstimator),
     /// This property stores the wavefront Information [`WaveFrontData`]
     WaveFrontData(WaveFrontData),
     /// This property stores the ray position history of all [`Rays`](crate::rays::Rays) during propagation through the optic scenery

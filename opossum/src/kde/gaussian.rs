@@ -1,34 +1,29 @@
 use crate::nodes::fluence_detector::Fluence;
 use nalgebra::Point2;
-use std::f64::consts::FRAC_1_PI;
-use uom::si::{
-    f64::{Energy, Length, Ratio},
-    ratio::ratio,
-};
+use uom::si::f64::{Area, Energy, Length};
 
+const FRAC_1_2PI: f64 = 0.159_154_943_091_895_35;
 pub struct Gaussian2D {
     mean: Point2<Length>,
-    sigma: Length,
-    weight: Energy,
+    sigma_square: Area,
+    amplitude: Fluence,
 }
 impl Gaussian2D {
-    pub const fn new(mean: Point2<Length>, sigma: Length, weight: Energy) -> Self {
+    pub fn new(mean: Point2<Length>, sigma: Length, weight: Energy) -> Self {
+        let sigma_square = sigma * sigma;
         Self {
             mean,
-            sigma,
-            weight,
+            sigma_square,
+            amplitude: weight * FRAC_1_2PI / sigma_square,
         }
     }
-    fn distance(point1: &Point2<Length>, point2: &Point2<Length>) -> Length {
-        ((point1.x - point2.x) * (point1.x - point2.x)
-            + (point1.y - point2.y) * (point1.y - point2.y))
-            .sqrt()
+    fn distance_squared(point1: &Point2<Length>, point2: &Point2<Length>) -> Area {
+        (point1.x - point2.x) * (point1.x - point2.x)
+            + (point1.y - point2.y) * (point1.y - point2.y)
     }
     pub fn value(&self, point: Point2<Length>) -> Fluence {
-        let distance = Self::distance(&point, &self.mean);
-        let factor = Ratio::new::<ratio>(0.5 * FRAC_1_PI); // 1/2pi
-        self.weight * factor / (self.sigma * self.sigma)
-            * (-distance * distance / (2. * self.sigma * self.sigma)).exp()
+        let dist_square = Self::distance_squared(&point, &self.mean);
+        self.amplitude * (-dist_square / (2. * self.sigma_square)).exp()
     }
 }
 

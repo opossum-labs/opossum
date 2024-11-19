@@ -13,11 +13,14 @@ use crate::{
     J_per_cm2,
 };
 
-use super::{geo_surface::GeoSurfaceRef, hit_map::HitPoint};
+use super::{
+    geo_surface::GeoSurfaceRef,
+    hit_map::{FluenceEstimator, HitPoint},
+};
 use core::fmt::Debug;
 
-/// This struct represents an optical surface, which consists of the geometric surface shape ([`GeoSurface`]) and further
-/// properties such as the [`CoatingType`].
+/// This struct represents an optical surface, which consists of the geometric surface shape
+/// ([`GeoSurface`](super::geo_surface::GeoSurface)) and further properties such as the [`CoatingType`].
 #[derive(Serialize, Deserialize, Clone)]
 pub struct OpticSurface {
     #[serde(skip)]
@@ -177,13 +180,13 @@ impl OpticSurface {
     /// This function errors on error propagation of `calc_fluence`
     pub fn evaluate_fluence_of_ray_bundle(&mut self, rays: &Rays) -> OpmResult<()> {
         if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), rays.uuid()) {
-            if let Some((_, _, _, _, peak_fluence)) =
-                rays_hit_map.calc_fluence_with_voronoi_method(self.lidt)?
-            {
+            let fluence_map =
+                rays_hit_map.calc_fluence_map((100, 100), &FluenceEstimator::Voronoi)?;
+            if fluence_map.peak() > self.lidt {
                 self.add_critical_fluence(
                     rays.uuid(),
                     rays.ray_history_len(),
-                    peak_fluence,
+                    fluence_map.peak(),
                     rays.bounce_lvl(),
                 );
             }
