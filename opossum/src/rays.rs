@@ -7,7 +7,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule, micrometer, millimeter, nanometer,
     nodes::{
-        fluence_detector::{fluence_data::FluenceData, Fluence},
+        fluence_detector::fluence_data::FluenceData,
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
         FilterType, WaveFrontData, WaveFrontErrorMap,
     },
@@ -634,7 +634,7 @@ impl Rays {
     fn calc_ray_fluence_in_voronoi_cells(
         &self,
         // projected_ray_pos: &MatrixXx2<Length>,
-    ) -> OpmResult<(VoronoiedData, AxLims, AxLims, Fluence)> {
+    ) -> OpmResult<(VoronoiedData, AxLims, AxLims)> {
         let valid_rays = Self::from(
             self.rays
                 .iter()
@@ -662,7 +662,7 @@ impl Rays {
             )
         })?;
 
-        let (voronoi, beam_area) = create_voronoi_cells(&ray_pos_cm).map_err(|_| {
+        let (voronoi, _beam_area) = create_voronoi_cells(&ray_pos_cm).map_err(|_| {
             OpossumError::Other(
                 "Voronoi diagram for fluence estimation could not be created!".into(),
             )
@@ -672,10 +672,8 @@ impl Rays {
         let v_cells = voronoi.cells();
 
         let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), f64::NAN);
-        let mut energy_in_beam = 0.;
 
         for (idx, ray) in valid_rays.iter().enumerate() {
-            //} in 0..self.nr_of_rays(true) {
             let v_neighbours = v_cells[idx]
                 .points()
                 .iter()
@@ -683,8 +681,6 @@ impl Rays {
                 .collect::<Vec<Point2<f64>>>();
             if v_neighbours.len() >= 3 {
                 let poly_area = calc_closed_poly_area(&v_neighbours)?;
-                // beam_area += poly_area;
-                energy_in_beam += ray.energy().get::<joule>();
                 fluence_scatter[idx] = ray.energy().get::<joule>() / poly_area;
             } else {
                 warn!(
@@ -697,7 +693,6 @@ impl Rays {
             VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)?,
             proj_ax1_lim,
             proj_ax2_lim,
-            J_per_cm2!(energy_in_beam / beam_area),
         ))
     }
 
@@ -712,7 +707,7 @@ impl Rays {
         let num_axes_points = 100;
 
         // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
-        let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim, average_fluence) =
+        let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim) =
             self.calc_ray_fluence_in_voronoi_cells()?;
 
         //axes definition
@@ -724,7 +719,6 @@ impl Rays {
             interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter, &co_ax1, &co_ax2)?;
 
         Ok(FluenceData::new(
-            average_fluence,
             DMatrix::from_iterator(
                 co_ax1.len(),
                 co_ax2.len(),
@@ -1315,9 +1309,7 @@ mod test {
     use itertools::izip;
     use nalgebra::Vector3;
     use testing_logger;
-    use uom::si::{
-        energy::joule, length::nanometer, radiant_exposure::joule_per_square_centimeter,
-    };
+    use uom::si::{energy::joule, length::nanometer};
 
     fn propagate(rays: &mut Rays, distance: Length) -> OpmResult<()> {
         for ray in rays {
@@ -2262,18 +2254,7 @@ mod test {
         )
         .unwrap();
 
-        let fluence = rays.calc_fluence_at_position().unwrap();
-        println!(
-            "{:?}",
-            fluence.average().get::<joule_per_square_centimeter>()
-        );
-        assert!(approx::RelativeEq::relative_eq(
-            &fluence.average().get::<joule_per_square_centimeter>(),
-            &1.,
-            0.01,
-            0.01
-        ));
-
+        let _ = rays.calc_fluence_at_position().unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
@@ -2281,13 +2262,7 @@ mod test {
         )
         .unwrap();
 
-        let fluence = rays.calc_fluence_at_position().unwrap();
-        assert!(approx::RelativeEq::relative_eq(
-            &fluence.average().get::<joule_per_square_centimeter>(),
-            &0.5,
-            0.01,
-            0.01
-        ));
+        let _ = rays.calc_fluence_at_position().unwrap();
     }
 
     #[test]

@@ -234,7 +234,6 @@ impl RaysHitMap {
             interp_fluence.iter().map(|val| J_per_cm2!(*val)),
         );
         let fluence_data = FluenceData::new(
-            J_per_cm2!(0.0),
             fluence_matrix,
             centimeter!(proj_ax1_lim.min)..centimeter!(proj_ax1_lim.max),
             centimeter!(proj_ax2_lim.min)..centimeter!(proj_ax2_lim.max),
@@ -295,8 +294,7 @@ impl RaysHitMap {
         kde.set_band_width(est_bandwidth);
         let (left, right, top, bottom) = self.calc_2d_bounding_box(3. * est_bandwidth)?;
         let fluence_matrix = kde.kde_2d(&(left..right, bottom..top), nr_of_points);
-        let fluence_data =
-            FluenceData::new(J_per_cm2!(0.0), fluence_matrix, left..right, bottom..top);
+        let fluence_data = FluenceData::new(fluence_matrix, left..right, bottom..top);
         Ok(fluence_data)
     }
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`].
