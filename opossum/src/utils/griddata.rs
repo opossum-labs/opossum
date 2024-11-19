@@ -12,9 +12,7 @@ use kahan::KahanSum;
 use log::warn;
 use nalgebra::{DMatrix, DVector, DVectorView, MatrixXx2, MatrixXx3, Point2, Scalar};
 use num::{Float, NumCast, ToPrimitive};
-use spade::{
-    DelaunayTriangulation, FloatTriangulation, HasPosition, Point2 as SpadeP, Triangulation,
-};
+use spade::{DelaunayTriangulation, HasPosition, Point2 as SpadeP, Triangulation};
 use std::ops::Add;
 // use triangulate::Mappable;
 use voronator::{
@@ -25,6 +23,7 @@ use voronator::{
 struct PointWithHeight {
     position: SpadeP<f64>,
     height: f64,
+    // normal: Vector3<f64>
 }
 
 impl HasPosition for PointWithHeight {
@@ -454,10 +453,28 @@ pub fn interpolate_3d_triangulated_scatter_data(
     //copy points of voronoi diag into spade triangulation
     for (p, z) in voronoi.voronoi_diagram.sites.iter().zip(z_data.iter()) {
         if z.is_finite() {
+            // let neighbours = &voronoi.voronoi_diagram.neighbors[idx];
+
+            // let mut normal = Vector3::new(0.,0.,0.);
+
+            // let p1 = Point3::new(p.x, p.y, *z);
+            // let p2 = voronoi.voronoi_diagram.sites[*neighbours.last().expect("No edges!")];
+            // let mut p2 = Point3::new(p2.x, p2.y, z_data[idx]);
+            // for point_idx in neighbours{
+            //     let p3 = voronoi.voronoi_diagram.sites[*point_idx];
+            //     let p3 = Point3::new(p3.x, p3.y, z_data[*point_idx]);
+            //     let vec1 = p2 - p1;
+            //     let vec2: nalgebra::Matrix<f64, nalgebra::Const<3>, nalgebra::Const<1>, nalgebra::ArrayStorage<f64, 3, 1>> = p3 - p1;
+            //     normal += vec1.cross(&vec2);
+            //     p2 = p3;
+            // }
+            // normal = normal.normalize();
+
             triangulation
                 .insert(PointWithHeight {
                     position: SpadeP::new(p.x, p.y),
                     height: *z,
+                    // normal
                 })
                 .map_err(|_| {
                     OpossumError::Other("Inserting Point into Spade triangulation failed".into())
@@ -469,11 +486,11 @@ pub fn interpolate_3d_triangulated_scatter_data(
         DMatrix::<f64>::from_element(num_axes_points_x, num_axes_points_y, f64::NAN);
     let mut mask = DMatrix::from_element(num_axes_points_x, num_axes_points_y, 0.);
 
-    // let nn = triangulation.natural_neighbor();
-    let nn = triangulation.barycentric();
+    let mm = triangulation.natural_neighbor();
     for (x_index, x) in x_interp.iter().enumerate() {
         for (y_index, y) in y_interp.iter().enumerate() {
-            let interp_point = nn.interpolate(|v| v.data().height, SpadeP::new(*x, *y));
+            let interp_point = mm.interpolate(|v| v.data().height, SpadeP::new(*x, *y));
+            // let interp_point = mm.interpolate_gradient(|v| v.data().height, |v| [v.data().normal[0], v.data().normal[1]], 1., SpadeP::new(*x, *y));
             if let Some(p) = interp_point {
                 interp_data[(y_index, x_index)] = p;
                 mask[(y_index, x_index)] = 1.;

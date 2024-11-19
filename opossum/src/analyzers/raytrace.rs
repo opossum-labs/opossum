@@ -197,7 +197,7 @@ pub trait AnalysisRayTrace: OpticNode {
     /// - `config`: the [`RayTraceConfig`] of this analysis
     /// # Errors
     /// This function errors if `pass_through_detector_surface` fails
-    fn raytrace_single_surface_detector(
+    fn analyze_single_surface_node(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,
@@ -214,7 +214,6 @@ pub trait AnalysisRayTrace: OpticNode {
                 &mut vec![rays.clone()],
                 &AnalyzerType::RayTrace(config.clone()),
             )?;
-
             Ok(LightResult::from([(
                 out_port.into(),
                 self.get_light_data_mut().unwrap().clone(),

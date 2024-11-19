@@ -427,7 +427,7 @@ impl Ray {
             Ok(None)
         }
     }
-    /// Refract the [`Ray`] on a given [`GeoSurface`] using Snellius' law.
+    /// Refract the [`Ray`] on a given [`OpticSurface`] using Snellius' law.
     ///
     /// This function refracts an incoming [`Ray`] on a given [`OpticSurface`] thereby changing its position (= intersection point) and
     /// its direction. The intial refractive index is (already) stored in the ray itself. The refractive index behind the surface is given

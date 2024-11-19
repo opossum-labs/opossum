@@ -270,7 +270,7 @@ impl AnalysisGhostFocus for WaveFront {
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        self.analyze_single_surface_detector(incoming_data, config)
+        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
     }
 }
 impl AnalysisEnergy for WaveFront {
@@ -290,7 +290,7 @@ impl AnalysisRayTrace for WaveFront {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        self.raytrace_single_surface_detector(incoming_data, config)
+        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
     }
 
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {

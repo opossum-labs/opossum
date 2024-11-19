@@ -527,7 +527,6 @@ impl AnalysisRayTrace for ParabolicMirror {
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
         }
-
         let light_data = LightData::Geometric(reflected_rays);
         let light_result = LightResult::from([(out_port.into(), light_data)]);
         Ok(light_result)
@@ -1128,7 +1127,8 @@ mod test {
     #[test]
     fn analysis_ghost_focus() {
         let mut node = ParabolicMirror::default();
-        node.set_isometry(Isometry::identity()).unwrap();
+        node.set_isometry(Isometry::new_along_z(millimeter!(10.0)).unwrap())
+            .unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),

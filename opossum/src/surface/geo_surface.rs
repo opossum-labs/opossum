@@ -11,7 +11,7 @@ use uom::si::f64::Length;
 
 /// Trait for handling geometric surfaces.
 ///
-/// A geomatric surface such as [`Plane`] or [`Sphere`] has to implement this trait in order to be used by the
+/// A geometric surface such as [`Plane`] or [`Sphere`](super::sphere::Sphere) has to implement this trait in order to be used by the
 /// `ray.refract_on_surface` function.
 pub trait GeoSurface {
     /// Calculate intersection point and its normal vector of a [`Ray`] with a [`GeoSurface`]

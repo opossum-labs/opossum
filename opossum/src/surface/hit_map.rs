@@ -16,13 +16,17 @@
 //!    caused by rays wih one bounce, ...
 //!  
 use crate::{
+    centimeter,
     error::{OpmResult, OpossumError},
     kde::Kde,
     nodes::fluence_detector::{fluence_data::FluenceData, Fluence},
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
     utils::{
-        griddata::{calc_closed_poly_area, create_voronoi_cells, VoronoiedData},
+        griddata::{
+            calc_closed_poly_area, create_voronoi_cells, interpolate_3d_triangulated_scatter_data,
+            linspace, VoronoiedData,
+        },
         unit_format::{
             get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit,
             get_unit_value_as_length_with_format_by_exponent,
@@ -31,18 +35,42 @@ use crate::{
     J_per_cm2,
 };
 use log::warn;
-use nalgebra::{DVector, MatrixXx2, Point2, Point3};
+use nalgebra::{DMatrix, DVector, MatrixXx2, Point2, Point3};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, ops::Range};
+use std::{collections::HashMap, fmt::Display};
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
-    length::centimeter,
-    radiant_exposure::joule_per_square_centimeter,
+    length,
 };
 use uuid::Uuid;
 
+/// Strategy for fluence estimation
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[non_exhaustive]
+pub enum FluenceEstimator {
+    /// Calculate Voronoi cells of the hit points and use the cell area for calculation of the fluence.
+    Voronoi,
+    /// Calculate the fluence at given point using a Kernel Density Estimator
+    KDE,
+    /// Simply perform binning of the hit points on a given matrix (not implemented yet)
+    Binning,
+}
+impl Display for FluenceEstimator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Voronoi => write!(f, "Voronoi"),
+            Self::KDE => write!(f, "KDE"),
+            Self::Binning => write!(f, "Binning"),
+        }
+    }
+}
+impl From<FluenceEstimator> for Proptype {
+    fn from(value: FluenceEstimator) -> Self {
+        Self::FluenceEstimator(value)
+    }
+}
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 /// Storage struct for `RaysHitMap` on a surface from a single bounce
 pub struct BouncedHitMap {
@@ -126,32 +154,30 @@ impl RaysHitMap {
             self.add_hit_point(hit_point.to_owned());
         }
     }
-    /// Calculates the fluence of a ray bundle that is stored in this hitmap
+    /// Calculates the fluence of this [`RaysHitMap`] using the "Voronoi" method
     /// # Attributes
     /// - `max_fluence`: the maximum allowed fluence on this surface
     /// # Errors
     /// This function errors if no reasonable axlimits  can be estimated due to only non-finite values in the positions
     #[allow(clippy::type_complexity)]
-    pub fn calc_fluence_with_voronoi_method(
+    pub fn calc_fluence_with_voronoi(
         &self,
-        max_fluence: Fluence,
-    ) -> OpmResult<Option<(VoronoiedData, AxLims, AxLims, Fluence, Fluence)>> {
-        let mut show_hitmap = false;
-        let max_fluence_jcm2 = max_fluence.get::<joule_per_square_centimeter>();
+        nr_of_points: (usize, usize),
+    ) -> OpmResult<FluenceData> {
         let mut pos_in_cm = MatrixXx2::<f64>::zeros(self.hit_map.len());
         let mut energy = DVector::<f64>::zeros(self.hit_map.len());
-        let mut energy_in_ray_bundle = 0.;
+        // let mut energy_in_ray_bundle = 0.;
 
         if self.hit_map.len() < 3 {
-            warn!("Too few points on hitmap to calculate fluence!");
-            return Ok(None);
+            return Err(OpossumError::Other(
+                "Too few points (<3) on hitmap to calculate fluence!".into(),
+            ));
         }
-
         for (row, p) in self.hit_map.iter().enumerate() {
-            pos_in_cm[(row, 0)] = p.position.x.get::<centimeter>();
-            pos_in_cm[(row, 1)] = p.position.y.get::<centimeter>();
+            pos_in_cm[(row, 0)] = p.position.x.get::<length::centimeter>();
+            pos_in_cm[(row, 1)] = p.position.y.get::<length::centimeter>();
             energy[row] = p.energy.get::<joule>();
-            energy_in_ray_bundle += energy[row];
+            // energy_in_ray_bundle += energy[row];
         }
 
         let proj_ax1_lim = AxLims::finite_from_dvector(&pos_in_cm.column(0)).ok_or_else(|| {
@@ -164,12 +190,11 @@ impl RaysHitMap {
                 "cannot construct voronoi cells with non-finite axes bounds!".into(),
             )
         })?;
-        let (voronoi, beam_area) = create_voronoi_cells(&pos_in_cm).map_err(|_| {
-            OpossumError::Other(
-                "Voronoi diagram for fluence estimation could not be created!".into(),
-            )
+        let (voronoi, _beam_area) = create_voronoi_cells(&pos_in_cm).map_err(|e| {
+            OpossumError::Other(format!(
+                "Voronoi diagram for fluence estimation could not be created!: {e}"
+            ))
         })?;
-
         //get the voronoi cells
         let v_cells = voronoi.cells();
         let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), f64::NAN);
@@ -183,9 +208,6 @@ impl RaysHitMap {
             if v_neighbours.len() >= 3 {
                 let poly_area = calc_closed_poly_area(&v_neighbours)?;
                 fluence_scatter[i] = energy[i] / poly_area;
-                if fluence_scatter[i] > max_fluence_jcm2 {
-                    show_hitmap = true;
-                }
                 if max_fluence_val < fluence_scatter[i] || i == 0 {
                     max_fluence_val = fluence_scatter[i];
                 }
@@ -196,17 +218,28 @@ impl RaysHitMap {
                 );
             }
         }
-        if show_hitmap {
-            Ok(Some((
-                VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)?,
-                proj_ax1_lim,
-                proj_ax2_lim,
-                J_per_cm2!(energy_in_ray_bundle / beam_area),
-                J_per_cm2!(max_fluence_val),
-            )))
-        } else {
-            Ok(None)
-        }
+
+        //axes definition
+        let co_ax1 = linspace(proj_ax1_lim.min, proj_ax1_lim.max, nr_of_points.0)?;
+        let co_ax2 = linspace(proj_ax2_lim.min, proj_ax2_lim.max, nr_of_points.1)?;
+
+        let voronied_data =
+            VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)?;
+        //currently only interpolation. voronoid data for plotting must still be implemented
+        let (interp_fluence, _) =
+            interpolate_3d_triangulated_scatter_data(&voronied_data, &co_ax1, &co_ax2)?;
+        let fluence_matrix = DMatrix::from_iterator(
+            co_ax1.len(),
+            co_ax2.len(),
+            interp_fluence.iter().map(|val| J_per_cm2!(*val)),
+        );
+        let fluence_data = FluenceData::new(
+            J_per_cm2!(0.0),
+            fluence_matrix,
+            centimeter!(proj_ax1_lim.min)..centimeter!(proj_ax1_lim.max),
+            centimeter!(proj_ax2_lim.min)..centimeter!(proj_ax2_lim.max),
+        );
+        Ok(fluence_data)
     }
     fn calc_2d_bounding_box(&self, margin: Length) -> OpmResult<(Length, Length, Length, Length)> {
         if !margin.is_finite() {
@@ -250,11 +283,7 @@ impl RaysHitMap {
     /// # Errors
     ///
     /// This function will return an error if .
-    pub fn calc_fluence_with_kde(
-        &self,
-        nr_of_points: (usize, usize),
-        ranges: Option<(Range<Length>, Range<Length>)>,
-    ) -> OpmResult<FluenceData> {
+    pub fn calc_fluence_with_kde(&self, nr_of_points: (usize, usize)) -> OpmResult<FluenceData> {
         let mut kde = Kde::default();
         let hitmap_2d = self
             .hit_map
@@ -264,15 +293,29 @@ impl RaysHitMap {
         kde.set_hit_map(hitmap_2d);
         let est_bandwidth = kde.bandwidth_estimate();
         kde.set_band_width(est_bandwidth);
-        let (left, right, top, bottom) = if let Some((x_range, y_range)) = ranges {
-            (x_range.start, x_range.end, y_range.end, y_range.start)
-        } else {
-            self.calc_2d_bounding_box(3. * est_bandwidth)?
-        };
+        let (left, right, top, bottom) = self.calc_2d_bounding_box(3. * est_bandwidth)?;
         let fluence_matrix = kde.kde_2d(&(left..right, bottom..top), nr_of_points);
         let fluence_data =
             FluenceData::new(J_per_cm2!(0.0), fluence_matrix, left..right, bottom..top);
         Ok(fluence_data)
+    }
+    /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`].
+    ///
+    /// Create a fluence map with the given number of points and the concrete estimator algorithm.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if  the underlying concrete estimator function returns an error.
+    pub fn calc_fluence_map(
+        &self,
+        nr_of_points: (usize, usize),
+        estimator: &FluenceEstimator,
+    ) -> OpmResult<FluenceData> {
+        match estimator {
+            FluenceEstimator::Voronoi => self.calc_fluence_with_voronoi(nr_of_points),
+            FluenceEstimator::KDE => self.calc_fluence_with_kde(nr_of_points),
+            FluenceEstimator::Binning => todo!(),
+        }
     }
 }
 
