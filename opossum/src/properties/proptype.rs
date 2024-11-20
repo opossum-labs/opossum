@@ -272,7 +272,6 @@ pub fn format_value_with_prefix(value: f64) -> String {
     if value.abs() < f64::EPSILON {
         return String::from("   0.000 ");
     }
-    #[allow(clippy::cast_possible_truncation)]
     let prefix = get_prefix_for_base_unit(value);
     let exponent = get_exponent_for_base_unit_in_e3_steps(value);
 

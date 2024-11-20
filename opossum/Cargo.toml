@@ -96,5 +96,5 @@ name = "grating_examples"
 path = "examples/grating_examples/grating_examples.rs"
 
 [[bench]]
-name = "kde"
+name = "fluence_estimator"
 harness = false

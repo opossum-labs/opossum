@@ -19,7 +19,7 @@ use crate::{
     joule, meter,
     nodes::FilterType,
     spectrum::Spectrum,
-    surface::{hit_map::HitPoint, optic_surface::OpticSurface},
+    surface::{hit_map::rays_hit_map::HitPoint, optic_surface::OpticSurface},
     utils::geom_transformation::Isometry,
 };
 

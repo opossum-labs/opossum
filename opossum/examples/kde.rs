@@ -3,7 +3,10 @@ use opossum::{
     joule, millimeter,
     plottable::Plottable,
     position_distributions::{Hexapolar, PositionDistribution},
-    surface::hit_map::{FluenceEstimator, HitPoint, RaysHitMap},
+    surface::hit_map::{
+        rays_hit_map::{HitPoint, RaysHitMap},
+        FluenceEstimator,
+    },
 };
 use std::path::Path;
 use uom::si::f64::Ratio;

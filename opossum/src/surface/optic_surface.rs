@@ -8,14 +8,17 @@ use crate::{
     error::{OpmResult, OpossumError},
     nodes::fluence_detector::Fluence,
     rays::Rays,
-    surface::hit_map::{HitMap, RaysHitMap},
+    surface::hit_map::HitMap,
     utils::geom_transformation::Isometry,
     J_per_cm2,
 };
 
 use super::{
     geo_surface::GeoSurfaceRef,
-    hit_map::{FluenceEstimator, HitPoint},
+    hit_map::{
+        rays_hit_map::{HitPoint, RaysHitMap},
+        FluenceEstimator,
+    },
 };
 use core::fmt::Debug;
 

@@ -25,6 +25,7 @@ use crate::{
     utils::{
         geom_transformation::Isometry,
         griddata::{create_linspace_axes, interpolate_3d_scatter_data},
+        usize_to_f64,
     },
 };
 
@@ -148,8 +149,7 @@ impl WaveFrontErrorMap {
             let max = wf_dat.max();
             let min = wf_dat.min();
             let ptv = max - min;
-            #[allow(clippy::cast_precision_loss)]
-            let avg = wf_dat.sum() / wf_dat.len() as f64;
+            let avg = wf_dat.sum() / usize_to_f64(wf_dat.len());
             let rms = f64::sqrt(
                 wf_dat
                     .iter()

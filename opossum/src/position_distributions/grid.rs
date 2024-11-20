@@ -1,7 +1,10 @@
 #![warn(missing_docs)]
 //! Rectangular, evenly-sized grid distribution
 use super::PositionDistribution;
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    utils::usize_to_f64,
+};
 use nalgebra::Point3;
 use num::Zero;
 use uom::si::f64::Length;
@@ -54,15 +57,13 @@ impl PositionDistribution for Grid {
     fn generate(&self) -> Vec<Point3<Length>> {
         let nr_of_points_x = self.nr_of_points.0.clamp(1, usize::MAX);
         let nr_of_points_y = self.nr_of_points.1.clamp(1, usize::MAX);
-        #[allow(clippy::cast_precision_loss)]
         let distance_x = if nr_of_points_x > 1 {
-            self.side_length.0 / ((nr_of_points_x - 1) as f64)
+            self.side_length.0 / usize_to_f64(nr_of_points_x - 1)
         } else {
             Length::zero()
         };
-        #[allow(clippy::cast_precision_loss)]
         let distance_y = if nr_of_points_y > 1 {
-            self.side_length.1 / ((nr_of_points_y - 1) as f64)
+            self.side_length.1 / usize_to_f64(nr_of_points_y - 1)
         } else {
             Length::zero()
         };
@@ -79,10 +80,9 @@ impl PositionDistribution for Grid {
         let mut points: Vec<Point3<Length>> = Vec::with_capacity(nr_of_points_x * nr_of_points_y);
         for i_x in 0..nr_of_points_x {
             for i_y in 0..nr_of_points_y {
-                #[allow(clippy::cast_precision_loss)]
                 points.push(Point3::new(
-                    (i_x as f64) * distance_x - offset_x,
-                    (i_y as f64) * distance_y - offset_y,
+                    usize_to_f64(i_x) * distance_x - offset_x,
+                    usize_to_f64(i_y) * distance_y - offset_y,
                     Length::zero(),
                 ));
             }
