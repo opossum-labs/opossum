@@ -1,9 +1,10 @@
-use serde::{Deserialize, Serialize};
+//! Helper module for circumventing issues during serialization / deserialization of enum values.
 
 use crate::{
     lightdata::LightData, nodes::FilterType, properties::Proptype, ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
 };
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EnumProxy<T> {

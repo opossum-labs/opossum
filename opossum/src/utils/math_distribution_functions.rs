@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//!distribution functions which can be applied, for example, for disitributing energies in rays
+//! distribution functions which can be applied, for example, for disitributing energies in rays
 use std::f64::consts::PI;
 
 use nalgebra::Point2;
@@ -23,7 +23,7 @@ use crate::error::OpmResult;
 /// # Remarks
 /// This function does not check the usefulness of the input arguments,
 /// meaning that passing values of NaN, Infinity, zero or negative numbers may result in an unexpected outcome of this function.
-/// To avoid non-useful input arguments see [`GeneralGaussian`](../../energy_distributions/general_gaussian/struct.GeneralGaussian.html)
+/// To avoid non-useful input arguments see [`General"dGaussian`](crate::energy_distributions::general_gaussian::General2DGaussian).
 #[must_use]
 pub fn general_2d_gaussian_points(
     points: &[Point2<f64>],
@@ -130,12 +130,10 @@ pub fn general_2d_gaussian_point(
 pub fn gaussian(points: &[f64], mu: f64, fwhm: f64, power: f64) -> Vec<f64> {
     let mut gaussian = Vec::<f64>::with_capacity(points.len());
     let sigma = fwhm / (2. * (2. * (f64::ln(2.)).powf(1. / power)).sqrt());
-
     for p in points {
         let g = f64::exp(-(0.5 * ((p - mu) / sigma).powi(2)).powf(power));
         gaussian.push(g);
     }
-
     gaussian
 }
 
@@ -179,10 +177,15 @@ pub fn ellipse(
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use approx::assert_abs_diff_eq;
     use nalgebra::point;
-
-    use super::*;
+    #[test]
+    fn test_gaussian() {
+        let x_values = vec![-1.0, 0.0, 1.0, 2.0];
+        let y_values = gaussian(&x_values, 1.0, 2.0, 1.0);
+        assert_eq!(y_values, vec![0.0625, 0.5, 1.0, 0.5]);
+    }
     #[test]
     fn ellipse_wrong() {
         for val in vec![f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
