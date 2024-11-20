@@ -48,7 +48,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let light = LightData::Geometric(rays_1w);
     let mut light_src = Source::new("collimated ray source", &light);
-    light_src.set_isometry(Isometry::identity());
+    light_src.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(&light_src)?;
 
     let w1 = scenery.add_node(

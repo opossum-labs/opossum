@@ -25,6 +25,7 @@ use crate::{
     utils::{
         geom_transformation::Isometry,
         griddata::{create_linspace_axes, interpolate_3d_scatter_data},
+        usize_to_f64,
     },
 };
 
@@ -148,8 +149,7 @@ impl WaveFrontErrorMap {
             let max = wf_dat.max();
             let min = wf_dat.min();
             let ptv = max - min;
-            #[allow(clippy::cast_precision_loss)]
-            let avg = wf_dat.sum() / wf_dat.len() as f64;
+            let avg = wf_dat.sum() / usize_to_f64(wf_dat.len());
             let rms = f64::sqrt(
                 wf_dat
                     .iter()
@@ -270,7 +270,7 @@ impl AnalysisGhostFocus for WaveFront {
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        self.analyze_single_surface_detector(incoming_data, config)
+        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
     }
 }
 impl AnalysisEnergy for WaveFront {
@@ -290,7 +290,7 @@ impl AnalysisRayTrace for WaveFront {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        self.raytrace_single_surface_detector(incoming_data, config)
+        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
     }
 
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
@@ -448,7 +448,7 @@ mod test {
     #[test]
     fn analyze_ok() {
         let mut node = WaveFront::default();
-        node.set_isometry(Isometry::identity());
+        node.set_isometry(Isometry::identity()).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
             Rays::new_uniform_collimated(

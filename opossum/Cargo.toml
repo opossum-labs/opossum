@@ -50,7 +50,7 @@ tempfile="3"
 rand="0.8"
 sobol="1"
 itertools = "0.13"
-nalgebra = {version = "0.33", features = ["serde-serialize"]}
+nalgebra = {version = "0.33", features = ["serde-serialize", "rayon"]}
 colorous = "1"
 strum_macros = "0.26"
 delaunator = "1"
@@ -58,7 +58,7 @@ num = "0.4"
 kahan = "0.1"
 log = "0.4"
 env_logger= "0.11"
-roots = "0.0"
+roots = "0.0.8"
 voronator = "0.2"
 # fast-surface-nets = "0.2.0"
 rayon = "1.10"
@@ -69,6 +69,7 @@ bevy={ version="0.14", optional=true }
 bevy_flycam = { version= "0.14", optional =true }
 spade = "2.12"
 earcutr = "0.4.3"
+splines = "4.4.0"
 
 [lints.rust]
 # missing_docs = "warn"
@@ -81,6 +82,7 @@ bevy = ["dep:bevy", "dep:bevy_flycam"]
 regex = "1"
 assert_matches = "1"
 testing_logger= "0.1"
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [build-dependencies]
 vergen-git2 = { version = "1" } # get git version infos compiled in binary
@@ -92,3 +94,7 @@ path = "examples/hhts/hhts.rs"
 [[example]]
 name = "grating_examples"
 path = "examples/grating_examples/grating_examples.rs"
+
+[[bench]]
+name = "fluence_estimator"
+harness = false

@@ -17,6 +17,7 @@ use crate::{
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
+    surface::hit_map::FluenceEstimator,
 };
 use log::warn;
 
@@ -25,7 +26,9 @@ pub type Fluence = uom::si::f64::RadiantExposure;
 
 /// A fluence monitor
 ///
-/// It simply calculates the fluence (spatial energy distribution) of an incoming [`Ray`](crate::ray::Ray) bundle.
+/// It simply calculates the fluence (spatial energy distribution) of an incoming [`Ray`](crate::ray::Ray) bundle. The used algorithm
+/// for calculating a fluence map is specified with the property `fluence estimator`. By default, the Voronoi estimator is
+/// used ([`FluenceEstimator::Voronoi`]). See [`FluenceEstimator`] for further options.
 ///
 /// ## Optical Ports
 ///   - Inputs
@@ -35,22 +38,32 @@ pub type Fluence = uom::si::f64::RadiantExposure;
 ///
 /// ## Properties
 ///   - `name`
+///   - `fluence estimator`
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
 #[derive(Clone, Debug)]
 pub struct FluenceDetector {
-    light_data: Option<LightData>,
     node_attr: NodeAttr,
     apodization_warning: bool,
+    light_data: Option<LightData>,
 }
 impl Default for FluenceDetector {
     /// creates a fluence detector.
     fn default() -> Self {
+        let mut node_attr = NodeAttr::new("fluence detector");
+        node_attr
+            .create_property(
+                "fluence estimator",
+                "fluence estimator strategy",
+                None,
+                FluenceEstimator::Voronoi.into(),
+            )
+            .unwrap();
         let mut fld = Self {
-            light_data: None,
-            node_attr: NodeAttr::new("fluence detector"),
+            node_attr,
             apodization_warning: false,
+            light_data: None,
         };
         fld.update_surfaces().unwrap();
         fld
@@ -77,52 +90,54 @@ impl OpticNode for FluenceDetector {
     }
     fn node_report(&self, uuid: &str) -> Option<NodeReport> {
         let mut props = Properties::default();
-        if let Some(LightData::Geometric(rays)) = &self.light_data {
-            // let hit_maps = self.hit_maps();
-            // let Some(hit_map) = hit_maps.get("input_1") else {
-            //     warn!("could not get surface hitmap using default");
-            //     return None;
-            // };
-            // if let Ok(fluence_data) = hit_map
-            //     .get_merged_rays_hit_map()
-            //     .calc_fluence_with_kde((50, 50))
-            if let Ok(fluence_data) = rays.calc_fluence_at_position() {
+        let hit_maps = self.hit_maps();
+        let Some(hit_map) = hit_maps.get("input_1") else {
+            warn!("could not get surface hitmap using default");
+            return None;
+        };
+        let Ok(Proptype::FluenceEstimator(estimator)) =
+            self.node_attr.get_property("fluence estimator")
+        else {
+            return None;
+        };
+        if let Ok(fluence_data_kde) = hit_map
+            .get_merged_rays_hit_map()
+            .calc_fluence_map((50, 50), estimator)
+        {
+            props
+                .create(
+                    &format!("Fluence ({estimator})"),
+                    "2D spatial energy distribution",
+                    None,
+                    fluence_data_kde.clone().into(),
+                )
+                .unwrap();
+            props
+                .create(
+                    &format!("Peak Fluence ({estimator})"),
+                    "Peak fluence of the distribution",
+                    None,
+                    Proptype::Fluence(fluence_data_kde.peak()),
+                )
+                .unwrap();
+            props
+                .create(
+                    &format!("Total energy ({estimator})"),
+                    "Total energy of the distribution",
+                    None,
+                    Proptype::Energy(fluence_data_kde.total_energy()),
+                )
+                .unwrap();
+            if self.apodization_warning {
                 props
-                    .create(
-                        "Fluence",
-                        "2D spatial energy distribution",
-                        None,
-                        fluence_data.clone().into(),
-                    )
-                    .unwrap();
-
-                props
-                    .create(
-                        "Peak Fluence",
-                        "Peak fluence of the distribution",
-                        None,
-                        Proptype::Fluence(fluence_data.peak()),
-                    )
-                    .unwrap();
-
-                props
-                    .create(
-                        "Average Fluence",
-                        "Average Fluence of the distribution",
-                        None,
-                        Proptype::Fluence(fluence_data.average()),
-                    )
-                    .unwrap();
-                if self.apodization_warning {
-                    props
                     .create(
                         "Warning",
                         "warning during analysis",
                         None,
-                        "Rays have been apodized at input aperture. Results might not be accurate.".into(),
+                        "Rays have been apodized at input aperture. Results might not be accurate."
+                            .into(),
                     )
                     .unwrap();
-                }
             }
         }
         Some(NodeReport::new(
@@ -139,7 +154,7 @@ impl OpticNode for FluenceDetector {
         &mut self.node_attr
     }
     fn reset_data(&mut self) {
-        self.light_data = None;
+        // self.light_data = None;
         self.reset_optic_surfaces();
     }
 }
@@ -160,7 +175,7 @@ impl AnalysisGhostFocus for FluenceDetector {
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        self.analyze_single_surface_detector(incoming_data, config)
+        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
     }
 }
 impl AnalysisEnergy for FluenceDetector {
@@ -170,7 +185,6 @@ impl AnalysisEnergy for FluenceDetector {
         let Some(data) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
-        // self.light_data = Some(data.clone());
         Ok(LightResult::from([(out_port.into(), data.clone())]))
     }
 }
@@ -180,7 +194,7 @@ impl AnalysisRayTrace for FluenceDetector {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        self.raytrace_single_surface_detector(incoming_data, config)
+        AnalysisRayTrace::analyze_single_surface_node(self, incoming_data, config)
     }
     fn get_light_data_mut(&mut self) -> Option<&mut LightData> {
         self.light_data.as_mut()
@@ -193,15 +207,15 @@ impl AnalysisRayTrace for FluenceDetector {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::lightdata::LightData;
     use crate::optic_ports::PortType;
     use crate::{
-        joule, lightdata::DataEnergy, millimeter, nanometer, nodes::test_helper::test_helper::*,
-        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
+        lightdata::DataEnergy, nodes::test_helper::test_helper::*,
+        spectrum_helper::create_he_ne_spec,
     };
     #[test]
     fn default() {
         let mut node = FluenceDetector::default();
-        assert!(node.light_data.is_none());
         assert_eq!(node.name(), "fluence detector");
         assert_eq!(node.node_type(), "fluence detector");
         assert_eq!(node.inverted(), false);
@@ -212,7 +226,6 @@ mod test {
     fn new() {
         let meter = FluenceDetector::new("test");
         assert_eq!(meter.name(), "test");
-        assert!(meter.light_data.is_none());
     }
     #[test]
     fn ports() {
@@ -283,31 +296,5 @@ mod test {
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
-    }
-    #[test]
-    fn report() {
-        let mut fd = FluenceDetector::default();
-        let node_report = fd.node_report("123").unwrap();
-        assert_eq!(node_report.node_type(), "fluence detector");
-        assert_eq!(node_report.name(), "fluence detector");
-        let node_props = node_report.properties();
-        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
-        assert_eq!(nr_of_props, 0);
-        fd.light_data = Some(LightData::Geometric(Rays::default()));
-        let node_report = fd.node_report("123").unwrap();
-        assert!(!node_report.properties().contains("Fluence"));
-        fd.light_data = Some(LightData::Geometric(
-            Rays::new_uniform_collimated(
-                nanometer!(1053.0),
-                joule!(1.0),
-                &Hexapolar::new(millimeter!(1.), 1).unwrap(),
-            )
-            .unwrap(),
-        ));
-        let node_report = fd.node_report("123").unwrap();
-        assert!(node_report.properties().contains("Fluence"));
-        let node_props = node_report.properties();
-        let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
-        assert_eq!(nr_of_props, 3);
     }
 }

@@ -22,6 +22,7 @@ use crate::{
     },
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
+    surface::hit_map::FluenceEstimator,
 };
 
 use super::{raytrace::AnalysisRayTrace, Analyzer, AnalyzerType, RayTraceConfig};
@@ -146,7 +147,7 @@ impl Analyzer for GhostFocusAnalyzer {
                             .1
                             .get_rays_hit_map(*bounce, rays_uuid)
                             .unwrap()
-                            .calc_fluence_with_kde((100, 100), None)?;
+                            .calc_fluence_map((100, 100), &FluenceEstimator::KDE)?;
                         hit_map_props.create(
                             "Peak fluence (Voronoi)",
                             "Peak fluence on this surface using Voronoi estimator",
@@ -172,9 +173,7 @@ impl Analyzer for GhostFocusAnalyzer {
                             format!(
                                 "{} J/cm²",
                                 format_value_with_prefix(
-                                    fluence_data
-                                        .get_peak_fluence()
-                                        .get::<joule_per_square_centimeter>()
+                                    fluence_data.peak().get::<joule_per_square_centimeter>()
                                 )
                             )
                             .into(),
@@ -238,7 +237,7 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     /// - `config`: the [`RayTraceConfig`] of this analysis
     /// # Errors
     /// This function errors if `pass_through_detector_surface` fails    
-    fn analyze_single_surface_detector(
+    fn analyze_single_surface_node(
         &mut self,
         incoming_data: LightRays,
         config: &GhostFocusConfig,

@@ -55,12 +55,8 @@ fn main() -> OpmResult<()> {
         .unwrap()
         .set(&PlotArgs::PlotSize((800, 800)))
         .unwrap();
-    // let start: Instant = Instant::now();
     let fluence_data = rays.calc_fluence_at_position()?;
-    // let duration = start.elapsed();
-    // println!("{duration:?}");
-    println!("{:?}", fluence_data.get_peak_fluence());
-    println!("{:?}", fluence_data.get_average_fluence());
+    println!("{:?}", fluence_data.peak());
     let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
 
     let plt_dat = PlotData::ColorMesh {

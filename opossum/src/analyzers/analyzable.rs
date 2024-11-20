@@ -37,14 +37,12 @@ pub trait Analyzable: OpticNode + AnalysisEnergy + AnalysisRayTrace + AnalysisGh
     //     Ok(())
     // }
 
-    fn set_surface_iso(&mut self, port_str: &str, iso: &Isometry) -> OpmResult<()> {
-        let eff_iso = self.effective_surface_iso(port_str)?;
+    fn set_anchor_point_iso(&mut self, port_str: &str, iso: Isometry) -> OpmResult<()> {
         if let Some(input_surf) = self.get_optic_surface_mut(port_str) {
-            input_surf.set_isometry(&eff_iso.append(iso));
+            input_surf.set_anchor_point_iso(iso);
         } else {
             return Err(OpossumError::OpticPort("No surface found.".into()));
         }
-
         Ok(())
     }
 }

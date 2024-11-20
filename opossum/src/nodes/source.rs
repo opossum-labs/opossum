@@ -19,10 +19,9 @@ use crate::{
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane},
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::EnumProxy,
 };
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::fmt::Debug;
 
 /// A general light source
 ///
@@ -162,30 +161,7 @@ impl OpticNode for Source {
         &mut self.node_attr
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"input_1".to_string())
-        {
-            optic_surf.set_geo_surface(geosurface.clone());
-        } else {
-            let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front.set_geo_surface(geosurface.clone());
-            self.ports_mut()
-                .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
-        }
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"output_1".to_string())
-        {
-            optic_surf.set_geo_surface(geosurface);
-        } else {
-            let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front.set_geo_surface(geosurface);
-            self.ports_mut()
-                .add_optic_surface(&PortType::Output, "output_1", optic_surf_front)?;
-        }
-        Ok(())
+        self.update_flat_single_surfaces()
     }
 }
 
@@ -319,10 +295,8 @@ impl AnalysisGhostFocus for Source {
         } else {
             Vec::<Rays>::new()
         };
-        let iso = self.effective_surface_iso("input_1")?;
 
         if let Some(surf) = self.get_optic_surface_mut("input_1") {
-            surf.set_isometry(&iso);
             let refraction_intended = true;
             for r in &mut rays {
                 r.refract_on_surface(surf, None, refraction_intended)?;

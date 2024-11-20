@@ -145,27 +145,26 @@ pub trait AnalysisRayTrace: OpticNode {
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<()> {
         let optic_name = format!("'{}' ({})", self.name(), self.node_type());
-        let iso = self.effective_surface_iso(optic_surf_name)?;
         let mut apodized = false;
-        if let Some(surf) = self.get_optic_surface_mut(optic_surf_name) {
-            surf.set_isometry(&iso);
-            for rays in &mut *rays_bundle {
-                rays.refract_on_surface(surf, None, true)?;
-
-                apodized |= rays.apodize(surf.aperture(), &iso)?;
-                if apodized {
-                    warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", optic_name);
-                }
-                if let AnalyzerType::GhostFocus(_) = analyzer_type {
-                    surf.evaluate_fluence_of_ray_bundle(rays)?;
-                }
-                if let AnalyzerType::RayTrace(c) = analyzer_type {
-                    rays.invalidate_by_threshold_energy(c.min_energy_per_ray)?;
-                }
-            }
-        } else {
+        let iso = self.effective_surface_iso(optic_surf_name)?;
+        let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
             return Err(OpossumError::Analysis("no surface found".into()));
+        };
+        for rays in &mut *rays_bundle {
+            rays.refract_on_surface(surf, None, true)?;
+
+            apodized |= rays.apodize(surf.aperture(), &iso)?;
+            if apodized {
+                warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", optic_name);
+            }
+            if let AnalyzerType::GhostFocus(_) = analyzer_type {
+                surf.evaluate_fluence_of_ray_bundle(rays)?;
+            }
+            if let AnalyzerType::RayTrace(c) = analyzer_type {
+                rays.invalidate_by_threshold_energy(c.min_energy_per_ray)?;
+            }
         }
+
         self.set_apodization_warning(apodized);
 
         // merge all rays
@@ -198,7 +197,7 @@ pub trait AnalysisRayTrace: OpticNode {
     /// - `config`: the [`RayTraceConfig`] of this analysis
     /// # Errors
     /// This function errors if `pass_through_detector_surface` fails
-    fn raytrace_single_surface_detector(
+    fn analyze_single_surface_node(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,
@@ -215,7 +214,6 @@ pub trait AnalysisRayTrace: OpticNode {
                 &mut vec![rays.clone()],
                 &AnalyzerType::RayTrace(config.clone()),
             )?;
-
             Ok(LightResult::from([(
                 out_port.into(),
                 self.get_light_data_mut().unwrap().clone(),

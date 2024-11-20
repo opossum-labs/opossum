@@ -13,12 +13,13 @@ use crate::{
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
-    millimeter,
+    meter, millimeter,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
     properties::Proptype,
+    radian,
     rays::Rays,
-    surface::{geo_surface::GeoSurfaceRef, optic_surface::OpticSurface, Plane, Sphere},
+    surface::{geo_surface::GeoSurfaceRef, Plane, Sphere},
     utils::geom_transformation::Isometry,
 };
 use num::Zero;
@@ -58,7 +59,6 @@ impl Default for ThinMirror {
 
         let mut m = Self { node_attr };
         m.update_surfaces().unwrap();
-
         m.ports_mut()
             .set_coating(
                 &PortType::Input,
@@ -115,41 +115,39 @@ impl OpticNode for ThinMirror {
         &mut self.node_attr
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
+        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let Ok(Proptype::Length(curvature)) = self.node_attr.get_property("curvature") else {
             return Err(OpossumError::Analysis("cannot read curvature".into()));
         };
-        let geosurface = if curvature.is_infinite() {
-            GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))))
+        let (geosurface, anchor_point_iso) = if curvature.is_infinite() {
+            (
+                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso)))),
+                Isometry::identity(),
+            )
         } else {
-            GeoSurfaceRef(Rc::new(RefCell::new(Sphere::new(
-                *curvature,
-                &Isometry::identity(),
-            )?)))
+            let anchor_point_iso_front =
+                Isometry::new(meter!(0., 0., curvature.value), radian!(0., 0., 0.))?;
+            (
+                GeoSurfaceRef(Rc::new(RefCell::new(Sphere::new(
+                    *curvature,
+                    node_iso.append(&anchor_point_iso_front),
+                )?))),
+                anchor_point_iso_front,
+            )
         };
 
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"input_1".to_string())
-        {
-            optic_surf.set_geo_surface(geosurface.clone());
-        } else {
-            let mut optic_surf_front = OpticSurface::default();
-            optic_surf_front.set_geo_surface(geosurface.clone());
-            self.ports_mut()
-                .add_optic_surface(&PortType::Input, "input_1", optic_surf_front)?;
-        }
-
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"output_1".to_string())
-        {
-            optic_surf.set_geo_surface(geosurface);
-        } else {
-            let mut optic_surf_rear = OpticSurface::default();
-            optic_surf_rear.set_geo_surface(geosurface);
-            self.ports_mut()
-                .add_optic_surface(&PortType::Output, "output_1", optic_surf_rear)?;
-        }
+        self.update_surface(
+            &"input_1".to_string(),
+            geosurface.clone(),
+            anchor_point_iso.clone(),
+            &PortType::Input,
+        )?;
+        self.update_surface(
+            &"output_1".to_string(),
+            geosurface,
+            anchor_point_iso,
+            &PortType::Output,
+        )?;
 
         Ok(())
     }
@@ -245,14 +243,12 @@ impl AnalysisRayTrace for ThinMirror {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
-            let iso = self.effective_surface_iso(in_port)?;
             let reflected = if let Some(surf) = self.get_optic_surface_mut(in_port) {
-                surf.set_isometry(&iso);
                 let refraction_intended = false;
                 let mut reflected_rays =
                     rays.refract_on_surface(surf, None, refraction_intended)?;
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
-                    reflected_rays.apodize(aperture, &iso)?;
+                    reflected_rays.apodize(aperture, &self.effective_surface_iso(in_port)?)?;
                     reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                     reflected_rays
                 } else {
@@ -392,9 +388,11 @@ mod test {
     #[test]
     fn analyze_geometric_ok() {
         let mut node = ThinMirror::default();
+
         node.set_isometry(
             Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(0.0, 0.0, 0.0)).unwrap(),
-        );
+        )
+        .unwrap();
         let mut input = LightResult::default();
         let mut rays = Rays::default();
         rays.add_ray(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap());

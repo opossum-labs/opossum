@@ -4,16 +4,17 @@ use std::ops::Range;
 use super::Fluence;
 use crate::{
     error::OpmResult,
+    joule,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
-    utils::griddata::linspace,
+    utils::{griddata::linspace, usize_to_f64},
     J_per_cm2,
 };
 use nalgebra::{DMatrix, DVector};
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::{
-    f64::Length,
+    f64::{Energy, Length},
     length::{meter, millimeter},
     radiant_exposure::joule_per_square_centimeter,
 };
@@ -23,13 +24,11 @@ impl From<FluenceData> for Proptype {
         Self::FluenceData(value)
     }
 }
-/// Struct to hold the fluence information of a beam
+/// Struct to hold the fluence map information of a beam
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FluenceData {
     /// peak fluence of the beam
     peak: Fluence,
-    /// average fluence of the beam
-    average: Fluence,
     /// 2d fluence distribution of the beam.
     interp_distribution: DMatrix<Fluence>,
     /// x coordinates of the fluence distribution
@@ -37,12 +36,10 @@ pub struct FluenceData {
     /// y coordinates of the fluence distribution
     y_range: Range<Length>,
 }
-
 impl FluenceData {
     /// Constructs a new [`FluenceData`] struct
     #[must_use]
     pub fn new(
-        average: Fluence,
         interp_distribution: DMatrix<Fluence>,
         x_range: Range<Length>,
         y_range: Range<Length>,
@@ -59,25 +56,11 @@ impl FluenceData {
                 });
         Self {
             peak: peak_fluence,
-            average,
             interp_distribution,
             x_range,
             y_range,
         }
     }
-
-    /// Returns the peak fluence value
-    #[must_use]
-    pub const fn get_peak_fluence(&self) -> Fluence {
-        self.peak
-    }
-
-    /// Returns the average fluence value
-    #[must_use]
-    pub const fn get_average_fluence(&self) -> Fluence {
-        self.average
-    }
-
     /// Returns the fluence distribution and the corresponding x and y axes in a tuple (x, y, distribution)
     ///
     /// # Panics
@@ -123,29 +106,35 @@ impl FluenceData {
     pub fn peak(&self) -> Fluence {
         self.peak
     }
-    /// Returns the average fluence of this [`FluenceData`].
+    /// Returns the total energy of this [`FluenceData`].
     #[must_use]
-    pub fn average(&self) -> Fluence {
-        self.average
+    pub fn total_energy(&self) -> Energy {
+        let dx = (self.x_range.end - self.x_range.start) / usize_to_f64(self.len_x());
+        let dy = (self.y_range.end - self.y_range.start) / usize_to_f64(self.len_y());
+        let area = dx * dy;
+        let mut energy = joule!(0.0);
+        for fluence in &self.interp_distribution {
+            if !fluence.is_nan() {
+                energy += area * (*fluence);
+            }
+        }
+        energy
     }
 }
-
 impl Plottable for FluenceData {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
-            .set(&PlotArgs::XLabel("distance in mm".into()))?
-            .set(&PlotArgs::YLabel("distance in mm".into()))?
-            .set(&PlotArgs::CBarLabel("fluence in J/cm²".into()))?
+            .set(&PlotArgs::XLabel("x position (mm)".into()))?
+            .set(&PlotArgs::YLabel("y position (mm)".into()))?
+            .set(&PlotArgs::CBarLabel("fluence (J/cm²)".into()))?
             .set(&PlotArgs::PlotSize((800, 800)))?
             .set(&PlotArgs::ExpandBounds(false))?;
 
         Ok(())
     }
-
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
         PlotType::ColorMesh(plt_params.clone())
     }
-
     fn get_plot_series(
         &self,
         plt_type: &mut PlotType,

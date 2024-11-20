@@ -46,17 +46,17 @@ impl Sphere {
     /// # Errors
     ///
     /// This function will return an error if any components of the `pos` are not finite or if the radius is not normal.
-    pub fn new(radius: Length, isometry: &Isometry) -> OpmResult<Self> {
+    pub fn new(radius: Length, isometry: Isometry) -> OpmResult<Self> {
         if !radius.is_normal() {
             return Err(OpossumError::Other(
                 "radius of curvature must be != 0.0 and finite".into(),
             ));
         }
-        let anchor_isometry = Isometry::new(
-            Point3::new(Length::zero(), Length::zero(), radius),
-            radian!(0., 0., 0.),
-        )?;
-        let isometry = isometry.append(&anchor_isometry);
+        // let anchor_isometry = Isometry::new(
+        //     Point3::new(Length::zero(), Length::zero(), radius),
+        //     radian!(0., 0., 0.),
+        // )?;
+        // let isometry = isometry.append(&anchor_isometry);
         Ok(Self { radius, isometry })
     }
 }
@@ -177,14 +177,14 @@ mod test {
     #[test]
     fn new() {
         let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
-        assert!(Sphere::new(millimeter!(f64::NAN), &iso).is_err());
-        assert!(Sphere::new(millimeter!(f64::INFINITY), &iso).is_err());
-        assert!(Sphere::new(millimeter!(f64::NEG_INFINITY), &iso).is_err());
+        assert!(Sphere::new(millimeter!(f64::NAN), iso.clone()).is_err());
+        assert!(Sphere::new(millimeter!(f64::INFINITY), iso.clone()).is_err());
+        assert!(Sphere::new(millimeter!(f64::NEG_INFINITY), iso.clone()).is_err());
 
-        let s = Sphere::new(millimeter!(2.0), &iso).unwrap();
+        let s = Sphere::new(millimeter!(2.0), iso.clone()).unwrap();
         assert_eq!(s.radius, millimeter!(2.0));
 
-        let s = Sphere::new(millimeter!(-2.0), &iso).unwrap();
+        let s = Sphere::new(millimeter!(-2.0), iso).unwrap();
         assert_eq!(s.radius, millimeter!(-2.0));
     }
     #[test]

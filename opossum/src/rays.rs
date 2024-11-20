@@ -7,7 +7,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule, micrometer, millimeter, nanometer,
     nodes::{
-        fluence_detector::{fluence_data::FluenceData, Fluence},
+        fluence_detector::fluence_data::FluenceData,
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
         FilterType, WaveFrontData, WaveFrontErrorMap,
     },
@@ -26,6 +26,7 @@ use crate::{
             calc_closed_poly_area, create_voronoi_cells, interpolate_3d_triangulated_scatter_data,
             linspace, VoronoiedData,
         },
+        usize_to_f64,
     },
     J_per_cm2,
 };
@@ -99,8 +100,7 @@ impl Rays {
         let points = strategy.generate();
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::with_capacity(nr_of_rays);
-        #[allow(clippy::cast_precision_loss)]
-        let energy_per_ray = energy / nr_of_rays as f64;
+        let energy_per_ray = energy / usize_to_f64(nr_of_rays);
         for point in points {
             let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
             rays.push(ray);
@@ -208,8 +208,8 @@ impl Rays {
         //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
         let ray_pos_plane = ray_pos
             .iter()
-            .map(|p| Point2::<f64>::new(p.x.get::<millimeter>(), p.y.get::<millimeter>()))
-            .collect::<Vec<Point2<f64>>>();
+            .map(|p| Point2::<Length>::new(p.x, p.y))
+            .collect::<Vec<Point2<Length>>>();
         //apply distribution strategy
         let mut ray_energies = energy_strategy.apply(&ray_pos_plane);
         energy_strategy.renormalize(&mut ray_energies);
@@ -252,8 +252,8 @@ impl Rays {
         //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
         let ray_pos_plane = ray_pos
             .iter()
-            .map(|p| Point2::<f64>::new(p.x.get::<millimeter>(), p.y.get::<millimeter>()))
-            .collect::<Vec<Point2<f64>>>();
+            .map(|p| Point2::<Length>::new(p.x, p.y))
+            .collect::<Vec<Point2<Length>>>();
         //apply distribution strategy
         let mut ray_energies = energy_strategy.apply(&ray_pos_plane);
         energy_strategy.renormalize(&mut ray_energies);
@@ -262,10 +262,8 @@ impl Rays {
         let nr_of_rays = ray_pos.len();
         let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
         for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
-            if *energy > f64::EPSILON * energy_strategy.get_total_energy() {
-                let ray = Ray::new_collimated(*pos, wave_length, *energy)?;
-                rays.push(ray);
-            }
+            let ray = Ray::new_collimated(*pos, wave_length, *energy)?;
+            rays.push(ray);
         }
         Ok(Self {
             rays,
@@ -305,8 +303,7 @@ impl Rays {
             Hexapolar::new(millimeter!(size_after_unit_length), nr_of_rings)?.generate()
         };
         let nr_of_rays = points.len();
-        #[allow(clippy::cast_precision_loss)]
-        let energy_per_ray = energy / nr_of_rays as f64;
+        let energy_per_ray = energy / usize_to_f64(nr_of_rays);
         let mut rays: Vec<Ray> = Vec::new();
         for point in points {
             let direction = vector![
@@ -408,8 +405,7 @@ impl Rays {
     /// function returns `None` if [`Rays`] is empty.
     #[must_use]
     pub fn centroid(&self) -> Option<Point3<Length>> {
-        #[allow(clippy::cast_precision_loss)]
-        let len = self.nr_of_rays(true) as f64;
+        let len = usize_to_f64(self.nr_of_rays(true));
         if len == 0.0 {
             return None;
         }
@@ -428,7 +424,6 @@ impl Rays {
     /// function returns `None` if [`Rays`] is empty.
     #[must_use]
     pub fn energy_weighted_centroid(&self) -> Option<Point3<Length>> {
-        #[allow(clippy::cast_precision_loss)]
         let len = self.nr_of_rays(true);
         if len == 0 {
             return None;
@@ -489,8 +484,7 @@ impl Rays {
                     sum_dist_sq += distance(&ray_2d, &c_in_millimeter).powi(2);
                 }
             }
-            #[allow(clippy::cast_precision_loss)]
-            let nr_of_rays = self.nr_of_rays(true) as f64;
+            let nr_of_rays = usize_to_f64(self.nr_of_rays(true));
             sum_dist_sq /= nr_of_rays;
             millimeter!(sum_dist_sq.sqrt())
         })
@@ -498,8 +492,8 @@ impl Rays {
 
     /// Returns the rms beam radius [`Rays`].
     ///
-    /// This function calculates the rms (root mean square) size of a ray bundle from it centroid. So far, the rays / spots are not weighted by their
-    /// particular energy.
+    /// This function calculates the rms (root mean square) size of a ray bundle from it centroid. So far,
+    /// the rays / spots are not weighted by their particular energy.
     #[must_use]
     pub fn energy_weighted_beam_radius_rms(&self) -> Option<Length> {
         self.energy_weighted_centroid().map(|c| {
@@ -636,7 +630,7 @@ impl Rays {
     fn calc_ray_fluence_in_voronoi_cells(
         &self,
         // projected_ray_pos: &MatrixXx2<Length>,
-    ) -> OpmResult<(VoronoiedData, AxLims, AxLims, Fluence)> {
+    ) -> OpmResult<(VoronoiedData, AxLims, AxLims)> {
         let valid_rays = Self::from(
             self.rays
                 .iter()
@@ -664,7 +658,7 @@ impl Rays {
             )
         })?;
 
-        let (voronoi, beam_area) = create_voronoi_cells(&ray_pos_cm).map_err(|_| {
+        let (voronoi, _beam_area) = create_voronoi_cells(&ray_pos_cm).map_err(|_| {
             OpossumError::Other(
                 "Voronoi diagram for fluence estimation could not be created!".into(),
             )
@@ -674,10 +668,8 @@ impl Rays {
         let v_cells = voronoi.cells();
 
         let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), f64::NAN);
-        let mut energy_in_beam = 0.;
 
         for (idx, ray) in valid_rays.iter().enumerate() {
-            //} in 0..self.nr_of_rays(true) {
             let v_neighbours = v_cells[idx]
                 .points()
                 .iter()
@@ -685,8 +677,6 @@ impl Rays {
                 .collect::<Vec<Point2<f64>>>();
             if v_neighbours.len() >= 3 {
                 let poly_area = calc_closed_poly_area(&v_neighbours)?;
-                // beam_area += poly_area;
-                energy_in_beam += ray.energy().get::<joule>();
                 fluence_scatter[idx] = ray.energy().get::<joule>() / poly_area;
             } else {
                 warn!(
@@ -699,7 +689,6 @@ impl Rays {
             VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)?,
             proj_ax1_lim,
             proj_ax2_lim,
-            J_per_cm2!(energy_in_beam / beam_area),
         ))
     }
 
@@ -714,7 +703,7 @@ impl Rays {
         let num_axes_points = 100;
 
         // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
-        let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim, average_fluence) =
+        let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim) =
             self.calc_ray_fluence_in_voronoi_cells()?;
 
         //axes definition
@@ -726,7 +715,6 @@ impl Rays {
             interpolate_3d_triangulated_scatter_data(&voronoi_fluence_scatter, &co_ax1, &co_ax2)?;
 
         Ok(FluenceData::new(
-            average_fluence,
             DMatrix::from_iterator(
                 co_ax1.len(),
                 co_ax2.len(),
@@ -1317,9 +1305,7 @@ mod test {
     use itertools::izip;
     use nalgebra::Vector3;
     use testing_logger;
-    use uom::si::{
-        energy::joule, length::nanometer, radiant_exposure::joule_per_square_centimeter,
-    };
+    use uom::si::{energy::joule, length::nanometer};
 
     fn propagate(rays: &mut Rays, distance: Length) -> OpmResult<()> {
         for ray in rays {
@@ -1570,8 +1556,8 @@ mod test {
         let pos_strategy = &Hexapolar::new(millimeter!(1.0), 2).unwrap();
         let energy_strategy = &General2DGaussian::new(
             joule!(1.),
-            Point2::new(0., 0.),
-            Point2::new(1., 1.),
+            millimeter!(0., 0.),
+            millimeter!(1., 1.),
             1.,
             radian!(0.),
             true,
@@ -2264,22 +2250,7 @@ mod test {
         )
         .unwrap();
 
-        let fluence = rays.calc_fluence_at_position().unwrap();
-        println!(
-            "{:?}",
-            fluence
-                .get_average_fluence()
-                .get::<joule_per_square_centimeter>()
-        );
-        assert!(approx::RelativeEq::relative_eq(
-            &fluence
-                .get_average_fluence()
-                .get::<joule_per_square_centimeter>(),
-            &1.,
-            0.01,
-            0.01
-        ));
-
+        let _ = rays.calc_fluence_at_position().unwrap();
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
@@ -2287,15 +2258,7 @@ mod test {
         )
         .unwrap();
 
-        let fluence = rays.calc_fluence_at_position().unwrap();
-        assert!(approx::RelativeEq::relative_eq(
-            &fluence
-                .get_average_fluence()
-                .get::<joule_per_square_centimeter>(),
-            &0.5,
-            0.01,
-            0.01
-        ));
+        let _ = rays.calc_fluence_at_position().unwrap();
     }
 
     #[test]

@@ -214,7 +214,6 @@ impl AnalysisRayTrace for IdealFilter {
         let Some(surf) = self.get_optic_surface_mut(in_port) else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
-        surf.set_isometry(&iso);
         let refraction_intended = true;
         rays.refract_on_surface(surf, None, refraction_intended)?;
         rays.filter_energy(&self.filter_type())?;
@@ -368,7 +367,7 @@ mod test {
     #[test]
     fn analyzer_geometric_fixed() {
         let mut node = IdealFilter::new("test", &FilterType::Constant(0.3)).unwrap();
-        node.set_isometry(Isometry::identity());
+        node.set_isometry(Isometry::identity()).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(
             Rays::new_uniform_collimated(

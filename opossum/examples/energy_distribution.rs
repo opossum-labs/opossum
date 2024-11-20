@@ -1,4 +1,4 @@
-use nalgebra::{DMatrix, DVector, Point2};
+use nalgebra::{DMatrix, DVector};
 use opossum::{
     degree,
     energy_distributions::general_gaussian::General2DGaussian,
@@ -16,8 +16,8 @@ fn main() -> OpmResult<()> {
         nanometer!(1000.),
         &General2DGaussian::new(
             joule!(3.),
-            Point2::new(0., 0.),
-            Point2::new(2., 2.),
+            millimeter!(0., 0.),
+            millimeter!(2., 2.),
             1.,
             degree!(0.),
             false,

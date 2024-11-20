@@ -118,7 +118,7 @@ impl AnalysisRayTrace for NodeGroup {
                             radian!(0., 0., 0.),
                         )?;
                         let new_iso = align_ref_iso.append(&align_iso);
-                        node_borrow_mut.set_isometry(new_iso);
+                        node_borrow_mut.set_isometry(new_iso)?;
                     } else {
                         warn!("Cannot align node like NodeIdx:{}. Fall back to standard positioning method", node_idx.index());
                         self.graph.set_node_isometry(

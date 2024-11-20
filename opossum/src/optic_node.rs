@@ -40,6 +40,7 @@ pub trait OpticNode: Dottable {
             self.node_type()
         );
     }
+
     /// Return all hit maps (if any) of this [`OpticNode`].
     fn hit_maps(&self) -> HashMap<String, HitMap> {
         let mut map: HashMap<String, HitMap> = HashMap::default();
@@ -64,29 +65,22 @@ pub trait OpticNode: Dottable {
     /// # Errors
     /// This function errors if the function `add_optic_surface` fails
     fn update_flat_single_surfaces(&mut self) -> OpmResult<()> {
-        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&Isometry::identity()))));
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"input_1".to_string())
-        {
-            optic_surf.set_geo_surface(geosurface.clone());
-        } else {
-            let mut optic_surf_in = OpticSurface::default();
-            optic_surf_in.set_geo_surface(geosurface.clone());
-            self.ports_mut()
-                .add_optic_surface(&PortType::Input, "input_1", optic_surf_in)?;
-        }
-        if let Some(optic_surf) = self
-            .ports_mut()
-            .get_optic_surface_mut(&"output_1".to_string())
-        {
-            optic_surf.set_geo_surface(geosurface);
-        } else {
-            let mut optic_surf_out = OpticSurface::default();
-            optic_surf_out.set_geo_surface(geosurface);
-            self.ports_mut()
-                .add_optic_surface(&PortType::Output, "output_1", optic_surf_out)?;
-        }
+        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso))));
+
+        self.update_surface(
+            &"input_1".to_string(),
+            geosurface.clone(),
+            Isometry::identity(),
+            &PortType::Input,
+        )?;
+        self.update_surface(
+            &"output_1".to_string(),
+            geosurface,
+            Isometry::identity(),
+            &PortType::Output,
+        )?;
+
         Ok(())
     }
 
@@ -221,7 +215,35 @@ pub trait OpticNode: Dottable {
     /// # Errors
     ///
     /// This function might return an error in a non-default implementation
-    fn update_surfaces(&mut self) -> OpmResult<()> {
+    fn update_surfaces(&mut self) -> OpmResult<()>;
+
+    /// Updates a single surface of this node
+    ///
+    /// # Attributes
+    /// `surf_name`: name of the surface,
+    /// `geo_surface`: the geometric surface [`GeoSurfaceRef`],
+    /// `anchor_point_iso`: the isometry of the geometrical anchor point,
+    /// `port_type`: the port type of this surface
+    ///
+    /// # Errors
+    /// This function errors if `add_optic_surface` fails
+    fn update_surface(
+        &mut self,
+        surf_name: &String,
+        geo_surface: GeoSurfaceRef,
+        anchor_point_iso: Isometry,
+        port_type: &PortType,
+    ) -> OpmResult<()> {
+        if let Some(optic_surf) = self.ports_mut().get_optic_surface_mut(surf_name) {
+            optic_surf.set_geo_surface(geo_surface);
+            optic_surf.set_anchor_point_iso(anchor_point_iso);
+        } else {
+            let mut optic_surf = OpticSurface::default();
+            optic_surf.set_geo_surface(geo_surface);
+            optic_surf.set_anchor_point_iso(anchor_point_iso);
+            self.ports_mut()
+                .add_optic_surface(port_type, surf_name, optic_surf)?;
+        }
         Ok(())
     }
     /// Updates the LIDT of the optical surfaces after deserialization
@@ -319,7 +341,7 @@ pub trait OpticNode: Dottable {
     fn set_node_attr(&mut self, node_attributes: NodeAttr) {
         let node_attr_mut = self.node_attr_mut();
         if let Some(iso) = node_attributes.isometry() {
-            node_attr_mut.set_isometry(iso);
+            let () = node_attr_mut.set_isometry(iso);
         }
         if let Some(alignment) = node_attributes.alignment() {
             node_attr_mut.set_alignment(alignment.clone());
@@ -353,8 +375,12 @@ pub trait OpticNode: Dottable {
         self.node_attr().isometry()
     }
     /// Set the (base) [`Isometry`] (position and angle) of this optical node.
-    fn set_isometry(&mut self, isometry: Isometry) {
+    ///
+    /// # Errors
+    /// This function errors if the `update_surfaces` function fails
+    fn set_isometry(&mut self, isometry: Isometry) -> OpmResult<()> {
         self.node_attr_mut().set_isometry(isometry);
+        self.update_surfaces()
     }
     /// Return the effective input isometry of this optical node.
     ///
@@ -392,10 +418,9 @@ pub trait OpticNode: Dottable {
     ///
     /// This function will return an error if the `alignment` property cannot be set.
     fn set_alignment(&mut self, decenter: Point3<Length>, tilt: Point3<Angle>) -> OpmResult<()> {
-        let align = Some(Isometry::new(decenter, tilt)?);
-        self.node_attr_mut()
-            .set_property("alignment", align.into())?;
-        Ok(())
+        let align = Isometry::new(decenter, tilt)?;
+        self.node_attr_mut().set_alignment(align);
+        self.update_surfaces()
     }
     ///
     #[cfg(feature = "bevy")]

@@ -2,7 +2,10 @@
 
 use nalgebra::Point2;
 use num::ToPrimitive;
-use uom::si::{energy::joule, f64::Energy};
+use uom::si::{
+    energy::joule,
+    f64::{Energy, Length},
+};
 
 use crate::error::{OpmResult, OpossumError};
 
@@ -30,7 +33,7 @@ impl UniformDist {
     }
 }
 impl EnergyDistribution for UniformDist {
-    fn apply(&self, input: &[Point2<f64>]) -> Vec<Energy> {
+    fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy> {
         let input_len = input.len();
         let energy_per_point = self.total_energy / input_len.to_f64().unwrap();
         vec![energy_per_point; input_len]

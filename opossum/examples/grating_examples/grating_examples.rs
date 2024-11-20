@@ -60,7 +60,7 @@ fn main() -> OpmResult<()> {
 
     let mut src = Source::new("collimated ray source", &light);
     src.set_alignment_wavelength(alignment_wvl)?;
-    src.set_isometry(Isometry::identity());
+    src.set_isometry(Isometry::identity())?;
     ////////////////////////////////////
     //  4 grating compressor example  //
     ////////////////////////////////////
@@ -328,7 +328,7 @@ fn main() -> OpmResult<()> {
     let light = LightData::Geometric(rays);
     let mut src = Source::new("collimated ray source", &light);
     src.set_alignment_wavelength(alignment_wvl)?;
-    src.set_isometry(Isometry::identity());
+    src.set_isometry(Isometry::identity())?;
 
     let i_src = scenery.add_node(&src)?;
     // focal length = 996.7 mm (Thorlabs LA1779-B)

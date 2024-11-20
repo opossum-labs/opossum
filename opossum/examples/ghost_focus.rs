@@ -19,7 +19,7 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(&round_collimated_ray_source(
         millimeter!(50.0),
-        joule!(200.0),
+        joule!(200.),
         8,
     )?)?;
     let i_sd = scenery.add_node(&SpotDiagram::default())?;

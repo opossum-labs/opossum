@@ -7,7 +7,6 @@ use cambox_1w::cambox_1w;
 use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
-use nalgebra::Point2;
 use num::Zero;
 use opossum::{
     analyzers::{AnalyzerType, RayTraceConfig},
@@ -86,8 +85,8 @@ fn main() -> OpmResult<()> {
         wvl_1w,
         &General2DGaussian::new(
             energy_1w,
-            Point2::new(0., 0.),
-            Point2::new(60.6389113608, 60.6389113608),
+            millimeter!(0., 0.),
+            millimeter!(60.6389113608, 60.6389113608),
             5.,
             radian!(0.),
             false,
@@ -98,8 +97,8 @@ fn main() -> OpmResult<()> {
         wvl_2w,
         &General2DGaussian::new(
             energy_2w,
-            Point2::new(0., 0.),
-            Point2::new(60.6389113608, 60.6389113608),
+            millimeter!(0., 0.),
+            millimeter!(60.6389113608, 60.6389113608),
             5.,
             radian!(0.),
             false,
@@ -139,7 +138,7 @@ fn main() -> OpmResult<()> {
 
     let mut scenery = NodeGroup::new("HHT Sensor");
     let mut src = Source::new("Source", &LightData::Geometric(rays));
-    src.set_isometry(Isometry::identity());
+    src.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(&src)?;
     let input_group = scenery.add_node(&hhts_input()?)?;
     scenery.connect_nodes(src, "output_1", input_group, "input_1", Length::zero())?;

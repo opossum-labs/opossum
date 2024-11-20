@@ -621,7 +621,7 @@ impl OpticGraph {
                             warn!("Keeping first position");
                         }
                     } else {
-                        node_borrow_mut.set_isometry(node_iso);
+                        node_borrow_mut.set_isometry(node_iso)?;
                     };
                 }
             } else {
@@ -1263,7 +1263,7 @@ mod test {
     fn analyze_subtree_warning() {
         let mut graph = OpticGraph::default();
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity());
+        dummy.set_isometry(Isometry::identity()).unwrap();
         let d1 = graph.add_node(dummy.clone()).unwrap();
         let d2 = graph.add_node(dummy.clone()).unwrap();
         let d3 = graph.add_node(dummy.clone()).unwrap();
@@ -1288,7 +1288,7 @@ mod test {
     fn analyze_stale_node() {
         let mut graph = OpticGraph::default();
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity());
+        dummy.set_isometry(Isometry::identity()).unwrap();
         let d1 = graph.add_node(dummy).unwrap();
         let _ = graph.add_node(Dummy::new("stale node")).unwrap();
         graph

@@ -68,7 +68,7 @@ pub mod test_helper {
     pub fn test_analyze_apodization_warning<T: Default + AnalysisRayTrace>() {
         testing_logger::setup();
         let mut node = T::default();
-        node.set_isometry(Isometry::identity());
+        node.set_isometry(Isometry::identity()).unwrap();
         let config = CircleConfig::new(millimeter!(1.0), millimeter!(0.0, 0.0)).unwrap();
         node.set_aperture(
             &PortType::Input,
