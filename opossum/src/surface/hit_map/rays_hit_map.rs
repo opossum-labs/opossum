@@ -86,7 +86,7 @@ impl RaysHitMap {
         }
         Self { hit_map: hps }
     }
-    /// Add intersection point (with energy) to this [`HitMap`].
+    /// Add intersection point (with energy) to this [`RaysHitMap`].
     pub fn add_hit_point(&mut self, hit_point: HitPoint) {
         self.hit_map.push(hit_point);
     }

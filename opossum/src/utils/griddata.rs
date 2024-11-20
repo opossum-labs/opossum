@@ -8,13 +8,11 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use itertools::Itertools;
-use kahan::KahanSum;
 use log::warn;
 use nalgebra::{DMatrix, DVector, DVectorView, MatrixXx2, MatrixXx3, Point2, Scalar};
 use num::{Float, NumCast, ToPrimitive};
 use spade::{DelaunayTriangulation, HasPosition, Point2 as SpadeP, Triangulation};
 use std::ops::Add;
-// use triangulate::Mappable;
 use voronator::{
     delaunator::{Coord, Point as VPoint},
     polygon, VoronoiDiagram,
@@ -23,7 +21,6 @@ use voronator::{
 struct PointWithHeight {
     position: SpadeP<f64>,
     height: f64,
-    // normal: Vector3<f64>
 }
 
 impl HasPosition for PointWithHeight {
@@ -205,7 +202,9 @@ pub fn meshgrid(x: &DVector<f64>, y: &DVector<f64>) -> OpmResult<(DMatrix<f64>, 
 /// - `num`:    number of elements
 ///
 /// # Errors
-/// This function will return an error if `num` cannot be casted to usize.
+/// This function will return an error if
+///  - `start` or `end` are not finite
+///  - `num` cannot be casted to usize.
 ///
 /// # Panics
 /// This function panics if step cannot be casted from usize to T
@@ -215,71 +214,23 @@ pub fn linspace<T: Float + Scalar>(start: T, end: T, num: usize) -> OpmResult<DV
             "start and end values must be finite!".into(),
         ));
     };
-
     let mut linspace = DVector::<T>::from_element(num, start);
     if num < 2 {
         warn!("Using linspace with less than two elements results in an empty Vector for num=0 or a Vector with one entry being num=start");
         return Ok(linspace);
     }
-
     let bin_size = (end - start)
         / NumCast::from(num - 1)
-            .ok_or_else(|| OpossumError::Other("Cannot Cast usize to float type!".into()))?;
-
+            .ok_or_else(|| OpossumError::Other("Cannot cast `usize` to float type!".into()))?;
     for (step, val) in linspace.iter_mut().enumerate() {
         *val = *val + <T as NumCast>::from(step).unwrap() * bin_size;
     }
     Ok(linspace)
 }
-
-/// Creates a linearly spaced Vector (Matrix with1 column and `num` rows) from `start` to `end`
-/// # Attributes
-/// - `start`:  Start value of the array
-/// - `end`:    end value of the array
-/// - `num`:    number of elements
-///
-/// # Errors
-/// This function will return an error if `num` cannot be casted to usize.
-pub fn linspace_f32(start: f32, end: f32, num: f32) -> OpmResult<DVector<f32>> {
-    if !start.is_finite() || !end.is_finite() {
-        return Err(OpossumError::Other(
-            "start and end values must be finite!".into(),
-        ));
-    };
-
-    if num < 2. {
-        warn!("Using linspace with less than two elements results in an empty Vector for num=0 or a Vector with one entry being num=start");
-    }
-    num.to_usize().map_or_else(
-        || {
-            Err(OpossumError::Other(
-                "Cannot cast num value to usize!".into(),
-            ))
-        },
-        |num_usize| {
-            let mut linspace = DVector::<f32>::zeros(num_usize);
-            let mut range = KahanSum::<f32>::new_with_value(end);
-            range += -start;
-
-            let mut steps = KahanSum::<f32>::new_with_value(num);
-            steps += -1.;
-
-            let bin_size = range.sum() / steps.sum();
-
-            let mut summator: KahanSum<f32> = KahanSum::<f32>::new_with_value(start);
-            for val in linspace.iter_mut() {
-                *val = summator.sum();
-                summator += bin_size;
-            }
-            Ok(linspace)
-        },
-    )
-}
-
 /// Creates a linearly spaced Vector (Matrix with1 column and `num` rows) from `start` to `end` and an [`AxLims`] struct from data.
 /// # Attributes
 /// - `data`: data that defines the start- and end-points of the linearly spaced vector
-/// - `num_axes_points`:    number of points
+/// - `num_axes_points`: number of points
 ///
 /// # Errors
 /// This function will return an error if `num_axes_points` is below 1 or if `linspace fails`.
@@ -453,51 +404,32 @@ pub fn interpolate_3d_triangulated_scatter_data(
     //copy points of voronoi diag into spade triangulation
     for (p, z) in voronoi.voronoi_diagram.sites.iter().zip(z_data.iter()) {
         if z.is_finite() {
-            // let neighbours = &voronoi.voronoi_diagram.neighbors[idx];
-
-            // let mut normal = Vector3::new(0.,0.,0.);
-
-            // let p1 = Point3::new(p.x, p.y, *z);
-            // let p2 = voronoi.voronoi_diagram.sites[*neighbours.last().expect("No edges!")];
-            // let mut p2 = Point3::new(p2.x, p2.y, z_data[idx]);
-            // for point_idx in neighbours{
-            //     let p3 = voronoi.voronoi_diagram.sites[*point_idx];
-            //     let p3 = Point3::new(p3.x, p3.y, z_data[*point_idx]);
-            //     let vec1 = p2 - p1;
-            //     let vec2: nalgebra::Matrix<f64, nalgebra::Const<3>, nalgebra::Const<1>, nalgebra::ArrayStorage<f64, 3, 1>> = p3 - p1;
-            //     normal += vec1.cross(&vec2);
-            //     p2 = p3;
-            // }
-            // normal = normal.normalize();
-
             triangulation
                 .insert(PointWithHeight {
                     position: SpadeP::new(p.x, p.y),
                     height: *z,
                     // normal
                 })
-                .map_err(|_| {
-                    OpossumError::Other("Inserting Point into Spade triangulation failed".into())
+                .map_err(|e| {
+                    OpossumError::Other(format!(
+                        "Inserting Point into Spade triangulation failed: {e}"
+                    ))
                 })?;
         }
     }
-
     let mut interp_data =
         DMatrix::<f64>::from_element(num_axes_points_x, num_axes_points_y, f64::NAN);
     let mut mask = DMatrix::from_element(num_axes_points_x, num_axes_points_y, 0.);
-
     let mm = triangulation.natural_neighbor();
     for (x_index, x) in x_interp.iter().enumerate() {
         for (y_index, y) in y_interp.iter().enumerate() {
             let interp_point = mm.interpolate(|v| v.data().height, SpadeP::new(*x, *y));
-            // let interp_point = mm.interpolate_gradient(|v| v.data().height, |v| [v.data().normal[0], v.data().normal[1]], 1., SpadeP::new(*x, *y));
             if let Some(p) = interp_point {
                 interp_data[(y_index, x_index)] = p;
                 mask[(y_index, x_index)] = 1.;
             }
         }
     }
-
     Ok((interp_data, mask))
 }
 
