@@ -612,6 +612,8 @@ pub fn project_pos_to_plane_with_base_vectors(
 
 #[cfg(test)]
 mod test {
+    use core::f64;
+
     use super::*;
     use crate::millimeter;
     use approx::{assert_abs_diff_eq, assert_relative_eq};
@@ -650,6 +652,56 @@ mod test {
         assert_eq!(i.transform.rotation.i, 0.0);
         assert_eq!(i.transform.rotation.j, 0.0);
         assert_eq!(i.transform.rotation.k, 0.0);
+    }
+    #[test]
+    fn new_translation() {
+        assert!(Isometry::new_translation(meter!(f64::NAN, 0.0, 0.0)).is_err());
+        assert!(Isometry::new_translation(meter!(f64::NEG_INFINITY, 0.0, 0.0)).is_err());
+        assert!(Isometry::new_translation(meter!(f64::INFINITY, 0.0, 0.0)).is_err());
+
+        assert!(Isometry::new_translation(meter!(0.0, f64::NAN, 0.0)).is_err());
+        assert!(Isometry::new_translation(meter!(0.0, f64::NEG_INFINITY, 0.0)).is_err());
+        assert!(Isometry::new_translation(meter!(0.0, f64::INFINITY, 0.0)).is_err());
+
+        assert!(Isometry::new_translation(meter!(0.0, 0.0, f64::NAN)).is_err());
+        assert!(Isometry::new_translation(meter!(0.0, 0.0, f64::NEG_INFINITY)).is_err());
+        assert!(Isometry::new_translation(meter!(0.0, 0.0, f64::INFINITY)).is_err());
+
+        let i = Isometry::new_translation(meter!(1.0, 2.0, 3.0)).unwrap();
+        assert_eq!(
+            i.transform,
+            Isometry3::<f64>::new(vector![1.0, 2.0, 3.0], vector![0.0, 0.0, 0.0])
+        );
+    }
+    #[test]
+    fn new_rotation() {
+        assert!(Isometry::new_rotation(degree!(f64::NAN, 0.0, 0.0)).is_err());
+        assert!(Isometry::new_rotation(degree!(f64::NEG_INFINITY, 0.0, 0.0)).is_err());
+        assert!(Isometry::new_rotation(degree!(f64::INFINITY, 0.0, 0.0)).is_err());
+
+        assert!(Isometry::new_rotation(degree!(0.0, f64::NAN, 0.0)).is_err());
+        assert!(Isometry::new_rotation(degree!(0.0, f64::NEG_INFINITY, 0.0)).is_err());
+        assert!(Isometry::new_rotation(degree!(0.0, f64::INFINITY, 0.0)).is_err());
+
+        assert!(Isometry::new_rotation(degree!(0.0, 0.0, f64::NAN)).is_err());
+        assert!(Isometry::new_rotation(degree!(0.0, 0.0, f64::NEG_INFINITY)).is_err());
+        assert!(Isometry::new_rotation(degree!(0.0, 0.0, f64::INFINITY)).is_err());
+    }
+    #[test]
+    fn get_transform() {
+        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        assert_eq!(
+            i.get_transform(),
+            Isometry3::<f64>::new(vector!(0.0, 0.0, 0.01), vector!(0.0, 0.0, 0.0))
+        );
+    }
+    #[test]
+    fn get_inv_transform() {
+        let i = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        assert_eq!(
+            i.get_inv_transform(),
+            Isometry3::<f64>::new(vector!(0.0, 0.0, -0.01), vector!(0.0, 0.0, 0.0))
+        );
     }
     #[test]
     fn translation_vec() {

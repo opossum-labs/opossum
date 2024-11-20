@@ -1,3 +1,8 @@
+//! various helper functions used to simplify unit tests.
+//!
+//! **Note**: This module is only compiled and used during testing. Hence, ther might be no
+//! further documentation show up.
+
 #[cfg(test)]
 pub mod test_helper {
     use log::Level;
