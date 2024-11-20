@@ -1,12 +1,11 @@
 //! Performing a (simple) energy flow analysis
-use log::info;
 
+use super::Analyzer;
 use crate::{
     error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode,
     reporting::analysis_report::AnalysisReport,
 };
-
-use super::Analyzer;
+use log::info;
 
 /// Analyzer for simulating a simple energy flow
 #[derive(Debug, Default)]
@@ -36,4 +35,52 @@ pub trait AnalysisEnergy: OpticNode {
     /// # Errors
     /// This function will return an error if the concrete implementation of the [`OpticNode`] fails.
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult>;
+}
+
+#[cfg(test)]
+mod test {
+    use num::Zero;
+    use uom::si::f64::Length;
+
+    use super::EnergyAnalyzer;
+    use crate::{
+        analyzers::Analyzer,
+        lightdata::{DataEnergy, LightData},
+        nodes::{EnergyMeter, NodeGroup, Source},
+        spectrum_helper::create_he_ne_spec,
+    };
+
+    #[test]
+    fn analyze_empty_scene() {
+        let mut scenery = NodeGroup::default();
+        let energy_analyzer = EnergyAnalyzer {};
+        energy_analyzer.analyze(&mut scenery).unwrap();
+    }
+    fn create_scene() -> NodeGroup {
+        let mut scenery = NodeGroup::default();
+        let data_energy = DataEnergy {
+            spectrum: create_he_ne_spec(1.0).unwrap(),
+        };
+        let light_data = LightData::Energy(data_energy);
+        let src = Source::new("source", &light_data);
+        let i_src = scenery.add_node(&src).unwrap();
+        let i_em = scenery.add_node(&EnergyMeter::default()).unwrap();
+        scenery
+            .connect_nodes(i_src, "output_1", i_em, "input_1", Length::zero())
+            .unwrap();
+        scenery
+    }
+    #[test]
+    fn analyze_full_scene() {
+        let mut scenery = create_scene();
+        let energy_analyzer = EnergyAnalyzer {};
+        energy_analyzer.analyze(&mut scenery).unwrap();
+    }
+    #[test]
+    fn report_without_analysis() {
+        let mut scenery = create_scene();
+        let energy_analyzer = EnergyAnalyzer {};
+        energy_analyzer.analyze(&mut scenery).unwrap();
+        energy_analyzer.report(&mut scenery).unwrap();
+    }
 }
