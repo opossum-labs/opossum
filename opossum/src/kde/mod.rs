@@ -1,7 +1,7 @@
 //! Kernel density estimator
 
 mod gaussian;
-use crate::{millimeter, nodes::fluence_detector::Fluence};
+use crate::{millimeter, nodes::fluence_detector::Fluence, utils::usize_to_f64};
 use gaussian::Gaussian2D;
 use nalgebra::{point, DMatrix, Point2};
 use num::Zero;
@@ -43,8 +43,7 @@ impl Kde {
                 sum += distance;
             }
         }
-        #[allow(clippy::cast_precision_loss)]
-        let nr_of_points = distances.len() as f64;
+        let nr_of_points = usize_to_f64(distances.len());
         let average_dist = sum / nr_of_points;
         let mut deviation_sum = Area::zero();
         for d in &distances {
@@ -67,12 +66,11 @@ impl Kde {
         }
     }
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
     pub fn bandwidth_estimate(&self) -> Length {
         let (distances, std_dev) = self.point_distances_std_dev();
         let iqr = Self::distances_iqr(&distances);
         // Silverman's rule of thumb
-        0.9 * Length::min(std_dev, iqr / 1.34) * (self.hit_map.len() as f64).powf(-0.2)
+        0.9 * Length::min(std_dev, iqr / 1.34) * (usize_to_f64(self.hit_map.len())).powf(-0.2)
     }
     #[must_use]
     pub fn kde_value(&self, point: Point2<Length>) -> Fluence {
@@ -87,20 +85,17 @@ impl Kde {
         ranges: &(Range<Length>, Range<Length>),
         dimensions: (usize, usize),
     ) -> DMatrix<Fluence> {
-        #[allow(clippy::cast_precision_loss)]
-        let dx = (ranges.0.end - ranges.0.start) / (dimensions.0 as f64);
-        #[allow(clippy::cast_precision_loss)]
-        let dy = (ranges.1.end - ranges.1.start) / (dimensions.1 as f64);
+        let dx = (ranges.0.end - ranges.0.start) / usize_to_f64(dimensions.0);
+        let dy = (ranges.1.end - ranges.1.start) / usize_to_f64(dimensions.1);
         let mut matrix = DMatrix::<Fluence>::zeros(dimensions.1, dimensions.0);
         matrix
             .par_column_iter_mut()
             .enumerate()
             .for_each(|(col_idx, mut col)| {
-                #[allow(clippy::cast_precision_loss)]
                 for point in col.iter_mut().enumerate() {
                     *point.1 = self.kde_value(point![
-                        ranges.0.start + (col_idx as f64) * dx,
-                        ranges.1.start + (point.0 as f64) * dy
+                        ranges.0.start + usize_to_f64(col_idx) * dx,
+                        ranges.1.start + usize_to_f64(point.0) * dy
                     ]);
                 }
             });
@@ -110,12 +105,8 @@ impl Kde {
     // pub fn kde_2d_2(&self,
     //     ranges: &(Range<Length>, Range<Length>),
     //     dimensions: (usize, usize),) -> DMatrix<Fluence>{
-
-    //     #[allow(clippy::cast_precision_loss)]
     //     let dx = (ranges.0.end - ranges.0.start) / (dimensions.0 as f64);
-    //     #[allow(clippy::cast_precision_loss)]
     //     let dy = (ranges.1.end - ranges.1.start) / (dimensions.1 as f64);
-
     //     let num_interp = 150;
     //     let mut spline_vec = Vec::<Key<f64, f64>>::with_capacity(num_interp);
     //     let bin_size = 10.*self.band_width.value/(num_interp-1).to_f64().unwrap();
@@ -126,10 +117,8 @@ impl Kde {
     //         let g = (-0.5*r_squared/(self.band_width.value*self.band_width.value)).exp()*norm_fac;
     //         spline_vec.push(Key::new(r_squared, g, Interpolation::Linear))
     //     }
-
     //     let spline = Spline::from_vec(spline_vec);
     //     let mut matrix = DMatrix::<Fluence>::zeros(dimensions.1, dimensions.0);
-
     //     matrix.as_mut_slice()
     //     .par_chunks_mut(dimensions.0)
     //     .enumerate()

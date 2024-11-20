@@ -102,7 +102,7 @@ impl OpticNode for FluenceDetector {
         };
         if let Ok(fluence_data_kde) = hit_map
             .get_merged_rays_hit_map()
-            .calc_fluence_map((100, 100), estimator)
+            .calc_fluence_map((50, 50), estimator)
         {
             props
                 .create(

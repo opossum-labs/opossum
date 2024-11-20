@@ -26,6 +26,7 @@ use crate::{
             calc_closed_poly_area, create_voronoi_cells, interpolate_3d_triangulated_scatter_data,
             linspace, VoronoiedData,
         },
+        usize_to_f64,
     },
     J_per_cm2,
 };
@@ -99,8 +100,7 @@ impl Rays {
         let points = strategy.generate();
         let nr_of_rays = points.len();
         let mut rays: Vec<Ray> = Vec::with_capacity(nr_of_rays);
-        #[allow(clippy::cast_precision_loss)]
-        let energy_per_ray = energy / nr_of_rays as f64;
+        let energy_per_ray = energy / usize_to_f64(nr_of_rays);
         for point in points {
             let ray = Ray::new_collimated(point, wave_length, energy_per_ray)?;
             rays.push(ray);
@@ -303,8 +303,7 @@ impl Rays {
             Hexapolar::new(millimeter!(size_after_unit_length), nr_of_rings)?.generate()
         };
         let nr_of_rays = points.len();
-        #[allow(clippy::cast_precision_loss)]
-        let energy_per_ray = energy / nr_of_rays as f64;
+        let energy_per_ray = energy / usize_to_f64(nr_of_rays);
         let mut rays: Vec<Ray> = Vec::new();
         for point in points {
             let direction = vector![
@@ -406,8 +405,7 @@ impl Rays {
     /// function returns `None` if [`Rays`] is empty.
     #[must_use]
     pub fn centroid(&self) -> Option<Point3<Length>> {
-        #[allow(clippy::cast_precision_loss)]
-        let len = self.nr_of_rays(true) as f64;
+        let len = usize_to_f64(self.nr_of_rays(true));
         if len == 0.0 {
             return None;
         }
@@ -426,7 +424,6 @@ impl Rays {
     /// function returns `None` if [`Rays`] is empty.
     #[must_use]
     pub fn energy_weighted_centroid(&self) -> Option<Point3<Length>> {
-        #[allow(clippy::cast_precision_loss)]
         let len = self.nr_of_rays(true);
         if len == 0 {
             return None;
@@ -487,8 +484,7 @@ impl Rays {
                     sum_dist_sq += distance(&ray_2d, &c_in_millimeter).powi(2);
                 }
             }
-            #[allow(clippy::cast_precision_loss)]
-            let nr_of_rays = self.nr_of_rays(true) as f64;
+            let nr_of_rays = usize_to_f64(self.nr_of_rays(true));
             sum_dist_sq /= nr_of_rays;
             millimeter!(sum_dist_sq.sqrt())
         })
@@ -496,8 +492,8 @@ impl Rays {
 
     /// Returns the rms beam radius [`Rays`].
     ///
-    /// This function calculates the rms (root mean square) size of a ray bundle from it centroid. So far, the rays / spots are not weighted by their
-    /// particular energy.
+    /// This function calculates the rms (root mean square) size of a ray bundle from it centroid. So far,
+    /// the rays / spots are not weighted by their particular energy.
     #[must_use]
     pub fn energy_weighted_beam_radius_rms(&self) -> Option<Length> {
         self.energy_weighted_centroid().map(|c| {

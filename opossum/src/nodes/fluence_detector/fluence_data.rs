@@ -7,7 +7,7 @@ use crate::{
     joule,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
-    utils::griddata::linspace,
+    utils::{griddata::linspace, usize_to_f64},
     J_per_cm2,
 };
 use nalgebra::{DMatrix, DVector};
@@ -109,10 +109,8 @@ impl FluenceData {
     /// Returns the total energy of this [`FluenceData`].
     #[must_use]
     pub fn total_energy(&self) -> Energy {
-        #[allow(clippy::cast_precision_loss)]
-        let dx = (self.x_range.end - self.x_range.start) / (self.len_x() as f64);
-        #[allow(clippy::cast_precision_loss)]
-        let dy = (self.y_range.end - self.y_range.start) / (self.len_y() as f64);
+        let dx = (self.x_range.end - self.x_range.start) / usize_to_f64(self.len_x());
+        let dy = (self.y_range.end - self.y_range.start) / usize_to_f64(self.len_y());
         let area = dx * dy;
         let mut energy = joule!(0.0);
         for fluence in &self.interp_distribution {
