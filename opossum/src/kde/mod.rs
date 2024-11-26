@@ -1,7 +1,12 @@
 //! Kernel density estimator
 
 mod gaussian;
-use crate::{millimeter, nodes::fluence_detector::Fluence, utils::usize_to_f64};
+use crate::{
+    error::OpmResult,
+    millimeter,
+    nodes::fluence_detector::Fluence,
+    utils::{math_utils::distance_2d_point, usize_to_f64},
+};
 use gaussian::Gaussian2D;
 use nalgebra::{point, DMatrix, Point2};
 use num::Zero;
@@ -25,30 +30,33 @@ impl Kde {
     pub fn set_hit_map(&mut self, hit_map: Vec<(Point2<Length>, Energy)>) {
         self.hit_map = hit_map;
     }
-    pub fn set_band_width(&mut self, band_width: Length) {
+    pub fn set_band_width(&mut self, band_width: Length) -> OpmResult<()> {
+        if !band_width.is_normal() {
+            return Err(crate::error::OpossumError::Other(
+                "bandwidth must be != 0.0 and finite".into(),
+            ));
+        }
         self.band_width = band_width;
-    }
-    fn distance(point1: &Point2<Length>, point2: &Point2<Length>) -> Length {
-        ((point1.x - point2.x) * (point1.x - point2.x)
-            + (point1.y - point2.y) * (point1.y - point2.y))
-            .sqrt()
+        Ok(())
     }
     fn point_distances_std_dev(&self) -> (Vec<Length>, Length) {
         let mut sum = Length::zero();
         let mut distances = Vec::default();
         for point1 in self.hit_map.iter().enumerate() {
             for point2 in &self.hit_map[point1.0 + 1..] {
-                let distance = Self::distance(&point1.1 .0, &point2.0);
+                let distance = distance_2d_point(&point1.1 .0, &point2.0);
                 distances.push(distance);
                 sum += distance;
             }
         }
         let nr_of_points = usize_to_f64(distances.len());
         let average_dist = sum / nr_of_points;
+        dbg!(average_dist);
         let mut deviation_sum = Area::zero();
         for d in &distances {
             deviation_sum += (*d - average_dist) * (*d - average_dist);
         }
+        dbg!(deviation_sum);
         (distances, (deviation_sum / nr_of_points).sqrt())
     }
     fn distances_iqr(values: &[Length]) -> Length {
@@ -101,40 +109,63 @@ impl Kde {
             });
         matrix
     }
+}
 
-    // pub fn kde_2d_2(&self,
-    //     ranges: &(Range<Length>, Range<Length>),
-    //     dimensions: (usize, usize),) -> DMatrix<Fluence>{
-    //     let dx = (ranges.0.end - ranges.0.start) / (dimensions.0 as f64);
-    //     let dy = (ranges.1.end - ranges.1.start) / (dimensions.1 as f64);
-    //     let num_interp = 150;
-    //     let mut spline_vec = Vec::<Key<f64, f64>>::with_capacity(num_interp);
-    //     let bin_size = 10.*self.band_width.value/(num_interp-1).to_f64().unwrap();
-    //     let norm_fac = 1./ (2.*std::f64::consts::PI*self.band_width.value * self.band_width.value);
-    //     for i in 0..num_interp{
-    //         let r = bin_size*i.to_f64().unwrap();
-    //         let r_squared = r*r;
-    //         let g = (-0.5*r_squared/(self.band_width.value*self.band_width.value)).exp()*norm_fac;
-    //         spline_vec.push(Key::new(r_squared, g, Interpolation::Linear))
-    //     }
-    //     let spline = Spline::from_vec(spline_vec);
-    //     let mut matrix = DMatrix::<Fluence>::zeros(dimensions.1, dimensions.0);
-    //     matrix.as_mut_slice()
-    //     .par_chunks_mut(dimensions.0)
-    //     .enumerate()
-    //     .for_each(|(y_i, tile)| {
-    //         let y = ranges.1.start + y_i.to_f64().unwrap()*dy;
-    //         for x_i in 0..dimensions.0{
-    //             let x = ranges.0.start + x_i.to_f64().unwrap()*dx;
-    //             for (hitp, e) in &self.hit_map {
-    //                 let dist_squared = (x.value-hitp.x.value)*(x.value-hitp.x.value) + (y.value-hitp.y.value)*(y.value-hitp.y.value);
-    //                 if let Some(val) = spline.sample(dist_squared){
-    //                     tile[x_i] += ArealNumberDensity::new::<per_square_meter>(val)**e;
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     );
-    //     matrix
-    // }
+#[cfg(test)]
+mod test {
+    use core::f64;
+
+    use super::Kde;
+    use crate::{joule, millimeter};
+    #[test]
+    fn default() {
+        let kde = Kde::default();
+        assert_eq!(kde.hit_map.len(), 0);
+        assert_eq!(kde.band_width, millimeter!(1.0));
+    }
+    #[test]
+    fn set_hit_map() {
+        let mut kde = Kde::default();
+        let hit_map = vec![(millimeter!(1.0, 2.0), joule!(3.0))];
+        kde.set_hit_map(hit_map);
+        assert_eq!(kde.hit_map.len(), 1);
+        assert_eq!(kde.hit_map[0].0.x, millimeter!(1.0));
+        assert_eq!(kde.hit_map[0].0.y, millimeter!(2.0));
+        assert_eq!(kde.hit_map[0].1, joule!(3.0));
+    }
+    #[test]
+    fn set_bandwidth() {
+        let mut kde = Kde::default();
+        assert!(kde.set_band_width(millimeter!(0.0)).is_err());
+        assert!(kde.set_band_width(millimeter!(f64::NAN)).is_err());
+        assert!(kde.set_band_width(millimeter!(f64::INFINITY)).is_err());
+        assert!(kde.set_band_width(millimeter!(f64::NEG_INFINITY)).is_err());
+        kde.set_band_width(millimeter!(2.0)).unwrap();
+        assert_eq!(kde.band_width, millimeter!(2.0));
+    }
+    #[test]
+    fn point_distances_std_dev() {
+        let mut kde = Kde::default();
+        assert_eq!(kde.point_distances_std_dev().0.len(), 0);
+        assert!(kde.point_distances_std_dev().1.value.is_nan());
+        let hit_map = vec![(millimeter!(0.0, 0.0), joule!(0.0))];
+        kde.set_hit_map(hit_map);
+        assert_eq!(kde.point_distances_std_dev().0.len(), 0);
+        assert!(kde.point_distances_std_dev().1.value.is_nan());
+        let hit_map = vec![
+            (millimeter!(0.0, 0.0), joule!(0.0)),
+            (millimeter!(1.0, 0.0), joule!(0.0)),
+        ];
+        kde.set_hit_map(hit_map);
+        assert_eq!(kde.point_distances_std_dev().0, vec![millimeter!(1.0)]);
+        assert_eq!(kde.point_distances_std_dev().1, millimeter!(0.0));
+        let hit_map = vec![
+            (millimeter!(0.0, 0.0), joule!(0.0)),
+            (millimeter!(1.0, 0.0), joule!(0.0)),
+            (millimeter!(-1.0,0.0), joule!(0.0))
+        ];
+        kde.set_hit_map(hit_map);
+        assert_eq!(kde.point_distances_std_dev().0, vec![millimeter!(1.0), millimeter!(1.0), millimeter!(2.0)]);
+        // assert_eq!(kde.point_distances_std_dev().1, millimeter!(1.0));
+    }
 }
