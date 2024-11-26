@@ -51,12 +51,10 @@ impl Kde {
         }
         let nr_of_points = usize_to_f64(distances.len());
         let average_dist = sum / nr_of_points;
-        dbg!(average_dist);
         let mut deviation_sum = Area::zero();
         for d in &distances {
             deviation_sum += (*d - average_dist) * (*d - average_dist);
         }
-        dbg!(deviation_sum);
         (distances, (deviation_sum / nr_of_points).sqrt())
     }
     fn distances_iqr(values: &[Length]) -> Length {
@@ -116,7 +114,7 @@ mod test {
     use core::f64;
 
     use super::Kde;
-    use crate::{joule, millimeter};
+    use crate::{joule, meter, millimeter};
     #[test]
     fn default() {
         let kde = Kde::default();
@@ -160,12 +158,12 @@ mod test {
         assert_eq!(kde.point_distances_std_dev().0, vec![millimeter!(1.0)]);
         assert_eq!(kde.point_distances_std_dev().1, millimeter!(0.0));
         let hit_map = vec![
-            (millimeter!(0.0, 0.0), joule!(0.0)),
-            (millimeter!(1.0, 0.0), joule!(0.0)),
-            (millimeter!(-1.0,0.0), joule!(0.0))
+            (meter!(0.0, 0.0), joule!(0.0)),
+            (meter!(1.0, 0.0), joule!(0.0)),
+            (meter!(-1.0,0.0), joule!(0.0))
         ];
         kde.set_hit_map(hit_map);
-        assert_eq!(kde.point_distances_std_dev().0, vec![millimeter!(1.0), millimeter!(1.0), millimeter!(2.0)]);
-        // assert_eq!(kde.point_distances_std_dev().1, millimeter!(1.0));
+        assert_eq!(kde.point_distances_std_dev().0, vec![meter!(1.0), meter!(1.0), meter!(2.0)]);
+        assert_eq!(kde.point_distances_std_dev().1, meter!(f64::sqrt(2.0/9.0)));
     }
 }
