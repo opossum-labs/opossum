@@ -5,7 +5,7 @@ use crate::{
     error::OpmResult,
     millimeter,
     nodes::fluence_detector::Fluence,
-    utils::{math_utils::distance_2d_point, usize_to_f64},
+    utils::{f64_to_usize, math_utils::distance_2d_point, usize_to_f64},
 };
 use gaussian::Gaussian2D;
 use nalgebra::{point, DMatrix, Point2};
@@ -59,16 +59,20 @@ impl Kde {
     }
     fn distances_iqr(values: &[Length]) -> Length {
         if values.is_empty() {
-            millimeter!(0.0)
+            millimeter!(f64::NAN)
+        } else if values.len() == 1 {
+            values[0]
         } else {
             let mut sorted_values = values.to_owned();
             sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            let mid = sorted_values.len() / 2;
-            let lower_mid = sorted_values[..mid].len() / 2;
-            let upper_mid = sorted_values[mid..].len() / 2;
-            let lower_median = sorted_values[..mid][lower_mid];
-            let upper_median = sorted_values[mid..][upper_mid];
-            upper_median - lower_median
+            let quart_index = 0.75 * usize_to_f64(sorted_values.len());
+            // check if quart_index effectively an integer
+            if quart_index.fract().is_zero() {
+                0.5 * (sorted_values[f64_to_usize(quart_index) - 1]
+                    + sorted_values[f64_to_usize(quart_index)])
+            } else {
+                sorted_values[f64_to_usize(f64::floor(quart_index))]
+            }
         }
     }
     #[must_use]
@@ -111,10 +115,9 @@ impl Kde {
 
 #[cfg(test)]
 mod test {
-    use core::f64;
-
     use super::Kde;
     use crate::{joule, meter, millimeter};
+    use core::f64;
     #[test]
     fn default() {
         let kde = Kde::default();
@@ -160,10 +163,47 @@ mod test {
         let hit_map = vec![
             (meter!(0.0, 0.0), joule!(0.0)),
             (meter!(1.0, 0.0), joule!(0.0)),
-            (meter!(-1.0,0.0), joule!(0.0))
+            (meter!(-1.0, 0.0), joule!(0.0)),
         ];
         kde.set_hit_map(hit_map);
-        assert_eq!(kde.point_distances_std_dev().0, vec![meter!(1.0), meter!(1.0), meter!(2.0)]);
-        assert_eq!(kde.point_distances_std_dev().1, meter!(f64::sqrt(2.0/9.0)));
+        assert_eq!(
+            kde.point_distances_std_dev().0,
+            vec![meter!(1.0), meter!(1.0), meter!(2.0)]
+        );
+        assert_eq!(
+            kde.point_distances_std_dev().1,
+            meter!(f64::sqrt(2.0 / 9.0))
+        );
+    }
+    #[test]
+    fn distances_iqr() {
+        assert!(Kde::distances_iqr(&vec![]).is_nan());
+        assert_eq!(Kde::distances_iqr(&vec![meter!(1.0)]), meter!(1.0));
+        assert_eq!(
+            Kde::distances_iqr(&vec![meter!(0.0), meter!(1.0)]),
+            meter!(1.0)
+        );
+        assert_eq!(
+            Kde::distances_iqr(&vec![meter!(0.0), meter!(1.0), meter!(2.0)]),
+            meter!(2.0)
+        );
+        assert_eq!(
+            Kde::distances_iqr(&vec![meter!(0.0), meter!(1.0), meter!(2.0), meter!(3.0)]),
+            meter!(2.5)
+        );
+        // Example from Wikipedia
+        let lengths = vec![
+            meter!(25.0),
+            meter!(28.0),
+            meter!(4.0),
+            meter!(28.0),
+            meter!(19.0),
+            meter!(3.0),
+            meter!(9.0),
+            meter!(17.0),
+            meter!(29.0),
+            meter!(29.0),
+        ];
+        assert_eq!(Kde::distances_iqr(&lengths), meter!(28.0));
     }
 }
