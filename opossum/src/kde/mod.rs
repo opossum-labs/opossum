@@ -30,6 +30,11 @@ impl Kde {
     pub fn set_hit_map(&mut self, hit_map: Vec<(Point2<Length>, Energy)>) {
         self.hit_map = hit_map;
     }
+    /// Sets the band width of this [`Kde`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given bandwidth is zero or not finite.
     pub fn set_band_width(&mut self, band_width: Length) -> OpmResult<()> {
         if !band_width.is_normal() {
             return Err(crate::error::OpossumError::Other(
@@ -60,8 +65,6 @@ impl Kde {
     fn distances_iqr(values: &[Length]) -> Length {
         if values.is_empty() {
             millimeter!(f64::NAN)
-        } else if values.len() == 1 {
-            values[0]
         } else {
             let mut sorted_values = values.to_owned();
             sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -77,10 +80,28 @@ impl Kde {
     }
     #[must_use]
     pub fn bandwidth_estimate(&self) -> Length {
-        let (distances, std_dev) = self.point_distances_std_dev();
-        let iqr = Self::distances_iqr(&distances);
-        // Silverman's rule of thumb
-        0.9 * Length::min(std_dev, iqr / 1.34) * (usize_to_f64(self.hit_map.len())).powf(-0.2)
+        match self.hit_map.len() {
+            0 | 1 => {
+                millimeter!(f64::NAN)
+            }
+            2 => {
+                let p1 = self.hit_map[0].0;
+                let p2 = self.hit_map[1].0;
+                let bw = 0.5 * distance_2d_point(&p1, &p2);
+                if bw.is_zero() {
+                    millimeter!(f64::NAN)
+                } else {
+                    bw
+                }
+            }
+            _ => {
+                let (distances, std_dev) = self.point_distances_std_dev();
+                let iqr = Self::distances_iqr(&distances);
+                // Silverman's rule of thumb
+                0.9 * Length::min(std_dev, iqr / 1.34)
+                    * (usize_to_f64(self.hit_map.len())).powf(-0.2)
+            }
+        }
     }
     #[must_use]
     pub fn kde_value(&self, point: Point2<Length>) -> Fluence {
@@ -115,6 +136,8 @@ impl Kde {
 
 #[cfg(test)]
 mod test {
+    use approx::assert_abs_diff_eq;
+
     use super::Kde;
     use crate::{joule, meter, millimeter};
     use core::f64;
@@ -205,5 +228,26 @@ mod test {
             meter!(29.0),
         ];
         assert_eq!(Kde::distances_iqr(&lengths), meter!(28.0));
+    }
+    #[test]
+    fn bandwidth_estimate() {
+        let mut kde = Kde::default();
+        assert!(kde.bandwidth_estimate().is_nan());
+        let hit_map = vec![(millimeter!(0.0, 0.0), joule!(0.0))];
+        kde.set_hit_map(hit_map);
+        assert!(kde.bandwidth_estimate().is_nan());
+        let hit_map = vec![
+            (millimeter!(0.0, 0.0), joule!(0.0)),
+            (millimeter!(1.0, 0.0), joule!(0.0)),
+        ];
+        kde.set_hit_map(hit_map);
+        assert_eq!(kde.bandwidth_estimate(), millimeter!(0.5));
+        let hit_map = vec![
+            (millimeter!(0.0, 0.0), joule!(0.0)),
+            (millimeter!(1.0, 0.0), joule!(0.0)),
+            (millimeter!(-1.0, 0.0), joule!(0.0)),
+        ];
+        kde.set_hit_map(hit_map);
+        assert_abs_diff_eq!(kde.bandwidth_estimate().value, 0.00034057440111656337);
     }
 }

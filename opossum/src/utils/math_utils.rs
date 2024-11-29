@@ -36,8 +36,7 @@ pub const fn f64_to_usize(value: f64) -> usize {
 }
 #[must_use]
 pub fn distance_2d_point(point1: &Point2<Length>, point2: &Point2<Length>) -> Length {
-    ((point1.x - point2.x) * (point1.x - point2.x)
-        + (point1.y - point2.y) * (point1.y - point2.y))
+    ((point1.x - point2.x) * (point1.x - point2.x) + (point1.y - point2.y) * (point1.y - point2.y))
         .sqrt()
 }
 
@@ -49,10 +48,22 @@ mod test {
 
     #[test]
     fn distance() {
-        let p1=millimeter!(0.0,0.0);
-        assert_eq!(distance_2d_point(&p1, &millimeter!(0.0,0.0)), millimeter!(0.0));
-        assert_eq!(distance_2d_point(&p1, &millimeter!(1.0,0.0)), millimeter!(1.0));
-        assert_eq!(distance_2d_point(&p1, &millimeter!(-1.0,0.0)), millimeter!(1.0));
-        assert_abs_diff_eq!(distance_2d_point(&p1, &millimeter!(1.0,1.0)).value, millimeter!(f64::sqrt(2.0)).value);
+        let p1 = millimeter!(0.0, 0.0);
+        assert_eq!(
+            distance_2d_point(&p1, &millimeter!(0.0, 0.0)),
+            millimeter!(0.0)
+        );
+        assert_eq!(
+            distance_2d_point(&p1, &millimeter!(1.0, 0.0)),
+            millimeter!(1.0)
+        );
+        assert_eq!(
+            distance_2d_point(&p1, &millimeter!(-1.0, 0.0)),
+            millimeter!(1.0)
+        );
+        assert_abs_diff_eq!(
+            distance_2d_point(&p1, &millimeter!(1.0, 1.0)).value,
+            millimeter!(f64::sqrt(2.0)).value
+        );
     }
 }
