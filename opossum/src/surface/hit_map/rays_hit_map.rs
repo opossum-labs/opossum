@@ -28,7 +28,7 @@ use crate::{
     J_per_cm2,
 };
 
-use super::FluenceEstimator;
+use super::fluence_estimator::FluenceEstimator;
 
 /// A hit point as part of a [`RaysHitMap`].
 ///

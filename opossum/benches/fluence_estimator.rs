@@ -3,8 +3,8 @@ use opossum::{
     joule, millimeter,
     position_distributions::{Hexapolar, PositionDistribution, SobolDist},
     surface::hit_map::{
+        fluence_estimator::FluenceEstimator,
         rays_hit_map::{HitPoint, RaysHitMap},
-        FluenceEstimator,
     },
 };
 use uom::si::f64::Ratio;

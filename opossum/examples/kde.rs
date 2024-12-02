@@ -4,8 +4,8 @@ use opossum::{
     plottable::Plottable,
     position_distributions::{Hexapolar, PositionDistribution},
     surface::hit_map::{
+        fluence_estimator::FluenceEstimator,
         rays_hit_map::{HitPoint, RaysHitMap},
-        FluenceEstimator,
     },
 };
 use std::path::Path;
