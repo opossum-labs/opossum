@@ -30,12 +30,11 @@ use std::fmt::Debug;
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - `in1` (input discarded, used to make the node invertable)
+///     - `input_1` (input discarded, used to make the node invertable)
 ///   - Outputs
-///     - `out1`
+///     - `output_1`
 ///
 /// ## Properties
-///   - `name`
 ///   - `light data`
 ///
 /// **Note**: If a [`Source`] is configured as `inverted` the initial output port becomes an input port and further data is discarded.
@@ -111,6 +110,11 @@ impl Source {
     /// # Errors
     /// This function only propagates the errors of the contained functions
     pub fn set_alignment_wavelength(&mut self, wvl: Length) -> OpmResult<()> {
+        if wvl.is_sign_negative() || !wvl.is_normal() {
+            return Err(OpossumError::Other(
+                "wavelength must be positive and finite".into(),
+            ));
+        }
         self.node_attr
             .set_property("alignment wavelength", Proptype::LengthOption(Some(wvl)))
     }
@@ -315,8 +319,12 @@ impl AnalysisGhostFocus for Source {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{lightdata::DataEnergy, optic_ports::PortType, spectrum_helper::create_he_ne_spec};
+    use crate::{
+        lightdata::DataEnergy, nanometer, optic_ports::PortType, position_distributions::Hexapolar,
+        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
+    };
     use assert_matches::assert_matches;
+    use core::f64;
 
     #[test]
     fn default() {
@@ -338,7 +346,42 @@ mod test {
         assert_eq!(source.name(), "test");
     }
     #[test]
-    fn not_invertable() {
+    fn set_alignment_wavelength() {
+        let mut node = Source::default();
+        assert!(node.set_alignment_wavelength(nanometer!(0.0)).is_err());
+        assert!(node.set_alignment_wavelength(nanometer!(f64::NAN)).is_err());
+        assert!(node
+            .set_alignment_wavelength(nanometer!(f64::INFINITY))
+            .is_err());
+        assert!(node
+            .set_alignment_wavelength(nanometer!(f64::NEG_INFINITY))
+            .is_err());
+        assert!(node.set_alignment_wavelength(nanometer!(-0.1)).is_err());
+        assert!(node.set_alignment_wavelength(nanometer!(600.0)).is_ok());
+        let Proptype::LengthOption(wavelength) =
+            node.node_attr.get_property("alignment wavelength").unwrap()
+        else {
+            panic!("wrong proptype")
+        };
+        assert_eq!(wavelength, &Some(nanometer!(600.0)));
+    }
+    #[test]
+    fn set_property() {
+        let mut node = Source::default();
+        node.set_property(
+            "alignment wavelength",
+            Proptype::LengthOption(Some(nanometer!(600.0))),
+        )
+        .unwrap();
+        let Proptype::LengthOption(wavelength) =
+            node.node_attr.get_property("alignment wavelength").unwrap()
+        else {
+            panic!("wrong proptype")
+        };
+        assert_eq!(wavelength, &Some(nanometer!(600.0)));
+    }
+    #[test]
+    fn is_invertable() {
         let mut node = Source::default();
         assert!(node.set_inverted(false).is_ok());
         assert!(node.set_inverted(true).is_ok());
@@ -361,13 +404,13 @@ mod test {
         }
     }
     #[test]
-    fn analyze_no_light_defined() {
+    fn analyze_energy_no_light_defined() {
         let mut node = Source::default();
         let output = AnalysisEnergy::analyze(&mut node, LightResult::default());
         assert!(output.is_err());
     }
     #[test]
-    fn analyze_ok() {
+    fn analyze_energy_ok() {
         let light = LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         });
@@ -379,6 +422,99 @@ mod test {
         assert!(output.is_some());
         let output = output.clone().unwrap();
         assert_eq!(*output, light);
+    }
+    #[test]
+    fn analyze_raytrace_no_light_defined() {
+        let mut node = Source::default();
+        node.set_isometry(Isometry::identity()).unwrap();
+        let output = AnalysisRayTrace::analyze(
+            &mut node,
+            LightResult::default(),
+            &RayTraceConfig::default(),
+        );
+        assert_eq!(
+            output.unwrap_err(),
+            OpossumError::Analysis("source has empty light data defined".into())
+        );
+    }
+    #[test]
+    fn analyze_raytrace_ok() {
+        let mut node = Source::default();
+        node.set_isometry(Isometry::identity()).unwrap();
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
+        )
+        .unwrap();
+        node.set_light_data(&LightData::Geometric(rays)).unwrap();
+        let output = AnalysisRayTrace::analyze(
+            &mut node,
+            LightResult::default(),
+            &RayTraceConfig::default(),
+        );
+        assert!(output.is_ok());
+    }
+    #[test]
+    fn calc_node_position_ok_alignement_wavelength_set() {
+        let mut node = Source::default();
+        node.set_isometry(Isometry::identity()).unwrap();
+        node.set_alignment_wavelength(nanometer!(630.0)).unwrap();
+        node.set_light_data(&LightData::Geometric(Rays::default()))
+            .unwrap();
+        let output = AnalysisRayTrace::calc_node_position(
+            &mut node,
+            LightResult::default(),
+            &RayTraceConfig::default(),
+        )
+        .unwrap();
+        let light_data = output.get("output_1").unwrap();
+        if let LightData::Geometric(rays) = light_data {
+            assert_eq!(rays.nr_of_rays(true), 1);
+            let ray = rays.iter().next().unwrap();
+            assert_eq!(ray.wavelength(), nanometer!(630.0));
+        } else {
+            panic!("no geometric light data found")
+        }
+    }
+    #[test]
+    fn analyze_ghost_focus_no_light_defined() {
+        let mut node = Source::default();
+        node.set_isometry(Isometry::identity()).unwrap();
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            LightRays::default(),
+            &GhostFocusConfig::default(),
+            &mut vec![],
+            0,
+        );
+        assert_eq!(
+            output.unwrap_err(),
+            OpossumError::Analysis("source has empty light data defined".into())
+        );
+    }
+    #[test]
+    fn analyze_ghost_focus_ok() {
+        let mut node = Source::default();
+        node.set_isometry(Isometry::identity()).unwrap();
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
+        )
+        .unwrap();
+        node.set_light_data(&LightData::Geometric(rays.clone()))
+            .unwrap();
+        let mut light_rays = LightRays::new();
+        light_rays.insert("input_1".into(), vec![rays]);
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            light_rays,
+            &GhostFocusConfig::default(),
+            &mut vec![],
+            0,
+        );
+        assert!(output.is_ok());
     }
     #[test]
     fn debug() {
