@@ -143,4 +143,31 @@ mod test {
     fn create_node_ref_error() {
         assert!(create_node_ref("test").is_err());
     }
+    #[test]
+    fn create_node_ref_ok() {
+        let node_types = vec![
+            "dummy",
+            "beam splitter",
+            "energy meter",
+            "group",
+            "ideal filter",
+            "reflective grating",
+            "reference",
+            "lens",
+            "cylindric lens",
+            "source",
+            "spectrometer",
+            "spot diagram",
+            "wavefront monitor",
+            "paraxial surface",
+            "ray propagation",
+            "fluence detector",
+            "wedge",
+            "mirror",
+            "parabolic mirror"
+        ];
+        for node_type in node_types {
+            assert!(create_node_ref(node_type).is_ok());
+        }
+    }
 }
