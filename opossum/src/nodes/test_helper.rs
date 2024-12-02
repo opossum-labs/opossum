@@ -12,7 +12,7 @@ pub mod test_helper {
         position_distributions::Hexapolar,
         rays::Rays,
         spectrum_helper::create_he_ne_spec,
-        utils::{geom_transformation::Isometry, test_helper::test_helper::check_warnings},
+        utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     pub fn test_inverted<T: Default + OpticNode>() {
         let mut node = T::default();
@@ -89,7 +89,7 @@ pub mod test_helper {
         let msg=format!("Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.", 
             node.node_attr().name(),
             node.node_attr().node_type());
-        check_warnings(vec![&msg]);
+        check_logs(log::Level::Warn, vec![&msg]);
     }
     pub fn test_analyze_geometric_no_isometry<T: Default + AnalysisRayTrace>(
         input_port_name: &str,

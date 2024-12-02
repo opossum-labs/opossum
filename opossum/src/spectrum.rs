@@ -606,7 +606,7 @@ mod test {
         spectrum_helper::{
             create_he_ne_spec, create_nd_glass_spec, create_nir_spec, create_visible_spec,
         },
-        utils::test_helper::test_helper::check_warnings,
+        utils::test_helper::test_helper::check_logs,
     };
     use approx::{assert_abs_diff_eq, AbsDiffEq};
     use testing_logger;
@@ -733,13 +733,15 @@ mod test {
         testing_logger::setup();
         let mut s = prep();
         assert!(s.add_single_peak(micrometer!(0.5), 1.0).is_ok());
-        check_warnings(vec![
-            "peak wavelength is not in spectrum range. Spectrum unmodified.",
-        ]);
+        check_logs(
+            log::Level::Warn,
+            vec!["peak wavelength is not in spectrum range. Spectrum unmodified."],
+        );
         assert!(s.add_single_peak(micrometer!(4.0), 1.0).is_ok());
-        check_warnings(vec![
-            "peak wavelength is not in spectrum range. Spectrum unmodified.",
-        ]);
+        check_logs(
+            log::Level::Warn,
+            vec!["peak wavelength is not in spectrum range. Spectrum unmodified."],
+        );
         assert!(s.add_single_peak(micrometer!(1.5), -1.0).is_err());
     }
     #[test]

@@ -1299,7 +1299,7 @@ mod test {
         ray::SplittingConfig,
         refractive_index::{refr_index_vaccuum, RefrIndexConst},
         surface::optic_surface::OpticSurface,
-        utils::test_helper::test_helper::check_warnings,
+        utils::test_helper::test_helper::check_logs,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use itertools::izip;
@@ -1675,9 +1675,10 @@ mod test {
             RefrIndexConst::new(1.5).unwrap(),
         ))
         .unwrap();
-        check_warnings(vec![
-            "ray bundle contains no valid rays for setting the refractive index",
-        ]);
+        check_logs(
+            log::Level::Warn,
+            vec!["ray bundle contains no valid rays for setting the refractive index"],
+        );
         let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
         rays.add_ray(ray);
         let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
@@ -1822,7 +1823,10 @@ mod test {
                 true,
             )
             .unwrap();
-        check_warnings(vec!["ray bundle contains no valid rays - not propagating"]);
+        check_logs(
+            log::Level::Warn,
+            vec!["ray bundle contains no valid rays - not propagating"],
+        );
         assert_eq!(reflected.nr_of_rays(false), 0);
     }
     #[test]
@@ -1867,7 +1871,10 @@ mod test {
                 true,
             )
             .unwrap();
-        check_warnings(vec!["rays totally reflected or missed a surface"]);
+        check_logs(
+            log::Level::Warn,
+            vec!["rays totally reflected or missed a surface"],
+        );
         assert_eq!(reflected.nr_of_rays(false), 0);
     }
     #[test]
@@ -1915,9 +1922,10 @@ mod test {
             .invalidate_by_threshold_energy(joule!(f64::INFINITY))
             .is_err());
         assert!(rays.invalidate_by_threshold_energy(joule!(-0.1)).is_ok());
-        check_warnings(vec![
-            "negative threshold energy given. Ray bundle unmodified.",
-        ]);
+        check_logs(
+            log::Level::Warn,
+            vec!["negative threshold energy given. Ray bundle unmodified."],
+        );
         assert!(rays.invalidate_by_threshold_energy(joule!(0.0)).is_ok());
         let ray =
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0)).unwrap();
@@ -2324,9 +2332,10 @@ mod test {
         );
         testing_logger::setup();
         assert!(rays.define_up_direction().is_ok());
-        check_warnings(vec![
-            "Ray bundle not used for alignment, use first ray for up-direction calculation",
-        ]);
+        check_logs(
+            log::Level::Warn,
+            vec!["Ray bundle not used for alignment, use first ray for up-direction calculation"],
+        );
     }
     #[test]
     fn calc_new_up_direction_test() {
@@ -2353,8 +2362,9 @@ mod test {
         testing_logger::setup();
         //error because underlying function return error
         assert!(rays.calc_new_up_direction(&mut Vector3::y()).is_err());
-        check_warnings(vec![
-            "Ray bundle not used for alignment, use first ray for up-direction calculation",
-        ]);
+        check_logs(
+            log::Level::Warn,
+            vec!["Ray bundle not used for alignment, use first ray for up-direction calculation"],
+        );
     }
 }

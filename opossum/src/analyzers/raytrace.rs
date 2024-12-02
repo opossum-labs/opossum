@@ -362,17 +362,17 @@ mod test {
     use crate::{
         joule, millimeter,
         nodes::{round_collimated_ray_source, ParaxialSurface},
+        utils::test_helper::test_helper::check_logs,
     };
     #[test]
-    fn ray_tracing_config_default() {
+    fn config_default() {
         let rt_conf = RayTraceConfig::default();
-        // assert!(matches!(rt_conf.mode(), RayTracingMode::Sequential));
         assert_eq!(rt_conf.max_number_of_bounces(), 1000);
         assert_eq!(rt_conf.max_number_of_refractions(), 1000);
         assert_eq!(rt_conf.min_energy_per_ray(), picojoule!(1.0));
     }
     #[test]
-    fn ray_tracing_config_set_min_energy() {
+    fn config_set_min_energy() {
         let mut rt_conf = RayTraceConfig::default();
         assert!(rt_conf.set_min_energy_per_ray(picojoule!(-0.1)).is_err());
         assert!(rt_conf
@@ -386,7 +386,7 @@ mod test {
         assert_eq!(rt_conf.min_energy_per_ray, picojoule!(20.0));
     }
     #[test]
-    fn ray_tracing_config_setters() {
+    fn config_setters() {
         let mut rt_conf = RayTraceConfig::default();
         rt_conf.set_max_number_of_bounces(123);
         rt_conf.set_max_number_of_refractions(456);
@@ -394,14 +394,52 @@ mod test {
         assert_eq!(rt_conf.max_number_of_refractions, 456);
     }
     #[test]
-    fn ray_tracing_config_debug() {
+    fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
             "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000 }"
         );
     }
     #[test]
-    fn ray_tracing_integration_test() {
+    fn new() {
+        let mut config = RayTraceConfig::default();
+        config.set_max_number_of_bounces(123);
+        let analyzer = RayTracingAnalyzer::new(config);
+        assert_eq!(analyzer.config.max_number_of_bounces(), 123);
+    }
+    #[test]
+    fn analyze_info() {
+        let mut scenery = NodeGroup::new("test");
+        let analyzer = RayTracingAnalyzer::default();
+        testing_logger::setup();
+        analyzer.analyze(&mut scenery).unwrap();
+        check_logs(
+            log::Level::Info,
+            vec![
+                "Calculate node positions of scenery 'test'.",
+                "Performing ray tracing analysis of scenery 'test'.",
+            ],
+        );
+        let mut scenery = NodeGroup::new("");
+        let analyzer = RayTracingAnalyzer::default();
+        testing_logger::setup();
+        analyzer.analyze(&mut scenery).unwrap();
+        check_logs(
+            log::Level::Info,
+            vec![
+                "Calculate node positions of scenery.",
+                "Performing ray tracing analysis of scenery.",
+            ],
+        );
+    }
+    #[test]
+    fn report() {
+        let analyzer = RayTracingAnalyzer::default();
+        let scenery = NodeGroup::new("");
+        analyzer.report(&scenery).unwrap();
+    }
+    #[test]
+    fn integration_test() {
         // simulate simple system for integration test
         let mut group = NodeGroup::default();
         let i_src = group

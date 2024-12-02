@@ -938,7 +938,7 @@ mod test {
         nodes::{BeamSplitter, Dummy, Source},
         ray::SplittingConfig,
         spectrum_helper::create_he_ne_spec,
-        utils::{geom_transformation::Isometry, test_helper::test_helper::check_warnings},
+        utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     use approx::assert_abs_diff_eq;
     use num::Zero;
@@ -1280,9 +1280,10 @@ mod test {
         let input = LightResult::default();
         testing_logger::setup();
         graph.analyze_energy(&input).unwrap();
-        check_warnings(vec![
-            "group contains unconnected sub-trees. Analysis might not be complete.",
-        ]);
+        check_logs(
+            log::Level::Warn,
+            vec!["group contains unconnected sub-trees. Analysis might not be complete."],
+        );
     }
     #[test]
     fn analyze_stale_node() {
@@ -1298,10 +1299,13 @@ mod test {
         input.insert("input_1".into(), LightData::Fourier);
         testing_logger::setup();
         assert!(graph.analyze_energy(&input).is_ok());
-        check_warnings(vec![
+        check_logs(
+            log::Level::Warn,
+            vec![
             "group contains unconnected sub-trees. Analysis might not be complete.",
             "graph contains stale (completely unconnected) node 'stale node' (dummy). Skipping.",
-        ]);
+        ],
+        );
     }
     fn prepare_group() -> OpticGraph {
         let mut graph = OpticGraph::default();
