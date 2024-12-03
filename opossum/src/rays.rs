@@ -203,7 +203,7 @@ impl Rays {
         pos_strategy: &dyn PositionDistribution,
     ) -> OpmResult<Self> {
         let ray_pos = pos_strategy.generate();
-        let (spec_amp, wvls) = spectral_distribution.generate()?;
+        let dist = spectral_distribution.generate()?;
 
         //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
         let ray_pos_plane = ray_pos
@@ -218,8 +218,8 @@ impl Rays {
         let nr_of_rays = ray_pos.len();
         let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
         for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
-            for (spec_amp, wvl) in izip!(spec_amp.iter(), wvls.iter()) {
-                let ray = Ray::new_collimated(*pos, *wvl, *energy * *spec_amp)?;
+            for value in &dist {
+                let ray = Ray::new_collimated(*pos, value.0, *energy * value.1)?;
                 rays.push(ray);
             }
         }
