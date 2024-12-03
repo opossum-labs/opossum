@@ -100,8 +100,8 @@ mod test {
         nanometer,
         spectral_distribution::{Gaussian, SpectralDistribution},
     };
-    use core::f64;
     use approx::assert_abs_diff_eq;
+    use core::f64;
     use uom::si::f64::Length;
     #[test]
     fn new() {
@@ -173,7 +173,7 @@ mod test {
         let values = gauss.generate().unwrap();
         assert_eq!(values.len(), 11);
         assert_abs_diff_eq!(values[5].0.value, nanometer!(1500.0).value);
-        let v_sum:f64=values.iter().map(|v| v.1).sum();
+        let v_sum: f64 = values.iter().map(|v| v.1).sum();
         assert_abs_diff_eq!(v_sum, 1.0);
     }
 }

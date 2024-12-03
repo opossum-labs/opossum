@@ -9,5 +9,5 @@ pub trait SpectralDistribution {
     /// Creates a Gaussian spectral distribution
     /// # Errors
     /// This function only propagates errors of the contained functions
-    fn generate(&self) -> OpmResult<Vec<(Length,f64)>>;
+    fn generate(&self) -> OpmResult<Vec<(Length, f64)>>;
 }

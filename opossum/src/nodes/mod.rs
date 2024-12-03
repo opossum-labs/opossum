@@ -164,7 +164,7 @@ mod test {
             "fluence detector",
             "wedge",
             "mirror",
-            "parabolic mirror"
+            "parabolic mirror",
         ];
         for node_type in node_types {
             assert!(create_node_ref(node_type).is_ok());
