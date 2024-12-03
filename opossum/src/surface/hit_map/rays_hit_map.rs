@@ -28,7 +28,7 @@ use crate::{
     J_per_cm2,
 };
 
-use super::FluenceEstimator;
+use super::fluence_estimator::FluenceEstimator;
 
 /// A hit point as part of a [`RaysHitMap`].
 ///
@@ -258,7 +258,7 @@ impl RaysHitMap {
             .collect();
         kde.set_hit_map(hitmap_2d);
         let est_bandwidth = kde.bandwidth_estimate();
-        kde.set_band_width(est_bandwidth);
+        kde.set_band_width(est_bandwidth)?;
         let (left, right, top, bottom) = self.calc_2d_bounding_box(3. * est_bandwidth)?;
         let fluence_matrix = kde.kde_2d(&(left..right, bottom..top), nr_of_points);
         let fluence_data = FluenceData::new(fluence_matrix, left..right, bottom..top);

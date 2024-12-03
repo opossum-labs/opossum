@@ -14,7 +14,7 @@ use crate::{
     ray::SplittingConfig,
     refractive_index::RefractiveIndexType,
     reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
-    surface::hit_map::{FluenceEstimator, HitMap},
+    surface::hit_map::{fluence_estimator::FluenceEstimator, HitMap},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},

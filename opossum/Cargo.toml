@@ -65,11 +65,10 @@ rayon = "1.10"
 
 tinytemplate = "1"
 
-bevy={ version="0.14", optional=true }
+bevy={ version="0.15", optional=true }
 bevy_flycam = { version= "0.14", optional =true }
 spade = "2.12"
 earcutr = "0.4.3"
-splines = "4.4.0"
 
 [lints.rust]
 # missing_docs = "warn"

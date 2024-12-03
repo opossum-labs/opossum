@@ -12,7 +12,7 @@ use opossum::{
     optic_node::OpticNode,
     position_distributions::SobolDist,
     rays::Rays,
-    surface::hit_map::FluenceEstimator,
+    surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::geom_transformation::Isometry,
     OpmDocument,
 };

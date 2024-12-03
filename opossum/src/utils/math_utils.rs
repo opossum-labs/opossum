@@ -1,5 +1,8 @@
 //! various simple helper functions (e.g. number format conversion)
 
+use nalgebra::Point2;
+use uom::si::f64::Length;
+
 /// Convert a `usize` value to a `f64`.
 ///
 /// This function is used to avoid linter warnings (precision loss) which
@@ -30,4 +33,37 @@ pub const fn f64_to_usize(value: f64) -> usize {
     #[allow(clippy::cast_sign_loss)]
     let newval = value as usize;
     newval
+}
+#[must_use]
+pub fn distance_2d_point(point1: &Point2<Length>, point2: &Point2<Length>) -> Length {
+    ((point1.x - point2.x) * (point1.x - point2.x) + (point1.y - point2.y) * (point1.y - point2.y))
+        .sqrt()
+}
+
+#[cfg(test)]
+mod test {
+    use approx::assert_abs_diff_eq;
+
+    use crate::{millimeter, utils::math_utils::distance_2d_point};
+
+    #[test]
+    fn distance() {
+        let p1 = millimeter!(0.0, 0.0);
+        assert_eq!(
+            distance_2d_point(&p1, &millimeter!(0.0, 0.0)),
+            millimeter!(0.0)
+        );
+        assert_eq!(
+            distance_2d_point(&p1, &millimeter!(1.0, 0.0)),
+            millimeter!(1.0)
+        );
+        assert_eq!(
+            distance_2d_point(&p1, &millimeter!(-1.0, 0.0)),
+            millimeter!(1.0)
+        );
+        assert_abs_diff_eq!(
+            distance_2d_point(&p1, &millimeter!(1.0, 1.0)).value,
+            millimeter!(f64::sqrt(2.0)).value
+        );
+    }
 }
