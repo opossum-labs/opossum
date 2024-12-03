@@ -16,8 +16,8 @@ use crate::{
 use super::{
     geo_surface::GeoSurfaceRef,
     hit_map::{
+        fluence_estimator::FluenceEstimator,
         rays_hit_map::{HitPoint, RaysHitMap},
-        FluenceEstimator,
     },
 };
 use core::fmt::Debug;

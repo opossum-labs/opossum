@@ -204,7 +204,7 @@ pub fn meshgrid(x: &DVector<f64>, y: &DVector<f64>) -> OpmResult<(DMatrix<f64>, 
 /// # Errors
 /// This function will return an error if
 ///  - `start` or `end` are not finite
-///  - `num` cannot be casted to usize.
+///  - `num` cannot be casted to float.
 ///
 /// # Panics
 /// This function panics if step cannot be casted from usize to T

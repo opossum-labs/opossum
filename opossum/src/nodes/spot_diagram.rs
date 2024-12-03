@@ -425,11 +425,18 @@ mod test {
         test_inverted::<SpotDiagram>()
     }
     #[test]
-    fn analyze_empty() {
+    fn reset_data() {
+        let mut spot = SpotDiagram::default();
+        spot.light_data = Some(LightData::Geometric(Rays::default()));
+        spot.reset_data();
+        assert!(spot.light_data.is_none());
+    }
+    #[test]
+    fn analyze_energy_empty() {
         test_analyze_empty::<SpotDiagram>()
     }
     #[test]
-    fn analyze_wrong() {
+    fn analyze_energy_wrong() {
         let mut node = SpotDiagram::default();
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::default());
@@ -438,7 +445,7 @@ mod test {
         assert!(output.is_empty());
     }
     #[test]
-    fn analyze_ok() {
+    fn analyze_energy_ok() {
         let mut node = SpotDiagram::default();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
@@ -458,7 +465,7 @@ mod test {
         test_analyze_apodization_warning::<SpotDiagram>()
     }
     #[test]
-    fn analyze_inverse() {
+    fn analyze_energy_inverse() {
         let mut node = SpotDiagram::default();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
@@ -475,27 +482,28 @@ mod test {
         let output = output.clone().unwrap();
         assert_eq!(*output, input_light);
     }
-    // #[test]
-    // fn export_data() {
-    //     testing_logger::setup();
-    //     let mut sd = SpotDiagram::default();
-    //     assert!(sd.export_data(Path::new(""), "").is_ok());
-    //     check_warnings(vec![
-    //         "spot diagram: no light data for export available. Cannot create plot!",
-    //     ]);
-    //     sd.light_data = Some(Rays::default());
-    //     let path = NamedTempFile::new().unwrap();
-    //     assert!(sd.export_data(path.path().parent().unwrap(), "").is_err());
-    //     sd.light_data = Some(
-    //         Rays::new_uniform_collimated(
-    //             nanometer!(1053.0),
-    //             joule!(1.0),
-    //             &Hexapolar::new(Length::zero(), 1).unwrap(),
-    //         )
-    //         .unwrap(),
-    //     );
-    //     assert!(sd.export_data(path.path().parent().unwrap(), "").is_ok());
-    // }
+    #[test]
+    fn analyze_ghostfocus_ok() {
+        let mut node = SpotDiagram::default();
+        node.set_isometry(Isometry::identity()).unwrap();
+        let mut input = LightRays::default();
+        let light_rays = Rays::default();
+        input.insert("input_1".into(), vec![light_rays.clone()]);
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            input,
+            &GhostFocusConfig::default(),
+            &mut vec![],
+            0,
+        )
+        .unwrap();
+        assert!(output.contains_key("output_1"));
+        assert_eq!(output.len(), 1);
+        let output = output.get("output_1");
+        assert!(output.is_some());
+        let output = output.clone().unwrap();
+        assert_eq!(output[0], light_rays);
+    }
     #[test]
     fn report() {
         let mut sd = SpotDiagram::default();

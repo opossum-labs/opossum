@@ -17,7 +17,7 @@ use crate::{
     properties::{Properties, Proptype},
     rays::Rays,
     reporting::node_report::NodeReport,
-    surface::hit_map::FluenceEstimator,
+    surface::hit_map::fluence_estimator::FluenceEstimator,
 };
 use log::warn;
 

@@ -2583,7 +2583,7 @@ pub enum PlotArgs {
 
 #[cfg(test)]
 mod test {
-    use crate::utils::test_helper::test_helper::check_warnings;
+    use crate::utils::test_helper::test_helper::check_logs;
 
     use super::*;
     use approx::{assert_relative_eq, relative_eq};
@@ -3475,7 +3475,10 @@ mod test {
         let mut plot = Plot::try_from(&PlotParameters::default()).unwrap();
         testing_logger::setup();
         plot.define_axes_bounds();
-        check_warnings(vec!["No plot series defined! Cannot define axes bounds!"]);
+        check_logs(
+            log::Level::Warn,
+            vec!["No plot series defined! Cannot define axes bounds!"],
+        );
         let mut plot = Plot::new(&vec![plt_series_dim2], &PlotParameters::default());
         let _ = plot.define_axes_bounds();
         assert_relative_eq!(plot.bounds.x.unwrap().min, -0.1);
@@ -3581,12 +3584,15 @@ mod test {
         axlim.expand_lim_range_by_factor(f64::INFINITY);
         axlim.expand_lim_range_by_factor(0.);
 
-        check_warnings(vec![
-            "Cannot expand ax limits! Expansion factor must be normal and positive!",
-            "Cannot expand ax limits! Expansion factor must be normal and positive!",
-            "Cannot expand ax limits! Expansion factor must be normal and positive!",
-            "Cannot expand ax limits! Expansion factor must be normal and positive!",
-        ]);
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "Cannot expand ax limits! Expansion factor must be normal and positive!",
+                "Cannot expand ax limits! Expansion factor must be normal and positive!",
+                "Cannot expand ax limits! Expansion factor must be normal and positive!",
+                "Cannot expand ax limits! Expansion factor must be normal and positive!",
+            ],
+        );
     }
     #[test]
     fn create_useful_axlims_test() {

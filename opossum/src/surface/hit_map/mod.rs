@@ -15,6 +15,7 @@
 //!    first entry contains all [`BouncedHitMap`]s caused by rays wih zero bounces, the second entry all [`BouncedHitMap`]s
 //!    caused by rays wih one bounce, ...
 
+pub mod fluence_estimator;
 pub mod rays_hit_map;
 
 use crate::{
@@ -31,35 +32,10 @@ use nalgebra::{DVector, MatrixXx2, Point2};
 use plotters::style::RGBAColor;
 use rays_hit_map::{HitPoint, RaysHitMap};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 use uom::si::f64::Length;
 use uuid::Uuid;
 
-/// Strategy for fluence estimation
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[non_exhaustive]
-pub enum FluenceEstimator {
-    /// Calculate Voronoi cells of the hit points and use the cell area for calculation of the fluence.
-    Voronoi,
-    /// Calculate the fluence at given point using a Kernel Density Estimator
-    KDE,
-    /// Simply perform binning of the hit points on a given matrix (not implemented yet)
-    Binning,
-}
-impl Display for FluenceEstimator {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Voronoi => write!(f, "Voronoi"),
-            Self::KDE => write!(f, "KDE"),
-            Self::Binning => write!(f, "Binning"),
-        }
-    }
-}
-impl From<FluenceEstimator> for Proptype {
-    fn from(value: FluenceEstimator) -> Self {
-        Self::FluenceEstimator(value)
-    }
-}
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 /// Storage struct for `RaysHitMap` on a surface from a single bounce
 pub struct BouncedHitMap {

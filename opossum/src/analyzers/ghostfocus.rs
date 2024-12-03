@@ -22,7 +22,7 @@ use crate::{
     },
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
-    surface::hit_map::FluenceEstimator,
+    surface::hit_map::fluence_estimator::FluenceEstimator,
 };
 
 use super::{raytrace::AnalysisRayTrace, Analyzer, AnalyzerType, RayTraceConfig};
