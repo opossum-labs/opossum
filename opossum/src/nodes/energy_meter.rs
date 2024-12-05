@@ -7,7 +7,7 @@ use crate::{
     dottable::Dottable,
     error::OpmResult,
     joule,
-    light_result::LightResult,
+    light_result::{LightRays, LightResult},
     lightdata::LightData,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
@@ -220,7 +220,7 @@ impl AnalysisGhostFocus for EnergyMeter {
         config: &crate::analyzers::GhostFocusConfig,
         _ray_collection: &mut Vec<crate::rays::Rays>,
         _bounce_lvl: usize,
-    ) -> OpmResult<crate::light_result::LightRays> {
+    ) -> OpmResult<LightRays> {
         AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
     }
 }

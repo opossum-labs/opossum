@@ -22,7 +22,7 @@ use crate::{
 /// represent an optically active component. However, this way a group can be positioned in a scenery.
 /// In addition, a [`Dummy`] can have an [`Aperture`](crate::aperture::Aperture) defined. This way, things like
 /// a mask (e.g. serrated aperture) which apodized an incoming beam can be realized.
-/// 
+///
 /// Geometrically, a [`Dummy`] node consists of a single flat surface.
 ///
 /// ## Optical Ports
@@ -143,8 +143,7 @@ impl OpticNode for Dummy {
     fn reset_data(&mut self) {
         self.reset_optic_surfaces();
     }
-    fn set_apodization_warning(&mut self, _apodized: bool) {
-    }
+    fn set_apodization_warning(&mut self, _apodized: bool) {}
 }
 impl Dottable for Dummy {}
 

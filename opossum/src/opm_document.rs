@@ -133,12 +133,16 @@ mod test {
         analyzers::{
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer, Analyzer,
             GhostFocusConfig, RayTraceConfig,
-        }, degree, joule, millimeter, nanometer, nodes::{
+        },
+        degree, joule, millimeter, nanometer,
+        nodes::{
             round_collimated_ray_source, BeamSplitter, CylindricLens, Dummy, EnergyMeter,
             FluenceDetector, IdealFilter, Lens, ParabolicMirror, ParaxialSurface,
             RayPropagationVisualizer, ReflectiveGrating, Spectrometer, SpotDiagram, ThinMirror,
             WaveFront, Wedge,
-        }, optic_node::OpticNode, utils::test_helper::test_helper::check_logs
+        },
+        optic_node::OpticNode,
+        utils::test_helper::test_helper::check_logs,
     };
     use petgraph::adj::NodeIndex;
     use std::path::PathBuf;
@@ -222,7 +226,9 @@ mod test {
         let i_6 = scenery.add_node(&Dummy::default()).unwrap();
         let i_7 = scenery.add_node(&EnergyMeter::default()).unwrap();
         let i_8 = scenery.add_node(&IdealFilter::default()).unwrap();
-        let i_9 = scenery.add_node(&ParaxialSurface::new("paraxial", millimeter!(1000.0)).unwrap()).unwrap();
+        let i_9 = scenery
+            .add_node(&ParaxialSurface::new("paraxial", millimeter!(1000.0)).unwrap())
+            .unwrap();
         let i_10 = scenery
             .add_node(&RayPropagationVisualizer::default())
             .unwrap();
@@ -230,11 +236,13 @@ mod test {
         let i_12 = scenery.add_node(&SpotDiagram::default()).unwrap();
         let i_13 = scenery.add_node(&WaveFront::default()).unwrap();
         let i_14 = scenery.add_node(&ParabolicMirror::default()).unwrap();
-        let i_15 = scenery.add_node(
-            &ReflectiveGrating::default()
-                .with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))
-                .unwrap(),
-        ).unwrap();
+        let i_15 = scenery
+            .add_node(
+                &ReflectiveGrating::default()
+                    .with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))
+                    .unwrap(),
+            )
+            .unwrap();
         let i_16 = scenery.add_node(&ThinMirror::default()).unwrap();
 
         scenery

@@ -3,15 +3,16 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, RayTraceConfig,
+        Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
+    light_result::{LightRays, LightResult},
     lightdata::LightData,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
     properties::Proptype,
+    rays::Rays,
     spectrum::Spectrum,
     utils::EnumProxy,
 };
@@ -159,12 +160,15 @@ impl OpticNode for IdealFilter {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
     }
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
+    }
+    fn set_apodization_warning(&mut self, _apodized: bool) {}
+    fn reset_data(&mut self) {
+        self.reset_optic_surfaces();
     }
 }
 impl Alignable for IdealFilter {}
@@ -175,7 +179,26 @@ impl Dottable for IdealFilter {
 }
 impl LIDT for IdealFilter {}
 impl Analyzable for IdealFilter {}
-impl AnalysisGhostFocus for IdealFilter {}
+impl AnalysisGhostFocus for IdealFilter {
+    fn analyze(
+        &mut self,
+        incoming_data: LightRays,
+        config: &GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
+        _bounce_lvl: usize,
+    ) -> OpmResult<LightRays> {
+        let mut output =
+            AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)?;
+        if let Some(rays_bundles) = output.get_mut("output_1") {
+            for rays in rays_bundles {
+                rays.filter_energy(&self.filter_type())?;
+            }
+            Ok(output)
+        } else {
+            Err(OpossumError::Analysis("filtering of rays failed".into()))
+        }
+    }
+}
 impl AnalysisEnergy for IdealFilter {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let in_port = &self.ports().names(&PortType::Input)[0];
