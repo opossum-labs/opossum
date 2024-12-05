@@ -24,7 +24,7 @@ pub struct Cylinder {
 impl Cylinder {
     /// Create a new [`Cylinder`] located and oriented by the given [`Isometry`].
     ///
-    /// **Note**: The anchor point is not the center of the cylinder but a point on the cylindric surface.
+    /// **Note**: The anchor point is the center of the cylinder.
     ///
     /// # Errors
     ///
@@ -35,12 +35,10 @@ impl Cylinder {
                 "radius of curvature must be != 0.0 and finite".into(),
             ));
         }
-        let anchor_isometry = Isometry::new(
-            Point3::new(Length::zero(), Length::zero(), radius),
-            radian!(0., 0., 0.),
-        )?;
-        let isometry = isometry.append(&anchor_isometry);
-        Ok(Self { radius, isometry })
+        Ok(Self {
+            radius,
+            isometry: isometry.clone(),
+        })
     }
     /// Returns the center position of this [`Cylinder`]
     #[must_use]

@@ -218,15 +218,12 @@ impl OpticNode for CylindricLens {
                 anchor_point_iso_rear,
             )
         };
-
         self.update_surface(
             &"output_1".to_string(),
             rear_geosurface,
             anchor_point_iso_rear,
             &PortType::Output,
-        )?;
-
-        Ok(())
+        )
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -237,13 +234,11 @@ impl OpticNode for CylindricLens {
 }
 
 impl Alignable for CylindricLens {}
-
 impl Dottable for CylindricLens {
     fn node_color(&self) -> &str {
         "aqua"
     }
 }
-
 impl LIDT for CylindricLens {}
 impl Analyzable for CylindricLens {}
 

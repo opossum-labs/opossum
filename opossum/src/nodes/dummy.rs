@@ -19,7 +19,10 @@ use crate::{
 /// Any incoming light is transparently forwarded without any modification. It is mainly used for
 /// development and debugging purposes. In addition it can be used as an "optical terminal" of a
 /// [`NodeGroup`](crate::nodes::NodeGroup) such as the "input hole" of a cameara box which does not really
-/// represent an optically active component. Howver this way a group can be positioned an a scene.
+/// represent an optically active component. However, this way a group can be positioned in a scenery.
+/// In addition, a [`Dummy`] can have an [`Aperture`](crate::aperture::Aperture) defined. This way, things like
+/// a mask (e.g. serrated aperture) which apodized an incoming beam can be realized.
+/// 
 /// Geometrically, a [`Dummy`] node consists of a single flat surface.
 ///
 /// ## Optical Ports
@@ -60,7 +63,17 @@ impl Dummy {
 impl LIDT for Dummy {}
 
 impl Analyzable for Dummy {}
-impl AnalysisGhostFocus for Dummy {}
+impl AnalysisGhostFocus for Dummy {
+    fn analyze(
+        &mut self,
+        incoming_data: crate::light_result::LightRays,
+        config: &crate::analyzers::GhostFocusConfig,
+        _ray_collection: &mut Vec<crate::rays::Rays>,
+        _bounce_lvl: usize,
+    ) -> OpmResult<crate::light_result::LightRays> {
+        AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
+    }
+}
 impl AnalysisEnergy for Dummy {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let in_port = &self.ports().names(&PortType::Input)[0];
@@ -126,6 +139,11 @@ impl OpticNode for Dummy {
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
+    }
+    fn reset_data(&mut self) {
+        self.reset_optic_surfaces();
+    }
+    fn set_apodization_warning(&mut self, _apodized: bool) {
     }
 }
 impl Dottable for Dummy {}

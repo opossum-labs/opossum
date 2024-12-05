@@ -330,8 +330,8 @@ impl RayPositionHistories {
 impl Plottable for RayPositionHistories {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
-            .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
-            .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?
+            .set(&PlotArgs::XLabel("position in mm (z axis)".into()))?
+            .set(&PlotArgs::YLabel("position in mm (y axis)".into()))?
             .set(&PlotArgs::PlotSize((1200, 1200)))?
             .set(&PlotArgs::AxisEqual(true))?
             .set(&PlotArgs::PlotAutoSize(true))?

@@ -193,7 +193,6 @@ impl OpticNode for EnergyMeter {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
-
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
