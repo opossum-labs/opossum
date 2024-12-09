@@ -31,7 +31,7 @@ impl CoatingType {
     pub fn calc_reflectivity(
         &self,
         incoming_ray: &Ray,
-        surface_normal: Vector3<f64>,
+        surface_normal: &Vector3<f64>,
         n2: f64,
     ) -> OpmResult<f64> {
         match self {
@@ -53,7 +53,7 @@ impl CoatingType {
 pub trait Coating {
     /// Calculate the reflectivity based on the concrete model for an incoming [`Ray`] on a surface with
     /// a given `surface_normal` at the intersection point and the refractive index of the following medium.
-    fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: Vector3<f64>, n2: f64) -> f64;
+    fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: &Vector3<f64>, n2: f64) -> f64;
     /// Return the corresponding [`CoatingType`] for a given [`Coating`].
     ///
     /// This function is mainly used for serialization / deserialization.

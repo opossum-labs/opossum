@@ -28,16 +28,11 @@ impl Sphere {
     ///
     /// This function will return an error if any components of the `pos` are not finite or if the radius is not normal.
     pub fn new_at_position(radius: Length, pos: Point3<Length>) -> OpmResult<Self> {
-        if !radius.is_normal() {
-            return Err(OpossumError::Other(
-                "radius of curvature must be != 0.0 and finite".into(),
-            ));
-        }
         let isometry = Isometry::new(
             Point3::new(pos.x, pos.y, pos.z + radius),
             radian!(0., 0., 0.),
         )?;
-        Ok(Self { radius, isometry })
+        Self::new(radius, isometry)
     }
     /// Create a new [`Sphere`] located and oriented by the given [`Isometry`].
     ///
@@ -52,11 +47,6 @@ impl Sphere {
                 "radius of curvature must be != 0.0 and finite".into(),
             ));
         }
-        // let anchor_isometry = Isometry::new(
-        //     Point3::new(Length::zero(), Length::zero(), radius),
-        //     radian!(0., 0., 0.),
-        // )?;
-        // let isometry = isometry.append(&anchor_isometry);
         Ok(Self { radius, isometry })
     }
 }

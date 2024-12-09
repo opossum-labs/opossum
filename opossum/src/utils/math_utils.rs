@@ -1,6 +1,6 @@
 //! various simple helper functions (e.g. number format conversion)
 
-use nalgebra::Point2;
+use nalgebra::{Point2, Point3};
 use uom::si::f64::Length;
 
 /// Convert a `usize` value to a `f64`.
@@ -39,7 +39,13 @@ pub fn distance_2d_point(point1: &Point2<Length>, point2: &Point2<Length>) -> Le
     ((point1.x - point2.x) * (point1.x - point2.x) + (point1.y - point2.y) * (point1.y - point2.y))
         .sqrt()
 }
-
+#[must_use]
+pub fn distance_3d_point(point1: &Point3<Length>, point2: &Point3<Length>) -> Length {
+    ((point1.x - point2.x) * (point1.x - point2.x)
+        + (point1.y - point2.y) * (point1.y - point2.y)
+        + (point1.z - point2.z) * (point1.z - point2.z))
+        .sqrt()
+}
 #[cfg(test)]
 mod test {
     use approx::assert_abs_diff_eq;

@@ -14,7 +14,7 @@ pub struct Fresnel;
 
 impl Coating for Fresnel {
     /// Formulas taken from [german wikipedia](https://de.wikipedia.org/wiki/Fresnelsche_Formeln).
-    fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: Vector3<f64>, n2: f64) -> f64 {
+    fn calc_reflectivity(&self, incoming_ray: &Ray, surface_normal: &Vector3<f64>, n2: f64) -> f64 {
         // Note: invert surface normal, since it is the "output_1" direction.
         let alpha = incoming_ray.direction().angle(&(-1.0 * surface_normal));
         let n1 = incoming_ray.refractive_index();
@@ -56,10 +56,10 @@ mod test {
         ray.set_refractive_index(1.0).unwrap();
         let surface_normal = vector![0.0, 0.0, -1.0];
         let coating = Fresnel;
-        assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.0), 0.0);
+        assert_eq!(coating.calc_reflectivity(&ray, &surface_normal, 1.0), 0.0);
 
         ray.set_refractive_index(2.0).unwrap();
-        assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 2.0), 0.0);
+        assert_eq!(coating.calc_reflectivity(&ray, &surface_normal, 2.0), 0.0);
     }
     #[test]
     fn calc_refl_glass_perpendicular() {
@@ -67,7 +67,7 @@ mod test {
         ray.set_refractive_index(1.0).unwrap();
         let surface_normal = vector![0.0, 0.0, -1.0];
         let coating = Fresnel;
-        assert_abs_diff_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.5), 0.04);
+        assert_abs_diff_eq!(coating.calc_reflectivity(&ray, &surface_normal, 1.5), 0.04);
     }
     #[test]
     fn calc_refl_glass_45_deg() {
@@ -77,7 +77,7 @@ mod test {
         let surface_normal = vector![0.0, 0.0, -1.0];
         let coating = Fresnel;
         assert_abs_diff_eq!(
-            coating.calc_reflectivity(&ray, surface_normal, 1.5),
+            coating.calc_reflectivity(&ray, &surface_normal, 1.5),
             0.05023991101223595
         );
     }

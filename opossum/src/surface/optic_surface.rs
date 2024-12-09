@@ -1,5 +1,8 @@
 //! Module handling optical surfaces
+use log::warn;
+use nalgebra::{Point3, Vector3};
 use serde::{Deserialize, Serialize};
+use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
@@ -7,6 +10,7 @@ use crate::{
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
     nodes::fluence_detector::Fluence,
+    ray::Ray,
     rays::Rays,
     surface::hit_map::HitMap,
     utils::geom_transformation::Isometry,
@@ -21,6 +25,20 @@ use super::{
     },
 };
 use core::fmt::Debug;
+
+/// Type of ray deflection model.
+///
+/// This enum denotes the type of model to be used to deflect a beam.
+pub enum DeflectionType {
+    /// A ray is not deflected at all. This is useful for 'passive' surfaces such as a detector.
+    NonInteracting,
+    /// 'Regular' refraction following Snell's law. The parameter correspond to the refractive index n2.
+    Snellius(f64),
+    /// Paraxial refraction which is used to model a perfect thin lens
+    Paraxial,
+    /// Diffrection Model for handling optical gratings
+    Grating,
+}
 
 /// This struct represents an optical surface, which consists of the geometric surface shape
 /// ([`GeoSurface`](super::geo_surface::GeoSurface)) and further properties such as the [`CoatingType`].
@@ -221,10 +239,100 @@ impl OpticSurface {
         self.anchor_point_iso = iso;
     }
 
-    ///Returns a reference to the anchor point isometry of this [`OpticSurface`]
+    /// Returns a reference to the anchor point isometry of this [`OpticSurface`]
     #[must_use]
     pub const fn anchor_point_iso(&self) -> &Isometry {
         &self.anchor_point_iso
+    }
+    /// Refract a ray on this [`OpticSurface`] using Snell's law.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    fn deflect_snellius(
+        &self,
+        n2: f64,
+        ray: &mut Ray,
+        surface_normal: &Vector3<f64>, intersection_point: &Point3<Length>
+    ) -> OpmResult<Option<Ray>> {
+        if n2 < 1.0 || !n2.is_finite() {
+            return Err(OpossumError::Other(
+                "the refractive index must be >=1.0 and finite".into(),
+            ));
+        }
+        // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
+        // mu=n_1 / n_2
+        // s1: incoming direction (normalized??)
+        // n: surface normal (normalized??)
+        // s2: refracted dir
+        //
+        // s2 = mu * [ n x ( -n x s1) ] - n* sqrt(1 - mu^2 * (n x s1) dot (n x s1))
+        let mu = ray.refractive_index() / n2;
+        let s1 = ray.direction().normalize();
+        let n = surface_normal.normalize();
+        let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
+        let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
+        // let pos_in_m = ray.position().map(|c| c.value);
+
+        // check, if total reflection
+        if dis.is_sign_positive() {
+            let mut reflected_ray = ray.clone();
+            // handle energy (due to coating)
+            let reflectivity = self.coating().calc_reflectivity(&ray, surface_normal, n2)?;
+            let input_energy = ray.energy();
+            let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
+                - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
+            ray.set_prev_dir(Some(ray.direction()));
+            ray.set_direction(refract_dir)?;
+            ray.set_energy(input_energy * (1. - reflectivity));
+            reflected_ray.set_prev_dir(Some(reflected_ray.direction()));
+            reflected_ray.set_direction(reflected_dir)?;
+            reflected_ray.set_energy(input_energy * reflectivity);
+            reflected_ray.increase_number_of_bounces();
+            reflected_ray.add_to_pos_hist(intersection_point.clone());
+            ray.update_path_length_for_next_point(&intersection_point);
+            ray.set_refractive_index(n2)?;
+            ray.increase_number_of_refractions();
+
+            // save on hit map of surface
+            // self.add_to_hit_map(
+            //     HitPoint::new(ray.position(), input_energy)?,
+            //     ray.number_of_bounces(),
+            //     ray_bundle_uuid,
+            // );
+            warn!("todo: reenable add_to_hit_map");
+            Ok(Some(reflected_ray))
+        } else {
+            ray.increase_number_of_bounces();
+            ray.set_prev_dir(Some(ray.direction()));
+            ray.set_direction(reflected_dir)?;
+            Ok(None)
+        }
+    }
+    /// Deflect (refraction, diffraction, paraxial, etc.) a given [`'Ray`] on this [`OpticSurface`].
+    pub fn deflect_ray(
+        &self,
+        ray: &mut Ray,
+        deflection_type: DeflectionType,
+    ) -> OpmResult<Option<Ray>> {
+        if let Some((intersection_point, surface_normal)) =
+            self.geo_surface.0.borrow().calc_intersect_and_normal(ray)
+        { 
+            let result=match deflection_type {
+                DeflectionType::NonInteracting => None,
+                DeflectionType::Snellius(refr_index) => {
+                    self.deflect_snellius(refr_index, ray, &surface_normal, &intersection_point)?
+                }
+                DeflectionType::Paraxial => None,
+                DeflectionType::Grating => None,
+            };
+            ray.set_position(intersection_point);
+            ray.add_to_pos_hist(ray.position());
+            Ok(result)
+        } else {
+            warn!("missed surface");
+            Ok(None)
+        }
     }
 }
 

@@ -9,9 +9,9 @@
 
 mod cylinder;
 mod parabola;
+mod paraxial;
 mod plane;
 mod sphere;
-mod paraxial;
 
 pub mod geo_surface;
 pub mod hit_map;
@@ -19,6 +19,6 @@ pub mod optic_surface;
 
 pub use cylinder::Cylinder;
 pub use parabola::Parabola;
+pub use paraxial::Paraxial;
 pub use plane::Plane;
 pub use sphere::Sphere;
-pub use paraxial::Paraxial;

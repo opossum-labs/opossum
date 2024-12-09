@@ -19,8 +19,11 @@ use crate::{
     joule, meter,
     nodes::FilterType,
     spectrum::Spectrum,
-    surface::{hit_map::rays_hit_map::HitPoint, optic_surface::OpticSurface},
-    utils::geom_transformation::Isometry,
+    surface::{
+        hit_map::rays_hit_map::HitPoint,
+        optic_surface::{DeflectionType, OpticSurface},
+    },
+    utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -342,7 +345,7 @@ impl Ray {
         let f_square = (focal_length * focal_length).value;
         self.path_length -= meter!((r_square + f_square).sqrt()) - focal_length.abs();
         self.number_of_refractions += 1;
-        //back to original position
+        // back to original position
         self.pos = iso.transform_point(&self.pos);
         self.dir = iso.transform_vector_f64(&self.dir).normalize();
         Ok(())
@@ -452,73 +455,78 @@ impl Ray {
         n2: Option<f64>,
         ray_bundle_uuid: &Uuid,
     ) -> OpmResult<Option<Self>> {
-        let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
-        if n_refri_2 < 1.0 || !n_refri_2.is_finite() {
-            return Err(OpossumError::Other(
-                "the refractive index must be >=1.0 and finite".into(),
-            ));
-        }
-        if let Some((intersection_point, surface_normal)) =
-            os.geo_surface().0.borrow().calc_intersect_and_normal(self)
-        {
-            // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
-            // mu=n_1 / n_2
-            // s1: incoming direction (normalized??)
-            // n: surface normal (normalized??)
-            // s2: refracted dir
-            //
-            // s2 = mu * [ n x ( -n x s1) ] - n* sqrt(1 - mu^2 * (n x s1) dot (n x s1))
-            let mu = self.refractive_index / n_refri_2;
-            let s1 = self.dir.normalize();
-            let n = surface_normal.normalize();
-            let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
-            let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
-            let pos_in_m = self.pos.map(|c| c.value);
-            let intersection_in_m = intersection_point.map(|c| c.value);
-            self.path_length +=
-                self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
-            self.pos = intersection_point;
-            self.pos_hist.push(self.pos);
-            // check, if total reflection
-            if dis.is_sign_positive() {
-                let mut reflected_ray = self.clone();
-                // handle energy (due to coating)
-                let reflectivity =
-                    os.coating()
-                        .calc_reflectivity(self, surface_normal, n_refri_2)?;
-                let input_energy = self.energy();
-                let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
-                    - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
-                self.prev_dir = Some(self.dir);
-                self.dir = refract_dir;
-                self.e = input_energy * (1. - reflectivity);
-                reflected_ray.prev_dir = Some(reflected_ray.dir);
-                reflected_ray.dir = reflected_dir;
-                reflected_ray.e = input_energy * reflectivity;
-                reflected_ray.number_of_bounces += 1;
-                self.refractive_index = n_refri_2;
-                if n2.is_some() {
-                    self.number_of_refractions += 1;
-                }
-
-                // save on hit map of surface
-                os.add_to_hit_map(
-                    HitPoint::new(intersection_point, input_energy)?,
-                    self.number_of_bounces,
-                    ray_bundle_uuid,
-                );
-
-                Ok(Some(reflected_ray))
-            } else {
-                self.number_of_bounces += 1;
-                self.prev_dir = Some(self.dir);
-                self.dir = reflected_dir;
-                Ok(None)
-            }
+        if let Some(n2) = n2 {
+            os.deflect_ray(self, DeflectionType::Snellius(n2))
         } else {
-            self.set_invalid();
-            Ok(None)
+            os.deflect_ray(self, DeflectionType::NonInteracting)
         }
+        // let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
+        // if n_refri_2 < 1.0 || !n_refri_2.is_finite() {
+        //     return Err(OpossumError::Other(
+        //         "the refractive index must be >=1.0 and finite".into(),
+        //     ));
+        // }
+        // if let Some((intersection_point, surface_normal)) =
+        //     os.geo_surface().0.borrow().calc_intersect_and_normal(self)
+        // {
+        //     // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
+        //     // mu=n_1 / n_2
+        //     // s1: incoming direction (normalized??)
+        //     // n: surface normal (normalized??)
+        //     // s2: refracted dir
+        //     //
+        //     // s2 = mu * [ n x ( -n x s1) ] - n* sqrt(1 - mu^2 * (n x s1) dot (n x s1))
+        //     let mu = self.refractive_index / n_refri_2;
+        //     let s1 = self.dir.normalize();
+        //     let n = surface_normal.normalize();
+        //     let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
+        //     let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
+        //     let pos_in_m = self.pos.map(|c| c.value);
+        //     let intersection_in_m = intersection_point.map(|c| c.value);
+        //     self.path_length +=
+        //         self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
+        //     self.pos = intersection_point;
+        //     self.pos_hist.push(self.pos);
+        //     // check, if total reflection
+        //     if dis.is_sign_positive() {
+        //         let mut reflected_ray = self.clone();
+        //         // handle energy (due to coating)
+        //         let reflectivity =
+        //             os.coating()
+        //                 .calc_reflectivity(self, &surface_normal, n_refri_2)?;
+        //         let input_energy = self.energy();
+        //         let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
+        //             - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
+        //         self.prev_dir = Some(self.dir);
+        //         self.dir = refract_dir;
+        //         self.e = input_energy * (1. - reflectivity);
+        //         reflected_ray.prev_dir = Some(reflected_ray.dir);
+        //         reflected_ray.dir = reflected_dir;
+        //         reflected_ray.e = input_energy * reflectivity;
+        //         reflected_ray.number_of_bounces += 1;
+        //         self.refractive_index = n_refri_2;
+        //         if n2.is_some() {
+        //             self.number_of_refractions += 1;
+        //         }
+
+        //         // save on hit map of surface
+        //         os.add_to_hit_map(
+        //             HitPoint::new(intersection_point, input_energy)?,
+        //             self.number_of_bounces,
+        //             ray_bundle_uuid,
+        //         );
+
+        //         Ok(Some(reflected_ray))
+        //     } else {
+        //         self.number_of_bounces += 1;
+        //         self.prev_dir = Some(self.dir);
+        //         self.dir = reflected_dir;
+        //         Ok(None)
+        //     }
+        // } else {
+        //     self.set_invalid();
+        //     Ok(None)
+        // }
     }
 
     /// Attenuate a ray's energy by a given filter.
@@ -686,6 +694,34 @@ impl Ray {
         }
 
         Ok(())
+    }
+    /// Sets the position of this [`Ray`].
+    pub fn set_position(&mut self, position: Point3<Length>) {
+        self.pos = position;
+    }
+    /// Update the path length of the [`Ray`].
+    ///
+    /// Update the path length by adding the optical distance from the [`Ray`]'s current
+    /// position to the given point. This takes the refractive index into account.
+    pub fn update_path_length_for_next_point(&mut self, next_point: &Point3<Length>) {
+        let distance_to_point = self.refractive_index * distance_3d_point(&self.pos, next_point);
+        self.path_length += distance_to_point;
+    }
+    /// Sets the energy of this [`Ray`].
+    pub fn set_energy(&mut self, energy: Energy) {
+        self.e = energy;
+    }
+    /// Increase number of bounces of this [`Ray`].
+    pub fn increase_number_of_bounces(&mut self) {
+        self.number_of_bounces += 1;
+    }
+    /// Increase number of refractions of this [`Ray`].
+    pub fn increase_number_of_refractions(&mut self) {
+        self.number_of_refractions += 1;
+    }
+    /// Sets the previous direction of this [`Ray`].
+    pub fn set_prev_dir(&mut self, prev_dir: Option<Vector3<f64>>) {
+        self.prev_dir = prev_dir;
     }
 }
 impl Display for Ray {

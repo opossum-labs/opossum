@@ -27,7 +27,7 @@ fn main() -> OpmResult<()> {
         "input_1",
         &CoatingType::ConstantR { reflectivity: 0.5 },
     )?;
-    let i_m1 = scenery.add_node(&mirror1)?;
+    let _i_m1 = scenery.add_node(&mirror1)?;
     let i_m2 = scenery.add_node(
         &ParabolicMirror::new_with_off_axis_y("parabola", millimeter!(50.0), false, degree!(90.0))?, // &ParabolicMirror::new("parabola", millimeter!(50.0))?
                                                                                                      //     .with_oap_angle(degree!(45.0))?,

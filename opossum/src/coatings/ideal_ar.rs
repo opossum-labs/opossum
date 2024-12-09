@@ -13,7 +13,7 @@ impl Coating for IdealAR {
     fn calc_reflectivity(
         &self,
         _incoming_ray: &Ray,
-        _surface_normal: Vector3<f64>,
+        _surface_normal: &Vector3<f64>,
         _n2: f64,
     ) -> f64 {
         0.0
@@ -39,6 +39,6 @@ mod test {
         let coating = IdealAR;
         let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0)).unwrap();
         let surface_normal = vector![0.0, 0.0, -1.0];
-        assert_eq!(coating.calc_reflectivity(&ray, surface_normal, 1.5), 0.0);
+        assert_eq!(coating.calc_reflectivity(&ray, &surface_normal, 1.5), 0.0);
     }
 }
