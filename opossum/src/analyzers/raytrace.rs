@@ -126,7 +126,6 @@ pub trait AnalysisRayTrace: OpticNode {
         for rays in surf.get_rays_cache(backward) {
             rays_bundle.push(rays.clone());
         }
-
         Ok(())
     }
 

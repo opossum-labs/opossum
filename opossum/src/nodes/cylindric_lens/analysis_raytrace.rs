@@ -1,3 +1,4 @@
+use super::CylindricLens;
 use crate::{
     analyzers::{raytrace::AnalysisRayTrace, AnalyzerType, RayTraceConfig},
     error::{OpmResult, OpossumError},
@@ -6,8 +7,6 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
 };
-
-use super::CylindricLens;
 
 impl AnalysisRayTrace for CylindricLens {
     fn analyze(
@@ -28,10 +27,8 @@ impl AnalysisRayTrace for CylindricLens {
         };
 
         let (refri, _, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
-
         let mut rays_bundle = vec![rays];
         let refraction_intended = true;
-
         self.pass_through_surface(
             in_port,
             &refri,

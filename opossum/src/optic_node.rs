@@ -66,7 +66,7 @@ pub trait OpticNode: Dottable {
     /// This function errors if the function `add_optic_surface` fails
     fn update_flat_single_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso))));
+        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso))));
 
         self.update_surface(
             &"input_1".to_string(),

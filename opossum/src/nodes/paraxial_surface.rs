@@ -3,17 +3,19 @@
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, RayTraceConfig,
+        Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
+    light_result::{LightRays, LightResult},
     lightdata::LightData,
     millimeter,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
     properties::Proptype,
+    rays::Rays,
 };
+use log::warn;
 use uom::{num_traits::Zero, si::f64::Length};
 
 use super::node_attr::NodeAttr;
@@ -101,7 +103,68 @@ impl Dottable for ParaxialSurface {
 }
 impl LIDT for ParaxialSurface {}
 impl Analyzable for ParaxialSurface {}
-impl AnalysisGhostFocus for ParaxialSurface {}
+impl AnalysisGhostFocus for ParaxialSurface {
+    fn analyze(
+        &mut self,
+        incoming_data: LightRays,
+        _config: &GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
+        _bounce_lvl: usize,
+    ) -> OpmResult<LightRays> {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+        let Proptype::Length(focal_length) = self.node_attr.get_property("focal length")?.clone()
+        else {
+            return Err(OpossumError::Analysis("cannot read focal length".into()));
+        };
+        let Some(bouncing_rays) = incoming_data.get(in_port) else {
+            let mut out_light_rays = LightRays::default();
+            out_light_rays.insert(out_port.into(), Vec::<Rays>::new());
+            return Ok(out_light_rays);
+        };
+        let mut rays = bouncing_rays.clone();
+
+        let this = &mut *self;
+        let rays_bundle: &mut Vec<Rays> = &mut rays;
+        let optic_name = format!("'{}' ({})", this.name(), this.node_type());
+        let mut apodized = false;
+        let iso = this.effective_surface_iso(in_port)?;
+        let Some(surf) = this.get_optic_surface_mut(in_port) else {
+            return Err(OpossumError::Analysis("no surface found".into()));
+        };
+
+        for rays in &mut *rays_bundle {
+            rays.refract_on_surface(surf, None, true)?;
+
+            rays.refract_paraxial(focal_length, &iso)?;
+
+            apodized |= rays.apodize(surf.aperture(), &iso)?;
+            if apodized {
+                warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", optic_name);
+            }
+            surf.evaluate_fluence_of_ray_bundle(rays)?;
+        }
+        // merge all rays
+        if let Some(ld) = this.get_light_data_mut() {
+            if let LightData::GhostFocus(rays) = ld {
+                for r in &*rays_bundle {
+                    rays.push(r.clone());
+                }
+            }
+            if let LightData::Geometric(rays) = ld {
+                for r in &*rays_bundle {
+                    rays.merge(r);
+                }
+            }
+        } else {
+            this.set_light_data(LightData::GhostFocus(rays_bundle.clone()));
+        }
+
+        let mut out_light_rays = LightRays::default();
+        out_light_rays.insert(out_port.to_string(), rays);
+        Ok(out_light_rays)
+    }
+}
 impl AnalysisEnergy for ParaxialSurface {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let in_port = &self.ports().names(&PortType::Input)[0];

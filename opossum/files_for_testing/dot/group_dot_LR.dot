@@ -75,7 +75,7 @@ digraph {
 				<TD FIXEDSIZE="TRUE" ALIGN="CENTER" WIDTH="16" HEIGHT="16"> </TD>
 			</TR>
 			<TR BORDER="0">
-				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="input1" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: input1">1</TD>
+				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="input_1" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: input_1">1</TD>
 				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="out1_trans1_refl2" BORDER="1" BGCOLOR="lightblue" HREF="" TOOLTIP="Output port 1: out1_trans1_refl2">1</TD>
 			</TR>
 			<TR BORDER="0">
@@ -83,7 +83,7 @@ digraph {
 				<TD FIXEDSIZE="TRUE" ALIGN="CENTER" WIDTH="16" HEIGHT="16"> </TD>
 			</TR>
 			<TR BORDER="0">
-				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="input2" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 2: input2">2</TD>
+				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="input_2" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 2: input_2">2</TD>
 				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="out2_trans2_refl1" BORDER="1" BGCOLOR="lightblue" HREF="" TOOLTIP="Output port 2: out2_trans2_refl1">2</TD>
 			</TR>
 			<TR BORDER="0">
@@ -196,7 +196,7 @@ digraph {
 			</TABLE>
 		>];
   i0_i2_i0:rear -> i0_i2_i1:front 
-}  i0_i0:rear -> i0_i1:input1 
+}  i0_i0:rear -> i0_i1:input_1 
   i0_i2_i1:rear -> i0_i0:front 
 }	i1 [
 		shape=plaintext

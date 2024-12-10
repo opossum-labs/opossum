@@ -28,13 +28,13 @@ fn main() -> OpmResult<()> {
     let r_bs = scenery.add_node(&rf)?;
     let det = scenery.add_node(&Dummy::new("Detector"))?;
 
-    scenery.connect_nodes(src, "output_1", bs, "input1", Length::zero())?;
+    scenery.connect_nodes(src, "output_1", bs, "input_1", Length::zero())?;
     scenery.connect_nodes(bs, "out1_trans1_refl2", sample, "input_1", Length::zero())?;
     scenery.connect_nodes(sample, "output_1", m1, "input_1", Length::zero())?;
     scenery.connect_nodes(m1, "output_1", r_sample, "input_1", Length::zero())?;
-    scenery.connect_nodes(r_sample, "output_1", r_bs, "input1", Length::zero())?;
+    scenery.connect_nodes(r_sample, "output_1", r_bs, "input_1", Length::zero())?;
     scenery.connect_nodes(bs, "out2_trans2_refl1", m2, "input_1", Length::zero())?;
-    scenery.connect_nodes(m2, "output_1", r_bs, "input2", Length::zero())?;
+    scenery.connect_nodes(m2, "output_1", r_bs, "input_2", Length::zero())?;
     scenery.connect_nodes(r_bs, "out1_trans1_refl2", det, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);

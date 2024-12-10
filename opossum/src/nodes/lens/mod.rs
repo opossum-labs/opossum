@@ -51,7 +51,6 @@ mod analysis_raytrace;
 pub struct Lens {
     node_attr: NodeAttr,
 }
-
 impl Default for Lens {
     /// Create a lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
     fn default() -> Self {
@@ -91,10 +90,8 @@ impl Default for Lens {
                 .into(),
             )
             .unwrap();
-
         let mut lens = Self { node_attr };
         lens.update_surfaces().unwrap();
-
         lens
     }
 }
@@ -147,9 +144,7 @@ impl Lens {
             }
             .into(),
         )?;
-
         lens.update_surfaces()?;
-
         Ok(lens)
     }
 
@@ -250,7 +245,7 @@ impl OpticNode for Lens {
         };
         let (front_geosurface, anchor_point_iso_front) = if front_curvature.is_infinite() {
             (
-                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso)))),
+                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso.clone())))),
                 Isometry::identity(),
             )
         } else {
@@ -270,7 +265,10 @@ impl OpticNode for Lens {
             anchor_point_iso_front,
             &PortType::Input,
         )?;
-
+        let Ok(Proptype::Length(rear_curvature)) = self.node_attr.get_property("rear curvature")
+        else {
+            return Err(OpossumError::Analysis("cannot read rear curvature".into()));
+        };
         let Ok(Proptype::Length(center_thickness)) =
             self.node_attr.get_property("center thickness")
         else {
@@ -278,16 +276,12 @@ impl OpticNode for Lens {
                 "cannot read center thickness".into(),
             ));
         };
-        let Ok(Proptype::Length(rear_curvature)) = self.node_attr.get_property("rear curvature")
-        else {
-            return Err(OpossumError::Analysis("cannot read rear curvature".into()));
-        };
         let (rear_geosurface, anchor_point_iso_rear) = if rear_curvature.is_infinite() {
             let anchor_point_iso_rear =
                 Isometry::new(meter!(0., 0., center_thickness.value), radian!(0., 0., 0.))?;
             (
                 GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(
-                    &node_iso.append(&anchor_point_iso_rear),
+                    node_iso.append(&anchor_point_iso_rear),
                 )))),
                 anchor_point_iso_rear,
             )
@@ -296,7 +290,6 @@ impl OpticNode for Lens {
                 meter!(0., 0., (*rear_curvature + *center_thickness).value),
                 radian!(0., 0., 0.),
             )?;
-
             (
                 GeoSurfaceRef(Rc::new(RefCell::new(Sphere::new(
                     *rear_curvature,
@@ -310,9 +303,7 @@ impl OpticNode for Lens {
             rear_geosurface,
             anchor_point_iso_rear,
             &PortType::Output,
-        )?;
-
-        Ok(())
+        )
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -348,14 +339,13 @@ impl OpticNode for Lens {
 //     }
 // }
 impl Alignable for Lens {}
-impl Analyzable for Lens {}
-impl LIDT for Lens {}
-
 impl Dottable for Lens {
     fn node_color(&self) -> &str {
         "aqua"
     }
 }
+impl LIDT for Lens {}
+impl Analyzable for Lens {}
 
 #[cfg(test)]
 mod test {

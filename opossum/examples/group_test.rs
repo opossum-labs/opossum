@@ -24,7 +24,7 @@ fn main() -> OpmResult<()> {
     let i_g1_l = group1.add_node(&Lens::default())?;
     group1.map_input_port(i_g1_l, "input_1", "input_1")?;
     let i_g1_bs = group1.add_node(&BeamSplitter::default())?;
-    group1.connect_nodes(i_g1_l, "output_1", i_g1_bs, "input1", millimeter!(100.0))?;
+    group1.connect_nodes(i_g1_l, "output_1", i_g1_bs, "input_1", millimeter!(100.0))?;
     let i_g1_m = group1.add_node(&ThinMirror::default().with_tilt(degree!(45.0, 0.0, 0.0))?)?;
     group1.connect_nodes(
         i_g1_bs,

@@ -400,7 +400,7 @@ mod test {
             .unwrap();
 
         scenery
-            .connect_nodes(i_s, "output_1", i_bs, "input1", Length::zero())
+            .connect_nodes(i_s, "output_1", i_bs, "input_1", Length::zero())
             .unwrap();
         scenery
             .connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "input_1", Length::zero())
@@ -427,7 +427,7 @@ mod test {
             .map_output_port(g1_n2, "out1_trans1_refl2", "output_1")
             .unwrap();
         group1
-            .connect_nodes(g1_n1, "output_1", g1_n2, "input1", Length::zero())
+            .connect_nodes(g1_n1, "output_1", g1_n2, "input_1", Length::zero())
             .unwrap();
 
         let mut nested_group = NodeGroup::new("group 1_1");

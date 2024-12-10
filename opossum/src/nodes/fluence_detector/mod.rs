@@ -80,7 +80,6 @@ impl FluenceDetector {
         fld
     }
 }
-
 impl OpticNode for FluenceDetector {
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
@@ -154,7 +153,7 @@ impl OpticNode for FluenceDetector {
         &mut self.node_attr
     }
     fn reset_data(&mut self) {
-        // self.light_data = None;
+        self.light_data = None;
         self.reset_optic_surfaces();
     }
 }

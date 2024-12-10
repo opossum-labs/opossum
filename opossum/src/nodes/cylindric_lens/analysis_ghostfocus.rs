@@ -1,3 +1,4 @@
+use super::CylindricLens;
 use crate::{
     analyzers::{
         ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace, AnalyzerType, GhostFocusConfig,
@@ -8,8 +9,6 @@ use crate::{
     optic_ports::PortType,
     rays::Rays,
 };
-
-use super::CylindricLens;
 
 impl AnalysisGhostFocus for CylindricLens {
     fn analyze(
@@ -22,7 +21,6 @@ impl AnalysisGhostFocus for CylindricLens {
         let (refri, _, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
         let in_port = &self.ports().names(&PortType::Input)[0];
         let out_port = &self.ports().names(&PortType::Output)[0];
-
         let mut rays_bundle = incoming_data
             .get(in_port)
             .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);

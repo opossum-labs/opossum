@@ -123,7 +123,7 @@ impl OpticNode for Wedge {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
 
-        let front_geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso))));
+        let front_geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso.clone()))));
 
         self.update_surface(
             &"input_1".to_string(),
@@ -153,7 +153,7 @@ impl OpticNode for Wedge {
         )?;
         let anchor_point_iso = thickness_iso.append(&wedge_iso);
         let rear_geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(
-            &node_iso.append(&anchor_point_iso),
+            node_iso.append(&anchor_point_iso),
         ))));
 
         self.update_surface(

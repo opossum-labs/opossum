@@ -6,17 +6,18 @@ use super::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, RayTraceConfig,
+        Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    light_result::LightResult,
+    light_result::{LightRays, LightResult},
     lightdata::LightData,
     num_per_mm,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
     properties::Proptype,
     radian,
+    rays::Rays,
     refractive_index::refr_index_vaccuum,
 };
 use approx::relative_eq;
@@ -160,7 +161,44 @@ impl Dottable for ReflectiveGrating {
 }
 impl LIDT for ReflectiveGrating {}
 impl Analyzable for ReflectiveGrating {}
-impl AnalysisGhostFocus for ReflectiveGrating {}
+impl AnalysisGhostFocus for ReflectiveGrating {
+    fn analyze(
+        &mut self,
+        incoming_data: LightRays,
+        _config: &GhostFocusConfig,
+        _ray_collection: &mut Vec<Rays>,
+        _bounce_lvl: usize,
+    ) -> OpmResult<LightRays> {
+        let in_port = &self.ports().names(&PortType::Input)[0];
+        let out_port = &self.ports().names(&PortType::Output)[0];
+
+        let mut rays_bundle = incoming_data
+            .get(in_port)
+            .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
+
+        for rays in &mut rays_bundle {
+            let mut input = LightResult::default();
+            input.insert(in_port.clone(), LightData::Geometric(rays.clone()));
+            let out = AnalysisRayTrace::analyze(self, input, &RayTraceConfig::default())?;
+
+            if let Some(LightData::Geometric(r)) = out.get(out_port) {
+                *rays = r.clone();
+            }
+        }
+        let Some(surf) = self.get_optic_surface_mut(in_port) else {
+            return Err(OpossumError::Analysis(format!(
+                "Cannot find surface: \"{in_port}\" of node: \"{}\"",
+                self.node_attr().name()
+            )));
+        };
+        for rays in &mut rays_bundle {
+            surf.evaluate_fluence_of_ray_bundle(rays)?;
+        }
+        let mut out_light_rays = LightRays::default();
+        out_light_rays.insert(out_port.to_string(), rays_bundle.clone());
+        Ok(out_light_rays)
+    }
+}
 impl AnalysisEnergy for ReflectiveGrating {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let in_port = &self.ports().names(&PortType::Input)[0];

@@ -157,14 +157,13 @@ impl CylindricLens {
 impl OpticNode for CylindricLens {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-
         let Ok(Proptype::Length(front_curvature)) = self.node_attr.get_property("front curvature")
         else {
             return Err(OpossumError::Analysis("cannot read front curvature".into()));
         };
         let (front_geosurface, anchor_point_iso_front) = if front_curvature.is_infinite() {
             (
-                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso)))),
+                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso.clone())))),
                 Isometry::identity(),
             )
         } else {
@@ -173,7 +172,7 @@ impl OpticNode for CylindricLens {
             (
                 GeoSurfaceRef(Rc::new(RefCell::new(Cylinder::new(
                     *front_curvature,
-                    &node_iso.append(&anchor_point_iso_front),
+                    node_iso.append(&anchor_point_iso_front),
                 )?))),
                 anchor_point_iso_front,
             )
@@ -184,7 +183,6 @@ impl OpticNode for CylindricLens {
             anchor_point_iso_front,
             &PortType::Input,
         )?;
-
         let Ok(Proptype::Length(rear_curvature)) = self.node_attr.get_property("rear curvature")
         else {
             return Err(OpossumError::Analysis("cannot read rear curvature".into()));
@@ -201,7 +199,7 @@ impl OpticNode for CylindricLens {
                 Isometry::new(meter!(0., 0., center_thickness.value), radian!(0., 0., 0.))?;
             (
                 GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(
-                    &node_iso.append(&anchor_point_iso_rear),
+                    node_iso.append(&anchor_point_iso_rear),
                 )))),
                 anchor_point_iso_rear,
             )
@@ -213,20 +211,17 @@ impl OpticNode for CylindricLens {
             (
                 GeoSurfaceRef(Rc::new(RefCell::new(Cylinder::new(
                     *rear_curvature,
-                    &node_iso.append(&anchor_point_iso_rear),
+                    node_iso.append(&anchor_point_iso_rear),
                 )?))),
                 anchor_point_iso_rear,
             )
         };
-
         self.update_surface(
             &"output_1".to_string(),
             rear_geosurface,
             anchor_point_iso_rear,
             &PortType::Output,
-        )?;
-
-        Ok(())
+        )
     }
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -234,16 +229,32 @@ impl OpticNode for CylindricLens {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
+    ///updates the lidt of the optical surfaces after deserialization
+    fn update_lidt(&mut self) -> OpmResult<()> {
+        let lidt = *self.node_attr().lidt();
+        let in_ports = self.ports().names(&PortType::Input);
+        let out_ports = self.ports().names(&PortType::Output);
+
+        for port_name in &in_ports {
+            if let Some(opt_surf) = self.get_optic_surface_mut(port_name) {
+                opt_surf.set_lidt(lidt)?;
+            }
+        }
+        for port_name in &out_ports {
+            if let Some(opt_surf) = self.get_optic_surface_mut(port_name) {
+                opt_surf.set_lidt(lidt)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Alignable for CylindricLens {}
-
 impl Dottable for CylindricLens {
     fn node_color(&self) -> &str {
         "aqua"
     }
 }
-
 impl LIDT for CylindricLens {}
 impl Analyzable for CylindricLens {}
 

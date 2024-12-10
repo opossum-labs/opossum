@@ -121,7 +121,7 @@ impl OpticNode for ThinMirror {
         };
         let (geosurface, anchor_point_iso) = if curvature.is_infinite() {
             (
-                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso)))),
+                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso)))),
                 Isometry::identity(),
             )
         } else {

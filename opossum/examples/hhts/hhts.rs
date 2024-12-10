@@ -252,7 +252,7 @@ fn main() -> OpmResult<()> {
         Length::zero(),
     )?;
 
-    group_bs.map_input_port(bs, "input1", "input_1")?;
+    group_bs.map_input_port(bs, "input_1", "input_1")?;
     group_bs.map_output_port(filter_1w, "output_1", "output_1w")?;
     group_bs.map_output_port(filter_2w, "output_1", "output_2w")?;
 

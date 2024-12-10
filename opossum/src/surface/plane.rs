@@ -24,10 +24,8 @@ impl Plane {
     /// (using `Isometry::identity()`), the surface is oriented with its normal along the
     /// optical axis (= xy surface) and positioned at the origin (z=0)
     #[must_use]
-    pub fn new(isometry: &Isometry) -> Self {
-        Self {
-            isometry: isometry.clone(),
-        }
+    pub const fn new(isometry: Isometry) -> Self {
+        Self { isometry }
     }
 }
 impl Default for Plane {
@@ -97,7 +95,7 @@ mod test {
     #[test]
     fn new() {
         let iso = Isometry::new_along_z(millimeter!(1.0)).unwrap();
-        let p = Plane::new(&iso);
+        let p = Plane::new(iso);
         let t = p.isometry.translation_vec();
         assert_eq!(t.x, millimeter!(0.0));
         assert_eq!(t.y, millimeter!(0.0));
@@ -116,7 +114,7 @@ mod test {
     #[test]
     fn intersect_on_axis() {
         let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Plane::new(&iso);
+        let s = Plane::new(iso);
         let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
@@ -126,14 +124,14 @@ mod test {
     #[test]
     fn intersect_on_axis_behind() {
         let iso = Isometry::new_along_z(millimeter!(-10.0)).unwrap();
-        let s = Plane::new(&iso);
+        let s = Plane::new(iso);
         let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
     fn intersect_zero_dist() {
         let iso = Isometry::new_along_z(millimeter!(0.0)).unwrap();
-        let s = Plane::new(&iso);
+        let s = Plane::new(iso);
         let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
@@ -143,7 +141,7 @@ mod test {
     #[test]
     fn intersect_off_axis() {
         let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Plane::new(&iso);
+        let s = Plane::new(iso);
         let ray = Ray::new_collimated(millimeter!(0.0, 1.0, 1.0), nanometer!(1053.0), joule!(1.0))
             .unwrap();
         assert_eq!(
