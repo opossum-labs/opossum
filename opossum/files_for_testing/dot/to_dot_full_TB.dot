@@ -59,9 +59,9 @@ digraph {
 			<TR BORDER="0">
 				<TD FIXEDSIZE="TRUE" ALIGN="CENTER" WIDTH="16" HEIGHT="16"> </TD>
 				<TD FIXEDSIZE="TRUE" ALIGN="CENTER" WIDTH="16" HEIGHT="16"> </TD>
-				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="input1" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: input1">1</TD>
+				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="input_1" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 1: input_1">1</TD>
 				<TD FIXEDSIZE="TRUE" ALIGN="CENTER" WIDTH="16" HEIGHT="16"> </TD>
-				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="input2" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 2: input2">2</TD>
+				<TD WIDTH="16" HEIGHT="16" FIXEDSIZE="TRUE" PORT="input_2" BORDER="1" BGCOLOR="lightgreen" HREF="" TOOLTIP="Input port 2: input_2">2</TD>
 				<TD FIXEDSIZE="TRUE" ALIGN="CENTER" WIDTH="16" HEIGHT="16"> </TD>
 				<TD FIXEDSIZE="TRUE" ALIGN="CENTER" WIDTH="16" HEIGHT="16"> </TD>
 			</TR>
@@ -187,7 +187,7 @@ digraph {
 			</TR>
 			</TABLE>
 		>];
-  i0:out1 -> i1:input1 
+  i0:out1 -> i1:input_1 
   i1:out1_trans1_refl2 -> i2:in1 
   i1:out2_trans2_refl1 -> i3:in1 
 }

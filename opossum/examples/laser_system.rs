@@ -36,7 +36,7 @@ fn main() -> OpmResult<()> {
 
     scenery.connect_nodes(i_src, "output_1", i_l1, "input_1", Length::zero())?;
     scenery.connect_nodes(i_l1, "output_1", i_l2, "input_1", millimeter!(300.0))?;
-    scenery.connect_nodes(i_l2, "output_1", i_bs, "input1", Length::zero())?;
+    scenery.connect_nodes(i_l2, "output_1", i_bs, "input_1", Length::zero())?;
     scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_e1, "input_1", Length::zero())?;
     scenery.connect_nodes(i_e1, "output_1", i_sd1, "input_1", Length::zero())?;
 
@@ -80,7 +80,7 @@ fn main() -> OpmResult<()> {
     )?;
     cam_box.connect_nodes(i_cb_sd1, "output_1", i_cb_e, "input_1", Length::zero())?;
 
-    cam_box.map_input_port(i_cb_bs, "input1", "input_1")?;
+    cam_box.map_input_port(i_cb_bs, "input_1", "input_1")?;
     let i_cam_box = scenery.add_node(&cam_box)?;
     scenery.connect_nodes(i_f, "output_1", i_cam_box, "input_1", Length::zero())?;
 

@@ -1113,12 +1113,12 @@ mod test {
         let mut og = OpticGraph::default();
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(BeamSplitter::default()).unwrap();
-        og.connect_nodes(sn1_i, "output_1", sn2_i, "input1", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
 
         // node port already internally connected
         assert!(og
-            .map_port(sn2_i, &PortType::Input, "input1", "bs_input")
+            .map_port(sn2_i, &PortType::Input, "input_1", "bs_input")
             .is_err());
 
         // correct usage
@@ -1126,7 +1126,7 @@ mod test {
             .map_port(sn1_i, &PortType::Input, "input_1", "input_1")
             .is_ok());
         assert!(og
-            .map_port(sn2_i, &PortType::Input, "input2", "bs_input")
+            .map_port(sn2_i, &PortType::Input, "input_2", "bs_input")
             .is_ok());
         assert_eq!(og.input_port_map.len(), 2);
     }
@@ -1195,7 +1195,7 @@ mod test {
         let sn3_i = og.add_node(sub_node3).unwrap();
         og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
-        og.connect_nodes(sn2_i, "output_1", sn3_i, "input1", Length::zero())
+        og.connect_nodes(sn2_i, "output_1", sn3_i, "input_1", Length::zero())
             .unwrap();
         assert_eq!(
             og.external_nodes(&PortType::Input),
@@ -1209,7 +1209,7 @@ mod test {
         let sub_node1 = BeamSplitter::new("test", &SplittingConfig::Ratio(0.5)).unwrap();
         let sn2_i = og.add_node(sub_node1).unwrap();
         let sn3_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(sn1_i, "output_1", sn2_i, "input1", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
         og.connect_nodes(sn2_i, "out1_trans1_refl2", sn3_i, "input_1", Length::zero())
             .unwrap();
@@ -1320,7 +1320,7 @@ mod test {
             .map_port(g1_n1, &PortType::Input, "input_1", "input_1")
             .unwrap();
         graph
-            .connect_nodes(g1_n1, "output_1", g1_n2, "input1", Length::zero())
+            .connect_nodes(g1_n1, "output_1", g1_n2, "input_1", Length::zero())
             .unwrap();
         graph
     }
@@ -1403,20 +1403,20 @@ mod test {
         let i_d1 = graph.add_node(Dummy::default()).unwrap();
         let i_d2 = graph.add_node(Dummy::default()).unwrap();
         graph
-            .map_port(i_d1, &PortType::Input, "input_1", "input1")
+            .map_port(i_d1, &PortType::Input, "input_1", "input_1")
             .unwrap();
         graph
-            .map_port(i_d2, &PortType::Input, "input_1", "input2")
+            .map_port(i_d2, &PortType::Input, "input_1", "input_2")
             .unwrap();
         assert_eq!(
             graph.port_map(&PortType::Input).port_names(),
-            vec!["input1", "input2"]
+            vec!["input_1", "input_2"]
         );
         let serialized = serde_yaml::to_string(&graph).unwrap();
         let deserialized: OpticGraph = serde_yaml::from_str(&serialized).unwrap();
         assert_eq!(
             deserialized.port_map(&PortType::Input).port_names(),
-            vec!["input1", "input2"]
+            vec!["input_1", "input_2"]
         );
     }
 }

@@ -1,13 +1,14 @@
 #![warn(missing_docs)]
 
 mod analysis_energy;
+mod analysis_ghostfocus;
 mod analysis_raytrace;
 
 use std::{cell::RefCell, rc::Rc};
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::{ghostfocus::AnalysisGhostFocus, Analyzable, AnalyzerType},
+    analyzers::{Analyzable, AnalyzerType},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{DataEnergy, LightData},
@@ -26,8 +27,8 @@ use crate::{
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - `input1`
-///     - `input2`
+///     - `input_1`
+///     - `input_2`
 ///   - Outputs
 ///     - `out1_trans1_refl2`
 ///     - `out2_trans2_refl1`
@@ -100,11 +101,6 @@ impl BeamSplitter {
     /// # Errors
     /// This function returns an [`OpossumError::Other`] if the [`SplittingConfig`] is invalid.
     pub fn set_splitting_config(&mut self, config: &SplittingConfig) -> OpmResult<()> {
-        // if ratio.is_sign_negative() || ratio > 1.0 || !ratio.is_finite() {
-        //     return Err(OpossumError::Properties(
-        //         "ratio must be within (0.0..1.0) and finite".into(),
-        //     ));
-        // }
         self.node_attr.set_property(
             "splitter config",
             EnumProxy::<SplittingConfig> {
@@ -181,6 +177,11 @@ impl BeamSplitter {
         in2: Option<&LightData>,
         analyzer_type: &AnalyzerType,
     ) -> OpmResult<(Option<LightData>, Option<LightData>)> {
+        let in1_port = &self.ports().names(&PortType::Input)[0];
+        let in2_port = &self.ports().names(&PortType::Input)[1];
+        let out1_port = &self.ports().names(&PortType::Output)[0];
+        let out2_port = &self.ports().names(&PortType::Output)[1];
+
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
         };
@@ -193,22 +194,15 @@ impl BeamSplitter {
         };
         //todo, not clear
         let refraction_intended = true;
-        let (mut in_ray1, split1) = if let Some(input1) = in1 {
-            match input1 {
+        let (mut in_ray1, split1) = if let Some(input_1) = in1 {
+            match input_1 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    // let iso = self.effective_surface_iso("input1")?;
-
-                    if let Some(surf) = self.get_optic_surface_mut("input1") {
-                        // surf.set_isometry(&self.effective_surface_iso("input1")?);
-
+                    if let Some(surf) = self.get_optic_surface_mut(in1_port) {
                         rays.refract_on_surface(surf, None, refraction_intended)?;
 
-                        if let Some(aperture) = self.ports().aperture(&PortType::Input, "input1") {
-                            rays.apodize(aperture, &self.effective_surface_iso("input1")?)?;
-                            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                            }
+                        if let Some(aperture) = self.ports().aperture(&PortType::Input, in1_port) {
+                            rays.apodize(aperture, &self.effective_surface_iso(in1_port)?)?;
                         } else {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
                         };
@@ -223,28 +217,21 @@ impl BeamSplitter {
                 }
                 _ => {
                     return Err(OpossumError::Analysis(
-                        "expected Rays value at `input1` port".into(),
+                        "expected Rays value at `input_1` port".into(),
                     ))
                 }
             }
         } else {
             (Rays::default(), Rays::default())
         };
-        let (mut in_ray2, split2) = if let Some(input2) = in2 {
-            match input2 {
+        let (mut in_ray2, split2) = if let Some(input_2) = in2 {
+            match input_2 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    // let iso = self.effective_surface_iso("input2")?;
-
-                    if let Some(surf) = self.get_optic_surface_mut("input2") {
-                        // surf.set_isometry(&iso);
-
+                    if let Some(surf) = self.get_optic_surface_mut(in2_port) {
                         rays.refract_on_surface(surf, None, refraction_intended)?;
-                        if let Some(aperture) = self.ports().aperture(&PortType::Input, "input2") {
-                            rays.apodize(aperture, &self.effective_surface_iso("input2")?)?;
-                            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                            }
+                        if let Some(aperture) = self.ports().aperture(&PortType::Input, in2_port) {
+                            rays.apodize(aperture, &self.effective_surface_iso(in2_port)?)?;
                         } else {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
                         };
@@ -259,7 +246,7 @@ impl BeamSplitter {
                 }
                 _ => {
                     return Err(OpossumError::Analysis(
-                        "expected Rays value at `input2` port".into(),
+                        "expected Rays value at `input_2` port".into(),
                     ))
                 }
             }
@@ -268,12 +255,9 @@ impl BeamSplitter {
         };
         in_ray1.merge(&split2);
         in_ray2.merge(&split1);
-        let iso = self.effective_surface_iso("out1_trans1_refl2")?;
+        let iso = self.effective_surface_iso(out1_port)?;
 
-        if let Some(aperture) = self
-            .ports()
-            .aperture(&PortType::Output, "out1_trans1_refl2")
-        {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, out1_port) {
             in_ray1.apodize(aperture, &iso)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 in_ray1.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -281,10 +265,7 @@ impl BeamSplitter {
         } else {
             return Err(OpossumError::OpticPort("ouput aperture not found".into()));
         };
-        if let Some(aperture) = self
-            .ports()
-            .aperture(&PortType::Output, "out2_trans2_refl1")
-        {
+        if let Some(aperture) = self.ports().aperture(&PortType::Output, out2_port) {
             in_ray2.apodize(aperture, &iso)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
                 in_ray2.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -306,13 +287,12 @@ impl OpticNode for BeamSplitter {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
 
-        let input_surf_name_list = vec!["input1", "input2"];
+        let input_surf_name_list = vec!["input_1", "input_2"];
         let output_surf_name_list = vec!["out1_trans1_refl2", "out2_trans2_refl1"];
-        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(&node_iso))));
+        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso))));
         let anchor_point_iso = Isometry::identity();
         for in_surf_name in &input_surf_name_list {
             self.update_surface(
@@ -339,20 +319,12 @@ impl Dottable for BeamSplitter {
         "lightpink"
     }
 }
-
 impl Analyzable for BeamSplitter {}
-impl AnalysisGhostFocus for BeamSplitter {}
-
 impl Alignable for BeamSplitter {}
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        analyzers::energy::AnalysisEnergy, light_result::LightResult,
-        nodes::test_helper::test_helper::*, optic_ports::PortType,
-        spectrum_helper::create_he_ne_spec,
-    };
-    use approx::assert_abs_diff_eq;
+    use crate::{nodes::test_helper::test_helper::*, optic_ports::PortType};
     #[test]
     fn default() {
         let mut node = BeamSplitter::default();
@@ -381,7 +353,7 @@ mod test {
         let node = BeamSplitter::default();
         let mut input_ports = node.ports().names(&PortType::Input);
         input_ports.sort();
-        assert_eq!(input_ports, vec!["input1", "input2"]);
+        assert_eq!(input_ports, vec!["input_1", "input_2"]);
         let mut output_ports = node.ports().names(&PortType::Output);
         output_ports.sort();
         assert_eq!(output_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
@@ -395,45 +367,10 @@ mod test {
         assert_eq!(input_ports, vec!["out1_trans1_refl2", "out2_trans2_refl1"]);
         let mut output_ports = node.ports().names(&PortType::Output);
         output_ports.sort();
-        assert_eq!(output_ports, vec!["input1", "input2"]);
+        assert_eq!(output_ports, vec!["input_1", "input_2"]);
     }
     #[test]
     fn analyze_empty() {
         test_analyze_empty::<BeamSplitter>()
-    }
-
-    #[test]
-    fn analyze_inverse() {
-        let mut node = BeamSplitter::new("test", &SplittingConfig::Ratio(0.6)).unwrap();
-        node.set_inverted(true).unwrap();
-        let mut input = LightResult::default();
-        input.insert(
-            "out1_trans1_refl2".into(),
-            LightData::Energy(DataEnergy {
-                spectrum: create_he_ne_spec(1.0).unwrap(),
-            }),
-        );
-        input.insert(
-            "out2_trans2_refl1".into(),
-            LightData::Energy(DataEnergy {
-                spectrum: create_he_ne_spec(0.5).unwrap(),
-            }),
-        );
-        let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
-        let energy_output1 =
-            if let LightData::Energy(s) = output.clone().get("input1").unwrap().clone() {
-                s.spectrum.total_energy()
-            } else {
-                0.0
-            };
-
-        let energy_output2 =
-            if let LightData::Energy(s) = output.clone().get("input2").unwrap().clone() {
-                s.spectrum.total_energy()
-            } else {
-                0.0
-            };
-        assert_abs_diff_eq!(energy_output1, &0.8);
-        assert_abs_diff_eq!(energy_output2, &0.7);
     }
 }

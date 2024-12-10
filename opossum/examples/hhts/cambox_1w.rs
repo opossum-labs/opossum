@@ -17,7 +17,7 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let d1 = cb.add_node(&Dummy::new("d1"))?;
     let bs1 = cb.add_node(&BeamSplitter::new("bs1", &SplittingConfig::Ratio(0.5))?)?;
 
-    cb.connect_nodes(d1, "output_1", bs1, "input1", millimeter!(35.0))?;
+    cb.connect_nodes(d1, "output_1", bs1, "input_1", millimeter!(35.0))?;
 
     // FF path
     let bs_ff = cb.add_node(&BeamSplitter::new("bs_ff", &SplittingConfig::Ratio(0.04))?)?;
@@ -34,7 +34,7 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
         bs1,
         "out1_trans1_refl2",
         bs_ff,
-        "input1",
+        "input_1",
         millimeter!(100.0),
     )?;
     cb.connect_nodes(
@@ -80,7 +80,7 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
         "input_1",
         millimeter!(250.0),
     )?;
-    cb.connect_nodes(nf_lens2, "output_1", nf_bs, "input1", millimeter!(50.0))?;
+    cb.connect_nodes(nf_lens2, "output_1", nf_bs, "input_1", millimeter!(50.0))?;
     cb.connect_nodes(
         nf_bs,
         "out1_trans1_refl2",

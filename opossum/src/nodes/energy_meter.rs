@@ -7,7 +7,7 @@ use crate::{
     dottable::Dottable,
     error::OpmResult,
     joule,
-    light_result::LightResult,
+    light_result::{LightRays, LightResult},
     lightdata::LightData,
     optic_node::{Alignable, OpticNode, LIDT},
     optic_ports::PortType,
@@ -193,7 +193,6 @@ impl OpticNode for EnergyMeter {
         self.light_data = None;
         self.reset_optic_surfaces();
     }
-
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
@@ -221,7 +220,7 @@ impl AnalysisGhostFocus for EnergyMeter {
         config: &crate::analyzers::GhostFocusConfig,
         _ray_collection: &mut Vec<crate::rays::Rays>,
         _bounce_lvl: usize,
-    ) -> OpmResult<crate::light_result::LightRays> {
+    ) -> OpmResult<LightRays> {
         AnalysisGhostFocus::analyze_single_surface_node(self, incoming_data, config)
     }
 }

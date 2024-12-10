@@ -52,11 +52,6 @@ impl Sphere {
                 "radius of curvature must be != 0.0 and finite".into(),
             ));
         }
-        // let anchor_isometry = Isometry::new(
-        //     Point3::new(Length::zero(), Length::zero(), radius),
-        //     radian!(0., 0., 0.),
-        // )?;
-        // let isometry = isometry.append(&anchor_isometry);
         Ok(Self { radius, isometry })
     }
 }
