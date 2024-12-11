@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
 use crate::{
+    analyzers::raytrace::MissedSurfaceStrategy,
     aperture::Aperture,
     centimeter, degree,
     energy_distributions::EnergyDistribution,
@@ -782,6 +783,7 @@ impl Rays {
         surface: &mut OpticSurface,
         refractive_index: Option<&RefractiveIndexType>,
         refraction_intended: bool,
+        missed_surface_strategy: &MissedSurfaceStrategy,
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
@@ -794,7 +796,9 @@ impl Rays {
                 } else {
                     None
                 };
-                if let Some(mut reflected) = ray.refract_on_surface(surface, n2, &self.uuid)? {
+                if let Some(mut reflected) =
+                    ray.refract_on_surface(surface, n2, &self.uuid, missed_surface_strategy)?
+                {
                     if refraction_intended {
                         reflected.clear_pos_hist();
                     } else {
@@ -1821,6 +1825,7 @@ mod test {
                 &mut OpticSurface::default(),
                 Some(&refr_index_vaccuum()),
                 true,
+                &MissedSurfaceStrategy::Stop,
             )
             .unwrap();
         check_logs(
@@ -1850,8 +1855,13 @@ mod test {
         ray1.set_refractive_index(2.0).unwrap();
         rays.add_ray(ray0);
         rays.add_ray(ray1);
-        rays.refract_on_surface(&mut OpticSurface::default(), None, true)
-            .unwrap();
+        rays.refract_on_surface(
+            &mut OpticSurface::default(),
+            None,
+            true,
+            &MissedSurfaceStrategy::Stop,
+        )
+        .unwrap();
         for ray in rays.iter() {
             assert_abs_diff_eq!(ray.direction(), vector![0.0, 1.0, 1.0].normalize())
         }
@@ -1869,6 +1879,7 @@ mod test {
                 &mut OpticSurface::default(),
                 Some(&refr_index_vaccuum()),
                 true,
+                &MissedSurfaceStrategy::Stop,
             )
             .unwrap();
         check_logs(
@@ -1887,7 +1898,12 @@ mod test {
         let mut s = OpticSurface::default();
         s.set_coating(CoatingType::ConstantR { reflectivity: 0.2 });
         let reflected = rays
-            .refract_on_surface(&mut s, Some(&refr_index_vaccuum()), true)
+            .refract_on_surface(
+                &mut s,
+                Some(&refr_index_vaccuum()),
+                true,
+                &MissedSurfaceStrategy::Stop,
+            )
             .unwrap();
         assert_eq!(rays.total_energy(), joule!(0.8));
         assert_eq!(reflected.total_energy(), joule!(0.2));
@@ -2146,8 +2162,13 @@ mod test {
 
         let mut s = OpticSurface::default();
         s.set_isometry(&Isometry::new_along_z(millimeter!(10.0)).unwrap());
-        rays.refract_on_surface(&mut s, Some(&refr_index_vaccuum()), true)
-            .unwrap();
+        rays.refract_on_surface(
+            &mut s,
+            Some(&refr_index_vaccuum()),
+            true,
+            &MissedSurfaceStrategy::Stop,
+        )
+        .unwrap();
         let wf_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(1000.), &Isometry::identity());
         for (i, val) in wf_error.column(2).iter().enumerate() {
@@ -2169,8 +2190,13 @@ mod test {
             joule!(1.),
         )
         .unwrap();
-        rays.refract_on_surface(&mut s, Some(&refr_index_vaccuum()), true)
-            .unwrap();
+        rays.refract_on_surface(
+            &mut s,
+            Some(&refr_index_vaccuum()),
+            true,
+            &MissedSurfaceStrategy::Stop,
+        )
+        .unwrap();
         let wf_error =
             rays.wavefront_error_at_pos_in_units_of_wvl(nanometer!(500.), &Isometry::identity());
         for (i, val) in wf_error.column(2).iter().enumerate() {

@@ -40,7 +40,7 @@ impl AnalysisRayTrace for BeamSplitter {
     fn calc_node_position(
         &mut self,
         incoming_data: LightResult,
-        _config: &RayTraceConfig,
+        config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
         let (input_port1, _input_port2) = if self.inverted() {
             ("out1_trans1_refl2", "out2_trans2_refl1")
@@ -56,7 +56,12 @@ impl AnalysisRayTrace for BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(surf) = self.get_optic_surface_mut(input_port1) {
-                        rays.refract_on_surface(surf, None, refraction_intended)?;
+                        rays.refract_on_surface(
+                            surf,
+                            None,
+                            refraction_intended,
+                            config.missed_surface_strategy(),
+                        )?;
                     } else {
                         return Err(OpossumError::OpticPort(
                             "input optic surface not found".into(),

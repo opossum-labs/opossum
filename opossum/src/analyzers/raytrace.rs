@@ -109,9 +109,18 @@ pub trait AnalysisRayTrace: OpticNode {
                 self.node_attr().name()
             )));
         };
+        let missed_surface_strategy = match analyzer_type {
+            AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
+            AnalyzerType::RayTrace(ray_trace_config) => &ray_trace_config.missed_surface_strategy,
+            AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
+        };
         for rays in &mut *rays_bundle {
-            let mut reflected =
-                rays.refract_on_surface(surf, Some(refri_after_surf), refraction_intended)?;
+            let mut reflected = rays.refract_on_surface(
+                surf,
+                Some(refri_after_surf),
+                refraction_intended,
+                missed_surface_strategy,
+            )?;
             reflected.set_node_origin_uuid(uuid);
             if let AnalyzerType::GhostFocus(_) = analyzer_type {
                 surf.evaluate_fluence_of_ray_bundle(rays)?;
@@ -149,8 +158,13 @@ pub trait AnalysisRayTrace: OpticNode {
         let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
             return Err(OpossumError::Analysis("no surface found".into()));
         };
+        let missed_surface_strategy = match analyzer_type {
+            AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
+            AnalyzerType::RayTrace(ray_trace_config) => &ray_trace_config.missed_surface_strategy,
+            AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
+        };
         for rays in &mut *rays_bundle {
-            rays.refract_on_surface(surf, None, true)?;
+            rays.refract_on_surface(surf, None, true, missed_surface_strategy)?;
 
             apodized |= rays.apodize(surf.aperture(), &iso)?;
             if apodized {
@@ -259,27 +273,21 @@ pub trait AnalysisRayTrace: OpticNode {
         Ok((index_model.value.clone(), *center_thickness, angle))
     }
 }
-// /// enum to define the mode of the raytracing analysis.
-// /// Currently only sequential mode
-// #[derive(Default, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
-// pub enum RayTracingMode {
-//     #[default]
-//     /// Sequential mode
-//     ///
-//     /// In this mode, rays follow the directed graph from node to node. If the next node is not hit, further propagation is dropped. This mode is
-//     /// mostly useful for imaging, collimation, and optimizing of "simple" optical lens systems.
-//     Sequential,
-//     // /// Semi-sequential mode
-//     // ///
-//     // /// Rays may bounce and traverse the graph in backward direction. If the next intended node is not hit, further propagation is dropped.
-//     // /// Interesting for ghost focus simulation
-//     // SemiSequential,
-//     // /// Non-sequential mode
-//     // ///
-//     // /// Rays do not follow a specific direction of the graph. Skipping of nodes may be allowed. Interesting for stray-light analysis, flash-lamp pumping, beam dumps, etc.
-//     // NonSequential
-// }
 
+/// Strategy to use if a [`Ray`](crate::ray::Ray) misses a surface
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+pub enum MissedSurfaceStrategy {
+    /// The [`Ray`](crate::ray::Ray) it is set as invalid and does no longer propagate.
+    Stop,
+    /// The [`Ray`](crate::ray::Ray) is not altered in any way, thus skipping the surface and propagating
+    /// further through the system.
+    Ignore,
+}
+impl Default for MissedSurfaceStrategy {
+    fn default() -> Self {
+        Self::Stop
+    }
+}
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration data for a rays tracing analysis.
 ///
@@ -293,19 +301,20 @@ pub struct RayTraceConfig {
     min_energy_per_ray: Energy,
     max_number_of_bounces: usize,
     max_number_of_refractions: usize,
+    missed_surface_strategy: MissedSurfaceStrategy,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
-    // ///   - ray tracing mode: [`RayTracingMode::Sequential`]
     ///   - mininum energy / ray: `1 pJ`
     ///   - maximum number of bounces / ray: `1000`
-    ///   - maximum number od refractions / ray: `1000`
+    ///   - maximum number of refractions / ray: `1000`
+    ///   - missed surface strategy: ray is stopped
     fn default() -> Self {
         Self {
-            //mode: RayTracingMode::default(),
             min_energy_per_ray: picojoule!(1.0),
             max_number_of_bounces: 1000,
             max_number_of_refractions: 1000,
+            missed_surface_strategy: MissedSurfaceStrategy::default(),
         }
     }
 }
@@ -353,6 +362,14 @@ impl RayTraceConfig {
     pub const fn max_number_of_refractions(&self) -> usize {
         self.max_number_of_refractions
     }
+    /// Returns a reference to the `missed surface strategy` of this [`RayTraceConfig`].
+    pub fn missed_surface_strategy(&self) -> &MissedSurfaceStrategy {
+        &self.missed_surface_strategy
+    }
+    /// Sets the `missed surface strategy` of this [`RayTraceConfig`].
+    pub fn set_missed_surface_strategy(&mut self, missed_surface_strategy: MissedSurfaceStrategy) {
+        self.missed_surface_strategy = missed_surface_strategy;
+    }
 }
 
 #[cfg(test)]
@@ -396,7 +413,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000 }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop }"
         );
     }
     #[test]

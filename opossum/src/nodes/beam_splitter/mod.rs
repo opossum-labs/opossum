@@ -8,7 +8,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::{Analyzable, AnalyzerType},
+    analyzers::{raytrace::MissedSurfaceStrategy, Analyzable, AnalyzerType},
     dottable::Dottable,
     error::{OpmResult, OpossumError},
     lightdata::{DataEnergy, LightData},
@@ -192,14 +192,23 @@ impl BeamSplitter {
                 "could not read splitter config property".into(),
             ));
         };
-        //todo, not clear
         let refraction_intended = true;
+        let missed_surface_strategy = match analyzer_type {
+            AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
+            AnalyzerType::RayTrace(ray_trace_config) => &ray_trace_config.missed_surface_strategy(),
+            AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
+        };
         let (mut in_ray1, split1) = if let Some(input_1) = in1 {
             match input_1 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(surf) = self.get_optic_surface_mut(in1_port) {
-                        rays.refract_on_surface(surf, None, refraction_intended)?;
+                        rays.refract_on_surface(
+                            surf,
+                            None,
+                            refraction_intended,
+                            missed_surface_strategy,
+                        )?;
 
                         if let Some(aperture) = self.ports().aperture(&PortType::Input, in1_port) {
                             rays.apodize(aperture, &self.effective_surface_iso(in1_port)?)?;
@@ -229,7 +238,12 @@ impl BeamSplitter {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
                     if let Some(surf) = self.get_optic_surface_mut(in2_port) {
-                        rays.refract_on_surface(surf, None, refraction_intended)?;
+                        rays.refract_on_surface(
+                            surf,
+                            None,
+                            refraction_intended,
+                            missed_surface_strategy,
+                        )?;
                         if let Some(aperture) = self.ports().aperture(&PortType::Input, in2_port) {
                             rays.apodize(aperture, &self.effective_surface_iso(in2_port)?)?;
                         } else {
