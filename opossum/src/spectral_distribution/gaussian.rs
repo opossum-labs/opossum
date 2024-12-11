@@ -24,9 +24,9 @@ impl Gaussian {
     /// - `mu`: the mean value  -> Shifts the distribution n to be centered at `mu`
     /// - `fwhm`: the full-with at half maximum of the gaussian
     /// - `power`: the power of the distribution. A standard Gaussian distribution has a power of 1. Larger powers are so called super-Gaussians
-
+    ///
     /// # Errors
-
+    ///
     /// This function will return an error if
     ///   - the mean value are non-finite
     ///   - the fwhm are non-finite, zero or below zero

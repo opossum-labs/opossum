@@ -195,7 +195,7 @@ impl BeamSplitter {
         let refraction_intended = true;
         let missed_surface_strategy = match analyzer_type {
             AnalyzerType::Energy => &MissedSurfaceStrategy::Stop,
-            AnalyzerType::RayTrace(ray_trace_config) => &ray_trace_config.missed_surface_strategy(),
+            AnalyzerType::RayTrace(ray_trace_config) => ray_trace_config.missed_surface_strategy(),
             AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
         };
         let (mut in_ray1, split1) = if let Some(input_1) = in1 {

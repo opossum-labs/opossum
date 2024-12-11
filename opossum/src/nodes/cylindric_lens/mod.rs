@@ -100,7 +100,7 @@ impl CylindricLens {
     ///
     /// This function creates a cylindric lens with spherical front and back surfaces, a given center thickness and refractive index.
     /// By default, the curvature aligned along the y axis.
-
+    ///
     /// The radii of curvature must not be zero. The given refractive index must not be < 1.0. A radius of curvature of +/- infinity
     /// corresponds to a flat surface.
     ///

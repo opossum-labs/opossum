@@ -778,7 +778,6 @@ type EdgeInfo<'a> = (Uuid, Uuid, &'a str, &'a str, Length);
 
 impl<'de> Deserialize<'de> for OpticGraph {
     #[allow(clippy::too_many_lines)]
-
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -798,7 +797,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
             {
                 struct FieldVisitor;
 
-                impl<'de> Visitor<'de> for FieldVisitor {
+                impl Visitor<'_> for FieldVisitor {
                     type Value = Field;
 
                     fn expecting(

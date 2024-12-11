@@ -82,7 +82,6 @@ impl FibonacciEllipse {
     /// This function will return an error if
     ///  - the given `side_length_x` or `side_length_y` is negative or not finite, or both are zero.
     ///  - the given `nr_of_rays` is zero.
-
     pub fn new(radius_x: Length, radius_y: Length, nr_of_rays: usize) -> OpmResult<Self> {
         if radius_x.is_sign_negative()
             || !radius_x.is_finite()

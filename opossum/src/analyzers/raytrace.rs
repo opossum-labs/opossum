@@ -275,7 +275,7 @@ pub trait AnalysisRayTrace: OpticNode {
 }
 
 /// Strategy to use if a [`Ray`](crate::ray::Ray) misses a surface
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub enum MissedSurfaceStrategy {
     /// The [`Ray`](crate::ray::Ray) it is set as invalid and does no longer propagate.
     Stop,
@@ -363,7 +363,8 @@ impl RayTraceConfig {
         self.max_number_of_refractions
     }
     /// Returns a reference to the `missed surface strategy` of this [`RayTraceConfig`].
-    pub fn missed_surface_strategy(&self) -> &MissedSurfaceStrategy {
+    #[must_use]
+    pub const fn missed_surface_strategy(&self) -> &MissedSurfaceStrategy {
         &self.missed_surface_strategy
     }
     /// Sets the `missed surface strategy` of this [`RayTraceConfig`].

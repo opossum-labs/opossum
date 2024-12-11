@@ -2073,7 +2073,7 @@ impl PlotParameters {
         found
     }
 
-    fn check_ax_lim_validity(ax_lim_opt: &Option<AxLims>) -> bool {
+    fn check_ax_lim_validity(ax_lim_opt: Option<&AxLims>) -> bool {
         ax_lim_opt.as_ref().map_or(true, |lim| lim.check_validity())
     }
 
@@ -2086,7 +2086,7 @@ impl PlotParameters {
                 matches!(label_pos, LabelPos::Left | LabelPos::Right)
             }
             PlotArgs::XLim(lim_opt) | PlotArgs::YLim(lim_opt) | PlotArgs::ZLim(lim_opt) => {
-                Self::check_ax_lim_validity(lim_opt)
+                Self::check_ax_lim_validity(lim_opt.as_ref())
             }
             PlotArgs::PlotSize(plotsize) => !(plotsize.0 == 0 || plotsize.1 == 0),
             PlotArgs::FDir(fdir) => Path::new(fdir).exists(),
@@ -3158,15 +3158,15 @@ mod test {
 
     #[test]
     fn check_ax_lim_opt_validity() {
-        assert!(!PlotParameters::check_ax_lim_validity(&Some(AxLims {
+        assert!(!PlotParameters::check_ax_lim_validity(Some(&AxLims {
             min: f64::INFINITY,
             max: 1.
         })));
-        assert!(PlotParameters::check_ax_lim_validity(&Some(AxLims {
+        assert!(PlotParameters::check_ax_lim_validity(Some(&AxLims {
             min: 0.,
             max: 1.
         })));
-        assert!(PlotParameters::check_ax_lim_validity(&None));
+        assert!(PlotParameters::check_ax_lim_validity(None));
     }
     #[test]
     fn check_plot_arg_validity_xlabel_pos() {
