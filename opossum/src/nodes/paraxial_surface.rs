@@ -2,7 +2,9 @@
 //! A paraxial surface (ideal lens)
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        energy::AnalysisEnergy,
+        ghostfocus::AnalysisGhostFocus,
+        raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
         Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
@@ -134,7 +136,7 @@ impl AnalysisGhostFocus for ParaxialSurface {
         };
 
         for rays in &mut *rays_bundle {
-            rays.refract_on_surface(surf, None, true)?;
+            rays.refract_on_surface(surf, None, true, &MissedSurfaceStrategy::Ignore)?;
 
             rays.refract_paraxial(focal_length, &iso)?;
 
@@ -196,7 +198,12 @@ impl AnalysisRayTrace for ParaxialSurface {
             let iso = self.effective_surface_iso(in_port)?;
             if let Some(surf) = self.get_optic_surface_mut(in_port) {
                 let refraction_intended = true;
-                rays.refract_on_surface(surf, None, refraction_intended)?;
+                rays.refract_on_surface(
+                    surf,
+                    None,
+                    refraction_intended,
+                    config.missed_surface_strategy(),
+                )?;
                 rays.refract_paraxial(focal_length, &iso)?;
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
                     rays.apodize(aperture, &iso)?;

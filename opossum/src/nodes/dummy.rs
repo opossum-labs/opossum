@@ -103,7 +103,12 @@ impl AnalysisRayTrace for Dummy {
 
             let refraction_intended = true;
             if let Some(surf) = self.get_optic_surface_mut(in_port) {
-                rays.refract_on_surface(surf, None, refraction_intended)?;
+                rays.refract_on_surface(
+                    surf,
+                    None,
+                    refraction_intended,
+                    config.missed_surface_strategy(),
+                )?;
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
                     rays.apodize(aperture, &iso)?;
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;

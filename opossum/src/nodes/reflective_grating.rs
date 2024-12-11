@@ -5,7 +5,9 @@ use std::f64::consts::PI;
 use super::NodeAttr;
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        energy::AnalysisEnergy,
+        ghostfocus::AnalysisGhostFocus,
+        raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
         Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
@@ -175,11 +177,12 @@ impl AnalysisGhostFocus for ReflectiveGrating {
         let mut rays_bundle = incoming_data
             .get(in_port)
             .map_or_else(Vec::<Rays>::new, std::clone::Clone::clone);
-
+        let mut ray_trace_config = RayTraceConfig::default();
+        ray_trace_config.set_missed_surface_strategy(MissedSurfaceStrategy::Ignore);
         for rays in &mut rays_bundle {
             let mut input = LightResult::default();
             input.insert(in_port.clone(), LightData::Geometric(rays.clone()));
-            let out = AnalysisRayTrace::analyze(self, input, &RayTraceConfig::default())?;
+            let out = AnalysisRayTrace::analyze(self, input, &ray_trace_config)?;
 
             if let Some(LightData::Geometric(r)) = out.get(out_port) {
                 *rays = r.clone();

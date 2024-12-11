@@ -5,7 +5,9 @@ use uom::si::f64::Length;
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        energy::AnalysisEnergy,
+        ghostfocus::AnalysisGhostFocus,
+        raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
         Analyzable, GhostFocusConfig, RayTraceConfig,
     },
     dottable::Dottable,
@@ -303,7 +305,12 @@ impl AnalysisGhostFocus for Source {
         if let Some(surf) = self.get_optic_surface_mut("input_1") {
             let refraction_intended = true;
             for r in &mut rays {
-                r.refract_on_surface(surf, None, refraction_intended)?;
+                r.refract_on_surface(
+                    surf,
+                    None,
+                    refraction_intended,
+                    &MissedSurfaceStrategy::Ignore,
+                )?;
                 surf.evaluate_fluence_of_ray_bundle(r)?;
             }
         } else {
