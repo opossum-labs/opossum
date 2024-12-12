@@ -54,16 +54,15 @@ impl Default for ParabolicMirror {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("parabolic mirror");
         node_attr
-            .create_property("focal length", "focal length", None, meter!(1.0).into())
+            .create_property("focal length", "focal length", meter!(1.0).into())
             .unwrap();
         node_attr
-            .create_property("oa angle", "off axis angle", None, degree!(0.0).into())
+            .create_property("oa angle", "off axis angle", degree!(0.0).into())
             .unwrap();
         node_attr
             .create_property(
                 "collimating",
                 "collimation flag. True if the parabola should collimate, false otherwise",
-                None,
                 false.into(),
             )
             .unwrap();
@@ -72,7 +71,6 @@ impl Default for ParabolicMirror {
             .create_property(
                 "oa direction",
                 "off axis direction in the local coordinate system",
-                None,
                 Vector2::new(1., 0.).into(),
             )
             .unwrap();

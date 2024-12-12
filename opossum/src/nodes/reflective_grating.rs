@@ -59,7 +59,6 @@ impl Default for ReflectiveGrating {
             .create_property(
                 "line density",
                 "line density in 1/mm of this grating",
-                None,
                 Proptype::LinearDensity(num_per_mm!(1740.)),
             )
             .unwrap();
@@ -67,7 +66,6 @@ impl Default for ReflectiveGrating {
             .create_property(
                 "diffraction order",
                 "order of diffraction that should be used to propagate the rays",
-                None,
                 (-1).into(),
             )
             .unwrap();

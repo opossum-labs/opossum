@@ -134,12 +134,8 @@ mod test {
     #[test]
     fn to_html_node_report() {
         let mut properties = Properties::default();
-        properties
-            .create("test1", "desc1", None, 1.0.into())
-            .unwrap();
-        properties
-            .create("test2", "desc2", None, "test".into())
-            .unwrap();
+        properties.create("test1", "desc1", 1.0.into()).unwrap();
+        properties.create("test2", "desc2", "test".into()).unwrap();
         let report = NodeReport::new("test detector", "detector name", "123", properties);
         let html_report = report.to_html_node_report("345");
         assert_eq!(html_report.node_name, "detector name");

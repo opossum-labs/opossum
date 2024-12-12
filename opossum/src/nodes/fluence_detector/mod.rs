@@ -56,7 +56,6 @@ impl Default for FluenceDetector {
             .create_property(
                 "fluence estimator",
                 "fluence estimator strategy",
-                None,
                 FluenceEstimator::Voronoi.into(),
             )
             .unwrap();
@@ -107,7 +106,6 @@ impl OpticNode for FluenceDetector {
                 .create(
                     &format!("Fluence ({estimator})"),
                     "2D spatial energy distribution",
-                    None,
                     fluence_data_kde.clone().into(),
                 )
                 .unwrap();
@@ -115,7 +113,6 @@ impl OpticNode for FluenceDetector {
                 .create(
                     &format!("Peak Fluence ({estimator})"),
                     "Peak fluence of the distribution",
-                    None,
                     Proptype::Fluence(fluence_data_kde.peak()),
                 )
                 .unwrap();
@@ -123,7 +120,6 @@ impl OpticNode for FluenceDetector {
                 .create(
                     &format!("Total energy ({estimator})"),
                     "Total energy of the distribution",
-                    None,
                     Proptype::Energy(fluence_data_kde.total_energy()),
                 )
                 .unwrap();
@@ -132,7 +128,6 @@ impl OpticNode for FluenceDetector {
                     .create(
                         "Warning",
                         "warning during analysis",
-                        None,
                         "Rays have been apodized at input aperture. Results might not be accurate."
                             .into(),
                     )

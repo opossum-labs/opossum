@@ -74,7 +74,6 @@ impl Default for EnergyMeter {
             .create_property(
                 "meter type",
                 "model type of the meter",
-                None,
                 Metertype::default().into(),
             )
             .unwrap();
@@ -149,19 +148,16 @@ impl OpticNode for EnergyMeter {
         };
         let mut props = Properties::default();
         if let Some(e) = energy {
-            props
-                .create("Energy", "Output energy", None, e.into())
-                .unwrap();
+            props.create("Energy", "Output energy", e.into()).unwrap();
         } else {
             props
-                .create("Energy", "Output energy", None, "no data".into())
+                .create("Energy", "Output energy", "no data".into())
                 .unwrap();
         }
         props
             .create(
                 "Model",
                 "type of meter",
-                None,
                 self.node_attr.get_property("meter type").unwrap().clone(),
             )
             .unwrap();
@@ -170,7 +166,6 @@ impl OpticNode for EnergyMeter {
                 .create(
                     "Warning",
                     "warning during analysis",
-                    None,
                     "Rays have been apodized at input aperture. Results might not be accurate."
                         .into(),
                 )

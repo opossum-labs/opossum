@@ -65,7 +65,6 @@ impl Default for SpotDiagram {
             .create_property(
                 "plot_aperture",
                 "flag that defines if the aperture is displayed in a plot",
-                None,
                 false.into(),
             )
             .unwrap();
@@ -110,14 +109,13 @@ impl OpticNode for SpotDiagram {
                 transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
             }
             props
-                .create("Spot diagram", "2D spot diagram", None, self.clone().into())
+                .create("Spot diagram", "2D spot diagram", self.clone().into())
                 .unwrap();
             if let Some(c) = transformed_rays.energy_weighted_centroid() {
                 props
                     .create(
                         "centroid x",
                         "x position of energy-weighted centroid",
-                        None,
                         c.x.into(),
                     )
                     .unwrap();
@@ -126,19 +124,13 @@ impl OpticNode for SpotDiagram {
                     .create(
                         "centroid y",
                         "y position of energy-weightedcentroid",
-                        None,
                         c.y.into(),
                     )
                     .unwrap();
             }
             if let Some(radius) = transformed_rays.beam_radius_geo() {
                 props
-                    .create(
-                        "geo beam radius",
-                        "geometric beam radius",
-                        None,
-                        radius.into(),
-                    )
+                    .create("geo beam radius", "geometric beam radius", radius.into())
                     .unwrap();
             }
             if let Some(radius) = transformed_rays.energy_weighted_beam_radius_rms() {
@@ -146,7 +138,6 @@ impl OpticNode for SpotDiagram {
                     .create(
                         "rms beam radius",
                         "energy-weighted rms beam radius",
-                        None,
                         radius.into(),
                     )
                     .unwrap();
@@ -156,7 +147,6 @@ impl OpticNode for SpotDiagram {
                     .create(
                         "Warning",
                         "warning during analysis",
-                        None,
                         "Rays have been apodized at input aperture. Results might not be accurate."
                             .into(),
                     )

@@ -51,7 +51,6 @@ impl Default for Wedge {
             .create_property(
                 "center thickness",
                 "thickness of the lens in the center",
-                None,
                 millimeter!(10.0).into(),
             )
             .unwrap();
@@ -59,7 +58,6 @@ impl Default for Wedge {
             .create_property(
                 "refractive index",
                 "refractive index of the lens material",
-                None,
                 EnumProxy::<RefractiveIndexType> {
                     value: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
                 }
@@ -67,7 +65,7 @@ impl Default for Wedge {
             )
             .unwrap();
         node_attr
-            .create_property("wedge", "wedge angle", None, Angle::zero().into())
+            .create_property("wedge", "wedge angle", Angle::zero().into())
             .unwrap();
 
         let mut wedge = Self { node_attr };

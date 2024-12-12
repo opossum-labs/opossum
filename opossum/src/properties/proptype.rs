@@ -292,25 +292,6 @@ where
     let base_value = q.value.to_f64().unwrap();
     format!("{}{}", format_value_with_prefix(base_value), base_unit)
 }
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
-/// An enum defining value constraints for various [`Proptype`]s.
-pub enum PropCondition {
-    /// Allow only non-empty [`Proptype::String`]s.
-    NonEmptyString,
-    /// Do not use yet...
-    InternalOnly, // DO NOT USE YET (deserialization problems)
-    /// This property is readonly. It can only be set during property creation.
-    ReadOnly, // can only be set during creation
-    /// Restrict integer or float properties to values greater (>) than the given limit.
-    GreaterThan(f64),
-    /// Restrict integer or float properties to values less (<) than the given limit.
-    LessThan(f64),
-    /// Restrict integer or float properties to values greater than or equal (>=) the given limit.
-    GreaterThanEqual(f64),
-    /// Restrict integer or float properties to values less than or equal (<=) the given limit.
-    LessThanEqual(f64),
-}
 #[cfg(test)]
 mod test {
     use super::*;

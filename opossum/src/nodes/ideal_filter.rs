@@ -50,7 +50,6 @@ impl Default for IdealFilter {
             .create_property(
                 "filter type",
                 "used filter algorithm",
-                None,
                 EnumProxy::<FilterType> {
                     value: FilterType::Constant(1.0),
                 }

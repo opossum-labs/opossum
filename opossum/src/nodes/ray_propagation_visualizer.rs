@@ -54,8 +54,7 @@ impl Default for RayPropagationVisualizer {
         let mut node_attr = NodeAttr::new("ray propagation");
         node_attr.create_property("view_direction", 
         "plane to project the ray positions onto, defined by the normal vector. default: y-z plane", 
-        None,
-        Proptype::Vec3(Vector3::x())).unwrap();
+                Proptype::Vec3(Vector3::x())).unwrap();
 
         let mut rpv = Self {
             light_data: None,
@@ -105,7 +104,6 @@ impl OpticNode for RayPropagationVisualizer {
                     .create(
                         "Ray plot",
                         "Ray plot",
-                        None,
                         Proptype::RayPositionHistory(ray_position_histories),
                     )
                     .unwrap();
@@ -114,8 +112,7 @@ impl OpticNode for RayPropagationVisualizer {
                     .create(
                         "Warning",
                         "warning during analysis",
-                        None,
-                        "Rays have been apodized at input aperture. Results might not be accurate."
+                                                "Rays have been apodized at input aperture. Results might not be accurate."
                             .into(),
                     )
                     .unwrap();

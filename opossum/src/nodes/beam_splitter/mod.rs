@@ -49,7 +49,6 @@ impl Default for BeamSplitter {
             .create_property(
                 "splitter config",
                 "config data of the beam splitter",
-                None,
                 EnumProxy::<SplittingConfig> {
                     value: SplittingConfig::Ratio(0.5),
                 }

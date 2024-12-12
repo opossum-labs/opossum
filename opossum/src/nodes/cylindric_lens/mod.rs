@@ -59,7 +59,6 @@ impl Default for CylindricLens {
             .create_property(
                 "front curvature",
                 "radius of curvature of front surface",
-                None,
                 millimeter!(500.0).into(),
             )
             .unwrap();
@@ -67,7 +66,6 @@ impl Default for CylindricLens {
             .create_property(
                 "rear curvature",
                 "radius of curvature of rear surface",
-                None,
                 millimeter!(-500.0).into(),
             )
             .unwrap();
@@ -75,7 +73,6 @@ impl Default for CylindricLens {
             .create_property(
                 "center thickness",
                 "thickness of the lens in the center",
-                None,
                 millimeter!(10.0).into(),
             )
             .unwrap();
@@ -83,7 +80,6 @@ impl Default for CylindricLens {
             .create_property(
                 "refractive index",
                 "refractive index of the lens material",
-                None,
                 EnumProxy::<RefractiveIndexType> {
                     value: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
                 }

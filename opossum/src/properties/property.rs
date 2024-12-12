@@ -1,10 +1,9 @@
-use super::{PropCondition, Proptype};
+use super::Proptype;
 use crate::{
     error::{OpmResult, OpossumError},
     plottable::Plottable,
 };
 use nalgebra::vector;
-use plotters::coord::combinators::LogScalable;
 use serde::{Deserialize, Serialize};
 use std::{mem, path::Path};
 
@@ -18,21 +17,11 @@ pub struct Property {
     prop: Proptype,
     #[serde(skip)]
     description: String,
-    #[serde(skip)]
-    conditions: Option<Vec<PropCondition>>,
 }
 impl Property {
     #[must_use]
-    pub const fn new(
-        prop: Proptype,
-        description: String,
-        conditions: Option<Vec<PropCondition>>,
-    ) -> Self {
-        Self {
-            prop,
-            description,
-            conditions,
-        }
+    pub const fn new(prop: Proptype, description: String) -> Self {
+        Self { prop, description }
     }
 
     /// Returns a reference to the actual property value (expressed as [`Proptype`] prop of this [`Property`].
@@ -51,17 +40,9 @@ impl Property {
     ///
     /// This function will return an error if the property conditions are  not met.
     pub fn set_value(&mut self, prop: Proptype) -> OpmResult<()> {
-        if let Some(conditions) = &self.conditions {
-            if conditions.contains(&PropCondition::InternalOnly) {
-                return Err(OpossumError::Properties(
-                    "property is internally used and public read-only".into(),
-                ));
-            }
-        }
         if mem::discriminant(&self.prop) != mem::discriminant(&prop) {
             return Err(OpossumError::Properties("incompatible value types".into()));
         }
-        self.check_conditions(&prop)?;
         self.prop = prop;
         Ok(())
     }
@@ -71,98 +52,7 @@ impl Property {
     ///
     /// This function will return an error if the [`Proptype`]s [`PropCondition`]s are not met.
     pub fn set_value_unchecked(&mut self, prop: Proptype) -> OpmResult<()> {
-        self.check_conditions(&prop)?;
         self.prop = prop;
-        Ok(())
-    }
-    fn check_conditions(&self, prop: &Proptype) -> OpmResult<()> {
-        if let Some(conditions) = &self.conditions {
-            for condition in conditions {
-                match condition {
-                    PropCondition::NonEmptyString => {
-                        if let Proptype::String(s) = prop.clone() {
-                            if s.is_empty() {
-                                return Err(OpossumError::Properties(
-                                    "string value must not be empty".into(),
-                                ));
-                            }
-                        }
-                    }
-                    PropCondition::GreaterThan(limit) => match prop {
-                        Proptype::I32(val) => {
-                            if val.as_f64() <= *limit {
-                                return Err(OpossumError::Properties(format!(
-                                    "value must be > {limit}"
-                                )));
-                            }
-                        }
-                        Proptype::F64(val) => {
-                            if val <= limit {
-                                return Err(OpossumError::Properties(format!(
-                                    "value must be > {limit}"
-                                )));
-                            }
-                        }
-                        _ => {}
-                    },
-                    PropCondition::LessThan(limit) => match prop {
-                        Proptype::I32(val) => {
-                            if val.as_f64() >= *limit {
-                                return Err(OpossumError::Properties(format!(
-                                    "value must be < {limit}"
-                                )));
-                            }
-                        }
-                        Proptype::F64(val) => {
-                            if val >= limit {
-                                return Err(OpossumError::Properties(format!(
-                                    "value must be < {limit}"
-                                )));
-                            }
-                        }
-                        _ => {}
-                    },
-                    PropCondition::GreaterThanEqual(limit) => match prop {
-                        Proptype::I32(val) => {
-                            if val.as_f64() < *limit {
-                                return Err(OpossumError::Properties(format!(
-                                    "value must be >= {limit}"
-                                )));
-                            }
-                        }
-                        Proptype::F64(val) => {
-                            if val < limit {
-                                return Err(OpossumError::Properties(format!(
-                                    "value must be >= {limit}"
-                                )));
-                            }
-                        }
-                        _ => {}
-                    },
-                    PropCondition::LessThanEqual(limit) => match prop {
-                        Proptype::I32(val) => {
-                            if val.as_f64() > *limit {
-                                return Err(OpossumError::Properties(format!(
-                                    "value must be <= {limit}"
-                                )));
-                            }
-                        }
-                        Proptype::F64(val) => {
-                            if val > limit {
-                                return Err(OpossumError::Properties(format!(
-                                    "value must be <= {limit}"
-                                )));
-                            }
-                        }
-                        _ => {}
-                    },
-                    PropCondition::InternalOnly => {}
-                    PropCondition::ReadOnly => {
-                        return Err(OpossumError::Properties("property is read-only".into()));
-                    }
-                }
-            }
-        }
         Ok(())
     }
     /// Export this [`Property`] to a file at the given `report_path`.
@@ -219,20 +109,27 @@ impl Property {
 mod test {
     use super::*;
     #[test]
-    fn property_description() {
+    fn new() {
         let prop = Property {
             prop: true.into(),
             description: "my description".to_string(),
-            conditions: None,
+        };
+        assert_eq!(prop.description, "my description");
+        // assert_eq!(prop.prop, Proptype::Bool(true));
+    }
+    #[test]
+    fn description() {
+        let prop = Property {
+            prop: true.into(),
+            description: "my description".to_string(),
         };
         assert_eq!(prop.description(), "my description");
     }
     #[test]
-    fn property_set_different_type() {
+    fn set_different_type() {
         let mut prop = Property {
             prop: Proptype::Bool(true),
             description: "".into(),
-            conditions: None,
         };
         assert!(prop.set_value(Proptype::Bool(false)).is_ok());
         assert!(prop.set_value(Proptype::F64(3.14)).is_err());

@@ -4,7 +4,7 @@ pub mod proptype;
 
 use log::warn;
 pub use property::Property;
-pub use proptype::{PropCondition, Proptype};
+pub use proptype::Proptype;
 
 use crate::error::{OpmResult, OpossumError};
 use serde::{Deserialize, Serialize};
@@ -37,19 +37,13 @@ impl Properties {
     /// # Errors
     ///
     /// This function will return an [`OpossumError`] if a property with the same name was already created before.
-    pub fn create(
-        &mut self,
-        name: &str,
-        description: &str,
-        conditions: Option<Vec<PropCondition>>,
-        value: Proptype,
-    ) -> OpmResult<()> {
+    pub fn create(&mut self, name: &str, description: &str, value: Proptype) -> OpmResult<()> {
         if self.props.contains_key(name) {
             return Err(OpossumError::Properties(format!(
                 "property {name} already created",
             )));
         }
-        let new_property = Property::new(value, description.into(), conditions);
+        let new_property = Property::new(value, description.into());
         self.props.insert(name.into(), new_property);
         Ok(())
     }
@@ -199,25 +193,17 @@ mod test {
     #[test]
     fn properties_create() {
         let mut props = Properties::default();
-        assert!(props
-            .create("test", "my description", None, 1.into())
-            .is_ok());
+        assert!(props.create("test", "my description", 1.into()).is_ok());
         assert_eq!(props.props.len(), 1);
-        assert!(props
-            .create("test2", "my description", None, 1.into())
-            .is_ok());
+        assert!(props.create("test2", "my description", 1.into()).is_ok());
         assert_eq!(props.props.len(), 2);
-        assert!(props
-            .create("test", "my description", None, 2.into())
-            .is_err());
+        assert!(props.create("test", "my description", 2.into()).is_err());
         assert_eq!(props.props.len(), 2);
     }
     #[test]
     fn properties_get() {
         let mut props = Properties::default();
-        props
-            .create("test", "my description", None, 1.into())
-            .unwrap();
+        props.create("test", "my description", 1.into()).unwrap();
         let prop = props.get("test").unwrap();
         assert_matches!(prop, &Proptype::I32(1));
         assert!(props.get("wrong").is_err());
@@ -225,14 +211,12 @@ mod test {
     #[test]
     fn properties_get_bool() {
         let mut props = Properties::default();
+        props.create("no bool", "my description", 1.into()).unwrap();
         props
-            .create("no bool", "my description", None, 1.into())
+            .create("my bool", "my description", true.into())
             .unwrap();
         props
-            .create("my bool", "my description", None, true.into())
-            .unwrap();
-        props
-            .create("my other bool", "my description", None, false.into())
+            .create("my other bool", "my description", false.into())
             .unwrap();
         assert!(props.get_bool("wrong").is_err());
         assert!(props.get_bool("no bool").is_err());

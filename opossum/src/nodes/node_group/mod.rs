@@ -89,12 +89,11 @@ impl Default for NodeGroup {
             .create_property(
                 "expand view",
                 "show group fully expanded in dot diagram?",
-                None,
                 false.into(),
             )
             .unwrap();
         node_attr
-            .create_property("graph", "optical graph", None, OpticGraph::default().into())
+            .create_property("graph", "optical graph", OpticGraph::default().into())
             .unwrap();
         Self {
             graph: OpticGraph::default(),
@@ -503,7 +502,7 @@ impl OpticNode for NodeGroup {
                 let node_name = &node.optical_ref.borrow().name();
                 if !(group_props.contains(node_name)) {
                     group_props
-                        .create(node_name, "", None, node_report.into())
+                        .create(node_name, "", node_report.into())
                         .unwrap();
                 }
             }

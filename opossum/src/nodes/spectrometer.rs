@@ -81,7 +81,6 @@ impl Default for Spectrometer {
             .create_property(
                 "spectrometer type",
                 "model type of the spectrometer",
-                None,
                 SpectrometerType::Ideal.into(),
             )
             .unwrap();
@@ -171,13 +170,12 @@ impl OpticNode for Spectrometer {
             };
             if spectrum.is_some() {
                 props
-                    .create("Spectrum", "Output spectrum", None, self.clone().into())
+                    .create("Spectrum", "Output spectrum", self.clone().into())
                     .unwrap();
                 props
                     .create(
                         "Model",
                         "Spectrometer model",
-                        None,
                         self.node_attr
                             .get_property("spectrometer type")
                             .unwrap()
@@ -189,7 +187,6 @@ impl OpticNode for Spectrometer {
                     .create(
                         "Warning",
                         "warning during analysis",
-                        None,
                         "Rays have been apodized at input aperture. Results might not be accurate.".into(),
                     )
                     .unwrap();

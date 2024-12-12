@@ -54,7 +54,6 @@ impl Default for ThinMirror {
             .create_property(
                 "curvature",
                 "radius of curvature of the surface",
-                None,
                 millimeter!(f64::INFINITY).into(),
             )
             .unwrap();

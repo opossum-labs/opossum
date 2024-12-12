@@ -51,7 +51,6 @@ impl Default for Source {
             .create_property(
                 "light data",
                 "data of the emitted light",
-                None,
                 EnumProxy::<Option<LightData>> { value: None }.into(),
             )
             .unwrap();
@@ -60,7 +59,6 @@ impl Default for Source {
             .create_property(
                 "alignment wavelength",
                 "wavelength to be used for alignment. Necessary for, e.g., grating alignments",
-                None,
                 Proptype::LengthOption(None),
             )
             .unwrap();

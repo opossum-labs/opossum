@@ -12,7 +12,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,
     optic_senery_rsc::SceneryResources,
-    properties::{PropCondition, Properties, Proptype},
+    properties::{Properties, Proptype},
     utils::geom_transformation::Isometry,
     J_per_cm2,
 };
@@ -126,10 +126,9 @@ impl NodeAttr {
         &mut self,
         name: &str,
         description: &str,
-        conditions: Option<Vec<PropCondition>>,
         value: Proptype,
     ) -> OpmResult<()> {
-        self.props.create(name, description, conditions, value)
+        self.props.create(name, description, value)
     }
     /// Returns a reference to the properties of this [`NodeAttr`].
     #[must_use]

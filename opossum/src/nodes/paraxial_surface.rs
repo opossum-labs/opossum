@@ -52,12 +52,7 @@ impl Default for ParaxialSurface {
         let mut node_attr = NodeAttr::new("paraxial surface");
 
         node_attr
-            .create_property(
-                "focal length",
-                "focal length",
-                None,
-                millimeter!(10.0).into(),
-            )
+            .create_property("focal length", "focal length", millimeter!(10.0).into())
             .unwrap();
         let mut ps = Self { node_attr };
         ps.update_surfaces().unwrap();

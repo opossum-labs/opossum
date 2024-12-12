@@ -49,7 +49,6 @@ impl Default for NodeReference {
             .create_property(
                 "reference id",
                 "unique id of the referenced node",
-                None,
                 Uuid::nil().into(),
             )
             .unwrap();

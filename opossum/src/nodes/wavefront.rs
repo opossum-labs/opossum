@@ -192,7 +192,6 @@ impl OpticNode for WaveFront {
                 .create(
                     "Wavefront Map",
                     "Wavefront error mapwith respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
-                    None,
                     wf_data.clone().into(),
                 )
                 .unwrap();
@@ -202,7 +201,6 @@ impl OpticNode for WaveFront {
                 .create(
                     "Wavefront PtV",
                     "Wavefront Peak-to-Valley value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
-                    None,
                     Proptype::WfLambda(wf_data.wavefront_error_maps[0].ptv, wf_data.wavefront_error_maps[0].wavelength),
                 )
                 .unwrap();
@@ -212,7 +210,6 @@ impl OpticNode for WaveFront {
                 .create(
                     "Wavefront RMS",
                     "Wavefront root mean square value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
-                    None,
                     Proptype::WfLambda(wf_data.wavefront_error_maps[0].rms, wf_data.wavefront_error_maps[0].wavelength),
                 )
                 .unwrap();
@@ -221,7 +218,6 @@ impl OpticNode for WaveFront {
                 .create(
                     "Warning",
                     "warning during analysis",
-                    None,
                     "Rays have been apodized at input aperture. Results might not be accurate.".into(),
                 )
                 .unwrap();
