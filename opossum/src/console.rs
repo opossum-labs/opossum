@@ -231,7 +231,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
                                                      5BBP!^:^7GBB!
                                                       ^JPBBBBG5?.\n".to_owned();
 
-    format!("{intro_logo}{intro_str}")
+    format!("{intro_logo}\n{intro_str}")
 }
 
 /// Show the OPOSSUM logo as ASCII art and the CLI version information.
@@ -352,6 +352,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
                                                     ^55J      !BBG
                                                      5BBP!^:^7GBB!
                                                       ^JPBBBBG5?.
+
                           Opossum - Open-source Optics Simulation System and Unified Modeler                           \n")
     }
     #[test]
