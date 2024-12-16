@@ -239,6 +239,7 @@ pub trait OpticNode: Dottable {
             optic_surf.set_anchor_point_iso(anchor_point_iso);
         } else {
             let mut optic_surf = OpticSurface::default();
+            // optic_surf.set_aperture(Aperture::BinaryCircle(CircleConfig::new(centimeter!(1.25), centimeter!(0.,0.))?));
             optic_surf.set_geo_surface(geo_surface);
             optic_surf.set_anchor_point_iso(anchor_point_iso);
             self.ports_mut()
@@ -250,7 +251,7 @@ pub trait OpticNode: Dottable {
     ///
     /// # Errors
     ///
-    /// This funtion returns an error if the LIDTs to be sdeserialized are invalid.
+    /// This funtion returns an error if the LIDTs to be deserialized are invalid.
     fn update_lidt(&mut self) -> OpmResult<()> {
         let lidt = *self.node_attr().lidt();
         for optic_surf in self.ports_mut().ports_mut(&PortType::Input).values_mut() {

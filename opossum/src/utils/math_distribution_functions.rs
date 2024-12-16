@@ -4,7 +4,7 @@ use std::f64::consts::PI;
 
 use nalgebra::Point2;
 use num::Zero;
-use uom::si::{angle::radian, f64::Angle};
+use uom::si::{angle::radian, f64::Angle, Dimension, Quantity, Units};
 
 use crate::error::OpmResult;
 
@@ -25,7 +25,7 @@ use crate::error::OpmResult;
 /// meaning that passing values of NaN, Infinity, zero or negative numbers may result in an unexpected outcome of this function.
 /// To avoid non-useful input arguments see [`General"dGaussian`](crate::energy_distributions::general_gaussian::General2DGaussian).
 #[must_use]
-pub fn general_2d_gaussian_points(
+pub fn general_2d_super_gaussian_points(
     points: &[Point2<f64>],
     mu_xy: Point2<f64>,
     sigma_xy: Point2<f64>,
@@ -37,13 +37,13 @@ pub fn general_2d_gaussian_points(
     let (sin_theta, cos_theta) = theta.get::<radian>().sin_cos();
     if rect_flag {
         for p in points {
-            gaussian.push(general_2d_gaussian_point_rect(
+            gaussian.push(general_2d_super_gaussian_point_rectangular(
                 p, mu_xy, sigma_xy, power, sin_theta, cos_theta,
             ));
         }
     } else {
         for p in points {
-            gaussian.push(general_2d_gaussian_point(
+            gaussian.push(general_2d_super_gaussian_point_elliptical(
                 p, mu_xy, sigma_xy, power, sin_theta, cos_theta,
             ));
         }
@@ -67,7 +67,7 @@ pub fn general_2d_gaussian_points(
 /// meaning that passing values of NaN, Infinity, zero or negative numbers may result in an unexpected outcome of this function.
 /// To avoid non-useful input arguments see [`GeneralGaussian`](../../energy_distributions/general_gaussian/struct.GeneralGaussian.html)
 #[must_use]
-pub fn general_2d_gaussian_point_rect(
+pub fn general_2d_super_gaussian_point_rectangular(
     point: &Point2<f64>,
     mu_xy: Point2<f64>,
     sigma_xy: Point2<f64>,
@@ -82,6 +82,44 @@ pub fn general_2d_gaussian_point_rect(
             - (0.5 * (y_rot / sigma_xy.y).powi(2)).powf(power),
     )
 }
+
+/// Calculates the value at a point, corresponding to a 2d Gaussian distribution
+///
+/// This function calculates the values of a Gaussian distribution using quantities. For example, a fluence distribution.
+///
+/// # Attributes
+/// - `peak_val`: peak value of quantity Q1 of the gaussian distribution at its center
+/// - `p`: reference to a `Point2` of quantity Q2 at which the Gaussian should be evaluated      
+/// - `mu`: Center position of the Gaussian in x and y. `Point2` of quantity Q2
+/// - `sigma`: Standard deviation of the Gaussian in x and y. `Point2` of quantity Q2
+/// - `theta`: rotation angle of the Gaussian.
+#[must_use]
+pub fn quantity_2d_gaussian_point<D1, D2, U1, U2>(
+    peak_val: Quantity<D1, U1, f64>,
+    p: &Point2<Quantity<D2, U2, f64>>,
+    mu: Point2<Quantity<D2, U2, f64>>,
+    sigma: Point2<Quantity<D2, U2, f64>>,
+    theta: Angle,
+) -> Quantity<D1, U1, f64>
+where
+    D2: Dimension + ?Sized + 'static,
+    <D2 as Dimension>::Kind: uom::marker::Mul,
+    D1: Dimension + ?Sized + 'static,
+    <D1 as Dimension>::Kind: uom::marker::Mul,
+    U1: Units<f64> + ?Sized + 'static,
+    U2: Units<f64> + ?Sized + 'static,
+{
+    let sin_theta = theta.sin().value;
+    let cos_theta = theta.cos().value;
+    let x_rot =
+        (p.x.value - mu.x.value).mul_add(cos_theta, -((p.y.value - mu.y.value) * sin_theta));
+    let y_rot = (p.y.value - mu.y.value).mul_add(cos_theta, (p.x.value - mu.x.value) * sin_theta);
+    let exp_val = (-0.5
+        * (x_rot / sigma.x.value).mul_add(x_rot / sigma.x.value, (y_rot / sigma.y.value).powi(2)))
+    .exp();
+    peak_val * exp_val
+}
+
 /// Get the value of a point at position `point` of a generalized 2-dimension Gaussian distribution
 /// Each point will be assigned the respective value of this Gaussian distribution
 /// # Attributes
@@ -98,7 +136,7 @@ pub fn general_2d_gaussian_point_rect(
 /// meaning that passing values of NaN, Infinity, zero or negative numbers may result in an unexpected outcome of this function.
 /// To avoid non-useful input arguments see [`GeneralGaussian`](../../energy_distributions/general_gaussian/struct.GeneralGaussian.html)
 #[must_use]
-pub fn general_2d_gaussian_point(
+pub fn general_2d_super_gaussian_point_elliptical(
     point: &Point2<f64>,
     mu_xy: Point2<f64>,
     sigma_xy: Point2<f64>,

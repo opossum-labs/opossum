@@ -26,6 +26,7 @@ pub mod console;
 pub mod dottable;
 pub mod energy_distributions;
 pub mod error;
+pub mod fluence_distributions;
 mod light_flow;
 pub mod light_result;
 pub mod lightdata;

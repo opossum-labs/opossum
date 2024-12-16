@@ -5,7 +5,7 @@ use opossum::{
     position_distributions::{Hexapolar, PositionDistribution},
     surface::hit_map::{
         fluence_estimator::FluenceEstimator,
-        rays_hit_map::{HitPoint, RaysHitMap},
+        rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
     },
 };
 use std::path::Path;
@@ -18,11 +18,11 @@ fn main() -> OpmResult<()> {
     let weight = joule!(1.0) / Ratio::new::<uom::si::ratio::ratio>(points.len() as f64);
     let mut hit_map = RaysHitMap::default();
     for p in points {
-        let hit_point = HitPoint::new(p, weight)?;
-        hit_map.add_hit_point(hit_point);
+        let hit_point = HitPoint::Energy(EnergyHitPoint::new(p, weight)?);
+        hit_map.add_hit_point(hit_point)?;
     }
     dbg!("Done Add HitMap");
-    let fluence_data = hit_map.calc_fluence_map((100, 100), &FluenceEstimator::KDE)?;
+    let fluence_data = hit_map.calc_fluence_map((100, 100), &FluenceEstimator::KDE, None, None)?;
     dbg!("Done KDE");
     fluence_data.to_plot(
         Path::new("./opossum/playground/kde.png"),

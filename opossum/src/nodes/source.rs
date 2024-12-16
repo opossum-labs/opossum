@@ -267,7 +267,7 @@ impl AnalysisGhostFocus for Source {
     fn analyze(
         &mut self,
         incoming_data: LightRays,
-        _config: &GhostFocusConfig,
+        config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
         bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
@@ -309,7 +309,7 @@ impl AnalysisGhostFocus for Source {
                     refraction_intended,
                     &MissedSurfaceStrategy::Ignore,
                 )?;
-                surf.evaluate_fluence_of_ray_bundle(r)?;
+                surf.evaluate_fluence_of_ray_bundle(r, config.fluence_estimator())?;
             }
         } else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));

@@ -122,8 +122,8 @@ pub trait AnalysisRayTrace: OpticNode {
                 missed_surface_strategy,
             )?;
             reflected.set_node_origin_uuid(uuid);
-            if let AnalyzerType::GhostFocus(_) = analyzer_type {
-                surf.evaluate_fluence_of_ray_bundle(rays)?;
+            if let AnalyzerType::GhostFocus(config) = analyzer_type {
+                surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
                 surf.add_to_rays_cache(reflected, backward);
             }
 
@@ -170,8 +170,8 @@ pub trait AnalysisRayTrace: OpticNode {
             if apodized {
                 warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", optic_name);
             }
-            if let AnalyzerType::GhostFocus(_) = analyzer_type {
-                surf.evaluate_fluence_of_ray_bundle(rays)?;
+            if let AnalyzerType::GhostFocus(config) = analyzer_type {
+                surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
             }
             if let AnalyzerType::RayTrace(c) = analyzer_type {
                 rays.invalidate_by_threshold_energy(c.min_energy_per_ray)?;

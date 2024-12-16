@@ -65,7 +65,7 @@ impl AnalysisGhostFocus for BeamSplitter {
             )));
         };
         for rays in &mut rays1_bundle {
-            surf.evaluate_fluence_of_ray_bundle(rays)?;
+            surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
         }
         let Some(surf) = self.get_optic_surface_mut(in2_port) else {
             return Err(OpossumError::Analysis(format!(
@@ -74,7 +74,7 @@ impl AnalysisGhostFocus for BeamSplitter {
             )));
         };
         for rays in &mut rays2_bundle {
-            surf.evaluate_fluence_of_ray_bundle(rays)?;
+            surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
         }
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out1_port.to_string(), light_data_out1);

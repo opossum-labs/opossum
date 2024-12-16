@@ -7,6 +7,7 @@ use crate::{
     joule,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::Proptype,
+    surface::hit_map::fluence_estimator::FluenceEstimator,
     utils::{griddata::linspace, usize_to_f64},
     J_per_cm2,
 };
@@ -35,6 +36,8 @@ pub struct FluenceData {
     x_range: Range<Length>,
     /// y coordinates of the fluence distribution
     y_range: Range<Length>,
+    /// the estimator which has been used to calculate this fluence
+    estimator: FluenceEstimator,
 }
 impl FluenceData {
     /// Constructs a new [`FluenceData`] struct
@@ -43,6 +46,7 @@ impl FluenceData {
         interp_distribution: DMatrix<Fluence>,
         x_range: Range<Length>,
         y_range: Range<Length>,
+        estimator: FluenceEstimator,
     ) -> Self {
         let peak_fluence =
             interp_distribution
@@ -59,7 +63,19 @@ impl FluenceData {
             interp_distribution,
             x_range,
             y_range,
+            estimator,
         }
+    }
+    /// Returns the [`FluenceEstimator`] that was used to calculate this [`FluenceData`]
+    #[must_use]
+    pub const fn estimator(&self) -> &FluenceEstimator {
+        &self.estimator
+    }
+
+    /// Returns the interpolated distribution of this [`FluenceData`]
+    #[must_use]
+    pub const fn interp_distribution(&self) -> &DMatrix<Fluence> {
+        &self.interp_distribution
     }
     /// Returns the fluence distribution and the corresponding x and y axes in a tuple (x, y, distribution)
     ///
@@ -128,7 +144,9 @@ impl Plottable for FluenceData {
             .set(&PlotArgs::YLabel("y position (mm)".into()))?
             .set(&PlotArgs::CBarLabel("fluence (J/cm²)".into()))?
             .set(&PlotArgs::PlotSize((800, 800)))?
-            .set(&PlotArgs::ExpandBounds(false))?;
+            .set(&PlotArgs::ExpandBounds(false))?
+            .set(&PlotArgs::AxisEqual(true))?
+            .set(&PlotArgs::PlotAutoSize(true))?;
 
         Ok(())
     }

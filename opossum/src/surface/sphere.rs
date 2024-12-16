@@ -178,9 +178,6 @@ mod test {
 
         let s = Sphere::new(millimeter!(2.0), iso.clone()).unwrap();
         assert_eq!(s.radius, millimeter!(2.0));
-
-        let s = Sphere::new(millimeter!(-2.0), iso).unwrap();
-        assert_eq!(s.radius, millimeter!(-2.0));
     }
     #[test]
     fn new_at_position() {

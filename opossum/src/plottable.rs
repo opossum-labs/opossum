@@ -158,11 +158,12 @@ impl PlotType {
                 line_color,
             ))
             .unwrap();
-
         if let Some(l) = label {
+            let label_color =
+                RGBAColor(line_color.0, line_color.1, line_color.2, 1.).stroke_width(8);
             series_anno
                 .label(&l)
-                .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], line_color));
+                .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], label_color));
         }
     }
 
