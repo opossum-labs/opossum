@@ -1,15 +1,11 @@
 #![warn(missing_docs)]
 //! Cylindric lens with spherical or flat surfaces.
 
-use std::{cell::RefCell, rc::Rc};
-
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::Analyzable,
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     meter, millimeter,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     radian,
@@ -21,13 +17,16 @@ use crate::{
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
 use num::Zero;
+use opm_macros_lib::OpmNode;
+use std::{cell::RefCell, rc::Rc};
 use uom::si::f64::Length;
 
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("aqua")]
 /// A real cylindric lens with spherical (or flat) surfaces. By default, the curvature is aligned along the (local) y axis.
 ///
 /// # Curvature convention:
@@ -244,16 +243,6 @@ impl OpticNode for CylindricLens {
         Ok(())
     }
 }
-
-impl Alignable for CylindricLens {}
-impl Dottable for CylindricLens {
-    fn node_color(&self) -> &str {
-        "aqua"
-    }
-}
-impl LIDT for CylindricLens {}
-impl Analyzable for CylindricLens {}
-
 #[cfg(test)]
 mod test {
     use super::*;

@@ -2,19 +2,19 @@
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, RayTraceConfig,
+        RayTraceConfig,
     },
-    dottable::Dottable,
     error::OpmResult,
     joule,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Properties, Proptype},
     reporting::node_report::NodeReport,
 };
 use log::warn;
+use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use uom::si::f64::Energy;
@@ -61,7 +61,8 @@ impl From<Metertype> for Proptype {
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
-#[derive(Clone)]
+#[derive(OpmNode, Clone)]
+#[opm_node("whitesmoke")]
 pub struct EnergyMeter {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
@@ -201,13 +202,6 @@ impl Debug for EnergyMeter {
         }
     }
 }
-impl Dottable for EnergyMeter {
-    fn node_color(&self) -> &str {
-        "whitesmoke"
-    }
-}
-impl LIDT for EnergyMeter {}
-impl Analyzable for EnergyMeter {}
 impl AnalysisGhostFocus for EnergyMeter {
     fn analyze(
         &mut self,
@@ -246,7 +240,6 @@ impl AnalysisRayTrace for EnergyMeter {
         self.light_data = Some(ld);
     }
 }
-impl Alignable for EnergyMeter {}
 #[cfg(test)]
 mod test {
     use super::*;

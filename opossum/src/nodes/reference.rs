@@ -1,27 +1,26 @@
+use super::node_attr::NodeAttr;
+use crate::{
+    analyzers::{
+        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        RayTraceConfig,
+    },
+    error::{OpmResult, OpossumError},
+    light_result::LightResult,
+    optic_node::OpticNode,
+    optic_ports::OpticPorts,
+    optic_ref::OpticRef,
+    properties::Proptype,
+    utils::geom_transformation::Isometry,
+};
+use opm_macros_lib::OpmNode;
 use std::{
     cell::RefCell,
     rc::{Rc, Weak},
 };
 use uuid::Uuid;
 
-use crate::{
-    analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, RayTraceConfig,
-    },
-    dottable::Dottable,
-    error::{OpmResult, OpossumError},
-    light_result::LightResult,
-    optic_node::{OpticNode, LIDT},
-    optic_ports::OpticPorts,
-    optic_ref::OpticRef,
-    properties::Proptype,
-    utils::geom_transformation::Isometry,
-};
-
-use super::node_attr::NodeAttr;
-
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("lightsalmon3")]
 /// A virtual component referring to another existing component.
 ///
 /// This node type is necessary in order to model resonators (loops) or double-pass systems.
@@ -129,15 +128,6 @@ impl OpticNode for NodeReference {
         Ok(())
     }
 }
-
-impl Dottable for NodeReference {
-    fn node_color(&self) -> &str {
-        "lightsalmon3"
-    }
-}
-
-impl LIDT for NodeReference {}
-impl Analyzable for NodeReference {}
 impl AnalysisGhostFocus for NodeReference {}
 impl AnalysisEnergy for NodeReference {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {

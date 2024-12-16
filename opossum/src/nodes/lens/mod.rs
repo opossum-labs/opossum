@@ -1,15 +1,11 @@
 #![warn(missing_docs)]
 //! Lens with spherical or flat surfaces
 
-use std::{cell::RefCell, rc::Rc};
-
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::Analyzable,
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     meter, millimeter,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     radian,
@@ -21,13 +17,16 @@ use crate::{
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
 use num::Zero;
+use opm_macros_lib::OpmNode;
+use std::{cell::RefCell, rc::Rc};
 use uom::si::f64::Length;
 
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("aqua")]
 /// A real lens with spherical (or flat) surfaces.
 ///
 /// # Curvature convention:
@@ -334,15 +333,6 @@ impl OpticNode for Lens {
 //         (p_out.x.mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z*p_out.z)) ).sqrt() - self.radius.value
 //     }
 // }
-impl Alignable for Lens {}
-impl Dottable for Lens {
-    fn node_color(&self) -> &str {
-        "aqua"
-    }
-}
-impl LIDT for Lens {}
-impl Analyzable for Lens {}
-
 #[cfg(test)]
 mod test {
     use super::*;

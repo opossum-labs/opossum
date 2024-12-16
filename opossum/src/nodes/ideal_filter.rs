@@ -3,19 +3,19 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     rays::Rays,
     spectrum::Spectrum,
     utils::EnumProxy,
 };
+use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
 
 /// Config data for an [`IdealFilter`].
@@ -26,7 +26,8 @@ pub enum FilterType {
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
 }
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("darkgray")]
 /// An ideal filter with given transmission or optical density.
 ///
 /// ## Optical Ports
@@ -170,14 +171,6 @@ impl OpticNode for IdealFilter {
         self.reset_optic_surfaces();
     }
 }
-impl Alignable for IdealFilter {}
-impl Dottable for IdealFilter {
-    fn node_color(&self) -> &str {
-        "darkgray"
-    }
-}
-impl LIDT for IdealFilter {}
-impl Analyzable for IdealFilter {}
 impl AnalysisGhostFocus for IdealFilter {
     fn analyze(
         &mut self,

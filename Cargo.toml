@@ -1,7 +1,5 @@
 [workspace]
-members = [
-  "opossum","xtask"
-]
+members = [ "opossum","xtask" ]
 default-members = ["opossum"]
 resolver = "2"
 

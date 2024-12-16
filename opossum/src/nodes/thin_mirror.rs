@@ -8,15 +8,14 @@ use crate::{
         energy::AnalysisEnergy,
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
     coatings::CoatingType,
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     meter, millimeter,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     radian,
@@ -25,9 +24,11 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use num::Zero;
+use opm_macros_lib::OpmNode;
 use uom::si::f64::Length;
 
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("aliceblue")]
 /// An infinitely thin mirror with a spherical (or flat) surface.
 ///
 /// Curvature convention:
@@ -172,16 +173,6 @@ impl OpticNode for ThinMirror {
         }
     }
 }
-
-impl Alignable for ThinMirror {}
-
-impl Dottable for ThinMirror {
-    fn node_color(&self) -> &str {
-        "aliceblue"
-    }
-}
-impl LIDT for ThinMirror {}
-impl Analyzable for ThinMirror {}
 impl AnalysisGhostFocus for ThinMirror {
     fn analyze(
         &mut self,

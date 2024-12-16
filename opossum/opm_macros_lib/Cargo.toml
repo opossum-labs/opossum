@@ -1,0 +1,14 @@
+[package]
+name = "opm_macros_lib"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "opm_macros_lib"
+path = "src/lib.rs"
+proc-macro = true
+
+[dependencies]
+quote = "*"
+syn = { version = "*", features = ["extra-traits"] }
+proc-macro2 = "*"
