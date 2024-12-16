@@ -3,7 +3,7 @@ use opossum::{
     error::OpmResult,
     millimeter,
     nodes::{NodeGroup, ReflectiveGrating},
-    num_per_mm, radian,
+    num_per_mm,
 };
 use uom::si::f64::Length;
 
@@ -17,7 +17,7 @@ pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {
 
     let i_g2 = cb.add_node(
         &ReflectiveGrating::new("grating 2", num_per_mm!(1740.), -1)?
-            .to_rot_from_littrow(alignment_wvl, degree!(-4.) + radian!(10e-6))?,
+            .to_rot_from_littrow(alignment_wvl, degree!(-4.) )?,
     )?;
 
     let i_g3 = cb.add_node(
