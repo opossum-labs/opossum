@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use log::warn;
+use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
 use uom::si::length::nanometer;
 
@@ -7,14 +8,13 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
-    dottable::Dottable,
     error::OpmResult,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     nanometer,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
@@ -67,7 +67,8 @@ impl From<Spectrometer> for Proptype {
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(OpmNode, Serialize, Deserialize, Clone)]
+#[opm_node("lightseagreen")]
 pub struct Spectrometer {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
@@ -211,7 +212,6 @@ impl OpticNode for Spectrometer {
         self.reset_optic_surfaces();
     }
 }
-impl Alignable for Spectrometer {}
 impl Debug for Spectrometer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
@@ -232,13 +232,6 @@ impl Debug for Spectrometer {
         }
     }
 }
-impl Dottable for Spectrometer {
-    fn node_color(&self) -> &str {
-        "lightseagreen"
-    }
-}
-impl LIDT for Spectrometer {}
-impl Analyzable for Spectrometer {}
 impl AnalysisGhostFocus for Spectrometer {
     fn analyze(
         &mut self,

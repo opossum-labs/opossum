@@ -4,15 +4,12 @@ mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 
-use std::{cell::RefCell, rc::Rc};
-
 use super::node_attr::NodeAttr;
 use crate::{
-    analyzers::{raytrace::MissedSurfaceStrategy, Analyzable, AnalyzerType},
-    dottable::Dottable,
+    analyzers::{raytrace::MissedSurfaceStrategy, AnalyzerType},
     error::{OpmResult, OpossumError},
     lightdata::{DataEnergy, LightData},
-    optic_node::{Alignable, OpticNode},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     ray::SplittingConfig,
@@ -21,8 +18,11 @@ use crate::{
     surface::{geo_surface::GeoSurfaceRef, Plane},
     utils::{geom_transformation::Isometry, EnumProxy},
 };
+use opm_macros_lib::OpmNode;
+use std::{cell::RefCell, rc::Rc};
 
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("lightpink")]
 /// An ideal beamsplitter node with a given splitting ratio.
 ///
 /// ## Optical Ports
@@ -292,7 +292,6 @@ impl BeamSplitter {
         ))
     }
 }
-
 impl OpticNode for BeamSplitter {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -326,14 +325,6 @@ impl OpticNode for BeamSplitter {
         Ok(())
     }
 }
-
-impl Dottable for BeamSplitter {
-    fn node_color(&self) -> &str {
-        "lightpink"
-    }
-}
-impl Analyzable for BeamSplitter {}
-impl Alignable for BeamSplitter {}
 #[cfg(test)]
 mod test {
     use super::*;

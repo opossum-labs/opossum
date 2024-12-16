@@ -6,13 +6,12 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
-    dottable::Dottable,
     error::OpmResult,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::{Properties, Proptype},
     rays::Rays,
@@ -20,6 +19,7 @@ use crate::{
     surface::hit_map::fluence_estimator::FluenceEstimator,
 };
 use log::warn;
+use opm_macros_lib::OpmNode;
 
 /// alias for uom `RadiantExposure`, as this name is rather uncommon to use for laser scientists
 pub type Fluence = uom::si::f64::RadiantExposure;
@@ -42,7 +42,8 @@ pub type Fluence = uom::si::f64::RadiantExposure;
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
-#[derive(Clone, Debug)]
+#[derive(OpmNode, Clone, Debug)]
+#[opm_node("hotpink")]
 pub struct FluenceDetector {
     node_attr: NodeAttr,
     apodization_warning: bool,
@@ -177,15 +178,6 @@ impl OpticNode for FluenceDetector {
         self.reset_optic_surfaces();
     }
 }
-
-impl Alignable for FluenceDetector {}
-impl Dottable for FluenceDetector {
-    fn node_color(&self) -> &str {
-        "hotpink"
-    }
-}
-impl LIDT for FluenceDetector {}
-impl Analyzable for FluenceDetector {}
 impl AnalysisGhostFocus for FluenceDetector {
     fn analyze(
         &mut self,

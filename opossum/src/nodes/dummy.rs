@@ -1,27 +1,29 @@
 #![warn(missing_docs)]
+use opm_macros_lib::OpmNode;
+
 use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, RayTraceConfig,
+        RayTraceConfig,
     },
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::LightResult,
     lightdata::LightData,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
 };
 
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("gray")]
 /// A fake / dummy component without any optical functionality.
 ///
 /// Any incoming light is transparently forwarded without any modification. It is mainly used for
-/// development and debugging purposes. In addition it can be used as an "optical terminal" of a
+/// development and debugging purposes. In addition, it can be used as an "optical terminal" of a
 /// [`NodeGroup`](crate::nodes::NodeGroup) such as the "input hole" of a cameara box which does not really
 /// represent an optically active component. However, this way a group can be positioned in a scenery.
-/// In addition, a [`Dummy`] can have an [`Aperture`](crate::aperture::Aperture) defined. This way, things like
-/// a mask (e.g. serrated aperture) which apodized an incoming beam can be realized.
+/// Similar to all other nodes, a [`Dummy`] can have an [`Aperture`](crate::aperture::Aperture) defined.
+/// This way, things like a mask (e.g. serrated aperture) which apodizes an incoming beam can be realized.
 ///
 /// Geometrically, a [`Dummy`] node consists of a single flat surface.
 ///
@@ -60,9 +62,6 @@ impl Dummy {
         dummy
     }
 }
-impl LIDT for Dummy {}
-
-impl Analyzable for Dummy {}
 impl AnalysisGhostFocus for Dummy {
     fn analyze(
         &mut self,
@@ -84,8 +83,6 @@ impl AnalysisEnergy for Dummy {
         )
     }
 }
-impl Alignable for Dummy {}
-
 impl AnalysisRayTrace for Dummy {
     fn analyze(
         &mut self,
@@ -134,7 +131,6 @@ impl AnalysisRayTrace for Dummy {
         }
     }
 }
-
 impl OpticNode for Dummy {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -150,8 +146,6 @@ impl OpticNode for Dummy {
     }
     fn set_apodization_warning(&mut self, _apodized: bool) {}
 }
-impl Dottable for Dummy {}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -168,6 +162,11 @@ mod test {
         assert_eq!(node.node_type(), "dummy");
         assert_eq!(node.inverted(), false);
         assert!(node.as_group().is_err());
+    }
+    #[test]
+    fn dottable() {
+        let node = Dummy::default();
+        assert_eq!(node.node_color(), "gray");
     }
     #[test]
     fn new() {

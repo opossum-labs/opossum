@@ -2,6 +2,7 @@
 //! Wavefront measurment node
 use log::warn;
 use nalgebra::{DVector, DVectorView, MatrixXx3};
+use opm_macros_lib::OpmNode;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
@@ -9,14 +10,13 @@ use uom::si::f64::Length;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, RayTraceConfig,
+        RayTraceConfig,
     },
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     nanometer,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
@@ -46,7 +46,8 @@ use super::node_attr::NodeAttr;
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(OpmNode, Serialize, Deserialize, Clone, Debug)]
+#[opm_node("goldenrod1")]
 pub struct WaveFront {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
@@ -78,9 +79,6 @@ impl WaveFront {
         wf
     }
 }
-
-impl Alignable for WaveFront {}
-
 /// This [`WaveFrontData`] struct holds a vector of wavefront-error maps.
 /// The vector of [`WaveFrontErrorMap`] is necessary, e.g., to store the wavefront data for each spectral component of a pulse
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -250,14 +248,6 @@ impl From<WaveFrontData> for Proptype {
         Self::WaveFrontData(value)
     }
 }
-impl Dottable for WaveFront {
-    fn node_color(&self) -> &str {
-        "goldenrod1"
-    }
-}
-
-impl LIDT for WaveFront {}
-impl Analyzable for WaveFront {}
 impl AnalysisGhostFocus for WaveFront {
     fn analyze(
         &mut self,

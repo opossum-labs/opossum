@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 use log::warn;
 use nalgebra::{DVector, MatrixXx2};
+use opm_macros_lib::OpmNode;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -12,14 +13,13 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
-    dottable::Dottable,
     error::OpmResult,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     nanometer,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
@@ -51,7 +51,8 @@ use core::f64;
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(OpmNode, Serialize, Deserialize, Clone, Debug)]
+#[opm_node("darkorange")]
 pub struct SpotDiagram {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
@@ -91,8 +92,6 @@ impl SpotDiagram {
         sd
     }
 }
-impl Alignable for SpotDiagram {}
-
 impl OpticNode for SpotDiagram {
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
@@ -175,14 +174,6 @@ impl OpticNode for SpotDiagram {
         self.update_flat_single_surfaces()
     }
 }
-
-impl Dottable for SpotDiagram {
-    fn node_color(&self) -> &str {
-        "darkorange"
-    }
-}
-impl LIDT for SpotDiagram {}
-impl Analyzable for SpotDiagram {}
 impl AnalysisEnergy for SpotDiagram {
     fn analyze(&mut self, incoming_data: LightResult) -> OpmResult<LightResult> {
         let in_port = &self.ports().names(&PortType::Input)[0];

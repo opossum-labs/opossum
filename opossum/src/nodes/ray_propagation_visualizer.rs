@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 use log::warn;
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
+use opm_macros_lib::OpmNode;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -13,14 +14,13 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     millimeter,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     properties::{Properties, Proptype},
@@ -42,7 +42,8 @@ use crate::{
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(OpmNode, Serialize, Deserialize, Clone, Debug)]
+#[opm_node("darkgreen")]
 pub struct RayPropagationVisualizer {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
@@ -84,7 +85,6 @@ impl RayPropagationVisualizer {
         Ok(rpv)
     }
 }
-
 impl OpticNode for RayPropagationVisualizer {
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
@@ -137,14 +137,6 @@ impl OpticNode for RayPropagationVisualizer {
         self.reset_optic_surfaces();
     }
 }
-
-impl Dottable for RayPropagationVisualizer {
-    fn node_color(&self) -> &str {
-        "darkgreen"
-    }
-}
-impl LIDT for RayPropagationVisualizer {}
-impl Analyzable for RayPropagationVisualizer {}
 impl AnalysisGhostFocus for RayPropagationVisualizer {
     fn analyze(
         &mut self,
@@ -184,8 +176,6 @@ impl AnalysisRayTrace for RayPropagationVisualizer {
         self.light_data = Some(ld);
     }
 }
-impl Alignable for RayPropagationVisualizer {}
-
 /// struct that holds the history of the rays' positions for rays of a specific wavelength
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPositionHistorySpectrum {

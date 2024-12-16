@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use log::{info, warn};
+use opm_macros_lib::OpmNode;
 use uom::si::f64::Length;
 
 use super::node_attr::NodeAttr;
@@ -8,15 +9,14 @@ use crate::{
         energy::AnalysisEnergy,
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     joule,
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     millimeter,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     ray::Ray,
@@ -40,7 +40,8 @@ use std::fmt::Debug;
 ///   - `light data`
 ///
 /// **Note**: If a [`Source`] is configured as `inverted` the initial output port becomes an input port and further data is discarded.
-#[derive(Clone)]
+#[derive(OpmNode, Clone)]
+#[opm_node("slateblue")]
 pub struct Source {
     node_attr: NodeAttr,
 }
@@ -137,9 +138,6 @@ impl Source {
         Ok(())
     }
 }
-
-impl Alignable for Source {}
-
 impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let light_prop = self.node_attr.get_property("light data").unwrap();
@@ -168,14 +166,6 @@ impl OpticNode for Source {
         self.update_flat_single_surfaces()
     }
 }
-
-impl Dottable for Source {
-    fn node_color(&self) -> &str {
-        "slateblue"
-    }
-}
-impl LIDT for Source {}
-impl Analyzable for Source {}
 impl AnalysisEnergy for Source {
     fn analyze(&mut self, _incoming_data: LightResult) -> OpmResult<LightResult> {
         if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {

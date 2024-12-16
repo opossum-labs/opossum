@@ -2,11 +2,9 @@ use std::{cell::RefCell, rc::Rc};
 
 use super::NodeAttr;
 use crate::{
-    analyzers::Analyzable,
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     millimeter,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
@@ -15,6 +13,7 @@ use crate::{
 };
 use nalgebra::Point3;
 use num::Zero;
+use opm_macros_lib::OpmNode;
 use uom::si::{
     angle::degree,
     f64::{Angle, Length},
@@ -24,7 +23,8 @@ mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("aquamarine")]
 /// An optical element with two flat surfaces, a given thickness and a  given wedge angle (= wedged window).
 ///
 ///
@@ -170,16 +170,6 @@ impl OpticNode for Wedge {
         &mut self.node_attr
     }
 }
-
-impl Alignable for Wedge {}
-
-impl Dottable for Wedge {
-    fn node_color(&self) -> &str {
-        "aquamarine"
-    }
-}
-impl Analyzable for Wedge {}
-impl LIDT for Wedge {}
 
 #[cfg(test)]
 mod test {

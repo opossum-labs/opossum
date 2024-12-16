@@ -8,14 +8,13 @@ use crate::{
         energy::AnalysisEnergy,
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     num_per_mm,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     radian,
@@ -25,6 +24,7 @@ use crate::{
 use approx::relative_eq;
 use nalgebra::Vector3;
 use num::ToPrimitive;
+use opm_macros_lib::OpmNode;
 use uom::si::{
     angle::radian,
     f64::{Angle, Length},
@@ -34,7 +34,8 @@ use uom::si::{
 /// used, for example, for the periodic grating structure
 pub type LinearDensity = uom::si::f64::LinearNumberDensity;
 
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("cornsilk")]
 /// An infinitely thin reflective grating.
 ///
 ///
@@ -74,7 +75,6 @@ impl Default for ReflectiveGrating {
         g
     }
 }
-
 impl ReflectiveGrating {
     /// Creates a new [`ReflectiveGrating`].
     ///
@@ -153,14 +153,6 @@ impl ReflectiveGrating {
         self.with_tilt(radian!(0.0, rot_angle, 0.0))
     }
 }
-impl Alignable for ReflectiveGrating {}
-impl Dottable for ReflectiveGrating {
-    fn node_color(&self) -> &str {
-        "cornsilk"
-    }
-}
-impl LIDT for ReflectiveGrating {}
-impl Analyzable for ReflectiveGrating {}
 impl AnalysisGhostFocus for ReflectiveGrating {
     fn analyze(
         &mut self,

@@ -5,19 +5,19 @@ use crate::{
         energy::AnalysisEnergy,
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     millimeter,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     rays::Rays,
 };
 use log::warn;
+use opm_macros_lib::OpmNode;
 use uom::{num_traits::Zero, si::f64::Length};
 
 use super::node_attr::NodeAttr;
@@ -42,7 +42,8 @@ use super::node_attr::NodeAttr;
 ///   - `apertures`
 ///   - `inverted`
 ///   - `focal length`
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("palegreen")]
 pub struct ParaxialSurface {
     node_attr: NodeAttr,
 }
@@ -90,16 +91,6 @@ impl OpticNode for ParaxialSurface {
         &mut self.node_attr
     }
 }
-
-impl Alignable for ParaxialSurface {}
-
-impl Dottable for ParaxialSurface {
-    fn node_color(&self) -> &str {
-        "palegreen"
-    }
-}
-impl LIDT for ParaxialSurface {}
-impl Analyzable for ParaxialSurface {}
 impl AnalysisGhostFocus for ParaxialSurface {
     fn analyze(
         &mut self,

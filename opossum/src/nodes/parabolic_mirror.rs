@@ -3,23 +3,24 @@ use core::f64;
 use std::{cell::RefCell, rc::Rc};
 
 use nalgebra::{vector, Isometry3, Point3, Vector2, Vector3};
+use opm_macros_lib::OpmNode;
 use uom::si::f64::{Angle, Length};
 
+use super::NodeAttr;
 use crate::{
     analyzers::{
         energy::AnalysisEnergy,
         ghostfocus::AnalysisGhostFocus,
         raytrace::{AnalysisRayTrace, MissedSurfaceStrategy},
-        Analyzable, GhostFocusConfig, RayTraceConfig,
+        GhostFocusConfig, RayTraceConfig,
     },
     coatings::CoatingType,
     degree,
-    dottable::Dottable,
     error::{OpmResult, OpossumError},
     light_result::{LightRays, LightResult},
     lightdata::LightData,
     meter,
-    optic_node::{Alignable, OpticNode, LIDT},
+    optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     radian,
@@ -28,9 +29,8 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 
-use super::NodeAttr;
-
-#[derive(Debug, Clone)]
+#[derive(OpmNode, Debug, Clone)]
+#[opm_node("chocolate2")]
 /// An infinitely thin mirror with a spherical (or flat) surface.
 ///
 /// # Focal length convention:
@@ -156,7 +156,6 @@ impl ParabolicMirror {
         parabola.update_surfaces()?;
         Ok(parabola)
     }
-
     /// Creates a new y off-axis [`ParabolicMirror`] node.
     ///
     /// This function creates an infinitely thin, off-axis parabolic mirror with a given focal length and reflection within the y-z plane.
@@ -191,7 +190,6 @@ impl ParabolicMirror {
         parabola.update_surfaces()?;
         Ok(parabola)
     }
-
     /// Creates a new off-axis [`ParabolicMirror`] node.
     ///
     /// This function creates an infinitely thin, off-axis parabolic mirror with a given focal length and reflection with a defined direction
@@ -229,7 +227,6 @@ impl ParabolicMirror {
         parabola.update_surfaces()?;
         Ok(parabola)
     }
-
     /// checks the validity of the provided node attributes of thie parabola
     fn check_attributes(
         focal_length: Length,
@@ -260,7 +257,6 @@ impl ParabolicMirror {
         };
         Ok(())
     }
-
     /// sets the properties of this parabola
     fn set_parabola_properties(
         &mut self,
@@ -287,7 +283,6 @@ impl ParabolicMirror {
         }
         Ok(())
     }
-
     fn calc_off_axis_isometry(&self) -> OpmResult<Isometry> {
         let (focal_length, oa_angle, oa_dir, collimating) = self.get_parabola_attributes()?;
         let tan_val = (oa_angle / 2.).tan().value;
@@ -313,7 +308,6 @@ impl ParabolicMirror {
         }
         Ok(tot_iso)
     }
-
     fn calc_parent_focal_length(&self) -> OpmResult<Length> {
         let Ok(Proptype::Length(focal_length)) = self.node_attr.get_property("focal length") else {
             return Err(OpossumError::Analysis("cannot read focal length".into()));
@@ -324,7 +318,6 @@ impl ParabolicMirror {
         let tan_val = (*oa_angle / 2.).tan().value;
         Ok(*focal_length / tan_val.mul_add(tan_val, 1.))
     }
-
     /// Returns / modifies a [`ParabolicMirror`] with a given off-axis angle.
     ///
     /// The angle defines the off axis angle between the focal direction of the mother parabola, hit at its center, and the off-axis focal direction.
@@ -352,7 +345,6 @@ impl ParabolicMirror {
         self.update_surfaces()?;
         Ok(self)
     }
-
     /// Returns the parabola-specific node attributed
     ///
     /// This function returns a tuple containing:
@@ -425,24 +417,6 @@ impl OpticNode for ParabolicMirror {
         }
         Ok(())
     }
-}
-impl Alignable for ParabolicMirror {}
-impl Dottable for ParabolicMirror {
-    fn node_color(&self) -> &str {
-        "chocolate2"
-    }
-}
-impl LIDT for ParabolicMirror {}
-impl Analyzable for ParabolicMirror {
-    // fn set_surface_iso(&mut self, port_str: &str, iso: &Isometry) -> OpmResult<()> {
-    //     let parabola_iso = self.calc_and_set_off_axis_isometry()?;
-    //     if let Some(input_surf) = self.get_optic_surface_mut(port_str) {
-    //         input_surf.set_isometry(&iso.append(&parabola_iso));
-    //     } else {
-    //         return Err(OpossumError::OpticPort("No surface found.".into()));
-    //     }
-    //     Ok(())
-    // }
 }
 impl AnalysisGhostFocus for ParabolicMirror {
     fn analyze(
