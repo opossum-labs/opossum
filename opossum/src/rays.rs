@@ -6,9 +6,10 @@ use crate::{
     centimeter, degree,
     energy_distributions::EnergyDistribution,
     error::{OpmResult, OpossumError},
-    joule, micrometer, millimeter, nanometer,
+    fluence_distributions::FluenceDistribution,
+    joule, meter, micrometer, millimeter, nanometer,
     nodes::{
-        fluence_detector::fluence_data::FluenceData,
+        fluence_detector::{fluence_data::FluenceData, Fluence},
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
         FilterType, WaveFrontData, WaveFrontErrorMap,
     },
@@ -19,7 +20,7 @@ use crate::{
     refractive_index::RefractiveIndexType,
     spectral_distribution::SpectralDistribution,
     spectrum::Spectrum,
-    surface::optic_surface::OpticSurface,
+    surface::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
     utils::{
         filter_data::{get_min_max_filter_nonfinite, get_unique_finite_values},
         geom_transformation::Isometry,
@@ -37,19 +38,19 @@ use itertools::{izip, Itertools};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{
-    distance, vector, DMatrix, DVector, MatrixXx2, MatrixXx3, Point2, Point3, Vector2, Vector3,
+    distance, vector, DMatrix, DVector, Matrix2xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector2,
+    Vector3,
 };
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Range};
 use uom::{
     num_traits::Zero,
-    si::f64::Area,
     si::{
+        area::square_centimeter,
         energy::joule,
-        f64::{Angle, Energy, Length},
-        length::centimeter,
-        length::{micrometer, millimeter, nanometer},
+        f64::{Angle, Area, Energy, Length},
+        length::{centimeter, micrometer, millimeter, nanometer},
     },
 };
 use uuid::Uuid;
@@ -79,6 +80,7 @@ impl Default for Rays {
         }
     }
 }
+
 impl Rays {
     /// Generate a set of collimated rays (collinear with optical axis) with uniform energy distribution.
     ///
@@ -150,6 +152,15 @@ impl Rays {
             } else {
                 valid_rays[0].ray_history_len()
             }
+        }
+    }
+    ///returns a reference to a ray, by its index
+    #[must_use]
+    pub fn get_ray_by_idx(&self, idx: usize) -> Option<&Ray> {
+        if idx < self.nr_of_rays(true) {
+            Some(&self.rays[idx])
+        } else {
+            None
         }
     }
     ///Returns the uuid of node at which this ray bundle originated
@@ -263,7 +274,70 @@ impl Rays {
         let nr_of_rays = ray_pos.len();
         let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
         for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
-            let ray = Ray::new_collimated(*pos, wave_length, *energy)?;
+            if *energy > f64::EPSILON * energy_strategy.get_total_energy() {
+                let ray = Ray::new_collimated(*pos, wave_length, *energy)?;
+                rays.push(ray);
+            }
+        }
+        Ok(Self {
+            rays,
+            node_origin: None,
+            uuid: Uuid::new_v4(),
+            parent_id: None,
+            parent_pos_split_idx: 0,
+        })
+    }
+
+    /// Generate a set of collimated rays (collinear with optical axis) with specified fluence and position distribution.
+    ///
+    /// This functions generates a bundle of (collimated) rays of the given wavelength .
+    /// The fluence is distributed according to the specified distribution function over the indivual rays: [`FluenceDistribution`].
+    /// The ray positions are distributed according to the given [`PositionDistribution`].
+    /// The total energy of the ray bundle depends on the size of the beam, as well as the fluence distribution
+    ///  
+    /// # Errors
+    /// This function returns an error if the ray creatio of a single ray fails
+    pub fn new_collimated_w_fluence_helper(
+        wave_length: Length,
+        fluence_strategy: &dyn FluenceDistribution,
+        pos_strategy: &dyn PositionDistribution,
+    ) -> OpmResult<Self> {
+        let ray_pos = pos_strategy.generate();
+
+        //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
+        let ray_pos_plane = ray_pos
+            .iter()
+            .map(|p| Point2::<Length>::new(p.x, p.y))
+            .collect::<Vec<Point2<Length>>>();
+        //apply distribution strategy
+        let ray_fluences = fluence_strategy.apply(&ray_pos_plane);
+
+        let ray_pos_plane_cm = Matrix2xX::from_vec(
+            ray_pos_plane
+                .iter()
+                .flat_map(|p| vec![p.x.get::<centimeter>(), p.y.get::<centimeter>()])
+                .collect_vec(),
+        )
+        .transpose();
+
+        let (voronoi, _) = create_voronoi_cells(&ray_pos_plane_cm)?;
+        //create rays
+        let nr_of_rays = ray_pos.len();
+        let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
+        for (pos, fluence, cell) in
+            izip!(ray_pos.iter(), ray_fluences.iter(), voronoi.cells().iter())
+        {
+            let v_neighbours = cell
+                .points()
+                .iter()
+                .map(|p| Point2::new(p.x, p.y))
+                .collect::<Vec<Point2<f64>>>();
+            let energy = if v_neighbours.len() >= 3 {
+                Area::new::<square_centimeter>(calc_closed_poly_area(&v_neighbours)?) * *fluence
+            } else {
+                joule!(0.)
+            };
+            let ray = Ray::new_collimated_w_fluence_helper(*pos, wave_length, energy, *fluence)?;
             rays.push(ray);
         }
         Ok(Self {
@@ -630,7 +704,7 @@ impl Rays {
     }
     fn calc_ray_fluence_in_voronoi_cells(
         &self,
-        // projected_ray_pos: &MatrixXx2<Length>,
+        iso: &Isometry, // projected_ray_pos: &MatrixXx2<Length>,
     ) -> OpmResult<(VoronoiedData, AxLims, AxLims)> {
         let valid_rays = Self::from(
             self.rays
@@ -640,7 +714,7 @@ impl Rays {
                 .collect_vec(),
         );
 
-        let projected_ray_pos = valid_rays.get_xy_rays_pos(true, &Isometry::identity());
+        let projected_ray_pos = valid_rays.get_xy_rays_pos(true, iso);
 
         let ray_pos_cm = MatrixXx2::from_iterator(
             projected_ray_pos.nrows(),
@@ -700,12 +774,12 @@ impl Rays {
     /// - creation of the linearly spaced axes fails
     /// - voronating the ray position or the fluence calculation in the voronoi cells fails
     /// - interpolation fails
-    pub fn calc_fluence_at_position(&self) -> OpmResult<FluenceData> {
+    pub fn calc_fluence_at_position(&self, iso: &Isometry) -> OpmResult<FluenceData> {
         let num_axes_points = 100;
 
         // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
         let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim) =
-            self.calc_ray_fluence_in_voronoi_cells()?;
+            self.calc_ray_fluence_in_voronoi_cells(iso)?;
 
         //axes definition
         let co_ax1 = linspace(co_ax1_lim.min, co_ax1_lim.max, num_axes_points)?;
@@ -723,6 +797,7 @@ impl Rays {
             ),
             centimeter!(co_ax1_lim.min)..centimeter!(co_ax1_lim.max),
             centimeter!(co_ax2_lim.min)..centimeter!(co_ax2_lim.max),
+            FluenceEstimator::Voronoi,
         ))
     }
 
@@ -757,6 +832,9 @@ impl Rays {
         for ray in &mut self.rays {
             if ray.valid() {
                 ray.refract_paraxial(focal_length, iso)?;
+            }
+            if let Some(helper_rays) = ray.helper_rays_mut() {
+                helper_rays.refract_paraxial(focal_length, iso)?;
             }
         }
         Ok(())
@@ -799,6 +877,22 @@ impl Rays {
                 if let Some(mut reflected) =
                     ray.refract_on_surface(surface, n2, &self.uuid, missed_surface_strategy)?
                 {
+                    if let (Some(helper_rays), Some(relf_helper)) =
+                        (ray.helper_rays_mut(), reflected.helper_rays_mut())
+                    {
+                        for (ray, refl_ray) in
+                            izip!(helper_rays.rays.iter_mut(), relf_helper.rays.iter_mut())
+                        {
+                            if let Some(reflected) = ray.refract_on_surface(
+                                surface,
+                                n2,
+                                &self.uuid,
+                                missed_surface_strategy,
+                            )? {
+                                refl_ray.set_direction(reflected.direction())?;
+                            }
+                        }
+                    }
                     if refraction_intended {
                         reflected.clear_pos_hist();
                     } else {
@@ -821,7 +915,7 @@ impl Rays {
         //surface.set_backwards_rays_cache(reflected_rays.clone());
         if refraction_intended {
             reflected_rays.set_parent_uuid(self.uuid);
-            reflected_rays.set_parent_node_split_idx(self.ray_history_len());
+            reflected_rays.set_parent_node_split_idx(self.ray_history_len() + 1);
         } else {
             reflected_rays.set_uuid(self.uuid);
             if let Some(node_origin) = self.node_origin {
@@ -885,7 +979,7 @@ impl Rays {
         }
         if refraction_intended {
             reflected_rays.set_parent_uuid(self.uuid);
-            reflected_rays.set_parent_node_split_idx(self.ray_history_len());
+            reflected_rays.set_parent_node_split_idx(self.ray_history_len() + 1);
         } else {
             reflected_rays.set_uuid(self.uuid);
             if let Some(node_origin) = self.node_origin {
@@ -898,6 +992,7 @@ impl Rays {
         }
         Ok(reflected_rays)
     }
+
     /// Filter a ray bundle by a given filter.
     ///
     /// Filter the energy of of all `valid` rays by a given [`FilterType`].
@@ -1242,6 +1337,107 @@ impl Rays {
             warn!("Ray bundle not used for alignment, use first ray for up-direction calculation");
         }
         self.rays[0].calc_new_up_direction(up_direction)
+    }
+}
+
+/// Struct to hold a set of helper rays for fluence calculation
+///
+/// [`FluenceRays`] is used to calculate the fluence evolution using the helper rays [`FluenceEstimator`].
+/// Here, three additional rays are spawned around the original ray, creating a triangle with a defined are of the square of the ray wavelength.
+/// During propagation through the system, the area of the helper rays changes, as well as the effective energy of the rays when the original is partially reflected or refracted.
+/// As the local evolution of the small surface element is stored, the fluence between all the rays can later on easily be interpolated
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct FluenceRays {
+    helper_rays: Rays,
+    effective_energy: Energy,
+}
+impl FluenceRays {
+    /// Creates a new [`FluenceRays`] struct
+    ///
+    /// # Attributes
+    /// -`original_ray`: the original ray around which these [`FluenceRays`] are created
+    /// -`init_fluence`: the initial fluence of these [`FluenceRays`]
+    ///
+    /// # Errors
+    /// This function returns an error if the creation of a helper ray fails
+    pub fn new(original_ray: &Ray, init_fluence: Fluence) -> OpmResult<Self> {
+        let area = original_ray.wavelength() * original_ray.wavelength();
+        let effective_energy = init_fluence * area;
+
+        let outer_radius = (4. * area / f64::sqrt(27.)).sqrt();
+        let mut rays = Vec::<Ray>::with_capacity(3);
+        for i in 0..3 {
+            let helper_ray_pos = original_ray.position()
+                + Vector3::<Length>::new(
+                    outer_radius * f64::cos(usize_to_f64(i) * 2. / 3. * std::f64::consts::PI),
+                    outer_radius * f64::sin(usize_to_f64(i) * 2. / 3. * std::f64::consts::PI),
+                    meter!(0.),
+                );
+            let mut helper_ray = Ray::new(
+                helper_ray_pos,
+                original_ray.direction(),
+                original_ray.wavelength(),
+                original_ray.energy(),
+            )?;
+            helper_ray.set_is_helper(true);
+            rays.push(helper_ray);
+        }
+        let helper_rays = Rays::from(rays);
+
+        Ok(Self {
+            helper_rays,
+            effective_energy,
+        })
+    }
+
+    /// Returns a mutable reference to the helper rays of these [`FluenceRays`]
+    #[must_use]
+    pub fn rays_mut(&mut self) -> &mut Rays {
+        &mut self.helper_rays
+    }
+
+    /// Returns a reference to the helper rays of these [`FluenceRays`]
+    #[must_use]
+    pub const fn rays(&self) -> &Rays {
+        &self.helper_rays
+    }
+
+    /// Returns a reference to the `effective_energy` of these [`FluenceRays`]
+    #[must_use]
+    pub const fn effective_energy(&self) -> &Energy {
+        &self.effective_energy
+    }
+
+    /// Returns the 'initial' fluence of these [`FluenceRays`]
+    ///
+    /// Calcualtes the fluence of these [`FluenceRays`] using the currenty effective energy and the original area spanned by the rays
+    ///
+    /// # Errors
+    /// This function errors if there is no ray stored in the struct to retrieve the wavelength
+    pub fn init_fluence(&self) -> OpmResult<Fluence> {
+        self.helper_rays.get_ray_by_idx(0).map_or_else(
+            || {
+                Err(OpossumError::Other(
+                    "no rays stored in this fluence-ray struct. cannot calculate fluence!".into(),
+                ))
+            },
+            |ray| Ok(self.effective_energy / (ray.wavelength() * ray.wavelength())),
+        )
+    }
+
+    /// Alters the effective energy by a given factor
+    ///
+    /// # Errors
+    /// This function errors if the factor is negative or not finite
+    pub fn change_effective_energy_by_factor(&mut self, factor: f64) -> OpmResult<()> {
+        if factor.is_finite() && factor.is_sign_positive() {
+            self.effective_energy *= factor;
+            Ok(())
+        } else {
+            Err(OpossumError::Other(
+                "energy factor must be finite and positive!".into(),
+            ))
+        }
     }
 }
 
@@ -2284,7 +2480,10 @@ mod test {
         )
         .unwrap();
 
-        let _ = rays.calc_fluence_at_position().unwrap();
+        let _ = rays
+            .calc_fluence_at_position(&Isometry::identity())
+            .unwrap();
+
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
@@ -2292,7 +2491,9 @@ mod test {
         )
         .unwrap();
 
-        let _ = rays.calc_fluence_at_position().unwrap();
+        let _ = rays
+            .calc_fluence_at_position(&Isometry::identity())
+            .unwrap();
     }
 
     #[test]
@@ -2393,4 +2594,8 @@ mod test {
             vec!["Ray bundle not used for alignment, use first ray for up-direction calculation"],
         );
     }
+    // #[test]
+    // fn get_ray_by_idx(){
+
+    // }
 }

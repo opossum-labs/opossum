@@ -1,4 +1,5 @@
 //! Module handling optical surfaces
+use log::warn;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -168,8 +169,16 @@ impl OpticSurface {
         self.hit_map.get_rays_hit_map(bounce, uuid)
     }
     /// Add intersection point (with energy) to hit map.
-    pub fn add_to_hit_map(&mut self, hit_point: HitPoint, bounce: usize, rays_uuid: &Uuid) {
-        self.hit_map.add_to_hitmap(hit_point, bounce, rays_uuid);
+    ///
+    /// # Errors
+    /// This function errors if adding the hit point to the hit map fails
+    pub fn add_to_hit_map(
+        &mut self,
+        hit_point: HitPoint,
+        bounce: usize,
+        rays_uuid: &Uuid,
+    ) -> OpmResult<()> {
+        self.hit_map.add_to_hitmap(hit_point, bounce, rays_uuid)
     }
     /// Reset hit map of this [`OpticSurface`].
     pub fn reset_hit_map(&mut self) {
@@ -181,17 +190,23 @@ impl OpticSurface {
     /// # Errors
     ///
     /// This function errors on error propagation of `calc_fluence`
-    pub fn evaluate_fluence_of_ray_bundle(&mut self, rays: &Rays) -> OpmResult<()> {
+    pub fn evaluate_fluence_of_ray_bundle(
+        &mut self,
+        rays: &Rays,
+        estimator: &FluenceEstimator,
+    ) -> OpmResult<()> {
         if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), rays.uuid()) {
-            let fluence_map =
-                rays_hit_map.calc_fluence_map((100, 100), &FluenceEstimator::Voronoi)?;
-            if fluence_map.peak() > self.lidt {
-                self.add_critical_fluence(
-                    rays.uuid(),
-                    rays.ray_history_len(),
-                    fluence_map.peak(),
-                    rays.bounce_lvl(),
-                );
+            if let Ok(peak_fluence) = rays_hit_map.get_max_fluence(estimator) {
+                if peak_fluence > self.lidt {
+                    self.add_critical_fluence(
+                        rays.uuid(),
+                        rays.ray_history_len() + 1,
+                        peak_fluence,
+                        rays.bounce_lvl(),
+                    );
+                };
+            } else {
+                warn!("Could not estimate maximum fluence of ray bundle! Ray bundle will be ignored during calculation");
             }
         }
         Ok(())

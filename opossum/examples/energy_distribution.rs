@@ -7,6 +7,7 @@ use opossum::{
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
     position_distributions::FibonacciRectangle,
     rays::Rays,
+    utils::geom_transformation::Isometry,
 };
 use plotters::style::RGBAColor;
 use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
@@ -25,7 +26,7 @@ fn main() -> OpmResult<()> {
         &FibonacciRectangle::new(millimeter!(10.), millimeter!(10.), 1000)?,
     )?;
 
-    let fluence_data = rays.calc_fluence_at_position()?;
+    let fluence_data = rays.calc_fluence_at_position(&Isometry::identity())?;
     let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
 
     let mut plt_params = PlotParameters::default();

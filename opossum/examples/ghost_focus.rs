@@ -18,8 +18,8 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(&round_collimated_ray_source(
-        millimeter!(50.0),
-        joule!(200.),
+        millimeter!(10.0),
+        joule!(2.),
         8,
     )?)?;
     let i_sd = scenery.add_node(&SpotDiagram::default())?;
@@ -71,10 +71,8 @@ fn main() -> OpmResult<()> {
         "output_1",
         &CoatingType::ConstantR { reflectivity: 0.5 },
     )?;
-    // let i_w = scenery.add_node(&wedge)?;
 
     scenery.connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(120.0))?;
-    // scenery.connect_nodes(i_l, "output_1", i_l2, "input_1", millimeter!(1000.0))?;
     scenery.connect_nodes(i_l, "output_1", mir1, "input_1", millimeter!(150.0))?;
     scenery.connect_nodes(mir1, "output_1", mir2, "input_1", millimeter!(700.0))?;
     scenery.connect_nodes(mir2, "output_1", i_l2, "input_1", millimeter!(150.0))?;

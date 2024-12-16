@@ -5,15 +5,18 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 /// Strategy for fluence estimation
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum FluenceEstimator {
     /// Calculate Voronoi cells of the hit points and use the cell area for calculation of the fluence.
+    #[default]
     Voronoi,
     /// Calculate the fluence at given point using a Kernel Density Estimator
     KDE,
     /// Simply perform binning of the hit points on a given matrix (not implemented yet)
     Binning,
+    /// Using additional "helper rays" for each ray to calculate the evolution of a small area element around the intial ray to calcuklate the fluence
+    HelperRays,
 }
 impl Display for FluenceEstimator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -21,6 +24,7 @@ impl Display for FluenceEstimator {
             Self::Voronoi => write!(f, "Voronoi"),
             Self::KDE => write!(f, "KDE"),
             Self::Binning => write!(f, "Binning"),
+            Self::HelperRays => write!(f, "Helper Rays"),
         }
     }
 }

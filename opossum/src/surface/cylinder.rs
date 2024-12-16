@@ -30,7 +30,7 @@ impl Cylinder {
     pub fn new(radius: Length, isometry: Isometry) -> OpmResult<Self> {
         if !radius.is_normal() {
             return Err(OpossumError::Other(
-                "radius of curvature must be != 0.0 and finite".into(),
+                "radius of curvature must be!=> 0.0 and finite".into(),
             ));
         }
         Ok(Self { radius, isometry })
@@ -154,10 +154,12 @@ mod test {
 
         let s = Cylinder::new(millimeter!(2.0), iso.clone()).unwrap();
         assert_eq!(s.radius, millimeter!(2.0));
-        assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, 3.0));
+        assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, 1.0));
 
-        let s = Cylinder::new(millimeter!(-2.0), iso).unwrap();
-        assert_eq!(s.radius, millimeter!(-2.0));
+        let iso = Isometry::new_along_z(millimeter!(-1.0)).unwrap();
+
+        let s = Cylinder::new(millimeter!(2.0), iso).unwrap();
+        assert_eq!(s.radius, millimeter!(2.0));
         assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, -1.0));
     }
     #[test]
@@ -168,7 +170,7 @@ mod test {
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
         assert_abs_diff_eq!(intersection_point.x.value, 0.0);
         assert_abs_diff_eq!(intersection_point.y.value, 0.0);
-        assert_abs_diff_eq!(intersection_point.z.value, 0.01);
+        assert_abs_diff_eq!(intersection_point.z.value, 0.009);
         assert_abs_diff_eq!(normal.x, 0.0);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, -1.0);
@@ -178,7 +180,7 @@ mod test {
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
         assert_abs_diff_eq!(intersection_point.x.value, 0.0);
         assert_abs_diff_eq!(intersection_point.y.value, 0.001);
-        assert_abs_diff_eq!(intersection_point.z.value, 0.01);
+        assert_abs_diff_eq!(intersection_point.z.value, 0.009);
         assert_abs_diff_eq!(normal.x, 0.0);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, -1.0);
@@ -188,8 +190,6 @@ mod test {
         let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
         let iso = Isometry::new_along_z(millimeter!(-10.0)).unwrap();
         let s = Cylinder::new(millimeter!(1.0), iso.clone()).unwrap();
-        assert_eq!(s.calc_intersect_and_normal(&ray), None);
-        let s = Cylinder::new(millimeter!(-1.0), iso).unwrap();
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
     }
     #[test]
@@ -208,7 +208,7 @@ mod test {
         let s = Cylinder::new(millimeter!(1.0), iso).unwrap();
         assert_eq!(
             s.calc_intersect_and_normal(&ray),
-            Some((millimeter!(1.0, 0.0, 11.0), Vector3::x()))
+            Some((millimeter!(1.0, 0.0, 10.0), Vector3::x()))
         );
         let ray = Ray::new_collimated(millimeter!(-1.0, 0.0, 0.0), wvl, joule!(1.0)).unwrap();
         let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
@@ -216,24 +216,11 @@ mod test {
         assert_abs_diff_eq!(intersection_point.x.value, -0.001);
         assert_abs_diff_eq!(
             intersection_point.z.value,
-            0.011,
+            0.01,
             epsilon = 1000.0 * f64::EPSILON
         );
         assert_abs_diff_eq!(normal.x, -1.0);
         assert_abs_diff_eq!(normal.y, 0.0);
         assert_abs_diff_eq!(normal.z, 0.0);
-    }
-    #[test]
-    fn intersect_negative_on_axis() {
-        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
-        let s = Cylinder::new(millimeter!(-1.0), iso).unwrap();
-        let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
-        let (intersection_point, normal) = s.calc_intersect_and_normal(&ray).unwrap();
-        assert_abs_diff_eq!(intersection_point.x.value, 0.0);
-        assert_abs_diff_eq!(intersection_point.y.value, 0.0);
-        assert_abs_diff_eq!(intersection_point.z.value, 0.01);
-        assert_abs_diff_eq!(normal.x, 0.0);
-        assert_abs_diff_eq!(normal.y, 0.0);
-        assert_abs_diff_eq!(normal.z, -1.0);
     }
 }

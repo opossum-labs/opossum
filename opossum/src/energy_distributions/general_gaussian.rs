@@ -3,7 +3,7 @@ use super::EnergyDistribution;
 use crate::{
     error::{OpmResult, OpossumError},
     utils::math_distribution_functions::{
-        general_2d_gaussian_point, general_2d_gaussian_point_rect,
+        general_2d_super_gaussian_point_elliptical, general_2d_super_gaussian_point_rectangular,
     },
 };
 use kahan::KahanSummator;
@@ -97,14 +97,14 @@ impl EnergyDistribution for General2DGaussian {
         if self.rectangular {
             for p in input {
                 let p_m = Point2::new(p.x.value, p.y.value);
-                energy_distribution.push(general_2d_gaussian_point_rect(
+                energy_distribution.push(general_2d_super_gaussian_point_rectangular(
                     &p_m, mu_xy, sigma_xy, self.power, sin_theta, cos_theta,
                 ));
             }
         } else {
             for p in input {
                 let p_m = Point2::new(p.x.value, p.y.value);
-                energy_distribution.push(general_2d_gaussian_point(
+                energy_distribution.push(general_2d_super_gaussian_point_elliptical(
                     &p_m, mu_xy, sigma_xy, self.power, sin_theta, cos_theta,
                 ));
             }

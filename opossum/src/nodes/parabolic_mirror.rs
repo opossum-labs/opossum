@@ -448,7 +448,7 @@ impl AnalysisGhostFocus for ParabolicMirror {
     fn analyze(
         &mut self,
         incoming_data: LightRays,
-        _config: &GhostFocusConfig,
+        config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
@@ -477,7 +477,7 @@ impl AnalysisGhostFocus for ParabolicMirror {
             )));
         };
         for rays in &mut rays_bundle {
-            surf.evaluate_fluence_of_ray_bundle(rays)?;
+            surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
         }
 
         let mut out_light_rays = LightRays::default();

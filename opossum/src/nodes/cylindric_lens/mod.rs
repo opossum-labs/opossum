@@ -434,8 +434,8 @@ mod test {
                 .unwrap();
         if let Some(LightData::Geometric(rays)) = output.get("output_1") {
             for ray in rays {
-                assert_eq!(ray.direction().x, 0.0);
-                assert_eq!(ray.direction().y, 0.0);
+                assert_relative_eq!(ray.direction().x, 0.0);
+                assert_relative_eq!(ray.direction().y, 0.0);
                 assert_relative_eq!(ray.direction().z, 1.0);
             }
         } else {

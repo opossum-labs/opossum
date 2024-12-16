@@ -23,7 +23,7 @@ use crate::reporting::html_report::HtmlProperty;
 /// ```rust
 /// use opossum::properties::Properties;
 /// let mut props = Properties::default();
-/// props.create("my float", "my floating point value", None, 3.14.into()).unwrap();
+/// props.create("my float", "my floating point value", 3.14.into()).unwrap();
 /// props.set("my float", 2.71.into()).unwrap();
 /// ```
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]

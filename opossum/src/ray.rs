@@ -18,9 +18,13 @@ use crate::{
     analyzers::raytrace::MissedSurfaceStrategy,
     error::{OpmResult, OpossumError},
     joule, meter,
-    nodes::FilterType,
+    nodes::{fluence_detector::Fluence, FilterType},
+    rays::{FluenceRays, Rays},
     spectrum::Spectrum,
-    surface::{hit_map::rays_hit_map::HitPoint, optic_surface::OpticSurface},
+    surface::{
+        hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
+        optic_surface::OpticSurface,
+    },
     utils::geom_transformation::Isometry,
 };
 
@@ -44,6 +48,7 @@ impl SplittingConfig {
         }
     }
 }
+
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {
@@ -69,13 +74,17 @@ pub struct Ray {
     valid: bool,
     /// optical path length of the ray
     path_length: Length,
-    // refractive index of the medium this ray is propagating in.
+    /// refractive index of the medium this ray is propagating in.
     refractive_index: f64,
+    /// helper rays used to calculate evolution of fluence or wavefront
+    helper_rays: Option<FluenceRays>,
+    /// currently only a workaround to check if this is a helper ray or not. true: ray is a helper ray, false otherwise
+    is_helper: bool,
 }
 impl Ray {
     /// Creates a new [`Ray`].
     ///
-    /// The dircetion vector is normalized. The direction is thus stored as (`direction cosine`)[`https://en.wikipedia.org/wiki/Direction_cosine`]
+    /// The direction vector is normalized. The direction is thus stored as (`direction cosine`)[`https://en.wikipedia.org/wiki/Direction_cosine`]
     ///
     /// # Errors
     /// This function returns an error if
@@ -97,9 +106,10 @@ impl Ray {
         if direction.norm().is_zero() {
             return Err(OpossumError::Other("length of direction must be >0".into()));
         }
+        // let pos_hist = vec![position];
         Ok(Self {
             pos: position,
-            pos_hist: Vec::<Point3<Length>>::with_capacity(50),
+            pos_hist: Vec::<Point3<Length>>::new(),
             dir: direction.normalize(),
             prev_dir: None,
             //pol: Vector2::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0)), // horizontal polarization
@@ -110,8 +120,73 @@ impl Ray {
             number_of_bounces: 0,
             number_of_refractions: 0,
             valid: true,
+            helper_rays: None,
+            is_helper: false,
         })
     }
+
+    /// Marks the ray as helper ray if `is_helper` is true
+    pub fn set_is_helper(&mut self, is_helper: bool) {
+        self.is_helper = is_helper;
+    }
+    /// Create a new collimated ray with 3 additional helper rays.
+    ///
+    /// Generate a ray a horizontally polarized ray collinear with the z axis (optical axis).
+    ///
+    /// # Errors
+    /// This function returns an error if
+    ///  - the given wavelength is <= 0.0, `NaN` or +inf
+    ///  - the given energy is < 0.0, `NaN` or +inf
+    pub fn new_collimated_w_fluence_helper(
+        position: Point3<Length>,
+        wave_length: Length,
+        energy: Energy,
+        init_fluence: Fluence,
+    ) -> OpmResult<Self> {
+        let mut ray = Self::new(position, Vector3::z(), wave_length, energy)?;
+        ray.helper_rays = Some(FluenceRays::new(&ray, init_fluence)?);
+        Ok(ray)
+    }
+
+    /// Calculates the fluence of this [`Ray`] by using its helper rays
+    ///
+    /// Returns a fluence option if successful or None
+    #[must_use]
+    pub fn helper_ray_fluence(&self) -> Option<Fluence> {
+        self.helper_rays.as_ref().and_then(|fluence| {
+            let rays = fluence.rays();
+            if let (Some(ray0), Some(ray1), Some(ray2)) = (
+                rays.get_ray_by_idx(0),
+                rays.get_ray_by_idx(1),
+                rays.get_ray_by_idx(2),
+            ) {
+                let ray0_pos = ray0.position();
+                let ray1_pos = ray1.position();
+                let ray2_pos = ray2.position();
+                let ab = ray0_pos - ray1_pos;
+                let ac = ray0_pos - ray2_pos;
+
+                let area = 0.5
+                    * ((ab.y * ac.z - ab.z * ac.y) * (ab.y * ac.z - ab.z * ac.y)
+                        + (ab.z * ac.x - ab.x * ac.z) * (ab.z * ac.x - ab.x * ac.z)
+                        + (ab.x * ac.y - ab.y * ac.x) * (ab.x * ac.y - ab.y * ac.x))
+                        .sqrt();
+                let new_fluence = *fluence.effective_energy() / area;
+                Some(new_fluence)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Returns an optional mutable reference to the helper [`Rays`]
+    #[must_use]
+    pub fn helper_rays_mut(&mut self) -> Option<&mut Rays> {
+        self.helper_rays
+            .as_mut()
+            .map(super::rays::FluenceRays::rays_mut)
+    }
+
     /// Create a new collimated ray.
     ///
     /// Generate a ray a horizontally polarized ray collinear with the z axis (optical axis).
@@ -203,16 +278,32 @@ impl Ray {
     #[must_use]
     pub fn position_history(&self) -> MatrixXx3<Length> {
         let nr_of_pos = self.pos_hist.len();
-        let mut positions = MatrixXx3::<Length>::zeros(nr_of_pos + 1);
+        let mut positions = MatrixXx3::<Length>::zeros(nr_of_pos);
 
         for (idx, pos) in self.pos_hist.iter().enumerate() {
             positions[(idx, 0)] = pos.x;
             positions[(idx, 1)] = pos.y;
             positions[(idx, 2)] = pos.z;
         }
-        positions[(nr_of_pos, 0)] = self.pos.x;
-        positions[(nr_of_pos, 1)] = self.pos.y;
-        positions[(nr_of_pos, 2)] = self.pos.z;
+        positions
+    }
+
+    /// Returns the position history of this [`Ray`] including its current position.
+    ///
+    /// This function returns a matrix with all positions (end of propagation and intersection points) of a ray path.
+    #[must_use]
+    pub fn position_history_with_current(&self) -> MatrixXx3<Length> {
+        let nr_of_pos = self.pos_hist.len() + 1;
+        let mut positions = MatrixXx3::<Length>::zeros(nr_of_pos);
+
+        for (idx, pos) in self.pos_hist.iter().enumerate() {
+            positions[(idx, 0)] = pos.x;
+            positions[(idx, 1)] = pos.y;
+            positions[(idx, 2)] = pos.z;
+        }
+        positions[(nr_of_pos - 1, 0)] = self.pos.x;
+        positions[(nr_of_pos - 1, 1)] = self.pos.y;
+        positions[(nr_of_pos - 1, 2)] = self.pos.z;
         positions
     }
 
@@ -233,19 +324,24 @@ impl Ray {
             return None;
         }
 
-        let end_idx = if end_idx > self.pos_hist.len() {
-            self.pos_hist.len()
-        } else {
-            end_idx
-        };
-
         let nr_of_pos = end_idx - start_idx;
         let mut positions = MatrixXx3::<Length>::zeros(nr_of_pos);
 
-        for (idx, hist_idx) in (start_idx..end_idx).enumerate() {
-            positions[(idx, 0)] = self.pos_hist[hist_idx].x;
-            positions[(idx, 1)] = self.pos_hist[hist_idx].y;
-            positions[(idx, 2)] = self.pos_hist[hist_idx].z;
+        if end_idx > self.pos_hist.len() {
+            for (idx, hist_idx) in (start_idx..end_idx - 1).enumerate() {
+                positions[(idx, 0)] = self.pos_hist[hist_idx].x;
+                positions[(idx, 1)] = self.pos_hist[hist_idx].y;
+                positions[(idx, 2)] = self.pos_hist[hist_idx].z;
+            }
+            positions[(nr_of_pos - 1, 0)] = self.pos.x;
+            positions[(nr_of_pos - 1, 1)] = self.pos.y;
+            positions[(nr_of_pos - 1, 2)] = self.pos.z;
+        } else {
+            for (idx, hist_idx) in (start_idx..end_idx).enumerate() {
+                positions[(idx, 0)] = self.pos_hist[hist_idx].x;
+                positions[(idx, 1)] = self.pos_hist[hist_idx].y;
+                positions[(idx, 2)] = self.pos_hist[hist_idx].z;
+            }
         }
         Some(positions)
     }
@@ -483,8 +579,8 @@ impl Ray {
             let intersection_in_m = intersection_point.map(|c| c.value);
             self.path_length +=
                 self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
-            self.pos = intersection_point;
             self.pos_hist.push(self.pos);
+            self.pos = intersection_point;
             // check, if total reflection
             if dis.is_sign_positive() {
                 let mut reflected_ray = self.clone();
@@ -508,12 +604,37 @@ impl Ray {
                 }
 
                 // save on hit map of surface
-                os.add_to_hit_map(
-                    HitPoint::new(intersection_point, input_energy)?,
-                    self.number_of_bounces,
-                    ray_bundle_uuid,
-                );
-
+                if self.helper_rays.is_none() && !self.is_helper {
+                    //energy hit point
+                    os.add_to_hit_map(
+                        HitPoint::Energy(EnergyHitPoint::new(
+                            os.geo_surface()
+                                .0
+                                .borrow()
+                                .isometry()
+                                .inverse_transform_point(&intersection_point),
+                            input_energy,
+                        )?),
+                        self.number_of_bounces,
+                        ray_bundle_uuid,
+                    )?;
+                } else if let Some(helper_fluence) = &self.helper_ray_fluence() {
+                    //fluence hit_point
+                    os.add_to_hit_map(
+                        HitPoint::Fluence(FluenceHitPoint::new(
+                            os.geo_surface()
+                                .0
+                                .borrow()
+                                .isometry()
+                                .inverse_transform_point(&intersection_point),
+                            *helper_fluence,
+                        )?),
+                        self.number_of_bounces,
+                        ray_bundle_uuid,
+                    )?;
+                    self.change_helper_fluence_by_factor(1. - reflectivity)?;
+                    reflected_ray.change_helper_fluence_by_factor(reflectivity)?;
+                }
                 Ok(Some(reflected_ray))
             } else {
                 self.number_of_bounces += 1;
@@ -531,6 +652,11 @@ impl Ray {
         }
     }
 
+    fn change_helper_fluence_by_factor(&mut self, factor: f64) -> OpmResult<()> {
+        self.helper_rays.as_mut().map_or(Ok(()), |helper_rays| {
+            helper_rays.change_effective_energy_by_factor(factor)
+        })
+    }
     /// Attenuate a ray's energy by a given filter.
     ///
     /// This function attenuates the ray's energy by the given [`FilterType`]. For [`FilterType::Constant`] the energy is simply multiplied by the
@@ -1088,7 +1214,7 @@ mod test {
         assert_eq!(ray.pos, millimeter!(0., 0., 10.));
         assert_eq!(ray.refractive_index, 1.5);
         assert_eq!(ray.dir, Vector3::z());
-        assert_eq!(ray.pos_hist, vec![millimeter!(0., 0., 10.)]);
+        assert_eq!(ray.pos_hist, vec![millimeter!(0., 0., 0.)]);
         assert_eq!(ray.path_length(), plane_z_pos);
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.number_of_refractions(), 1);
@@ -1098,7 +1224,7 @@ mod test {
         assert_eq!(reflected_ray.pos, millimeter!(0., 0., 10.));
         assert_eq!(reflected_ray.refractive_index, 1.0);
         assert_eq!(reflected_ray.dir, -1.0 * Vector3::z());
-        assert_eq!(reflected_ray.pos_hist, vec![millimeter!(0., 0., 10.)]);
+        assert_eq!(reflected_ray.pos_hist, vec![millimeter!(0., 0., 0.)]);
         assert_eq!(reflected_ray.path_length(), plane_z_pos);
         assert_eq!(reflected_ray.number_of_bounces(), 1);
         assert_eq!(reflected_ray.number_of_refractions(), 0);

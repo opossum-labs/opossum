@@ -98,29 +98,26 @@ impl OpticNode for FluenceDetector {
         else {
             return None;
         };
-        if let Ok(fluence_data_kde) = hit_map
-            .get_merged_rays_hit_map()
-            .calc_fluence_map((50, 50), estimator)
-        {
+        if let Ok(fluence_data) = hit_map.calc_fluence_map((51, 51), estimator) {
             props
                 .create(
-                    &format!("Fluence ({estimator})"),
+                    &format!("Fluence ({})", fluence_data.estimator()),
                     "2D spatial energy distribution",
-                    fluence_data_kde.clone().into(),
+                    fluence_data.clone().into(),
                 )
                 .unwrap();
             props
                 .create(
-                    &format!("Peak Fluence ({estimator})"),
+                    &format!("Peak Fluence ({})", fluence_data.estimator()),
                     "Peak fluence of the distribution",
-                    Proptype::Fluence(fluence_data_kde.peak()),
+                    Proptype::Fluence(fluence_data.peak()),
                 )
                 .unwrap();
             props
                 .create(
-                    &format!("Total energy ({estimator})"),
+                    &format!("Total energy ({})", fluence_data.estimator()),
                     "Total energy of the distribution",
-                    Proptype::Energy(fluence_data_kde.total_energy()),
+                    Proptype::Energy(fluence_data.total_energy()),
                 )
                 .unwrap();
             if self.apodization_warning {
@@ -134,6 +131,34 @@ impl OpticNode for FluenceDetector {
                     .unwrap();
             }
         }
+        // if let Some(LightData::Geometric(r)) = &self.light_data{
+        //     if let Ok(f_data) = r.calc_fluence_array_from_helper_rays(&self.effective_node_iso().unwrap()){
+        //         props
+        //         .create(
+        //             &format!("helper ray Fluence"),
+        //             "2D spatial energy distribution",
+        //             None,
+        //             f_data.clone().into(),
+        //         )
+        //         .unwrap();
+        //     props
+        //         .create(
+        //             &format!("helper ray Peak Fluence "),
+        //             "Peak fluence of the distribution",
+        //             None,
+        //             Proptype::Fluence(f_data.peak()),
+        //         )
+        //         .unwrap();
+        //     props
+        //         .create(
+        //             &format!("helper ray Total energy "),
+        //             "Total energy of the distribution",
+        //             None,
+        //             Proptype::Energy(f_data.total_energy()),
+        //         )
+        //         .unwrap();
+        //     }
+        // }
         Some(NodeReport::new(
             &self.node_type(),
             &self.name(),

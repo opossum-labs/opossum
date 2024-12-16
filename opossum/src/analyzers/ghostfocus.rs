@@ -30,6 +30,7 @@ use super::{raytrace::AnalysisRayTrace, Analyzer, AnalyzerType, RayTraceConfig};
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
     max_bounces: usize,
+    fluence_estimator: FluenceEstimator,
 }
 
 impl GhostFocusConfig {
@@ -42,10 +43,23 @@ impl GhostFocusConfig {
     pub fn set_max_bounces(&mut self, max_bounces: usize) {
         self.max_bounces = max_bounces;
     }
+
+    /// Returns the fluence estimator of this [`GhostFocusConfig`].
+    #[must_use]
+    pub const fn fluence_estimator(&self) -> &FluenceEstimator {
+        &self.fluence_estimator
+    }
+    /// Sets the fluence estimator to be considered during ghost focus analysis.
+    pub fn set_fluence_estimator(&mut self, fluence_estimator: FluenceEstimator) {
+        self.fluence_estimator = fluence_estimator;
+    }
 }
 impl Default for GhostFocusConfig {
     fn default() -> Self {
-        Self { max_bounces: 1 }
+        Self {
+            max_bounces: 1,
+            fluence_estimator: FluenceEstimator::Voronoi,
+        }
     }
 }
 /// Analyzer for ghost focus simulation
@@ -146,12 +160,17 @@ impl Analyzer for GhostFocusAnalyzer {
                             .1
                             .get_rays_hit_map(*bounce, rays_uuid)
                             .unwrap()
-                            .calc_fluence_map((100, 100), &FluenceEstimator::KDE)?;
+                            .calc_fluence_map(
+                                (101, 101),
+                                &self.config().fluence_estimator,
+                                None,
+                                None,
+                            )?;
                         hit_map_props.create(
-                            "Peak fluence (Voronoi)",
+                            &format!("Peak fluence ({})", fluence_data.estimator()),
                             "Peak fluence on this surface using Voronoi estimator",
                             format!(
-                                "{} J/cm²",
+                                "{}J/cm²",
                                 format_value_with_prefix(
                                     fluence.get::<joule_per_square_centimeter>()
                                 )
@@ -162,17 +181,6 @@ impl Analyzer for GhostFocusAnalyzer {
                             "Ray propagation",
                             "ray propagation",
                             Proptype::from(critical_ghost_hist),
-                        )?;
-                        hit_map_props.create(
-                            "Peak fluence (KDE)",
-                            "Peak fluence on this surface using kernel density estimator",
-                            format!(
-                                "{} J/cm²",
-                                format_value_with_prefix(
-                                    fluence_data.peak().get::<joule_per_square_centimeter>()
-                                )
-                            )
-                            .into(),
                         )?;
                         hit_map_props.create(
                             "Fluence",
@@ -190,7 +198,6 @@ impl Analyzer for GhostFocusAnalyzer {
                             &Uuid::new_v4().as_simple().to_string(),
                             hit_map_props,
                         );
-
                         analysis_report.add_node_report(hit_map_report);
                     }
                 }
@@ -459,7 +466,7 @@ impl From<Vec<HashMap<Uuid, Rays>>> for GhostFocusHistory {
                 let mut rays_history =
                     Vec::<MatrixXx3<Length>>::with_capacity(rays.nr_of_rays(false));
                 for ray in rays {
-                    rays_history.push(ray.position_history());
+                    rays_history.push(ray.position_history_with_current());
                 }
                 ray_node_bounce_correlation.insert(
                     rays.uuid(),
@@ -563,11 +570,10 @@ impl Plottable for GhostFocusHistory {
 
                 plt_series.push(PlotSeries::new(
                     &plt_data,
-                    RGBAColor(c.r, c.g, c.b, 0.1),
+                    RGBAColor(c.r, c.g, c.b, 0.2),
                     Some(series_label),
                 ));
             }
-
             Ok(Some(plt_series))
         }
     }

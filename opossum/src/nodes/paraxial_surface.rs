@@ -104,7 +104,7 @@ impl AnalysisGhostFocus for ParaxialSurface {
     fn analyze(
         &mut self,
         incoming_data: LightRays,
-        _config: &GhostFocusConfig,
+        config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
@@ -139,7 +139,7 @@ impl AnalysisGhostFocus for ParaxialSurface {
             if apodized {
                 warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", optic_name);
             }
-            surf.evaluate_fluence_of_ray_bundle(rays)?;
+            surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
         }
         // merge all rays
         if let Some(ld) = this.get_light_data_mut() {
