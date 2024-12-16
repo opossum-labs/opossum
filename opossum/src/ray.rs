@@ -163,6 +163,7 @@ impl Ray {
                 let ray0_pos = ray0.position();
                 let ray1_pos = ray1.position();
                 let ray2_pos = ray2.position();
+
                 let ab = ray0_pos - ray1_pos;
                 let ac = ray0_pos - ray2_pos;
 
@@ -317,18 +318,22 @@ impl Ray {
         start_idx: usize,
         end_idx: usize,
     ) -> Option<MatrixXx3<Length>> {
-        if start_idx >= self.pos_hist.len() {
+        if start_idx > self.pos_hist.len() {
+            return None;
+        }
+
+        if start_idx > end_idx {
             return None;
         }
         if end_idx == 0 {
             return None;
         }
 
-        let nr_of_pos = end_idx - start_idx;
+        let nr_of_pos = end_idx - start_idx + 1;
         let mut positions = MatrixXx3::<Length>::zeros(nr_of_pos);
 
-        if end_idx > self.pos_hist.len() {
-            for (idx, hist_idx) in (start_idx..end_idx - 1).enumerate() {
+        if end_idx >= self.pos_hist.len() {
+            for (idx, hist_idx) in (start_idx..self.pos_hist.len()).enumerate() {
                 positions[(idx, 0)] = self.pos_hist[hist_idx].x;
                 positions[(idx, 1)] = self.pos_hist[hist_idx].y;
                 positions[(idx, 2)] = self.pos_hist[hist_idx].z;
@@ -337,7 +342,7 @@ impl Ray {
             positions[(nr_of_pos - 1, 1)] = self.pos.y;
             positions[(nr_of_pos - 1, 2)] = self.pos.z;
         } else {
-            for (idx, hist_idx) in (start_idx..end_idx).enumerate() {
+            for (idx, hist_idx) in (start_idx..=end_idx).enumerate() {
                 positions[(idx, 0)] = self.pos_hist[hist_idx].x;
                 positions[(idx, 1)] = self.pos_hist[hist_idx].y;
                 positions[(idx, 2)] = self.pos_hist[hist_idx].z;
@@ -851,6 +856,7 @@ mod test {
         coatings::CoatingType,
         degree, joule, millimeter, nanometer,
         spectrum_helper::{self, generate_filter_spectrum},
+        J_per_cm2,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use core::f64;
@@ -1741,5 +1747,131 @@ mod test {
 
         ray.calc_new_up_direction(&mut up_direction).unwrap();
         assert_relative_eq!(up_direction, Vector3::y());
+    }
+
+    #[test]
+    fn set_is_helper() {
+        let mut ray = Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        assert!(!ray.is_helper);
+        ray.set_is_helper(true);
+        assert!(ray.is_helper);
+        ray.set_is_helper(false);
+        assert!(!ray.is_helper);
+    }
+
+    #[test]
+    fn new_collimated_w_fluence_helper() {
+        let ray = Ray::new_collimated_w_fluence_helper(
+            meter!(1., 1., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+            J_per_cm2!(1.),
+        );
+        assert!(ray.is_ok());
+    }
+    #[test]
+    fn helper_ray_fluence() {
+        let ray = Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        assert!(ray.helper_ray_fluence().is_none());
+        let mut ray = Ray::new_collimated_w_fluence_helper(
+            meter!(1., 1., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+            J_per_cm2!(1.),
+        )
+        .unwrap();
+        assert_relative_eq!(
+            ray.helper_ray_fluence().unwrap().value / 10000.,
+            1.,
+            epsilon = 1e-8
+        );
+
+        let fluence_rays = ray.helper_rays_mut().unwrap();
+        *fluence_rays = Rays::default();
+        assert!(ray.helper_ray_fluence().is_none());
+    }
+
+    #[test]
+    fn position_history_with_current() {
+        let ray = Ray::new(
+            meter!(1., 2., 3.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        assert_eq!(ray.position_history_with_current().column(0).len(), 1);
+        let hist = ray.position_history_with_current();
+        assert_relative_eq!(hist[(0, 0)].value, 1.);
+        assert_relative_eq!(hist[(0, 1)].value, 2.);
+        assert_relative_eq!(hist[(0, 2)].value, 3.);
+    }
+
+    #[test]
+    fn position_history_from_to() {
+        let mut ray = Ray::new(
+            meter!(1., 2., 3.),
+            Vector3::new(1., 1., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        ray.propagate(meter!(f64::sqrt(3.))).unwrap();
+        ray.propagate(meter!(f64::sqrt(3.))).unwrap();
+
+        assert!(ray.position_history_from_to(0, 0).is_none());
+        assert!(ray.position_history_from_to(4, 5).is_none());
+        assert!(ray.position_history_from_to(1, 0).is_none());
+        assert!(ray.position_history_from_to(2, 1).is_none());
+
+        let hist = ray.position_history_from_to(0, 2).unwrap();
+        assert_relative_eq!(hist[(0, 0)].value, 1.);
+        assert_relative_eq!(hist[(0, 1)].value, 2.);
+        assert_relative_eq!(hist[(0, 2)].value, 3.);
+        assert_relative_eq!(hist[(1, 0)].value, 2.);
+        assert_relative_eq!(hist[(1, 1)].value, 3.);
+        assert_relative_eq!(hist[(1, 2)].value, 4.);
+        assert_relative_eq!(hist[(2, 0)].value, 3.);
+        assert_relative_eq!(hist[(2, 1)].value, 4.);
+        assert_relative_eq!(hist[(2, 2)].value, 5.);
+    }
+
+    #[test]
+    fn change_helper_fluence_by_factor() {
+        let mut original_ray = Ray::new_collimated_w_fluence_helper(
+            meter!(1., 1., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+            J_per_cm2!(1.),
+        )
+        .unwrap();
+        assert!(original_ray.change_helper_fluence_by_factor(-1.).is_err());
+        assert!(original_ray
+            .change_helper_fluence_by_factor(f64::NAN)
+            .is_err());
+        assert!(original_ray
+            .change_helper_fluence_by_factor(f64::NEG_INFINITY)
+            .is_err());
+        assert!(original_ray
+            .change_helper_fluence_by_factor(f64::INFINITY)
+            .is_err());
+        original_ray.change_helper_fluence_by_factor(4.).unwrap();
+        assert_relative_eq!(
+            original_ray.helper_ray_fluence().unwrap().value / 40000.,
+            1.,
+            epsilon = 1e-9
+        );
     }
 }

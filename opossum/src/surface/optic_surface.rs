@@ -200,7 +200,7 @@ impl OpticSurface {
                 if peak_fluence > self.lidt {
                     self.add_critical_fluence(
                         rays.uuid(),
-                        rays.ray_history_len() + 1,
+                        rays.ray_history_len(),
                         peak_fluence,
                         rays.bounce_lvl(),
                     );

@@ -852,14 +852,12 @@ mod test_hitpoint {
 }
 #[cfg(test)]
 mod test_hitpoints {
+    use super::HitPoints;
     use crate::{
         joule, meter,
         surface::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
         J_per_cm2,
     };
-    use core::f64;
-
-    use super::HitPoints;
     #[test]
     fn len() {
         let hp = HitPoints::Energy(vec![]);
