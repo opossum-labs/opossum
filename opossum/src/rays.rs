@@ -915,7 +915,7 @@ impl Rays {
         //surface.set_backwards_rays_cache(reflected_rays.clone());
         if refraction_intended {
             reflected_rays.set_parent_uuid(self.uuid);
-            reflected_rays.set_parent_node_split_idx(self.ray_history_len() + 1);
+            reflected_rays.set_parent_node_split_idx(self.ray_history_len());
         } else {
             reflected_rays.set_uuid(self.uuid);
             if let Some(node_origin) = self.node_origin {
@@ -979,7 +979,7 @@ impl Rays {
         }
         if refraction_intended {
             reflected_rays.set_parent_uuid(self.uuid);
-            reflected_rays.set_parent_node_split_idx(self.ray_history_len() + 1);
+            reflected_rays.set_parent_node_split_idx(self.ray_history_len());
         } else {
             reflected_rays.set_uuid(self.uuid);
             if let Some(node_origin) = self.node_origin {
@@ -1361,6 +1361,11 @@ impl FluenceRays {
     /// # Errors
     /// This function returns an error if the creation of a helper ray fails
     pub fn new(original_ray: &Ray, init_fluence: Fluence) -> OpmResult<Self> {
+        if init_fluence.is_sign_negative() || !init_fluence.is_finite() {
+            return Err(OpossumError::Other(
+                "Initial fluence of Fluence Rays must be non-negative and finite!".into(),
+            ));
+        }
         let area = original_ray.wavelength() * original_ray.wavelength();
         let effective_energy = init_fluence * area;
 
@@ -1487,13 +1492,16 @@ impl<'a> IntoIterator for &'a Rays {
 
 #[cfg(test)]
 mod test {
+    use core::f64;
+    use std::f64::consts::PI;
+
     use super::*;
     use crate::{
         aperture::CircleConfig,
         centimeter,
         coatings::CoatingType,
         energy_distributions::General2DGaussian,
-        joule, meter, millimeter, nanometer,
+        fluence_distributions, joule, meter, millimeter, nanometer,
         position_distributions::{FibonacciEllipse, FibonacciRectangle, Hexapolar, Random},
         radian,
         ray::SplittingConfig,
@@ -2029,6 +2037,55 @@ mod test {
             vec!["ray bundle contains no valid rays - not propagating"],
         );
         assert_eq!(reflected.nr_of_rays(false), 0);
+    }
+    #[test]
+    fn refract_on_surface_helper_rays() {
+        let tot_energy = joule!(1.);
+        let pos_strategy = Hexapolar::new(millimeter!(15.), 5).unwrap();
+        let fluence_strategy = fluence_distributions::general_gaussian::General2DGaussian::new(
+            tot_energy,
+            millimeter!(0., 0.),
+            millimeter!(2.5, 2.5),
+            radian!(0.),
+        )
+        .unwrap();
+        let mut rays = Rays::new_collimated_w_fluence_helper(
+            nanometer!(1000.),
+            &fluence_strategy,
+            &pos_strategy,
+        )
+        .unwrap();
+
+        let _ = rays
+            .refract_on_surface(
+                &mut OpticSurface::default(),
+                Some(&refr_index_vaccuum()),
+                true,
+                &MissedSurfaceStrategy::Stop,
+            )
+            .unwrap();
+    }
+    #[test]
+    fn refract_on_surface_parent_node_split_id() {
+        let mut rays = Rays::default();
+        let node_uuid = Uuid::new_v4();
+        let parent_uuid = Uuid::new_v4();
+        rays.set_node_origin_uuid(node_uuid);
+        rays.set_parent_uuid(parent_uuid);
+        rays.set_parent_node_split_idx(10);
+        let reflected = rays
+            .refract_on_surface(
+                &mut OpticSurface::default(),
+                Some(&refr_index_vaccuum()),
+                false,
+                &MissedSurfaceStrategy::Stop,
+            )
+            .unwrap();
+
+        assert_eq!(*reflected.parent_pos_split_idx(), 10);
+        assert_eq!(reflected.node_origin().unwrap(), node_uuid);
+        assert_eq!(reflected.parent_id().unwrap(), parent_uuid);
+        assert_eq!(reflected.uuid(), rays.uuid());
     }
     #[test]
     fn refract_on_surface_same_index() {
@@ -2594,8 +2651,206 @@ mod test {
             vec!["Ray bundle not used for alignment, use first ray for up-direction calculation"],
         );
     }
-    // #[test]
-    // fn get_ray_by_idx(){
+    #[test]
+    fn get_ray_by_idx() {
+        let mut rays = Rays::default();
+        assert!(rays.get_ray_by_idx(0).is_none());
+        rays.add_ray(
+            Ray::new(
+                meter!(0., 0., 0.),
+                Vector3::new(0., 0., 1.),
+                nanometer!(1000.),
+                joule!(1.),
+            )
+            .unwrap(),
+        );
+        rays.add_ray(
+            Ray::new(
+                meter!(1., 1., 1.),
+                Vector3::new(0., 0., 1.),
+                nanometer!(1050.),
+                joule!(1.),
+            )
+            .unwrap(),
+        );
+        assert!(rays.get_ray_by_idx(1).is_some());
+        assert!(rays.get_ray_by_idx(2).is_none());
+        assert_relative_eq!(rays.get_ray_by_idx(1).unwrap().wavelength().value, 1050e-9);
+    }
 
-    // }
+    #[test]
+    fn node_origin() {
+        let mut rays = Rays::default();
+        assert!(rays.node_origin().is_none());
+        let uuid: Uuid = Uuid::new_v4();
+        rays.set_node_origin_uuid(uuid.clone());
+        assert_eq!(rays.node_origin().unwrap(), uuid);
+    }
+
+    #[test]
+    fn parent_id() {
+        let mut rays = Rays::default();
+        assert!(rays.parent_id().is_none());
+        let uuid: Uuid = Uuid::new_v4();
+        rays.set_parent_uuid(uuid.clone());
+        assert_eq!(rays.parent_id().unwrap(), uuid);
+    }
+    #[test]
+    fn parent_pos_split_idx() {
+        let mut rays = Rays::default();
+        assert_eq!(*rays.parent_pos_split_idx(), 0);
+        rays.set_parent_node_split_idx(10);
+        assert_eq!(*rays.parent_pos_split_idx(), 10);
+    }
+
+    #[test]
+    fn new_collimated_w_fluence_helper() {
+        let tot_energy = joule!(1.);
+        let pos_strategy = Hexapolar::new(millimeter!(15.), 5).unwrap();
+        let fluence_strategy = fluence_distributions::general_gaussian::General2DGaussian::new(
+            tot_energy,
+            millimeter!(0., 0.),
+            millimeter!(2.5, 2.5),
+            radian!(0.),
+        )
+        .unwrap();
+        let rays = Rays::new_collimated_w_fluence_helper(
+            nanometer!(1000.),
+            &fluence_strategy,
+            &pos_strategy,
+        )
+        .unwrap();
+        assert_relative_eq!(
+            rays.get_ray_by_idx(0)
+                .unwrap()
+                .helper_ray_fluence()
+                .unwrap()
+                .value
+                * (2. * PI * 0.0025 * 0.0025),
+            1.,
+            epsilon = 2. * f64::EPSILON
+        )
+    }
+}
+
+#[cfg(test)]
+mod fluence_rays_test {
+    use core::f64;
+
+    use approx::assert_relative_eq;
+    use nalgebra::Vector3;
+
+    use crate::{joule, meter, nanometer, ray::Ray, rays::Rays, J_per_cm2};
+
+    use super::FluenceRays;
+
+    #[test]
+    fn new() {
+        let original_ray = Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        let fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.));
+        assert!(fluence_rays.is_ok());
+    }
+
+    #[test]
+    fn new_false_fluence() {
+        let original_ray = Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        assert!(FluenceRays::new(&original_ray, J_per_cm2!(-1.)).is_err());
+        assert!(FluenceRays::new(&original_ray, J_per_cm2!(f64::NEG_INFINITY)).is_err());
+        assert!(FluenceRays::new(&original_ray, J_per_cm2!(0.)).is_ok());
+        assert!(FluenceRays::new(&original_ray, J_per_cm2!(f64::INFINITY)).is_err());
+        assert!(FluenceRays::new(&original_ray, J_per_cm2!(f64::NAN)).is_err());
+    }
+
+    #[test]
+    fn helper_rays() {
+        let original_ray = Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
+        assert_eq!(fluence_rays.rays().nr_of_rays(true), 3);
+        assert_eq!(fluence_rays.rays_mut().nr_of_rays(true), 3);
+    }
+
+    #[test]
+    fn init_fluence() {
+        let original_ray = Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
+        assert_relative_eq!(fluence_rays.init_fluence().unwrap().value, 10000.);
+
+        fluence_rays.helper_rays = Rays::default();
+
+        assert!(fluence_rays.init_fluence().is_err())
+    }
+    #[test]
+    fn effective_energy() {
+        let original_ray = Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        let fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
+        assert_relative_eq!(fluence_rays.clone().effective_energy.value, 1e-8);
+        let original_ray = Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(10000.),
+            joule!(1.),
+        )
+        .unwrap();
+        let fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
+        assert_relative_eq!(fluence_rays.clone().effective_energy.value, 1e-6);
+    }
+
+    #[test]
+    fn change_effective_energy_by_factor() {
+        let original_ray = Ray::new(
+            meter!(1., 1., 1.),
+            Vector3::new(0., 0., 1.),
+            nanometer!(1000.),
+            joule!(1.),
+        )
+        .unwrap();
+        let mut fluence_rays = FluenceRays::new(&original_ray, J_per_cm2!(1.)).unwrap();
+        assert_relative_eq!(fluence_rays.clone().effective_energy.value, 1e-8);
+
+        assert!(fluence_rays.change_effective_energy_by_factor(-1.).is_err());
+        assert!(fluence_rays
+            .change_effective_energy_by_factor(f64::NAN)
+            .is_err());
+        assert!(fluence_rays
+            .change_effective_energy_by_factor(f64::NEG_INFINITY)
+            .is_err());
+        assert!(fluence_rays
+            .change_effective_energy_by_factor(f64::INFINITY)
+            .is_err());
+
+        assert!(fluence_rays.change_effective_energy_by_factor(2.).is_ok());
+        assert_relative_eq!(fluence_rays.clone().effective_energy.value, 2e-8);
+        assert!(fluence_rays.change_effective_energy_by_factor(0.).is_ok());
+        assert_relative_eq!(fluence_rays.clone().effective_energy.value, 0.);
+    }
 }
