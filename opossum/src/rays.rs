@@ -1237,9 +1237,12 @@ impl Rays {
     ///
     /// # Returns
     /// This method returns a vector of N-row x 3 column matrices that contain the position history of all the rays
+    ///
+    /// # Attributes
+    /// - `with_current`: falg that defines if the current position of the rays should also be included.
     /// # Errors
     /// This function errors when the splitting of the rays by their wavelengths fails. For more info see `split_ray_bundle_by_wavelength`
-    pub fn get_rays_position_history(&self) -> OpmResult<RayPositionHistories> {
+    pub fn get_rays_position_history(&self, with_current: bool) -> OpmResult<RayPositionHistories> {
         let (rays_by_wavelength, wavelengths) =
             self.split_ray_bundle_by_wavelength(nanometer!(1.), false)?;
 
@@ -1248,7 +1251,11 @@ impl Rays {
             let mut rays_pos_history =
                 Vec::<MatrixXx3<Length>>::with_capacity(ray_bundle.rays.len());
             for ray in &ray_bundle {
-                rays_pos_history.push(ray.position_history());
+                if with_current {
+                    rays_pos_history.push(ray.position_history_with_current());
+                } else {
+                    rays_pos_history.push(ray.position_history());
+                }
             }
             ray_pos_hists.push(RayPositionHistorySpectrum::new(
                 rays_pos_history,
@@ -1478,7 +1485,9 @@ impl<'a> IntoIterator for &'a mut Rays {
 impl TryFrom<Rays> for Proptype {
     type Error = OpossumError;
     fn try_from(value: Rays) -> OpmResult<Self> {
-        Ok(Self::RayPositionHistory(value.get_rays_position_history()?))
+        Ok(Self::RayPositionHistory(
+            value.get_rays_position_history(true)?,
+        ))
     }
 }
 
@@ -2333,7 +2342,7 @@ mod test {
         let pos_hist_comp = vec![MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5])]; // 0., 1., 3.,
                                                                                        //])];
 
-        let pos_hist = rays.get_rays_position_history().unwrap();
+        let pos_hist = rays.get_rays_position_history(false).unwrap();
         for (ray_pos, ray_pos_calc) in izip!(
             pos_hist_comp.iter(),
             pos_hist.rays_pos_history[0].get_history().iter()
