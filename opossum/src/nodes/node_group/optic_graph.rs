@@ -308,7 +308,6 @@ impl OpticGraph {
             for id in ids {
                 let light = self.g.edge_weight_mut(id);
                 if let Some(light) = light {
-                    // light.set_data(Some(LightData::Geometric(Rays::default())));
                     light.set_data(None);
                 }
             }
@@ -320,7 +319,6 @@ impl OpticGraph {
             for id in ids {
                 let light = self.g.edge_weight_mut(id);
                 if let Some(light) = light {
-                    // light.set_data(Some(LightData::Geometric(Rays::default())));
                     light.set_data(None);
                 }
             }

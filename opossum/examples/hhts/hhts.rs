@@ -7,7 +7,6 @@ use cambox_1w::cambox_1w;
 use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
-use nalgebra::Point2;
 use num::Zero;
 use opossum::{
     analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
@@ -136,7 +135,7 @@ fn main() -> OpmResult<()> {
     // )?;
 
     let mut rays = rays_1w;
-    // rays.add_rays(&mut rays_2w);
+    rays.add_rays(&mut rays_2w);
 
     let mut scenery = NodeGroup::new("HHT Sensor");
     let mut src = Source::new("Source", &LightData::Geometric(rays));
@@ -217,8 +216,7 @@ fn main() -> OpmResult<()> {
             cut_off: nanometer!(700.0),
         },
     )?;
-    // let short_pass = SplittingConfig::Spectrum(short_pass_spectrum);
-    let short_pass = SplittingConfig::Ratio(0.5);
+    let short_pass = SplittingConfig::Spectrum(short_pass_spectrum);
 
     // real spectrum (Thorlabs HBSY21)
     //let hbsyx2 = SplittingConfig::Spectrum(Spectrum::from_csv("opossum/examples/hhts/HBSYx2_Reflectivity_45deg_unpol.csv")?);
@@ -522,6 +520,6 @@ fn main() -> OpmResult<()> {
     let mut config = GhostFocusConfig::default();
     config.set_max_bounces(0);
     doc.add_analyzer(AnalyzerType::GhostFocus(config));
-    // doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new("./opossum/playground/hhts.opm"))
 }
