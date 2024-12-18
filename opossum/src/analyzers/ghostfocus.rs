@@ -135,10 +135,15 @@ impl Analyzer for GhostFocusAnalyzer {
         analysis_report.add_node_report(node_report);
 
         for node in scenery.graph().nodes() {
-            let node_name = &node.optical_ref.borrow().name();
-            let hit_maps = node.optical_ref.borrow().hit_maps();
+            let node = node.optical_ref.borrow();
+            let node_name = &node.name();
+            let hit_maps = node.hit_maps();
             for hit_map in &hit_maps {
                 let critical_positions = hit_map.1.critical_fluences();
+                let lidt = node
+                    .get_optic_surface(hit_map.0)
+                    .expect("OpticSurface not found!")
+                    .lidt();
                 if !critical_positions.is_empty() {
                     for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
                         critical_positions.iter().enumerate()
@@ -166,14 +171,16 @@ impl Analyzer for GhostFocusAnalyzer {
                                 None,
                                 None,
                             )?;
+
                         hit_map_props.create(
                             &format!("Peak fluence ({})", fluence_data.estimator()),
                             "Peak fluence on this surface using Voronoi estimator",
                             format!(
-                                "{}J/cm²",
+                                "{}J/cm², (LIDT of surface: {}J/cm²)",
                                 format_value_with_prefix(
                                     fluence.get::<joule_per_square_centimeter>()
-                                )
+                                ),
+                                format_value_with_prefix(lidt.get::<joule_per_square_centimeter>())
                             )
                             .into(),
                         )?;
@@ -437,9 +444,7 @@ impl GhostFocusHistory {
         for (bounce, rays_correlation) in self.ray_node_correlation.iter().enumerate() {
             for rays_origin in rays_correlation.values() {
                 if let Some(node_uuid) = rays_origin.node_origin {
-                    if bounce == 0 {
-                        report_str += "Origin at node '";
-                    } else {
+                    if bounce != 0 {
                         report_str += format!("bounce {bounce} at node '").as_str();
                     }
                     if let Some(opt_ref) = graph.node_by_uuid(node_uuid) {
@@ -513,8 +518,8 @@ impl From<(&Vec<HashMap<Uuid, Rays>>, Uuid, usize)> for GhostFocusHistory {
 impl Plottable for GhostFocusHistory {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
-            .set(&PlotArgs::XLabel("distance in mm (z axis)".into()))?
-            .set(&PlotArgs::YLabel("distance in mm (y axis)".into()))?
+            .set(&PlotArgs::XLabel("position in mm (z axis)".into()))?
+            .set(&PlotArgs::YLabel("position in mm (y axis)".into()))?
             .set(&PlotArgs::PlotSize((1200, 1200)))?
             .set(&PlotArgs::AxisEqual(true))?
             .set(&PlotArgs::PlotAutoSize(true))?

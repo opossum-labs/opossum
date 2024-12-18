@@ -290,8 +290,8 @@ impl AnalysisRayTrace for WaveFront {
 impl Plottable for WaveFrontErrorMap {
     fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
         plt_params
-            .set(&PlotArgs::XLabel("x distance in mm".into()))?
-            .set(&PlotArgs::YLabel("y distance in mm".into()))?
+            .set(&PlotArgs::XLabel("x position in mm".into()))?
+            .set(&PlotArgs::YLabel("y position in mm".into()))?
             .set(&PlotArgs::CBarLabel("wavefront error in λ".into()))?
             .set(&PlotArgs::ExpandBounds(false))?;
         Ok(())
