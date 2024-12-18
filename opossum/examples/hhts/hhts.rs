@@ -43,8 +43,8 @@ fn main() -> OpmResult<()> {
     let energy_2w = joule!(50.0);
 
     // let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
-    let beam_dist_1w = HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0.,0.))?;
-    let beam_dist_2w = HexagonalTiling::new(millimeter!(100.), 10, millimeter!(1.,1.))?;
+    let beam_dist_1w = HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0., 0.))?;
+    let beam_dist_2w = HexagonalTiling::new(millimeter!(100.), 10, millimeter!(1., 1.))?;
     // let beam_dist_2w = beam_dist_1w.clone();
 
     let refr_index_hk9l = RefrIndexSellmeier1::new(
@@ -217,7 +217,8 @@ fn main() -> OpmResult<()> {
             cut_off: nanometer!(700.0),
         },
     )?;
-    let short_pass = SplittingConfig::Spectrum(short_pass_spectrum);
+    // let short_pass = SplittingConfig::Spectrum(short_pass_spectrum);
+    let short_pass = SplittingConfig::Ratio(0.5);
 
     // real spectrum (Thorlabs HBSY21)
     //let hbsyx2 = SplittingConfig::Spectrum(Spectrum::from_csv("opossum/examples/hhts/HBSYx2_Reflectivity_45deg_unpol.csv")?);
@@ -255,7 +256,7 @@ fn main() -> OpmResult<()> {
     )?;
 
     group_bs.map_input_port(bs, "input_1", "input_1")?;
-    group_bs.map_output_port(filter_1w, "output_1", "output_1")?;
+    group_bs.map_output_port(filter_1w, "output_1", "output_1w")?;
     group_bs.map_output_port(filter_2w, "output_1", "output_2w")?;
 
     let bs_group = scenery.add_node(&group_bs)?;
@@ -345,7 +346,7 @@ fn main() -> OpmResult<()> {
 
     scenery.connect_nodes(
         bs_group,
-        "output_1",
+        "output_1w",
         t2_1w,
         "input_1",
         millimeter!(537.5190),
@@ -434,7 +435,6 @@ fn main() -> OpmResult<()> {
 
     dbg!(t2_2w);
 
-
     // T3_2w
     let mut group_t3_2w = NodeGroup::new("T3 2w");
 
@@ -519,9 +519,9 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(t3_2w, "output_1", det_2w, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    // doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     let mut config = GhostFocusConfig::default();
     config.set_max_bounces(0);
     doc.add_analyzer(AnalyzerType::GhostFocus(config));
+    // doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new("./opossum/playground/hhts.opm"))
 }

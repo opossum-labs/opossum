@@ -4,7 +4,8 @@ use opossum::{
     error::OpmResult,
     joule, millimeter,
     nodes::{
-        round_collimated_ray_source, EnergyMeter, NodeGroup, ParabolicMirror, RayPropagationVisualizer, SpotDiagram, WaveFront
+        round_collimated_ray_source, EnergyMeter, NodeGroup, ParabolicMirror,
+        RayPropagationVisualizer, SpotDiagram, WaveFront,
     },
     OpmDocument,
 };

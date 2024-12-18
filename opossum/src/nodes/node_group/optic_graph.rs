@@ -12,7 +12,6 @@ use crate::{
     optic_senery_rsc::SceneryResources,
     port_map::PortMap,
     properties::{proptype::format_quantity, Proptype},
-    rays::Rays,
 };
 use log::warn;
 use nalgebra::Vector3;

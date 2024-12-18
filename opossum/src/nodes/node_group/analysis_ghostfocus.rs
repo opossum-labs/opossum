@@ -5,6 +5,7 @@ use crate::{
     light_result::{light_rays_to_light_result, light_result_to_light_rays, LightRays},
     lightdata::LightData,
     optic_node::OpticNode,
+    optic_ports::PortType,
     rays::Rays,
 };
 use log::warn;
@@ -61,7 +62,22 @@ impl AnalysisGhostFocus for NodeGroup {
                     OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
                 })?;
                 filter_ray_limits(&mut outgoing_edges, config);
+
                 current_bouncing_rays.clone_from(&outgoing_edges);
+
+                if self.graph.is_output_node(idx) {
+                    let portmap = if self.graph.is_inverted() {
+                        self.graph.port_map(&PortType::Input).clone()
+                    } else {
+                        self.graph.port_map(&PortType::Output).clone()
+                    };
+                    let assigned_ports = portmap.assigned_ports_for_node(idx);
+                    for port in assigned_ports {
+                        if let Some(light_data) = outgoing_edges.get(&port.1) {
+                            current_bouncing_rays.insert(port.0, light_data.clone());
+                        }
+                    }
+                }
                 let outgoing_edges = light_rays_to_light_result(outgoing_edges);
 
                 for outgoing_edge in outgoing_edges {
