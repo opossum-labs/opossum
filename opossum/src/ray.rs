@@ -325,14 +325,17 @@ impl Ray {
         if start_idx > end_idx {
             return None;
         }
-        if end_idx == 0 {
-            return None;
-        }
+
+        let end_idx = if end_idx > self.pos_hist.len() {
+            self.pos_hist.len()
+        } else {
+            end_idx
+        };
 
         let nr_of_pos = end_idx - start_idx + 1;
         let mut positions = MatrixXx3::<Length>::zeros(nr_of_pos);
 
-        if end_idx >= self.pos_hist.len() {
+        if end_idx == self.pos_hist.len() {
             for (idx, hist_idx) in (start_idx..self.pos_hist.len()).enumerate() {
                 positions[(idx, 0)] = self.pos_hist[hist_idx].x;
                 positions[(idx, 1)] = self.pos_hist[hist_idx].y;
@@ -1831,7 +1834,7 @@ mod test {
         ray.propagate(meter!(f64::sqrt(3.))).unwrap();
         ray.propagate(meter!(f64::sqrt(3.))).unwrap();
 
-        assert!(ray.position_history_from_to(0, 0).is_none());
+        assert!(ray.position_history_from_to(0, 0).is_some());
         assert!(ray.position_history_from_to(4, 5).is_none());
         assert!(ray.position_history_from_to(1, 0).is_none());
         assert!(ray.position_history_from_to(2, 1).is_none());

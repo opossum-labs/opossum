@@ -20,7 +20,7 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(&round_collimated_ray_source(
         millimeter!(10.0),
         joule!(2.),
-        15,
+        20,
     )?)?;
     let i_sd = scenery.add_node(&SpotDiagram::default())?;
     let i_prop = scenery.add_node(&RayPropagationVisualizer::default())?;
