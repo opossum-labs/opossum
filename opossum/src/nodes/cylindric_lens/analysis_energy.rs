@@ -15,3 +15,32 @@ impl AnalysisEnergy for CylindricLens {
         Ok(LightResult::from([(out_port.into(), data.clone())]))
     }
 }
+#[cfg(test)]
+mod test {
+    use crate::{
+        analyzers::energy::AnalysisEnergy,
+        light_result::LightResult,
+        lightdata::{DataEnergy, LightData},
+        nodes::CylindricLens,
+        spectrum_helper::create_he_ne_spec,
+    };
+    #[test]
+    fn analyze_empty() {
+        let mut node = CylindricLens::default();
+        let output = node.analyze(LightResult::default()).unwrap();
+        assert!(output.is_empty());
+    }
+    #[test]
+    fn analyze_ok() {
+        let mut node = CylindricLens::default();
+        let mut input = LightResult::default();
+        input.insert(
+            "input_1".to_string(),
+            LightData::Energy(DataEnergy {
+                spectrum: create_he_ne_spec(1.0).unwrap(),
+            }),
+        );
+        let output = node.analyze(input).unwrap();
+        assert!(output.contains_key("output_1"));
+    }
+}

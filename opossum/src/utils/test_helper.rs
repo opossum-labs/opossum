@@ -5,7 +5,6 @@
 
 #[cfg(test)]
 pub mod test_helper {
-
     pub fn check_logs(level: log::Level, expected_warnings: Vec<&str>) {
         testing_logger::validate(|captured_logs| {
             let captured_logs: Vec<_> = captured_logs.iter().filter(|l| l.level == level).collect();

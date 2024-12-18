@@ -315,7 +315,7 @@ impl RaysNodeCorrelation {
 }
 
 /// struct that holds the history of the ray positions that is needed for report generation
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct GhostFocusHistory {
     /// vector of ray positions for each raybundle at a specifc spectral position
     pub rays_pos_history: Vec<Vec<Vec<MatrixXx3<Length>>>>,
@@ -457,7 +457,11 @@ impl GhostFocusHistory {
         report_str
     }
 }
-
+impl From<GhostFocusHistory> for Proptype {
+    fn from(value: GhostFocusHistory) -> Self {
+        Self::GhostFocusHistory(value)
+    }
+}
 impl From<Vec<HashMap<Uuid, Rays>>> for GhostFocusHistory {
     fn from(value: Vec<HashMap<Uuid, Rays>>) -> Self {
         let mut ghost_focus_history =
@@ -581,5 +585,16 @@ impl Plottable for GhostFocusHistory {
             }
             Ok(Some(plt_series))
         }
+    }
+}
+#[cfg(test)]
+mod test {
+    use crate::{analyzers::ghostfocus::GhostFocusHistory, properties::Proptype};
+    #[test]
+    fn from_ghost_focus_history() {
+        assert!(matches!(
+            GhostFocusHistory::default().into(),
+            Proptype::GhostFocusHistory(_)
+        ));
     }
 }

@@ -78,21 +78,6 @@ impl Properties {
             let _ = self.set(&new_prop.0, (*new_prop.1.prop()).clone());
         }
     }
-    /// Sets the unchecked value of this [`Properties`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the [`PropCondition`]s of the [`Proptype`] are not met.
-    pub fn set_unchecked(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
-        let mut property = self
-            .props
-            .get(name)
-            .ok_or_else(|| OpossumError::Properties(format!("property {name} does not exist")))?
-            .clone();
-        property.set_value_unchecked(value)?;
-        self.props.insert(name.into(), property);
-        Ok(())
-    }
     /// Returns the iter of this [`Properties`].
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, Property> {
         self.props.iter()
@@ -189,7 +174,9 @@ impl<'a> IntoIterator for &'a Properties {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{nodes::OpticGraph, utils::test_helper::test_helper::check_logs};
     use assert_matches::assert_matches;
+    use log::Level;
     #[test]
     fn properties_create() {
         let mut props = Properties::default();
@@ -222,5 +209,31 @@ mod test {
         assert!(props.get_bool("no bool").is_err());
         assert_eq!(props.get_bool("my bool").unwrap(), true);
         assert_eq!(props.get_bool("my other bool").unwrap(), false);
+    }
+    #[test]
+    fn is_empty() {
+        let mut props = Properties::default();
+        assert_eq!(props.is_empty(), true);
+        props.create("my prop", "my description", 1.into()).unwrap();
+        assert_eq!(props.is_empty(), false);
+    }
+    #[test]
+    fn html_props() {
+        let mut props = Properties::default();
+        props.create("my prop", "my description", 1.into()).unwrap();
+        testing_logger::setup();
+        let html_props = props.html_props("test123");
+        let html_props = html_props.first().unwrap();
+        check_logs(Level::Warn, vec![]);
+        assert_eq!(html_props.name, "my prop");
+        assert_eq!(html_props.description, "my description");
+        assert_eq!(html_props.prop_value, "1");
+
+        props
+            .create("my graph", "my description", OpticGraph::default().into())
+            .unwrap();
+        let html_props = props.html_props("test123");
+        // check_logs(Level::Warn, vec!["property 'my graph' could not be converted to html. Skipping"]);
+        assert_eq!(html_props.len(), 1);
     }
 }

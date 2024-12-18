@@ -183,7 +183,9 @@ impl Proptype {
             ),
             Self::Length(value) => tt.render("simple", &format_quantity(meter, *value)),
             Self::Energy(value) => tt.render("simple", &format_quantity(joule, *value)),
-            _ => Ok("unknown property type".into()),
+            _ => Err(tinytemplate::error::Error::GenericError {
+                msg: "proptype not supported".into(),
+            }),
         };
         string_value.map_err(|e| OpossumError::Other(e.to_string()))
     }
@@ -233,13 +235,6 @@ impl From<Angle> for Proptype {
         Self::Angle(value)
     }
 }
-
-impl From<GhostFocusHistory> for Proptype {
-    fn from(value: GhostFocusHistory) -> Self {
-        Self::GhostFocusHistory(value)
-    }
-}
-
 impl From<Vector2<f64>> for Proptype {
     fn from(value: Vector2<f64>) -> Self {
         Self::Vec2(value)
@@ -247,15 +242,14 @@ impl From<Vector2<f64>> for Proptype {
 }
 #[must_use]
 pub fn count_str(i: usize) -> String {
-    if i == 1 {
-        "1st".to_owned()
-    } else if i == 2 {
-        "2nd".to_owned()
-    } else if i == 3 {
-        "3rd".to_owned()
-    } else {
-        format!("{i}th")
-    }
+    let mod_i = i % 10;
+    let suf = match mod_i {
+        1 => "st",
+        2 => "nd",
+        3 => "rd",
+        _ => "th",
+    };
+    format!("{i}{suf}")
 }
 
 #[must_use]
@@ -295,6 +289,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{joule, meter, nanometer, properties::Properties, J_per_m2};
     use assert_matches::assert_matches;
     use uom::si::length::nanometer;
     #[test]
@@ -343,5 +338,89 @@ mod test {
             super::format_quantity(joule, Length::new::<nanometer>(1053.12345)),
             "   1.053 μJ"
         );
+    }
+    #[test]
+    fn to_html() {
+        assert_eq!(
+            Proptype::String("Test".into())
+                .to_html("id", "property_name")
+                .unwrap(),
+            "Test".to_string()
+        );
+        assert_eq!(
+            Proptype::I32(-14).to_html("id", "property_name").unwrap(),
+            "-14".to_string()
+        );
+        assert_eq!(
+            Proptype::F64(-3.1415926537)
+                .to_html("id", "property_name")
+                .unwrap(),
+            "-3.141593".to_string()
+        );
+        assert_eq!(
+            Proptype::Bool(true).to_html("id", "property_name").unwrap(),
+            "true".to_string()
+        );
+        assert_eq!(
+            Proptype::SpectrometerType(SpectrometerType::HR2000)
+                .to_html("id", "property_name")
+                .unwrap(),
+            "Ocean Optics HR2000".to_string()
+        );
+        assert_eq!(
+            Proptype::SpotDiagram(SpotDiagram::default())
+                .to_html("id", "property_name")
+                .unwrap(),
+            "<img src=\"data/id_property_name.svg\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()
+        );
+        assert_eq!(
+            Proptype::WaveFrontData(WaveFrontData::default())
+                .to_html("id", "property_name")
+                .unwrap(),
+            "<img src=\"data/id_property_name.png\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()
+        );
+        assert_eq!(
+            Proptype::NodeReport(NodeReport::new("test1", "test2", "test3", Properties::default()))
+                .to_html("id", "property_name")
+                .unwrap(),
+            "<div class=\"accordion-item\">\n  <h5 class=\"accordion-header\">\n    <button class=\"accordion-button\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#test3\">\n      <span class=\"h5 me-2\">test2</span><small class=\"muted\">test1</small>\n    </button>\n  </h5>\n  <div id=\"test3\" class=\"accordion-collapse collapse \">\n    <div class=\"accordion-body\">\n      <table class=\"table table-sm table-bordered\">\n        <tbody>\n          \n        </tbody>\n      </table>\n    </div>\n  </div>\n</div>\n".to_string()
+        );
+        assert_eq!(
+            Proptype::Fluence(J_per_m2!(1.234567))
+                .to_html("id", "property_name")
+                .unwrap(),
+            " 123.457 μJ/cm²".to_string()
+        );
+        assert_eq!(
+            Proptype::WfLambda(0.123456, nanometer!(1054.0))
+                .to_html("id", "property_name")
+                .unwrap(),
+            " 123.456 mλ, (λ =    1.054 μm)".to_string()
+        );
+        assert_eq!(
+            Proptype::Length(meter!(0.12345678))
+                .to_html("id", "property_name")
+                .unwrap(),
+            " 123.457 mm".to_string()
+        );
+        assert_eq!(
+            Proptype::Energy(joule!(0.12345678))
+                .to_html("id", "property_name")
+                .unwrap(),
+            " 123.457 mJ".to_string()
+        );
+    }
+    #[test]
+    fn test_count_str() {
+        assert_eq!(count_str(0), "0th");
+        assert_eq!(count_str(1), "1st");
+        assert_eq!(count_str(2), "2nd");
+        assert_eq!(count_str(3), "3rd");
+        assert_eq!(count_str(4), "4th");
+        assert_eq!(count_str(20), "20th");
+        assert_eq!(count_str(21), "21st");
+        assert_eq!(count_str(22), "22nd");
+        assert_eq!(count_str(23), "23rd");
+        assert_eq!(count_str(24), "24th");
     }
 }

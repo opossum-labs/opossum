@@ -46,15 +46,6 @@ impl Property {
         self.prop = prop;
         Ok(())
     }
-    /// Sets the value unchecked of this [`Property`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the [`Proptype`]s [`PropCondition`]s are not met.
-    pub fn set_value_unchecked(&mut self, prop: Proptype) -> OpmResult<()> {
-        self.prop = prop;
-        Ok(())
-    }
     /// Export this [`Property`] to a file at the given `report_path`.
     ///
     /// # Errors
