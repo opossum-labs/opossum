@@ -44,12 +44,11 @@ impl AnalysisGhostFocus for NodeGroup {
                     node.borrow()
                 );
             } else {
+                let node_name = format!("{}", node.borrow());
                 let incoming_edges = self.graph.get_incoming(
                     idx,
                     &light_rays_to_light_result(current_bouncing_rays.clone()),
                 );
-
-                let node_name = format!("{}", node.borrow());
 
                 let mut outgoing_edges = AnalysisGhostFocus::analyze(
                     &mut *node.borrow_mut(),

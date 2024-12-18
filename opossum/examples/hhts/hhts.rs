@@ -7,9 +7,10 @@ use cambox_1w::cambox_1w;
 use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
+use nalgebra::Point2;
 use num::Zero;
 use opossum::{
-    analyzers::{AnalyzerType, RayTraceConfig},
+    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
     aperture::{Aperture, CircleConfig},
     energy_distributions::General2DGaussian,
     error::OpmResult,
@@ -42,8 +43,9 @@ fn main() -> OpmResult<()> {
     let energy_2w = joule!(50.0);
 
     // let beam_dist_1w = Hexapolar::new(millimeter!(76.05493), 10)?;
-    let beam_dist_1w = HexagonalTiling::new(millimeter!(100.), 25)?;
-    let beam_dist_2w = beam_dist_1w.clone();
+    let beam_dist_1w = HexagonalTiling::new(millimeter!(100.), 10, millimeter!(0.,0.))?;
+    let beam_dist_2w = HexagonalTiling::new(millimeter!(100.), 10, millimeter!(1.,1.))?;
+    // let beam_dist_2w = beam_dist_1w.clone();
 
     let refr_index_hk9l = RefrIndexSellmeier1::new(
         6.14555251E-1,
@@ -134,7 +136,7 @@ fn main() -> OpmResult<()> {
     // )?;
 
     let mut rays = rays_1w;
-    rays.add_rays(&mut rays_2w);
+    // rays.add_rays(&mut rays_2w);
 
     let mut scenery = NodeGroup::new("HHT Sensor");
     let mut src = Source::new("Source", &LightData::Geometric(rays));
@@ -253,7 +255,7 @@ fn main() -> OpmResult<()> {
     )?;
 
     group_bs.map_input_port(bs, "input_1", "input_1")?;
-    group_bs.map_output_port(filter_1w, "output_1", "output_1w")?;
+    group_bs.map_output_port(filter_1w, "output_1", "output_1")?;
     group_bs.map_output_port(filter_2w, "output_1", "output_2w")?;
 
     let bs_group = scenery.add_node(&group_bs)?;
@@ -343,7 +345,7 @@ fn main() -> OpmResult<()> {
 
     scenery.connect_nodes(
         bs_group,
-        "output_1w",
+        "output_1",
         t2_1w,
         "input_1",
         millimeter!(537.5190),
@@ -430,6 +432,9 @@ fn main() -> OpmResult<()> {
     group_t2_2w.map_output_port(t2_2w_exit, "output_1", "output_1")?;
     let t2_2w = scenery.add_node(&group_t2_2w)?;
 
+    dbg!(t2_2w);
+
+
     // T3_2w
     let mut group_t3_2w = NodeGroup::new("T3 2w");
 
@@ -514,6 +519,9 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(t3_2w, "output_1", det_2w, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
-    doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    // doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let mut config = GhostFocusConfig::default();
+    config.set_max_bounces(0);
+    doc.add_analyzer(AnalyzerType::GhostFocus(config));
     doc.save_to_file(Path::new("./opossum/playground/hhts.opm"))
 }
