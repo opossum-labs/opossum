@@ -1,7 +1,17 @@
 [workspace]
-members = [ "opossum","xtask" ]
+members = [ "opossum","opossum_gui", "xtask" ]
 default-members = ["opossum"]
 resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.80"
+version = "0.6.0"
+
+[workspace.dependencies]
+eframe = { version = "0.30.0" }
+egui_extras = { version = "0.30.0" }
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
