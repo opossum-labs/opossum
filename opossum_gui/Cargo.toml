@@ -17,7 +17,5 @@ eframe = { workspace = true, features = [
 # For image support:
 egui_extras = { workspace = true, features = ["default", "image"] }
 
-env_logger = { version = "0.11", default-features = false, features = [
-    "auto-color",
-    "humantime",
-] }
+log = "0.4"
+env_logger= "0.11"
