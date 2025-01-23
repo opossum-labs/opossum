@@ -5,10 +5,8 @@ pub enum DemoNode {
     /// Node with single input.
     /// Displays the value of the input.
     Sink,
-
-    // /// Value node with a single output.
-    // /// The value is editable in UI.
-    // Number(f64),
+    /// Value node with a single output.
+    Source,
 
     // /// Value node with a single output.
     // String(String),

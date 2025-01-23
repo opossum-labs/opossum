@@ -19,6 +19,7 @@ egui_extras = { workspace = true, features = ["default", "image"] }
 
 egui-snarl = "0.6"
 egui-modal="0.6"
+egui-file-dialog = "0.8.0"
 
 log = "0.4"
 env_logger= "0.11"

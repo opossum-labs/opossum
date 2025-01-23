@@ -868,7 +868,7 @@ dependencies = [
  "bevy_time",
  "bevy_utils",
  "const-fnv1a-hash",
- "sysinfo",
+ "sysinfo 0.32.1",
 ]
 
 [[package]]
@@ -2585,6 +2585,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "directories"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a49173b84e034382284f27f1af4dcbbd231ffa358c0fe316541a7337f376a35"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs"
 version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2671,6 +2680,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
 name = "dwrote"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2751,6 +2766,19 @@ dependencies = [
  "log",
  "nohash-hasher",
  "profiling",
+]
+
+[[package]]
+name = "egui-file-dialog"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac4167fcddb279f41863074b96b877c6e48c02d543b7d6111d1f3957b9a5874f"
+dependencies = [
+ "directories",
+ "dunce",
+ "egui",
+ "serde",
+ "sysinfo 0.33.1",
 ]
 
 [[package]]
@@ -5108,6 +5136,7 @@ name = "opossum_gui"
 version = "0.1.0"
 dependencies = [
  "eframe",
+ "egui-file-dialog",
  "egui-modal",
  "egui-snarl",
  "egui_extras",
@@ -6310,6 +6339,17 @@ dependencies = [
  "libc",
  "memchr",
  "ntapi",
+ "windows 0.57.0",
+]
+
+[[package]]
+name = "sysinfo"
+version = "0.33.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fc858248ea01b66f19d8e8a6d55f41deaf91e9d495246fd01368d99935c6c01"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
  "windows 0.57.0",
 ]
 
