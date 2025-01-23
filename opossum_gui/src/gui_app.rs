@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use eframe::egui::{self, Id};
 use egui_file_dialog::FileDialog;
@@ -14,7 +14,7 @@ use opossum::{
     OpmDocument,
 };
 
-use crate::{demo_node::DemoNode, demo_viewer::DemoViewer};
+use crate::{demo_node::DemoNode, opm_model_viewer::OPMModelViewer};
 
 pub struct GuiApp {
     opm_document: OpmDocument,
@@ -22,7 +22,6 @@ pub struct GuiApp {
     style: SnarlStyle,
     snarl_ui_id: Option<Id>,
     file_dialog: FileDialog,
-    picked_file: Option<PathBuf>,
 }
 impl Default for GuiApp {
     fn default() -> Self {
@@ -37,7 +36,6 @@ impl Default for GuiApp {
                     Arc::new(|p| p.extension().unwrap_or_default() == "opm"),
                 )
                 .default_file_filter("OPOSSUM models"),
-            picked_file: None,
         }
     }
 }
@@ -84,21 +82,29 @@ impl eframe::App for GuiApp {
                 });
             })
         });
-        egui::SidePanel::left("Properties").show(ctx, |ui| {
-            ui.heading("Properties");
-        });
+        egui::TopBottomPanel::bottom("Log")
+            .resizable(true)
+            .show(ctx, |ui| {
+                egui_logger::logger_ui()
+                    .show_target(false)
+                    .enable_ctx_menu(false)
+                    .enable_regex(false)
+                    .show(ui);
+            });
+        egui::SidePanel::left("Properties")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Properties");
+            });
         egui::CentralPanel::default().show(ctx, |ui| {
-            // ui.label(format!("Picked file: {:?}", self.picked_file));
-
             self.snarl_ui_id = Some(ui.id());
-            self.snarl.show(&mut DemoViewer, &self.style, "snarl", ui);
+            self.snarl
+                .show(&mut OPMModelViewer, &self.style, "snarl", ui);
         });
         // Update the dialog
         self.file_dialog.update(ctx);
         // Check if the user picked a file.
         if let Some(path) = self.file_dialog.take_picked() {
-            info!("Picked file: {:?}", path);
-            // self.picked_file = Some(path.to_path_buf());
             self.opm_document = OpmDocument::from_file(&path).unwrap();
             let analyzers = self.opm_document.analyzers();
             let scenery = self.opm_document.scenery_mut();
@@ -111,14 +117,13 @@ impl eframe::App for GuiApp {
                         AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
                         AnalyzerType::GhostFocus(config) => {
                             &GhostFocusAnalyzer::new(config.clone())
-                        },
-                        _ => &EnergyAnalyzer::default()
+                        }
+                        _ => &EnergyAnalyzer::default(),
                     };
                     info!("Analysis #{}", ana.0);
                     scenery.clear_edges();
                     scenery.reset_data();
                     analyzer.analyze(scenery).unwrap()
-                    // create_report_and_data_files(&opossum_args.report_directory, analyzer, ana.0, scenery)?;
                 }
             }
         }

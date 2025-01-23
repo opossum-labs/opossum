@@ -2873,6 +2873,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_logger"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3eee84b0b39f308f08b96b9710bb96c04d69eed7c66085fc98084d0e54890b8"
+dependencies = [
+ "chrono",
+ "egui",
+ "hashbrown 0.15.2",
+ "log",
+ "regex",
+]
+
+[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3708,6 +3721,8 @@ version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash",
 ]
 
@@ -5140,6 +5155,7 @@ dependencies = [
  "egui-modal",
  "egui-snarl",
  "egui_extras",
+ "egui_logger",
  "env_logger",
  "log",
  "opossum",

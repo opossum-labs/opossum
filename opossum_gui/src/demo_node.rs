@@ -7,10 +7,8 @@ pub enum DemoNode {
     Sink,
     /// Value node with a single output.
     Source,
-
-    // /// Value node with a single output.
-    // String(String),
-
+    /// Node with input and output
+    Lens,
     // /// Converts URI to Image
     // ShowImage(String),
 

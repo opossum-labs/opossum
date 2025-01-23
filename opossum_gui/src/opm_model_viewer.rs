@@ -7,17 +7,16 @@ use log::info;
 
 use crate::demo_node::DemoNode;
 
-// const STRING_COLOR: Color32 = Color32::from_rgb(0x00, 0xb0, 0x00);
-const NUMBER_COLOR: Color32 = Color32::from_rgb(0xb0, 0x00, 0x00);
-// const IMAGE_COLOR: Color32 = Color32::from_rgb(0xb0, 0x00, 0xb0);
+const LIGHT_RESULT_COLOR: Color32 = Color32::from_rgb(0xb0, 0x00, 0x00);
 const UNTYPED_COLOR: Color32 = Color32::from_rgb(0xb0, 0xb0, 0xb0);
-pub struct DemoViewer;
+pub struct OPMModelViewer;
 
-impl SnarlViewer<DemoNode> for DemoViewer {
+impl SnarlViewer<DemoNode> for OPMModelViewer {
     fn title(&mut self, node: &DemoNode) -> String {
         match node {
             DemoNode::Sink => "Sink".to_owned(),
             DemoNode::Source => "Source".to_owned(),
+            DemoNode::Lens => "Lens".to_owned(),
             // DemoNode::String(_) => "String".to_owned(),
             // DemoNode::ShowImage(_) => "Show image".to_owned(),
             // DemoNode::ExprNode(_) => "Expr".to_owned(),
@@ -27,33 +26,34 @@ impl SnarlViewer<DemoNode> for DemoViewer {
     fn inputs(&mut self, node: &DemoNode) -> usize {
         match node {
             DemoNode::Sink => 1,
-            DemoNode::Source => 0, // DemoNode::Number(_) | DemoNode::String(_) => 0,
-                                   // DemoNode::ExprNode(expr_node) => 1 + expr_node.bindings.len(),
+            DemoNode::Source => 0,
+            DemoNode::Lens => 1
         }
     }
-
     fn show_input(
         &mut self,
         pin: &egui_snarl::InPin,
-        ui: &mut eframe::egui::Ui,
+        _ui: &mut eframe::egui::Ui,
         _scale: f32,
         snarl: &mut egui_snarl::Snarl<DemoNode>,
     ) -> egui_snarl::ui::PinInfo {
         match snarl[pin.id.node] {
-            DemoNode::Sink => {
+            DemoNode::Sink | DemoNode::Lens => {
                 assert_eq!(pin.id.input, 0, "Sink node has only one input");
 
                 match &*pin.remotes {
                     [] => {
-                        ui.label("None");
                         PinInfo::circle().with_fill(UNTYPED_COLOR)
                     }
                     [remote] => match snarl[remote.node] {
                         DemoNode::Sink => unreachable!("Sink node has no outputs"),
                         DemoNode::Source => {
                             assert_eq!(remote.output, 0, "Number node has only one output");
-                            //ui.label(format_float(value));
-                            PinInfo::circle().with_fill(NUMBER_COLOR)
+                            PinInfo::circle().with_fill(LIGHT_RESULT_COLOR)
+                        }
+                        DemoNode::Lens => {
+                            assert_eq!(remote.output, 0, "Number node has only one output");
+                            PinInfo::circle().with_fill(LIGHT_RESULT_COLOR)
                         }
                     },
                     _ => unreachable!("Sink input has only one wire"),
@@ -68,9 +68,8 @@ impl SnarlViewer<DemoNode> for DemoViewer {
     fn outputs(&mut self, node: &DemoNode) -> usize {
         match node {
             DemoNode::Sink => 0,
-            DemoNode::Source => 1, // | DemoNode::String(_)
-                                   // | DemoNode::ShowImage(_)
-                                   // | DemoNode::ExprNode(_) => 1,
+            DemoNode::Source => 1,
+            DemoNode::Lens => 1
         }
     }
 
@@ -85,10 +84,9 @@ impl SnarlViewer<DemoNode> for DemoViewer {
             DemoNode::Sink => {
                 unreachable!("Sink node has no outputs")
             }
-            DemoNode::Source => {
+            DemoNode::Source | DemoNode::Lens => {
                 assert_eq!(pin.id.output, 0, "Source node has only one output");
-                // ui.add(egui::DragValue::new(value));
-                PinInfo::circle().with_fill(NUMBER_COLOR)
+                PinInfo::circle().with_fill(LIGHT_RESULT_COLOR)
             }
         }
     }
@@ -107,18 +105,10 @@ impl SnarlViewer<DemoNode> for DemoViewer {
             snarl.insert_node(pos, DemoNode::Source);
             ui.close_menu();
         }
-        // if ui.button("Expr").clicked() {
-        //     snarl.insert_node(pos, DemoNode::ExprNode(ExprNode::new()));
-        //     ui.close_menu();
-        // }
-        // if ui.button("String").clicked() {
-        //     snarl.insert_node(pos, DemoNode::String(String::new()));
-        //     ui.close_menu();
-        // }
-        // if ui.button("Show image").clicked() {
-        //     snarl.insert_node(pos, DemoNode::ShowImage(String::new()));
-        //     ui.close_menu();
-        // }
+        if ui.button("Lens").clicked() {
+            snarl.insert_node(pos, DemoNode::Lens);
+            ui.close_menu();
+        }
         if ui.button("Sink").clicked() {
             snarl.insert_node(pos, DemoNode::Sink);
             ui.close_menu();
@@ -161,15 +151,10 @@ impl SnarlViewer<DemoNode> for DemoViewer {
             }
             DemoNode::Source => {
                 ui.label("Optical source emitting radiation");
-            } // DemoNode::String(_) => {
-              //     ui.label("Outputs string value");
-              // }
-              // DemoNode::ShowImage(_) => {
-              //     ui.label("Displays image from URL in input");
-              // }
-              // DemoNode::ExprNode(_) => {
-              //     ui.label("Evaluates algebraic expression with input for each unique variable name");
-              // }
+            }
+            DemoNode::Lens => {
+                ui.label("Lens node");
+            }
         }
     }
     fn header_frame(
@@ -183,9 +168,7 @@ impl SnarlViewer<DemoNode> for DemoViewer {
         match snarl[node] {
             DemoNode::Sink => frame.fill(egui::Color32::from_rgb(150, 150, 150)),
             DemoNode::Source => frame.fill(egui::Color32::from_rgb(200, 150, 150)),
-            // DemoNode::String(_) => frame.fill(egui::Color32::from_rgb(40, 70, 40)),
-            // DemoNode::ShowImage(_) => frame.fill(egui::Color32::from_rgb(40, 40, 70)),
-            // DemoNode::ExprNode(_) => frame.fill(egui::Color32::from_rgb(70, 66, 40)),
+            DemoNode::Lens => frame.fill(egui::Color32::from_rgb(150, 200, 150)),
         }
     }
     fn has_wire_widget(
