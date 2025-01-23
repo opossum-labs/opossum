@@ -2754,6 +2754,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-modal"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3915089109907acf93b79d613b908d5c006d9c17a1bc2664606d3f4eb84e031c"
+dependencies = [
+ "egui",
+]
+
+[[package]]
+name = "egui-snarl"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93d55cf28e422c85145b777e4ba86c0b8f84eb86ddbce1bd86f439a94caf3754"
+dependencies = [
+ "egui",
+ "slab",
+]
+
+[[package]]
 name = "egui-wgpu"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5089,9 +5108,13 @@ name = "opossum_gui"
 version = "0.1.0"
 dependencies = [
  "eframe",
+ "egui-modal",
+ "egui-snarl",
  "egui_extras",
  "env_logger",
  "log",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]
