@@ -1,13 +1,23 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use eframe::egui::{self, Id};
 use egui_file_dialog::FileDialog;
 use egui_modal::{Icon, Modal, ModalStyle};
 use egui_snarl::{ui::SnarlStyle, Snarl};
+use log::info;
+use opossum::{
+    analyzers::{
+        energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
+        Analyzer, AnalyzerType,
+    },
+    optic_node::OpticNode,
+    OpmDocument,
+};
 
 use crate::{demo_node::DemoNode, demo_viewer::DemoViewer};
 
 pub struct GuiApp {
+    opm_document: OpmDocument,
     snarl: Snarl<DemoNode>,
     style: SnarlStyle,
     snarl_ui_id: Option<Id>,
@@ -17,10 +27,16 @@ pub struct GuiApp {
 impl Default for GuiApp {
     fn default() -> Self {
         Self {
+            opm_document: OpmDocument::default(),
             snarl: Snarl::default(),
             style: SnarlStyle::default(),
             snarl_ui_id: None,
-            file_dialog: FileDialog::default(),
+            file_dialog: FileDialog::default()
+                .add_file_filter(
+                    "OPOSSUM models",
+                    Arc::new(|p| p.extension().unwrap_or_default() == "opm"),
+                )
+                .default_file_filter("OPOSSUM models"),
             picked_file: None,
         }
     }
@@ -72,7 +88,7 @@ impl eframe::App for GuiApp {
             ui.heading("Properties");
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label(format!("Picked file: {:?}", self.picked_file));
+            // ui.label(format!("Picked file: {:?}", self.picked_file));
 
             self.snarl_ui_id = Some(ui.id());
             self.snarl.show(&mut DemoViewer, &self.style, "snarl", ui);
@@ -81,7 +97,30 @@ impl eframe::App for GuiApp {
         self.file_dialog.update(ctx);
         // Check if the user picked a file.
         if let Some(path) = self.file_dialog.take_picked() {
-            self.picked_file = Some(path.to_path_buf());
+            info!("Picked file: {:?}", path);
+            // self.picked_file = Some(path.to_path_buf());
+            self.opm_document = OpmDocument::from_file(&path).unwrap();
+            let analyzers = self.opm_document.analyzers();
+            let scenery = self.opm_document.scenery_mut();
+            if analyzers.is_empty() {
+                info!("No analyzer defined in document. Stopping here.");
+            } else {
+                for ana in analyzers.iter().enumerate() {
+                    let analyzer: &dyn Analyzer = match ana.1 {
+                        AnalyzerType::Energy => &EnergyAnalyzer::default(),
+                        AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
+                        AnalyzerType::GhostFocus(config) => {
+                            &GhostFocusAnalyzer::new(config.clone())
+                        },
+                        _ => &EnergyAnalyzer::default()
+                    };
+                    info!("Analysis #{}", ana.0);
+                    scenery.clear_edges();
+                    scenery.reset_data();
+                    analyzer.analyze(scenery).unwrap()
+                    // create_report_and_data_files(&opossum_args.report_directory, analyzer, ana.0, scenery)?;
+                }
+            }
         }
     }
 }

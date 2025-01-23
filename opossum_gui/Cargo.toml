@@ -9,6 +9,8 @@ publish = false
 
 
 [dependencies]
+opossum = {path = "../opossum"}
+
 eframe = { workspace = true, features = [
     "default",
     "__screenshot", # __screenshot is so we can dump a screenshot using EFRAME_SCREENSHOT_TO

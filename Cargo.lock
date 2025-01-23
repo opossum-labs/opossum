@@ -5142,6 +5142,7 @@ dependencies = [
  "egui_extras",
  "env_logger",
  "log",
+ "opossum",
  "serde",
  "serde_derive",
 ]
