@@ -91,11 +91,31 @@ impl eframe::App for GuiApp {
                     .enable_regex(false)
                     .show(ui);
             });
-        egui::SidePanel::left("Properties")
-            .resizable(true)
-            .show(ctx, |ui| {
-                ui.heading("Properties");
-            });
+
+            if let Some(snarl_ui_id) = self.snarl_ui_id {
+                egui::SidePanel::left("Properties").show(ctx, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        ui.heading("Properties");
+    
+                        let selected =
+                            Snarl::<DemoNode>::get_selected_nodes_at("snarl", snarl_ui_id, ui.ctx());
+                        let mut selected = selected
+                            .into_iter()
+                            .map(|id| (id, &self.snarl[id]))
+                            .collect::<Vec<_>>();
+    
+                        selected.sort_by_key(|(id, _)| *id);
+        
+                        for (id, _node) in selected {
+                            ui.horizontal(|ui| {
+                                ui.label(format!("{id:?}"));
+                                // ui.label(node.name());
+                                ui.add_space(ui.spacing().item_spacing.x);
+                            });
+                        }
+                    });
+                });
+            }
         egui::CentralPanel::default().show(ctx, |ui| {
             self.snarl_ui_id = Some(ui.id());
             self.snarl

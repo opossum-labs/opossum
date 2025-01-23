@@ -12,6 +12,19 @@ const UNTYPED_COLOR: Color32 = Color32::from_rgb(0xb0, 0xb0, 0xb0);
 pub struct OPMModelViewer;
 
 impl SnarlViewer<DemoNode> for OPMModelViewer {
+    fn connect(&mut self, from: &OutPin, to: &InPin, snarl: &mut Snarl<DemoNode>) {
+        match (&snarl[from.id.node], &snarl[to.id.node]) {
+            (DemoNode::Source, DemoNode::Lens) => {}
+            (DemoNode::Lens, DemoNode::Sink) => {}
+            _ => {
+                return;
+            }
+        }
+        for &remote in &to.remotes {
+            snarl.disconnect(remote, to.id);
+        }
+        snarl.connect(from.id, to.id);
+    }
     fn title(&mut self, node: &DemoNode) -> String {
         match node {
             DemoNode::Sink => "Sink".to_owned(),
@@ -27,24 +40,23 @@ impl SnarlViewer<DemoNode> for OPMModelViewer {
         match node {
             DemoNode::Sink => 1,
             DemoNode::Source => 0,
-            DemoNode::Lens => 1
+            DemoNode::Lens => 1,
         }
     }
     fn show_input(
         &mut self,
         pin: &egui_snarl::InPin,
-        _ui: &mut eframe::egui::Ui,
+        ui: &mut eframe::egui::Ui,
         _scale: f32,
         snarl: &mut egui_snarl::Snarl<DemoNode>,
     ) -> egui_snarl::ui::PinInfo {
         match snarl[pin.id.node] {
             DemoNode::Sink | DemoNode::Lens => {
+                ui.label("input_1");
                 assert_eq!(pin.id.input, 0, "Sink node has only one input");
 
                 match &*pin.remotes {
-                    [] => {
-                        PinInfo::circle().with_fill(UNTYPED_COLOR)
-                    }
+                    [] => PinInfo::circle().with_fill(UNTYPED_COLOR),
                     [remote] => match snarl[remote.node] {
                         DemoNode::Sink => unreachable!("Sink node has no outputs"),
                         DemoNode::Source => {
@@ -69,14 +81,14 @@ impl SnarlViewer<DemoNode> for OPMModelViewer {
         match node {
             DemoNode::Sink => 0,
             DemoNode::Source => 1,
-            DemoNode::Lens => 1
+            DemoNode::Lens => 1,
         }
     }
 
     fn show_output(
         &mut self,
         pin: &egui_snarl::OutPin,
-        _ui: &mut eframe::egui::Ui,
+        ui: &mut eframe::egui::Ui,
         _scale: f32,
         snarl: &mut egui_snarl::Snarl<DemoNode>,
     ) -> egui_snarl::ui::PinInfo {
@@ -85,6 +97,7 @@ impl SnarlViewer<DemoNode> for OPMModelViewer {
                 unreachable!("Sink node has no outputs")
             }
             DemoNode::Source | DemoNode::Lens => {
+                ui.label("ouput_1");
                 assert_eq!(pin.id.output, 0, "Source node has only one output");
                 PinInfo::circle().with_fill(LIGHT_RESULT_COLOR)
             }
