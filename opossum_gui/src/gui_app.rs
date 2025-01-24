@@ -9,16 +9,13 @@ use opossum::{
     analyzers::{
         energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         Analyzer, AnalyzerType,
-    },
-    optic_node::OpticNode,
-    OpmDocument,
+    }, optic_node::OpticNode, optic_ref::OpticRef, OpmDocument
 };
-
-use crate::{demo_node::DemoNode, opm_model_viewer::OPMModelViewer};
+use crate::opm_model_viewer::OPMModelViewer;
 
 pub struct GuiApp {
     opm_document: OpmDocument,
-    snarl: Snarl<DemoNode>,
+    snarl: Snarl<OpticRef>,
     style: SnarlStyle,
     snarl_ui_id: Option<Id>,
     file_dialog: FileDialog,
@@ -98,7 +95,7 @@ impl eframe::App for GuiApp {
                         ui.heading("Properties");
     
                         let selected =
-                            Snarl::<DemoNode>::get_selected_nodes_at("snarl", snarl_ui_id, ui.ctx());
+                            Snarl::<OpticRef>::get_selected_nodes_at("snarl", snarl_ui_id, ui.ctx());
                         let mut selected = selected
                             .into_iter()
                             .map(|id| (id, &self.snarl[id]))
