@@ -1,5 +1,4 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 use log::LevelFilter;
 use opossum_gui::gui_app::GuiApp;
 

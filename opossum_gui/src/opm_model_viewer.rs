@@ -86,7 +86,18 @@ impl SnarlViewer<OpticRef> for OPMModelViewer {
         _scale: f32,
         snarl: &mut Snarl<OpticRef>,
     ) {
-        ui.label("Add node");
+        ui.strong("Add node");
+        if ui.button("gen test nodes").clicked() {
+            for i in 0..250 {
+                let node = create_node_ref("dummy").unwrap();
+                self.model.add_node_ref(&node).unwrap();
+                snarl.insert_node(
+                    pos + egui::vec2((i % 15) as f32 * 160.0, (i / 15) as f32 * 60.0),
+                    node,
+                );
+            }
+            ui.close_menu();
+        }
         let available_nodes = vec![
             "dummy",
             "beam splitter",
@@ -111,8 +122,8 @@ impl SnarlViewer<OpticRef> for OPMModelViewer {
         for node in available_nodes {
             if ui.button(node).clicked() {
                 let node = create_node_ref(node).unwrap();
-                snarl.insert_node(pos, node.clone());
-                self.model.add_node_ref(node).unwrap();
+                self.model.add_node_ref(&node).unwrap();
+                snarl.insert_node(pos, node);
                 ui.close_menu();
             }
         }
@@ -129,15 +140,17 @@ impl SnarlViewer<OpticRef> for OPMModelViewer {
         _scale: f32,
         snarl: &mut Snarl<OpticRef>,
     ) {
-        ui.label("Node menu");
+        ui.strong("Node menu");
         if ui.button("Remove").clicked() {
             snarl.remove_node(node);
             ui.close_menu();
         }
-        if snarl[node].optical_ref.borrow().name() == "group" {
-            if ui.button("Open group").clicked() {
-                info!("Open group {:?}", snarl[node].uuid());
-                ui.close_menu();
+        if let Some(node) = snarl.get_node(node) {
+            if node.optical_ref.borrow().name() == "group" {
+                if ui.button("Open group").clicked() {
+                    info!("Open group {:?}", node.uuid());
+                    ui.close_menu();
+                }
             }
         }
     }
