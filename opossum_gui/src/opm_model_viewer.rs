@@ -5,11 +5,19 @@ use egui_snarl::{
     ui::{PinInfo, SnarlViewer},
     InPin, NodeId, OutPin, Snarl,
 };
-use opossum::{nodes::create_node_ref, optic_ports::PortType, optic_ref::OpticRef};
+use log::info;
+use opossum::{
+    nodes::{create_node_ref, NodeGroup},
+    optic_ports::PortType,
+    optic_ref::OpticRef,
+};
 
 const LIGHT_RESULT_COLOR: Color32 = Color32::from_rgb(0xb0, 0x00, 0x00);
 // const UNTYPED_COLOR: Color32 = Color32::from_rgb(0xb0, 0xb0, 0xb0);
-pub struct OPMModelViewer;
+#[derive(Default)]
+pub struct OPMModelViewer {
+    model: NodeGroup,
+}
 
 impl SnarlViewer<OpticRef> for OPMModelViewer {
     fn connect(&mut self, from: &OutPin, to: &InPin, snarl: &mut Snarl<OpticRef>) {
@@ -42,9 +50,9 @@ impl SnarlViewer<OpticRef> for OPMModelViewer {
         _scale: f32,
         snarl: &mut egui_snarl::Snarl<OpticRef>,
     ) -> egui_snarl::ui::PinInfo {
-        let node=snarl[pin.id.node].optical_ref.borrow();
-        let port_names=node.ports().names(&PortType::Input);
-        let i=pin.id.input;
+        let node = snarl[pin.id.node].optical_ref.borrow();
+        let port_names = node.ports().names(&PortType::Input);
+        let i = pin.id.input;
         ui.label(port_names[i].to_owned());
         PinInfo::circle().with_fill(LIGHT_RESULT_COLOR)
     }
@@ -62,9 +70,9 @@ impl SnarlViewer<OpticRef> for OPMModelViewer {
         _scale: f32,
         snarl: &mut egui_snarl::Snarl<OpticRef>,
     ) -> egui_snarl::ui::PinInfo {
-        let node=snarl[pin.id.node].optical_ref.borrow();
-        let port_names=node.ports().names(&PortType::Output);
-        let i=pin.id.output;
+        let node = snarl[pin.id.node].optical_ref.borrow();
+        let port_names = node.ports().names(&PortType::Output);
+        let i = pin.id.output;
         ui.label(port_names[i].to_owned());
         PinInfo::circle().with_fill(LIGHT_RESULT_COLOR)
     }
@@ -103,7 +111,8 @@ impl SnarlViewer<OpticRef> for OPMModelViewer {
         for node in available_nodes {
             if ui.button(node).clicked() {
                 let node = create_node_ref(node).unwrap();
-                snarl.insert_node(pos, node);
+                snarl.insert_node(pos, node.clone());
+                self.model.add_node_ref(node).unwrap();
                 ui.close_menu();
             }
         }
@@ -124,6 +133,12 @@ impl SnarlViewer<OpticRef> for OPMModelViewer {
         if ui.button("Remove").clicked() {
             snarl.remove_node(node);
             ui.close_menu();
+        }
+        if snarl[node].optical_ref.borrow().name() == "group" {
+            if ui.button("Open group").clicked() {
+                info!("Open group {:?}", snarl[node].uuid());
+                ui.close_menu();
+            }
         }
     }
     fn has_on_hover_popup(&mut self, _: &OpticRef) -> bool {

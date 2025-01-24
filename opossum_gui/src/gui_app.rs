@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::opm_model_viewer::OPMModelViewer;
 use eframe::egui::{self, Id};
 use egui_file_dialog::FileDialog;
 use egui_modal::{Icon, Modal, ModalStyle};
@@ -9,9 +10,11 @@ use opossum::{
     analyzers::{
         energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         Analyzer, AnalyzerType,
-    }, optic_node::OpticNode, optic_ref::OpticRef, OpmDocument
+    },
+    optic_node::OpticNode,
+    optic_ref::OpticRef,
+    OpmDocument,
 };
-use crate::opm_model_viewer::OPMModelViewer;
 
 pub struct GuiApp {
     opm_document: OpmDocument,
@@ -19,6 +22,7 @@ pub struct GuiApp {
     style: SnarlStyle,
     snarl_ui_id: Option<Id>,
     file_dialog: FileDialog,
+    snarl_viewer: OPMModelViewer,
 }
 impl Default for GuiApp {
     fn default() -> Self {
@@ -33,6 +37,7 @@ impl Default for GuiApp {
                     Arc::new(|p| p.extension().unwrap_or_default() == "opm"),
                 )
                 .default_file_filter("OPOSSUM models"),
+            snarl_viewer: OPMModelViewer::default(),
         }
     }
 }
@@ -89,34 +94,34 @@ impl eframe::App for GuiApp {
                     .show(ui);
             });
 
-            if let Some(snarl_ui_id) = self.snarl_ui_id {
-                egui::SidePanel::left("Properties").show(ctx, |ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        ui.heading("Properties");
-    
-                        let selected =
-                            Snarl::<OpticRef>::get_selected_nodes_at("snarl", snarl_ui_id, ui.ctx());
-                        let mut selected = selected
-                            .into_iter()
-                            .map(|id| (id, &self.snarl[id]))
-                            .collect::<Vec<_>>();
-    
-                        selected.sort_by_key(|(id, _)| *id);
-        
-                        for (id, _node) in selected {
-                            ui.horizontal(|ui| {
-                                ui.label(format!("{id:?}"));
-                                // ui.label(node.name());
-                                ui.add_space(ui.spacing().item_spacing.x);
-                            });
-                        }
-                    });
+        if let Some(snarl_ui_id) = self.snarl_ui_id {
+            egui::SidePanel::left("Properties").show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.heading("Properties");
+
+                    let selected =
+                        Snarl::<OpticRef>::get_selected_nodes_at("snarl", snarl_ui_id, ui.ctx());
+                    let mut selected = selected
+                        .into_iter()
+                        .map(|id| (id, &self.snarl[id]))
+                        .collect::<Vec<_>>();
+
+                    selected.sort_by_key(|(id, _)| *id);
+
+                    for (id, _node) in selected {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("{id:?}"));
+                            // ui.label(node.name());
+                            ui.add_space(ui.spacing().item_spacing.x);
+                        });
+                    }
                 });
-            }
+            });
+        }
         egui::CentralPanel::default().show(ctx, |ui| {
             self.snarl_ui_id = Some(ui.id());
             self.snarl
-                .show(&mut OPMModelViewer, &self.style, "snarl", ui);
+                .show(&mut self.snarl_viewer, &self.style, "snarl", ui);
         });
         // Update the dialog
         self.file_dialog.update(ctx);

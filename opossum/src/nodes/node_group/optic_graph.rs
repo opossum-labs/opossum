@@ -65,7 +65,15 @@ impl OpticGraph {
             Rc::new(RefCell::new(node)),
             self.global_confg.clone(),
         ));
-
+        Ok(idx)
+    }
+    pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<NodeIndex> {
+        if self.is_inverted {
+            return Err(OpossumError::OpticGroup(
+                "cannot add nodes if group is set as inverted".into(),
+            ));
+        }
+        let idx=self.g.add_node(node);
         Ok(idx)
     }
     /// Connect two optical nodes within this [`OpticGraph`].

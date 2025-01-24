@@ -135,7 +135,17 @@ impl NodeGroup {
             .unwrap();
         Ok(idx)
     }
+    pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<NodeIndex> {
+        let idx = self.graph.add_node_ref(node)?;
 
+        // save uuid of node in rays if present
+        // self.store_node_uuid_in_rays_bundle(&node, idx)?;
+
+        self.node_attr
+            .set_property("graph", self.graph.clone().into())
+            .unwrap();
+        Ok(idx)
+    }
     fn store_node_uuid_in_rays_bundle<T: Analyzable + Clone + 'static>(
         &mut self,
         node: &T,
