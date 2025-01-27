@@ -135,6 +135,17 @@ impl NodeGroup {
             .unwrap();
         Ok(idx)
     }
+    /// Add a given [`OpticRef`] to the (sub-)graph of this [`NodeGroup`].
+    ///
+    /// This command just adds an [`OpticRef`] but does not connect it to existing nodes in the (sub-)graph. The given node is
+    /// consumed (owned) by the [`NodeGroup`]. This function returns a reference to the element in the scenery as [`NodeIndex`].
+    /// This reference must be used later on for connecting nodes (see `connect_nodes` function).
+    ///
+    /// # Errors
+    /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
+    ///
+    /// # Panics
+    /// This function panics if the property "graph" can not be updated. Produces an error of type [`OpossumError::Properties`]
     pub fn add_node_ref(&mut self, node: &OpticRef) -> OpmResult<NodeIndex> {
         let idx = self.graph.add_node_ref(node.clone())?;
 
@@ -146,6 +157,14 @@ impl NodeGroup {
             .unwrap();
         Ok(idx)
     }
+    /// Stores the UUID of a node in the rays bundle if the node has light data.
+    ///
+    /// # Parameters
+    /// * `node`: The node to store the UUID for.
+    /// * `node_idx`: The index of the node in the graph.
+    ///
+    /// # Errors
+    /// Returns an error if the property "light data" cannot be set.
     fn store_node_uuid_in_rays_bundle<T: Analyzable + Clone + 'static>(
         &mut self,
         node: &T,
@@ -205,6 +224,25 @@ impl NodeGroup {
     ) -> OpmResult<()> {
         self.graph
             .connect_nodes(src_node, src_port, target_node, target_port, distance)?;
+        self.node_attr
+            .set_property("graph", self.graph.clone().into())?;
+        Ok(())
+    }
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn connect_nodes_by_uuid(
+        &mut self,
+        src_uuid: Uuid,
+        src_port: &str,
+        target_uuid: Uuid,
+        target_port: &str,
+        distance: Length,
+    ) -> OpmResult<()> {
+        self.graph
+            .connect_nodes_by_uuid(src_uuid, src_port, target_uuid, target_port, distance)?;
         self.node_attr
             .set_property("graph", self.graph.clone().into())?;
         Ok(())

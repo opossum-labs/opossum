@@ -5,11 +5,9 @@ use egui_snarl::{
     ui::{PinInfo, SnarlViewer},
     InPin, NodeId, OutPin, Snarl,
 };
-use log::info;
+use log::{error, info};
 use opossum::{
-    nodes::{create_node_ref, NodeGroup},
-    optic_ports::PortType,
-    optic_ref::OpticRef,
+    millimeter, nodes::{create_node_ref, NodeGroup}, optic_ports::PortType, optic_ref::OpticRef
 };
 
 const LIGHT_RESULT_COLOR: Color32 = Color32::from_rgb(0xb0, 0x00, 0x00);
@@ -19,15 +17,22 @@ pub struct OPMModelViewer {
     model: NodeGroup,
 }
 
+impl OPMModelViewer {
+    pub fn model(&self) -> &NodeGroup {
+        &self.model
+    }
+}
+
 impl SnarlViewer<OpticRef> for OPMModelViewer {
     fn connect(&mut self, from: &OutPin, to: &InPin, snarl: &mut Snarl<OpticRef>) {
-        // match (&snarl[from.id.node], &snarl[to.id.node]) {
-        //     (OpticRef::Source, OpticRef::Lens) => {}
-        //     (OpticRef::Lens, OpticRef::Sink) => {}
-        //     _ => {
-        //         return;
-        //     }
-        // }
+        let src_uuid=snarl[from.id.node].uuid();
+        let target_uuid=snarl[to.id.node].uuid();
+        let src_port=snarl[from.id.node].optical_ref.borrow().ports().names(&PortType::Output)[from.id.output].to_owned();
+        let target_port=snarl[to.id.node].optical_ref.borrow().ports().names(&PortType::Input)[to.id.input].to_owned();
+        if let Err(e)=self.model.connect_nodes_by_uuid(src_uuid, &src_port, target_uuid, &target_port, millimeter!(10.0)) {
+            error!("Error connecting nodes: {:?}", e);
+            return;
+        }
         for &remote in &to.remotes {
             snarl.disconnect(remote, to.id);
         }

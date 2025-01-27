@@ -67,6 +67,14 @@ impl OpticGraph {
         ));
         Ok(idx)
     }
+    /// Add an existing optical node reference to this [`OpticGraph`].
+    ///
+    /// This function returns a [`NodeIndex`] of the added node for later referencing (see `connect_nodes`).
+    /// **Note**: While constructing the underlying [`OpticRef`] a random, uuid is assigned.
+    ///
+    /// # Errors
+    /// This function returns an error if the graph is set as `inverted` and a node is added. (This could end up in
+    /// a weird / undefined behaviour)
     pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<NodeIndex> {
         if self.is_inverted {
             return Err(OpossumError::OpticGroup(
@@ -162,6 +170,33 @@ impl OpticGraph {
         // remove output port mapping, if no loner valid
         self.output_port_map.remove_mapping(src_node, src_port);
         Ok(())
+    }
+    /// Connect two nodes by specifiying their uuids.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn connect_nodes_by_uuid(
+        &mut self,
+        src_uuid: Uuid,
+        src_port: &str,
+        target_uuid: Uuid,
+        target_port: &str,
+        distance: Length,
+    ) -> OpmResult<()> {
+        let src_node = self.node_idx_by_uuid(src_uuid).ok_or_else(|| {
+            OpossumError::OpticScenery(format!(
+                "source node with uuid {} does not exist",
+                src_uuid
+            ))
+        })?;
+        let target_node = self.node_idx_by_uuid(target_uuid).ok_or_else(|| {
+            OpossumError::OpticScenery(format!(
+                "target node with uuid {} does not exist",
+                target_uuid
+            ))
+        })?;
+        self.connect_nodes(src_node, src_port, target_node, target_port, distance)
     }
     /// Returns a reference to the input port map of this [`OpticGraph`].
     #[must_use]

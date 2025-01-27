@@ -5163,6 +5163,7 @@ dependencies = [
  "opossum",
  "serde",
  "serde_derive",
+ "uom",
 ]
 
 [[package]]

@@ -70,6 +70,9 @@ impl eframe::App for GuiApp {
                     if ui.button("Open").clicked() {
                         self.file_dialog.pick_file();
                     }
+                    if ui.button("Save").clicked() {
+                        self.file_dialog.save_file();
+                    }
                     if ui.button("Quit").clicked() {
                         let ctx = ctx.clone();
                         std::thread::spawn(move || {
@@ -127,25 +130,38 @@ impl eframe::App for GuiApp {
         self.file_dialog.update(ctx);
         // Check if the user picked a file.
         if let Some(path) = self.file_dialog.take_picked() {
-            self.opm_document = OpmDocument::from_file(&path).unwrap();
-            let analyzers = self.opm_document.analyzers();
-            let scenery = self.opm_document.scenery_mut();
-            if analyzers.is_empty() {
-                info!("No analyzer defined in document. Stopping here.");
-            } else {
-                for ana in analyzers.iter().enumerate() {
-                    let analyzer: &dyn Analyzer = match ana.1 {
-                        AnalyzerType::Energy => &EnergyAnalyzer::default(),
-                        AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
-                        AnalyzerType::GhostFocus(config) => {
-                            &GhostFocusAnalyzer::new(config.clone())
+            match self.file_dialog.mode() {
+                egui_file_dialog::DialogMode::SelectFile => {
+                    self.opm_document = OpmDocument::from_file(&path).unwrap();
+                    let analyzers = self.opm_document.analyzers();
+                    let scenery = self.opm_document.scenery_mut();
+                    if analyzers.is_empty() {
+                        info!("No analyzer defined in document. Stopping here.");
+                    } else {
+                        for ana in analyzers.iter().enumerate() {
+                            let analyzer: &dyn Analyzer = match ana.1 {
+                                AnalyzerType::Energy => &EnergyAnalyzer::default(),
+                                AnalyzerType::RayTrace(config) => {
+                                    &RayTracingAnalyzer::new(config.clone())
+                                }
+                                AnalyzerType::GhostFocus(config) => {
+                                    &GhostFocusAnalyzer::new(config.clone())
+                                }
+                                _ => &EnergyAnalyzer::default(),
+                            };
+                            info!("Analysis #{}", ana.0);
+                            scenery.clear_edges();
+                            scenery.reset_data();
+                            analyzer.analyze(scenery).unwrap()
                         }
-                        _ => &EnergyAnalyzer::default(),
-                    };
-                    info!("Analysis #{}", ana.0);
-                    scenery.clear_edges();
-                    scenery.reset_data();
-                    analyzer.analyze(scenery).unwrap()
+                    }
+                }
+                egui_file_dialog::DialogMode::SelectDirectory => todo!(),
+                egui_file_dialog::DialogMode::SelectMultiple => todo!(),
+                egui_file_dialog::DialogMode::SaveFile => {
+                    self.opm_document=OpmDocument::new(self.snarl_viewer.model().clone());
+                    info!("Saving file to {:?}", path);
+                    self.opm_document.save_to_file(&path).unwrap();
                 }
             }
         }
