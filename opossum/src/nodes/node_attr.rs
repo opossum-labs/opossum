@@ -258,5 +258,6 @@ impl NodeAttr {
             };
             ui.label("J/cm²");
         });
+        self.props.generate_gui(ui);
     }
 }

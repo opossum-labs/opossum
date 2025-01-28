@@ -162,6 +162,11 @@ impl Properties {
         }
         Ok(())
     }
+    pub fn generate_gui(&mut self, ui: &mut egui::Ui) {
+        for prop in &mut self.props {
+            ui.label(prop.0);
+        }
+    }
 }
 
 impl<'a> IntoIterator for &'a Properties {
