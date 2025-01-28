@@ -1,5 +1,6 @@
 use std::vec;
 
+use crate::editor_node::EditorNode;
 use eframe::egui::{self, Color32, Ui};
 use egui_snarl::{
     ui::{PinInfo, SnarlViewer},
@@ -7,44 +8,77 @@ use egui_snarl::{
 };
 use log::{error, info};
 use opossum::{
-    analyzers::AnalyzerType, millimeter, nodes::{create_node_ref, NodeGroup}, optic_ports::PortType, optic_ref::OpticRef
+    analyzers::AnalyzerType,
+    millimeter,
+    nodes::{create_node_ref, NodeGroup},
+    optic_ports::PortType,
 };
-
-use crate::editor_node::EditorNode;
 
 const LIGHT_RESULT_COLOR: Color32 = Color32::from_rgb(0xb0, 0x00, 0x00);
 const UNTYPED_COLOR: Color32 = Color32::from_rgb(0xb0, 0xb0, 0xb0);
 #[derive(Default)]
 pub struct OPMModelViewer {
     model: NodeGroup,
-    analyzers: Vec<AnalyzerType>
+    analyzers: Vec<AnalyzerType>,
 }
-
 impl OPMModelViewer {
     pub fn model(&self) -> &NodeGroup {
         &self.model
     }
-    
     pub fn analyzers(&self) -> &[AnalyzerType] {
         &self.analyzers
+    }
+    pub fn gen_properties_gui(&mut self, ui: &mut Ui, node_id: NodeId, snarl: &Snarl<EditorNode>) {
+        match snarl[node_id] {
+            EditorNode::OpticRef(ref node) => {
+                let mut node_ref = node.optical_ref.borrow_mut();
+                ui.label(format!("Type: {}", node_ref.node_type()));
+                ui.horizontal(|ui| {
+                    let name_label = ui.label("Name: ");
+                    let mut name=node_ref.name();
+                    if ui.text_edit_singleline(&mut name)
+                        .labelled_by(name_label.id).changed() {
+                        node_ref.node_attr_mut().set_name(&name);
+                        }
+                });
+                // ui.label(format!("UUID: {:?}", node.uuid()));
+                // ui.label(format!("Ports: {:?}", node_ref.ports()));
+                // ui.label(format!("Properties: {:?}", node_ref.properties()));
+            }
+            EditorNode::Analyzer(ref node) => {
+                ui.label(format!("Analyzer: {:?}", node));
+            }
+        }
     }
 }
 
 impl SnarlViewer<EditorNode> for OPMModelViewer {
     fn connect(&mut self, from: &OutPin, to: &InPin, snarl: &mut Snarl<EditorNode>) {
-        let EditorNode::OpticRef(from_node)=snarl[from.id.node].clone() else {
+        let EditorNode::OpticRef(from_node) = snarl[from.id.node].clone() else {
             error!("Trying to connenct from non-optical node");
-            return;  
+            return;
         };
-        let EditorNode::OpticRef(to_node)=snarl[to.id.node].clone() else {
+        let EditorNode::OpticRef(to_node) = snarl[to.id.node].clone() else {
             error!("Trying to connenct to non-optical node");
-            return;  
+            return;
         };
-        let src_uuid=from_node.uuid();
-        let target_uuid=to_node.uuid();
-        let src_port=from_node.optical_ref.borrow().ports().names(&PortType::Output)[from.id.output].to_owned();
-        let target_port=to_node.optical_ref.borrow().ports().names(&PortType::Input)[to.id.input].to_owned();
-        if let Err(e)=self.model.connect_nodes_by_uuid(src_uuid, &src_port, target_uuid, &target_port, millimeter!(10.0)) {
+        let src_uuid = from_node.uuid();
+        let target_uuid = to_node.uuid();
+        let src_port = from_node
+            .optical_ref
+            .borrow()
+            .ports()
+            .names(&PortType::Output)[from.id.output]
+            .to_owned();
+        let target_port =
+            to_node.optical_ref.borrow().ports().names(&PortType::Input)[to.id.input].to_owned();
+        if let Err(e) = self.model.connect_nodes_by_uuid(
+            src_uuid,
+            &src_port,
+            target_uuid,
+            &target_port,
+            millimeter!(10.0),
+        ) {
             error!("Error connecting nodes: {:?}", e);
             return;
         }
@@ -61,7 +95,12 @@ impl SnarlViewer<EditorNode> for OPMModelViewer {
     }
     fn inputs(&mut self, node: &EditorNode) -> usize {
         match node {
-            EditorNode::OpticRef(node) => node.optical_ref.borrow().ports().names(&PortType::Input).len(),
+            EditorNode::OpticRef(node) => node
+                .optical_ref
+                .borrow()
+                .ports()
+                .names(&PortType::Input)
+                .len(),
             EditorNode::Analyzer(_) => 0,
         }
     }
@@ -84,7 +123,12 @@ impl SnarlViewer<EditorNode> for OPMModelViewer {
     }
     fn outputs(&mut self, node: &EditorNode) -> usize {
         match node {
-            EditorNode::OpticRef(node) => node.optical_ref.borrow().ports().names(&PortType::Output).len(),
+            EditorNode::OpticRef(node) => node
+                .optical_ref
+                .borrow()
+                .ports()
+                .names(&PortType::Output)
+                .len(),
             EditorNode::Analyzer(_) => 0,
         }
     }
@@ -215,7 +259,6 @@ impl SnarlViewer<EditorNode> for OPMModelViewer {
             EditorNode::Analyzer(ref node) => {
                 ui.label(format!("{:?}", node));
             }
-            
         }
     }
     fn header_frame(
@@ -227,7 +270,7 @@ impl SnarlViewer<EditorNode> for OPMModelViewer {
         snarl: &Snarl<EditorNode>,
     ) -> egui::Frame {
         // snarl[node].optical_ref.borrow().node_color();
-        let color=match snarl[node]{
+        let color = match snarl[node] {
             EditorNode::OpticRef(_) => Color32::from_rgb(150, 150, 150),
             EditorNode::Analyzer(_) => Color32::from_rgb(200, 150, 150),
         };

@@ -105,20 +105,8 @@ impl eframe::App for GuiApp {
                             .into_iter()
                             .last()
                     {
-                        if let Some(node)=Snarl::<EditorNode>::get_node(&self.snarl,selected) {
-                            match node {
-                                EditorNode::OpticRef(node) => {
-                                    ui.horizontal(|ui| {
-                                        ui.label(format!("{:?}", node.optical_ref.borrow().name()));
-                                    });
-                                }
-                                EditorNode::Analyzer(node) => {
-                                    ui.horizontal(|ui| {
-                                        ui.label(format!("{:?}", node));
-                                    });
-                                }
-                            }
-                        }
+                        self.snarl_viewer
+                            .gen_properties_gui(ui, selected, &self.snarl);
                     }
                 });
             });

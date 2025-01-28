@@ -40,6 +40,15 @@ pub enum AnalyzerType {
     GhostFocus(GhostFocusConfig),
 }
 impl AnalyzerType {
+    /// Creates an `AnalyzerType` from a given name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - A string slice that holds the name of the analyzer type.
+    ///
+    /// # Returns
+    ///
+    /// * `Option<Self>` - Returns `Some(AnalyzerType)` if the name matches an analyzer type, otherwise `None`.
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "Energy" => Some(Self::Energy),

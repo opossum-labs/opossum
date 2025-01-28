@@ -81,7 +81,7 @@ impl OpticGraph {
                 "cannot add nodes if group is set as inverted".into(),
             ));
         }
-        let idx=self.g.add_node(node);
+        let idx = self.g.add_node(node);
         Ok(idx)
     }
     /// Connect two optical nodes within this [`OpticGraph`].
@@ -185,10 +185,7 @@ impl OpticGraph {
         distance: Length,
     ) -> OpmResult<()> {
         let src_node = self.node_idx_by_uuid(src_uuid).ok_or_else(|| {
-            OpossumError::OpticScenery(format!(
-                "source node with uuid {} does not exist",
-                src_uuid
-            ))
+            OpossumError::OpticScenery(format!("source node with uuid {} does not exist", src_uuid))
         })?;
         let target_node = self.node_idx_by_uuid(target_uuid).ok_or_else(|| {
             OpossumError::OpticScenery(format!(
