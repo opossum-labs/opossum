@@ -185,12 +185,11 @@ impl OpticGraph {
         distance: Length,
     ) -> OpmResult<()> {
         let src_node = self.node_idx_by_uuid(src_uuid).ok_or_else(|| {
-            OpossumError::OpticScenery(format!("source node with uuid {} does not exist", src_uuid))
+            OpossumError::OpticScenery(format!("source node with uuid {src_uuid} does not exist"))
         })?;
         let target_node = self.node_idx_by_uuid(target_uuid).ok_or_else(|| {
             OpossumError::OpticScenery(format!(
-                "target node with uuid {} does not exist",
-                target_uuid
+                "target node with uuid {target_uuid} does not exist"
             ))
         })?;
         self.connect_nodes(src_node, src_port, target_node, target_port, distance)

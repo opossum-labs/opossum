@@ -3,11 +3,13 @@
 //! This module handles common attributes of optical nodes such as [`Properties`] or geometric data (isometries, etc.)
 use std::{cell::RefCell, rc::Rc};
 
+use egui::Ui;
 use petgraph::graph::NodeIndex;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::Length;
+use uom::si::{f64::Length, radiant_exposure::joule_per_square_centimeter};
 use uuid::Uuid;
 
+use super::fluence_detector::Fluence;
 use crate::{
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,
@@ -17,9 +19,7 @@ use crate::{
     J_per_cm2,
 };
 
-use super::fluence_detector::Fluence;
-
-/// Struct for sotring common attributes of optical nodes.
+/// Struct for storing common attributes of optical nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeAttr {
     #[serde(skip)]
@@ -55,15 +55,6 @@ impl NodeAttr {
     /// Panics theoretically if the standarnd properties could not be created.
     #[must_use]
     pub fn new(node_type: &str) -> Self {
-        // let mut properties = Properties::default();
-        // properties
-        //     .create(
-        //         "apertures",
-        //         "input and output apertures of the optical element",
-        //         None,
-        //         OpticPorts::default().into(),
-        //     )
-        //     .unwrap();
         Self {
             node_type: node_type.into(),
             name: node_type.into(),
@@ -143,7 +134,6 @@ impl NodeAttr {
     pub fn get_property(&self, name: &str) -> OpmResult<&Proptype> {
         self.props.get(name)
     }
-
     /// Return the value of a boolean property.
     ///
     /// # Errors
@@ -201,7 +191,6 @@ impl NodeAttr {
     pub const fn ports(&self) -> &OpticPorts {
         &self.ports
     }
-
     /// Returns a mutable reference to the optic ports of this [`NodeAttr`].
     #[must_use]
     pub fn ports_mut(&mut self) -> &mut OpticPorts {
@@ -211,7 +200,6 @@ impl NodeAttr {
     pub fn set_ports(&mut self, ports: OpticPorts) {
         self.ports = ports;
     }
-
     /// Returns a reference to the uuid of this [`NodeAttr`].
     #[must_use]
     pub const fn uuid(&self) -> &Uuid {
@@ -221,7 +209,6 @@ impl NodeAttr {
     pub fn set_uuid(&mut self, uuid: &Uuid) {
         self.uuid = *uuid;
     }
-
     /// Returns a reference to the lidt of this [`NodeAttr`].
     #[must_use]
     pub const fn lidt(&self) -> &Fluence {
@@ -231,15 +218,45 @@ impl NodeAttr {
     pub fn set_lidt(&mut self, lidt: &Fluence) {
         self.lidt = *lidt;
     }
-
     /// set the nodeindex and distance of the node to which this node should be aligned to
     pub fn set_align_like_node_at_distance(&mut self, node_idx: NodeIndex, distance: Length) {
         self.align_like_node_at_distance = Some((node_idx, distance));
     }
-
     /// get the nodeindex and distance of the node to which this node should be aligned to
     #[must_use]
     pub const fn get_align_like_node_at_distance(&self) -> &Option<(NodeIndex, Length)> {
         &self.align_like_node_at_distance
+    }
+    /// Generates the GUI for this [`NodeAttr`].
+    ///
+    /// # Arguments
+    ///
+    /// * `ui` - A mutable reference to the UI.
+    pub fn generate_gui(&mut self, ui: &mut Ui) {
+        ui.label(format!("Type: {}", self.node_type()));
+        ui.horizontal(|ui| {
+            let name_label = ui.label("Name: ");
+            ui.text_edit_singleline(&mut self.name)
+                .labelled_by(name_label.id);
+        });
+        ui.horizontal(|ui| {
+            let inverted_label = ui.label("Inverted: ");
+            ui.checkbox(&mut self.inverted, "")
+                .labelled_by(inverted_label.id);
+        });
+        ui.horizontal(|ui| {
+            let mut lidt = self.lidt.get::<joule_per_square_centimeter>();
+            if ui
+                .add(
+                    egui::Slider::new(&mut lidt, 0.0..=50.0)
+                        .step_by(0.1)
+                        .text("LIDT"),
+                )
+                .changed()
+            {
+                self.lidt = J_per_cm2!(lidt);
+            };
+            ui.label("J/cm²");
+        });
     }
 }

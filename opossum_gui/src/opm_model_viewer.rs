@@ -32,18 +32,8 @@ impl OPMModelViewer {
         match snarl[node_id] {
             EditorNode::OpticRef(ref node) => {
                 let mut node_ref = node.optical_ref.borrow_mut();
-                ui.label(format!("Type: {}", node_ref.node_type()));
-                ui.horizontal(|ui| {
-                    let name_label = ui.label("Name: ");
-                    let mut name=node_ref.name();
-                    if ui.text_edit_singleline(&mut name)
-                        .labelled_by(name_label.id).changed() {
-                        node_ref.node_attr_mut().set_name(&name);
-                        }
-                });
-                // ui.label(format!("UUID: {:?}", node.uuid()));
-                // ui.label(format!("Ports: {:?}", node_ref.ports()));
-                // ui.label(format!("Properties: {:?}", node_ref.properties()));
+                let node_attr = node_ref.node_attr_mut();
+                node_attr.generate_gui(ui);
             }
             EditorNode::Analyzer(ref node) => {
                 ui.label(format!("Analyzer: {:?}", node));

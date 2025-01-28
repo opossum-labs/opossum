@@ -6,5 +6,5 @@ pub enum EditorNode {
     /// Node representing an optical node.
     OpticRef(OpticRef),
     /// Node representing an analyzer.
-    Analyzer(AnalyzerType)
+    Analyzer(AnalyzerType),
 }

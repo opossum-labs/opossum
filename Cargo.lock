@@ -5117,6 +5117,7 @@ dependencies = [
  "csv",
  "delaunator",
  "earcutr",
+ "egui",
  "embed-doc-image",
  "env_logger",
  "image 0.25.5",

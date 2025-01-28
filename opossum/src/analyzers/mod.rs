@@ -49,6 +49,7 @@ impl AnalyzerType {
     /// # Returns
     ///
     /// * `Option<Self>` - Returns `Some(AnalyzerType)` if the name matches an analyzer type, otherwise `None`.
+    #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "Energy" => Some(Self::Energy),
