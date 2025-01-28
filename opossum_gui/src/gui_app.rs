@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::opm_model_viewer::OPMModelViewer;
+use crate::{editor_node::EditorNode, opm_model_viewer::OPMModelViewer};
 use eframe::egui::{self, Id};
 use egui_file_dialog::FileDialog;
 use egui_modal::{Icon, Modal, ModalStyle};
@@ -12,13 +12,12 @@ use opossum::{
         Analyzer, AnalyzerType,
     },
     optic_node::OpticNode,
-    optic_ref::OpticRef,
     OpmDocument,
 };
 
 pub struct GuiApp {
     opm_document: OpmDocument,
-    snarl: Snarl<OpticRef>,
+    snarl: Snarl<EditorNode>,
     style: SnarlStyle,
     snarl_ui_id: Option<Id>,
     file_dialog: FileDialog,
@@ -101,22 +100,25 @@ impl eframe::App for GuiApp {
             egui::SidePanel::left("Properties").show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.heading("Properties");
-
-                    let selected =
-                        Snarl::<OpticRef>::get_selected_nodes_at("snarl", snarl_ui_id, ui.ctx());
-                    let mut selected = selected
-                        .into_iter()
-                        .map(|id| (id, &self.snarl[id]))
-                        .collect::<Vec<_>>();
-
-                    selected.sort_by_key(|(id, _)| *id);
-
-                    for (id, _node) in selected {
-                        ui.horizontal(|ui| {
-                            ui.label(format!("{id:?}"));
-                            // ui.label(node.name());
-                            ui.add_space(ui.spacing().item_spacing.x);
-                        });
+                    if let Some(selected) =
+                        Snarl::<EditorNode>::get_selected_nodes_at("snarl", snarl_ui_id, ui.ctx())
+                            .into_iter()
+                            .last()
+                    {
+                        if let Some(node)=Snarl::<EditorNode>::get_node(&self.snarl,selected) {
+                            match node {
+                                EditorNode::OpticRef(node) => {
+                                    ui.horizontal(|ui| {
+                                        ui.label(format!("{:?}", node.optical_ref.borrow().name()));
+                                    });
+                                }
+                                EditorNode::Analyzer(node) => {
+                                    ui.horizontal(|ui| {
+                                        ui.label(format!("{:?}", node));
+                                    });
+                                }
+                            }
+                        }
                     }
                 });
             });
@@ -159,7 +161,10 @@ impl eframe::App for GuiApp {
                 egui_file_dialog::DialogMode::SelectDirectory => todo!(),
                 egui_file_dialog::DialogMode::SelectMultiple => todo!(),
                 egui_file_dialog::DialogMode::SaveFile => {
-                    self.opm_document=OpmDocument::new(self.snarl_viewer.model().clone());
+                    self.opm_document = OpmDocument::new(self.snarl_viewer.model().clone());
+                    self.snarl_viewer.analyzers().iter().for_each(|ana| {
+                        self.opm_document.add_analyzer(ana.clone());
+                    });
                     info!("Saving file to {:?}", path);
                     self.opm_document.save_to_file(&path).unwrap();
                 }

@@ -39,6 +39,16 @@ pub enum AnalyzerType {
     /// given number of bounces.
     GhostFocus(GhostFocusConfig),
 }
+impl AnalyzerType {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "Energy" => Some(Self::Energy),
+            "RayTrace" => Some(Self::RayTrace(RayTraceConfig::default())),
+            "GhostFocus" => Some(Self::GhostFocus(GhostFocusConfig::default())),
+            _ => None,
+        }
+    }
+}
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = match self {
