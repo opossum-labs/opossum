@@ -58,9 +58,7 @@ impl eframe::App for GuiApp {
             });
 
             modal.buttons(ui, |ui| {
-                if modal.button(ui, "close").clicked() {
-                    println!("hello world!");
-                }
+                modal.button(ui, "close");
             });
         });
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
@@ -106,7 +104,7 @@ impl eframe::App for GuiApp {
                             .last()
                     {
                         self.snarl_viewer
-                            .gen_properties_gui(ui, selected, &self.snarl);
+                            .gen_properties_gui(ui, ctx, selected, &self.snarl);
                     }
                 });
             });

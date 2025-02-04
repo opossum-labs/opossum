@@ -162,9 +162,12 @@ impl Properties {
         }
         Ok(())
     }
-    pub fn generate_gui(&mut self, ui: &mut egui::Ui) {
+    pub fn generate_gui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         for prop in &mut self.props {
-            ui.label(prop.0);
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:",prop.0.to_owned()));
+                prop.1.gui(ui, ctx);
+            });
         }
     }
 }

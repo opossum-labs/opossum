@@ -95,6 +95,9 @@ impl Property {
         }
         Ok(())
     }
+    pub fn gui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        self.prop.gui(ui, "blah", ctx);
+    }
 }
 #[cfg(test)]
 mod test {

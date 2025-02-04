@@ -232,7 +232,7 @@ impl NodeAttr {
     /// # Arguments
     ///
     /// * `ui` - A mutable reference to the UI.
-    pub fn generate_gui(&mut self, ui: &mut Ui) {
+    pub fn generate_gui(&mut self, ui: &mut Ui, ctx: &egui::Context) {
         ui.label(format!("Type: {}", self.node_type()));
         ui.horizontal(|ui| {
             let name_label = ui.label("Name: ");
@@ -258,6 +258,6 @@ impl NodeAttr {
             };
             ui.label("J/cm²");
         });
-        self.props.generate_gui(ui);
+        self.props.generate_gui(ui, ctx);
     }
 }

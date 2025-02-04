@@ -1,8 +1,10 @@
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     aperture::Aperture,
+    degree,
     error::{OpmResult, OpossumError},
-    lightdata::LightData,
+    lightdata::{DataEnergy, LightData},
+    meter,
     nodes::{
         fluence_detector::{fluence_data::FluenceData, Fluence},
         ray_propagation_visualizer::RayPositionHistories,
@@ -21,11 +23,14 @@ use crate::{
         EnumProxy,
     },
 };
+use egui_modal::{Icon, Modal, ModalStyle};
+use log::info;
 use nalgebra::{Vector2, Vector3};
 use num::Float;
 use serde::{Deserialize, Serialize};
 use tinytemplate::TinyTemplate;
 use uom::si::{
+    angle::degree,
     energy::joule,
     f64::{Energy, Length},
     length::meter,
@@ -188,6 +193,81 @@ impl Proptype {
             }),
         };
         string_value.map_err(|e| OpossumError::Other(e.to_string()))
+    }
+    pub fn gui(&mut self, ui: &mut egui::Ui, description: &str, ctx: &egui::Context) {
+        let mut selected = LightData::Fourier;
+        let light_field_gui = Modal::new(ctx, "light_field").with_close_on_outside_click(false);
+        light_field_gui.show(|ui| {
+            ui.heading("Light field configuration");
+            egui::ComboBox::from_label("Select one!")
+                .selected_text(format!("{:?}", selected))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut selected, LightData::Fourier, "Energy");
+                    ui.selectable_value(&mut selected, LightData::Fourier, "Rays");
+                    ui.selectable_value(&mut selected, LightData::Fourier, "Fourier");
+                });
+            light_field_gui.buttons(ui, |ui| {
+                if ui.button("close").clicked() {
+                    light_field_gui.close();
+                }
+            });
+        });
+        match &self {
+            Self::Bool(value) => {
+                let mut value = *value;
+                if ui.checkbox(&mut value, description).changed() {
+                    *self = Proptype::Bool(value);
+                }
+            }
+            Self::String(value) => {
+                let mut value = value.clone();
+                if ui
+                    .text_edit_singleline(&mut value)
+                    .on_hover_text(description)
+                    .changed()
+                {
+                    *self = Proptype::String(value);
+                }
+            }
+            Self::I32(value) => {
+                let mut value = *value;
+                if ui
+                    .add(egui::DragValue::new(&mut value).speed(1.0))
+                    .on_hover_text(description)
+                    .changed()
+                {
+                    *self = Proptype::I32(value);
+                }
+            }
+            Self::Angle(value) => {
+                let mut value = value.get::<degree>();
+                if ui
+                    .add(egui::DragValue::new(&mut value).speed(1.0))
+                    .on_hover_text(description)
+                    .changed()
+                {
+                    *self = Proptype::Angle(degree!(value));
+                }
+                ui.label("°");
+            }
+            Self::Length(value) => {
+                let mut value = value.get::<meter>();
+                if ui
+                    .add(egui::DragValue::new(&mut value).speed(0.1))
+                    .on_hover_text(description)
+                    .changed()
+                {
+                    *self = Proptype::Length(meter!(value));
+                }
+                ui.label("m");
+            }
+            Self::LightData(value) => {
+                if ui.button("configure").clicked() {
+                    light_field_gui.open();
+                }
+            }
+            _ => {}
+        }
     }
 }
 impl From<bool> for Proptype {

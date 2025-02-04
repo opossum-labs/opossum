@@ -28,12 +28,12 @@ impl OPMModelViewer {
     pub fn analyzers(&self) -> &[AnalyzerType] {
         &self.analyzers
     }
-    pub fn gen_properties_gui(&mut self, ui: &mut Ui, node_id: NodeId, snarl: &Snarl<EditorNode>) {
+    pub fn gen_properties_gui(&mut self, ui: &mut Ui, ctx: &egui::Context, node_id: NodeId, snarl: &Snarl<EditorNode>) {
         match snarl[node_id] {
             EditorNode::OpticRef(ref node) => {
                 let mut node_ref = node.optical_ref.borrow_mut();
                 let node_attr = node_ref.node_attr_mut();
-                node_attr.generate_gui(ui);
+                node_attr.generate_gui(ui,ctx);
             }
             EditorNode::Analyzer(ref node) => {
                 ui.label(format!("Analyzer: {:?}", node));
