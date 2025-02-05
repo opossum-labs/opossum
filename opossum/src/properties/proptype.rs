@@ -195,24 +195,23 @@ impl Proptype {
         string_value.map_err(|e| OpossumError::Other(e.to_string()))
     }
     pub fn gui(&mut self, ui: &mut egui::Ui, description: &str, ctx: &egui::Context) {
-        let mut selected = LightData::Fourier;
-        let light_field_gui = Modal::new(ctx, "light_field").with_close_on_outside_click(false);
-        light_field_gui.show(|ui| {
-            ui.heading("Light field configuration");
-            egui::ComboBox::from_label("Select one!")
-                .selected_text(format!("{:?}", selected))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut selected, LightData::Fourier, "Energy");
-                    ui.selectable_value(&mut selected, LightData::Fourier, "Rays");
-                    ui.selectable_value(&mut selected, LightData::Fourier, "Fourier");
-                });
-            light_field_gui.buttons(ui, |ui| {
-                if ui.button("close").clicked() {
-                    light_field_gui.close();
-                }
-            });
-        });
-        match &self {
+        // let light_field_gui = Modal::new(ctx, "light_field").with_close_on_outside_click(false);
+        // light_field_gui.show(|ui| {
+        //     ui.heading("Light field configuration");
+        //     egui::ComboBox::from_label("Select one!")
+        //         .selected_text(format!("{:?}", selected))
+        //         .show_ui(ui, |ui| {
+        //             ui.selectable_value(&mut selected, LightData::Fourier, "Energy");
+        //             ui.selectable_value(&mut selected, LightData::Fourier, "Rays");
+        //             ui.selectable_value(&mut selected, LightData::Fourier, "Fourier");
+        //         });
+        //     light_field_gui.buttons(ui, |ui| {
+        //         if ui.button("close").clicked() {
+        //             light_field_gui.close();
+        //         }
+        //     });
+        // });
+        match self {
             Self::Bool(value) => {
                 let mut value = *value;
                 if ui.checkbox(&mut value, description).changed() {
@@ -262,8 +261,10 @@ impl Proptype {
                 ui.label("m");
             }
             Self::LightData(value) => {
-                if ui.button("configure").clicked() {
-                    light_field_gui.open();
+                if let Some(value) = &mut value.value {
+                    value.gui(ui);
+                } else {
+                    value.value = Some(LightData::Fourier);
                 }
             }
             _ => {}

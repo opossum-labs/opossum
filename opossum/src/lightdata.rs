@@ -24,6 +24,23 @@ pub enum LightData {
     Fourier,
 }
 
+impl LightData {
+    pub fn gui(&mut self, ui: &mut egui::Ui) {
+        let selected_text= match self {
+            LightData::Energy(_) => "Energy",
+            LightData::Geometric(_) => "Rays",
+            LightData::GhostFocus(_) => "GhostFocus",
+            LightData::Fourier => "Fourier",
+        };
+        egui::ComboBox::from_label("Select one!")
+                .selected_text(selected_text)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(self,  LightData::Fourier, "Fourier");
+                    ui.selectable_value(self,  LightData::Geometric(Rays::default()), "Rays");
+                    ui.selectable_value(self,  LightData::GhostFocus(vec![]), "GhostFocus");
+                });
+    }
+}
 impl Display for LightData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
