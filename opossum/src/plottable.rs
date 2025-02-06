@@ -1423,7 +1423,7 @@ pub trait Plottable {
         if let Some(plt_series) = &mut plt_series_opt {
             if plt_series.len() == 1 {
                 let c = colorous::CATEGORY10[0];
-                plt_series[0].color = RGBAColor(c.r, c.g, c.b, 1.);
+                plt_series[0].color = RGBAColor(c.r, c.g, c.b, plt_series[0].color.3);
             }
         }
         plt_series_opt.map_or(Ok(None), |plt_series| plt_type.plot(&plt_series))

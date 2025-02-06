@@ -385,7 +385,7 @@ impl Plottable for RayPositionHistories {
                 };
                 plt_series.push(PlotSeries::new(
                     &plt_data,
-                    RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.),
+                    RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 0.4),
                     series_label,
                 ));
             }

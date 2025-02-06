@@ -1,5 +1,5 @@
 [workspace]
-members = [ "opossum","xtask" ]
+members = [ "opossum","xtask" , "yew-gui"]
 default-members = ["opossum"]
 resolver = "2"
 
