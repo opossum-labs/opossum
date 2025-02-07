@@ -1,19 +1,25 @@
-#[cfg(not(target_arch = "wasm32"))]
-use opossum::nodes::NodeGroup;
-use opossum::optic_ref::OpticRef;
+// use uuid::Uuid;
 
+// #[cfg(not(target_arch = "wasm32"))]
+// use opossum;
+// #[cfg(not(target_arch = "wasm32"))]
+// use opossum::nodes::NodeGroup;
 
-pub struct OPMGUIModel{
-    model: NodeGroup
-}
+// // #[cfg(not(target_arch = "wasm32"))]
+// use opossum::{error::OpmResult, optic_ref::OpticRef};
 
-impl OPMGUIModel{
-    pub fn new(name: &str) -> Self{
-        Self{model: NodeGroup::new(name)}
-    }
+// #[derive(Clone)]
+// pub struct OPMGUIModel{
+//     model: NodeGroup
+// }
 
-    pub fn add_node(&mut self, node: &OpticRef){
-        // let test = self.model.graph().g.add_node(node);
-        // .add_node(node);
-    }
-}
+// impl OPMGUIModel{
+//     pub fn new(name: &str) -> Self{
+//         Self{model: NodeGroup::new(name)}
+//     }
+
+//     pub fn add_node(&mut self, node: &OpticRef) -> OpmResult<Uuid>{
+//         self.model.add_node_ref(node)?;
+//         Ok(node.uuid())
+//     }
+// }

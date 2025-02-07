@@ -7,6 +7,7 @@ edition = "2021"
 yew = { git = "https://github.com/yewstack/yew/", features = ["csr"] }
 web-sys = { version = "0.3", features = ["DragEvent", "DataTransfer", "DomRect", "Element", "MouseEvent"] }
 wasm-bindgen = "0.2"
+uuid = "1.13.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 opossum = { path = "../opossum"}

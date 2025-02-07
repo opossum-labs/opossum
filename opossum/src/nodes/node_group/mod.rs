@@ -136,6 +136,29 @@ impl NodeGroup {
         Ok(idx)
     }
 
+    /// Add a given [`OpticRef`] to the (sub-)graph of this [`NodeGroup`].
+    ///
+    /// This command just adds an [`OpticRef`] but does not connect it to existing nodes in the (sub-)graph. The given node is
+    /// consumed (owned) by the [`NodeGroup`]. This function returns a reference to the element in the scenery as [`NodeIndex`].
+    /// This reference must be used later on for connecting nodes (see `connect_nodes` function).
+    ///
+    /// # Errors
+    /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
+    ///
+    /// # Panics
+    /// This function panics if the property "graph" can not be updated. Produces an error of type [`OpossumError::Properties`]
+    pub fn add_node_ref(&mut self, node: &OpticRef) -> OpmResult<NodeIndex> {
+        let idx = self.graph.add_node_ref(node.clone())?;
+
+        // save uuid of node in rays if present
+        // self.store_node_uuid_in_rays_bundle(&node, idx)?;
+
+        self.node_attr
+            .set_property("graph", self.graph.clone().into())
+            .unwrap();
+        Ok(idx)
+    }
+
     fn store_node_uuid_in_rays_bundle<T: Analyzable + Clone + 'static>(
         &mut self,
         node: &T,

@@ -68,6 +68,23 @@ impl OpticGraph {
 
         Ok(idx)
     }
+    /// Add an existing optical node reference to this [`OpticGraph`].
+    ///
+    /// This function returns a [`NodeIndex`] of the added node for later referencing (see `connect_nodes`).
+    /// **Note**: While constructing the underlying [`OpticRef`] a random, uuid is assigned.
+    ///
+    /// # Errors
+    /// This function returns an error if the graph is set as `inverted` and a node is added. (This could end up in
+    /// a weird / undefined behaviour)
+    pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<NodeIndex> {
+        if self.is_inverted {
+            return Err(OpossumError::OpticGroup(
+                "cannot add nodes if group is set as inverted".into(),
+            ));
+        }
+        let idx = self.g.add_node(node);
+        Ok(idx)
+    }
     /// Connect two optical nodes within this [`OpticGraph`].
     ///
     /// This function connects two optical nodes (referenced by their [`NodeIndex`]) with their respective port names and their geometrical distance
