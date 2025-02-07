@@ -1,14 +1,15 @@
 use std::collections::HashMap;
+use opossum::nodes::create_node_ref;
 use web_sys::{DragEvent, HtmlElement};
 use yew::{function_component, html, use_state, Callback, Html, TargetCast, UseStateHandle};
 use yew_gui::node_graph::node_element::{Connection, Node};
+use yew_gui::node_graph::model::OPMGUIModel;
 
-#[cfg(not(target_arch = "wasm32"))]
-use opossum::nodes;
 
 // Hauptkomponente für Drag-and-Drop mit Nodes und Ports
 #[function_component(App)]
 pub fn app() -> Html {
+    let model = use_state(|| OPMGUIModel::new("Generic model name"));
     let nodes = use_state(|| Vec::<(usize, i32, i32, String, bool)>::new());
     let connections = use_state(|| HashMap::<usize, Connection>::new()); // Verbindungen
     let selected_port = use_state(|| None::<(usize, String)>); // Aktuell ausgewählter Port (Node-ID, Port-Typ)
@@ -219,6 +220,7 @@ fn available_nodes() -> Vec<String> {
 // Die Funktion, die den Callback zurückgibt
 fn create_add_node_handler(
     nodes: UseStateHandle<Vec<(usize, i32, i32, String, bool)>>,
+    model: UseStateHandle<OPMGUIModel>,
 ) -> Callback<(String, bool)> {
     Callback::from(move |(name, is_source): (String, bool)| {
         // Erzeuge eine zufällige Position
@@ -229,6 +231,9 @@ fn create_add_node_handler(
         let mut new_nodes = (*nodes).clone();
         new_nodes.push((new_id, new_x, new_y, name.clone(), is_source.clone())); // Neue Position für die Node
         nodes.set(new_nodes);
+
+        let new_node = create_node_ref(name.as_str()).unwrap();
+        (*model).add_node(new_node);
     })
 }
 
