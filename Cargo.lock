@@ -7425,6 +7425,7 @@ name = "yew-gui"
 version = "0.1.0"
 dependencies = [
  "opossum",
+ "wasm-bindgen",
  "web-sys",
  "yew",
 ]
