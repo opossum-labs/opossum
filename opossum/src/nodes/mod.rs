@@ -46,7 +46,7 @@ pub use source_helper::{
     collimated_line_ray_source, point_ray_source, round_collimated_ray_source,
 };
 pub use spot_diagram::SpotDiagram;
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 pub use wedge::Wedge;
 
 use crate::{
@@ -64,71 +64,71 @@ use crate::{
 #[allow(clippy::too_many_lines)]
 pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
     match node_type {
-        "dummy" => Ok(OpticRef::new(Rc::new(RefCell::new(Dummy::default())), None)),
+        "dummy" => Ok(OpticRef::new(Arc::new(Mutex::new(Dummy::default())), None)),
         "beam splitter" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(BeamSplitter::default())),
+            Arc::new(Mutex::new(BeamSplitter::default())),
             None,
         )),
         "energy meter" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(EnergyMeter::default())),
+            Arc::new(Mutex::new(EnergyMeter::default())),
             None,
         )),
         "group" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(NodeGroup::default())),
+            Arc::new(Mutex::new(NodeGroup::default())),
             None,
         )),
         "ideal filter" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(IdealFilter::default())),
+            Arc::new(Mutex::new(IdealFilter::default())),
             None,
         )),
         "reflective grating" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(ReflectiveGrating::default())),
+            Arc::new(Mutex::new(ReflectiveGrating::default())),
             None,
         )),
         "reference" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(NodeReference::default())),
+            Arc::new(Mutex::new(NodeReference::default())),
             None,
         )),
-        "lens" => Ok(OpticRef::new(Rc::new(RefCell::new(Lens::default())), None)),
+        "lens" => Ok(OpticRef::new(Arc::new(Mutex::new(Lens::default())), None)),
         "cylindric lens" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(CylindricLens::default())),
+            Arc::new(Mutex::new(CylindricLens::default())),
             None,
         )),
         "source" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(Source::default())),
+            Arc::new(Mutex::new(Source::default())),
             None,
         )),
         "spectrometer" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(Spectrometer::default())),
+            Arc::new(Mutex::new(Spectrometer::default())),
             None,
         )),
         "spot diagram" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(SpotDiagram::default())),
+            Arc::new(Mutex::new(SpotDiagram::default())),
             None,
         )),
         "wavefront monitor" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(WaveFront::default())),
+            Arc::new(Mutex::new(WaveFront::default())),
             None,
         )),
         "paraxial surface" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(ParaxialSurface::default())),
+            Arc::new(Mutex::new(ParaxialSurface::default())),
             None,
         )),
         "ray propagation" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(RayPropagationVisualizer::default())),
+            Arc::new(Mutex::new(RayPropagationVisualizer::default())),
             None,
         )),
         "fluence detector" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(FluenceDetector::default())),
+            Arc::new(Mutex::new(FluenceDetector::default())),
             None,
         )),
-        "wedge" => Ok(OpticRef::new(Rc::new(RefCell::new(Wedge::default())), None)),
+        "wedge" => Ok(OpticRef::new(Arc::new(Mutex::new(Wedge::default())), None)),
         "mirror" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(ThinMirror::default())),
+            Arc::new(Mutex::new(ThinMirror::default())),
             None,
         )),
         "parabolic mirror" => Ok(OpticRef::new(
-            Rc::new(RefCell::new(ParabolicMirror::default())),
+            Arc::new(Mutex::new(ParabolicMirror::default())),
             None,
         )),
         _ => Err(OpossumError::Other(format!(

@@ -49,6 +49,7 @@ pub struct FluenceDetector {
     apodization_warning: bool,
     light_data: Option<LightData>,
 }
+unsafe impl Send for FluenceDetector {}
 impl Default for FluenceDetector {
     /// creates a fluence detector.
     fn default() -> Self {

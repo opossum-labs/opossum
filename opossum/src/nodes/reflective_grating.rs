@@ -52,6 +52,8 @@ pub type LinearDensity = uom::si::f64::LinearNumberDensity;
 pub struct ReflectiveGrating {
     node_attr: NodeAttr,
 }
+unsafe impl Send for ReflectiveGrating {}
+
 impl Default for ReflectiveGrating {
     /// Create a reflective grating with a specified line density.
     fn default() -> Self {

@@ -47,6 +47,7 @@ use super::node_attr::NodeAttr;
 pub struct ParaxialSurface {
     node_attr: NodeAttr,
 }
+unsafe impl Send for ParaxialSurface {}
 impl Default for ParaxialSurface {
     /// Create a default paraxial surface (ideal thin lens) with a focal length of 10 mm.
     fn default() -> Self {

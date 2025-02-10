@@ -1,6 +1,6 @@
 use core::f64;
 
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 use nalgebra::{vector, Isometry3, Point3, Vector2, Vector3};
 use opm_macros_lib::OpmNode;
@@ -376,6 +376,8 @@ impl ParabolicMirror {
         Ok((*focal_length, *oa_angle, *oa_dir, *collimating))
     }
 }
+unsafe impl Send for ParabolicMirror {}
+
 impl OpticNode for ParabolicMirror {
     fn node_attr(&self) -> &NodeAttr {
         &self.node_attr
@@ -388,7 +390,7 @@ impl OpticNode for ParabolicMirror {
         let anchor_point_iso = self.calc_off_axis_isometry()?;
         let total_iso = node_iso.append(&anchor_point_iso);
         let parabola = Parabola::new(-1. * self.calc_parent_focal_length()?, &total_iso)?;
-        let para_geo_surface = GeoSurfaceRef(Rc::new(RefCell::new(parabola)));
+        let para_geo_surface = GeoSurfaceRef(Arc::new(Mutex::new(parabola)));
         if let Some(optic_surf) = self
             .ports_mut()
             .get_optic_surface_mut(&"input_1".to_string())

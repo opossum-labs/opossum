@@ -24,13 +24,11 @@ pub use optic_graph::OpticGraph;
 use petgraph::prelude::NodeIndex;
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::RefCell,
     collections::{BTreeMap, HashMap},
     fs::{self, File},
     io::Write,
     path::PathBuf,
-    process::Stdio,
-    rc::Rc,
+    process::Stdio,sync::{Arc, Mutex},
 };
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -103,6 +101,9 @@ impl Default for NodeGroup {
         }
     }
 }
+
+unsafe impl Send for NodeGroup {}
+
 impl NodeGroup {
     /// Creates a new [`NodeGroup`].
     /// # Attributes
@@ -171,7 +172,7 @@ impl NodeGroup {
                 let mut new_rays = rays.clone();
                 new_rays.set_node_origin_uuid(node_from_graph.uuid());
 
-                let mut node_ref = node_from_graph.optical_ref.borrow_mut();
+                let mut node_ref = node_from_graph.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?;
                 node_ref.node_attr_mut().set_property(
                     "light data",
                     EnumProxy::<Option<LightData>> {
@@ -378,7 +379,7 @@ impl NodeGroup {
         let mut section_number: usize = 0;
         for node in self.graph.nodes() {
             let uuid = node.uuid().as_simple().to_string();
-            if let Some(mut node_report) = node.optical_ref.borrow().node_report(&uuid) {
+            if let Some(mut node_report) = node.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.node_report(&uuid) {
                 if section_number.is_zero() {
                     node_report.set_show_item(true);
                 }
@@ -521,12 +522,14 @@ impl OpticNode for NodeGroup {
         let mut group_props = Properties::default();
         for node in self.graph.nodes() {
             let sub_uuid = node.uuid().as_simple().to_string();
-            if let Some(node_report) = node.optical_ref.borrow().node_report(&sub_uuid) {
-                let node_name = &node.optical_ref.borrow().name();
-                if !(group_props.contains(node_name)) {
-                    group_props
-                        .create(node_name, "", node_report.into())
-                        .unwrap();
+            if let Ok(node_ref) = node.optical_ref.lock() {
+                if let Some(node_report) = node_ref.node_report(&sub_uuid) {
+                    let node_name = node_ref.name();
+                    if !(group_props.contains(&node_name)) {
+                        group_props
+                            .create(&node_name, "", node_report.into())
+                            .unwrap();
+                    }
                 }
             }
         }
@@ -547,7 +550,7 @@ impl OpticNode for NodeGroup {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
+    fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
         let node_attr = self.node_attr_mut();
         node_attr.set_global_conf(global_conf.clone());
         self.graph.update_global_config(&global_conf);
@@ -560,7 +563,9 @@ impl OpticNode for NodeGroup {
     fn reset_data(&mut self) {
         let nodes = self.graph.nodes();
         for node in nodes {
-            node.optical_ref.borrow_mut().reset_data();
+        if let Ok(mut node) = node.optical_ref.lock() {
+            node.reset_data();
+            }
         }
         self.accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
     }
@@ -737,7 +742,7 @@ mod test {
             .node(i_e)
             .unwrap()
             .optical_ref
-            .borrow()
+            .lock().map_err(|e| OpossumError::Other(format!("Mutex lock failed"))).unwrap()
             .node_report(&uuid)
             .unwrap();
         if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {

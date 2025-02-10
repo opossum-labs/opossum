@@ -49,6 +49,7 @@ pub struct RayPropagationVisualizer {
     node_attr: NodeAttr,
     apodization_warning: bool,
 }
+unsafe impl Send for RayPropagationVisualizer {}
 impl Default for RayPropagationVisualizer {
     /// create a spot-diagram monitor.
     fn default() -> Self {

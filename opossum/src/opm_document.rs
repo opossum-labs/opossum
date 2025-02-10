@@ -8,11 +8,9 @@ use crate::{
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::RefCell,
     fs::{self, File},
     io::Write,
-    path::Path,
-    rc::Rc,
+    path::Path,sync::{Arc, Mutex},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,7 +20,7 @@ pub struct OpmDocument {
     #[serde(default)]
     scenery: NodeGroup,
     #[serde(default, rename = "global")]
-    global_conf: Rc<RefCell<SceneryResources>>,
+    global_conf: Arc<Mutex<SceneryResources>>,
     #[serde(default)]
     analyzers: Vec<AnalyzerType>,
 }
@@ -31,7 +29,7 @@ impl Default for OpmDocument {
         Self {
             opm_file_version: env!("OPM_FILE_VERSION").to_string(),
             scenery: NodeGroup::default(),
-            global_conf: Rc::new(RefCell::new(SceneryResources::default())),
+            global_conf: Arc::new(Mutex::new(SceneryResources::default())),
             analyzers: vec![],
         }
     }
@@ -114,12 +112,12 @@ impl OpmDocument {
     }
     /// Returns a reference to the global config of this [`OpmDocument`].
     #[must_use]
-    pub fn global_conf(&self) -> &RefCell<SceneryResources> {
+    pub fn global_conf(&self) -> &Mutex<SceneryResources> {
         &self.global_conf
     }
     /// Sets the global config of this [`OpmDocument`].
     pub fn set_global_conf(&mut self, rsrc: SceneryResources) {
-        self.global_conf = Rc::new(RefCell::new(rsrc));
+        self.global_conf = Arc::new(Mutex::new(rsrc));
         self.scenery
             .graph_mut()
             .update_global_config(&Some(self.global_conf.clone()));
@@ -145,7 +143,7 @@ mod test {
         utils::test_helper::test_helper::check_logs,
     };
     use petgraph::adj::NodeIndex;
-    use std::path::PathBuf;
+    use std::{path::PathBuf, sync::{Arc, Mutex}};
     use tempfile::NamedTempFile;
 
     #[test]
@@ -294,7 +292,7 @@ mod test {
             .connect_nodes(i_15, "output_1", i_16, "input_1", millimeter!(50.0))
             .unwrap();
 
-        scenery.set_global_conf(Some(Rc::new(RefCell::new(SceneryResources::default()))));
+        scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
         // Perform ray tracing analysis
         testing_logger::setup();
         let analyzer = RayTracingAnalyzer::new(RayTraceConfig::default());

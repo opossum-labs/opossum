@@ -135,7 +135,7 @@ impl Analyzer for GhostFocusAnalyzer {
         analysis_report.add_node_report(node_report);
 
         for node in scenery.graph().nodes() {
-            let node = node.optical_ref.borrow();
+            let node = node.optical_ref.lock().map_err(|_| OpossumError::Other("Mutex lock failed".into()))?;
             let node_name = &node.name();
             let hit_maps = node.hit_maps();
             for hit_map in &hit_maps {
@@ -449,7 +449,7 @@ impl GhostFocusHistory {
                     }
                     if let Some(opt_ref) = graph.node_by_uuid(node_uuid) {
                         report_str +=
-                            format!("{}', ", opt_ref.optical_ref.borrow().name()).as_str();
+                            format!("{}', ", opt_ref.optical_ref.lock().expect("Mutex lock failed").name()).as_str();
                     }
                 }
             }

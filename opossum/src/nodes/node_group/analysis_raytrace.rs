@@ -45,13 +45,13 @@ impl AnalysisRayTrace for NodeGroup {
             if self.graph.is_stale_node(idx) {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
-                    node.borrow()
+                    node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
                 );
             } else {
                 let incoming_edges = self.graph.get_incoming(idx, &incoming_data);
-                let node_name = format!("{}", node.borrow());
+                let node_name = format!("{}", node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?);
                 let mut outgoing_edges =
-                    AnalysisRayTrace::analyze(&mut *node.borrow_mut(), incoming_edges, config)
+                    AnalysisRayTrace::analyze(&mut *node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?, incoming_edges, config)
                         .map_err(|e| {
                             OpossumError::Analysis(format!(
                                 "analysis of node {node_name} failed: {e}"
@@ -97,22 +97,22 @@ impl AnalysisRayTrace for NodeGroup {
         let mut up_direction = Vector3::<f64>::y();
         for idx in sorted {
             let node = self.graph.node_by_idx(idx)?.optical_ref;
-            let node_type = node.borrow().node_type();
-            let node_attr = node.borrow().node_attr().clone();
+            let node_type = node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.node_type();
+            let node_attr = node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.node_attr().clone();
             let incoming_edges: LightResult = self.graph.get_incoming(idx, &incoming_data);
-            if node.borrow().isometry().is_none() {
+            if node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.isometry().is_none() {
                 if incoming_edges.is_empty() {
-                    warn!("{} has no incoming edges", node.borrow());
+                    warn!("{} has no incoming edges", node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?);
                 }
                 if let Some((node_idx, distance)) = node_attr.get_align_like_node_at_distance() {
                     if let Some(align_ref_iso) = self
                         .graph
                         .node_by_idx(*node_idx)?
                         .optical_ref
-                        .borrow()
+                        .lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
                         .isometry()
                     {
-                        let mut node_borrow_mut = node.borrow_mut();
+                        let mut node_borrow_mut = node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?;
                         let align_iso = Isometry::new(
                             Point3::new(Length::zero(), Length::zero(), *distance),
                             radian!(0., 0., 0.),
@@ -123,7 +123,7 @@ impl AnalysisRayTrace for NodeGroup {
                         warn!("Cannot align node like NodeIdx:{}. Fall back to standard positioning method", node_idx.index());
                         self.graph.set_node_isometry(
                             &incoming_edges,
-                            &mut node.borrow_mut(),
+                            &mut node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
                             &node_type,
                             idx,
                             up_direction,
@@ -132,7 +132,7 @@ impl AnalysisRayTrace for NodeGroup {
                 } else {
                     self.graph.set_node_isometry(
                         &incoming_edges,
-                        &mut node.borrow_mut(),
+                        &mut node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
                         &node_type,
                         idx,
                         up_direction,
@@ -141,11 +141,11 @@ impl AnalysisRayTrace for NodeGroup {
             } else {
                 info!(
                     "Node {} has already been placed. Leaving untouched.",
-                    node.borrow()
+                    node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
                 );
             }
             let output = AnalysisRayTrace::calc_node_position(
-                &mut *node.borrow_mut(),
+                &mut *node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
                 incoming_edges,
                 config,
             );
@@ -153,7 +153,7 @@ impl AnalysisRayTrace for NodeGroup {
             let outgoing_edges = output.map_err(|e| {
                 OpossumError::Analysis(format!(
                     "calculation of optical axis for node {} failed: {e}",
-                    node.borrow()
+                    node.lock().expect("Mutex Lock failed")
                 ))
             })?;
             // If node is sink node, rewrite port names according to output mapping
@@ -172,9 +172,9 @@ impl AnalysisRayTrace for NodeGroup {
             }
             for outgoing_edge in outgoing_edges {
                 if node_type == "source" {
-                    up_direction = node.borrow().define_up_direction(&outgoing_edge.1)?;
+                    up_direction = node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.define_up_direction(&outgoing_edge.1)?;
                 } else {
-                    node.borrow_mut()
+                    node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
                         .calc_new_up_direction(&outgoing_edge.1, &mut up_direction)?;
                 }
 

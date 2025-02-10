@@ -21,13 +21,26 @@ html, body {
 
 /* Rechte Drag-and-Drop-Fläche */
 .drop-container {
-    flex-grow: 1;
+    flex: 1;
     position: relative;
     background-color: #f0f0f0;
     padding: 10px;
-    height: 100vh;
+    display: flex;
+    align-items: stretch;
 }
 
+.graph-hierarchy{
+    padding: 10px; 
+    display: flex; 
+    gap: 10px; 
+}
+
+.main-window {
+    width: 100%; 
+    height: 100vh; 
+    display:flex; 
+    flex-direction: column;
+}
 /* Drag-Objekt */
 .draggable {
     text-align: center;
@@ -112,3 +125,18 @@ html, body {
   
   /* Change the background color of the dropdown button when the dropdown content is shown */
   .dropdown:hover .dropbtn {background-color: #3e8e41;} 
+
+  .log-container {
+    height: 120px;
+    overflow-y: scroll;
+    border: 1px solid gray;
+    padding: 10px;
+    background-color: #222;
+    color: #fff;
+    font-family: monospace;
+    width: 100%;
+}
+
+.log-entry {
+    margin: 5px 0;
+}

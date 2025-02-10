@@ -43,6 +43,8 @@ pub enum FilterType {
 pub struct IdealFilter {
     node_attr: NodeAttr,
 }
+unsafe impl Send for IdealFilter {}
+
 impl Default for IdealFilter {
     /// Create an ideal filter node with a transmission of 100%.
     fn default() -> Self {

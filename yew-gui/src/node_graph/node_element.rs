@@ -1,25 +1,26 @@
+use uuid::Uuid;
 use web_sys::{DragEvent, HtmlElement};
 use yew::{function_component, html, Callback, Html, Properties, TargetCast};
 
 // Verbindung zwischen Ports
 #[derive(Clone, PartialEq)]
 pub struct Connection {
-    pub from: usize,
-    pub to: usize,
+    pub from: Uuid,
+    pub to: Uuid,
 }
 
 // Node-Komponente
 #[derive(Properties, PartialEq)]
 pub struct NodeProps {
-    pub id: usize,                                // Eindeutige ID für die Node
+    pub id: Uuid,                                // Eindeutige ID für die Node
     pub x: i32,                                   // Position der Node (x)
     pub y: i32,                                   // Position der Node (y)
     pub width: i32,                               // Breite der Node
     pub height: i32,                              // Höhe der Node
     pub on_drag_start: Callback<DragEvent>,       // Callback für den Drag-Start
-    pub on_drag_end: Callback<(usize, i32, i32)>, // Callback für das Drag-Ende (ID, neue X-, Y-Position)
-    pub on_port_click: Callback<(usize, String)>, // Klick auf Port (Node-ID, Port-Typ)
-    pub on_node_double_click: Callback<(usize, String)>,
+    pub on_drag_end: Callback<(Uuid, i32, i32)>, // Callback für das Drag-Ende (ID, neue X-, Y-Position)
+    pub on_port_click: Callback<(Uuid, String)>, // Klick auf Port (Node-ID, Port-Typ)
+    pub on_node_double_click: Callback<(Uuid, String)>,
     pub is_active: bool,
     pub name: String,
     pub is_source: bool,

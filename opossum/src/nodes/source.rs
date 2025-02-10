@@ -45,6 +45,8 @@ use std::fmt::Debug;
 pub struct Source {
     node_attr: NodeAttr,
 }
+unsafe impl Send for Source {}
+
 impl Default for Source {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("source");

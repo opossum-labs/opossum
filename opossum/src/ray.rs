@@ -475,7 +475,7 @@ impl Ray {
             ));
         }
         if let Some((intersection_point, surface_normal)) =
-            s.geo_surface().0.borrow().calc_intersect_and_normal(self)
+            s.geo_surface().0.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.calc_intersect_and_normal(self)
         {
             let surface_normal = surface_normal.normalize();
 
@@ -503,7 +503,7 @@ impl Ray {
             let dist_from_origin = s
                 .geo_surface()
                 .0
-                .borrow()
+                .lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
                 .isometry()
                 .inverse_transform_point_f64(&intersection_in_m)
                 .x;
@@ -569,7 +569,7 @@ impl Ray {
             ));
         }
         if let Some((intersection_point, surface_normal)) =
-            os.geo_surface().0.borrow().calc_intersect_and_normal(self)
+            os.geo_surface().0.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.calc_intersect_and_normal(self)
         {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
@@ -618,7 +618,7 @@ impl Ray {
                         HitPoint::Energy(EnergyHitPoint::new(
                             os.geo_surface()
                                 .0
-                                .borrow()
+                                .lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
                                 .isometry()
                                 .inverse_transform_point(&intersection_point),
                             input_energy,
@@ -632,7 +632,7 @@ impl Ray {
                         HitPoint::Fluence(FluenceHitPoint::new(
                             os.geo_surface()
                                 .0
-                                .borrow()
+                                .lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
                                 .isometry()
                                 .inverse_transform_point(&intersection_point),
                             *helper_fluence,

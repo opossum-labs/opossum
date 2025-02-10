@@ -5,13 +5,11 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use crate::{
-    analyzers::Analyzable,
-    nodes::{create_node_ref, NodeAttr},
-    optic_senery_rsc::SceneryResources,
+    analyzers::Analyzable,nodes::{create_node_ref, NodeAttr}, optic_senery_rsc::SceneryResources
 };
 
 #[derive(Debug, Clone)]
@@ -22,26 +20,26 @@ use crate::{
 /// as a node in a `NodeGroup`)[`crate::nodes::NodeGroup`].
 pub struct OpticRef {
     /// The underlying optical reference.
-    pub optical_ref: Rc<RefCell<dyn Analyzable>>,
+    pub optical_ref: Arc<Mutex<dyn Analyzable>>,
 }
 impl OpticRef {
     /// Creates a new [`OpticRef`].
     pub fn new(
-        node: Rc<RefCell<dyn Analyzable>>,
-        global_conf: Option<Rc<RefCell<SceneryResources>>>,
+        node: Arc<Mutex<dyn Analyzable>>,
+        global_conf: Option<Arc<Mutex<SceneryResources>>>,
     ) -> Self {
-        node.borrow_mut().set_global_conf(global_conf);
+        node.lock().expect("Mutex lock failed").set_global_conf(global_conf);
         Self { optical_ref: node }
     }
     /// Returns the [`Uuid`] of the node, reference to by this [`OpticRef`].
     #[must_use]
     pub fn uuid(&self) -> Uuid {
-        *self.optical_ref.borrow().node_attr().uuid()
+        *self.optical_ref.lock().expect("Mutex lock failed").node_attr().uuid()
     }
     /// Update the reference to the global configuration.
     /// **Note**: This functions is normally only called from `OpticGraph`.
-    pub fn update_global_config(&self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
-        self.optical_ref.borrow_mut().set_global_conf(global_conf);
+    pub fn update_global_config(&self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
+        self.optical_ref.lock().expect("Mutex lock failed").set_global_conf(global_conf);
     }
 }
 impl Serialize for OpticRef {
@@ -50,8 +48,8 @@ impl Serialize for OpticRef {
         S: serde::Serializer,
     {
         let mut node = serializer.serialize_struct("node", 3)?;
-        node.serialize_field("type", &self.optical_ref.borrow().node_type())?;
-        node.serialize_field("attributes", &self.optical_ref.borrow().node_attr())?;
+        node.serialize_field("type", &self.optical_ref.lock().expect("Mutex lock failed").node_type())?;
+        node.serialize_field("attributes", &self.optical_ref.lock().expect("Mutex lock failed").node_attr())?;
         node.end()
     }
 }
@@ -121,7 +119,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                 let node =
                     create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
-                    .borrow_mut()
+                    .lock().expect("Mutex lock failed")
                     .set_properties(properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 Ok(node)
@@ -154,10 +152,10 @@ impl<'de> Deserialize<'de> for OpticRef {
                     node_attributes.ok_or_else(|| de::Error::missing_field("attributes"))?;
                 let node =
                     create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
-                node.optical_ref.borrow_mut().set_node_attr(node_attributes);
+                node.optical_ref.lock().expect("Mutex lock failed").set_node_attr(node_attributes);
                 // group node: assign props to graph
                 node.optical_ref
-                    .borrow_mut()
+                .lock().expect("Mutex lock failed")
                     .after_deserialization_hook()
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 Ok(node)
@@ -179,12 +177,12 @@ mod test {
         let uuid = Uuid::new_v4();
         let mut dummy = Dummy::default();
         dummy.node_attr_mut().set_uuid(&uuid);
-        let optic_ref = OpticRef::new(Rc::new(RefCell::new(dummy)), None);
+        let optic_ref = OpticRef::new(Arc::new(Mutex::new(dummy)), None);
         assert_eq!(optic_ref.uuid(), uuid);
     }
     #[test]
     fn serialize() {
-        let optic_ref = OpticRef::new(Rc::new(RefCell::new(Dummy::default())), None);
+        let optic_ref = OpticRef::new(Arc::new(Mutex::new(Dummy::default())), None);
         let serialized = serde_yaml::to_string(&optic_ref);
         assert!(serialized.is_ok());
     }
@@ -201,7 +199,7 @@ mod test {
             optic_ref.uuid(),
             uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb")
         );
-        let optic_ref = optic_ref.optical_ref.borrow();
+        let optic_ref = optic_ref.optical_ref.lock().expect("Mutex lock failed");
         assert_eq!(optic_ref.node_type(), "dummy");
         assert_eq!(optic_ref.name(), "test123");
     }
@@ -210,7 +208,7 @@ mod test {
         assert_eq!(
             format!(
                 "{:?}",
-                OpticRef::new(Rc::new(RefCell::new(Dummy::default())), None)
+                OpticRef::new(Arc::new(Mutex::new(Dummy::default())), None)
             ),
             "OpticRef { optical_ref: RefCell { value: 'dummy' (dummy) } }"
         );
