@@ -6,7 +6,10 @@
 use super::Plane;
 use crate::{ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
-use std::{fmt::Debug, sync::{Arc, Mutex}};
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 use uom::si::f64::Length;
 
 /// Trait for handling geometric surfaces.

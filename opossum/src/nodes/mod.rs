@@ -94,10 +94,7 @@ pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
             Arc::new(Mutex::new(CylindricLens::default())),
             None,
         )),
-        "source" => Ok(OpticRef::new(
-            Arc::new(Mutex::new(Source::default())),
-            None,
-        )),
+        "source" => Ok(OpticRef::new(Arc::new(Mutex::new(Source::default())), None)),
         "spectrometer" => Ok(OpticRef::new(
             Arc::new(Mutex::new(Spectrometer::default())),
             None,

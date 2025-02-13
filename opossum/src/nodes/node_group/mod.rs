@@ -28,7 +28,8 @@ use std::{
     fs::{self, File},
     io::Write,
     path::PathBuf,
-    process::Stdio,sync::{Arc, Mutex},
+    process::Stdio,
+    sync::{Arc, Mutex},
 };
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -172,7 +173,10 @@ impl NodeGroup {
                 let mut new_rays = rays.clone();
                 new_rays.set_node_origin_uuid(node_from_graph.uuid());
 
-                let mut node_ref = node_from_graph.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?;
+                let mut node_ref = node_from_graph
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?;
                 node_ref.node_attr_mut().set_property(
                     "light data",
                     EnumProxy::<Option<LightData>> {
@@ -379,7 +383,12 @@ impl NodeGroup {
         let mut section_number: usize = 0;
         for node in self.graph.nodes() {
             let uuid = node.uuid().as_simple().to_string();
-            if let Some(mut node_report) = node.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.node_report(&uuid) {
+            if let Some(mut node_report) = node
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+                .node_report(&uuid)
+            {
                 if section_number.is_zero() {
                     node_report.set_show_item(true);
                 }
@@ -563,8 +572,8 @@ impl OpticNode for NodeGroup {
     fn reset_data(&mut self) {
         let nodes = self.graph.nodes();
         for node in nodes {
-        if let Ok(mut node) = node.optical_ref.lock() {
-            node.reset_data();
+            if let Ok(mut node) = node.optical_ref.lock() {
+                node.reset_data();
             }
         }
         self.accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
@@ -742,7 +751,9 @@ mod test {
             .node(i_e)
             .unwrap()
             .optical_ref
-            .lock().map_err(|e| OpossumError::Other(format!("Mutex lock failed"))).unwrap()
+            .lock()
+            .map_err(|e| OpossumError::Other(format!("Mutex lock failed")))
+            .unwrap()
             .node_report(&uuid)
             .unwrap();
         if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {

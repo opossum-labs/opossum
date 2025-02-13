@@ -29,7 +29,8 @@ use serde::{
     Deserialize, Serialize,
 };
 use std::{
-    collections::BTreeMap,sync::{Arc, Mutex, MutexGuard},
+    collections::BTreeMap,
+    sync::{Arc, Mutex, MutexGuard},
 };
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
@@ -112,14 +113,19 @@ impl OpticGraph {
             OpossumError::OpticScenery("source node with given index does not exist".into())
         })?;
         if !source
-            .optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
             .ports()
             .names(&PortType::Output)
             .contains(&src_port.into())
         {
             return Err(OpossumError::OpticScenery(format!(
                 "source node {} does not have a port {}",
-                source.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
+                source
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
                 src_port
             )));
         }
@@ -128,33 +134,51 @@ impl OpticGraph {
         })?;
         if !target
             .optical_ref
-            .lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+            .lock()
+            .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
             .ports()
             .names(&PortType::Input)
             .contains(&target_port.into())
         {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} does not have a port {}",
-                target.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
+                target
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
                 target_port
             )));
         }
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "src node <{}> with port <{}> is already connected",
-                source.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
+                source
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
                 src_port
             )));
         }
         if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} with port <{}> is already connected",
-                target.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
+                target
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
                 target_port
             )));
         }
-        let src_name = source.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.name();
-        let target_name = target.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.name();
+        let src_name = source
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+            .name();
+        let target_name = target
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+            .name();
         let light = LightFlow::new(src_port, target_port, distance)?;
         let edge_index = self.g.add_edge(src_node, target_node, light);
         if is_cyclic_directed(&self.g) {
@@ -189,7 +213,8 @@ impl OpticGraph {
                 .node_by_idx(node_idx)
                 .unwrap()
                 .optical_ref
-                .lock().expect("Mutex lock failed")
+                .lock()
+                .expect("Mutex lock failed")
                 .ports()
                 .names(port_type)
                 .len();
@@ -233,7 +258,8 @@ impl OpticGraph {
         let node = self.node_by_idx(node_idx)?;
         if !node
             .optical_ref
-            .lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+            .lock()
+            .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
             .ports()
             .names(port_type)
             .contains(&(internal_name.to_string()))
@@ -442,13 +468,20 @@ impl OpticGraph {
             if self.is_stale_node(idx) {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
-                    node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+                    node.lock()
+                        .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
                 );
             } else {
                 let incoming_edges = self.get_incoming(idx, incoming_data);
-                let node_name = format!("{}", node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?);
+                let node_name = format!(
+                    "{}",
+                    node.lock()
+                        .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+                );
                 let outgoing_edges = AnalysisEnergy::analyze(
-                    &mut *node.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
+                    &mut *node
+                        .lock()
+                        .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?,
                     incoming_edges,
                 )
                 .map_err(|e| {
@@ -498,7 +531,8 @@ impl OpticGraph {
             .node_by_idx(idx)
             .unwrap()
             .optical_ref
-            .lock().expect("Mutex lock failed")
+            .lock()
+            .expect("Mutex lock failed")
             .ports()
             .ports(&PortType::Input)
             .len();
@@ -516,7 +550,13 @@ impl OpticGraph {
     /// Panics if .
     #[must_use]
     pub fn is_output_node(&self, idx: NodeIndex) -> bool {
-        let ports = self.node_by_idx(idx).unwrap().optical_ref.lock().expect("Mutex lock failed").ports();
+        let ports = self
+            .node_by_idx(idx)
+            .unwrap()
+            .optical_ref
+            .lock()
+            .expect("Mutex lock failed")
+            .ports();
         let nr_of_output_ports = ports.ports(&PortType::Output).len();
         let nr_of_outgoing_edges = self.g.edges_directed(idx, Direction::Outgoing).count();
         debug_assert!(
@@ -570,10 +610,15 @@ impl OpticGraph {
     /// This function will return an error if one tries to invert a graph containing a non-invertable node (eg. source).
     pub fn invert_graph(&mut self) -> OpmResult<()> {
         for node in self.g.node_weights_mut() {
-            let node_to_be_inverted = !node.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.inverted();
+            let node_to_be_inverted = !node
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+                .inverted();
 
             node.optical_ref
-            .lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+                .lock()
+                .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
                 .set_inverted(node_to_be_inverted)
                 .map_err(|_| {
                     OpossumError::OpticGroup(
@@ -655,8 +700,17 @@ impl OpticGraph {
     fn create_node_edge_str(&self, end_node_idx: NodeIndex, light_port: &str) -> OpmResult<String> {
         let node_id = format!("i{}", self.node_by_idx(end_node_idx)?.uuid().as_simple());
         let node = self.node_by_idx(end_node_idx)?;
-        if node.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.node_type() == "group" {
-            let mut node = node.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?;
+        if node
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+            .node_type()
+            == "group"
+        {
+            let mut node = node
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?;
             let group_node: &NodeGroup = node.as_group()?;
             Ok(group_node.get_mapped_port_str(light_port, &node_id)?)
         } else {
@@ -675,16 +729,33 @@ impl OpticGraph {
         let sorted = self.topologically_sorted()?;
         for idx in &sorted {
             let node = self.node_by_idx(*idx)?;
-            let node_name = node.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.name();
-            let inverted = node.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.node_attr().inverted();
-            let ports = node.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.ports();
-            dot_string += &node.optical_ref.lock().map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?.to_dot(
-                &format!("{}", node.uuid().as_simple()),
-                &node_name,
-                inverted,
-                &ports,
-                rankdir,
-            )?;
+            let node_name = node
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+                .name();
+            let inverted = node
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+                .node_attr()
+                .inverted();
+            let ports = node
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+                .ports();
+            dot_string += &node
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))?
+                .to_dot(
+                    &format!("{}", node.uuid().as_simple()),
+                    &node_name,
+                    inverted,
+                    &ports,
+                    rankdir,
+                )?;
         }
         for edge_idx in self.g.edge_indices() {
             let light: &LightFlow = self.edge_by_idx(edge_idx)?;
@@ -888,7 +959,13 @@ impl<'de> Deserialize<'de> for OpticGraph {
                 }
                 // assign references to ref nodes (if any)
                 for node in &nodes {
-                    if node.optical_ref.lock().expect("Mutex lock failed").node_type() == "reference" {
+                    if node
+                        .optical_ref
+                        .lock()
+                        .expect("Mutex lock failed")
+                        .node_type()
+                        == "reference"
+                    {
                         let mut my_node = node.optical_ref.lock().expect("Mutex lock failed");
                         let refnode = my_node.as_refnode_mut().unwrap();
                         let node_props = refnode.properties().clone();
@@ -903,8 +980,14 @@ impl<'de> Deserialize<'de> for OpticGraph {
                                 "reference node found, which does not reference anything",
                             ));
                         };
-                        let ref_name =
-                            format!("ref ({})", reference_node.optical_ref.lock().expect("Mutex lock failed").name());
+                        let ref_name = format!(
+                            "ref ({})",
+                            reference_node
+                                .optical_ref
+                                .lock()
+                                .expect("Mutex lock failed")
+                                .name()
+                        );
                         refnode.assign_reference(&reference_node);
 
                         refnode.node_attr_mut().set_name(&ref_name);

@@ -142,7 +142,11 @@ impl OpticSurface {
     }
     /// Sets the isometry of this [`OpticSurface`].
     pub fn set_isometry(&self, iso: &Isometry) {
-        self.geo_surface.0.lock().expect("Mutex lock failed").set_isometry(iso);
+        self.geo_surface
+            .0
+            .lock()
+            .expect("Mutex lock failed")
+            .set_isometry(iso);
     }
     /// Returns a reference to the hit map of this [`OpticSurface`].
     ///

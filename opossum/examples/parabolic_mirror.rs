@@ -31,7 +31,8 @@ fn main() -> OpmResult<()> {
         true,
         degree!(-45.0),
     )?)?;
-    let mut rpv = RayPropagationVisualizer::new("visualizer", Some(Vector3::new(10., 0., 0.).normalize()))?;
+    let mut rpv =
+        RayPropagationVisualizer::new("visualizer", Some(Vector3::new(10., 0., 0.).normalize()))?;
     let i_prop_vis = scenery.add_node(&rpv)?;
     let i_sd = scenery.add_node(&SpotDiagram::default())?;
     let i_wf = scenery.add_node(&WaveFront::default())?;

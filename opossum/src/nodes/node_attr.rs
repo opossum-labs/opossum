@@ -22,7 +22,7 @@ use super::fluence_detector::Fluence;
 /// Struct for sotring common attributes of optical nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeAttr {
-    #[serde(skip)]
+    // #[serde(skip)]
     node_type: String,
     name: String,
     ports: OpticPorts,

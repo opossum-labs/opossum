@@ -140,3 +140,15 @@ html, body {
 .log-entry {
     margin: 5px 0;
 }
+
+.node_attributes {
+    position:relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.node_attributes input {
+    position:relative;
+    top: 2px;
+}

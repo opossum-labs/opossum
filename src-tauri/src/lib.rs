@@ -1,4 +1,7 @@
-use opossum::{error::{OpmResult}, nodes::{create_node_ref, NodeGroup}};
+use opossum::{
+    error::OpmResult,
+    nodes::{create_node_ref, NodeGroup},
+};
 use uuid::Uuid;
 pub mod commands;
 
@@ -9,7 +12,9 @@ pub struct OPMGUIModel {
 
 impl OPMGUIModel {
     pub fn new(name: &str) -> Self {
-        Self { model: NodeGroup::new(name) }
+        Self {
+            model: NodeGroup::new(name),
+        }
     }
 
     pub fn add_default_node(&mut self, node_type: &str) -> OpmResult<Uuid> {
@@ -17,5 +22,12 @@ impl OPMGUIModel {
         self.model.add_node_ref(&node)?;
         Ok(node.uuid())
     }
-}
 
+    pub fn model(&self) -> &NodeGroup {
+        &self.model
+    }
+
+    pub fn model_mut(&mut self) -> &mut NodeGroup {
+        &mut self.model
+    }
+}

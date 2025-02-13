@@ -9,7 +9,9 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use crate::{
-    analyzers::Analyzable,nodes::{create_node_ref, NodeAttr}, optic_senery_rsc::SceneryResources
+    analyzers::Analyzable,
+    nodes::{create_node_ref, NodeAttr},
+    optic_senery_rsc::SceneryResources,
 };
 
 #[derive(Debug, Clone)]
@@ -28,18 +30,28 @@ impl OpticRef {
         node: Arc<Mutex<dyn Analyzable>>,
         global_conf: Option<Arc<Mutex<SceneryResources>>>,
     ) -> Self {
-        node.lock().expect("Mutex lock failed").set_global_conf(global_conf);
+        node.lock()
+            .expect("Mutex lock failed")
+            .set_global_conf(global_conf);
         Self { optical_ref: node }
     }
     /// Returns the [`Uuid`] of the node, reference to by this [`OpticRef`].
     #[must_use]
     pub fn uuid(&self) -> Uuid {
-        *self.optical_ref.lock().expect("Mutex lock failed").node_attr().uuid()
+        *self
+            .optical_ref
+            .lock()
+            .expect("Mutex lock failed")
+            .node_attr()
+            .uuid()
     }
     /// Update the reference to the global configuration.
     /// **Note**: This functions is normally only called from `OpticGraph`.
     pub fn update_global_config(&self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
-        self.optical_ref.lock().expect("Mutex lock failed").set_global_conf(global_conf);
+        self.optical_ref
+            .lock()
+            .expect("Mutex lock failed")
+            .set_global_conf(global_conf);
     }
 }
 impl Serialize for OpticRef {
@@ -48,8 +60,22 @@ impl Serialize for OpticRef {
         S: serde::Serializer,
     {
         let mut node = serializer.serialize_struct("node", 3)?;
-        node.serialize_field("type", &self.optical_ref.lock().expect("Mutex lock failed").node_type())?;
-        node.serialize_field("attributes", &self.optical_ref.lock().expect("Mutex lock failed").node_attr())?;
+        node.serialize_field(
+            "type",
+            &self
+                .optical_ref
+                .lock()
+                .expect("Mutex lock failed")
+                .node_type(),
+        )?;
+        node.serialize_field(
+            "attributes",
+            &self
+                .optical_ref
+                .lock()
+                .expect("Mutex lock failed")
+                .node_attr(),
+        )?;
         node.end()
     }
 }
@@ -119,7 +145,8 @@ impl<'de> Deserialize<'de> for OpticRef {
                 let node =
                     create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
-                    .lock().expect("Mutex lock failed")
+                    .lock()
+                    .expect("Mutex lock failed")
                     .set_properties(properties)
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 Ok(node)
@@ -152,10 +179,14 @@ impl<'de> Deserialize<'de> for OpticRef {
                     node_attributes.ok_or_else(|| de::Error::missing_field("attributes"))?;
                 let node =
                     create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
-                node.optical_ref.lock().expect("Mutex lock failed").set_node_attr(node_attributes);
+                node.optical_ref
+                    .lock()
+                    .expect("Mutex lock failed")
+                    .set_node_attr(node_attributes);
                 // group node: assign props to graph
                 node.optical_ref
-                .lock().expect("Mutex lock failed")
+                    .lock()
+                    .expect("Mutex lock failed")
                     .after_deserialization_hook()
                     .map_err(|e| de::Error::custom(e.to_string()))?;
                 Ok(node)

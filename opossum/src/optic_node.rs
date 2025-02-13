@@ -25,9 +25,9 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
-use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::sync::{Arc, Mutex};
 
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait OpticNode: Dottable {
@@ -455,9 +455,13 @@ pub trait OpticNode: Dottable {
                 );
                 SceneryResources::default().ambient_refr_index
             },
-            |conf| conf.lock().expect("Mutex lock failed").ambient_refr_index.clone(),
+            |conf| {
+                conf.lock()
+                    .expect("Mutex lock failed")
+                    .ambient_refr_index
+                    .clone()
+            },
         )
-        
     }
 
     /// Returns a mutable reference to an [`OpticSurface`] of this [`OpticNode`] with the key `surf_name`

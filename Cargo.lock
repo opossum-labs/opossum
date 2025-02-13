@@ -289,6 +289,7 @@ checksum = "c1fd03a028ef38ba2276dce7e33fcd6369c158a1bca17946c4b1b701891c1ff7"
 name = "app"
 version = "0.1.0"
 dependencies = [
+ "env_logger",
  "log",
  "opossum",
  "serde",
@@ -2127,6 +2128,16 @@ checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
 dependencies = [
  "cfg-if",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "console_log"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be8aed40e4edbf4d3b4431ab260b63fdc40f5780a4766824329ea0f1eefe3c0f"
+dependencies = [
+ "log",
+ "web-sys",
 ]
 
 [[package]]
@@ -10226,8 +10237,10 @@ dependencies = [
 name = "yew-gui"
 version = "0.1.0"
 dependencies = [
+ "console_log",
  "gloo-console",
  "gloo-utils",
+ "log",
  "serde",
  "serde_json",
  "uuid",

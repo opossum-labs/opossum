@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.tauri.dev",
   "build": {
-    "frontendDist": "../yew-gui/",
+    "frontendDist": "./yew-gui/dist",
     "devUrl": "http://localhost:8080",
     "beforeDevCommand": "cd ./yew-gui && trunk serve",
     "beforeBuildCommand": "cd ./yew-gui && trunk build"

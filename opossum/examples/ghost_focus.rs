@@ -1,7 +1,24 @@
 use opossum::{
-    analyzers::{AnalyzerType, GhostFocusConfig}, coatings::CoatingType, degree, energy_distributions::General2DGaussian, error::OpmResult, joule, lightdata::LightData, millimeter, nanometer, nodes::{
-        round_collimated_ray_source, Lens, NodeGroup, RayPropagationVisualizer, Source, SpotDiagram, ThinMirror, Wedge
-    }, optic_node::{Alignable, OpticNode}, optic_ports::PortType, position_distributions::{HexagonalTiling, Hexapolar}, radian, rays::Rays, refractive_index::RefrIndexConst, utils::geom_transformation::Isometry, OpmDocument
+    analyzers::{AnalyzerType, GhostFocusConfig},
+    coatings::CoatingType,
+    degree,
+    energy_distributions::General2DGaussian,
+    error::OpmResult,
+    joule,
+    lightdata::LightData,
+    millimeter, nanometer,
+    nodes::{
+        round_collimated_ray_source, Lens, NodeGroup, RayPropagationVisualizer, Source,
+        SpotDiagram, ThinMirror, Wedge,
+    },
+    optic_node::{Alignable, OpticNode},
+    optic_ports::PortType,
+    position_distributions::{HexagonalTiling, Hexapolar},
+    radian,
+    rays::Rays,
+    refractive_index::RefrIndexConst,
+    utils::geom_transformation::Isometry,
+    OpmDocument,
 };
 use std::path::Path;
 
@@ -12,17 +29,16 @@ fn main() -> OpmResult<()> {
     let rays = Rays::new_collimated(
         nanometer!(1000.0),
         &General2DGaussian::new(
-            joule!(2.),            
+            joule!(2.),
             millimeter!(0., 0.),
             millimeter!(8., 8.),
             5.,
             radian!(0.),
             false,
         )?,
-        &HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0,0.))?,
+        &HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?,
     )?;
 
-   
     let light = LightData::Geometric(rays);
     let mut src = Source::new("collimated ray source", &light);
     src.set_isometry(Isometry::identity())?;
@@ -61,12 +77,10 @@ fn main() -> OpmResult<()> {
     let mir3 = scenery.add_node(&ThinMirror::new("mirror 3").with_tilt(degree!(-45., 0., 0.))?)?;
     let mir4 = scenery.add_node(&ThinMirror::new("mirror 4").with_tilt(degree!(-45., 0., 0.))?)?;
 
-
     // mgroup.connect_nodes(mir1, "output_1", mir2, "input_1", millimeter!(200.0))?;
     // mgroup.connect_nodes(mir2, "output_1", mir3, "input_1", millimeter!(300.0))?;
     // mgroup.connect_nodes(mir3, "output_1", mir4, "input_1", millimeter!(200.0))?;
-    
-    
+
     // mgroup.map_input_port(mir1, "input_1", "input_1");
     // mgroup.map_output_port(mir4, "output_1", "output_1");
     // let mg = scenery.add_node(&mgroup)?;

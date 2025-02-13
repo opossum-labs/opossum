@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
     io::Write,
-    path::Path,sync::{Arc, Mutex},
+    path::Path,
+    sync::{Arc, Mutex},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -143,7 +144,10 @@ mod test {
         utils::test_helper::test_helper::check_logs,
     };
     use petgraph::adj::NodeIndex;
-    use std::{path::PathBuf, sync::{Arc, Mutex}};
+    use std::{
+        path::PathBuf,
+        sync::{Arc, Mutex},
+    };
     use tempfile::NamedTempFile;
 
     #[test]
