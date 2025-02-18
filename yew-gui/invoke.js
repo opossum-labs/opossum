@@ -1,3 +1,4 @@
+
 const invoke = window.__TAURI__.core.invoke
 
 export async function addNode(node_type) {
@@ -43,3 +44,41 @@ export async function setName(node_id, name) {
             throw error;
         });
 }
+
+export async function setLidt(node_id, lidt) {
+    return await invoke('set_lidt', { nodeId: node_id, lidt: lidt })
+        .then(response => {
+            return response;
+        })
+        .catch(error => {
+            console.error("Error:", error);
+            throw error;
+        });
+}
+
+export async function connectNodes(node_id_1, port_1, node_id_2, port_2, distance) {
+    return await invoke('connect_nodes', { nodeId1: node_id_1, port1: port_1, nodeId2: node_id_2, port2: port_2, distance: distance})
+        .then(response => {
+            return response;
+        })
+        .catch(error => {
+            console.error("Error:", error);
+            throw error;
+        });
+}
+
+// export function setupEventListener(eventName, callback) {
+//     const unlisten = listen(eventName, (event) => {
+//       console.log(`Event '${eventName}' empfangen:`, event.payload);
+      
+//       // Falls eine Callback-Funktion übergeben wurde, rufe sie auf
+//       if (callback) {
+//         callback(event.payload);
+//       }
+  
+//       // Zusätzlich ein globales Event im Browser dispatchen
+//       window.dispatchEvent(new CustomEvent(eventName, { detail: event.payload }));
+//     });
+  
+//     return unlisten; // Gibt die Funktion zurück, mit der das Event später abgemeldet werden kann
+//   }

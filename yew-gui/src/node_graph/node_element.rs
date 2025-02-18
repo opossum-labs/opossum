@@ -1,4 +1,8 @@
-use std::{collections::{hash_map::Values, HashMap}, rc::Rc, str::FromStr};
+use std::{
+    collections::{hash_map::Values, HashMap},
+    rc::Rc,
+    str::FromStr,
+};
 
 use crate::bindings::getNodeInfo;
 use log::debug;
@@ -21,20 +25,27 @@ pub struct HTMLNodeElement {
 }
 
 impl HTMLNodeElement {
-    pub fn new(id: Uuid, x: i32, y: i32, name: String, is_source: bool, offset: (i32,i32)) -> Self {
+    pub fn new(
+        id: Uuid,
+        x: i32,
+        y: i32,
+        name: String,
+        is_source: bool,
+        offset: (i32, i32),
+    ) -> Self {
         HTMLNodeElement {
             id,
             x,
             y,
             name,
             is_source,
-            offset
+            offset,
         }
     }
-    pub fn offset(&self) -> (i32, i32){
+    pub fn offset(&self) -> (i32, i32) {
         self.offset
     }
-    pub fn set_offset(&mut self, offset: (i32, i32)){
+    pub fn set_offset(&mut self, offset: (i32, i32)) {
         self.offset = offset;
     }
     pub fn set_id(&mut self, id: Uuid) {
@@ -80,34 +91,35 @@ pub struct Connection {
 pub struct Connections {
     pub connections: HashMap<Uuid, Connection>,
 }
-impl Connections{
-    pub fn new() -> Self{
-        Connections{
-            connections: HashMap::<Uuid, Connection>::new()
+impl Connections {
+    pub fn new() -> Self {
+        Connections {
+            connections: HashMap::<Uuid, Connection>::new(),
         }
     }
-    pub fn values(&self) -> Values<Uuid, Connection>{
+    pub fn values(&self) -> Values<Uuid, Connection> {
         self.connections.values()
     }
-    pub fn check_connection_validity(&self, connect_to_id: Uuid)-> bool{
-        self.connections.values()
-                    .into_iter()
-                    .fold(true, |arg0, c| (c.to != connect_to_id) & arg0)
+    pub fn check_connection_validity(&self, connect_to_id: Uuid) -> bool {
+        self.connections
+            .values()
+            .into_iter()
+            .fold(true, |arg0, c| (c.to != connect_to_id) & arg0)
     }
-    pub fn insert_connection(&mut self, selected_type: String, selected_id: Uuid, node_id: Uuid){
+    pub fn insert_connection(&mut self, selected_type: String, selected_id: Uuid, node_id: Uuid) {
         self.connections.insert(
-            if selected_type == "output" {
+            if selected_type == "output_1" {
                 selected_id
             } else {
                 node_id
             },
             Connection {
-                from: if selected_type == "output" {
+                from: if selected_type == "output_1" {
                     selected_id
                 } else {
                     node_id
                 },
-                to: if selected_type == "input" {
+                to: if selected_type == "input_1" {
                     selected_id
                 } else {
                     node_id
@@ -121,9 +133,9 @@ impl Connections{
 #[derive(Properties, PartialEq)]
 pub struct NodeProps {
     pub html_node: HTMLNodeElement,
-    pub width: i32,                              // Breite der Node
-    pub height: i32,                             // Höhe der Node
-    pub node_callbacks: NodeCallbacks,      // Callback für den Drag-Start
+    pub width: i32,                    // Breite der Node
+    pub height: i32,                   // Höhe der Node
+    pub node_callbacks: NodeCallbacks, // Callback für den Drag-Start
     pub is_active: bool,
 }
 
@@ -134,38 +146,44 @@ pub struct NodeStates {
     connections: Connections,
     selected_port: Option<(Uuid, String)>,
 }
-impl NodeStates{
-    pub fn new(nodes: Vec<HTMLNodeElement>, active_node: Option<Value>, connections: Connections, selected_port: Option<(Uuid, String)>) -> Self{
-        NodeStates{
+impl NodeStates {
+    pub fn new(
+        nodes: Vec<HTMLNodeElement>,
+        active_node: Option<Value>,
+        connections: Connections,
+        selected_port: Option<(Uuid, String)>,
+    ) -> Self {
+        NodeStates {
             nodes,
             active_node,
             connections,
             selected_port,
         }
     }
-    pub fn nodes(&self) -> &Vec<HTMLNodeElement>{
+    pub fn nodes(&self) -> &Vec<HTMLNodeElement> {
         &self.nodes
     }
-    pub fn active_node(&self) -> &Option<Value>{
+    pub fn active_node(&self) -> &Option<Value> {
         &self.active_node
     }
-    pub fn add_node(&mut self, node: HTMLNodeElement){
+    pub fn add_node(&mut self, node: HTMLNodeElement) {
         self.nodes.push(node);
     }
-    pub fn set_active_node(&mut self, active_node: Value){
+    pub fn set_active_node(&mut self, active_node: Value) {
         self.active_node = Some(active_node);
     }
-    pub fn connections(&self) -> &Connections{
+    pub fn connections(&self) -> &Connections {
         &self.connections
     }
-    pub fn selected_port(&self) -> &Option<(Uuid, String)>{
+    pub fn selected_port(&self) -> &Option<(Uuid, String)> {
         &self.selected_port
     }
-    pub fn active_node_uuid_str(&self) -> Option<String>{
-        if let Some(active_node) = &self.active_node{
-            active_node["uuid"].as_str().map(|uuid_str| uuid_str.to_string())
-        }
-        else{
+    pub fn active_node_uuid_str(&self) -> Option<String> {
+        if let Some(active_node) = &self.active_node {
+            active_node["uuid"]
+                .as_str()
+                .map(|uuid_str| uuid_str.to_string())
+        } else {
             None
         }
     }
@@ -179,24 +197,31 @@ impl Reducible for NodeStates {
             NodeAction::AddNode(node) => {
                 let mut nodestates = self.as_ref().clone();
                 nodestates.add_node(node);
-                Rc::new(nodestates            )},
-            NodeAction::UpdateNode(updated_node) =>{
+                Rc::new(nodestates)
+            }
+            NodeAction::UpdateNode(updated_node) => {
                 let mut nodes = self.nodes.clone();
-                let index = nodes.iter().position(|node| node.id() == updated_node.id()).unwrap();
+                let index = nodes
+                    .iter()
+                    .position(|node| node.id() == updated_node.id())
+                    .unwrap();
                 nodes[index] = updated_node;
-                
+
                 Rc::new(NodeStates {
                     nodes,
                     ..self.as_ref().clone()
-                })                
-            }            
+                })
+            }
             NodeAction::NodeDoubleClick(js_val) => Rc::new(NodeStates {
                 active_node: Some(js_val),
                 ..self.as_ref().clone()
             }),
             NodeAction::UpdateNodeName(uuid_str, new_name, active_node_js) => {
                 let mut nodes = self.nodes.clone();
-                let index = nodes.iter().position(|node| node.id() == Uuid::from_str(uuid_str.as_str()).unwrap()).unwrap();
+                let index = nodes
+                    .iter()
+                    .position(|node| node.id() == Uuid::from_str(uuid_str.as_str()).unwrap())
+                    .unwrap();
                 nodes[index].set_name(new_name);
                 Rc::new(NodeStates {
                     nodes,
@@ -208,37 +233,43 @@ impl Reducible for NodeStates {
                 connections,
                 ..self.as_ref().clone()
             }),
-            NodeAction::SelectPort(selected_port) => {
-                Rc::new(NodeStates {
-                    selected_port,
-                    ..self.as_ref().clone()
-                })
-            },
-            NodeAction::SetDragStartOffset(offset, uuid_str  ) => {
+            NodeAction::SelectPort(selected_port) => Rc::new(NodeStates {
+                selected_port,
+                ..self.as_ref().clone()
+            }),
+            NodeAction::SetDragStartOffset(offset, uuid_str) => {
                 let mut nodes = self.nodes.clone();
-                let index = nodes.iter().position(|node| node.id() == Uuid::from_str(uuid_str.as_str()).unwrap()).unwrap();
+                let index = nodes
+                    .iter()
+                    .position(|node| node.id() == Uuid::from_str(uuid_str.as_str()).unwrap())
+                    .unwrap();
                 nodes[index].set_offset(offset);
                 Rc::new(NodeStates {
                     nodes,
                     ..self.as_ref().clone()
                 })
-            },
-
+            }
+            NodeAction::UpdateNodeLIDT(active_node) => {
+                let mut nodes = self.nodes.clone();
+                Rc::new(NodeStates {
+                    active_node: Some(active_node),
+                    ..self.as_ref().clone()
+                })
+            }
         }
     }
 }
 
-pub enum NodeAction{
+pub enum NodeAction {
     AddNode(HTMLNodeElement),
     UpdateNode(HTMLNodeElement),
-    NodeDoubleClick(Value),
     UpdateNodeName(String, String, Value),
+    UpdateNodeLIDT(Value),
+    NodeDoubleClick(Value),
     UpdateConnections(Connections),
     SelectPort(Option<(Uuid, String)>),
     SetDragStartOffset((i32, i32), String),
 }
-
-
 
 #[function_component(Node)]
 pub fn node(props: &NodeProps) -> Html {
@@ -266,13 +297,13 @@ pub fn node(props: &NodeProps) -> Html {
     let on_input_port_click = {
         let on_port_click = node_callbacks.on_port_click.clone();
         let id = html_node.id();
-        Callback::from(move |_| on_port_click.emit((id, "input".to_string())))
+        Callback::from(move |_| on_port_click.emit((id, "input_1".to_string())))
     };
 
     let on_output_port_click = {
         let on_port_click = node_callbacks.on_port_click.clone();
         let id = html_node.id();
-        Callback::from(move |_| on_port_click.emit((id, "output".to_string())))
+        Callback::from(move |_| on_port_click.emit((id, "output_1".to_string())))
     };
 
     // Drag-Ende-Handler
@@ -281,11 +312,12 @@ pub fn node(props: &NodeProps) -> Html {
         let id = html_node.id();
         move |event: DragEvent| {
             if let Some(target) = event.target_dyn_into::<HtmlElement>() {
+                let target = target.parent_element().unwrap();
                 if let Some(container) = target.closest(".drop-container").unwrap() {
                     let rect = container.get_bounding_client_rect();
                     let new_x = event.page_x() as i32 - rect.left() as i32;
                     let new_y = event.page_y() as i32 - rect.top() as i32;
-                    
+
                     on_drag_end.emit((id, new_x, new_y)); // ID und neue Position übergeben
                 }
             }
@@ -305,8 +337,7 @@ pub fn node(props: &NodeProps) -> Html {
             let on_double_click = on_double_click.clone();
 
             spawn_local(async move {
-                // let name = name.clone();
-                let result = getNodeInfo(id.clone().as_simple().to_string());
+                let result = unsafe { getNodeInfo(id.clone().as_simple().to_string()) };
                 let result = wasm_bindgen_futures::JsFuture::from(result).await;
 
                 match result {
@@ -340,15 +371,21 @@ pub fn node(props: &NodeProps) -> Html {
 
     html! {
         <div
-
             ondblclick={on_dblclick}
-            class={format!("node{style} draggable")}
-            draggable="true"
-            ondragstart={node_callbacks.on_drag_start.clone()}
-            ondragend={on_drag_end}
+            class={format!("node{style} draggable prevent-select")}
             style={format!("position: absolute; left: {}px; top: {}px;", html_node.x(), html_node.y())}>
 
             <div id={html_node.id().to_string()} class="node-content" style={format!("width: {}px; height: {}px;", width, height)}>{html_node.name()}</div>
+
+            <div
+            draggable="true"
+
+            ondragstart={node_callbacks.on_drag_start.clone()}
+            ondragend={on_drag_end}
+                class="drag-anchor"
+                style={format!("positon:absolute;left: {}px; top: {}px; width: {}px; height: {}px;", -2*port_w_h/3, -2*port_w_h/3, port_w_h, port_w_h)}>
+                <img src="static/images/grab.png" style={format!("position: absolute; margin: auto;top:2px; left:2px;width: {}px; height: {}px;", port_w_h-4, port_w_h-4)}/>
+            </div>
 
             // Input-Port
             <div

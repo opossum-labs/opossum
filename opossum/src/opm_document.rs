@@ -107,6 +107,9 @@ impl OpmDocument {
     pub fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
     }
+    pub fn scenery(&self) -> &NodeGroup {
+        &self.scenery
+    }
     #[must_use]
     pub fn analyzers(&self) -> Vec<AnalyzerType> {
         self.analyzers.clone()

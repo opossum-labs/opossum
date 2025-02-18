@@ -37,6 +37,7 @@ plotters = "0.3"
 
 approx = "0.5" # assert macros for comparison of floats with tolerance
 clap = { version = "4", features = ["derive", "string"] } # command line argument parser
+tauri = "2.2.5"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rprompt = "2"

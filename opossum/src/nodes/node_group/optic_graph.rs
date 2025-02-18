@@ -424,7 +424,7 @@ impl OpticGraph {
             .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
         Ok(node)
     }
-    fn node_idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
+    pub fn node_idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
         self.g
             .node_indices()
             .find(|idx| self.g.node_weight(*idx).unwrap().uuid() == uuid)

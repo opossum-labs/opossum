@@ -227,6 +227,31 @@ impl NodeGroup {
             .set_property("graph", self.graph.clone().into())?;
         Ok(())
     }
+
+    pub fn connect_nodes_by_uuid(
+        &mut self,
+        src_node: Uuid,
+        src_port: &str,
+        target_node: Uuid,
+        target_port: &str,
+        distance: Length,
+    ) -> OpmResult<()> {
+        if let (Some(src_idx), Some(target_idx)) = (
+            self.graph().node_idx_by_uuid(src_node),
+            self.graph().node_idx_by_uuid(target_node),
+        ) {
+            self.graph
+                .connect_nodes(src_idx, src_port, target_idx, target_port, distance)?;
+            self.node_attr
+                .set_property("graph", self.graph.clone().into())?;
+            Ok(())
+        } else {
+            Err(OpossumError::Other(format!(
+                "Node uuid {} or {} not found in graph!",
+                src_node, target_node
+            )))
+        }
+    }
     /// Map an input port of an internal node to an external port of the group.
     ///
     /// In oder to use a [`NodeGroup`] from the outside, internal nodes / ports must be mapped to be visible. The

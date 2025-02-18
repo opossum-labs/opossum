@@ -21,8 +21,10 @@ tauri-build = { version = "2.0.4", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.2.4", features = [] }
+tauri = { version = "2.2.5", features = [] }
 env_logger = "0.11"
 tauri-plugin-log = "2.0.0"
+tauri-plugin-dialog = "2.2"
 opossum = { path = "../opossum" }
 uuid = "1.13.1"
+uom = {version="0.36", features = ["serde"] }
