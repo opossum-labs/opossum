@@ -10,12 +10,15 @@ use wasm_bindgen::prelude::{wasm_bindgen, Closure};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{js_sys, window, CustomEvent, HtmlInputElement};
-use yew::{function_component, html, use_effect, use_effect_with, use_node_ref, use_reducer, use_state, Callback, Event, FocusEvent, Html, InputEvent, KeyboardEvent, NodeRef, UseReducerHandle, UseStateHandle
+use yew::{
+    function_component, html, use_effect, use_effect_with, use_node_ref, use_reducer, use_state,
+    Callback, Event, FocusEvent, Html, InputEvent, KeyboardEvent, NodeRef, UseReducerHandle,
+    UseStateHandle,
 };
 use yew_gui::bindings::{addNode, setInverted, setLidt, setName};
 use yew_gui::node_graph::callbacks::create_node_callbacks;
-use yew_gui::node_graph::node_element::{Connections, HTMLNodeElement, NodeAction, NodeStates};
 use yew_gui::node_graph::node_element::Node;
+use yew_gui::node_graph::node_element::{Connections, HTMLNodeElement, NodeAction, NodeStates};
 
 pub struct StateHandler {
     pub node_states: UseReducerHandle<NodeStates>,
@@ -37,38 +40,36 @@ pub fn app() -> Html {
     let hierarchy = use_state(|| vec!["Root".to_string()]); // Startpunkt
 
     let node_callbacks = create_node_callbacks(node_states.clone(), logs.clone());
-    
 
-        // Cleanup-Funktion: wird aufgerufen, wenn die Komponente entfernt wird.
-        // move || {
-        //     // Optional: Entfernen des Event-Listeners bei der Zerstörung der Komponente
-        //     window.remove_event_listener_with_callback("open_opm_file", closure.as_ref().unchecked_ref()).unwrap();
-        // }
-            
-        // use_effect(
-        //     || {
-        //         let closure = Closure::wrap(Box::new(move |event: web_sys::CustomEvent| {
-        //             debug!("Event empfangen: {:?}", event);  // Debug-Ausgabe
-        //             if let Some(data) = event.detail().as_string() {
-        //                 debug!("Empfangenes Event-Daten: {}", data);
-        //             } else {
-        //                 debug!("Keine Daten im Event.");
-        //             }
-        //         }) as Box<dyn FnMut(_)>);
+    // Cleanup-Funktion: wird aufgerufen, wenn die Komponente entfernt wird.
+    // move || {
+    //     // Optional: Entfernen des Event-Listeners bei der Zerstörung der Komponente
+    //     window.remove_event_listener_with_callback("open_opm_file", closure.as_ref().unchecked_ref()).unwrap();
+    // }
 
-        //         // Event-Listener für "listen_event" hinzufügen
-        //         window()
-        //             .unwrap()
-        //             .add_event_listener_with_callback("open_opm_file", closure.as_ref().unchecked_ref())
-        //             .unwrap();
-    
-        //         // Die Closure sicher in der use_effect speichern
-        //         closure.forget();
-    
-        //         || {} // Cleanup-Funktion, wenn die Komponente entfernt wird
-        //     },
-        // );
-    
+    // use_effect(
+    //     || {
+    //         let closure = Closure::wrap(Box::new(move |event: web_sys::CustomEvent| {
+    //             debug!("Event empfangen: {:?}", event);  // Debug-Ausgabe
+    //             if let Some(data) = event.detail().as_string() {
+    //                 debug!("Empfangenes Event-Daten: {}", data);
+    //             } else {
+    //                 debug!("Keine Daten im Event.");
+    //             }
+    //         }) as Box<dyn FnMut(_)>);
+
+    //         // Event-Listener für "listen_event" hinzufügen
+    //         window()
+    //             .unwrap()
+    //             .add_event_listener_with_callback("open_opm_file", closure.as_ref().unchecked_ref())
+    //             .unwrap();
+
+    //         // Die Closure sicher in der use_effect speichern
+    //         closure.forget();
+
+    //         || {} // Cleanup-Funktion, wenn die Komponente entfernt wird
+    //     },
+    // );
 
     // Klick auf eine Breadcrumb → Zurück zu dieser Node springen
     let navigate_to = {

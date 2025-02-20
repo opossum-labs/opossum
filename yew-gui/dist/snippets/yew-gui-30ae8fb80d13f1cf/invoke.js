@@ -1,4 +1,3 @@
-import { listen } from './node_modules/@tauri-apps/api/event'
 
 const invoke = window.__TAURI__.core.invoke
 

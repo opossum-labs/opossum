@@ -10,7 +10,9 @@ use std::{
 use app_lib::{commands, OPMGUIModel};
 use opossum::OpmDocument;
 use tauri::{
-    generate_handler, menu::{MenuBuilder, SubmenuBuilder}, Emitter, Manager
+    generate_handler,
+    menu::{MenuBuilder, SubmenuBuilder},
+    Emitter, Manager,
 };
 use tauri_plugin_dialog::DialogExt;
 
@@ -56,30 +58,28 @@ fn main() {
                         let opmgui_model =
                             Arc::clone(&app_handle.state::<Arc<Mutex<OPMGUIModel>>>());
                         if let Some(fp) = app_handle
-                        .dialog()
-                        .file()
-                        .set_title("Open OPM file")
-                        .add_filter("Opossum files", &["opm"])
-                        .blocking_pick_file(){
-                            if let Ok(opm_doc) =
-                            OpmDocument::from_file(fp.as_path().unwrap())
-                            {
-                                    let mut model = opmgui_model.lock().unwrap();
-                                    let scenery = opm_doc.scenery().clone();
-                                    model.set_model(opm_doc.scenery().clone());
-                                
-                                    println!("file loaded:{}", fp.to_string());
-                                    if let Ok(()) = app_handle.emit("openopmfile",serde_json::to_string(&scenery).map_err(|e| e.to_string())){
-                                        println!("file send");
+                            .dialog()
+                            .file()
+                            .set_title("Open OPM file")
+                            .add_filter("Opossum files", &["opm"])
+                            .blocking_pick_file()
+                        {
+                            if let Ok(opm_doc) = OpmDocument::from_file(fp.as_path().unwrap()) {
+                                let mut model = opmgui_model.lock().unwrap();
+                                let scenery = opm_doc.scenery().clone();
+                                model.set_model(opm_doc.scenery().clone());
 
-                                    }
-                                    else{
-                                        println!("file fucked");
-
-                                    }
+                                println!("file loaded:{}", fp.to_string());
+                                if let Ok(()) = app_handle.emit(
+                                    "openopmfile",
+                                    serde_json::to_string(&scenery).map_err(|e| e.to_string()),
+                                ) {
+                                    println!("file send");
+                                } else {
+                                    println!("file fucked");
                                 }
-                        }
-                        else{
+                            }
+                        } else {
                             println!("no file selected");
                         }
                         // move |fpath| {
@@ -90,7 +90,7 @@ fn main() {
                         //                 let mut model = opmgui_model.lock().unwrap();
                         //                 let scenery = opm_doc.scenery().clone();
                         //                 model.set_model(opm_doc.scenery().clone());
-                                        
+
                         //                 println!("file loaded:{}", fp.to_string());
                         //             }
                         //         }

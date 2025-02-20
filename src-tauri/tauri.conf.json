@@ -4,10 +4,10 @@
   "version": "0.7.0",
   "identifier": "opossum",
   "build": {
-    "frontendDist": "./yew-gui/dist",
+    "frontendDist": "./leptos_ui",
     "devUrl": "http://localhost:8080",
-    "beforeDevCommand": "cd ./yew-gui && trunk serve",
-    "beforeBuildCommand": "cd ./yew-gui && trunk build"
+    "beforeDevCommand": "cd ./leptos_ui && trunk serve",
+    "beforeBuildCommand": "cd ./leptos_ui && trunk build"
   },
   "app": {
     "withGlobalTauri": true,
