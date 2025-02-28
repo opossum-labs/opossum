@@ -1,6 +1,6 @@
 [workspace]
-members = [ "opossum","xtask" ]
-default-members = ["opossum"]
+members = [ "opossum", "xtask", "opossum_backend" ]
+default-members = ["opossum", "opossum_backend"]
 resolver = "2"
 
 # The profile that 'cargo dist' will build with

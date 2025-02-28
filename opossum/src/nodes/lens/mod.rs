@@ -18,7 +18,7 @@ use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
 use num::Zero;
 use opm_macros_lib::OpmNode;
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
 
 mod analysis_energy;
@@ -50,6 +50,7 @@ mod analysis_raytrace;
 pub struct Lens {
     node_attr: NodeAttr,
 }
+unsafe impl Send for Lens {}
 impl Default for Lens {
     /// Create a lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
     fn default() -> Self {
@@ -240,14 +241,14 @@ impl OpticNode for Lens {
         };
         let (front_geosurface, anchor_point_iso_front) = if front_curvature.is_infinite() {
             (
-                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso.clone())))),
+                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso.clone())))),
                 Isometry::identity(),
             )
         } else {
             let anchor_point_iso_front =
                 Isometry::new(meter!(0., 0., front_curvature.value), radian!(0., 0., 0.))?;
             (
-                GeoSurfaceRef(Rc::new(RefCell::new(Sphere::new(
+                GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
                     *front_curvature,
                     node_iso.append(&anchor_point_iso_front),
                 )?))),
@@ -275,7 +276,7 @@ impl OpticNode for Lens {
             let anchor_point_iso_rear =
                 Isometry::new(meter!(0., 0., center_thickness.value), radian!(0., 0., 0.))?;
             (
-                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(
+                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
                     node_iso.append(&anchor_point_iso_rear),
                 )))),
                 anchor_point_iso_rear,
@@ -286,7 +287,7 @@ impl OpticNode for Lens {
                 radian!(0., 0., 0.),
             )?;
             (
-                GeoSurfaceRef(Rc::new(RefCell::new(Sphere::new(
+                GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
                     *rear_curvature,
                     node_iso.append(&anchor_point_iso_rear),
                 )?))),

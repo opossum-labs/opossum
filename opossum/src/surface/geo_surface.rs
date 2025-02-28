@@ -6,14 +6,17 @@
 use super::Plane;
 use crate::{ray::Ray, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 use uom::si::f64::Length;
 
 /// Trait for handling geometric surfaces.
 ///
 /// A geometric surface such as [`Plane`] or [`Sphere`](super::sphere::Sphere) has to implement this trait in order to be used by the
 /// `ray.refract_on_surface` function.
-pub trait GeoSurface {
+pub trait GeoSurface: Send + Sync {
     /// Calculate intersection point and its normal vector of a [`Ray`] with a [`GeoSurface`]
     ///
     /// This function returns `None` if the given ray does not intersect with the surface.
@@ -43,22 +46,24 @@ pub trait GeoSurface {
     ///
     /// This function can be used to place and align the [`GeoSurface`] in 3D space.
     fn set_isometry(&mut self, isometry: &Isometry);
+    /// Return the surface type as string (for debugging purposes)
+    fn name(&self) -> String;
 }
 
 impl Debug for dyn GeoSurface {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Surface")
+        write!(f, "{}", self.name())
     }
 }
 /// Reference for a [`GeoSurface`].
 ///
-/// This struct is necessary in order to implement a Default trait on a `Rc<RefCell<GeoSurface>>`.
+/// This struct is necessary in order to implement a Default trait on a `Arc<Mutex<GeoSurface>>`.
 #[derive(Clone)]
-pub struct GeoSurfaceRef(pub Rc<RefCell<dyn GeoSurface>>);
+pub struct GeoSurfaceRef(pub Arc<Mutex<dyn GeoSurface>>);
 
 impl Default for GeoSurfaceRef {
     fn default() -> Self {
-        Self(Rc::new(RefCell::new(Plane::default())))
+        Self(Arc::new(Mutex::new(Plane::default())))
     }
 }
 

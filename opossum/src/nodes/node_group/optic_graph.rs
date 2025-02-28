@@ -5,7 +5,6 @@ use crate::{
     light_flow::LightFlow,
     light_result::LightResult,
     lightdata::LightData,
-    nodes::NodeGroup,
     optic_node::OpticNode,
     optic_ports::PortType,
     optic_ref::OpticRef,
@@ -29,9 +28,8 @@ use serde::{
     Deserialize, Serialize,
 };
 use std::{
-    cell::{RefCell, RefMut},
     collections::BTreeMap,
-    rc::Rc,
+    sync::{Arc, Mutex, MutexGuard},
 };
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
@@ -44,7 +42,7 @@ pub struct OpticGraph {
     output_port_map: PortMap,
     is_inverted: bool,
     external_distances: BTreeMap<String, Length>,
-    global_confg: Option<Rc<RefCell<SceneryResources>>>,
+    global_confg: Option<Arc<Mutex<SceneryResources>>>,
 }
 impl OpticGraph {
     /// Add a new optical node to this [`OpticGraph`].
@@ -62,11 +60,24 @@ impl OpticGraph {
             ));
         }
         let idx = self.g.add_node(OpticRef::new(
-            Rc::new(RefCell::new(node)),
+            Arc::new(Mutex::new(node)),
             self.global_confg.clone(),
         ));
 
         Ok(idx)
+    }
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<NodeIndex> {
+        if self.is_inverted {
+            return Err(OpossumError::OpticGroup(
+                "cannot add nodes if group is set as inverted".into(),
+            ));
+        }
+        Ok(self.g.add_node(node))
     }
     /// Connect two optical nodes within this [`OpticGraph`].
     ///
@@ -98,14 +109,18 @@ impl OpticGraph {
         })?;
         if !source
             .optical_ref
-            .borrow()
+            .lock()
+            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
             .ports()
             .names(&PortType::Output)
             .contains(&src_port.into())
         {
             return Err(OpossumError::OpticScenery(format!(
                 "source node {} does not have a port {}",
-                source.optical_ref.borrow(),
+                source
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
                 src_port
             )));
         }
@@ -114,33 +129,51 @@ impl OpticGraph {
         })?;
         if !target
             .optical_ref
-            .borrow()
+            .lock()
+            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
             .ports()
             .names(&PortType::Input)
             .contains(&target_port.into())
         {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} does not have a port {}",
-                target.optical_ref.borrow(),
+                target
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
                 target_port
             )));
         }
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "src node <{}> with port <{}> is already connected",
-                source.optical_ref.borrow(),
+                source
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
                 src_port
             )));
         }
         if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} with port <{}> is already connected",
-                target.optical_ref.borrow(),
+                target
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
                 target_port
             )));
         }
-        let src_name = source.optical_ref.borrow().name();
-        let target_name = target.optical_ref.borrow().name();
+        let src_name = source
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+            .name();
+        let target_name = target
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+            .name();
         let light = LightFlow::new(src_port, target_port, distance)?;
         let edge_index = self.g.add_edge(src_node, target_node, light);
         if is_cyclic_directed(&self.g) {
@@ -175,7 +208,8 @@ impl OpticGraph {
                 .node_by_idx(node_idx)
                 .unwrap()
                 .optical_ref
-                .borrow()
+                .lock()
+                .expect("Mutex lock failed")
                 .ports()
                 .names(port_type)
                 .len();
@@ -219,7 +253,8 @@ impl OpticGraph {
         let node = self.node_by_idx(node_idx)?;
         if !node
             .optical_ref
-            .borrow()
+            .lock()
+            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
             .ports()
             .names(port_type)
             .contains(&(internal_name.to_string()))
@@ -332,7 +367,7 @@ impl OpticGraph {
     }
     /// Update reference to global config for each node in this [`OpticGraph`].
     /// This function is needed after deserialization.
-    pub fn update_global_config(&mut self, global_conf: &Option<Rc<RefCell<SceneryResources>>>) {
+    pub fn update_global_config(&mut self, global_conf: &Option<Arc<Mutex<SceneryResources>>>) {
         for node in self.g.node_weights_mut() {
             node.update_global_config(global_conf.clone());
         }
@@ -369,7 +404,17 @@ impl OpticGraph {
             .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
         Ok(node.clone())
     }
-
+    /// Return the corresponding [`NodeIndex`] from a node with a given [`Uuid`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if .
+    #[must_use]
+    pub fn idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
+        self.g
+            .node_indices()
+            .find(|idx| self.g.node_weight(*idx).unwrap().uuid() == uuid)
+    }
     /// Return a mutable reference to the optical node specified by its node index.
     ///
     /// This function is mainly useful for setting up a reference node.
@@ -428,13 +473,20 @@ impl OpticGraph {
             if self.is_stale_node(idx) {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
-                    node.borrow()
+                    node.lock()
+                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
                 );
             } else {
                 let incoming_edges = self.get_incoming(idx, incoming_data);
-                let node_name = format!("{}", node.borrow());
+                let node_name = format!(
+                    "{}",
+                    node.lock()
+                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                );
                 let outgoing_edges = AnalysisEnergy::analyze(
-                    &mut *node.borrow_mut(),
+                    &mut *node
+                        .lock()
+                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
                     incoming_edges,
                 )
                 .map_err(|e| {
@@ -484,7 +536,8 @@ impl OpticGraph {
             .node_by_idx(idx)
             .unwrap()
             .optical_ref
-            .borrow()
+            .lock()
+            .expect("Mutex lock failed")
             .ports()
             .ports(&PortType::Input)
             .len();
@@ -502,7 +555,13 @@ impl OpticGraph {
     /// Panics if .
     #[must_use]
     pub fn is_output_node(&self, idx: NodeIndex) -> bool {
-        let ports = self.node_by_idx(idx).unwrap().optical_ref.borrow().ports();
+        let ports = self
+            .node_by_idx(idx)
+            .unwrap()
+            .optical_ref
+            .lock()
+            .expect("Mutex lock failed")
+            .ports();
         let nr_of_output_ports = ports.ports(&PortType::Output).len();
         let nr_of_outgoing_edges = self.g.edges_directed(idx, Direction::Outgoing).count();
         debug_assert!(
@@ -556,10 +615,15 @@ impl OpticGraph {
     /// This function will return an error if one tries to invert a graph containing a non-invertable node (eg. source).
     pub fn invert_graph(&mut self) -> OpmResult<()> {
         for node in self.g.node_weights_mut() {
-            let node_to_be_inverted = !node.optical_ref.borrow().inverted();
+            let node_to_be_inverted = !node
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                .inverted();
 
             node.optical_ref
-                .borrow_mut()
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
                 .set_inverted(node_to_be_inverted)
                 .map_err(|_| {
                     OpossumError::OpticGroup(
@@ -585,7 +649,7 @@ impl OpticGraph {
     pub fn set_node_isometry(
         &self,
         incoming_edges: &LightResult,
-        node_borrow_mut: &mut RefMut<'_, dyn Analyzable + 'static>,
+        node_borrow_mut: &mut MutexGuard<'_, dyn Analyzable + 'static>,
         node_type: &str,
         idx: NodeIndex,
         up_direction: Vector3<f64>,
@@ -640,10 +704,12 @@ impl OpticGraph {
     /// Returns the result of the edge strnig for the dot format
     fn create_node_edge_str(&self, end_node_idx: NodeIndex, light_port: &str) -> OpmResult<String> {
         let node_id = format!("i{}", self.node_by_idx(end_node_idx)?.uuid().as_simple());
-        let node = self.node_by_idx(end_node_idx)?;
-        if node.optical_ref.borrow().node_type() == "group" {
-            let mut node = node.optical_ref.borrow_mut();
-            let group_node: &NodeGroup = node.as_group()?;
+        let node_ref = self.node_by_idx(end_node_idx)?;
+        let mut node = node_ref
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+        if let Ok(group_node) = node.as_group() {
             Ok(group_node.get_mapped_port_str(light_port, &node_id)?)
         } else {
             Ok(format!("{node_id}:{light_port}"))
@@ -660,17 +726,16 @@ impl OpticGraph {
         let mut dot_string = String::default();
         let sorted = self.topologically_sorted()?;
         for idx in &sorted {
-            let node = self.node_by_idx(*idx)?;
-            let node_name = node.optical_ref.borrow().name();
-            let inverted = node.optical_ref.borrow().node_attr().inverted();
-            let ports = node.optical_ref.borrow().ports();
-            dot_string += &node.optical_ref.borrow().to_dot(
-                &format!("{}", node.uuid().as_simple()),
-                &node_name,
-                inverted,
-                &ports,
-                rankdir,
-            )?;
+            let node_ref = self.node_by_idx(*idx)?;
+            let node = node_ref
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            let node_name = node.name();
+            let inverted = node.inverted();
+            let ports = node.ports();
+            let uuid = node.node_attr().uuid().as_simple().to_string();
+            dot_string += &node.to_dot(&uuid, &node_name, inverted, &ports, rankdir)?;
         }
         for edge_idx in self.g.edge_indices() {
             let light: &LightFlow = self.edge_by_idx(edge_idx)?;
@@ -872,29 +937,10 @@ impl<'de> Deserialize<'de> for OpticGraph {
                 for node in &nodes {
                     g.g.add_node(node.clone());
                 }
-                // assign references to ref nodes (if any)
-                for node in &nodes {
-                    if node.optical_ref.borrow().node_type() == "reference" {
-                        let mut my_node = node.optical_ref.borrow_mut();
-                        let refnode = my_node.as_refnode_mut().unwrap();
-                        let node_props = refnode.properties().clone();
-                        let uuid =
-                            if let Proptype::Uuid(uuid) = node_props.get("reference id").unwrap() {
-                                *uuid
-                            } else {
-                                Uuid::nil()
-                            };
-                        let Some(reference_node) = g.node_by_uuid(uuid) else {
-                            return Err(de::Error::custom(
-                                "reference node found, which does not reference anything",
-                            ));
-                        };
-                        let ref_name =
-                            format!("ref ({})", reference_node.optical_ref.borrow().name());
-                        refnode.assign_reference(&reference_node);
-
-                        refnode.node_attr_mut().set_name(&ref_name);
-                    }
+                for node_ref in &nodes {
+                    // assign references to ref nodes (if any)
+                    assign_reference_to_ref_node(node_ref, &g)
+                        .map_err(|e| de::Error::custom(e.to_string()))?;
                 }
                 for edge in &edges {
                     let src_idx = g.node_idx_by_uuid(edge.0).ok_or_else(|| {
@@ -922,6 +968,40 @@ impl<'de> Deserialize<'de> for OpticGraph {
         deserializer.deserialize_struct("OpticGraph", FIELDS, OpticGraphVisitor)
     }
 }
+
+fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmResult<()> {
+    if let Ok(ref_node) = node_ref
+        .optical_ref
+        .lock()
+        .expect("Mutex lock failed")
+        .as_refnode_mut()
+    {
+        // if Ok, the node was indeed a reference node
+        let node_props = ref_node.properties().clone();
+        let uuid = if let Proptype::Uuid(uuid) = node_props.get("reference id").unwrap() {
+            *uuid
+        } else {
+            Uuid::nil()
+        };
+        let Some(reference_node) = graph.node_by_uuid(uuid) else {
+            return Err(OpossumError::Other(
+                "reference node found, which does not reference anything".into(),
+            ));
+        };
+        let ref_name = format!(
+            "ref ({})",
+            reference_node
+                .optical_ref
+                .lock()
+                .expect("Mutex lock failed")
+                .name()
+        );
+        ref_node.assign_reference(&reference_node);
+        ref_node.node_attr_mut().set_name(&ref_name);
+    }
+    Ok(())
+}
+
 impl From<OpticGraph> for Proptype {
     fn from(value: OpticGraph) -> Self {
         Self::OpticGraph(value)

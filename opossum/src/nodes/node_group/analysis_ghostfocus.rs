@@ -42,17 +42,24 @@ impl AnalysisGhostFocus for NodeGroup {
             if self.graph.is_stale_node(idx) {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
-                    node.borrow()
+                    node.lock()
+                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
                 );
             } else {
-                let node_name = format!("{}", node.borrow());
+                let node_name = format!(
+                    "{}",
+                    node.lock()
+                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                );
                 let incoming_edges = self.graph.get_incoming(
                     idx,
                     &light_rays_to_light_result(current_bouncing_rays.clone()),
                 );
 
                 let mut outgoing_edges = AnalysisGhostFocus::analyze(
-                    &mut *node.borrow_mut(),
+                    &mut *node
+                        .lock()
+                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
                     light_result_to_light_rays(incoming_edges)?,
                     config,
                     ray_collection,

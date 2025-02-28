@@ -27,7 +27,7 @@ dialog = "opossum/logo/Logo_InstallDialog.png"
 
 [dependencies]
 opm_macros_lib = { path = "opm_macros_lib" }
-petgraph = { version = "0.6", features = ["serde-1"] } # the graph library
+petgraph = { version = "0.7", features = ["serde-1"] } # the graph library
 uom = {version="0.36", features = ["serde"] }
 serde = { version = "1", features = ['rc'] }
 serde_yaml = "0.9"
@@ -37,7 +37,9 @@ plotters = "0.3"
 
 approx = "0.5" # assert macros for comparison of floats with tolerance
 clap = { version = "4", features = ["derive", "string"] } # command line argument parser
-rprompt = "2.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rprompt = "2"
 strum = { version = "0.26", features = ["derive"] }
 
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
@@ -48,9 +50,9 @@ embed-doc-image = "0.1" # allows for embedded images in the rust API doc
 
 image="0.25"
 tempfile="3"
-rand="0.8"
+rand="0.9"
 sobol="1"
-itertools = "0.13"
+itertools = "0.14"
 nalgebra = {version = "0.33", features = ["serde-serialize", "rayon"]}
 colorous = "1"
 strum_macros = "0.26"

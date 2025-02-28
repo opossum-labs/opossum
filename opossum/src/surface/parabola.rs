@@ -114,6 +114,10 @@ impl GeoSurface for Parabola {
     fn set_isometry(&mut self, isometry: &Isometry) {
         self.isometry = isometry.clone();
     }
+
+    fn name(&self) -> String {
+        "parabolic".into()
+    }
 }
 
 #[cfg(test)]

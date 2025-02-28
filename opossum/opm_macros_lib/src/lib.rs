@@ -45,7 +45,7 @@ pub fn derive_opm_node(input: TokenStream) -> TokenStream {
         let dottable = quote! {
             use crate::dottable::Dottable;
             impl Dottable for #struct_name {
-                fn node_color(&self) -> &str {
+                fn node_color(&self) -> &'static str {
                     #arg
                 }
             }

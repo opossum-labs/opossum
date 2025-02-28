@@ -24,13 +24,12 @@ pub use optic_graph::OpticGraph;
 use petgraph::prelude::NodeIndex;
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::RefCell,
     collections::{BTreeMap, HashMap},
     fs::{self, File},
     io::Write,
     path::PathBuf,
     process::Stdio,
-    rc::Rc,
+    sync::{Arc, Mutex},
 };
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -103,6 +102,9 @@ impl Default for NodeGroup {
         }
     }
 }
+
+unsafe impl Send for NodeGroup {}
+
 impl NodeGroup {
     /// Creates a new [`NodeGroup`].
     /// # Attributes
@@ -135,7 +137,32 @@ impl NodeGroup {
             .unwrap();
         Ok(idx)
     }
-
+    /// Adds a node to the graph by reference.
+    ///
+    /// This command adds an [`OpticNode`] by reference but does not connect it to existing nodes in the (sub-)graph. The given node is
+    /// consumed (owned) by the [`NodeGroup`]. This function returns the UUID of the node.
+    ///
+    /// # Errors
+    /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
+    ///
+    /// # Panics
+    /// This function panics if the property "graph" cannot be updated. Produces an error of type [`OpossumError::Properties`]
+    ///
+    /// # Parameters
+    /// - `node`: The node to be added by reference.
+    ///
+    /// # Returns
+    /// The UUID of the added node.
+    pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<Uuid> {
+        let uuid = node.uuid();
+        self.graph.add_node_ref(node)?;
+        // save uuid of node in rays if present
+        // self.store_node_uuid_in_rays_bundle(&node.optical_ref.borrow(), idx)?;
+        self.node_attr
+            .set_property("graph", self.graph.clone().into())
+            .unwrap();
+        Ok(uuid)
+    }
     fn store_node_uuid_in_rays_bundle<T: Analyzable + Clone + 'static>(
         &mut self,
         node: &T,
@@ -148,7 +175,10 @@ impl NodeGroup {
                 let mut new_rays = rays.clone();
                 new_rays.set_node_origin_uuid(node_from_graph.uuid());
 
-                let mut node_ref = node_from_graph.optical_ref.borrow_mut();
+                let mut node_ref = node_from_graph
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
                 node_ref.node_attr_mut().set_property(
                     "light data",
                     EnumProxy::<Option<LightData>> {
@@ -169,6 +199,26 @@ impl NodeGroup {
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node_idx: NodeIndex) -> OpmResult<OpticRef> {
         self.graph.node_by_idx(node_idx)
+    }
+    /// Refturn a reference to the optical node specified by its [`Uuid`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
+    pub fn node_by_uuid(&self, uuid: &Uuid) -> OpmResult<OpticRef> {
+        self.graph.node_by_uuid(*uuid).map_or_else(
+            || {
+                Err(OpossumError::OpticScenery(format!(
+                    "Node with uuid {uuid} not found"
+                )))
+            },
+            Ok,
+        )
+    }
+    /// Returns the number of nodes of this [`NodeGroup`].
+    #[must_use]
+    pub fn nr_of_nodes(&self) -> usize {
+        self.graph.node_count()
     }
     ///  Connect (already existing) optical nodes within this [`NodeGroup`].
     ///
@@ -198,6 +248,39 @@ impl NodeGroup {
         self.node_attr
             .set_property("graph", self.graph.clone().into())?;
         Ok(())
+    }
+    /// Connect (already existing) optical nodes within this [`NodeGroup`].
+    ///
+    /// This function is similar to `connect_nodes` but uses the [`Uuid`] of the nodes instead of their [`NodeIndex`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn connect_nodes_by_uuid(
+        &mut self,
+        src_uuid: &Uuid,
+        src_port: &str,
+        target_uuid: &Uuid,
+        target_port: &str,
+        distance: Length,
+    ) -> OpmResult<()> {
+        let Some(src_node_idx) = self.graph.idx_by_uuid(*src_uuid) else {
+            return Err(OpossumError::OpticScenery(format!(
+                "source uuid {src_uuid} not found"
+            )));
+        };
+        let Some(target_node_idx) = self.graph.idx_by_uuid(*target_uuid) else {
+            return Err(OpossumError::OpticScenery(format!(
+                "target uuid {target_uuid} not found"
+            )));
+        };
+        self.connect_nodes(
+            src_node_idx,
+            src_port,
+            target_node_idx,
+            target_port,
+            distance,
+        )
     }
     /// Map an input port of an internal node to an external port of the group.
     ///
@@ -353,9 +436,14 @@ impl NodeGroup {
         let mut analysis_report = AnalysisReport::default();
         analysis_report.add_scenery(self);
         let mut section_number: usize = 0;
-        for node in self.graph.nodes() {
-            let uuid = node.uuid().as_simple().to_string();
-            if let Some(mut node_report) = node.optical_ref.borrow().node_report(&uuid) {
+        for node_ref in self.graph.nodes() {
+            let uuid = node_ref.uuid().as_simple().to_string();
+            let node_report = node_ref
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+                .node_report(&uuid);
+            if let Some(mut node_report) = node_report {
                 if section_number.is_zero() {
                     node_report.set_show_item(true);
                 }
@@ -498,12 +586,14 @@ impl OpticNode for NodeGroup {
         let mut group_props = Properties::default();
         for node in self.graph.nodes() {
             let sub_uuid = node.uuid().as_simple().to_string();
-            if let Some(node_report) = node.optical_ref.borrow().node_report(&sub_uuid) {
-                let node_name = &node.optical_ref.borrow().name();
-                if !(group_props.contains(node_name)) {
-                    group_props
-                        .create(node_name, "", node_report.into())
-                        .unwrap();
+            if let Ok(node_ref) = node.optical_ref.lock() {
+                if let Some(node_report) = node_ref.node_report(&sub_uuid) {
+                    let node_name = node_ref.name();
+                    if !(group_props.contains(&node_name)) {
+                        group_props
+                            .create(&node_name, "", node_report.into())
+                            .unwrap();
+                    }
                 }
             }
         }
@@ -524,7 +614,7 @@ impl OpticNode for NodeGroup {
     fn node_attr_mut(&mut self) -> &mut NodeAttr {
         &mut self.node_attr
     }
-    fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
+    fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
         let node_attr = self.node_attr_mut();
         node_attr.set_global_conf(global_conf.clone());
         self.graph.update_global_config(&global_conf);
@@ -537,7 +627,9 @@ impl OpticNode for NodeGroup {
     fn reset_data(&mut self) {
         let nodes = self.graph.nodes();
         for node in nodes {
-            node.optical_ref.borrow_mut().reset_data();
+            if let Ok(mut node) = node.optical_ref.lock() {
+                node.reset_data();
+            }
         }
         self.accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
     }
@@ -569,7 +661,7 @@ impl Dottable for NodeGroup {
             Ok(cloned_self.to_dot_collapsed_view(node_index, name, inverted, ports, rankdir))
         }
     }
-    fn node_color(&self) -> &str {
+    fn node_color(&self) -> &'static str {
         "yellow"
     }
 }
@@ -714,7 +806,9 @@ mod test {
             .node(i_e)
             .unwrap()
             .optical_ref
-            .borrow()
+            .lock()
+            .map_err(|_| OpossumError::Other(format!("Mutex lock failed")))
+            .unwrap()
             .node_report(&uuid)
             .unwrap();
         if let Proptype::Energy(e) = report.properties().get("Energy").unwrap() {

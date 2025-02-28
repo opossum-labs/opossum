@@ -13,10 +13,7 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
-use std::{
-    cell::RefCell,
-    rc::{Rc, Weak},
-};
+use std::sync::{Arc, Mutex, Weak};
 use uuid::Uuid;
 
 #[derive(OpmNode, Debug, Clone)]
@@ -38,7 +35,7 @@ use uuid::Uuid;
 /// **Note**: Since this node only refers to another optical node it does not handle
 /// (ignores) any [`Aperture`](crate::aperture::Aperture) definitions on its ports.
 pub struct NodeReference {
-    reference: Option<Weak<RefCell<dyn Analyzable>>>,
+    reference: Option<Weak<Mutex<dyn Analyzable>>>,
     node_attr: NodeAttr,
 }
 impl Default for NodeReference {
@@ -68,15 +65,14 @@ impl NodeReference {
     #[must_use]
     pub fn from_node(node: &OpticRef) -> Self {
         let mut refr = Self::default();
+        let node_mut = node.optical_ref.lock().expect("Mutex lock failed");
         refr.node_attr
-            .set_property(
-                "reference id",
-                Proptype::Uuid(*node.optical_ref.borrow().node_attr().uuid()),
-            )
+            .set_property("reference id", Proptype::Uuid(*node_mut.node_attr().uuid()))
             .unwrap();
-        let ref_name = format!("ref ({})", node.optical_ref.borrow().name());
+        let ref_name = format!("ref ({})", node_mut.name());
+        drop(node_mut);
         refr.node_attr.set_name(&ref_name);
-        refr.reference = Some(Rc::downgrade(&node.optical_ref));
+        refr.reference = Some(Arc::downgrade(&node.optical_ref));
         refr
     }
     /// Assign a reference to another optical node.
@@ -85,7 +81,7 @@ impl NodeReference {
     /// construction of a [`NodeReference`] using it's `new` function. This function allows for setting / changing after construction (e.g.
     /// during deserialization).
     pub fn assign_reference(&mut self, node: &OpticRef) {
-        self.reference = Some(Rc::downgrade(&node.optical_ref));
+        self.reference = Some(Arc::downgrade(&node.optical_ref));
     }
 }
 impl OpticNode for NodeReference {
@@ -93,7 +89,12 @@ impl OpticNode for NodeReference {
         self.reference
             .as_ref()
             .map_or_else(OpticPorts::default, |rf| {
-                let mut ports = rf.upgrade().unwrap().borrow().ports();
+                let mut ports = rf
+                    .upgrade()
+                    .unwrap()
+                    .lock()
+                    .expect("Mutex lock failed")
+                    .ports();
                 if self.inverted() {
                     ports.set_inverted(true);
                 }
@@ -111,9 +112,10 @@ impl OpticNode for NodeReference {
     }
     fn isometry(&self) -> Option<Isometry> {
         self.reference.as_ref().and_then(|rf| {
-            let ref_node = rf.upgrade().unwrap();
-            let node = ref_node.borrow();
-            node.isometry()
+            rf.upgrade()
+                .unwrap()
+                .lock()
+                .map_or(None, |ref_node| ref_node.isometry())
         })
     }
     fn set_isometry(
@@ -136,7 +138,9 @@ impl AnalysisEnergy for NodeReference {
             .clone()
             .ok_or_else(|| OpossumError::Analysis("no reference defined".into()))?;
         let ref_node = rf.upgrade().unwrap();
-        let mut ref_node = ref_node.borrow_mut();
+        let mut ref_node = ref_node
+            .lock()
+            .map_err(|_| OpossumError::Analysis("Mutex lock failed".into()))?;
         if self.inverted() {
             ref_node.set_inverted(true).map_err(|_e| {
                 OpossumError::Analysis(format!("referenced node {ref_node} cannot be inverted"))
@@ -149,6 +153,8 @@ impl AnalysisEnergy for NodeReference {
         output
     }
 }
+unsafe impl Send for NodeReference {}
+
 impl AnalysisRayTrace for NodeReference {
     fn analyze(
         &mut self,
@@ -159,8 +165,10 @@ impl AnalysisRayTrace for NodeReference {
             .reference
             .clone()
             .ok_or_else(|| OpossumError::Analysis("no reference defined".into()))?;
-        let ref_node = rf.upgrade().unwrap();
-        let mut ref_node = ref_node.borrow_mut();
+        let ref_node_arc = rf.upgrade().unwrap();
+        let mut ref_node = ref_node_arc
+            .lock()
+            .map_err(|_| OpossumError::Analysis("Mutex lock failed".into()))?;
         if self.inverted() {
             ref_node.set_inverted(true).map_err(|_e| {
                 OpossumError::Analysis(format!("referenced node {ref_node} cannot be inverted"))
@@ -205,7 +213,14 @@ mod test {
         let mut scenery = NodeGroup::default();
         let idx = scenery.add_node(&Dummy::default()).unwrap();
         let node_ref = scenery.node(idx).unwrap();
-        let node_name = format!("ref ({})", node_ref.optical_ref.borrow().name());
+        let node_name = format!(
+            "ref ({})",
+            node_ref
+                .optical_ref
+                .lock()
+                .expect("Mutex lock failed")
+                .name()
+        );
         let node = NodeReference::from_node(&node_ref);
 
         assert_eq!(node.name(), node_name);

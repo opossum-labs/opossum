@@ -390,7 +390,7 @@ mod test {
         ports.add(&PortType::Output, "test2").unwrap();
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: RefCell { value: Surface }, lidt: 10000.0 kg^1 s^-2, .. }\noutput:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: RefCell { value: Surface }, lidt: 10000.0 kg^1 s^-2, .. }\n".to_owned()
+            "inputs:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: plane, lidt: 10000.0 kg^1 s^-2, .. }\noutput:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: plane, lidt: 10000.0 kg^1 s^-2, .. }\n".to_owned()
         );
     }
     #[test]
@@ -402,7 +402,7 @@ mod test {
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: RefCell { value: Surface }, lidt: 10000.0 kg^1 s^-2, .. }\noutput:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: RefCell { value: Surface }, lidt: 10000.0 kg^1 s^-2, .. }\nports are inverted\n".to_owned()
+            "inputs:\n  <test2> OpticSurface { aperture: None, coating: IdealAR, geometric surface: plane, lidt: 10000.0 kg^1 s^-2, .. }\noutput:\n  <test1> OpticSurface { aperture: None, coating: IdealAR, geometric surface: plane, lidt: 10000.0 kg^1 s^-2, .. }\nports are inverted\n".to_owned()
         );
     }
 }

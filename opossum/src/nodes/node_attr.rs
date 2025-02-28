@@ -1,7 +1,7 @@
 //! Common optcial node attributes.
 //!
 //! This module handles common attributes of optical nodes such as [`Properties`] or geometric data (isometries, etc.)
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 use petgraph::graph::NodeIndex;
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ pub struct NodeAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     alignment: Option<Isometry>,
     #[serde(skip)]
-    global_conf: Option<Rc<RefCell<SceneryResources>>>,
+    global_conf: Option<Arc<Mutex<SceneryResources>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     align_like_node_at_distance: Option<(NodeIndex, Length)>,
 }
@@ -181,11 +181,11 @@ impl NodeAttr {
     }
     /// Returns a reference to the global config (if any) of this [`NodeAttr`].
     #[must_use]
-    pub const fn global_conf(&self) -> &Option<Rc<RefCell<SceneryResources>>> {
+    pub const fn global_conf(&self) -> &Option<Arc<Mutex<SceneryResources>>> {
         &self.global_conf
     }
     /// Sets the global conf of this [`NodeAttr`].
-    pub fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
+    pub fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
         self.global_conf = global_conf;
     }
     /// Sets the name of this [`NodeAttr`].

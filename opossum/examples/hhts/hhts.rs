@@ -431,8 +431,6 @@ fn main() -> OpmResult<()> {
     group_t2_2w.map_output_port(t2_2w_exit, "output_1", "output_1")?;
     let t2_2w = scenery.add_node(&group_t2_2w)?;
 
-    dbg!(t2_2w);
-
     // T3_2w
     let mut group_t3_2w = NodeGroup::new("T3 2w");
 

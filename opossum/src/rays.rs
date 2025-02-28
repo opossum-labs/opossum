@@ -866,7 +866,6 @@ impl Rays {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
         let mut reflected_rays = Self::default();
-
         for ray in &mut self.rays {
             if ray.valid() {
                 let n2 = if let Some(refractive_index) = refractive_index {

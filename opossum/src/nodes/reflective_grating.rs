@@ -52,6 +52,8 @@ pub type LinearDensity = uom::si::f64::LinearNumberDensity;
 pub struct ReflectiveGrating {
     node_attr: NodeAttr,
 }
+unsafe impl Send for ReflectiveGrating {}
+
 impl Default for ReflectiveGrating {
     /// Create a reflective grating with a specified line density.
     fn default() -> Self {
@@ -228,7 +230,6 @@ impl AnalysisRayTrace for ReflectiveGrating {
             };
 
             let iso = self.effective_surface_iso(in_port)?;
-
             if let Some(surf) = self.get_optic_surface_mut(in_port) {
                 let refraction_intended = false;
                 let grating_vector =
@@ -240,7 +241,6 @@ impl AnalysisRayTrace for ReflectiveGrating {
                     &diffraction_order,
                     refraction_intended,
                 )?;
-
                 if let Some(aperture) = self.ports().aperture(&PortType::Input, in_port) {
                     diffracted_rays.apodize(aperture, &iso)?;
                     diffracted_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;

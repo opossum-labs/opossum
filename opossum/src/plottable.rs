@@ -29,6 +29,7 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 ///Enum to define the type of plot that should be created
+#[derive(Debug)]
 pub enum PlotType {
     ///Scatter plot in two dimensions for pairwise data
     Scatter2D(PlotParameters),
@@ -1423,7 +1424,7 @@ pub trait Plottable {
         if let Some(plt_series) = &mut plt_series_opt {
             if plt_series.len() == 1 {
                 let c = colorous::CATEGORY10[0];
-                plt_series[0].color = RGBAColor(c.r, c.g, c.b, 1.);
+                plt_series[0].color = RGBAColor(c.r, c.g, c.b, plt_series[0].color.3);
             }
         }
         plt_series_opt.map_or(Ok(None), |plt_series| plt_type.plot(&plt_series))
@@ -2075,7 +2076,7 @@ impl PlotParameters {
     }
 
     fn check_ax_lim_validity(ax_lim_opt: Option<&AxLims>) -> bool {
-        ax_lim_opt.as_ref().map_or(true, |lim| lim.check_validity())
+        ax_lim_opt.as_ref().is_none_or(|lim| lim.check_validity())
     }
 
     fn check_plot_arg_validity(plt_arg: &PlotArgs) -> bool {
@@ -2105,7 +2106,7 @@ impl PlotParameters {
         for valid_ext in valid_exts {
             if std::path::Path::new(fname)
                 .extension()
-                .map_or(false, |ext| ext.eq_ignore_ascii_case(valid_ext))
+                .is_some_and(|ext| ext.eq_ignore_ascii_case(valid_ext))
             {
                 valid = true;
                 break;
@@ -2175,13 +2176,13 @@ impl PlotParameters {
             PltBackEnd::Bitmap => {
                 if std::path::Path::new(&path_fname)
                     .extension()
-                    .map_or(false, |ext| ext.eq_ignore_ascii_case("png"))
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
                     || std::path::Path::new(&path_fname)
                         .extension()
-                        .map_or(false, |ext| ext.eq_ignore_ascii_case("bmp"))
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("bmp"))
                     || std::path::Path::new(&path_fname)
                         .extension()
-                        .map_or(false, |ext| ext.eq_ignore_ascii_case("jpg"))
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("jpg"))
                 {
                     Ok(())
                 } else {
@@ -2191,7 +2192,7 @@ impl PlotParameters {
             PltBackEnd::SVG => {
                 if std::path::Path::new(&path_fname)
                     .extension()
-                    .map_or(false, |ext| ext.eq_ignore_ascii_case("svg"))
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"))
                 {
                     Ok(())
                 } else {

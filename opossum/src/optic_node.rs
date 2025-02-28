@@ -25,10 +25,9 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait OpticNode: Dottable {
@@ -66,7 +65,7 @@ pub trait OpticNode: Dottable {
     /// This function errors if the function `add_optic_surface` fails
     fn update_flat_single_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso))));
+        let geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
 
         self.update_surface(
             &"input_1".to_string(),
@@ -435,12 +434,12 @@ pub trait OpticNode: Dottable {
         }
     }
     /// Get a refrecne to a global configuration (if any).
-    fn global_conf(&self) -> &Option<Rc<RefCell<SceneryResources>>> {
+    fn global_conf(&self) -> &Option<Arc<Mutex<SceneryResources>>> {
         self.node_attr().global_conf()
     }
     /// Set the global configuration for this [`OpticNode`].
     /// **Note**: This function should normally only be used by [`OpticRef`](crate::optic_ref::OpticRef).
-    fn set_global_conf(&mut self, global_conf: Option<Rc<RefCell<SceneryResources>>>) {
+    fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
         let node_attr = self.node_attr_mut();
         node_attr.set_global_conf(global_conf);
     }
@@ -456,7 +455,12 @@ pub trait OpticNode: Dottable {
                 );
                 SceneryResources::default().ambient_refr_index
             },
-            |conf| conf.borrow().ambient_refr_index.clone(),
+            |conf| {
+                conf.lock()
+                    .expect("Mutex lock failed")
+                    .ambient_refr_index
+                    .clone()
+            },
         )
     }
 

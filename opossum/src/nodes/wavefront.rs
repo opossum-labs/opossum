@@ -53,6 +53,8 @@ pub struct WaveFront {
     node_attr: NodeAttr,
     apodization_warning: bool,
 }
+unsafe impl Send for WaveFront {}
+
 impl Default for WaveFront {
     /// create a wavefront monitor.
     fn default() -> Self {

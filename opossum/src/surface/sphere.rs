@@ -146,6 +146,9 @@ impl GeoSurface for Sphere {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
+    fn name(&self) -> String {
+        "sphere".into()
+    }
 }
 
 // impl Color for Sphere {

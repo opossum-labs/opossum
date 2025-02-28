@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! Infinitely thin mirror with spherical or flat surface
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 use super::NodeAttr;
 use crate::{
@@ -47,6 +47,8 @@ use uom::si::f64::Length;
 pub struct ThinMirror {
     node_attr: NodeAttr,
 }
+unsafe impl Send for ThinMirror {}
+
 impl Default for ThinMirror {
     /// Create a thin mirror with a flat surface.
     fn default() -> Self {
@@ -123,14 +125,14 @@ impl OpticNode for ThinMirror {
         };
         let (geosurface, anchor_point_iso) = if curvature.is_infinite() {
             (
-                GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso)))),
+                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso)))),
                 Isometry::identity(),
             )
         } else {
             let anchor_point_iso_front =
                 Isometry::new(meter!(0., 0., curvature.value), radian!(0., 0., 0.))?;
             (
-                GeoSurfaceRef(Rc::new(RefCell::new(Sphere::new(
+                GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
                     *curvature,
                     node_iso.append(&anchor_point_iso_front),
                 )?))),
@@ -263,7 +265,7 @@ impl AnalysisRayTrace for ThinMirror {
         }
     }
 
-    fn calc_node_position(
+    fn calc_node_positions(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,

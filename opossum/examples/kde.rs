@@ -21,13 +21,10 @@ fn main() -> OpmResult<()> {
         let hit_point = HitPoint::Energy(EnergyHitPoint::new(p, weight)?);
         hit_map.add_hit_point(hit_point)?;
     }
-    dbg!("Done Add HitMap");
     let fluence_data = hit_map.calc_fluence_map((100, 100), &FluenceEstimator::KDE, None, None)?;
-    dbg!("Done KDE");
     fluence_data.to_plot(
         Path::new("./opossum/playground/kde.png"),
         opossum::plottable::PltBackEnd::Bitmap,
     )?;
-    dbg!("Done PNG");
     Ok(())
 }
