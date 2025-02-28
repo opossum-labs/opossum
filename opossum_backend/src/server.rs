@@ -21,7 +21,7 @@ async fn not_found() -> actix_web::Result<HttpResponse> {
 /// # Panics
 ///
 /// Panics if the server could not be bind to a port.
-pub fn start_server() -> Server {
+pub fn start() -> Server {
     #[derive(OpenApi)]
     #[openapi(
         info(title = "OPOSSUM API", description = "Description blah blah...", contact(name="Udo Eisenbarth", email="u.eisenbarth@gsi.de"), license(name="GPL3")),
