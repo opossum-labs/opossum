@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 use super::NodeAttr;
 use crate::{
@@ -43,6 +43,8 @@ mod analysis_raytrace;
 pub struct Wedge {
     node_attr: NodeAttr,
 }
+unsafe impl Send for Wedge {}
+
 impl Default for Wedge {
     /// Create a wedge with a center thickness of 10.0 mm, refractive index of 1.5 and no wedge angle (flat windows)
     fn default() -> Self {
@@ -121,7 +123,7 @@ impl OpticNode for Wedge {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
 
-        let front_geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso.clone()))));
+        let front_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso.clone()))));
 
         self.update_surface(
             &"input_1".to_string(),
@@ -150,7 +152,7 @@ impl OpticNode for Wedge {
             Point3::new(angle, Angle::zero(), Angle::zero()),
         )?;
         let anchor_point_iso = thickness_iso.append(&wedge_iso);
-        let rear_geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(
+        let rear_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
             node_iso.append(&anchor_point_iso),
         ))));
 

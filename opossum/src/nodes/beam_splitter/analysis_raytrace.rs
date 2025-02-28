@@ -37,7 +37,7 @@ impl AnalysisRayTrace for BeamSplitter {
             Ok(LightResult::default())
         }
     }
-    fn calc_node_position(
+    fn calc_node_positions(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,

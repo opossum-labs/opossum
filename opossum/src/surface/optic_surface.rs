@@ -141,8 +141,16 @@ impl OpticSurface {
         }
     }
     /// Sets the isometry of this [`OpticSurface`].
+    ///
+    /// # Panics
+    ///
+    /// This function might theoretically panic if locking of an internal mutex fails.
     pub fn set_isometry(&self, iso: &Isometry) {
-        self.geo_surface.0.borrow_mut().set_isometry(iso);
+        self.geo_surface
+            .0
+            .lock()
+            .expect("Mutex lock failed")
+            .set_isometry(iso);
     }
     /// Returns a reference to the hit map of this [`OpticSurface`].
     ///
@@ -248,7 +256,7 @@ impl Debug for OpticSurface {
         f.debug_struct("OpticSurface")
             .field("aperture", &self.aperture)
             .field("coating", &self.coating)
-            .field("geometric surface", &self.geo_surface.0)
+            .field("geometric surface", &self.geo_surface.0.lock().unwrap())
             .field("lidt", &self.lidt)
             .finish_non_exhaustive()
     }
@@ -268,7 +276,7 @@ mod test {
         J_per_cm2,
     };
     use core::f64;
-    use std::{cell::RefCell, rc::Rc};
+    use std::sync::{Arc, Mutex};
     use uuid::Uuid;
 
     #[test]
@@ -316,7 +324,7 @@ mod test {
         let aperture =
             Aperture::BinaryCircle(CircleConfig::new(meter!(1.0), meter!(0.0, 0.0)).unwrap());
         let os = OpticSurface::new(
-            GeoSurfaceRef(Rc::new(RefCell::new(
+            GeoSurfaceRef(Arc::new(Mutex::new(
                 Sphere::new(meter!(1.0), Isometry::identity()).unwrap(),
             ))),
             CoatingType::Fresnel,

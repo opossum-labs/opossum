@@ -45,6 +45,8 @@ use std::fmt::Debug;
 pub struct Source {
     node_attr: NodeAttr,
 }
+unsafe impl Send for Source {}
+
 impl Default for Source {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("source");
@@ -218,7 +220,7 @@ impl AnalysisRayTrace for Source {
             ))
         }
     }
-    fn calc_node_position(
+    fn calc_node_positions(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,
@@ -457,7 +459,7 @@ mod test {
         node.set_alignment_wavelength(nanometer!(630.0)).unwrap();
         node.set_light_data(&LightData::Geometric(Rays::default()))
             .unwrap();
-        let output = AnalysisRayTrace::calc_node_position(
+        let output = AnalysisRayTrace::calc_node_positions(
             &mut node,
             LightResult::default(),
             &RayTraceConfig::default(),

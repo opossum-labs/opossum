@@ -137,6 +137,10 @@ impl GeoSurface for Cylinder {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
+
+    fn name(&self) -> String {
+        "cylindric".into()
+    }
 }
 
 #[cfg(test)]

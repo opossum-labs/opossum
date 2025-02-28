@@ -61,6 +61,9 @@ impl GeoSurface for Plane {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
+    fn name(&self) -> String {
+        "plane".into()
+    }
 }
 // impl Color for Plane {
 //     fn get_color(&self, _p: &Point3<f64>) -> Vector3<f64> {

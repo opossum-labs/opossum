@@ -40,7 +40,7 @@ impl Analyzer for RayTracingAnalyzer {
             format!(" '{}'", scenery.node_attr().name())
         };
         info!("Calculate node positions of scenery{scenery_name}.");
-        AnalysisRayTrace::calc_node_position(scenery, LightResult::default(), &self.config)?;
+        AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &self.config)?;
         scenery.reset_data();
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
         AnalysisRayTrace::analyze(scenery, LightResult::default(), &self.config)?;
@@ -72,7 +72,7 @@ pub trait AnalysisRayTrace: OpticNode {
     ///
     /// # Errors
     /// This function will return an error if internal element-specific errors occur and the analysis cannot be performed.
-    fn calc_node_position(
+    fn calc_node_positions(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,

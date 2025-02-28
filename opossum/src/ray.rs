@@ -474,9 +474,13 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        if let Some((intersection_point, surface_normal)) =
-            s.geo_surface().0.borrow().calc_intersect_and_normal(self)
-        {
+        let geo_surf = s.geo_surface();
+        let surf_vectors = geo_surf
+            .0
+            .lock()
+            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+            .calc_intersect_and_normal(self);
+        if let Some((intersection_point, surface_normal)) = surf_vectors {
             let surface_normal = surface_normal.normalize();
 
             // get correctly normalized k vector of ray
@@ -503,7 +507,8 @@ impl Ray {
             let dist_from_origin = s
                 .geo_surface()
                 .0
-                .borrow()
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
                 .isometry()
                 .inverse_transform_point_f64(&intersection_in_m)
                 .x;
@@ -568,9 +573,13 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        if let Some((intersection_point, surface_normal)) =
-            os.geo_surface().0.borrow().calc_intersect_and_normal(self)
-        {
+        let geo_surface = os.geo_surface();
+        let surf_vectors = geo_surface
+            .0
+            .lock()
+            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+            .calc_intersect_and_normal(self);
+        if let Some((intersection_point, surface_normal)) = surf_vectors {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
             // s1: incoming direction (normalized??)
@@ -610,7 +619,6 @@ impl Ray {
                 if n2.is_some() {
                     self.number_of_refractions += 1;
                 }
-
                 // save on hit map of surface
                 if self.helper_rays.is_none() && !self.is_helper {
                     //energy hit point
@@ -618,7 +626,8 @@ impl Ray {
                         HitPoint::Energy(EnergyHitPoint::new(
                             os.geo_surface()
                                 .0
-                                .borrow()
+                                .lock()
+                                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
                                 .isometry()
                                 .inverse_transform_point(&intersection_point),
                             input_energy,
@@ -632,7 +641,8 @@ impl Ray {
                         HitPoint::Fluence(FluenceHitPoint::new(
                             os.geo_surface()
                                 .0
-                                .borrow()
+                                .lock()
+                                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
                                 .isometry()
                                 .inverse_transform_point(&intersection_point),
                             *helper_fluence,

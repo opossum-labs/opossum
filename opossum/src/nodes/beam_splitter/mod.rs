@@ -19,7 +19,7 @@ use crate::{
     utils::{geom_transformation::Isometry, EnumProxy},
 };
 use opm_macros_lib::OpmNode;
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("lightpink")]
@@ -41,6 +41,8 @@ use std::{cell::RefCell, rc::Rc};
 pub struct BeamSplitter {
     node_attr: NodeAttr,
 }
+unsafe impl Send for BeamSplitter {}
+
 impl Default for BeamSplitter {
     /// Create a 50:50 beamsplitter.
     fn default() -> Self {
@@ -304,7 +306,7 @@ impl OpticNode for BeamSplitter {
 
         let input_surf_name_list = vec!["input_1", "input_2"];
         let output_surf_name_list = vec!["out1_trans1_refl2", "out2_trans2_refl1"];
-        let geosurface = GeoSurfaceRef(Rc::new(RefCell::new(Plane::new(node_iso))));
+        let geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
         let anchor_point_iso = Isometry::identity();
         for in_surf_name in &input_surf_name_list {
             self.update_surface(

@@ -24,6 +24,7 @@ pub trait Dottable {
         let node_name = format!("{name}{inv_string}");
         let mut dot_str = format!("\ti{node_index} [\n\t\tshape=plaintext\n");
         let mut indent_level = 2;
+
         dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports, rankdir));
         Ok(dot_str)
     }
@@ -57,7 +58,7 @@ pub trait Dottable {
     ///
     /// # Returns
     /// Returns the color string of the node.
-    fn node_color(&self) -> &str {
+    fn node_color(&self) -> &'static str {
         "lightgray"
     }
     /// Creates the start- or end-sequence of an html-like container within the dot file
@@ -366,7 +367,6 @@ mod test {
 
         let mut scenery = NodeGroup::default();
         scenery.add_node(&Dummy::new("Test")).unwrap();
-
         let scenery_dot_str_tb = scenery.toplevel_dot("TB").unwrap();
         let scenery_dot_str_lr = scenery.toplevel_dot("LR").unwrap();
 

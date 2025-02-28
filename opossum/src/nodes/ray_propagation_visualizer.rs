@@ -49,6 +49,7 @@ pub struct RayPropagationVisualizer {
     node_attr: NodeAttr,
     apodization_warning: bool,
 }
+unsafe impl Send for RayPropagationVisualizer {}
 impl Default for RayPropagationVisualizer {
     /// create a spot-diagram monitor.
     fn default() -> Self {
@@ -385,7 +386,7 @@ impl Plottable for RayPositionHistories {
                 };
                 plt_series.push(PlotSeries::new(
                     &plt_data,
-                    RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.),
+                    RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 0.4),
                     series_label,
                 ));
             }

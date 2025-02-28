@@ -113,6 +113,8 @@ impl FluenceData {
         self.interp_distribution.nrows()
     }
     /// Returns the shape of the interpolation distribution in pixels
+    ///
+    /// The order of the returned tuple is `(rows, columns)`.
     #[must_use]
     pub fn shape(&self) -> (usize, usize) {
         self.interp_distribution.shape()
@@ -188,5 +190,128 @@ impl Plottable for FluenceData {
             }
             _ => Ok(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::FluenceData;
+    use crate::{
+        joule, meter,
+        plottable::{PlotType, Plottable},
+        properties::Proptype,
+        surface::hit_map::fluence_estimator::FluenceEstimator,
+        J_per_cm2, J_per_m2,
+    };
+    use assert_matches::assert_matches;
+    use nalgebra::{dmatrix, vector};
+    #[test]
+    fn into_proptype() {
+        let fluence_data = FluenceData::new(
+            dmatrix![
+                J_per_cm2!(1.0), J_per_cm2!(2.0);
+                J_per_cm2!(3.0), J_per_cm2!(4.0)],
+            meter!(0.0)..meter!(1.0),
+            meter!(0.0)..meter!(1.0),
+            FluenceEstimator::default(),
+        );
+        let proptype: Proptype = fluence_data.into();
+        assert_matches!(proptype, Proptype::FluenceData(_));
+    }
+    #[test]
+    fn estimator() {
+        let fluence_data = FluenceData::new(
+            dmatrix![
+                J_per_cm2!(1.0), J_per_cm2!(2.0);
+                J_per_cm2!(3.0), J_per_cm2!(4.0)],
+            meter!(0.0)..meter!(1.0),
+            meter!(0.0)..meter!(1.0),
+            FluenceEstimator::Binning,
+        );
+        assert_eq!(fluence_data.estimator(), &FluenceEstimator::Binning);
+    }
+    #[test]
+    fn get_fluence_distribution() {
+        let fluence_data = FluenceData::new(
+            dmatrix![
+                J_per_cm2!(1.0), J_per_cm2!(2.0);
+                J_per_cm2!(3.0), J_per_cm2!(4.0)],
+            meter!(0.0)..meter!(1.0),
+            meter!(0.0)..meter!(1.0),
+            FluenceEstimator::Binning,
+        );
+        let (x, y, distribution) = fluence_data.get_fluence_distribution();
+        assert_eq!(x, vector![meter!(0.0), meter!(1.0)]);
+        assert_eq!(y, vector![meter!(0.0), meter!(1.0)]);
+        assert_eq!(
+            distribution,
+            dmatrix![
+            J_per_cm2!(1.0), J_per_cm2!(2.0);
+            J_per_cm2!(3.0), J_per_cm2!(4.0)]
+        );
+    }
+    #[test]
+    fn len_x_y() {
+        let fluence_data = FluenceData::new(
+            dmatrix![
+                J_per_cm2!(1.0), J_per_cm2!(2.0), J_per_cm2!(3.0);
+                J_per_cm2!(4.0), J_per_cm2!(5.0), J_per_cm2!(6.0);],
+            meter!(0.0)..meter!(1.0),
+            meter!(0.0)..meter!(1.0),
+            FluenceEstimator::Binning,
+        );
+        assert_eq!(fluence_data.len_x(), 3);
+        assert_eq!(fluence_data.len_y(), 2);
+    }
+    #[test]
+    fn shape() {
+        let fluence_data = FluenceData::new(
+            dmatrix![
+                J_per_cm2!(1.0), J_per_cm2!(2.0), J_per_cm2!(3.0);
+                J_per_cm2!(4.0), J_per_cm2!(5.0), J_per_cm2!(6.0);],
+            meter!(0.0)..meter!(1.0),
+            meter!(0.0)..meter!(1.0),
+            FluenceEstimator::Binning,
+        );
+        assert_eq!(fluence_data.shape(), (2, 3));
+    }
+    #[test]
+    fn peak() {
+        let fluence_data = FluenceData::new(
+            dmatrix![
+                J_per_cm2!(1.0), J_per_cm2!(2.0);
+                J_per_cm2!(3.0), J_per_cm2!(4.0)],
+            meter!(0.0)..meter!(1.0),
+            meter!(0.0)..meter!(1.0),
+            FluenceEstimator::Binning,
+        );
+        assert_eq!(fluence_data.peak(), J_per_cm2!(4.0));
+    }
+    #[test]
+    fn total_energy() {
+        let fluence_data = FluenceData::new(
+            dmatrix![
+                J_per_m2!(f64::NAN), J_per_m2!(8.0);
+                J_per_m2!(8.0), J_per_m2!(4.0)],
+            meter!(0.0)..meter!(1.0),
+            meter!(0.0)..meter!(1.0),
+            FluenceEstimator::Binning,
+        );
+        assert_eq!(fluence_data.total_energy(), joule!(5.0));
+    }
+    #[test]
+    fn get_plot_type() {
+        let fluence_data = FluenceData::new(
+            dmatrix![
+                J_per_m2!(4.0), J_per_m2!(8.0);
+                J_per_m2!(8.0), J_per_m2!(4.0)],
+            meter!(0.0)..meter!(1.0),
+            meter!(0.0)..meter!(1.0),
+            FluenceEstimator::Binning,
+        );
+        assert_matches!(
+            fluence_data.get_plot_type(&mut Default::default()),
+            PlotType::ColorMesh(_)
+        );
     }
 }
