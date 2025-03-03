@@ -1,7 +1,14 @@
 [package]
 name = "opossum_backend"
-version = "0.1.0"
+version = "0.6.0"
 edition = "2021"
+authors = ["Udo Eisenbarth", "Yannik Zobus"]
+
+[package.metadata.wix]
+upgrade-guid = "AE0EF413-A04C-4EF1-BAFA-7F0F01F2A50A"
+path-guid = "E3D4E364-1CA1-45A4-A48B-ED66417EA5E0"
+license = false
+eula = false
 
 [dependencies]
 opossum = { path = "../opossum" }

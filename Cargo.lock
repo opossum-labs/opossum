@@ -4964,7 +4964,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_backend"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "actix-cors",
  "actix-web",
