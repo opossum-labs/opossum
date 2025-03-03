@@ -239,7 +239,6 @@ mod test {
         assert_eq!(document.analyzers().len(), 2);
     }
     #[test]
-    #[ignore]
     fn all_nodes_integration_test() {
         let mut scenery = NodeGroup::default();
         let src = round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 1).unwrap();
