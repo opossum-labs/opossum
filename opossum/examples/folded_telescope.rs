@@ -62,9 +62,9 @@ pub fn main() -> OpmResult<()> {
         .with_decenter(centimeter!(2., 0., 0.))?,
     )?;
 
-    let mir_1 = ThinMirror::new("mirr").align_like_node_at_distance(lens1, millimeter!(996.7));
+    let mir_1 = ThinMirror::new("mirr").align_like_node_at_distance(&lens1, millimeter!(996.7));
     let mir_1 = scenery.add_node(&mir_1)?;
-    let mut lens_1_ref = NodeReference::from_node(&scenery.node(lens1)?);
+    let mut lens_1_ref = NodeReference::from_node(&scenery.node(&lens1)?);
     lens_1_ref.set_inverted(true)?;
     let lens_1_ref = scenery.add_node(&lens_1_ref)?;
 
@@ -73,19 +73,19 @@ pub fn main() -> OpmResult<()> {
         Some(Vector3::y()),
     )?)?;
 
-    scenery.connect_nodes(i_src, "output_1", lens1, "input_1", millimeter!(400.0))?;
-    scenery.connect_nodes(lens1, "output_1", mir_1, "input_1", millimeter!(400.0))?;
+    scenery.connect_nodes(&i_src, "output_1", &lens1, "input_1", millimeter!(400.0))?;
+    scenery.connect_nodes(&lens1, "output_1", &mir_1, "input_1", millimeter!(400.0))?;
     scenery.connect_nodes(
-        mir_1,
+        &mir_1,
         "output_1",
-        lens_1_ref,
+        &lens_1_ref,
         "output_1",
         millimeter!(100.0),
     )?;
     scenery.connect_nodes(
-        lens_1_ref,
+        &lens_1_ref,
         "input_1",
-        i_prop_vis,
+        &i_prop_vis,
         "input_1",
         millimeter!(400.0),
     )?;

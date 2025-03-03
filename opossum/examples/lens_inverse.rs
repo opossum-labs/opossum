@@ -28,14 +28,14 @@ fn main() -> OpmResult<()> {
         &RefrIndexConst::new(1.5)?,
     )?)?;
     let i_m2 = scenery.add_node(&ThinMirror::new("mirror").with_tilt(degree!(5.0, 0.0, 0.0))?)?;
-    let mut l1_ref = NodeReference::from_node(&scenery.node(i_l1)?);
+    let mut l1_ref = NodeReference::from_node(&scenery.node(&i_l1)?);
     l1_ref.set_inverted(true)?;
     let i_l1_ref = scenery.add_node(&l1_ref)?;
     let i_sd3 = scenery.add_node(&RayPropagationVisualizer::default())?;
-    scenery.connect_nodes(i_src, "output_1", i_l1, "input_1", millimeter!(30.0))?;
-    scenery.connect_nodes(i_l1, "output_1", i_m2, "input_1", millimeter!(90.0))?;
-    scenery.connect_nodes(i_m2, "output_1", i_l1_ref, "output_1", millimeter!(0.0))?;
-    scenery.connect_nodes(i_l1_ref, "input_1", i_sd3, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(&i_src, "output_1", &i_l1, "input_1", millimeter!(30.0))?;
+    scenery.connect_nodes(&i_l1, "output_1", &i_m2, "input_1", millimeter!(90.0))?;
+    scenery.connect_nodes(&i_m2, "output_1", &i_l1_ref, "output_1", millimeter!(0.0))?;
+    scenery.connect_nodes(&i_l1_ref, "input_1", &i_sd3, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

@@ -42,10 +42,10 @@ fn main() -> OpmResult<()> {
     )?)?;
     let i_d1 = scenery.add_node(&Dummy::default())?;
 
-    scenery.connect_nodes(i_s1, "output_1", i_bs, "input_1", Length::zero())?;
-    scenery.connect_nodes(i_s2, "output_1", i_bs, "input_2", Length::zero())?;
-    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_f, "input_1", Length::zero())?;
-    scenery.connect_nodes(i_f, "output_1", i_d1, "input_1", Length::zero())?;
+    scenery.connect_nodes(&i_s1, "output_1", &i_bs, "input_1", Length::zero())?;
+    scenery.connect_nodes(&i_s2, "output_1", &i_bs, "input_2", Length::zero())?;
+    scenery.connect_nodes(&i_bs, "out1_trans1_refl2", &i_f, "input_1", Length::zero())?;
+    scenery.connect_nodes(&i_f, "output_1", &i_d1, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::Energy);

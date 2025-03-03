@@ -22,12 +22,12 @@ fn main() -> OpmResult<()> {
     let i_bs = scenery.add_node(&BeamSplitter::default())?;
     let i_sd = scenery.add_node(&RayPropagationVisualizer::default())?;
 
-    scenery.connect_nodes(i_src1, "output_1", i_bs, "input_1", millimeter!(100.0))?;
-    scenery.connect_nodes(i_src2, "output_1", i_bs, "input_2", millimeter!(110.0))?;
+    scenery.connect_nodes(&i_src1, "output_1", &i_bs, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(&i_src2, "output_1", &i_bs, "input_2", millimeter!(110.0))?;
     scenery.connect_nodes(
-        i_bs,
+        &i_bs,
         "out1_trans1_refl2",
-        i_sd,
+        &i_sd,
         "input_1",
         millimeter!(150.0),
     )?;

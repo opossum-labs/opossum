@@ -22,11 +22,11 @@ fn main() -> OpmResult<()> {
         "50 % filter",
         &opossum::nodes::FilterType::Constant(0.5),
     )?)?;
-    let reference = scenery.add_node(&NodeReference::from_node(&scenery.node(filt).unwrap()))?;
+    let reference = scenery.add_node(&NodeReference::from_node(&scenery.node(&filt).unwrap()))?;
     let detector = scenery.add_node(&EnergyMeter::default())?;
-    scenery.connect_nodes(src, "output_1", filt, "input_1", Length::zero())?;
-    scenery.connect_nodes(filt, "output_1", reference, "input_1", Length::zero())?;
-    scenery.connect_nodes(reference, "output_1", detector, "input_1", Length::zero())?;
+    scenery.connect_nodes(&src, "output_1", &filt, "input_1", Length::zero())?;
+    scenery.connect_nodes(&filt, "output_1", &reference, "input_1", Length::zero())?;
+    scenery.connect_nodes(&reference, "output_1", &detector, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::Energy);

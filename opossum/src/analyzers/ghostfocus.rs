@@ -460,7 +460,7 @@ impl GhostFocusHistory {
                     if bounce != 0 {
                         report_str += format!("bounce {bounce} at node '").as_str();
                     }
-                    if let Some(opt_ref) = graph.node_by_uuid(node_uuid) {
+                    if let Ok(opt_ref) = graph.node_by_uuid(&node_uuid) {
                         report_str += format!(
                             "{}', ",
                             opt_ref
@@ -680,10 +680,10 @@ mod test_ghost_focus_analyzer {
             )
             .unwrap();
         scenery
-            .connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(120.0))
+            .connect_nodes(&i_src, "output_1", &i_l, "input_1", millimeter!(120.0))
             .unwrap();
         scenery
-            .connect_nodes(i_l, "output_1", mir1, "input_1", millimeter!(60.0))
+            .connect_nodes(&i_l, "output_1", &mir1, "input_1", millimeter!(60.0))
             .unwrap();
 
         let mut config = GhostFocusConfig::default();

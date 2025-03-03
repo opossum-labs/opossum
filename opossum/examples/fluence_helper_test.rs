@@ -42,9 +42,9 @@ fn main() -> OpmResult<()> {
     let i_fl1 = scenery.add_node(&fl_det)?;
     let i_fl2 = scenery.add_node(&FluenceDetector::default())?;
 
-    scenery.connect_nodes(i_src, "output_1", i_fl1, "input_1", millimeter!(100.0))?;
-    scenery.connect_nodes(i_fl1, "output_1", i_pl, "input_1", millimeter!(50.0))?;
-    scenery.connect_nodes(i_pl, "output_1", i_fl2, "input_1", millimeter!(250.))?;
+    scenery.connect_nodes(&i_src, "output_1", &i_fl1, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(&i_fl1, "output_1", &i_pl, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(&i_pl, "output_1", &i_fl2, "input_1", millimeter!(250.))?;
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     doc.save_to_file(Path::new("./opossum/playground/fluence_test_w_helper.opm"))

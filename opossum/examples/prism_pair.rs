@@ -39,11 +39,11 @@ fn main() -> OpmResult<()> {
     let det = scenery.add_node(&RayPropagationVisualizer::default())?;
     let sd = scenery.add_node(&SpotDiagram::default())?;
 
-    scenery.connect_nodes(src, "output_1", p1, "input_1", millimeter!(10.0))?;
-    scenery.connect_nodes(p1, "output_1", p2, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(&src, "output_1", &p1, "input_1", millimeter!(10.0))?;
+    scenery.connect_nodes(&p1, "output_1", &p2, "input_1", millimeter!(100.0))?;
 
-    scenery.connect_nodes(p2, "output_1", sd, "input_1", millimeter!(50.0))?;
-    scenery.connect_nodes(sd, "output_1", det, "input_1", millimeter!(0.1))?;
+    scenery.connect_nodes(&p2, "output_1", &sd, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(&sd, "output_1", &det, "input_1", millimeter!(0.1))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

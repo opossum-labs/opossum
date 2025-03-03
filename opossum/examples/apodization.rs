@@ -31,8 +31,8 @@ fn main() -> OpmResult<()> {
     let i_d = scenery.add_node(&dummy)?;
     let i_sd = scenery.add_node(&SpotDiagram::default())?;
 
-    scenery.connect_nodes(i_src, "output_1", i_d, "input_1", millimeter!(50.0))?;
-    scenery.connect_nodes(i_d, "output_1", i_sd, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(&i_src, "output_1", &i_d, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(&i_d, "output_1", &i_sd, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

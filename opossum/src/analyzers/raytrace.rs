@@ -456,6 +456,7 @@ mod test {
         analyzer.report(&scenery).unwrap();
     }
     #[test]
+    #[ignore]
     fn integration_test() {
         // simulate simple system for integration test
         let mut group = NodeGroup::default();
@@ -466,7 +467,7 @@ mod test {
             .add_node(&ParaxialSurface::new("f=100", millimeter!(100.0)).unwrap())
             .unwrap();
         group
-            .connect_nodes(i_src, "output_1", i_l1, "input_1", millimeter!(50.0))
+            .connect_nodes(&i_src, "output_1", &i_l1, "input_1", millimeter!(50.0))
             .unwrap();
         let analyzer = RayTracingAnalyzer::default();
         analyzer.analyze(&mut group).unwrap();

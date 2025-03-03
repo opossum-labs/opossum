@@ -203,16 +203,16 @@ mod test {
     #[test]
     fn from_node() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(&Dummy::default()).unwrap();
-        let node_ref = scenery.node(idx).unwrap();
+        let node_id = scenery.add_node(&Dummy::default()).unwrap();
+        let node_ref = scenery.node(&node_id).unwrap();
         let node = NodeReference::from_node(&node_ref);
         assert!(node.reference.is_some());
     }
     #[test]
     fn from_node_name() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(&Dummy::default()).unwrap();
-        let node_ref = scenery.node(idx).unwrap();
+        let node_id = scenery.add_node(&Dummy::default()).unwrap();
+        let node_ref = scenery.node(&node_id).unwrap();
         let node_name = format!(
             "ref ({})",
             node_ref
@@ -228,8 +228,8 @@ mod test {
     #[test]
     fn assign_reference() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(&Dummy::default()).unwrap();
-        let node_ref = scenery.node(idx).unwrap();
+        let node_id = scenery.add_node(&Dummy::default()).unwrap();
+        let node_ref = scenery.node(&node_id).unwrap();
         let mut node = NodeReference::default();
         assert!(node.reference.is_none());
         node.assign_reference(&node_ref);
@@ -248,16 +248,16 @@ mod test {
     #[test]
     fn ports_non_empty() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(&Dummy::default()).unwrap();
-        let node = NodeReference::from_node(&scenery.node(idx).unwrap());
+        let node_id = scenery.add_node(&Dummy::default()).unwrap();
+        let node = NodeReference::from_node(&scenery.node(&node_id).unwrap());
         assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
     fn ports_inverted() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(&Dummy::default()).unwrap();
-        let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
+        let node_id = scenery.add_node(&Dummy::default()).unwrap();
+        let mut node = NodeReference::from_node(&scenery.node(&node_id).unwrap());
         node.set_inverted(true.into()).unwrap();
         assert_eq!(node.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["input_1"]);
@@ -265,8 +265,8 @@ mod test {
     #[test]
     fn analyze_empty() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(&Dummy::default()).unwrap();
-        let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
+        let node_id = scenery.add_node(&Dummy::default()).unwrap();
+        let mut node = NodeReference::from_node(&scenery.node(&node_id).unwrap());
         let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
         assert!(output.is_empty());
     }
@@ -279,8 +279,8 @@ mod test {
     #[test]
     fn analyze() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(&Dummy::default()).unwrap();
-        let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
+        let node_id = scenery.add_node(&Dummy::default()).unwrap();
+        let mut node = NodeReference::from_node(&scenery.node(&node_id).unwrap());
 
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
@@ -298,8 +298,8 @@ mod test {
     #[test]
     fn analyze_inverse() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(&Dummy::default()).unwrap();
-        let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
+        let node_id = scenery.add_node(&Dummy::default()).unwrap();
+        let mut node = NodeReference::from_node(&scenery.node(&node_id).unwrap());
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {
@@ -318,8 +318,8 @@ mod test {
     #[test]
     fn analyze_non_invertible_ref() {
         let mut scenery = NodeGroup::default();
-        let idx = scenery.add_node(&Source::default()).unwrap();
-        let mut node = NodeReference::from_node(&scenery.node(idx).unwrap());
+        let node_id = scenery.add_node(&Source::default()).unwrap();
+        let mut node = NodeReference::from_node(&scenery.node(&node_id).unwrap());
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(DataEnergy {

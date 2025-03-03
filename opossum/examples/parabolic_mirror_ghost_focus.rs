@@ -47,10 +47,10 @@ fn main() -> OpmResult<()> {
     )?;
     let i_rpv = scenery.add_node(&RayPropagationVisualizer::default())?;
 
-    scenery.connect_nodes(i_src, "output_1", i_m1, "input_1", millimeter!(50.0))?;
-    scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(50.0))?;
-    scenery.connect_nodes(i_m2, "output_1", i_m3, "input_1", millimeter!(200.0))?;
-    scenery.connect_nodes(i_m3, "output_1", i_rpv, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(&i_src, "output_1", &i_m1, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(&i_m1, "output_1", &i_m2, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(&i_m2, "output_1", &i_m3, "input_1", millimeter!(200.0))?;
+    scenery.connect_nodes(&i_m3, "output_1", &i_rpv, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     // let mut config = GhostFocusConfig::default();

@@ -71,16 +71,16 @@ fn main() -> OpmResult<()> {
     let detectors = scenery.add_node(&detector_group()?)?;
 
     scenery.connect_nodes(
-        i_src,
+        &i_src,
         "output_1",
-        compressor_node,
+        &compressor_node,
         "input_1",
         millimeter!(400.0),
     )?;
     scenery.connect_nodes(
-        compressor_node,
+        &compressor_node,
         "output_1",
-        detectors,
+        &detectors,
         "input_1",
         millimeter!(400.),
     )?;
@@ -103,16 +103,16 @@ fn main() -> OpmResult<()> {
     let detectors = scenery.add_node(&detector_group()?)?;
 
     scenery.connect_nodes(
-        i_src,
+        &i_src,
         "output_1",
-        stretcher_node,
+        &stretcher_node,
         "input_1",
         millimeter!(400.0),
     )?;
     scenery.connect_nodes(
-        stretcher_node,
+        &stretcher_node,
         "output_1",
-        detectors,
+        &detectors,
         "input_1",
         millimeter!(0.),
     )?;
@@ -137,16 +137,16 @@ fn main() -> OpmResult<()> {
     let detectors = scenery.add_node(&detector_group()?)?;
 
     scenery.connect_nodes(
-        i_src,
+        &i_src,
         "output_1",
-        stretcher_node,
+        &stretcher_node,
         "input_1",
         millimeter!(400.0),
     )?;
     scenery.connect_nodes(
-        stretcher_node,
+        &stretcher_node,
         "output_1",
-        detectors,
+        &detectors,
         "input_1",
         millimeter!(1500.),
     )?;
@@ -169,16 +169,16 @@ fn main() -> OpmResult<()> {
     let detectors = scenery.add_node(&detector_group()?)?;
 
     scenery.connect_nodes(
-        i_src,
+        &i_src,
         "output_1",
-        stretcher_node,
+        &stretcher_node,
         "input_1",
         millimeter!(400.0),
     )?;
     scenery.connect_nodes(
-        stretcher_node,
+        &stretcher_node,
         "output_1",
-        detectors,
+        &detectors,
         "input_1",
         millimeter!(1500.),
     )?;
@@ -206,16 +206,16 @@ fn main() -> OpmResult<()> {
     let detectors = scenery.add_node(&detector_group()?)?;
 
     scenery.connect_nodes(
-        i_src,
+        &i_src,
         "output_1",
-        stretcher_node,
+        &stretcher_node,
         "input_1",
         millimeter!(400.0),
     )?;
     scenery.connect_nodes(
-        stretcher_node,
+        &stretcher_node,
         "output_1",
-        detectors,
+        &detectors,
         "input_1",
         millimeter!(1500.),
     )?;
@@ -243,16 +243,16 @@ fn main() -> OpmResult<()> {
     let detectors = scenery.add_node(&detector_group()?)?;
 
     scenery.connect_nodes(
-        i_src,
+        &i_src,
         "output_1",
-        stretcher_node,
+        &stretcher_node,
         "input_1",
         millimeter!(400.0),
     )?;
     scenery.connect_nodes(
-        stretcher_node,
+        &stretcher_node,
         "output_1",
-        detectors,
+        &detectors,
         "input_1",
         millimeter!(1500.),
     )?;
@@ -279,16 +279,16 @@ fn main() -> OpmResult<()> {
     let detectors = scenery.add_node(&detector_group()?)?;
 
     scenery.connect_nodes(
-        i_src,
+        &i_src,
         "output_1",
-        stretcher_node,
+        &stretcher_node,
         "input_1",
         millimeter!(400.0),
     )?;
     scenery.connect_nodes(
-        stretcher_node,
+        &stretcher_node,
         "output_1",
-        detectors,
+        &detectors,
         "input_1",
         millimeter!(1500.),
     )?;
@@ -340,8 +340,8 @@ fn main() -> OpmResult<()> {
         &nbk7,
     )?)?;
     let mir_1 =
-        scenery.add_node(&ThinMirror::new("mirr").align_like_node_at_distance(lens1, tel_dist))?;
-    let mut lens_1_ref1 = NodeReference::from_node(&scenery.node(lens1)?);
+        scenery.add_node(&ThinMirror::new("mirr").align_like_node_at_distance(&lens1, tel_dist))?;
+    let mut lens_1_ref1 = NodeReference::from_node(&scenery.node(&lens1)?);
     lens_1_ref1.set_inverted(true)?;
     let lens_1_ref1 = scenery.add_node(&lens_1_ref1)?;
 
@@ -352,33 +352,39 @@ fn main() -> OpmResult<()> {
         "Ray_positions",
         Some(Vector3::y()),
     )?)?;
-    scenery.connect_nodes(i_src, "output_1", lens1, "input_1", millimeter!(100.0))?;
-    scenery.connect_nodes(lens1, "output_1", mir_1, "input_1", millimeter!(1017.14885))?;
+    scenery.connect_nodes(&i_src, "output_1", &lens1, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(
-        mir_1,
+        &lens1,
         "output_1",
-        lens_1_ref1,
+        &mir_1,
+        "input_1",
+        millimeter!(1017.14885),
+    )?;
+    scenery.connect_nodes(
+        &mir_1,
+        "output_1",
+        &lens_1_ref1,
         "output_1",
         millimeter!(1017.14885),
     )?;
     scenery.connect_nodes(
-        lens_1_ref1,
+        &lens_1_ref1,
         "input_1",
-        paraxial_lens,
-        "input_1",
-        millimeter!(500.0),
-    )?;
-    scenery.connect_nodes(
-        paraxial_lens,
-        "output_1",
-        spot_diag,
+        &paraxial_lens,
         "input_1",
         millimeter!(500.0),
     )?;
     scenery.connect_nodes(
-        spot_diag,
+        &paraxial_lens,
         "output_1",
-        i_prop_vis,
+        &spot_diag,
+        "input_1",
+        millimeter!(500.0),
+    )?;
+    scenery.connect_nodes(
+        &spot_diag,
+        "output_1",
+        &i_prop_vis,
         "input_1",
         millimeter!(0.0),
     )?;

@@ -25,23 +25,23 @@ pub fn detector_group() -> OpmResult<NodeGroup> {
     let spot_diag = cb.add_node(&spot_monitor)?;
 
     cb.connect_nodes(
-        paraxial_lens,
+        &paraxial_lens,
         "output_1",
-        spot_diag,
+        &spot_diag,
         "input_1",
         millimeter!(500.0),
     )?;
     cb.connect_nodes(
-        spot_diag,
+        &spot_diag,
         "output_1",
-        i_prop_vis_top_view,
+        &i_prop_vis_top_view,
         "input_1",
         millimeter!(0.0),
     )?;
     cb.connect_nodes(
-        i_prop_vis_top_view,
+        &i_prop_vis_top_view,
         "output_1",
-        i_prop_vis_side_view,
+        &i_prop_vis_side_view,
         "input_1",
         millimeter!(0.0),
     )?;
@@ -51,8 +51,8 @@ pub fn detector_group() -> OpmResult<NodeGroup> {
         Some(Vector3::x()),
     )?)?;
 
-    cb.map_input_port(paraxial_lens, "input_1", "input_1")?;
-    cb.map_output_port(i_prop_vis_side_view, "output_1", "output_1")?;
+    cb.map_input_port(&paraxial_lens, "input_1", "input_1")?;
+    cb.map_output_port(&i_prop_vis_side_view, "output_1", "output_1")?;
 
     Ok(cb)
 }

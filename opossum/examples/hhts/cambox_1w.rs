@@ -17,7 +17,7 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let d1 = cb.add_node(&Dummy::new("d1"))?;
     let bs1 = cb.add_node(&BeamSplitter::new("bs1", &SplittingConfig::Ratio(0.5))?)?;
 
-    cb.connect_nodes(d1, "output_1", bs1, "input_1", millimeter!(35.0))?;
+    cb.connect_nodes(&d1, "output_1", &bs1, "input_1", millimeter!(35.0))?;
 
     // FF path
     let bs_ff = cb.add_node(&BeamSplitter::new("bs_ff", &SplittingConfig::Ratio(0.04))?)?;
@@ -31,24 +31,24 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let ff_fluence_cam = cb.add_node(&ff_fluence)?;
 
     cb.connect_nodes(
-        bs1,
+        &bs1,
         "out1_trans1_refl2",
-        bs_ff,
+        &bs_ff,
         "input_1",
         millimeter!(100.0),
     )?;
     cb.connect_nodes(
-        bs_ff,
+        &bs_ff,
         "out1_trans1_refl2",
-        ff_lens,
+        &ff_lens,
         "input_1",
         millimeter!(25.0),
     )?;
-    cb.connect_nodes(ff_lens, "output_1", ff_cam, "input_1", millimeter!(100.0))?;
+    cb.connect_nodes(&ff_lens, "output_1", &ff_cam, "input_1", millimeter!(100.0))?;
     cb.connect_nodes(
-        ff_cam,
+        &ff_cam,
         "output_1",
-        ff_fluence_cam,
+        &ff_fluence_cam,
         "input_1",
         millimeter!(0.0),
     )?;
@@ -67,36 +67,36 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let nf_fluence_cam = cb.add_node(&nf_fluence)?;
 
     cb.connect_nodes(
-        bs1,
+        &bs1,
         "out2_trans2_refl1",
-        nf_lens1,
+        &nf_lens1,
         "input_1",
         millimeter!(35.0),
     )?;
     cb.connect_nodes(
-        nf_lens1,
+        &nf_lens1,
         "output_1",
-        nf_lens2,
+        &nf_lens2,
         "input_1",
         millimeter!(250.0),
     )?;
-    cb.connect_nodes(nf_lens2, "output_1", nf_bs, "input_1", millimeter!(50.0))?;
+    cb.connect_nodes(&nf_lens2, "output_1", &nf_bs, "input_1", millimeter!(50.0))?;
     cb.connect_nodes(
-        nf_bs,
+        &nf_bs,
         "out1_trans1_refl2",
-        nf_cam,
+        &nf_cam,
         "input_1",
         millimeter!(130.0),
     )?;
 
     cb.connect_nodes(
-        nf_cam,
+        &nf_cam,
         "output_1",
-        nf_fluence_cam,
+        &nf_fluence_cam,
         "input_1",
         millimeter!(0.0),
     )?;
 
-    cb.map_input_port(d1, "input_1", "input_1")?;
+    cb.map_input_port(&d1, "input_1", "input_1")?;
     Ok(cb)
 }
