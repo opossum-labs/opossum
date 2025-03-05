@@ -99,10 +99,10 @@ fn main() {
     scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
     // Perform ray tracing analysis
     testing_logger::setup();
-    let analyzer = RayTracingAnalyzer::new(RayTraceConfig::default());
-    analyzer.analyze(&mut scenery).unwrap();
-    // scenery.reset_data();
-    // // Perform ghost focus analysis
-    // let analyzer = GhostFocusAnalyzer::new(GhostFocusConfig::default());
+    // let analyzer = RayTracingAnalyzer::new(RayTraceConfig::default());
     // analyzer.analyze(&mut scenery).unwrap();
+    // scenery.reset_data();
+    // Perform ghost focus analysis
+    let analyzer = GhostFocusAnalyzer::new(GhostFocusConfig::default());
+    analyzer.analyze(&mut scenery).unwrap();
 }

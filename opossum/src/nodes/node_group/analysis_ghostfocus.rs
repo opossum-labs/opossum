@@ -42,15 +42,17 @@ impl AnalysisGhostFocus for NodeGroup {
             let node = node_ref
                 .lock()
                 .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
-            let node_id = node.node_attr().uuid();
-            if self.graph.is_stale_node(node_id) {
+            let node_id = *node.node_attr().uuid();
+            let node_info=node.to_string();
+            drop(node);
+            if self.graph.is_stale_node(&node_id) {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
-                    node
+                    node_info
                 );
             } else {
                 let incoming_edges = self.graph.get_incoming(
-                    node_id,
+                    &node_id,
                     &light_rays_to_light_result(current_bouncing_rays.clone()),
                 );
 
@@ -64,7 +66,7 @@ impl AnalysisGhostFocus for NodeGroup {
                     bounce_lvl,
                 )
                 .map_err(|e| {
-                    OpossumError::Analysis(format!("analysis of node {node} failed: {e}"))
+                    OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
                 })?;
                 filter_ray_limits(&mut outgoing_edges, config);
 
@@ -76,7 +78,7 @@ impl AnalysisGhostFocus for NodeGroup {
                     } else {
                         self.graph.port_map(&PortType::Output).clone()
                     };
-                    let assigned_ports = portmap.assigned_ports_for_node(node_id);
+                    let assigned_ports = portmap.assigned_ports_for_node(&node_id);
                     for port in assigned_ports {
                         if let Some(light_data) = outgoing_edges.get(&port.1) {
                             current_bouncing_rays.insert(port.0, light_data.clone());

@@ -156,10 +156,11 @@ fn calculate_single_node_position(
                     radian!(0., 0., 0.),
                 )?;
                 let new_iso = align_ref_iso.append(&align_iso);
-                let mut node_borrow_mut = node_ref
+                let mut node = node_ref
                     .lock()
                     .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
-                node_borrow_mut.set_isometry(new_iso)?;
+                node.set_isometry(new_iso)?;
+                drop(node);
             } else {
                 warn!(
                     "Cannot align node like NodeIdx:{}. Fall back to standard positioning method",
@@ -167,10 +168,6 @@ fn calculate_single_node_position(
                 );
                 graph.set_node_isometry(
                     &incoming_edges,
-                    &mut node_ref
-                        .lock()
-                        .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
-                    &node_type,
                     node_id,
                     *up_direction,
                 )?;
@@ -178,10 +175,6 @@ fn calculate_single_node_position(
         } else {
             graph.set_node_isometry(
                 &incoming_edges,
-                &mut node_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
-                &node_type,
                 node_id,
                 *up_direction,
             )?;

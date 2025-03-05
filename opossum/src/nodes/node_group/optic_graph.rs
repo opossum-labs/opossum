@@ -29,7 +29,7 @@ use serde::{
 };
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex},
 };
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
@@ -673,17 +673,18 @@ impl OpticGraph {
     pub fn set_node_isometry(
         &self,
         incoming_edges: &LightResult,
-        node_borrow_mut: &mut MutexGuard<'_, dyn Analyzable + 'static>,
-        node_type: &str,
         node_id: &Uuid,
         up_direction: Vector3<f64>,
     ) -> OpmResult<()> {
         for incoming_edge in incoming_edges {
+            let node_ref = self.node_by_uuid(node_id)?;
             let distance_from_predecessor =
                 self.distance_from_predecessor(node_id, incoming_edge.0)?;
-            if node_type == "group" {
-                // let mut node_borrow_mut = node;
-                let group = node_borrow_mut.as_group()?;
+            let mut node = node_ref
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            if let Ok(group) = node.as_group() {
                 group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
             }
             if let LightData::Geometric(rays) = incoming_edge.1 {
@@ -698,18 +699,18 @@ impl OpticGraph {
                 // if a node with more than one input was already placed (in an earlier loop cycle),
                 // check, if the resulting isometry is consistent
                 {
-                    if let Some(iso) = node_borrow_mut.isometry() {
+                    if let Some(iso) = node.isometry() {
                         if iso != node_iso {
                             warn!(
                                 "Node {} cannot be consistently positioned.",
-                                node_borrow_mut.name()
+                                node.name()
                             );
                             warn!("Position based on previous input port is: {iso}");
                             warn!("Position based on this port would be:     {node_iso}");
                             warn!("Keeping first position");
                         }
                     } else {
-                        node_borrow_mut.set_isometry(node_iso)?;
+                        node.set_isometry(node_iso)?;
                     };
                 }
             } else {
