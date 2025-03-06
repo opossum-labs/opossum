@@ -269,7 +269,11 @@ impl OpticGraph {
                 "internal {name_type} port name not found"
             )));
         }
-        let node_idx = self.node_idx_by_uuid(node_id).unwrap();
+        let Some(node_idx) = self.node_idx_by_uuid(node_id) else {
+            return Err(OpossumError::OpticGroup(format!(
+                "node with id {node_id} not found"
+            )));
+        };
         if !self.external_nodes(port_type).contains(&node_idx) {
             return Err(OpossumError::OpticGroup(format!(
                 "node to be mapped is not an {name_type} node of the group"
@@ -366,7 +370,10 @@ impl OpticGraph {
             }
         }
     }
-    /// .
+    /// Return `true` if the node with the given [`Uuid`] is not connected to any other node.
+    ///
+    /// # Panics
+    /// This function will panic if the node with the given [`Uuid`] does not exist.
     #[must_use]
     pub fn is_stale_node(&self, node_id: &Uuid) -> bool {
         let idx = self.node_idx_by_uuid(node_id).unwrap();
@@ -390,20 +397,24 @@ impl OpticGraph {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
-    /// Returns [`OpticRef`] if the provided uuid is connected with a node in the graph.
+    /// Returns [`OpticRef`] with the given [`Uuid`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the node with the given [`Uuid`] does not exist.
     pub fn node_by_uuid(&self, uuid: &Uuid) -> OpmResult<OpticRef> {
-        if let Some(node) = self
-            .g
+        self.g
             .node_weights()
             .find(|node| node.uuid() == *uuid)
             .cloned()
-        {
-            Ok(node)
-        } else {
-            Err(OpossumError::OpticScenery(
-                "node with given uuid does not exist".into(),
-            ))
-        }
+            .map_or_else(
+                || {
+                    Err(OpossumError::OpticScenery(
+                        "node with given uuid does not exist".into(),
+                    ))
+                },
+                Ok,
+            )
     }
     /// Return a reference to the optical node specified by its node index.
     ///
@@ -446,9 +457,12 @@ impl OpticGraph {
     }
     /// Return the (internal graph) [`NodeIndex`] of the node with the given [`Uuid`].
     ///
+    /// `None` is returned if the node with the given [`Uuid`] does not exist.
+    ///
     /// # Panics
     ///
-    /// Panics if .
+    /// Panics theoretically, if the internal [`NodeIndex`] was not found while looping over all nodes.
+    #[must_use]
     pub fn node_idx_by_uuid(&self, uuid: &Uuid) -> Option<NodeIndex> {
         self.g
             .node_indices()
@@ -520,7 +534,7 @@ impl OpticGraph {
                     } else {
                         self.output_port_map.clone()
                     };
-                    let node_id = self.node_by_idx(idx).unwrap().uuid();
+                    let node_id = self.node_by_idx(idx)?.uuid();
                     let assigned_ports = portmap.assigned_ports_for_node(&node_id);
                     for port in assigned_ports {
                         if let Some(light_data) = outgoing_edges.get(&port.1) {
@@ -708,6 +722,7 @@ impl OpticGraph {
                         }
                     } else {
                         node.set_isometry(node_iso)?;
+                        drop(node);
                     };
                 }
             } else {

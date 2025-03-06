@@ -104,16 +104,6 @@ impl AnalysisRayTrace for NodeGroup {
         let mut light_result = LightResult::default();
         let mut up_direction = Vector3::<f64>::y();
         for idx in sorted {
-            let node_name = self
-                .graph
-                .node_by_idx(idx)
-                .unwrap()
-                .optical_ref
-                .lock()
-                .unwrap()
-                .node_attr()
-                .name();
-            println!("node: {}", node_name);
             calculate_single_node_position(
                 &mut self.graph,
                 idx,

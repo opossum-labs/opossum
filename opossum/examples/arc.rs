@@ -2,15 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use opossum::{
     analyzers::{
-        ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer, Analyzer, GhostFocusConfig,
-        RayTraceConfig,
+        ghostfocus::GhostFocusAnalyzer, Analyzer, GhostFocusConfig,
     },
-    degree, joule, millimeter, nanometer,
-    nodes::{
-        round_collimated_ray_source, BeamSplitter, CylindricLens, Dummy, EnergyMeter,
-        FluenceDetector, IdealFilter, Lens, NodeGroup, ParabolicMirror, ParaxialSurface,
-        RayPropagationVisualizer, ReflectiveGrating, Spectrometer, SpotDiagram, ThinMirror,
-        WaveFront, Wedge,
+    joule, millimeter, nodes::{
+        round_collimated_ray_source, BeamSplitter, NodeGroup,
     },
     optic_node::OpticNode,
     SceneryResources,
