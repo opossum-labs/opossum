@@ -184,7 +184,7 @@ impl OpticSurface {
         &mut self,
         hit_point: HitPoint,
         bounce: usize,
-        rays_uuid: &Uuid,
+        rays_uuid: Uuid,
     ) -> OpmResult<()> {
         self.hit_map.add_to_hitmap(hit_point, bounce, rays_uuid)
     }
@@ -203,11 +203,11 @@ impl OpticSurface {
         rays: &Rays,
         estimator: &FluenceEstimator,
     ) -> OpmResult<()> {
-        if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), rays.uuid()) {
+        if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), &rays.uuid()) {
             if let Ok(peak_fluence) = rays_hit_map.get_max_fluence(estimator) {
                 if peak_fluence > self.lidt {
                     self.add_critical_fluence(
-                        rays.uuid(),
+                        &rays.uuid(),
                         rays.ray_history_len(),
                         peak_fluence,
                         rays.bounce_lvl(),

@@ -101,7 +101,7 @@ impl HitMap {
         &mut self,
         hit_point: HitPoint,
         bounce: usize,
-        uuid: &Uuid,
+        uuid: Uuid,
     ) -> OpmResult<()> {
         // make sure that vector is large enough to insert the data
         if self.hit_map.len() <= bounce {
@@ -109,7 +109,7 @@ impl HitMap {
                 self.hit_map.push(BouncedHitMap::default());
             }
         }
-        self.hit_map[bounce].add_to_hitmap(hit_point, uuid)?;
+        self.hit_map[bounce].add_to_hitmap(hit_point, &uuid)?;
         Ok(())
     }
 
@@ -586,19 +586,19 @@ mod test_hit_map {
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
             1,
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
             1,
-            &uuid2,
+            uuid2,
         )
         .unwrap();
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
             0,
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         assert_eq!(hm.hit_map().len(), 2);
@@ -611,7 +611,7 @@ mod test_hit_map {
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
             0,
-            &uuid,
+            uuid,
         )
         .unwrap();
         assert!(hm
@@ -620,7 +620,7 @@ mod test_hit_map {
                     FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap()
                 ),
                 0,
-                &uuid,
+                uuid,
             )
             .is_err());
     }
@@ -634,7 +634,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             0,
-            &uuid,
+            uuid,
         )
         .unwrap();
 
@@ -642,7 +642,7 @@ mod test_hit_map {
             .add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
                 0,
-                &uuid,
+                uuid,
             )
             .is_err());
     }
@@ -655,7 +655,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             0,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
 
@@ -663,7 +663,7 @@ mod test_hit_map {
             .add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
                 0,
-                &Uuid::new_v4(),
+                Uuid::new_v4(),
             )
             .is_ok());
     }
@@ -677,7 +677,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             0,
-            &uuid,
+            uuid,
         )
         .unwrap();
 
@@ -685,7 +685,7 @@ mod test_hit_map {
             .add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .is_ok());
     }
@@ -696,7 +696,7 @@ mod test_hit_map {
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
             1,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         assert_eq!(hm.hit_map.len(), 2);
@@ -705,7 +705,7 @@ mod test_hit_map {
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
             0,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         assert_eq!(hm.hit_map.len(), 2);
@@ -720,7 +720,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             1,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         assert_eq!(hm.hit_map.len(), 2);
@@ -731,7 +731,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             0,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         assert_eq!(hm.hit_map.len(), 2);
@@ -744,7 +744,7 @@ mod test_hit_map {
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
             1,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         hm.reset();
@@ -758,7 +758,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             1,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         hm.reset();
@@ -773,7 +773,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             1,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         assert!(!hm.is_empty());
@@ -788,7 +788,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             1,
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         hm.add_to_hitmap(
@@ -796,7 +796,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             1,
-            &uuid2,
+            uuid2,
         )
         .unwrap();
         hm.add_to_hitmap(
@@ -804,7 +804,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             0,
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         assert!(hm.get_rays_hit_map(2, &uuid1).is_none());
@@ -820,7 +820,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             1,
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         hm.add_to_hitmap(
@@ -828,7 +828,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             1,
-            &uuid2,
+            uuid2,
         )
         .unwrap();
         hm.add_to_hitmap(
@@ -836,7 +836,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             0,
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         assert_eq!(hm.get_merged_rays_hit_map().unwrap().hit_map().len(), 3);
@@ -852,13 +852,13 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             1,
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
             1,
-            &uuid2,
+            uuid2,
         )
         .unwrap();
         hm.add_to_hitmap(
@@ -866,7 +866,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             0,
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         assert!(hm.get_merged_rays_hit_map().is_err());
@@ -883,19 +883,19 @@ mod test_hit_map {
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.1, 1.0, 0.0), joule!(1.0)).unwrap()),
             1,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(-20.0, 20.0, 0.0), joule!(1.0)).unwrap()),
             1,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(3.210, 0.0, 0.0), joule!(1.0)).unwrap()),
             0,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
 
@@ -912,7 +912,7 @@ mod test_hit_map {
         hm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.1, 1.0, 0.0), joule!(1.0)).unwrap()),
             1,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
 
@@ -941,7 +941,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -960,7 +960,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -977,7 +977,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1000,7 +1000,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1024,7 +1024,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1043,7 +1043,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1059,7 +1059,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(-0.5, -0.5, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             1,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         hm.add_to_hitmap(
@@ -1067,7 +1067,7 @@ mod test_hit_map {
                 FluenceHitPoint::new(meter!(-0.5, 0.5, 0.0), J_per_cm2!(1.0)).unwrap(),
             ),
             1,
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
         )
         .unwrap();
         assert!(hm.calc_combined_fluence_with_helper_rays((50, 50)).is_err());
@@ -1089,7 +1089,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1113,7 +1113,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1135,7 +1135,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1161,7 +1161,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1185,7 +1185,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1204,7 +1204,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1227,7 +1227,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1251,7 +1251,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }
@@ -1284,7 +1284,7 @@ mod test_hit_map {
             hm.add_to_hitmap(
                 HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0)).unwrap()),
                 1,
-                &uuid,
+                uuid,
             )
             .unwrap();
         }

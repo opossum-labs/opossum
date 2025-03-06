@@ -35,9 +35,8 @@ pub fn folded_martinez(
         .with_decenter(centimeter!(0., 0., 0.))?,
     )?;
 
-    let mir_1 = cb.add_node(
-        ThinMirror::new("mirr").align_like_node_at_distance(&lens1, telescope_distance),
-    )?;
+    let mir_1 = cb
+        .add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance))?;
     let mir_1_ref = cb.add_node(NodeReference::from_node(&cb.node(mir_1)?))?;
     let mut lens_1_ref1 = NodeReference::from_node(&cb.node(lens1)?);
     lens_1_ref1.set_inverted(true)?;

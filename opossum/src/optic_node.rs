@@ -526,9 +526,9 @@ pub trait Alignable: OpticNode + Sized {
     /// # Returns
     /// This function returns the original Node with updated alignment settings.
     #[must_use]
-    fn align_like_node_at_distance(mut self, node_id: &Uuid, distance: Length) -> Self {
+    fn align_like_node_at_distance(mut self, node_id: Uuid, distance: Length) -> Self {
         self.node_attr_mut()
-            .set_align_like_node_at_distance(node_id, distance);
+            .set_align_like_node_at_distance(&node_id, distance);
         self
     }
 }

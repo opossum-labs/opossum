@@ -62,7 +62,7 @@ pub fn main() -> OpmResult<()> {
         .with_decenter(centimeter!(2., 0., 0.))?,
     )?;
 
-    let mir_1 = ThinMirror::new("mirr").align_like_node_at_distance(&lens1, millimeter!(996.7));
+    let mir_1 = ThinMirror::new("mirr").align_like_node_at_distance(lens1, millimeter!(996.7));
     let mir_1 = scenery.add_node(mir_1)?;
     let mut lens_1_ref = NodeReference::from_node(&scenery.node(lens1)?);
     lens_1_ref.set_inverted(true)?;

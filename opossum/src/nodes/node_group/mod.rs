@@ -231,7 +231,7 @@ impl NodeGroup {
         distance: Length,
     ) -> OpmResult<()> {
         self.graph
-            .connect_nodes(&src_id, src_port, &target_id, target_port, distance)
+            .connect_nodes(src_id, src_port, target_id, target_port, distance)
     }
     /// Map an input port of an internal node to an external port of the group.
     ///
@@ -496,10 +496,10 @@ impl NodeGroup {
     pub fn add_to_accumulated_rays(&mut self, rays: &Rays, bounce: usize) {
         if self.accumulated_rays.len() <= bounce {
             let mut hashed_rays = HashMap::<Uuid, Rays>::new();
-            hashed_rays.insert(*rays.uuid(), rays.clone());
+            hashed_rays.insert(rays.uuid(), rays.clone());
             self.accumulated_rays.push(hashed_rays);
         } else {
-            self.accumulated_rays[bounce].insert(*rays.uuid(), rays.clone());
+            self.accumulated_rays[bounce].insert(rays.uuid(), rays.clone());
         }
     }
 

@@ -340,7 +340,7 @@ fn main() -> OpmResult<()> {
         &nbk7,
     )?)?;
     let mir_1 =
-        scenery.add_node(ThinMirror::new("mirr").align_like_node_at_distance(&lens1, tel_dist))?;
+        scenery.add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, tel_dist))?;
     let mut lens_1_ref1 = NodeReference::from_node(&scenery.node(lens1)?);
     lens_1_ref1.set_inverted(true)?;
     let lens_1_ref1 = scenery.add_node(lens_1_ref1)?;

@@ -123,8 +123,8 @@ impl Rays {
     }
     ///Returns the uuid of this ray bundle
     #[must_use]
-    pub const fn uuid(&self) -> &Uuid {
-        &self.uuid
+    pub const fn uuid(&self) -> Uuid {
+        self.uuid
     }
     ///get the bounce level of this ray bundle
     #[must_use]
@@ -874,7 +874,7 @@ impl Rays {
                     None
                 };
                 if let Some(mut reflected) =
-                    ray.refract_on_surface(surface, n2, &self.uuid, missed_surface_strategy)?
+                    ray.refract_on_surface(surface, n2, self.uuid, missed_surface_strategy)?
                 {
                     if let (Some(helper_rays), Some(relf_helper)) =
                         (ray.helper_rays_mut(), reflected.helper_rays_mut())
@@ -885,7 +885,7 @@ impl Rays {
                             if let Some(reflected) = ray.refract_on_surface(
                                 surface,
                                 n2,
-                                &self.uuid,
+                                self.uuid,
                                 missed_surface_strategy,
                             )? {
                                 refl_ray.set_direction(reflected.direction())?;

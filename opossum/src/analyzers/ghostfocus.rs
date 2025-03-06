@@ -428,7 +428,7 @@ impl GhostFocusHistory {
                     }
                     rays_per_bounce_history.push(rays_history);
                     self.ray_node_correlation[bounce].insert(
-                        rays.uuid(),
+                        &rays.uuid(),
                         &RaysOrigin::new(*rays.parent_id(), *rays.node_origin()),
                     );
 
@@ -498,7 +498,7 @@ impl From<Vec<HashMap<Uuid, Rays>>> for GhostFocusHistory {
                     rays_history.push(ray.position_history_with_current());
                 }
                 ray_node_bounce_correlation.insert(
-                    rays.uuid(),
+                    &rays.uuid(),
                     &RaysOrigin::new(*rays.parent_id(), *rays.node_origin()),
                 );
                 rays_per_bounce_history.push(rays_history);
@@ -822,11 +822,11 @@ mod test_rays_ghost_focus_history {
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(*rays1.uuid(), rays1.clone());
+        hash1.insert(rays1.uuid(), rays1.clone());
 
         accumulated_rays.push(hash1);
 
-        let hist = GhostFocusHistory::from((&accumulated_rays, *rays1.uuid(), 0));
+        let hist = GhostFocusHistory::from((&accumulated_rays, rays1.uuid(), 0));
 
         assert_eq!(hist.rays_pos_history.len(), 1);
         assert_eq!(hist.rays_pos_history[0].len(), 1);
@@ -857,7 +857,7 @@ mod test_rays_ghost_focus_history {
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(*rays1.uuid(), rays1.clone());
+        hash1.insert(rays1.uuid(), rays1.clone());
 
         accumulated_rays.push(hash1);
 
@@ -900,8 +900,8 @@ mod test_rays_ghost_focus_history {
         let mut hash1 = HashMap::<Uuid, Rays>::new();
         let mut hash2 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(*rays1.uuid(), rays1.clone());
-        hash2.insert(*rays2.uuid(), rays2.clone());
+        hash1.insert(rays1.uuid(), rays1.clone());
+        hash2.insert(rays2.uuid(), rays2.clone());
 
         accumulated_rays.push(hash1);
         accumulated_rays.push(hash2);
@@ -1008,7 +1008,7 @@ mod test_rays_ghost_focus_history {
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(*rays1.uuid(), rays1.clone());
+        hash1.insert(rays1.uuid(), rays1.clone());
         accumulated_rays.push(hash1);
 
         let mut ray_pos_history =
