@@ -47,8 +47,8 @@ pub fn detector_group() -> OpmResult<NodeGroup> {
         Some(Vector3::x()),
     )?)?;
 
-    cb.map_input_port(&paraxial_lens, "input_1", "input_1")?;
-    cb.map_output_port(&i_prop_vis_side_view, "output_1", "output_1")?;
+    cb.map_input_port(paraxial_lens, "input_1", "input_1")?;
+    cb.map_output_port(i_prop_vis_side_view, "output_1", "output_1")?;
 
     Ok(cb)
 }

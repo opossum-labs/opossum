@@ -27,8 +27,8 @@ fn main() -> OpmResult<()> {
     let g_n2 = group.add_node(Dummy::new("node2"))?;
 
     group.connect_nodes(g_n1, "output_1", g_n2, "input_1", Length::zero())?;
-    group.map_input_port(&g_n1, "input_1", "input_1")?;
-    group.map_output_port(&g_n2, "output_1", "output_1")?;
+    group.map_input_port(g_n1, "input_1", "input_1")?;
+    group.map_output_port(g_n2, "output_1", "output_1")?;
     group.set_inverted(true)?;
 
     let i_g = scenery.add_node(group)?;

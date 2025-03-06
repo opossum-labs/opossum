@@ -424,7 +424,7 @@ mod test {
         let g1_n1 = group1.add_node(Dummy::new("node1")).unwrap();
         let g1_n2 = group1.add_node(BeamSplitter::default()).unwrap();
         group1
-            .map_output_port(&g1_n2, "out1_trans1_refl2", "output_1")
+            .map_output_port(g1_n2, "out1_trans1_refl2", "output_1")
             .unwrap();
         group1
             .connect_nodes(g1_n1, "output_1", g1_n2, "input_1", Length::zero())
@@ -445,10 +445,10 @@ mod test {
             )
             .unwrap();
         nested_group
-            .map_input_port(&nested_g_n1, "input_1", "input_1")
+            .map_input_port(nested_g_n1, "input_1", "input_1")
             .unwrap();
         nested_group
-            .map_output_port(&nested_g_n2, "output_1", "output_1")
+            .map_output_port(nested_g_n2, "output_1", "output_1")
             .unwrap();
 
         let nested_group_id = group1.add_node(nested_group).unwrap();
@@ -466,7 +466,7 @@ mod test {
         group2.set_expand_view(false).unwrap();
         let g2_n1 = group2.add_node(Dummy::new("node2_1")).unwrap();
         let g2_n2 = group2.add_node(Dummy::new("node2_2")).unwrap();
-        group2.map_input_port(&g2_n1, "input_1", "input_1").unwrap();
+        group2.map_input_port(g2_n1, "input_1", "input_1").unwrap();
 
         group2
             .connect_nodes(g2_n1, "output_1", g2_n2, "input_1", Length::zero())

@@ -120,8 +120,8 @@ pub fn folded_martinez_longer_f(
         millimeter!(100.0),
     )?;
 
-    cb.map_input_port(&i_g1, "input_1", "input_1")?;
-    cb.map_output_port(&g1ref3, "output_1", "output_1")?;
+    cb.map_input_port(i_g1, "input_1", "input_1")?;
+    cb.map_output_port(g1ref3, "output_1", "output_1")?;
 
     Ok(cb)
 }

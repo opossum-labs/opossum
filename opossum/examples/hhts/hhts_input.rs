@@ -54,7 +54,7 @@ pub fn hhts_input() -> OpmResult<NodeGroup> {
         "input_1",
         millimeter!(1000.0),
     )?;
-    group.map_input_port(&d1, "input_1", "input_1")?;
-    group.map_output_port(&hhts_t1_pm, "out2_trans2_refl1", "output_1")?;
+    group.map_input_port(d1, "input_1", "input_1")?;
+    group.map_output_port(hhts_t1_pm, "out2_trans2_refl1", "output_1")?;
     Ok(group)
 }

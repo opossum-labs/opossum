@@ -245,12 +245,12 @@ impl NodeGroup {
     ///   - the `input_node` has an input port with the specified `internal_name` but is already internally connected.
     pub fn map_input_port(
         &mut self,
-        input_node: &Uuid,
+        input_node: Uuid,
         internal_name: &str,
         external_name: &str,
     ) -> OpmResult<()> {
         self.graph
-            .map_port(input_node, &PortType::Input, internal_name, external_name)?;
+            .map_port(&input_node, &PortType::Input, internal_name, external_name)?;
         self.node_attr
             .set_property("graph", self.graph.clone().into())
     }
@@ -266,12 +266,16 @@ impl NodeGroup {
     ///   - the `output_node` has an output port with the specified `internal_name` but is already internally connected.
     pub fn map_output_port(
         &mut self,
-        output_node: &Uuid,
+        output_node: Uuid,
         internal_name: &str,
         external_name: &str,
     ) -> OpmResult<()> {
-        self.graph
-            .map_port(output_node, &PortType::Output, internal_name, external_name)?;
+        self.graph.map_port(
+            &output_node,
+            &PortType::Output,
+            internal_name,
+            external_name,
+        )?;
         self.node_attr
             .set_property("graph", self.graph.clone().into())
     }
@@ -670,12 +674,12 @@ mod test {
             .unwrap();
         assert!(og.ports().names(&PortType::Input).is_empty());
         assert!(og.ports().names(&PortType::Output).is_empty());
-        og.map_input_port(&sn1_i, "input_1", "input_1").unwrap();
+        og.map_input_port(sn1_i, "input_1", "input_1").unwrap();
         assert!(og
             .ports()
             .names(&PortType::Input)
             .contains(&("input_1".to_string())));
-        og.map_output_port(&sn2_i, "output_1", "output_1").unwrap();
+        og.map_output_port(sn2_i, "output_1", "output_1").unwrap();
         assert!(og
             .ports()
             .names(&PortType::Output)
@@ -688,8 +692,8 @@ mod test {
         let sn2_i = og.add_node(Dummy::default()).unwrap();
         og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
-        og.map_input_port(&sn1_i, "input_1", "input_1").unwrap();
-        og.map_output_port(&sn2_i, "output_1", "output_1").unwrap();
+        og.map_input_port(sn1_i, "input_1", "input_1").unwrap();
+        og.map_output_port(sn2_i, "output_1", "output_1").unwrap();
         og.set_inverted(true).unwrap();
         assert!(og
             .ports()

@@ -196,8 +196,8 @@ fn main() -> OpmResult<()> {
     group_t1.connect_nodes(t1_l2a, "output_1", t1_l2b, "input_1", millimeter!(8.85423))?;
     group_t1.connect_nodes(t1_l2b, "output_1", t1_l2c, "input_1", millimeter!(14.78269))?;
 
-    group_t1.map_input_port(&t1_l1a, "input_1", "input_1")?;
-    group_t1.map_output_port(&t1_l2c, "output_1", "output_1")?;
+    group_t1.map_input_port(t1_l1a, "input_1", "input_1")?;
+    group_t1.map_output_port(t1_l2c, "output_1", "output_1")?;
 
     group_t1.set_expand_view(false)?;
     let t1 = scenery.add_node(group_t1)?;
@@ -253,9 +253,9 @@ fn main() -> OpmResult<()> {
         Length::zero(),
     )?;
 
-    group_bs.map_input_port(&bs, "input_1", "input_1")?;
-    group_bs.map_output_port(&filter_1w, "output_1", "output_1w")?;
-    group_bs.map_output_port(&filter_2w, "output_1", "output_2w")?;
+    group_bs.map_input_port(bs, "input_1", "input_1")?;
+    group_bs.map_output_port(filter_1w, "output_1", "output_1w")?;
+    group_bs.map_output_port(filter_2w, "output_1", "output_2w")?;
 
     let bs_group = scenery.add_node(group_bs)?;
 
@@ -301,8 +301,8 @@ fn main() -> OpmResult<()> {
         millimeter!(429.20520),
     )?;
 
-    group_t2_1w.map_input_port(&t2_1w_in, "input_1", "input_1")?;
-    group_t2_1w.map_output_port(&t2_1w_exit, "output_1", "output_1")?;
+    group_t2_1w.map_input_port(t2_1w_in, "input_1", "input_1")?;
+    group_t2_1w.map_output_port(t2_1w_exit, "output_1", "output_1")?;
     let t2_1w = scenery.add_node(group_t2_1w)?;
 
     // T3_1w
@@ -338,8 +338,8 @@ fn main() -> OpmResult<()> {
         millimeter!(279.86873),
     )?;
 
-    group_t3_1w.map_input_port(&t3_1w_input, "input_1", "input_1")?;
-    group_t3_1w.map_output_port(&d_1w_12, "output_1", "output_1")?;
+    group_t3_1w.map_input_port(t3_1w_input, "input_1", "input_1")?;
+    group_t3_1w.map_output_port(d_1w_12, "output_1", "output_1")?;
     let t3_1w = scenery.add_node(group_t3_1w)?;
 
     scenery.connect_nodes(
@@ -381,7 +381,7 @@ fn main() -> OpmResult<()> {
         Length::zero(),
     )?;
 
-    group_det_1w.map_input_port(&det_prop, "input_1", "input_1")?;
+    group_det_1w.map_input_port(det_prop, "input_1", "input_1")?;
 
     let det_1w = scenery.add_node(group_det_1w)?;
     scenery.connect_nodes(t3_1w, "output_1", det_1w, "input_1", Length::zero())?;
@@ -427,8 +427,8 @@ fn main() -> OpmResult<()> {
         millimeter!(512.11171),
     )?;
 
-    group_t2_2w.map_input_port(&t2_2w_in, "input_1", "input_1")?;
-    group_t2_2w.map_output_port(&t2_2w_exit, "output_1", "output_1")?;
+    group_t2_2w.map_input_port(t2_2w_in, "input_1", "input_1")?;
+    group_t2_2w.map_output_port(t2_2w_exit, "output_1", "output_1")?;
     let t2_2w = scenery.add_node(group_t2_2w)?;
 
     // T3_2w
@@ -464,8 +464,8 @@ fn main() -> OpmResult<()> {
         millimeter!(250.35850),
     )?;
 
-    group_t3_2w.map_input_port(&t3_2w_input, "input_1", "input_1")?;
-    group_t3_2w.map_output_port(&d_2w_12, "output_1", "output_1")?;
+    group_t3_2w.map_input_port(t3_2w_input, "input_1", "input_1")?;
+    group_t3_2w.map_output_port(d_2w_12, "output_1", "output_1")?;
     let t3_2w = scenery.add_node(group_t3_2w)?;
 
     scenery.connect_nodes(
@@ -508,7 +508,7 @@ fn main() -> OpmResult<()> {
         Length::zero(),
     )?;
 
-    group_det_2w.map_input_port(&det_prop_2w, "input_1", "input_1")?;
+    group_det_2w.map_input_port(det_prop_2w, "input_1", "input_1")?;
     let det_2w = scenery.add_node(group_det_2w)?;
 
     scenery.connect_nodes(t3_2w, "output_1", det_2w, "input_1", Length::zero())?;

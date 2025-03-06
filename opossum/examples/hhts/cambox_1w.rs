@@ -97,6 +97,6 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
         millimeter!(0.0),
     )?;
 
-    cb.map_input_port(&d1, "input_1", "input_1")?;
+    cb.map_input_port(d1, "input_1", "input_1")?;
     Ok(cb)
 }
