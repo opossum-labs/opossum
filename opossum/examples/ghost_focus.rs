@@ -38,7 +38,7 @@ fn main() -> OpmResult<()> {
     let light = LightData::Geometric(rays);
     let mut src = Source::new("collimated ray source", &light);
     src.set_isometry(Isometry::identity())?;
-    let i_src = scenery.add_node(&src)?;
+    let i_src = scenery.add_node(src)?;
     let mut lens = Lens::default();
     lens.set_coating(
         &PortType::Input,
@@ -50,7 +50,7 @@ fn main() -> OpmResult<()> {
         "output_1",
         &CoatingType::ConstantR { reflectivity: 0.05 },
     )?;
-    let i_l = scenery.add_node(&lens)?;
+    let i_l = scenery.add_node(lens)?;
 
     let mut lens2 = Lens::default();
     lens2.set_coating(
@@ -65,13 +65,13 @@ fn main() -> OpmResult<()> {
     )?;
     lens2.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
     lens2.set_coating(&PortType::Output, "output_1", &CoatingType::Fresnel)?;
-    let i_l2 = scenery.add_node(&lens2)?;
+    let i_l2 = scenery.add_node(lens2)?;
 
     // let mut mgroup = NodeGroup::new("mirror group");
-    let mir1 = scenery.add_node(&ThinMirror::new("mirror 1").with_tilt(degree!(45., 0., 0.))?)?;
-    let mir2 = scenery.add_node(&ThinMirror::new("mirror 2").with_tilt(degree!(45., 0., 0.))?)?;
-    let mir3 = scenery.add_node(&ThinMirror::new("mirror 3").with_tilt(degree!(-45., 0., 0.))?)?;
-    let mir4 = scenery.add_node(&ThinMirror::new("mirror 4").with_tilt(degree!(-45., 0., 0.))?)?;
+    let mir1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(45., 0., 0.))?)?;
+    let mir2 = scenery.add_node(ThinMirror::new("mirror 2").with_tilt(degree!(45., 0., 0.))?)?;
+    let mir3 = scenery.add_node(ThinMirror::new("mirror 3").with_tilt(degree!(-45., 0., 0.))?)?;
+    let mir4 = scenery.add_node(ThinMirror::new("mirror 4").with_tilt(degree!(-45., 0., 0.))?)?;
 
     // mgroup.connect_nodes(mir1, "output_1", mir2, "input_1", millimeter!(200.0))?;
     // mgroup.connect_nodes(mir2, "output_1", mir3, "input_1", millimeter!(300.0))?;
@@ -79,7 +79,7 @@ fn main() -> OpmResult<()> {
 
     // mgroup.map_input_port(mir1, "input_1", "input_1");
     // mgroup.map_output_port(mir4, "output_1", "output_1");
-    // let mg = scenery.add_node(&mgroup)?;
+    // let mg = scenery.add_node(mgroup)?;
 
     scenery.connect_nodes(&i_src, "output_1", &i_l, "input_1", millimeter!(150.0))?;
     scenery.connect_nodes(&i_l, "output_1", &mir1, "input_1", millimeter!(150.0))?;

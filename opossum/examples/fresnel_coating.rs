@@ -26,8 +26,8 @@ fn main() -> OpmResult<()> {
     )?;
     let mut source = Source::new("src", &LightData::Geometric(rays));
     source.set_isometry(Isometry::identity())?;
-    let src = scenery.add_node(&source)?;
-    let fd1 = scenery.add_node(&FluenceDetector::new("before lens"))?;
+    let src = scenery.add_node(source)?;
+    let fd1 = scenery.add_node(FluenceDetector::new("before lens"))?;
 
     let mut lens1 = Lens::new(
         "Lens",
@@ -37,10 +37,10 @@ fn main() -> OpmResult<()> {
         &RefrIndexConst::new(1.5)?,
     )?;
     lens1.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
-    let l1 = scenery.add_node(&lens1)?;
-    let fd2 = scenery.add_node(&FluenceDetector::new("after lens"))?;
-    let ed = scenery.add_node(&EnergyMeter::default())?;
-    let det = scenery.add_node(&RayPropagationVisualizer::default())?;
+    let l1 = scenery.add_node(lens1)?;
+    let fd2 = scenery.add_node(FluenceDetector::new("after lens"))?;
+    let ed = scenery.add_node(EnergyMeter::default())?;
+    let det = scenery.add_node(RayPropagationVisualizer::default())?;
 
     scenery.connect_nodes(&src, "output_1", &fd1, "input_1", millimeter!(10.0))?;
     scenery.connect_nodes(&fd1, "output_1", &l1, "input_1", millimeter!(1.0))?;

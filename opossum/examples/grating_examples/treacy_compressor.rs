@@ -11,22 +11,22 @@ pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {
     let mut cb = NodeGroup::new("Treacy compressor");
 
     let i_g1 = cb.add_node(
-        &ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
+        ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
             .with_rot_from_littrow(alignment_wvl, degree!(-4.))?,
     )?;
 
     let i_g2 = cb.add_node(
-        &ReflectiveGrating::new("grating 2", num_per_mm!(1740.), -1)?
+        ReflectiveGrating::new("grating 2", num_per_mm!(1740.), -1)?
             .to_rot_from_littrow(alignment_wvl, degree!(-4.))?,
     )?;
 
     let i_g3 = cb.add_node(
-        &ReflectiveGrating::new("grating 3", num_per_mm!(1740.), 1)?
+        ReflectiveGrating::new("grating 3", num_per_mm!(1740.), 1)?
             .with_rot_from_littrow(alignment_wvl, degree!(4.))?,
     )?;
 
     let i_g4 = cb.add_node(
-        &ReflectiveGrating::new("grating 4", num_per_mm!(1740.), 1)?
+        ReflectiveGrating::new("grating 4", num_per_mm!(1740.), 1)?
             .to_rot_from_littrow(alignment_wvl, degree!(4.))?,
     )?;
 

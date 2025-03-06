@@ -21,7 +21,6 @@ use crate::{
 };
 use num::Zero;
 pub use optic_graph::OpticGraph;
-use petgraph::prelude::NodeIndex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -46,8 +45,8 @@ use uuid::Uuid;
 ///
 /// fn main() -> OpmResult<()> {
 ///   let mut scenery = NodeGroup::new("OpticScenery demo");
-///   let node1 = scenery.add_node(&Dummy::new("dummy1"))?;
-///   let node2 = scenery.add_node(&Dummy::new("dummy2"))?;
+///   let node1 = scenery.add_node(Dummy::new("dummy1"))?;
+///   let node2 = scenery.add_node(Dummy::new("dummy2"))?;
 ///   scenery.connect_nodes(&node1, "output_1", &node2, "input_1", millimeter!(100.0))?;
 ///   Ok(())
 /// }
@@ -126,11 +125,10 @@ impl NodeGroup {
     ///
     /// # Panics
     /// This function panics if the property "graph" can not be updated. Produces an error of type [`OpossumError::Properties`]
-    pub fn add_node<T: Analyzable + Clone + 'static>(&mut self, node: &T) -> OpmResult<Uuid> {
-        let node_id = self.graph.add_node(node.clone())?;
+    pub fn add_node<T: Analyzable + Clone + 'static>(&mut self, node: T) -> OpmResult<Uuid> {
+        let node_id = self.graph.add_node(node)?;
         // save uuid of node in rays if present
-        let idx = self.graph.node_idx_by_uuid(&node_id).unwrap();
-        self.store_node_uuid_in_rays_bundle(node, idx)?;
+        self.store_node_uuid_in_rays_bundle(node_id)?;
 
         self.node_attr
             .set_property("graph", self.graph.clone().into())
@@ -163,19 +161,23 @@ impl NodeGroup {
             .unwrap();
         Ok(uuid)
     }
-    fn store_node_uuid_in_rays_bundle<T: Analyzable + Clone + 'static>(
-        &mut self,
-        node: &T,
-        node_idx: NodeIndex,
-    ) -> OpmResult<()> {
-        if let Ok(Proptype::LightData(ld)) = node.node_attr().get_property("light data") {
+    fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
+        let node_ref = self.graph.node_by_uuid(&node_id)?;
+        let node = node_ref
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+        let Ok(node_props) = node.node_attr().get_property("light data") else {
+            return Ok(());
+        };
+        let node_props = node_props.clone();
+        drop(node);
+        if let Proptype::LightData(ld) = node_props {
             if let Some(LightData::Geometric(rays)) = &ld.value {
-                let node_from_graph = self.graph_mut().node_by_idx_mut(node_idx)?;
-
                 let mut new_rays = rays.clone();
-                new_rays.set_node_origin_uuid(node_from_graph.uuid());
+                new_rays.set_node_origin_uuid(node_id);
 
-                let mut node_ref = node_from_graph
+                let mut node_ref = node_ref
                     .optical_ref
                     .lock()
                     .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
@@ -670,8 +672,8 @@ mod test {
     #[test]
     fn ports() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(&Dummy::default()).unwrap();
-        let sn2_i = og.add_node(&Dummy::default()).unwrap();
+        let sn1_i = og.add_node(Dummy::default()).unwrap();
+        let sn2_i = og.add_node(Dummy::default()).unwrap();
         og.connect_nodes(&sn1_i, "output_1", &sn2_i, "input_1", Length::zero())
             .unwrap();
         assert!(og.ports().names(&PortType::Input).is_empty());
@@ -690,8 +692,8 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(&Dummy::default()).unwrap();
-        let sn2_i = og.add_node(&Dummy::default()).unwrap();
+        let sn1_i = og.add_node(Dummy::default()).unwrap();
+        let sn2_i = og.add_node(Dummy::default()).unwrap();
         og.connect_nodes(&sn1_i, "output_1", &sn2_i, "input_1", Length::zero())
             .unwrap();
         og.map_input_port(&sn1_i, "input_1", "input_1").unwrap();
@@ -709,7 +711,7 @@ mod test {
     #[test]
     fn report() {
         let mut scenery = NodeGroup::default();
-        scenery.add_node(&Dummy::default()).unwrap();
+        scenery.add_node(Dummy::default()).unwrap();
         let report = scenery.toplevel_report().unwrap();
         assert!(serde_yaml::to_string(&report).is_ok());
         // How shall we further parse the output?
@@ -723,8 +725,8 @@ mod test {
     #[test]
     fn analyze_dummy() {
         let mut scenery = NodeGroup::default();
-        let node1 = scenery.add_node(&Dummy::default()).unwrap();
-        let node2 = scenery.add_node(&Dummy::default()).unwrap();
+        let node1 = scenery.add_node(Dummy::default()).unwrap();
+        let node2 = scenery.add_node(Dummy::default()).unwrap();
         scenery
             .connect_nodes(&node1, "output_1", &node2, "input_1", Length::zero())
             .unwrap();
@@ -746,11 +748,11 @@ mod test {
         );
         let mut scenery = NodeGroup::default();
         let i_s = scenery
-            .add_node(&Source::new("src", &LightData::Geometric(rays)))
+            .add_node(Source::new("src", &LightData::Geometric(rays)))
             .unwrap();
         let mut em = EnergyMeter::default();
         em.set_isometry(Isometry::identity()).unwrap();
-        let i_e = scenery.add_node(&em).unwrap();
+        let i_e = scenery.add_node(em).unwrap();
         scenery
             .connect_nodes(&i_s, "output_1", &i_e, "input_1", Length::zero())
             .unwrap();

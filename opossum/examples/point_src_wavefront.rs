@@ -11,8 +11,8 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let source = point_ray_source(degree!(90.0), joule!(1.))?;
-    let i_s = scenery.add_node(&source)?;
-    let i_wf1 = scenery.add_node(&WaveFront::new("wf_monitor 1"))?;
+    let i_s = scenery.add_node(source)?;
+    let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"))?;
 
     scenery.connect_nodes(&i_s, "output_1", &i_wf1, "input_1", meter!(0.1))?;
 

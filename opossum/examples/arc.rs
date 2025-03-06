@@ -1,12 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use opossum::{
-    analyzers::{
-        ghostfocus::GhostFocusAnalyzer, Analyzer, GhostFocusConfig,
-    },
-    joule, millimeter, nodes::{
-        round_collimated_ray_source, BeamSplitter, NodeGroup,
-    },
+    analyzers::{ghostfocus::GhostFocusAnalyzer, Analyzer, GhostFocusConfig},
+    joule, millimeter,
+    nodes::{round_collimated_ray_source, BeamSplitter, NodeGroup},
     optic_node::OpticNode,
     SceneryResources,
 };
@@ -14,33 +11,33 @@ use opossum::{
 fn main() {
     let mut scenery = NodeGroup::default();
     let src = round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 1).unwrap();
-    let i_0 = scenery.add_node(&src).unwrap();
-    let i_1 = scenery.add_node(&BeamSplitter::default()).unwrap();
-    // let i_2 = scenery.add_node(&CylindricLens::default()).unwrap();
-    // let i_3 = scenery.add_node(&FluenceDetector::default()).unwrap();
-    // let i_4 = scenery.add_node(&Lens::default()).unwrap();
-    // let i_5 = scenery.add_node(&Wedge::default()).unwrap();
-    // let i_6 = scenery.add_node(&Dummy::default()).unwrap();
-    // let i_7 = scenery.add_node(&EnergyMeter::default()).unwrap();
-    // let i_8 = scenery.add_node(&IdealFilter::default()).unwrap();
+    let i_0 = scenery.add_node(src).unwrap();
+    let i_1 = scenery.add_node(BeamSplitter::default()).unwrap();
+    // let i_2 = scenery.add_node(CylindricLens::default()).unwrap();
+    // let i_3 = scenery.add_node(FluenceDetector::default()).unwrap();
+    // let i_4 = scenery.add_node(Lens::default()).unwrap();
+    // let i_5 = scenery.add_node(Wedge::default()).unwrap();
+    // let i_6 = scenery.add_node(Dummy::default()).unwrap();
+    // let i_7 = scenery.add_node(EnergyMeter::default()).unwrap();
+    // let i_8 = scenery.add_node(IdealFilter::default()).unwrap();
     // let i_9 = scenery
-    //     .add_node(&ParaxialSurface::new("paraxial", millimeter!(1000.0)).unwrap())
+    //     .add_node(ParaxialSurface::new("paraxial", millimeter!(1000.0)).unwrap())
     //     .unwrap();
     // let i_10 = scenery
-    //     .add_node(&RayPropagationVisualizer::default())
+    //     .add_node(RayPropagationVisualizer::default())
     //     .unwrap();
-    // let i_11 = scenery.add_node(&Spectrometer::default()).unwrap();
-    // let i_12 = scenery.add_node(&SpotDiagram::default()).unwrap();
-    // let i_13 = scenery.add_node(&WaveFront::default()).unwrap();
-    // let i_14 = scenery.add_node(&ParabolicMirror::default()).unwrap();
+    // let i_11 = scenery.add_node(Spectrometer::default()).unwrap();
+    // let i_12 = scenery.add_node(SpotDiagram::default()).unwrap();
+    // let i_13 = scenery.add_node(WaveFront::default()).unwrap();
+    // let i_14 = scenery.add_node(ParabolicMirror::default()).unwrap();
     // let i_15 = scenery
     //     .add_node(
-    //         &ReflectiveGrating::default()
+    //         ReflectiveGrating::default()
     //             .with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))
     //             .unwrap(),
     //     )
     //     .unwrap();
-    // let i_16 = scenery.add_node(&ThinMirror::default()).unwrap();
+    // let i_16 = scenery.add_node(ThinMirror::default()).unwrap();
 
     scenery
         .connect_nodes(&i_0, "output_1", &i_1, "input_1", millimeter!(5.0))

@@ -49,10 +49,10 @@ fn main() -> OpmResult<()> {
     let light = LightData::Geometric(rays_1w);
     let mut light_src = Source::new("collimated ray source", &light);
     light_src.set_isometry(Isometry::identity())?;
-    let src = scenery.add_node(&light_src)?;
+    let src = scenery.add_node(light_src)?;
 
     let w1 = scenery.add_node(
-        &Wedge::new(
+        Wedge::new(
             "prism 1",
             millimeter!(20.0),
             degree!(wedge_angle_in_degree),
@@ -67,9 +67,9 @@ fn main() -> OpmResult<()> {
         &refr_index_hk9l,
     )?
     .with_tilt(degree!(wedge_angle_in_degree / 2.0, 0.0, 0.0))?;
-    let w2 = scenery.add_node(&wedge2)?;
+    let w2 = scenery.add_node(wedge2)?;
     let w3 = scenery.add_node(
-        &Wedge::new(
+        Wedge::new(
             "prism 3",
             millimeter!(20.0),
             degree!(-1.0 * wedge_angle_in_degree),
@@ -78,7 +78,7 @@ fn main() -> OpmResult<()> {
         .with_tilt(degree!(wedge_angle_in_degree / 2.0, 0.0, 0.0))?,
     )?;
     let w4 = scenery.add_node(
-        &Wedge::new(
+        Wedge::new(
             "prism 4",
             millimeter!(20.0),
             degree!(wedge_angle_in_degree),
@@ -86,8 +86,8 @@ fn main() -> OpmResult<()> {
         )?
         .with_tilt(degree!(wedge_angle_in_degree / -2.0, 0.0, 0.0))?,
     )?;
-    let det = scenery.add_node(&RayPropagationVisualizer::default())?;
-    let sd = scenery.add_node(&SpotDiagram::default())?;
+    let det = scenery.add_node(RayPropagationVisualizer::default())?;
+    let sd = scenery.add_node(SpotDiagram::default())?;
     scenery.connect_nodes(&src, "output_1", &w1, "input_1", millimeter!(50.0))?;
     scenery.connect_nodes(&w1, "output_1", &w2, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(&w2, "output_1", &w3, "input_1", millimeter!(150.0))?;

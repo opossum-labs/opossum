@@ -461,10 +461,10 @@ mod test {
         // simulate simple system for integration test
         let mut group = NodeGroup::default();
         let i_src = group
-            .add_node(&round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 3).unwrap())
+            .add_node(round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 3).unwrap())
             .unwrap();
         let i_l1 = group
-            .add_node(&ParaxialSurface::new("f=100", millimeter!(100.0)).unwrap())
+            .add_node(ParaxialSurface::new("f=100", millimeter!(100.0)).unwrap())
             .unwrap();
         group
             .connect_nodes(&i_src, "output_1", &i_l1, "input_1", millimeter!(50.0))

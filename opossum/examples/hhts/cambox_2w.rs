@@ -13,22 +13,22 @@ pub fn cambox_2w() -> OpmResult<NodeGroup> {
 
     let mut cb = NodeGroup::new("CamBox 2w");
 
-    let d1 = cb.add_node(&Dummy::new("d1"))?;
-    let bs1 = cb.add_node(&BeamSplitter::new("bs1", &SplittingConfig::Ratio(0.5))?)?;
+    let d1 = cb.add_node(Dummy::new("d1"))?;
+    let bs1 = cb.add_node(BeamSplitter::new("bs1", &SplittingConfig::Ratio(0.5))?)?;
 
     cb.connect_nodes(&d1, "output_1", &bs1, "input_1", millimeter!(35.0))?;
 
     // FF path
-    let bs_ff = cb.add_node(&BeamSplitter::new("bs_ff", &SplittingConfig::Ratio(0.04))?)?;
-    let ff_lens = cb.add_node(&ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
+    let bs_ff = cb.add_node(BeamSplitter::new("bs_ff", &SplittingConfig::Ratio(0.04))?)?;
+    let ff_lens = cb.add_node(ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
     let mut node = SpotDiagram::new("FF cam");
     //node.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
     node.set_property("plot_aperture", true.into())?;
-    let ff_cam = cb.add_node(&node)?;
+    let ff_cam = cb.add_node(node)?;
 
     let ff_fluence = FluenceDetector::new("FF fluence");
     //ff_fluence.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
-    let ff_fluence_cam = cb.add_node(&ff_fluence)?;
+    let ff_fluence_cam = cb.add_node(ff_fluence)?;
 
     cb.connect_nodes(
         &bs1,
@@ -54,16 +54,16 @@ pub fn cambox_2w() -> OpmResult<NodeGroup> {
     )?;
 
     // NF path
-    let nf_lens1 = cb.add_node(&ParaxialSurface::new("NF lens1", millimeter!(125.0))?)?;
-    let nf_lens2 = cb.add_node(&ParaxialSurface::new("NF lens2", millimeter!(125.0))?)?;
-    let nf_bs = cb.add_node(&BeamSplitter::new("nf bs", &SplittingConfig::Ratio(0.5))?)?;
+    let nf_lens1 = cb.add_node(ParaxialSurface::new("NF lens1", millimeter!(125.0))?)?;
+    let nf_lens2 = cb.add_node(ParaxialSurface::new("NF lens2", millimeter!(125.0))?)?;
+    let nf_bs = cb.add_node(BeamSplitter::new("nf bs", &SplittingConfig::Ratio(0.5))?)?;
     let node = SpotDiagram::new("NF cam");
     //node.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
-    let nf_cam = cb.add_node(&node)?;
+    let nf_cam = cb.add_node(node)?;
 
     let nf_fluence = FluenceDetector::new("NF fluence");
     // nf_fluence.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
-    let nf_fluence_cam = cb.add_node(&nf_fluence)?;
+    let nf_fluence_cam = cb.add_node(nf_fluence)?;
 
     cb.connect_nodes(
         &bs1,

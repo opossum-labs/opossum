@@ -12,21 +12,21 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Michaelson interferomater");
-    let src = scenery.add_node(&Source::new(
+    let src = scenery.add_node(Source::new(
         "Source",
         &LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0)?,
         }),
     ))?;
-    let bs = scenery.add_node(&BeamSplitter::default())?;
-    let sample = scenery.add_node(&Dummy::new("Sample"))?;
+    let bs = scenery.add_node(BeamSplitter::default())?;
+    let sample = scenery.add_node(Dummy::new("Sample"))?;
     let rf = NodeReference::from_node(&scenery.node(&sample)?);
-    let r_sample = scenery.add_node(&rf)?;
-    let m1 = scenery.add_node(&Dummy::new("Mirror"))?;
-    let m2 = scenery.add_node(&Dummy::new("Mirror"))?;
+    let r_sample = scenery.add_node(rf)?;
+    let m1 = scenery.add_node(Dummy::new("Mirror"))?;
+    let m2 = scenery.add_node(Dummy::new("Mirror"))?;
     let rf = NodeReference::from_node(&scenery.node(&bs)?);
-    let r_bs = scenery.add_node(&rf)?;
-    let det = scenery.add_node(&Dummy::new("Detector"))?;
+    let r_bs = scenery.add_node(rf)?;
+    let det = scenery.add_node(Dummy::new("Detector"))?;
 
     scenery.connect_nodes(&src, "output_1", &bs, "input_1", Length::zero())?;
     scenery.connect_nodes(&bs, "out1_trans1_refl2", &sample, "input_1", Length::zero())?;

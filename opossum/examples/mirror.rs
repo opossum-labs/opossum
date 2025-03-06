@@ -16,7 +16,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(&round_collimated_ray_source(
+    let i_src = scenery.add_node(round_collimated_ray_source(
         millimeter!(20.0),
         joule!(1.0),
         3,
@@ -27,16 +27,16 @@ fn main() -> OpmResult<()> {
         "input_1",
         &CoatingType::ConstantR { reflectivity: 0.5 },
     )?;
-    let i_m1 = scenery.add_node(&mirror1)?;
+    let i_m1 = scenery.add_node(mirror1)?;
     let i_m2 = scenery.add_node(
-        &ThinMirror::new("mirror 2")
+        ThinMirror::new("mirror 2")
             .with_curvature(millimeter!(-100.0))?
             .with_tilt(degree!(-22.5, 0.0, 0.0))?,
     )?;
-    let i_prop_vis = scenery.add_node(&RayPropagationVisualizer::default())?;
-    let i_sd = scenery.add_node(&SpotDiagram::default())?;
-    let i_wf = scenery.add_node(&WaveFront::default())?;
-    let i_pm = scenery.add_node(&EnergyMeter::default())?;
+    let i_prop_vis = scenery.add_node(RayPropagationVisualizer::default())?;
+    let i_sd = scenery.add_node(SpotDiagram::default())?;
+    let i_wf = scenery.add_node(WaveFront::default())?;
+    let i_pm = scenery.add_node(EnergyMeter::default())?;
     scenery.connect_nodes(&i_src, "output_1", &i_m1, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(&i_m1, "output_1", &i_m2, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(&i_m2, "output_1", &i_prop_vis, "input_1", millimeter!(80.0))?;

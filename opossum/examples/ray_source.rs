@@ -18,11 +18,11 @@ fn main() -> OpmResult<()> {
     let aperture =
         Aperture::BinaryCircle(CircleConfig::new(millimeter!(1.0), millimeter![0.5, 0.5])?);
     source.set_aperture(&PortType::Output, "output_1", &aperture)?;
-    let i_s = scenery.add_node(&source)?;
+    let i_s = scenery.add_node(source)?;
     let dummy = Dummy::default();
-    let i_dummy = scenery.add_node(&dummy)?;
-    let i_d = scenery.add_node(&EnergyMeter::default())?;
-    let i_sd = scenery.add_node(&SpotDiagram::default())?;
+    let i_dummy = scenery.add_node(dummy)?;
+    let i_d = scenery.add_node(EnergyMeter::default())?;
+    let i_sd = scenery.add_node(SpotDiagram::default())?;
     scenery.connect_nodes(&i_s, "output_1", &i_dummy, "input_1", Length::zero())?;
     scenery.connect_nodes(&i_dummy, "output_1", &i_d, "input_1", Length::zero())?;
     scenery.connect_nodes(&i_d, "output_1", &i_sd, "input_1", Length::zero())?;

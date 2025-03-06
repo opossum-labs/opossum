@@ -35,12 +35,12 @@ fn main() -> OpmResult<()> {
     let mut source = Source::new("source", &LightData::Geometric(rays));
     source.set_isometry(Isometry::identity())?;
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(&source)?;
-    let i_pl = scenery.add_node(&ParaxialSurface::new("paraxial", millimeter!(500.0))?)?;
+    let i_src = scenery.add_node(source)?;
+    let i_pl = scenery.add_node(ParaxialSurface::new("paraxial", millimeter!(500.0))?)?;
     let mut fl_det = FluenceDetector::default();
     fl_det.set_property("fluence estimator", FluenceEstimator::HelperRays.into())?;
-    let i_fl1 = scenery.add_node(&fl_det)?;
-    let i_fl2 = scenery.add_node(&FluenceDetector::default())?;
+    let i_fl1 = scenery.add_node(fl_det)?;
+    let i_fl2 = scenery.add_node(FluenceDetector::default())?;
 
     scenery.connect_nodes(&i_src, "output_1", &i_fl1, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(&i_fl1, "output_1", &i_pl, "input_1", millimeter!(50.0))?;

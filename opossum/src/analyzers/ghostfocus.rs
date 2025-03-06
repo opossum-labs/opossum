@@ -656,7 +656,7 @@ mod test_ghost_focus_analyzer {
     fn report() {
         let mut scenery = NodeGroup::default();
         let i_src = scenery
-            .add_node(&round_collimated_ray_source(millimeter!(10.0), joule!(2.), 5).unwrap())
+            .add_node(round_collimated_ray_source(millimeter!(10.0), joule!(2.), 5).unwrap())
             .unwrap();
         let mut lens = Lens::default();
         lens.set_coating(
@@ -671,10 +671,10 @@ mod test_ghost_focus_analyzer {
             &CoatingType::ConstantR { reflectivity: 0.2 },
         )
         .unwrap();
-        let i_l = scenery.add_node(&lens).unwrap();
+        let i_l = scenery.add_node(lens).unwrap();
         let mir1 = scenery
             .add_node(
-                &ThinMirror::new("mir 1")
+                ThinMirror::new("mir 1")
                     .with_tilt(degree!(45., 0., 0.))
                     .unwrap(),
             )

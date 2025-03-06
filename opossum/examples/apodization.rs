@@ -14,7 +14,7 @@ use opossum::{
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
 
-    let i_src = scenery.add_node(&round_collimated_ray_source(
+    let i_src = scenery.add_node(round_collimated_ray_source(
         millimeter!(1.0),
         joule!(1.0),
         25,
@@ -28,8 +28,8 @@ fn main() -> OpmResult<()> {
     dummy.set_aperture(&PortType::Input, "front", &aperture)?;
     let dummy = dummy.with_decenter(millimeter!(-5.0, 5.0, 0.0))?;
 
-    let i_d = scenery.add_node(&dummy)?;
-    let i_sd = scenery.add_node(&SpotDiagram::default())?;
+    let i_d = scenery.add_node(dummy)?;
+    let i_sd = scenery.add_node(SpotDiagram::default())?;
 
     scenery.connect_nodes(&i_src, "output_1", &i_d, "input_1", millimeter!(50.0))?;
     scenery.connect_nodes(&i_d, "output_1", &i_sd, "input_1", millimeter!(50.0))?;
