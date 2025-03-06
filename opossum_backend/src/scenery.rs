@@ -46,7 +46,7 @@ async fn get_node(data: web::Data<AppState>, uuid_str: web::Path<String>) -> imp
     let Ok(uuid) = uuid_str.parse() else {
         return HttpResponse::BadRequest().body("Invalid UUID");
     };
-    scenery.node_by_uuid(&uuid).map_or_else(
+    scenery.node(&uuid).map_or_else(
         |_| HttpResponse::NotFound().body("Node not found"),
         |node| HttpResponse::Ok().json(node),
     )

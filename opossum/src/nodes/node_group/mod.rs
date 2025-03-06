@@ -202,14 +202,6 @@ impl NodeGroup {
     pub fn node(&self, node_id: &Uuid) -> OpmResult<OpticRef> {
         self.graph.node_by_uuid(node_id)
     }
-    /// Refturn a reference to the optical node specified by its [`Uuid`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
-    pub fn node_by_uuid(&self, uuid: &Uuid) -> OpmResult<OpticRef> {
-        self.graph.node_by_uuid(uuid)
-    }
     /// Returns the number of nodes of this [`NodeGroup`].
     #[must_use]
     pub fn nr_of_nodes(&self) -> usize {
@@ -759,14 +751,9 @@ mod test {
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();
         AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config).unwrap();
-        let uuid = scenery
-            .node_by_uuid(&i_e)
-            .unwrap()
-            .uuid()
-            .as_simple()
-            .to_string();
+        let uuid = scenery.node(&i_e).unwrap().uuid().as_simple().to_string();
         let report = scenery
-            .node_by_uuid(&i_e)
+            .node(&i_e)
             .unwrap()
             .optical_ref
             .lock()
