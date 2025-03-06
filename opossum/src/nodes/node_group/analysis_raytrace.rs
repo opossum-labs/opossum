@@ -104,7 +104,15 @@ impl AnalysisRayTrace for NodeGroup {
         let mut light_result = LightResult::default();
         let mut up_direction = Vector3::<f64>::y();
         for idx in sorted {
-            let node_name=self.graph.node_by_idx(idx).unwrap().optical_ref.lock().unwrap().node_attr().name();
+            let node_name = self
+                .graph
+                .node_by_idx(idx)
+                .unwrap()
+                .optical_ref
+                .lock()
+                .unwrap()
+                .node_attr()
+                .name();
             println!("node: {}", node_name);
             calculate_single_node_position(
                 &mut self.graph,
@@ -166,18 +174,10 @@ fn calculate_single_node_position(
                     "Cannot align node like NodeIdx:{}. Fall back to standard positioning method",
                     node_idx.index()
                 );
-                graph.set_node_isometry(
-                    &incoming_edges,
-                    node_id,
-                    *up_direction,
-                )?;
+                graph.set_node_isometry(&incoming_edges, node_id, *up_direction)?;
             }
         } else {
-            graph.set_node_isometry(
-                &incoming_edges,
-                node_id,
-                *up_direction,
-            )?;
+            graph.set_node_isometry(&incoming_edges, node_id, *up_direction)?;
         };
     } else {
         info!("Node {node_info} has already been placed. Leaving untouched.");

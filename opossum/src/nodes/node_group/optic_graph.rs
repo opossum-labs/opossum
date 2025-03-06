@@ -701,10 +701,7 @@ impl OpticGraph {
                 {
                     if let Some(iso) = node.isometry() {
                         if iso != node_iso {
-                            warn!(
-                                "Node {} cannot be consistently positioned.",
-                                node.name()
-                            );
+                            warn!("Node {} cannot be consistently positioned.", node.name());
                             warn!("Position based on previous input port is: {iso}");
                             warn!("Position based on this port would be:     {node_iso}");
                             warn!("Keeping first position");
@@ -1373,9 +1370,15 @@ mod test {
         let mut graph = OpticGraph::default();
         let mut dummy = Dummy::default();
         dummy.set_isometry(Isometry::identity()).unwrap();
-        let d1 = graph.add_node(dummy.clone()).unwrap();
-        let d2 = graph.add_node(dummy.clone()).unwrap();
-        let d3 = graph.add_node(dummy.clone()).unwrap();
+        let d1 = graph.add_node(dummy).unwrap();
+        let mut dummy = Dummy::default();
+        dummy.set_isometry(Isometry::identity()).unwrap();
+        let d2 = graph.add_node(dummy).unwrap();
+        let mut dummy = Dummy::default();
+        dummy.set_isometry(Isometry::identity()).unwrap();
+        let d3 = graph.add_node(dummy).unwrap();
+        let mut dummy = Dummy::default();
+        dummy.set_isometry(Isometry::identity()).unwrap();
         let d4 = graph.add_node(dummy).unwrap();
         graph
             .connect_nodes(&d1, "output_1", &d2, "input_1", Length::zero())

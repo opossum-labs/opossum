@@ -48,7 +48,7 @@ use uuid::Uuid;
 ///   let mut scenery = NodeGroup::new("OpticScenery demo");
 ///   let node1 = scenery.add_node(&Dummy::new("dummy1"))?;
 ///   let node2 = scenery.add_node(&Dummy::new("dummy2"))?;
-///   scenery.connect_nodes(node1, "output_1", node2, "input_1", millimeter!(100.0))?;
+///   scenery.connect_nodes(&node1, "output_1", &node2, "input_1", millimeter!(100.0))?;
 ///   Ok(())
 /// }
 ///

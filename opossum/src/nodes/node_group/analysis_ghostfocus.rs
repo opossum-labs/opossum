@@ -43,7 +43,7 @@ impl AnalysisGhostFocus for NodeGroup {
                 .lock()
                 .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
             let node_id = *node.node_attr().uuid();
-            let node_info=node.to_string();
+            let node_info = node.to_string();
             drop(node);
             if self.graph.is_stale_node(&node_id) {
                 warn!(
