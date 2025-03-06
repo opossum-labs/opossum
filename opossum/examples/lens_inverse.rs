@@ -28,7 +28,7 @@ fn main() -> OpmResult<()> {
         &RefrIndexConst::new(1.5)?,
     )?)?;
     let i_m2 = scenery.add_node(ThinMirror::new("mirror").with_tilt(degree!(5.0, 0.0, 0.0))?)?;
-    let mut l1_ref = NodeReference::from_node(&scenery.node(&i_l1)?);
+    let mut l1_ref = NodeReference::from_node(&scenery.node(i_l1)?);
     l1_ref.set_inverted(true)?;
     let i_l1_ref = scenery.add_node(l1_ref)?;
     let i_sd3 = scenery.add_node(RayPropagationVisualizer::default())?;

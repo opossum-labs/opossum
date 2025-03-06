@@ -199,8 +199,8 @@ impl NodeGroup {
     /// # Errors
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
-    pub fn node(&self, node_id: &Uuid) -> OpmResult<OpticRef> {
-        self.graph.node(node_id)
+    pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
+        self.graph.node(&node_id)
     }
     /// Returns the number of nodes of this [`NodeGroup`].
     #[must_use]
@@ -755,9 +755,9 @@ mod test {
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();
         AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config).unwrap();
-        let uuid = scenery.node(&i_e).unwrap().uuid().as_simple().to_string();
+        let uuid = scenery.node(i_e).unwrap().uuid().as_simple().to_string();
         let report = scenery
-            .node(&i_e)
+            .node(i_e)
             .unwrap()
             .optical_ref
             .lock()

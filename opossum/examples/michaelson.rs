@@ -20,11 +20,11 @@ fn main() -> OpmResult<()> {
     ))?;
     let bs = scenery.add_node(BeamSplitter::default())?;
     let sample = scenery.add_node(Dummy::new("Sample"))?;
-    let rf = NodeReference::from_node(&scenery.node(&sample)?);
+    let rf = NodeReference::from_node(&scenery.node(sample)?);
     let r_sample = scenery.add_node(rf)?;
     let m1 = scenery.add_node(Dummy::new("Mirror"))?;
     let m2 = scenery.add_node(Dummy::new("Mirror"))?;
-    let rf = NodeReference::from_node(&scenery.node(&bs)?);
+    let rf = NodeReference::from_node(&scenery.node(bs)?);
     let r_bs = scenery.add_node(rf)?;
     let det = scenery.add_node(Dummy::new("Detector"))?;
 

@@ -30,19 +30,19 @@ pub fn folded_martinez_paraxial_lens(
     let mir_1 = cb.add_node(
         ThinMirror::new("mirr").align_like_node_at_distance(&lens1, telescope_distance),
     )?;
-    let mir_1_ref = cb.add_node(NodeReference::from_node(&cb.node(&mir_1)?))?;
-    let mut lens_1_ref1 = NodeReference::from_node(&cb.node(&lens1)?);
+    let mir_1_ref = cb.add_node(NodeReference::from_node(&cb.node(mir_1)?))?;
+    let mut lens_1_ref1 = NodeReference::from_node(&cb.node(lens1)?);
     lens_1_ref1.set_inverted(true)?;
     let lens_1_ref1 = cb.add_node(lens_1_ref1)?;
-    let lens_1_ref2 = cb.add_node(NodeReference::from_node(&cb.node(&lens1)?))?;
-    let mut lens_1_ref3 = NodeReference::from_node(&cb.node(&lens1)?);
+    let lens_1_ref2 = cb.add_node(NodeReference::from_node(&cb.node(lens1)?))?;
+    let mut lens_1_ref3 = NodeReference::from_node(&cb.node(lens1)?);
     lens_1_ref3.set_inverted(true)?;
     let lens_1_ref3 = cb.add_node(lens_1_ref3)?;
-    let mut g1ref1 = NodeReference::from_node(&cb.node(&i_g1)?);
+    let mut g1ref1 = NodeReference::from_node(&cb.node(i_g1)?);
     g1ref1.set_inverted(true)?;
     let g1ref1 = cb.add_node(g1ref1)?;
-    let g1ref2 = cb.add_node(NodeReference::from_node(&cb.node(&i_g1)?))?;
-    let mut g1ref3 = NodeReference::from_node(&cb.node(&i_g1)?);
+    let g1ref2 = cb.add_node(NodeReference::from_node(&cb.node(i_g1)?))?;
+    let mut g1ref3 = NodeReference::from_node(&cb.node(i_g1)?);
     g1ref3.set_inverted(true)?;
     let g1ref3 = cb.add_node(g1ref3)?;
     let retro_mir1 =
