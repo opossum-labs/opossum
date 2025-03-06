@@ -37,11 +37,11 @@ fn main() -> OpmResult<()> {
         opossum::nodes::Metertype::IdealEnergyMeter,
     ))?;
 
-    scenery.connect_nodes(&i_s, "output_1", &i_bs, "input_1", Length::zero())?;
-    scenery.connect_nodes(&i_bs, "out1_trans1_refl2", &i_d1, "input_1", Length::zero())?;
-    scenery.connect_nodes(&i_bs, "out2_trans2_refl1", &i_f, "input_1", Length::zero())?;
-    scenery.connect_nodes(&i_f, "output_1", &i_d2, "input_1", Length::zero())?;
-    scenery.connect_nodes(&i_d2, "output_1", &i_d3, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_s, "output_1", i_bs, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_f, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_f, "output_1", i_d2, "input_1", Length::zero())?;
+    scenery.connect_nodes(i_d2, "output_1", i_d3, "input_1", Length::zero())?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

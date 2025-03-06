@@ -39,9 +39,9 @@ fn main() -> OpmResult<()> {
     )?;
     let l2 = scenery.add_node(lens2)?;
     let det = scenery.add_node(RayPropagationVisualizer::default())?;
-    scenery.connect_nodes(&src, "output_1", &l1, "input_1", millimeter!(30.0))?;
-    scenery.connect_nodes(&l1, "output_1", &l2, "input_1", millimeter!(197.22992))?;
-    scenery.connect_nodes(&l2, "output_1", &det, "input_1", millimeter!(30.0))?;
+    scenery.connect_nodes(src, "output_1", l1, "input_1", millimeter!(30.0))?;
+    scenery.connect_nodes(l1, "output_1", l2, "input_1", millimeter!(197.22992))?;
+    scenery.connect_nodes(l2, "output_1", det, "input_1", millimeter!(30.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

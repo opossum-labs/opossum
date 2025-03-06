@@ -256,7 +256,7 @@ impl OpticGraph {
                 "external {name_type} port name already assigned"
             )));
         }
-        let node = self.node_by_uuid(node_id)?;
+        let node = self.node(node_id)?;
         if !node
             .optical_ref
             .lock()
@@ -402,7 +402,7 @@ impl OpticGraph {
     /// # Errors
     ///
     /// This function will return an error if the node with the given [`Uuid`] does not exist.
-    pub fn node_by_uuid(&self, uuid: &Uuid) -> OpmResult<OpticRef> {
+    pub fn node(&self, uuid: &Uuid) -> OpmResult<OpticRef> {
         self.g
             .node_weights()
             .find(|node| node.uuid() == *uuid)
@@ -569,7 +569,7 @@ impl OpticGraph {
     }
     fn is_incoming_node(&self, node_id: &Uuid) -> bool {
         let nr_of_input_ports = self
-            .node_by_uuid(node_id)
+            .node(node_id)
             .unwrap()
             .optical_ref
             .lock()
@@ -691,7 +691,7 @@ impl OpticGraph {
         up_direction: Vector3<f64>,
     ) -> OpmResult<()> {
         for incoming_edge in incoming_edges {
-            let node_ref = self.node_by_uuid(node_id)?;
+            let node_ref = self.node(node_id)?;
             let distance_from_predecessor =
                 self.distance_from_predecessor(node_id, incoming_edge.0)?;
             let mut node = node_ref
@@ -1016,7 +1016,7 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
         } else {
             Uuid::nil()
         };
-        let Ok(reference_node) = graph.node_by_uuid(&uuid) else {
+        let Ok(reference_node) = graph.node(&uuid) else {
             return Err(OpossumError::Other(
                 "reference node found, which does not reference anything".into(),
             ));
@@ -1345,8 +1345,8 @@ mod test {
     fn node_by_uuid() {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::default()).unwrap();
-        assert!(graph.node_by_uuid(&n1).is_ok());
-        assert!(graph.node_by_uuid(&Uuid::nil()).is_err());
+        assert!(graph.node(&n1).is_ok());
+        assert!(graph.node(&Uuid::nil()).is_err());
     }
     #[test]
     fn node_id() {

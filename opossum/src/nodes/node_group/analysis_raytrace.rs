@@ -143,7 +143,7 @@ fn calculate_single_node_position(
         }
         if let Some((node_id, distance)) = node_attr.get_align_like_node_at_distance() {
             let align_ref_iso = graph
-                .node_by_uuid(node_id)?
+                .node(node_id)?
                 .optical_ref
                 .lock()
                 .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?

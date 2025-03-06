@@ -14,7 +14,7 @@ fn main() -> OpmResult<()> {
     let i_s = scenery.add_node(source)?;
     let i_wf1 = scenery.add_node(WaveFront::new("wf_monitor 1"))?;
 
-    scenery.connect_nodes(&i_s, "output_1", &i_wf1, "input_1", meter!(0.1))?;
+    scenery.connect_nodes(i_s, "output_1", i_wf1, "input_1", meter!(0.1))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

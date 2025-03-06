@@ -66,7 +66,7 @@ mod test {
         let i_src = scenery.add_node(src).unwrap();
         let i_em = scenery.add_node(EnergyMeter::default()).unwrap();
         scenery
-            .connect_nodes(&i_src, "output_1", &i_em, "input_1", Length::zero())
+            .connect_nodes(i_src, "output_1", i_em, "input_1", Length::zero())
             .unwrap();
         scenery
     }

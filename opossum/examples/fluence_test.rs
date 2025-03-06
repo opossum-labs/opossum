@@ -53,7 +53,7 @@ fn main() -> OpmResult<()> {
     // let i_fl2 = scenery.add_node(FluenceDetector::new("50 mm"))?;
     // let i_fl3 = scenery.add_node(FluenceDetector::new("90 mm"))?;
 
-    scenery.connect_nodes(&i_src, "output_1", &i_fl1, "input_1", millimeter!(5.0))?;
+    scenery.connect_nodes(i_src, "output_1", i_fl1, "input_1", millimeter!(5.0))?;
     // scenery.connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(10.0))?;
     // scenery.connect_nodes(i_l, "output_1", i_fl2, "input_1", millimeter!(90.0))?;
     // scenery.connect_nodes(i_fl2, "output_1", i_fl3, "input_1", millimeter!(40.0))?;

@@ -81,12 +81,12 @@ fn main() -> OpmResult<()> {
     // mgroup.map_output_port(mir4, "output_1", "output_1");
     // let mg = scenery.add_node(mgroup)?;
 
-    scenery.connect_nodes(&i_src, "output_1", &i_l, "input_1", millimeter!(150.0))?;
-    scenery.connect_nodes(&i_l, "output_1", &mir1, "input_1", millimeter!(150.0))?;
-    scenery.connect_nodes(&mir1, "output_1", &mir2, "input_1", millimeter!(200.0))?;
-    scenery.connect_nodes(&mir2, "output_1", &mir3, "input_1", millimeter!(300.0))?;
-    scenery.connect_nodes(&mir3, "output_1", &mir4, "input_1", millimeter!(200.0))?;
-    scenery.connect_nodes(&mir4, "output_1", &i_l2, "input_1", millimeter!(150.0))?;
+    scenery.connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(150.0))?;
+    scenery.connect_nodes(i_l, "output_1", mir1, "input_1", millimeter!(150.0))?;
+    scenery.connect_nodes(mir1, "output_1", mir2, "input_1", millimeter!(200.0))?;
+    scenery.connect_nodes(mir2, "output_1", mir3, "input_1", millimeter!(300.0))?;
+    scenery.connect_nodes(mir3, "output_1", mir4, "input_1", millimeter!(200.0))?;
+    scenery.connect_nodes(mir4, "output_1", i_l2, "input_1", millimeter!(150.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     let mut config = GhostFocusConfig::default();

@@ -61,43 +61,31 @@ pub fn folded_martinez(
 
     //first grating pass up to 0° mirror
     cb.connect_nodes(
-        &i_g1,
+        i_g1,
         "output_1",
-        &lens1,
+        lens1,
         "input_1",
         telescope_distance - millimeter!(200.),
     )?;
-    cb.connect_nodes(&lens1, "output_1", &mir_1, "input_1", millimeter!(100.0))?;
+    cb.connect_nodes(lens1, "output_1", mir_1, "input_1", millimeter!(100.0))?;
 
     //second grating pass pass up to rooftop mirror
     cb.connect_nodes(
-        &mir_1,
+        mir_1,
         "output_1",
-        &lens_1_ref1,
-        "output_1",
-        millimeter!(100.0),
-    )?;
-    cb.connect_nodes(
-        &lens_1_ref1,
-        "input_1",
-        &g1ref1,
+        lens_1_ref1,
         "output_1",
         millimeter!(100.0),
     )?;
     cb.connect_nodes(
-        &g1ref1,
+        lens_1_ref1,
         "input_1",
-        &retro_mir1,
-        "input_1",
-        telescope_distance,
-    )?;
-    cb.connect_nodes(
-        &retro_mir1,
+        g1ref1,
         "output_1",
-        &g1ref2,
-        "input_1",
-        millimeter!(10.0),
+        millimeter!(100.0),
     )?;
+    cb.connect_nodes(g1ref1, "input_1", retro_mir1, "input_1", telescope_distance)?;
+    cb.connect_nodes(retro_mir1, "output_1", g1ref2, "input_1", millimeter!(10.0))?;
 
     // // cb.connect_nodes(
     // //     retro_mir1,
@@ -110,38 +98,37 @@ pub fn folded_martinez(
 
     //third grating pass pass up to 0° mirror
     cb.connect_nodes(
-        &g1ref2,
+        g1ref2,
         "output_1",
-        &lens_1_ref2,
+        lens_1_ref2,
         "input_1",
         millimeter!(1500.0),
     )?;
     cb.connect_nodes(
-        &lens_1_ref2,
+        lens_1_ref2,
         "output_1",
-        &mir_1_ref,
+        mir_1_ref,
         "input_1",
         millimeter!(100.0),
     )?;
 
     //fourth grating pass up to last grating interaction
     cb.connect_nodes(
-        &mir_1_ref,
+        mir_1_ref,
         "output_1",
-        &lens_1_ref3,
+        lens_1_ref3,
         "output_1",
         millimeter!(100.0),
     )?;
     cb.connect_nodes(
-        &lens_1_ref3,
+        lens_1_ref3,
         "input_1",
-        &g1ref3,
+        g1ref3,
         "output_1",
         millimeter!(100.0),
     )?;
 
     cb.map_input_port(&i_g1, "input_1", "input_1")?;
-    // cb.map_output_port(g1ref3, "input_1", "output_1")?;
     cb.map_output_port(&g1ref3, "input_1", "output_1")?;
 
     Ok(cb)

@@ -271,52 +271,52 @@ mod test {
         let i_16 = scenery.add_node(ThinMirror::default()).unwrap();
 
         scenery
-            .connect_nodes(&i_0, "output_1", &i_1, "input_1", millimeter!(5.0))
+            .connect_nodes(i_0, "output_1", i_1, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_1, "out1_trans1_refl2", &i_2, "input_1", millimeter!(5.0))
+            .connect_nodes(i_1, "out1_trans1_refl2", i_2, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_2, "output_1", &i_3, "input_1", millimeter!(5.0))
+            .connect_nodes(i_2, "output_1", i_3, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_3, "output_1", &i_4, "input_1", millimeter!(5.0))
+            .connect_nodes(i_3, "output_1", i_4, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_4, "output_1", &i_5, "input_1", millimeter!(5.0))
+            .connect_nodes(i_4, "output_1", i_5, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_5, "output_1", &i_6, "input_1", millimeter!(5.0))
+            .connect_nodes(i_5, "output_1", i_6, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_6, "output_1", &i_7, "input_1", millimeter!(5.0))
+            .connect_nodes(i_6, "output_1", i_7, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_7, "output_1", &i_8, "input_1", millimeter!(5.0))
+            .connect_nodes(i_7, "output_1", i_8, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_8, "output_1", &i_9, "input_1", millimeter!(5.0))
+            .connect_nodes(i_8, "output_1", i_9, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_9, "output_1", &i_10, "input_1", millimeter!(5.0))
+            .connect_nodes(i_9, "output_1", i_10, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_10, "output_1", &i_11, "input_1", millimeter!(5.0))
+            .connect_nodes(i_10, "output_1", i_11, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_11, "output_1", &i_12, "input_1", millimeter!(5.0))
+            .connect_nodes(i_11, "output_1", i_12, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_12, "output_1", &i_13, "input_1", millimeter!(5.0))
+            .connect_nodes(i_12, "output_1", i_13, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_13, "output_1", &i_14, "input_1", millimeter!(5.0))
+            .connect_nodes(i_13, "output_1", i_14, "input_1", millimeter!(5.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_14, "output_1", &i_15, "input_1", millimeter!(50.0))
+            .connect_nodes(i_14, "output_1", i_15, "input_1", millimeter!(50.0))
             .unwrap();
         scenery
-            .connect_nodes(&i_15, "output_1", &i_16, "input_1", millimeter!(50.0))
+            .connect_nodes(i_15, "output_1", i_16, "input_1", millimeter!(50.0))
             .unwrap();
 
         scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));

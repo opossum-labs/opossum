@@ -40,7 +40,7 @@ fn main() {
     // let i_16 = scenery.add_node(ThinMirror::default()).unwrap();
 
     scenery
-        .connect_nodes(&i_0, "output_1", &i_1, "input_1", millimeter!(5.0))
+        .connect_nodes(i_0, "output_1", i_1, "input_1", millimeter!(5.0))
         .unwrap();
     // scenery
     //     .connect_nodes(&i_1, "out1_trans1_refl2", &i_2, "input_1", millimeter!(5.0))

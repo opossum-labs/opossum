@@ -23,9 +23,9 @@ fn main() -> OpmResult<()> {
     let i_pl1 = scenery.add_node(lens1)?;
     let i_pl2 = scenery.add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0))?)?;
     let i_sd3 = scenery.add_node(RayPropagationVisualizer::new("after telecope", None)?)?;
-    scenery.connect_nodes(&i_src, "output_1", &i_pl1, "input_1", millimeter!(50.0))?;
-    scenery.connect_nodes(&i_pl1, "output_1", &i_pl2, "input_1", millimeter!(150.0))?;
-    scenery.connect_nodes(&i_pl2, "output_1", &i_sd3, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(i_src, "output_1", i_pl1, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(i_pl1, "output_1", i_pl2, "input_1", millimeter!(150.0))?;
+    scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(50.0))?;
 
     let mut doc = OpmDocument::new(scenery);
     doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));

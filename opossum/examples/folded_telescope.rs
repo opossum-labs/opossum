@@ -73,19 +73,19 @@ pub fn main() -> OpmResult<()> {
         Some(Vector3::y()),
     )?)?;
 
-    scenery.connect_nodes(&i_src, "output_1", &lens1, "input_1", millimeter!(400.0))?;
-    scenery.connect_nodes(&lens1, "output_1", &mir_1, "input_1", millimeter!(400.0))?;
+    scenery.connect_nodes(i_src, "output_1", lens1, "input_1", millimeter!(400.0))?;
+    scenery.connect_nodes(lens1, "output_1", mir_1, "input_1", millimeter!(400.0))?;
     scenery.connect_nodes(
-        &mir_1,
+        mir_1,
         "output_1",
-        &lens_1_ref,
+        lens_1_ref,
         "output_1",
         millimeter!(100.0),
     )?;
     scenery.connect_nodes(
-        &lens_1_ref,
+        lens_1_ref,
         "input_1",
-        &i_prop_vis,
+        i_prop_vis,
         "input_1",
         millimeter!(400.0),
     )?;

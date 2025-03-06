@@ -47,7 +47,7 @@ use uuid::Uuid;
 ///   let mut scenery = NodeGroup::new("OpticScenery demo");
 ///   let node1 = scenery.add_node(Dummy::new("dummy1"))?;
 ///   let node2 = scenery.add_node(Dummy::new("dummy2"))?;
-///   scenery.connect_nodes(&node1, "output_1", &node2, "input_1", millimeter!(100.0))?;
+///   scenery.connect_nodes(node1, "output_1", node2, "input_1", millimeter!(100.0))?;
 ///   Ok(())
 /// }
 ///
@@ -162,7 +162,7 @@ impl NodeGroup {
         Ok(uuid)
     }
     fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
-        let node_ref = self.graph.node_by_uuid(&node_id)?;
+        let node_ref = self.graph.node(&node_id)?;
         let node = node_ref
             .optical_ref
             .lock()
@@ -200,7 +200,7 @@ impl NodeGroup {
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node_id: &Uuid) -> OpmResult<OpticRef> {
-        self.graph.node_by_uuid(node_id)
+        self.graph.node(node_id)
     }
     /// Returns the number of nodes of this [`NodeGroup`].
     #[must_use]
@@ -224,14 +224,14 @@ impl NodeGroup {
     /// In addition this function returns an [`OpossumError::Properties`] if the (internal) property "graph" cannot be set.
     pub fn connect_nodes(
         &mut self,
-        src_id: &Uuid,
+        src_id: Uuid,
         src_port: &str,
-        target_id: &Uuid,
+        target_id: Uuid,
         target_port: &str,
         distance: Length,
     ) -> OpmResult<()> {
         self.graph
-            .connect_nodes(src_id, src_port, target_id, target_port, distance)
+            .connect_nodes(&src_id, src_port, &target_id, target_port, distance)
     }
     /// Map an input port of an internal node to an external port of the group.
     ///
@@ -666,7 +666,7 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(&sn1_i, "output_1", &sn2_i, "input_1", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
         assert!(og.ports().names(&PortType::Input).is_empty());
         assert!(og.ports().names(&PortType::Output).is_empty());
@@ -686,7 +686,7 @@ mod test {
         let mut og = NodeGroup::default();
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(Dummy::default()).unwrap();
-        og.connect_nodes(&sn1_i, "output_1", &sn2_i, "input_1", Length::zero())
+        og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
         og.map_input_port(&sn1_i, "input_1", "input_1").unwrap();
         og.map_output_port(&sn2_i, "output_1", "output_1").unwrap();
@@ -720,7 +720,7 @@ mod test {
         let node1 = scenery.add_node(Dummy::default()).unwrap();
         let node2 = scenery.add_node(Dummy::default()).unwrap();
         scenery
-            .connect_nodes(&node1, "output_1", &node2, "input_1", Length::zero())
+            .connect_nodes(node1, "output_1", node2, "input_1", Length::zero())
             .unwrap();
         AnalysisEnergy::analyze(&mut scenery, LightResult::default()).unwrap();
     }
@@ -746,7 +746,7 @@ mod test {
         em.set_isometry(Isometry::identity()).unwrap();
         let i_e = scenery.add_node(em).unwrap();
         scenery
-            .connect_nodes(&i_s, "output_1", &i_e, "input_1", Length::zero())
+            .connect_nodes(i_s, "output_1", i_e, "input_1", Length::zero())
             .unwrap();
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_min_energy_per_ray(joule!(0.5)).unwrap();

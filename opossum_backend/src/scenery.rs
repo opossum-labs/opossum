@@ -67,9 +67,9 @@ async fn connect_nodes(
 ) -> impl Responder {
     let mut scenery = data.scenery.lock().unwrap();
     if let Err(e) = scenery.connect_nodes(
-        &connect_info.src_uuid,
+        connect_info.src_uuid,
         &connect_info.src_port,
-        &connect_info.target_uuid,
+        connect_info.target_uuid,
         &connect_info.target_port,
         meter!(connect_info.distance),
     ) {

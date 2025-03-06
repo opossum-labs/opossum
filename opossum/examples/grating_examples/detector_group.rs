@@ -18,30 +18,26 @@ pub fn detector_group() -> OpmResult<NodeGroup> {
     )?)?;
     let paraxial_lens = cb.add_node(ParaxialSurface::new("ideal lens", millimeter!(500.))?)?;
     let spot_monitor = SpotDiagram::new("spot diagram");
-    // let rect_config = RectangleConfig::new(millimeter!(150.), millimeter!(150.), micrometer!(0.,0.))?;
-    // let aperture = Aperture::BinaryRectangle(rect_config);
-    // spot_monitor.set_aperture(&PortType::Input, "input_1", &aperture)?;
-    // spot_monitor.set_property("plot_aperture", true.into())?;
     let spot_diag = cb.add_node(spot_monitor)?;
 
     cb.connect_nodes(
-        &paraxial_lens,
+        paraxial_lens,
         "output_1",
-        &spot_diag,
+        spot_diag,
         "input_1",
         millimeter!(500.0),
     )?;
     cb.connect_nodes(
-        &spot_diag,
+        spot_diag,
         "output_1",
-        &i_prop_vis_top_view,
+        i_prop_vis_top_view,
         "input_1",
         millimeter!(0.0),
     )?;
     cb.connect_nodes(
-        &i_prop_vis_top_view,
+        i_prop_vis_top_view,
         "output_1",
-        &i_prop_vis_side_view,
+        i_prop_vis_side_view,
         "input_1",
         millimeter!(0.0),
     )?;
