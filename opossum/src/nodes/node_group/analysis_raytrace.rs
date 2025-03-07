@@ -46,15 +46,15 @@ impl AnalysisRayTrace for NodeGroup {
                 .lock()
                 .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
             let node_info = node.to_string();
-            let node_id = *node.node_attr().uuid();
+            let node_id = node.node_attr().uuid();
             drop(node);
-            if self.graph.is_stale_node(&node_id) {
+            if self.graph.is_stale_node(node_id) {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
                     node_info
                 );
             } else {
-                let incoming_edges = self.graph.get_incoming(&node_id, &incoming_data);
+                let incoming_edges = self.graph.get_incoming(node_id, &incoming_data);
                 let mut outgoing_edges = AnalysisRayTrace::analyze(
                     &mut *node_ref
                         .lock()
@@ -73,7 +73,7 @@ impl AnalysisRayTrace for NodeGroup {
                     } else {
                         self.graph.port_map(&PortType::Output).clone()
                     };
-                    let assigned_ports = portmap.assigned_ports_for_node(&node_id);
+                    let assigned_ports = portmap.assigned_ports_for_node(node_id);
                     for port in assigned_ports {
                         if let Some(light_data) = outgoing_edges.get(&port.1) {
                             light_result.insert(port.0, light_data.clone());
@@ -143,7 +143,7 @@ fn calculate_single_node_position(
         }
         if let Some((node_id, distance)) = node_attr.get_align_like_node_at_distance() {
             let align_ref_iso = graph
-                .node(node_id)?
+                .node(*node_id)?
                 .optical_ref
                 .lock()
                 .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
@@ -164,7 +164,7 @@ fn calculate_single_node_position(
                     "Cannot align node like NodeIdx:{}. Fall back to standard positioning method",
                     node_idx.index()
                 );
-                graph.set_node_isometry(&incoming_edges, node_id, *up_direction)?;
+                graph.set_node_isometry(&incoming_edges, *node_id, *up_direction)?;
             }
         } else {
             graph.set_node_isometry(&incoming_edges, node_id, *up_direction)?;

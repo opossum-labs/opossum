@@ -58,14 +58,14 @@ impl PortMap {
         self.0.contains_key(name)
     }
     /// Check if this [`PortMap`] contains the given node.
-    pub fn contains_node(&self, node_id: &Uuid) -> bool {
-        self.0.iter().any(|p| p.1 .0 == *node_id)
+    pub fn contains_node(&self, node_id: Uuid) -> bool {
+        self.0.iter().any(|p| p.1 .0 == node_id)
     }
     /// Return a vector of port (external -> internal) port assignments for the given node.
-    pub fn assigned_ports_for_node(&self, node_id: &Uuid) -> Vec<(String, String)> {
+    pub fn assigned_ports_for_node(&self, node_id: Uuid) -> Vec<(String, String)> {
         self.0
             .iter()
-            .filter(|p| p.1 .0 == *node_id)
+            .filter(|p| p.1 .0 == node_id)
             .map(|p| (p.0.to_string(), p.1 .1.to_string()))
             .collect()
     }

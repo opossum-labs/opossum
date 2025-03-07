@@ -67,7 +67,7 @@ impl NodeReference {
         let mut refr = Self::default();
         let node_mut = node.optical_ref.lock().expect("Mutex lock failed");
         refr.node_attr
-            .set_property("reference id", Proptype::Uuid(*node_mut.node_attr().uuid()))
+            .set_property("reference id", Proptype::Uuid(node_mut.node_attr().uuid()))
             .unwrap();
         let ref_name = format!("ref ({})", node_mut.name());
         drop(node_mut);

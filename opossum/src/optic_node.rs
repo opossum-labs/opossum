@@ -349,7 +349,7 @@ pub trait OpticNode: Dottable {
         node_attr_mut.set_name(&node_attributes.name());
         node_attr_mut.set_inverted(node_attributes.inverted());
         if let Some((node_idx, distance)) = node_attributes.get_align_like_node_at_distance() {
-            node_attr_mut.set_align_like_node_at_distance(node_idx, *distance);
+            node_attr_mut.set_align_like_node_at_distance(*node_idx, *distance);
         }
         node_attr_mut.update_properties(node_attributes.properties().clone());
 
@@ -528,7 +528,7 @@ pub trait Alignable: OpticNode + Sized {
     #[must_use]
     fn align_like_node_at_distance(mut self, node_id: Uuid, distance: Length) -> Self {
         self.node_attr_mut()
-            .set_align_like_node_at_distance(&node_id, distance);
+            .set_align_like_node_at_distance(node_id, distance);
         self
     }
 }

@@ -162,7 +162,7 @@ impl OpticSurface {
     /// Stores a critical fluence in a hitmap
     fn add_critical_fluence(
         &mut self,
-        uuid: &Uuid,
+        uuid: Uuid,
         rays_hist_pos: usize,
         fluence: Fluence,
         bounce: usize,
@@ -173,7 +173,7 @@ impl OpticSurface {
 
     ///returns a reference to a [`RaysHitMap`] in this [`OpticSurface`]
     #[must_use]
-    pub fn get_rays_hit_map(&self, bounce: usize, uuid: &Uuid) -> Option<&RaysHitMap> {
+    pub fn get_rays_hit_map(&self, bounce: usize, uuid: Uuid) -> Option<&RaysHitMap> {
         self.hit_map.get_rays_hit_map(bounce, uuid)
     }
     /// Add intersection point (with energy) to hit map.
@@ -203,11 +203,11 @@ impl OpticSurface {
         rays: &Rays,
         estimator: &FluenceEstimator,
     ) -> OpmResult<()> {
-        if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), &rays.uuid()) {
+        if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), rays.uuid()) {
             if let Ok(peak_fluence) = rays_hit_map.get_max_fluence(estimator) {
                 if peak_fluence > self.lidt {
                     self.add_critical_fluence(
-                        &rays.uuid(),
+                        rays.uuid(),
                         rays.ray_history_len(),
                         peak_fluence,
                         rays.bounce_lvl(),
@@ -394,7 +394,7 @@ mod test {
     fn add_critical_fluence() {
         let mut os = OpticSurface::default();
         let uuid = Uuid::new_v4();
-        os.add_critical_fluence(&uuid, 1, J_per_cm2!(1.0), 2);
+        os.add_critical_fluence(uuid, 1, J_per_cm2!(1.0), 2);
         let hit_map = os.hit_map();
         assert!(hit_map.critical_fluences().get(&Uuid::nil()).is_none());
         let critical_fluence = hit_map.critical_fluences().get(&uuid).unwrap();

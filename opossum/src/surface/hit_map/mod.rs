@@ -50,20 +50,20 @@ impl BouncedHitMap {
     ///
     /// # Errors
     /// This function errors if the hit-point that should be added does not match the already stored hit point type
-    pub fn add_to_hitmap(&mut self, hit_point: HitPoint, uuid: &Uuid) -> OpmResult<()> {
-        if let Some(rays_hit_map) = self.hit_map.get_mut(uuid) {
+    pub fn add_to_hitmap(&mut self, hit_point: HitPoint, uuid: Uuid) -> OpmResult<()> {
+        if let Some(rays_hit_map) = self.hit_map.get_mut(&uuid) {
             rays_hit_map.add_hit_point(hit_point)?;
         } else {
             match hit_point {
                 HitPoint::Energy(energy_hit_point) => {
                     let mut rhm = RaysHitMap::new(HitPoints::Energy(vec![]));
                     rhm.add_hit_point(HitPoint::Energy(energy_hit_point))?;
-                    self.hit_map.insert(*uuid, rhm);
+                    self.hit_map.insert(uuid, rhm);
                 }
                 HitPoint::Fluence(fluence_hit_point) => {
                     let mut rhm = RaysHitMap::new(HitPoints::Fluence(vec![]));
                     rhm.add_hit_point(HitPoint::Fluence(fluence_hit_point))?;
-                    self.hit_map.insert(*uuid, rhm);
+                    self.hit_map.insert(uuid, rhm);
                 }
             };
         };
@@ -71,8 +71,8 @@ impl BouncedHitMap {
     }
     /// Returns a reference to a [`RaysHitMap`] in this [`BouncedHitMap`]
     #[must_use]
-    pub fn get_rays_hit_map(&self, uuid: &Uuid) -> Option<&RaysHitMap> {
-        self.hit_map.get(uuid)
+    pub fn get_rays_hit_map(&self, uuid: Uuid) -> Option<&RaysHitMap> {
+        self.hit_map.get(&uuid)
     }
 }
 
@@ -109,7 +109,7 @@ impl HitMap {
                 self.hit_map.push(BouncedHitMap::default());
             }
         }
-        self.hit_map[bounce].add_to_hitmap(hit_point, &uuid)?;
+        self.hit_map[bounce].add_to_hitmap(hit_point, uuid)?;
         Ok(())
     }
 
@@ -135,18 +135,18 @@ impl HitMap {
     ///stores a critical fluence in a hitmap
     pub fn add_critical_fluence(
         &mut self,
-        uuid: &Uuid,
+        uuid: Uuid,
         rays_hist_pos: usize,
         fluence: Fluence,
         bounce: usize,
     ) {
         self.critical_fluence
-            .insert(*uuid, (fluence, rays_hist_pos, bounce));
+            .insert(uuid, (fluence, rays_hist_pos, bounce));
     }
 
     ///returns a reference to a [`RaysHitMap`] in this [`HitMap`]
     #[must_use]
-    pub fn get_rays_hit_map(&self, bounce: usize, uuid: &Uuid) -> Option<&RaysHitMap> {
+    pub fn get_rays_hit_map(&self, bounce: usize, uuid: Uuid) -> Option<&RaysHitMap> {
         if bounce >= self.hit_map.len() {
             None
         } else {
@@ -515,21 +515,21 @@ mod test_bounced_hit_map {
         let uuid2 = Uuid::new_v4();
         bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         assert_eq!(bhm.hit_map.get(&uuid1).unwrap().hit_map().len(), 1);
         assert!(bhm.hit_map.get(&uuid2).is_none());
         bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         assert_eq!(bhm.hit_map.get(&uuid1).unwrap().hit_map().len(), 2);
         assert!(bhm.hit_map.get(&uuid2).is_none());
         bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
-            &uuid2,
+            uuid2,
         )
         .unwrap();
         assert_eq!(bhm.hit_map.get(&uuid1).unwrap().hit_map().len(), 2);
@@ -542,22 +542,22 @@ mod test_bounced_hit_map {
         let uuid2 = Uuid::new_v4();
         bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
-            &uuid1,
+            uuid1,
         )
         .unwrap();
         bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
-            &uuid2,
+            uuid2,
         )
         .unwrap();
-        assert_eq!(bhm.get_rays_hit_map(&uuid1).unwrap().hit_map().len(), 2);
-        assert_eq!(bhm.get_rays_hit_map(&uuid2).unwrap().hit_map().len(), 1);
-        assert!(bhm.get_rays_hit_map(&Uuid::nil()).is_none());
+        assert_eq!(bhm.get_rays_hit_map(uuid1).unwrap().hit_map().len(), 2);
+        assert_eq!(bhm.get_rays_hit_map(uuid2).unwrap().hit_map().len(), 1);
+        assert!(bhm.get_rays_hit_map(Uuid::nil()).is_none());
     }
 }
 #[cfg(test)]
@@ -807,8 +807,8 @@ mod test_hit_map {
             uuid1,
         )
         .unwrap();
-        assert!(hm.get_rays_hit_map(2, &uuid1).is_none());
-        assert!(hm.get_rays_hit_map(0, &uuid2).is_none());
+        assert!(hm.get_rays_hit_map(2, uuid1).is_none());
+        assert!(hm.get_rays_hit_map(0, uuid2).is_none());
     }
     #[test]
     fn get_merged_rays_hit_map() {

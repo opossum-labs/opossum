@@ -212,12 +212,12 @@ impl NodeAttr {
 
     /// Returns a reference to the uuid of this [`NodeAttr`].
     #[must_use]
-    pub const fn uuid(&self) -> &Uuid {
-        &self.uuid
+    pub const fn uuid(&self) -> Uuid {
+        self.uuid
     }
     ///Sets the uuid of this [`NodeAttr`].
-    pub fn set_uuid(&mut self, uuid: &Uuid) {
-        self.uuid = *uuid;
+    pub fn set_uuid(&mut self, uuid: Uuid) {
+        self.uuid = uuid;
     }
 
     /// Returns a reference to the lidt of this [`NodeAttr`].
@@ -231,8 +231,8 @@ impl NodeAttr {
     }
 
     /// set the nodeindex and distance of the node to which this node should be aligned to
-    pub fn set_align_like_node_at_distance(&mut self, node_id: &Uuid, distance: Length) {
-        self.align_like_node_at_distance = Some((*node_id, distance));
+    pub fn set_align_like_node_at_distance(&mut self, node_id: Uuid, distance: Length) {
+        self.align_like_node_at_distance = Some((node_id, distance));
     }
 
     /// get the nodeindex and distance of the node to which this node should be aligned to

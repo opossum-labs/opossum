@@ -101,7 +101,7 @@ pub trait AnalysisRayTrace: OpticNode {
         backward: bool,
         refraction_intended: bool,
     ) -> OpmResult<()> {
-        let uuid = *self.node_attr().uuid();
+        let uuid = self.node_attr().uuid();
         let iso = &self.effective_surface_iso(optic_surf_name)?;
         let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
             return Err(OpossumError::Analysis(format!(

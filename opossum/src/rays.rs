@@ -170,8 +170,8 @@ impl Rays {
     }
     ///Returns the uuid of tha parent ray bundle of this ray bundle
     #[must_use]
-    pub const fn parent_id(&self) -> &Option<Uuid> {
-        &self.parent_id
+    pub const fn parent_id(&self) -> Option<Uuid> {
+        self.parent_id
     }
     ///Returns the index of the position history of its parent ray bundle
     #[must_use]

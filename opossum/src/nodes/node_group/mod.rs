@@ -162,7 +162,7 @@ impl NodeGroup {
         Ok(uuid)
     }
     fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
-        let node_ref = self.graph.node(&node_id)?;
+        let node_ref = self.graph.node(node_id)?;
         let node = node_ref
             .optical_ref
             .lock()
@@ -200,7 +200,7 @@ impl NodeGroup {
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
-        self.graph.node(&node_id)
+        self.graph.node(node_id)
     }
     /// Returns the number of nodes of this [`NodeGroup`].
     #[must_use]
@@ -250,7 +250,7 @@ impl NodeGroup {
         external_name: &str,
     ) -> OpmResult<()> {
         self.graph
-            .map_port(&input_node, &PortType::Input, internal_name, external_name)?;
+            .map_port(input_node, &PortType::Input, internal_name, external_name)?;
         self.node_attr
             .set_property("graph", self.graph.clone().into())
     }
@@ -270,12 +270,8 @@ impl NodeGroup {
         internal_name: &str,
         external_name: &str,
     ) -> OpmResult<()> {
-        self.graph.map_port(
-            &output_node,
-            &PortType::Output,
-            internal_name,
-            external_name,
-        )?;
+        self.graph
+            .map_port(output_node, &PortType::Output, internal_name, external_name)?;
         self.node_attr
             .set_property("graph", self.graph.clone().into())
     }
