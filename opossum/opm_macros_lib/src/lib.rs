@@ -18,11 +18,11 @@ use syn::{parse_macro_input, AttrStyle, ItemStruct, LitStr};
 //   cloned_input
 // }
 
-/// Add basic functions an traits for an optical node..
+/// Add basic functions and traits for an optical node.
 ///
 /// # Panics
 ///
-/// Panics if .
+/// Panics if the arguments cannot be sucessfully parsed.
 #[proc_macro_derive(OpmNode, attributes(opm_node))]
 pub fn derive_opm_node(input: TokenStream) -> TokenStream {
     let struct_input = parse_macro_input!(input as ItemStruct);

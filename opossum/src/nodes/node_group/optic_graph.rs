@@ -434,7 +434,7 @@ impl OpticGraph {
     ///
     /// # Panics
     ///
-    /// Panics if .
+    /// Panics theoretically if the internal [`NodeIndex`] was not found while looping over all nodes.
     #[must_use]
     pub fn idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
         self.g
@@ -585,11 +585,13 @@ impl OpticGraph {
         );
         nr_of_incoming_edges < nr_of_input_ports
     }
-    /// .
+    /// Returns `true` if the node is an output node.
+    ///
+    /// This function checks if a node with the given [`NodeIndex`] has an unconnected output port.
     ///
     /// # Panics
     ///
-    /// Panics if .
+    /// Panics if an error occurs while locking the mutex.
     #[must_use]
     pub fn is_output_node(&self, idx: NodeIndex) -> bool {
         let ports = self
@@ -677,13 +679,14 @@ impl OpticGraph {
     }
     /// Sets the node isometry of this [`OpticGraph`].
     ///
-    /// # Panics
-    ///
-    /// Panics if .
-    ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if
+    ///  - the given `node_id` was not found in the graph.
+    ///  - the given `incoming_edges` are not of type `LightData::Geometric`.
+    ///  - the given `incoming_edges` contain no rays.
+    ///  - the resulting isometry is inconsistent with a previously placed node.
+    ///  - the mutex lock failed.
     pub fn set_node_isometry(
         &self,
         incoming_edges: &LightResult,
@@ -701,13 +704,13 @@ impl OpticGraph {
             if let Ok(group) = node.as_group() {
                 group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
             }
-            if let LightData::Geometric(rays) = incoming_edge.1 {
-                if rays.nr_of_rays(false) == 0 {
-                    return Err(OpossumError::Analysis(
-                        "no rays in this ray bundle. cannot position nodes".into(),
-                    ));
-                }
-                let mut ray = rays.into_iter().next().unwrap().to_owned();
+            let LightData::Geometric(rays) = incoming_edge.1 else {
+                return Err(OpossumError::Analysis(
+                    "expected LightData::Geometric at input port".into(),
+                ));
+            };
+            if let Some(ray) = rays.into_iter().next() {
+                let mut ray = ray.to_owned();
                 ray.propagate(distance_from_predecessor)?;
                 let node_iso = ray.to_isometry(up_direction);
                 // if a node with more than one input was already placed (in an earlier loop cycle),
@@ -727,7 +730,7 @@ impl OpticGraph {
                 }
             } else {
                 return Err(OpossumError::Analysis(
-                    "expected LightData::Geometric at input port".into(),
+                    "no rays in this ray bundle. cannot position nodes".into(),
                 ));
             }
         }

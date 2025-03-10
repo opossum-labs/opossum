@@ -1,3 +1,9 @@
+//! The basic structure of an OPOSSUM model.
+//!
+//! It contains the [`OpmDocument`] structure, which holds a (toplevel) [`NodeGroup`] representing the actual optical model
+//! as well as a list of analyzers with their particular configuration and a global scene configuration (e.g. ambient medium etc.).
+//!
+//! This module also handles reading and writing of `.opm` files.
 use crate::{
     analyzers::AnalyzerType,
     error::{OpmResult, OpossumError},

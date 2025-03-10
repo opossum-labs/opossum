@@ -452,7 +452,7 @@ impl Ray {
         self.dir = iso.transform_vector_f64(&self.dir).normalize();
         Ok(())
     }
-    /// Diffract a bundle of [`Rays`](crate::rays::Rays) on a periodic surface, e.g., a grating.
+    /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating.
     /// All valid rays that hit this surface are diffracted according to the peridic structure,
     /// the diffraction order, the wavelength of the rays and there incoming k-vector
     /// The calculation follows the description of:

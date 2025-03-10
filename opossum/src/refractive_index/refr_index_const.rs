@@ -9,12 +9,10 @@ use crate::error::OpmResult;
 use crate::error::OpossumError;
 
 #[must_use]
+#[allow(clippy::missing_panics_doc)]
 /// Create a refractive index model representing vacuum.
 ///
-/// Constant (wavelength independant) refractive index of 1.0.
-///
-/// # Panics
-/// This function could only theorectically panic.
+/// This returns a constant (wavelength independant) refractive index of 1.0.
 pub fn refr_index_vaccuum() -> RefractiveIndexType {
     RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap())
 }

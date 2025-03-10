@@ -592,7 +592,7 @@ impl Rays {
     /// This function errors for the moment if `center_wavelength_flag` is set to false
     ///
     /// # Panics
-    /// This method panics if the usize `to_f64()`conversion fails. This is not expected
+    /// This method panics if the usize `to_f64()`conversion fails. This is not expected.
     pub fn get_wavefront_data_in_units_of_wvl(
         &self,
         center_wavelength_flag: bool,

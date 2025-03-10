@@ -1,3 +1,4 @@
+//! Module for generating html reports from analysis results.
 use serde::Serialize;
 use std::{fs, path::Path};
 use tinytemplate::TinyTemplate;

@@ -124,7 +124,7 @@ impl NodeGroup {
     /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
     ///
     /// # Panics
-    /// This function panics if the property "graph" can not be updated. Produces an error of type [`OpossumError::Properties`]
+    /// This function panics if the property `graph` can not be updated. Produces an error of type [`OpossumError::Properties`]
     pub fn add_node<T: Analyzable + Clone + 'static>(&mut self, node: T) -> OpmResult<Uuid> {
         let node_id = self.graph.add_node(node)?;
         // save uuid of node in rays if present
@@ -144,7 +144,7 @@ impl NodeGroup {
     /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
     ///
     /// # Panics
-    /// This function panics if the property "graph" cannot be updated. Produces an error of type [`OpossumError::Properties`]
+    /// This function panics if the property `graph` cannot be updated. Produces an error of type [`OpossumError::Properties`]
     ///
     /// # Parameters
     /// - `node`: The node to be added by reference.

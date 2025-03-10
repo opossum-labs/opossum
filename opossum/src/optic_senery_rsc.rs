@@ -1,8 +1,8 @@
-//! Structure handling scenery wide resources (e.g. ambient medium)
 use crate::refractive_index::{refr_index_vaccuum, RefractiveIndexType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Structure handling scenery wide resources (e.g. ambient medium)
 pub struct SceneryResources {
     pub ambient_refr_index: RefractiveIndexType,
 }

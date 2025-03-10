@@ -110,7 +110,7 @@ impl ReflectiveGrating {
     /// - the diffraction order cannot be read from te properties
     /// - the line density cannot be read from te properties
     /// # Panics
-    /// This function panics if the diffraction order canno be converted to f64
+    /// This function panics if the diffraction order canno be converted to f64.
     pub fn with_rot_from_littrow(self, wavelength: Length, angle: Angle) -> OpmResult<Self> {
         let Ok(Proptype::I32(diffraction_order)) = self.node_attr.get_property("diffraction order")
         else {
@@ -133,7 +133,7 @@ impl ReflectiveGrating {
     /// - the diffraction order cannot be read from te properties
     /// - the line density cannot be read from te properties
     /// # Panics
-    /// This function panics if the diffraction order canno be converted to f64
+    /// This function panics if the diffraction order canno be converted to f64.
     pub fn to_rot_from_littrow(self, wavelength: Length, angle: Angle) -> OpmResult<Self> {
         let Ok(Proptype::I32(diffraction_order)) = self.node_attr.get_property("diffraction order")
         else {

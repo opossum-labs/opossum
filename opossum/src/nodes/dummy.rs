@@ -52,11 +52,6 @@ impl Default for Dummy {
 }
 impl Dummy {
     /// Creates a new [`Dummy`] with a given name.
-    ///
-    /// # Panics
-    ///
-    /// This function panics if
-    ///   - the default [`Dummy`] could not be constructed.
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut dummy = Self::default();

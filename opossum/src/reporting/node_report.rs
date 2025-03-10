@@ -1,3 +1,4 @@
+//! Module for storing node specific data to be integrated in an [`AnalysisReport`](crate::reporting::analysis_report::AnalysisReport).
 use super::html_report::HtmlNodeReport;
 use crate::{
     error::OpmResult,

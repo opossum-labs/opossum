@@ -50,18 +50,9 @@ impl NodeAttr {
     ///   - `alignment`: `None`
     /// # Panics
     ///
-    /// Panics theoretically if the standarnd properties could not be created.
+    /// Panics theoretically if the standard properties could not be created.
     #[must_use]
     pub fn new(node_type: &str) -> Self {
-        // let mut properties = Properties::default();
-        // properties
-        //     .create(
-        //         "apertures",
-        //         "input and output apertures of the optical element",
-        //         None,
-        //         OpticPorts::default().into(),
-        //     )
-        //     .unwrap();
         Self {
             node_type: node_type.into(),
             name: node_type.into(),
