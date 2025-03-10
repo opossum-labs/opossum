@@ -16,19 +16,19 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("beam combiner demo");
-    let i_s1 = scenery.add_node(&Source::new(
+    let i_s1 = scenery.add_node(Source::new(
         "Source 1",
         &LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0).unwrap(),
         }),
     ))?;
-    let i_s2 = scenery.add_node(&Source::new(
+    let i_s2 = scenery.add_node(Source::new(
         "Source 2",
         &LightData::Energy(DataEnergy {
             spectrum: create_nd_glass_spec(1.0)?,
         }),
     ))?;
-    let i_bs = scenery.add_node(&BeamSplitter::new("bs", &SplittingConfig::Ratio(0.5)).unwrap())?;
+    let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.5)).unwrap())?;
     let filter_spectrum = generate_filter_spectrum(
         nanometer!(400.0)..nanometer!(1100.0),
         nanometer!(1.0),
@@ -36,11 +36,11 @@ fn main() -> OpmResult<()> {
             cut_off: nanometer!(700.0),
         },
     )?;
-    let i_f = scenery.add_node(&IdealFilter::new(
+    let i_f = scenery.add_node(IdealFilter::new(
         "filter",
         &FilterType::Spectrum(filter_spectrum),
     )?)?;
-    let i_d1 = scenery.add_node(&Dummy::default())?;
+    let i_d1 = scenery.add_node(Dummy::default())?;
 
     scenery.connect_nodes(i_s1, "output_1", i_bs, "input_1", Length::zero())?;
     scenery.connect_nodes(i_s2, "output_1", i_bs, "input_2", Length::zero())?;

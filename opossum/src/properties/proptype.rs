@@ -43,16 +43,10 @@ static HTML_PROP_GROUP: &str = include_str!("../html/node_report.html");
 /// The type of the [`Property`](crate::properties::Property).
 pub enum Proptype {
     /// A string property
-    ///
-    /// This property makes use of [`PropCondition::NonEmptyString`] for restricting strings to be non-empty.
     String(String),
     /// An integer property
-    ///
-    /// This property respects the [`PropCondition::LessThan`], [`PropCondition::LessThanEqual`], [`PropCondition::GreaterThan`], and [`PropCondition::GreaterThanEqual`]
     I32(i32),
     /// A float property
-    ///
-    /// This property respects the [`PropCondition::LessThan`], [`PropCondition::LessThanEqual`], [`PropCondition::GreaterThan`], and [`PropCondition::GreaterThanEqual`]
     F64(f64),
     /// A boolean property
     Bool(bool),
@@ -68,8 +62,6 @@ pub enum Proptype {
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.
     Metertype(Metertype),
-    /// Property for storing the external port mapping (`PortMap`) of a [`Group`](crate::nodes::NodeGroup) node.
-    //GroupPortMap(PortMap),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
     /// A property for storing [`OpticPorts`].
@@ -271,10 +263,10 @@ pub fn format_value_with_prefix(value: f64) -> String {
 
     format!("{:8.3} {prefix}", value / f64::powi(10.0, exponent))
 }
-///Formats a uom quantity
+/// Formats a uom quantity
 ///
 /// # Panics
-/// This function panics if the coversion from the quantity value to f64 fails
+/// This function panics if the conversion from the quantity value to f64 fails.
 pub fn format_quantity<D, U, V, N>(_: N, q: Quantity<D, U, V>) -> String
 where
     D: Dimension + ?Sized,

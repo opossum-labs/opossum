@@ -46,7 +46,7 @@ async fn get_node(data: web::Data<AppState>, uuid_str: web::Path<String>) -> imp
     let Ok(uuid) = uuid_str.parse() else {
         return HttpResponse::BadRequest().body("Invalid UUID");
     };
-    scenery.node_by_uuid(&uuid).map_or_else(
+    scenery.node(uuid).map_or_else(
         |_| HttpResponse::NotFound().body("Node not found"),
         |node| HttpResponse::Ok().json(node),
     )
@@ -66,10 +66,10 @@ async fn connect_nodes(
     connect_info: Json<ConnectNodes>,
 ) -> impl Responder {
     let mut scenery = data.scenery.lock().unwrap();
-    if let Err(e) = scenery.connect_nodes_by_uuid(
-        &connect_info.src_uuid,
+    if let Err(e) = scenery.connect_nodes(
+        connect_info.src_uuid,
         &connect_info.src_port,
-        &connect_info.target_uuid,
+        connect_info.target_uuid,
         &connect_info.target_port,
         meter!(connect_info.distance),
     ) {

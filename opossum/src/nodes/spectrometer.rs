@@ -100,11 +100,11 @@ impl Spectrometer {
     /// Creates a new [`Spectrometer`] of the given [`SpectrometerType`].
     /// # Attributes
     /// * `name`: name of the  [`Spectrometer`]
-    /// * `spectrometer_type`: [`SpectrometerType`] of the  [`Spectrometer`]
+    /// * `spectrometer type`: [`SpectrometerType`] of the  [`Spectrometer`]
     ///
     /// # Panics
     /// This function panics if
-    /// - the property "spectrometer" type can not be set.
+    /// - the property `spectrometer type` can not be set.
     #[must_use]
     pub fn new(name: &str, spectrometer_type: SpectrometerType) -> Self {
         let mut spect = Self::default();
@@ -136,12 +136,10 @@ impl Spectrometer {
         }
     }
     /// Sets the meter type of this [`Spectrometer`].
-    /// /// # Attributes
-    /// * `meter_type`: [`SpectrometerType`] of the  [`Spectrometer`]
     ///
     /// # Errors
     /// This function returns an error if
-    /// - the property "spectrometer type" type can not be set.
+    /// - the property `spectrometer type` type can not be set.
     pub fn set_spectrometer_type(&mut self, meter_type: SpectrometerType) -> OpmResult<()> {
         self.node_attr
             .set_property("spectrometer type", meter_type.into())?;

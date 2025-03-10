@@ -47,8 +47,7 @@ impl OpticRef {
     /// This function might theoretically panic if locking of an internal mutex fails.
     #[must_use]
     pub fn uuid(&self) -> Uuid {
-        *self
-            .optical_ref
+        self.optical_ref
             .lock()
             .expect("Mutex lock failed")
             .node_attr()
@@ -227,7 +226,7 @@ mod test {
     fn new() {
         let uuid = Uuid::new_v4();
         let mut dummy = Dummy::default();
-        dummy.node_attr_mut().set_uuid(&uuid);
+        dummy.node_attr_mut().set_uuid(uuid);
         let optic_ref = OpticRef::new(Arc::new(Mutex::new(dummy)), None);
         assert_eq!(optic_ref.uuid(), uuid);
     }

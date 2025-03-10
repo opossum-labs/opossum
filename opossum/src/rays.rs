@@ -123,8 +123,8 @@ impl Rays {
     }
     ///Returns the uuid of this ray bundle
     #[must_use]
-    pub const fn uuid(&self) -> &Uuid {
-        &self.uuid
+    pub const fn uuid(&self) -> Uuid {
+        self.uuid
     }
     ///get the bounce level of this ray bundle
     #[must_use]
@@ -170,8 +170,8 @@ impl Rays {
     }
     ///Returns the uuid of tha parent ray bundle of this ray bundle
     #[must_use]
-    pub const fn parent_id(&self) -> &Option<Uuid> {
-        &self.parent_id
+    pub const fn parent_id(&self) -> Option<Uuid> {
+        self.parent_id
     }
     ///Returns the index of the position history of its parent ray bundle
     #[must_use]
@@ -592,7 +592,7 @@ impl Rays {
     /// This function errors for the moment if `center_wavelength_flag` is set to false
     ///
     /// # Panics
-    /// This method panics if the usize `to_f64()`conversion fails. This is not expected
+    /// This method panics if the usize `to_f64()`conversion fails. This is not expected.
     pub fn get_wavefront_data_in_units_of_wvl(
         &self,
         center_wavelength_flag: bool,
@@ -874,7 +874,7 @@ impl Rays {
                     None
                 };
                 if let Some(mut reflected) =
-                    ray.refract_on_surface(surface, n2, &self.uuid, missed_surface_strategy)?
+                    ray.refract_on_surface(surface, n2, self.uuid, missed_surface_strategy)?
                 {
                     if let (Some(helper_rays), Some(relf_helper)) =
                         (ray.helper_rays_mut(), reflected.helper_rays_mut())
@@ -885,7 +885,7 @@ impl Rays {
                             if let Some(reflected) = ray.refract_on_surface(
                                 surface,
                                 n2,
-                                &self.uuid,
+                                self.uuid,
                                 missed_surface_strategy,
                             )? {
                                 refl_ray.set_direction(reflected.direction())?;

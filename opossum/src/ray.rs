@@ -452,7 +452,7 @@ impl Ray {
         self.dir = iso.transform_vector_f64(&self.dir).normalize();
         Ok(())
     }
-    /// Diffract a bundle of [`Rays`](crate::rays::Rays) on a periodic surface, e.g., a grating.
+    /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating.
     /// All valid rays that hit this surface are diffracted according to the peridic structure,
     /// the diffraction order, the wavelength of the rays and there incoming k-vector
     /// The calculation follows the description of:
@@ -564,7 +564,7 @@ impl Ray {
         &mut self,
         os: &mut OpticSurface,
         n2: Option<f64>,
-        ray_bundle_uuid: &Uuid,
+        ray_bundle_uuid: Uuid,
         missed_surface_strategy: &MissedSurfaceStrategy,
     ) -> OpmResult<Option<Self>> {
         let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
@@ -1199,7 +1199,7 @@ mod test {
             .refract_on_surface(
                 &mut s,
                 Some(0.9),
-                &Uuid::new_v4(),
+                Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
             .is_err());
@@ -1207,7 +1207,7 @@ mod test {
             .refract_on_surface(
                 &mut s,
                 Some(f64::NAN),
-                &Uuid::new_v4(),
+                Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
             .is_err());
@@ -1215,7 +1215,7 @@ mod test {
             .refract_on_surface(
                 &mut s,
                 Some(f64::INFINITY),
-                &Uuid::new_v4(),
+                Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
             .is_err());
@@ -1223,7 +1223,7 @@ mod test {
             .refract_on_surface(
                 &mut s,
                 Some(1.5),
-                &Uuid::new_v4(),
+                Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop,
             )
             .unwrap()
@@ -1254,7 +1254,7 @@ mod test {
         ray.refract_on_surface(
             &mut s,
             Some(1.5),
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
             &MissedSurfaceStrategy::Stop,
         )
         .unwrap();
@@ -1281,7 +1281,7 @@ mod test {
         .unwrap();
         let mut s = OpticSurface::default();
         s.set_isometry(&isometry);
-        ray.refract_on_surface(&mut s, None, &Uuid::new_v4(), &MissedSurfaceStrategy::Stop)
+        ray.refract_on_surface(&mut s, None, Uuid::new_v4(), &MissedSurfaceStrategy::Stop)
             .unwrap();
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
@@ -1309,7 +1309,7 @@ mod test {
         ray.refract_on_surface(
             &mut s,
             Some(1.5),
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
             &MissedSurfaceStrategy::Stop,
         )
         .unwrap();
@@ -1339,7 +1339,7 @@ mod test {
             .refract_on_surface(
                 &mut s,
                 Some(0.9),
-                &Uuid::new_v4(),
+                Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
             .is_err());
@@ -1347,7 +1347,7 @@ mod test {
             .refract_on_surface(
                 &mut s,
                 Some(f64::NAN),
-                &Uuid::new_v4(),
+                Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
             .is_err());
@@ -1355,14 +1355,14 @@ mod test {
             .refract_on_surface(
                 &mut s,
                 Some(f64::INFINITY),
-                &Uuid::new_v4(),
+                Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop
             )
             .is_err());
         ray.refract_on_surface(
             &mut s,
             Some(1.0),
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
             &MissedSurfaceStrategy::Stop,
         )
         .unwrap();
@@ -1375,7 +1375,7 @@ mod test {
         ray.refract_on_surface(
             &mut s,
             Some(1.5),
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
             &MissedSurfaceStrategy::Stop,
         )
         .unwrap();
@@ -1390,7 +1390,7 @@ mod test {
         ray.refract_on_surface(
             &mut s,
             Some(1.5),
-            &Uuid::new_v4(),
+            Uuid::new_v4(),
             &MissedSurfaceStrategy::Stop,
         )
         .unwrap();
@@ -1418,7 +1418,7 @@ mod test {
             .refract_on_surface(
                 &mut s,
                 Some(1.0),
-                &Uuid::new_v4(),
+                Uuid::new_v4(),
                 &MissedSurfaceStrategy::Stop,
             )
             .unwrap();

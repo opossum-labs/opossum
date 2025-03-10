@@ -207,7 +207,7 @@ pub fn meshgrid(x: &DVector<f64>, y: &DVector<f64>) -> OpmResult<(DMatrix<f64>, 
 ///  - `num` cannot be casted to float.
 ///
 /// # Panics
-/// This function panics if step cannot be casted from usize to T
+/// This function panics if step cannot be casted from usize to `T`.
 pub fn linspace<T: Float + Scalar>(start: T, end: T, num: usize) -> OpmResult<DVector<T>> {
     if !start.is_finite() || !end.is_finite() {
         return Err(OpossumError::Other(
@@ -255,11 +255,11 @@ pub fn create_linspace_axes(
 /// - `xy_coord`: Matrix of x-y coordinates of scattered points with the first column being the x coordinates and the second column being the y coordinates of these points
 /// # Errors
 /// This function errors if
-/// - coordinate values are non-finite or NAN
-/// - all points are on the same line and can therefore not be triangulated properly
-/// - the generation of the voronoi diagram fails
+/// - coordinate values are non-finite or NAN.
+/// - all points are on the same line and can therefore not be triangulated properly.
+/// - the generation of the voronoi diagram fails.
 /// # Panics
-/// This function panics if the number of triangles cannot be converted to f64
+/// This function panics if the number of triangles cannot be converted to f64.
 pub fn create_voronoi_cells(xy_coord: &MatrixXx2<f64>) -> OpmResult<(VoronoiDiagram<VPoint>, f64)> {
     //collect data to a vector of Points that can be used to create the triangulation
     let points = Iterator::map(xy_coord.row_iter(), |c| {
@@ -376,11 +376,11 @@ pub fn create_valued_voronoi_cells(xyz_data: &MatrixXx3<f64>) -> OpmResult<Voron
 /// `x_interp`: x-coordinates of the points on which this function should interpolate
 /// `y_interp`: y-coordinates of the points on which this function should interpolate
 /// # Returns
-/// This function returns the interpolated data and a mask that marks the points that have been interpolated
+/// This function returns the interpolated data and a mask that marks the points that have been interpolated.
 /// # Errors
-/// This function errors if any of the interpolation vectors have zero length
+/// This function errors if any of the interpolation vectors have zero length.
 /// # Panics
-/// This function panics if the conversion from usize to f64 fails. May be the case for extremely large numbers
+/// This function panics if the conversion from usize to f64 fails. May be the case for extremely large numbers.
 #[allow(clippy::too_many_lines)]
 pub fn interpolate_3d_triangulated_scatter_data(
     voronoi: &VoronoiedData,

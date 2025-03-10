@@ -138,7 +138,8 @@ fn get_args<T>(
 /// * `path`: Path to a file.
 ///
 /// # Panics
-/// Panics if no parent directory can be determined. In theory not possible, since the used `file_path` is only passed if it is valid.
+/// Panics if no parent directory can be determined. In theory not possible, since the used `file_path`
+/// is only passed if it is valid.
 fn get_parent_dir(path: &Path) -> PathBuf {
     let parent_dir = Path::parent(path).unwrap();
     PathBuf::from(parent_dir)

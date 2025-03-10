@@ -29,7 +29,7 @@ use serde::{
 };
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex},
 };
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
@@ -47,24 +47,24 @@ pub struct OpticGraph {
 impl OpticGraph {
     /// Add a new optical node to this [`OpticGraph`].
     ///
-    /// This function returns a [`NodeIndex`] of the added node for later referencing (see `connect_nodes`).
+    /// This function returns a unique node index ([`Uuid`]) of the added node for later referencing (see `connect_nodes`).
     /// **Note**: While constructing the underlying [`OpticRef`] a random, uuid is assigned.
     ///
     /// # Errors
     /// This function returns an error if the graph is set as `inverted` and a node is added. (This could end up in
     /// a weird / undefined behaviour)
-    pub fn add_node<T: Analyzable + 'static>(&mut self, node: T) -> OpmResult<NodeIndex> {
+    pub fn add_node<T: Analyzable + 'static>(&mut self, node: T) -> OpmResult<Uuid> {
         if self.is_inverted {
             return Err(OpossumError::OpticGroup(
                 "cannot add nodes if group is set as inverted".into(),
             ));
         }
-        let idx = self.g.add_node(OpticRef::new(
+        let node_id = node.node_attr().uuid();
+        self.g.add_node(OpticRef::new(
             Arc::new(Mutex::new(node)),
             self.global_confg.clone(),
         ));
-
-        Ok(idx)
+        Ok(node_id)
     }
     /// .
     ///
@@ -93,9 +93,9 @@ impl OpticGraph {
     ///   - the given geometric distance between the nodes is not finite.
     pub fn connect_nodes(
         &mut self,
-        src_node: NodeIndex,
+        src_id: Uuid,
         src_port: &str,
-        target_node: NodeIndex,
+        target_id: Uuid,
         target_port: &str,
         distance: Length,
     ) -> OpmResult<()> {
@@ -104,6 +104,9 @@ impl OpticGraph {
                 "cannot connect nodes if group is set as inverted".into(),
             ));
         }
+        let src_node = self.node_idx_by_uuid(src_id).ok_or_else(|| {
+            OpossumError::OpticScenery("source node with given index does not exist".into())
+        })?;
         let source = self.g.node_weight(src_node).ok_or_else(|| {
             OpossumError::OpticScenery("source node with given index does not exist".into())
         })?;
@@ -124,6 +127,9 @@ impl OpticGraph {
                 src_port
             )));
         }
+        let target_node = self.node_idx_by_uuid(target_id).ok_or_else(|| {
+            OpossumError::OpticScenery("target node with given index does not exist".into())
+        })?;
         let target = self.g.node_weight(target_node).ok_or_else(|| {
             OpossumError::OpticScenery("target node with given index does not exist".into())
         })?;
@@ -183,9 +189,9 @@ impl OpticGraph {
             )));
         }
         // remove input port mapping, if no loner valid
-        self.input_port_map.remove_mapping(target_node, target_port);
+        self.input_port_map.remove_mapping(target_id, target_port);
         // remove output port mapping, if no loner valid
-        self.output_port_map.remove_mapping(src_node, src_port);
+        self.output_port_map.remove_mapping(src_id, src_port);
         Ok(())
     }
     /// Returns a reference to the input port map of this [`OpticGraph`].
@@ -232,7 +238,7 @@ impl OpticGraph {
     ///   - the `input_node` has an input port with the specified `internal_name` but is already internally connected.
     pub fn map_port(
         &mut self,
-        node_idx: NodeIndex,
+        node_id: Uuid,
         port_type: &PortType,
         internal_name: &str,
         external_name: &str,
@@ -250,7 +256,7 @@ impl OpticGraph {
                 "external {name_type} port name already assigned"
             )));
         }
-        let node = self.node_by_idx(node_idx)?;
+        let node = self.node(node_id)?;
         if !node
             .optical_ref
             .lock()
@@ -263,6 +269,11 @@ impl OpticGraph {
                 "internal {name_type} port name not found"
             )));
         }
+        let Some(node_idx) = self.node_idx_by_uuid(node_id) else {
+            return Err(OpossumError::OpticGroup(format!(
+                "node with id {node_id} not found"
+            )));
+        };
         if !self.external_nodes(port_type).contains(&node_idx) {
             return Err(OpossumError::OpticGroup(format!(
                 "node to be mapped is not an {name_type} node of the group"
@@ -293,10 +304,10 @@ impl OpticGraph {
         match port_type {
             PortType::Input => self
                 .input_port_map
-                .add(external_name, node_idx, internal_name),
+                .add(external_name, node_id, internal_name),
             PortType::Output => self
                 .output_port_map
-                .add(external_name, node_idx, internal_name),
+                .add(external_name, node_id, internal_name),
         };
         Ok(())
     }
@@ -306,8 +317,8 @@ impl OpticGraph {
     ///
     /// This function will return an error if .
     #[must_use]
-    pub fn get_incoming(&self, idx: NodeIndex, incoming_data: &LightResult) -> LightResult {
-        if self.is_incoming_node(idx) {
+    pub fn get_incoming(&self, node_id: Uuid, incoming_data: &LightResult) -> LightResult {
+        if self.is_incoming_node(node_id) {
             let portmap = if self.is_inverted {
                 self.output_port_map.clone()
             } else {
@@ -317,18 +328,18 @@ impl OpticGraph {
             // map group-external data and add
             for incoming in incoming_data {
                 if let Some(mapping) = portmap.get(incoming.0) {
-                    if idx == mapping.0 {
+                    if node_id == mapping.0 {
                         mapped_light_result.insert(mapping.1.clone(), incoming.1.clone());
                     }
                 }
             }
             // add group internal data
-            for edge in self.incoming_edges(idx) {
+            for edge in self.incoming_edges(node_id) {
                 mapped_light_result.insert(edge.0.clone(), edge.1.clone());
             }
             mapped_light_result
         } else {
-            self.incoming_edges(idx)
+            self.incoming_edges(node_id)
         }
     }
 
@@ -359,11 +370,15 @@ impl OpticGraph {
             }
         }
     }
-    /// .
+    /// Return `true` if the node with the given [`Uuid`] is not connected to any other node.
+    ///
+    /// # Panics
+    /// This function will panic if the node with the given [`Uuid`] does not exist.
     #[must_use]
-    pub fn is_stale_node(&self, idx: NodeIndex) -> bool {
+    pub fn is_stale_node(&self, node_id: Uuid) -> bool {
+        let idx = self.node_idx_by_uuid(node_id).unwrap();
         let neighbors = self.g.neighbors_undirected(idx);
-        neighbors.count() == 0 && !self.input_port_map.contains_node(idx)
+        neighbors.count() == 0 && !self.input_port_map.contains_node(node_id)
     }
     /// Update reference to global config for each node in this [`OpticGraph`].
     /// This function is needed after deserialization.
@@ -382,13 +397,24 @@ impl OpticGraph {
             .edges_directed(target_node, petgraph::Direction::Incoming)
             .any(|e| e.weight().target_port() == target_port)
     }
-    /// Returns Some(`OpticRef`) if the provided uuid is connected with a node in the graph. None, otherwise.
-    #[must_use]
-    pub fn node_by_uuid(&self, uuid: Uuid) -> Option<OpticRef> {
+    /// Returns [`OpticRef`] with the given [`Uuid`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the node with the given [`Uuid`] does not exist.
+    pub fn node(&self, uuid: Uuid) -> OpmResult<OpticRef> {
         self.g
             .node_weights()
             .find(|node| node.uuid() == uuid)
             .cloned()
+            .map_or_else(
+                || {
+                    Err(OpossumError::OpticScenery(
+                        "node with given uuid does not exist".into(),
+                    ))
+                },
+                Ok,
+            )
     }
     /// Return a reference to the optical node specified by its node index.
     ///
@@ -408,7 +434,7 @@ impl OpticGraph {
     ///
     /// # Panics
     ///
-    /// Panics if .
+    /// Panics theoretically if the internal [`NodeIndex`] was not found while looping over all nodes.
     #[must_use]
     pub fn idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
         self.g
@@ -429,7 +455,15 @@ impl OpticGraph {
             .ok_or_else(|| OpossumError::OpticScenery("node index does not exist".into()))?;
         Ok(node)
     }
-    fn node_idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
+    /// Return the (internal graph) [`NodeIndex`] of the node with the given [`Uuid`].
+    ///
+    /// `None` is returned if the node with the given [`Uuid`] does not exist.
+    ///
+    /// # Panics
+    ///
+    /// Panics theoretically, if the internal [`NodeIndex`] was not found while looping over all nodes.
+    #[must_use]
+    pub fn node_idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
         self.g
             .node_indices()
             .find(|idx| self.g.node_weight(*idx).unwrap().uuid() == uuid)
@@ -470,14 +504,15 @@ impl OpticGraph {
         let mut light_result = LightResult::default();
         for idx in sorted {
             let node = g_clone.node_by_idx(idx)?.optical_ref;
-            if self.is_stale_node(idx) {
+            let node_id = g_clone.node_by_idx(idx)?.uuid();
+            if self.is_stale_node(node_id) {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
                     node.lock()
                         .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
                 );
             } else {
-                let incoming_edges = self.get_incoming(idx, incoming_data);
+                let incoming_edges = self.get_incoming(node_id, incoming_data);
                 let node_name = format!(
                     "{}",
                     node.lock()
@@ -499,7 +534,8 @@ impl OpticGraph {
                     } else {
                         self.output_port_map.clone()
                     };
-                    let assigned_ports = portmap.assigned_ports_for_node(idx);
+                    let node_id = self.node_by_idx(idx)?.uuid();
+                    let assigned_ports = portmap.assigned_ports_for_node(node_id);
                     for port in assigned_ports {
                         if let Some(light_data) = outgoing_edges.get(&port.1) {
                             light_result.insert(port.0, light_data.clone());
@@ -531,9 +567,9 @@ impl OpticGraph {
     pub fn edge_count(&self) -> usize {
         self.g.edge_count()
     }
-    fn is_incoming_node(&self, idx: NodeIndex) -> bool {
+    fn is_incoming_node(&self, node_id: Uuid) -> bool {
         let nr_of_input_ports = self
-            .node_by_idx(idx)
+            .node(node_id)
             .unwrap()
             .optical_ref
             .lock()
@@ -541,6 +577,7 @@ impl OpticGraph {
             .ports()
             .ports(&PortType::Input)
             .len();
+        let idx = self.node_idx_by_uuid(node_id).unwrap();
         let nr_of_incoming_edges = self.g.edges_directed(idx, Direction::Incoming).count();
         assert!(
             nr_of_incoming_edges <= nr_of_input_ports,
@@ -548,11 +585,13 @@ impl OpticGraph {
         );
         nr_of_incoming_edges < nr_of_input_ports
     }
-    /// .
+    /// Returns `true` if the node is an output node.
+    ///
+    /// This function checks if a node with the given [`NodeIndex`] has an unconnected output port.
     ///
     /// # Panics
     ///
-    /// Panics if .
+    /// Panics if an error occurs while locking the mutex.
     #[must_use]
     pub fn is_output_node(&self, idx: NodeIndex) -> bool {
         let ports = self
@@ -570,8 +609,9 @@ impl OpticGraph {
         );
         nr_of_outgoing_edges < nr_of_output_ports
     }
-    fn incoming_edges(&self, idx: NodeIndex) -> LightResult {
-        let edges = self.g.edges_directed(idx, Direction::Incoming);
+    fn incoming_edges(&self, node_id: Uuid) -> LightResult {
+        let node_idx = self.node_idx_by_uuid(node_id).unwrap();
+        let edges = self.g.edges_directed(node_idx, Direction::Incoming);
         edges
             .into_iter()
             .filter(|e| e.weight().data().is_some())
@@ -639,57 +679,58 @@ impl OpticGraph {
     }
     /// Sets the node isometry of this [`OpticGraph`].
     ///
-    /// # Panics
-    ///
-    /// Panics if .
-    ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if
+    ///  - the given `node_id` was not found in the graph.
+    ///  - the given `incoming_edges` are not of type `LightData::Geometric`.
+    ///  - the given `incoming_edges` contain no rays.
+    ///  - the resulting isometry is inconsistent with a previously placed node.
+    ///  - the mutex lock failed.
     pub fn set_node_isometry(
         &self,
         incoming_edges: &LightResult,
-        node_borrow_mut: &mut MutexGuard<'_, dyn Analyzable + 'static>,
-        node_type: &str,
-        idx: NodeIndex,
+        node_id: Uuid,
         up_direction: Vector3<f64>,
     ) -> OpmResult<()> {
         for incoming_edge in incoming_edges {
-            let distance_from_predecessor = self.distance_from_predecessor(idx, incoming_edge.0)?;
-            if node_type == "group" {
-                // let mut node_borrow_mut = node;
-                let group = node_borrow_mut.as_group()?;
+            let node_ref = self.node(node_id)?;
+            let distance_from_predecessor =
+                self.distance_from_predecessor(node_id, incoming_edge.0)?;
+            let mut node = node_ref
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            if let Ok(group) = node.as_group() {
                 group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
             }
-            if let LightData::Geometric(rays) = incoming_edge.1 {
-                if rays.nr_of_rays(false) == 0 {
-                    return Err(OpossumError::Analysis(
-                        "no rays in this ray bundle. cannot position nodes".into(),
-                    ));
-                }
-                let mut ray = rays.into_iter().next().unwrap().to_owned();
+            let LightData::Geometric(rays) = incoming_edge.1 else {
+                return Err(OpossumError::Analysis(
+                    "expected LightData::Geometric at input port".into(),
+                ));
+            };
+            if let Some(ray) = rays.into_iter().next() {
+                let mut ray = ray.to_owned();
                 ray.propagate(distance_from_predecessor)?;
                 let node_iso = ray.to_isometry(up_direction);
                 // if a node with more than one input was already placed (in an earlier loop cycle),
                 // check, if the resulting isometry is consistent
                 {
-                    if let Some(iso) = node_borrow_mut.isometry() {
+                    if let Some(iso) = node.isometry() {
                         if iso != node_iso {
-                            warn!(
-                                "Node {} cannot be consistently positioned.",
-                                node_borrow_mut.name()
-                            );
+                            warn!("Node {} cannot be consistently positioned.", node.name());
                             warn!("Position based on previous input port is: {iso}");
                             warn!("Position based on this port would be:     {node_iso}");
                             warn!("Keeping first position");
                         }
                     } else {
-                        node_borrow_mut.set_isometry(node_iso)?;
+                        node.set_isometry(node_iso)?;
+                        drop(node);
                     };
                 }
             } else {
                 return Err(OpossumError::Analysis(
-                    "expected LightData::Geometric at input port".into(),
+                    "no rays in this ray bundle. cannot position nodes".into(),
                 ));
             }
         }
@@ -743,8 +784,8 @@ impl OpticGraph {
                 .g
                 .edge_endpoints(edge_idx)
                 .ok_or_else(|| OpossumError::Other("could not get edge_endpoints".into()))?;
-
-            let dist = self.distance_from_predecessor(end_nodes.1, light.target_port())?;
+            let node_id = self.node_by_idx(end_nodes.1)?.uuid();
+            let dist = self.distance_from_predecessor(node_id, light.target_port())?;
 
             let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port())?;
             let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port())?;
@@ -757,15 +798,16 @@ impl OpticGraph {
         dot_string.push_str("}\n");
         Ok(dot_string)
     }
-    fn distance_from_predecessor(&self, idx: NodeIndex, port_name: &str) -> OpmResult<Length> {
+    fn distance_from_predecessor(&self, node_id: Uuid, port_name: &str) -> OpmResult<Length> {
         let portmap = if self.is_inverted {
             self.output_port_map.clone()
         } else {
             self.input_port_map.clone()
         };
-        if let Some(external_port_name) = portmap.external_port_name(idx, port_name) {
+        if let Some(external_port_name) = portmap.external_port_name(node_id, port_name) {
             self.external_distances.get(&external_port_name).map_or_else(|| Err(OpossumError::Analysis(format!("did not find distance from predecessor to target port '{port_name}' because it's not in the list of external distances"))), |length| Ok(*length))
         } else {
+            let idx = self.node_idx_by_uuid(node_id).unwrap();
             let neighbors = self
                 .g
                 .neighbors_directed(idx, petgraph::Direction::Incoming);
@@ -943,13 +985,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                         .map_err(|e| de::Error::custom(e.to_string()))?;
                 }
                 for edge in &edges {
-                    let src_idx = g.node_idx_by_uuid(edge.0).ok_or_else(|| {
-                        de::Error::custom(format!("src id {} does not exist", edge.0))
-                    })?;
-                    let target_idx = g.node_idx_by_uuid(edge.1).ok_or_else(|| {
-                        de::Error::custom(format!("target id {} does not exist", edge.1))
-                    })?;
-                    g.connect_nodes(src_idx, edge.2, target_idx, edge.3, edge.4)
+                    g.connect_nodes(edge.0, edge.2, edge.1, edge.3, edge.4)
                         .map_err(|e| {
                             de::Error::custom(format!("connecting OpticGraph nodes failed: {e}"))
                         })?;
@@ -983,7 +1019,7 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
         } else {
             Uuid::nil()
         };
-        let Some(reference_node) = graph.node_by_uuid(uuid) else {
+        let Ok(reference_node) = graph.node(uuid) else {
             return Err(OpossumError::Other(
                 "reference node found, which does not reference anything".into(),
             ));
@@ -1069,10 +1105,10 @@ mod test {
         let n1 = graph.add_node(Dummy::default()).unwrap();
         let n2 = graph.add_node(Dummy::default()).unwrap();
         assert!(graph
-            .connect_nodes(n1, "output_1", 5.into(), "input_1", Length::zero())
+            .connect_nodes(n1, "output_1", Uuid::nil(), "input_1", Length::zero())
             .is_err());
         assert!(graph
-            .connect_nodes(5.into(), "output_1", n2, "input_1", Length::zero())
+            .connect_nodes(Uuid::nil(), "output_1", n2, "input_1", Length::zero())
             .is_err());
     }
     #[test]
@@ -1167,7 +1203,7 @@ mod test {
         assert_eq!(og.input_port_map.len(), 0);
         // wrong node index
         assert!(og
-            .map_port(5.into(), &PortType::Input, "input_1", "input_1")
+            .map_port(Uuid::nil(), &PortType::Input, "input_1", "input_1")
             .is_err());
         assert_eq!(og.input_port_map.len(), 0);
         // map output port
@@ -1223,7 +1259,7 @@ mod test {
         assert_eq!(og.output_port_map.len(), 0);
         // wrong node index
         assert!(og
-            .map_port(5.into(), &PortType::Output, "output_1", "output_1")
+            .map_port(Uuid::nil(), &PortType::Output, "output_1", "output_1")
             .is_err());
         assert_eq!(og.output_port_map.len(), 0);
         // map input port
@@ -1300,17 +1336,15 @@ mod test {
     fn node_by_uuid() {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::default()).unwrap();
-        let uuid = graph.g.node_weight(n1).unwrap().uuid();
-        assert!(graph.node_by_uuid(uuid).is_some());
-        assert!(graph.node_by_uuid(Uuid::new_v4()).is_none());
+        assert!(graph.node(n1).is_ok());
+        assert!(graph.node(Uuid::nil()).is_err());
     }
     #[test]
     fn node_id() {
         let mut graph = OpticGraph::default();
         let n1 = graph.add_node(Dummy::default()).unwrap();
-        let uuid = graph.g.node_weight(n1).unwrap().uuid();
-        assert_eq!(graph.node_idx_by_uuid(uuid), Some(n1));
-        assert_eq!(graph.node_idx_by_uuid(Uuid::new_v4()), None);
+        assert!(graph.node_idx_by_uuid(n1).is_some());
+        assert!(graph.node_idx_by_uuid(Uuid::nil()).is_none());
     }
     #[test]
     fn is_single_tree() {
@@ -1342,9 +1376,15 @@ mod test {
         let mut graph = OpticGraph::default();
         let mut dummy = Dummy::default();
         dummy.set_isometry(Isometry::identity()).unwrap();
-        let d1 = graph.add_node(dummy.clone()).unwrap();
-        let d2 = graph.add_node(dummy.clone()).unwrap();
-        let d3 = graph.add_node(dummy.clone()).unwrap();
+        let d1 = graph.add_node(dummy).unwrap();
+        let mut dummy = Dummy::default();
+        dummy.set_isometry(Isometry::identity()).unwrap();
+        let d2 = graph.add_node(dummy).unwrap();
+        let mut dummy = Dummy::default();
+        dummy.set_isometry(Isometry::identity()).unwrap();
+        let d3 = graph.add_node(dummy).unwrap();
+        let mut dummy = Dummy::default();
+        dummy.set_isometry(Isometry::identity()).unwrap();
         let d4 = graph.add_node(dummy).unwrap();
         graph
             .connect_nodes(d1, "output_1", d2, "input_1", Length::zero())

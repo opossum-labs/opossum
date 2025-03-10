@@ -44,14 +44,14 @@ fn main() -> OpmResult<()> {
     let mut source = Source::new("source", &LightData::Geometric(rays));
     source.set_isometry(Isometry::identity())?;
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(&source)?;
+    let i_src = scenery.add_node(source)?;
 
     let mut fd = FluenceDetector::new("0 mm");
     fd.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
-    let i_fl1 = scenery.add_node(&fd)?;
-    // let i_l = scenery.add_node(&ParaxialSurface::new("f=100mm", millimeter!(100.0))?)?;
-    // let i_fl2 = scenery.add_node(&FluenceDetector::new("50 mm"))?;
-    // let i_fl3 = scenery.add_node(&FluenceDetector::new("90 mm"))?;
+    let i_fl1 = scenery.add_node(fd)?;
+    // let i_l = scenery.add_node(ParaxialSurface::new("f=100mm", millimeter!(100.0))?)?;
+    // let i_fl2 = scenery.add_node(FluenceDetector::new("50 mm"))?;
+    // let i_fl3 = scenery.add_node(FluenceDetector::new("90 mm"))?;
 
     scenery.connect_nodes(i_src, "output_1", i_fl1, "input_1", millimeter!(5.0))?;
     // scenery.connect_nodes(i_src, "output_1", i_l, "input_1", millimeter!(10.0))?;

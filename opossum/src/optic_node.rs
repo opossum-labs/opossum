@@ -4,8 +4,8 @@
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
 use nalgebra::{Point3, Vector3};
-use petgraph::stable_graph::NodeIndex;
 use uom::si::f64::{Angle, Length};
+use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
@@ -526,9 +526,9 @@ pub trait Alignable: OpticNode + Sized {
     /// # Returns
     /// This function returns the original Node with updated alignment settings.
     #[must_use]
-    fn align_like_node_at_distance(mut self, node_idx: NodeIndex, distance: Length) -> Self {
+    fn align_like_node_at_distance(mut self, node_id: Uuid, distance: Length) -> Self {
         self.node_attr_mut()
-            .set_align_like_node_at_distance(node_idx, distance);
+            .set_align_like_node_at_distance(node_id, distance);
         self
     }
 }

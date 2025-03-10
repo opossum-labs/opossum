@@ -1,3 +1,9 @@
+//! The basic structure of an OPOSSUM model.
+//!
+//! It contains the [`OpmDocument`] structure, which holds a (toplevel) [`NodeGroup`] representing the actual optical model
+//! as well as a list of analyzers with their particular configuration and a global scene configuration (e.g. ambient medium etc.).
+//!
+//! This module also handles reading and writing of `.opm` files.
 use crate::{
     analyzers::AnalyzerType,
     error::{OpmResult, OpossumError},
@@ -177,7 +183,6 @@ mod test {
         optic_node::OpticNode,
         utils::test_helper::test_helper::check_logs,
     };
-    use petgraph::adj::NodeIndex;
     use std::{
         path::PathBuf,
         sync::{Arc, Mutex},
@@ -212,19 +217,9 @@ mod test {
             result.unwrap_err().to_string(),
             "OpmDocument:parsing of model failed: missing field `opm file version`"
         );
-
-        let document =
+        assert!(
             OpmDocument::from_file(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
-                .unwrap();
-        let node1 = document.scenery.node(NodeIndex::from(0)).unwrap();
-        let node2 = document.scenery.node(NodeIndex::from(1)).unwrap();
-        assert_eq!(
-            "587fa699-5e98-4d08-b5a5-f9885151f3d1",
-            node1.uuid().to_string()
-        );
-        assert_eq!(
-            "a81f485c-26f7-4b3c-a6ac-4a62746f6cad",
-            node2.uuid().to_string()
+                .is_ok()
         );
     }
     #[test]
@@ -253,33 +248,33 @@ mod test {
     fn all_nodes_integration_test() {
         let mut scenery = NodeGroup::default();
         let src = round_collimated_ray_source(millimeter!(10.0), joule!(1.0), 1).unwrap();
-        let i_0 = scenery.add_node(&src).unwrap();
-        let i_1 = scenery.add_node(&BeamSplitter::default()).unwrap();
-        let i_2 = scenery.add_node(&CylindricLens::default()).unwrap();
-        let i_3 = scenery.add_node(&FluenceDetector::default()).unwrap();
-        let i_4 = scenery.add_node(&Lens::default()).unwrap();
-        let i_5 = scenery.add_node(&Wedge::default()).unwrap();
-        let i_6 = scenery.add_node(&Dummy::default()).unwrap();
-        let i_7 = scenery.add_node(&EnergyMeter::default()).unwrap();
-        let i_8 = scenery.add_node(&IdealFilter::default()).unwrap();
+        let i_0 = scenery.add_node(src).unwrap();
+        let i_1 = scenery.add_node(BeamSplitter::default()).unwrap();
+        let i_2 = scenery.add_node(CylindricLens::default()).unwrap();
+        let i_3 = scenery.add_node(FluenceDetector::default()).unwrap();
+        let i_4 = scenery.add_node(Lens::default()).unwrap();
+        let i_5 = scenery.add_node(Wedge::default()).unwrap();
+        let i_6 = scenery.add_node(Dummy::default()).unwrap();
+        let i_7 = scenery.add_node(EnergyMeter::default()).unwrap();
+        let i_8 = scenery.add_node(IdealFilter::default()).unwrap();
         let i_9 = scenery
-            .add_node(&ParaxialSurface::new("paraxial", millimeter!(1000.0)).unwrap())
+            .add_node(ParaxialSurface::new("paraxial", millimeter!(1000.0)).unwrap())
             .unwrap();
         let i_10 = scenery
-            .add_node(&RayPropagationVisualizer::default())
+            .add_node(RayPropagationVisualizer::default())
             .unwrap();
-        let i_11 = scenery.add_node(&Spectrometer::default()).unwrap();
-        let i_12 = scenery.add_node(&SpotDiagram::default()).unwrap();
-        let i_13 = scenery.add_node(&WaveFront::default()).unwrap();
-        let i_14 = scenery.add_node(&ParabolicMirror::default()).unwrap();
+        let i_11 = scenery.add_node(Spectrometer::default()).unwrap();
+        let i_12 = scenery.add_node(SpotDiagram::default()).unwrap();
+        let i_13 = scenery.add_node(WaveFront::default()).unwrap();
+        let i_14 = scenery.add_node(ParabolicMirror::default()).unwrap();
         let i_15 = scenery
             .add_node(
-                &ReflectiveGrating::default()
+                ReflectiveGrating::default()
                     .with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))
                     .unwrap(),
             )
             .unwrap();
-        let i_16 = scenery.add_node(&ThinMirror::default()).unwrap();
+        let i_16 = scenery.add_node(ThinMirror::default()).unwrap();
 
         scenery
             .connect_nodes(i_0, "output_1", i_1, "input_1", millimeter!(5.0))

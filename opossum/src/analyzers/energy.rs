@@ -63,8 +63,8 @@ mod test {
         };
         let light_data = LightData::Energy(data_energy);
         let src = Source::new("source", &light_data);
-        let i_src = scenery.add_node(&src).unwrap();
-        let i_em = scenery.add_node(&EnergyMeter::default()).unwrap();
+        let i_src = scenery.add_node(src).unwrap();
+        let i_em = scenery.add_node(EnergyMeter::default()).unwrap();
         scenery
             .connect_nodes(i_src, "output_1", i_em, "input_1", Length::zero())
             .unwrap();

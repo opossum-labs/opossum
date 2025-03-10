@@ -21,7 +21,6 @@ use crate::{
 };
 use num::Zero;
 pub use optic_graph::OpticGraph;
-use petgraph::prelude::NodeIndex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -46,8 +45,8 @@ use uuid::Uuid;
 ///
 /// fn main() -> OpmResult<()> {
 ///   let mut scenery = NodeGroup::new("OpticScenery demo");
-///   let node1 = scenery.add_node(&Dummy::new("dummy1"))?;
-///   let node2 = scenery.add_node(&Dummy::new("dummy2"))?;
+///   let node1 = scenery.add_node(Dummy::new("dummy1"))?;
+///   let node2 = scenery.add_node(Dummy::new("dummy2"))?;
 ///   scenery.connect_nodes(node1, "output_1", node2, "input_1", millimeter!(100.0))?;
 ///   Ok(())
 /// }
@@ -118,24 +117,23 @@ impl NodeGroup {
     /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
     ///
     /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is
-    /// consumed (owned) by the [`NodeGroup`]. This function returns a reference to the element in the scenery as [`NodeIndex`].
+    /// consumed (owned) by the [`NodeGroup`]. This function returns a unique id [`Uuid`] as to the element in the scenery.
     /// This reference must be used later on for connecting nodes (see `connect_nodes` function).
     ///
     /// # Errors
     /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
     ///
     /// # Panics
-    /// This function panics if the property "graph" can not be updated. Produces an error of type [`OpossumError::Properties`]
-    pub fn add_node<T: Analyzable + Clone + 'static>(&mut self, node: &T) -> OpmResult<NodeIndex> {
-        let idx = self.graph.add_node(node.clone())?;
-
+    /// This function panics if the property `graph` can not be updated. Produces an error of type [`OpossumError::Properties`]
+    pub fn add_node<T: Analyzable + Clone + 'static>(&mut self, node: T) -> OpmResult<Uuid> {
+        let node_id = self.graph.add_node(node)?;
         // save uuid of node in rays if present
-        self.store_node_uuid_in_rays_bundle(node, idx)?;
+        self.store_node_uuid_in_rays_bundle(node_id)?;
 
         self.node_attr
             .set_property("graph", self.graph.clone().into())
             .unwrap();
-        Ok(idx)
+        Ok(node_id)
     }
     /// Adds a node to the graph by reference.
     ///
@@ -146,7 +144,7 @@ impl NodeGroup {
     /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
     ///
     /// # Panics
-    /// This function panics if the property "graph" cannot be updated. Produces an error of type [`OpossumError::Properties`]
+    /// This function panics if the property `graph` cannot be updated. Produces an error of type [`OpossumError::Properties`]
     ///
     /// # Parameters
     /// - `node`: The node to be added by reference.
@@ -163,19 +161,23 @@ impl NodeGroup {
             .unwrap();
         Ok(uuid)
     }
-    fn store_node_uuid_in_rays_bundle<T: Analyzable + Clone + 'static>(
-        &mut self,
-        node: &T,
-        node_idx: NodeIndex,
-    ) -> OpmResult<()> {
-        if let Ok(Proptype::LightData(ld)) = node.node_attr().get_property("light data") {
+    fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
+        let node_ref = self.graph.node(node_id)?;
+        let node = node_ref
+            .optical_ref
+            .lock()
+            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+        let Ok(node_props) = node.node_attr().get_property("light data") else {
+            return Ok(());
+        };
+        let node_props = node_props.clone();
+        drop(node);
+        if let Proptype::LightData(ld) = node_props {
             if let Some(LightData::Geometric(rays)) = &ld.value {
-                let node_from_graph = self.graph_mut().node_by_idx_mut(node_idx)?;
-
                 let mut new_rays = rays.clone();
-                new_rays.set_node_origin_uuid(node_from_graph.uuid());
+                new_rays.set_node_origin_uuid(node_id);
 
-                let mut node_ref = node_from_graph
+                let mut node_ref = node_ref
                     .optical_ref
                     .lock()
                     .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
@@ -190,30 +192,15 @@ impl NodeGroup {
         }
         Ok(())
     }
-    /// Return a reference to the optical node specified by its [`NodeIndex`].
+    /// Return a reference to the optical node specified by its [`Uuid`].
     ///
     /// This function is mainly useful for setting up a [reference node](crate::nodes::NodeReference).
     ///
     /// # Errors
     ///
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
-    pub fn node(&self, node_idx: NodeIndex) -> OpmResult<OpticRef> {
-        self.graph.node_by_idx(node_idx)
-    }
-    /// Refturn a reference to the optical node specified by its [`Uuid`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
-    pub fn node_by_uuid(&self, uuid: &Uuid) -> OpmResult<OpticRef> {
-        self.graph.node_by_uuid(*uuid).map_or_else(
-            || {
-                Err(OpossumError::OpticScenery(format!(
-                    "Node with uuid {uuid} not found"
-                )))
-            },
-            Ok,
-        )
+    pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
+        self.graph.node(node_id)
     }
     /// Returns the number of nodes of this [`NodeGroup`].
     #[must_use]
@@ -222,7 +209,7 @@ impl NodeGroup {
     }
     ///  Connect (already existing) optical nodes within this [`NodeGroup`].
     ///
-    /// This function connects two optical nodes (referenced by their [`NodeIndex`]) with their respective port names
+    /// This function connects two optical nodes (referenced by their [`Uuid`]) with their respective port names
     /// and their geometrical distance (= propagation length) to each other thus extending the optical network.
     /// **Note**: The connection of two internal nodes might affect external port mappings (see [`map_input_port`](NodeGroup::map_input_port())
     /// & [`map_output_port`](NodeGroup::map_output_port()) functions). In this case no longer valid mappings will be deleted.
@@ -237,50 +224,14 @@ impl NodeGroup {
     /// In addition this function returns an [`OpossumError::Properties`] if the (internal) property "graph" cannot be set.
     pub fn connect_nodes(
         &mut self,
-        src_node: NodeIndex,
+        src_id: Uuid,
         src_port: &str,
-        target_node: NodeIndex,
+        target_id: Uuid,
         target_port: &str,
         distance: Length,
     ) -> OpmResult<()> {
         self.graph
-            .connect_nodes(src_node, src_port, target_node, target_port, distance)?;
-        self.node_attr
-            .set_property("graph", self.graph.clone().into())?;
-        Ok(())
-    }
-    /// Connect (already existing) optical nodes within this [`NodeGroup`].
-    ///
-    /// This function is similar to `connect_nodes` but uses the [`Uuid`] of the nodes instead of their [`NodeIndex`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if .
-    pub fn connect_nodes_by_uuid(
-        &mut self,
-        src_uuid: &Uuid,
-        src_port: &str,
-        target_uuid: &Uuid,
-        target_port: &str,
-        distance: Length,
-    ) -> OpmResult<()> {
-        let Some(src_node_idx) = self.graph.idx_by_uuid(*src_uuid) else {
-            return Err(OpossumError::OpticScenery(format!(
-                "source uuid {src_uuid} not found"
-            )));
-        };
-        let Some(target_node_idx) = self.graph.idx_by_uuid(*target_uuid) else {
-            return Err(OpossumError::OpticScenery(format!(
-                "target uuid {target_uuid} not found"
-            )));
-        };
-        self.connect_nodes(
-            src_node_idx,
-            src_port,
-            target_node_idx,
-            target_port,
-            distance,
-        )
+            .connect_nodes(src_id, src_port, target_id, target_port, distance)
     }
     /// Map an input port of an internal node to an external port of the group.
     ///
@@ -294,7 +245,7 @@ impl NodeGroup {
     ///   - the `input_node` has an input port with the specified `internal_name` but is already internally connected.
     pub fn map_input_port(
         &mut self,
-        input_node: NodeIndex,
+        input_node: Uuid,
         internal_name: &str,
         external_name: &str,
     ) -> OpmResult<()> {
@@ -315,7 +266,7 @@ impl NodeGroup {
     ///   - the `output_node` has an output port with the specified `internal_name` but is already internally connected.
     pub fn map_output_port(
         &mut self,
-        output_node: NodeIndex,
+        output_node: Uuid,
         internal_name: &str,
         external_name: &str,
     ) -> OpmResult<()> {
@@ -344,8 +295,7 @@ impl NodeGroup {
                     "port {port_name} is not mapped"
                 )));
             };
-            let node_id = *self.graph.node_by_idx(port_info.0)?.uuid().as_simple();
-            Ok(format!("i{}:{}", node_id, port_info.1))
+            Ok(format!("i{}:{}", port_info.0, port_info.1))
         } else {
             Ok(format!("{node_id}:{port_name}"))
         }
@@ -542,10 +492,10 @@ impl NodeGroup {
     pub fn add_to_accumulated_rays(&mut self, rays: &Rays, bounce: usize) {
         if self.accumulated_rays.len() <= bounce {
             let mut hashed_rays = HashMap::<Uuid, Rays>::new();
-            hashed_rays.insert(*rays.uuid(), rays.clone());
+            hashed_rays.insert(rays.uuid(), rays.clone());
             self.accumulated_rays.push(hashed_rays);
         } else {
-            self.accumulated_rays[bounce].insert(*rays.uuid(), rays.clone());
+            self.accumulated_rays[bounce].insert(rays.uuid(), rays.clone());
         }
     }
 
@@ -714,8 +664,8 @@ mod test {
     #[test]
     fn ports() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(&Dummy::default()).unwrap();
-        let sn2_i = og.add_node(&Dummy::default()).unwrap();
+        let sn1_i = og.add_node(Dummy::default()).unwrap();
+        let sn2_i = og.add_node(Dummy::default()).unwrap();
         og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
         assert!(og.ports().names(&PortType::Input).is_empty());
@@ -734,8 +684,8 @@ mod test {
     #[test]
     fn ports_inverted() {
         let mut og = NodeGroup::default();
-        let sn1_i = og.add_node(&Dummy::default()).unwrap();
-        let sn2_i = og.add_node(&Dummy::default()).unwrap();
+        let sn1_i = og.add_node(Dummy::default()).unwrap();
+        let sn2_i = og.add_node(Dummy::default()).unwrap();
         og.connect_nodes(sn1_i, "output_1", sn2_i, "input_1", Length::zero())
             .unwrap();
         og.map_input_port(sn1_i, "input_1", "input_1").unwrap();
@@ -753,7 +703,7 @@ mod test {
     #[test]
     fn report() {
         let mut scenery = NodeGroup::default();
-        scenery.add_node(&Dummy::default()).unwrap();
+        scenery.add_node(Dummy::default()).unwrap();
         let report = scenery.toplevel_report().unwrap();
         assert!(serde_yaml::to_string(&report).is_ok());
         // How shall we further parse the output?
@@ -767,8 +717,8 @@ mod test {
     #[test]
     fn analyze_dummy() {
         let mut scenery = NodeGroup::default();
-        let node1 = scenery.add_node(&Dummy::default()).unwrap();
-        let node2 = scenery.add_node(&Dummy::default()).unwrap();
+        let node1 = scenery.add_node(Dummy::default()).unwrap();
+        let node2 = scenery.add_node(Dummy::default()).unwrap();
         scenery
             .connect_nodes(node1, "output_1", node2, "input_1", Length::zero())
             .unwrap();
@@ -790,11 +740,11 @@ mod test {
         );
         let mut scenery = NodeGroup::default();
         let i_s = scenery
-            .add_node(&Source::new("src", &LightData::Geometric(rays)))
+            .add_node(Source::new("src", &LightData::Geometric(rays)))
             .unwrap();
         let mut em = EnergyMeter::default();
         em.set_isometry(Isometry::identity()).unwrap();
-        let i_e = scenery.add_node(&em).unwrap();
+        let i_e = scenery.add_node(em).unwrap();
         scenery
             .connect_nodes(i_s, "output_1", i_e, "input_1", Length::zero())
             .unwrap();

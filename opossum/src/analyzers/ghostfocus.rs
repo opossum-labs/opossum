@@ -172,7 +172,7 @@ impl Analyzer for GhostFocusAnalyzer {
                         )?;
                         let fluence_data = hit_map
                             .1
-                            .get_rays_hit_map(*bounce, rays_uuid)
+                            .get_rays_hit_map(*bounce, *rays_uuid)
                             .unwrap()
                             .calc_fluence_map(
                                 (101, 101),
@@ -305,15 +305,15 @@ pub struct RaysNodeCorrelation {
 impl RaysNodeCorrelation {
     ///creates a new [`RaysNodeCorrelation`]
     #[must_use]
-    pub fn new(rays_uuid: &Uuid, rays_origin: &RaysOrigin) -> Self {
+    pub fn new(rays_uuid: Uuid, rays_origin: &RaysOrigin) -> Self {
         let mut correlation = HashMap::<Uuid, RaysOrigin>::new();
-        correlation.insert(*rays_uuid, rays_origin.clone());
+        correlation.insert(rays_uuid, rays_origin.clone());
         Self { correlation }
     }
 
     /// inserts a key value pair in the correlation hashmap
-    pub fn insert(&mut self, k: &Uuid, v: &RaysOrigin) {
-        self.correlation.insert(*k, v.clone());
+    pub fn insert(&mut self, k: Uuid, v: &RaysOrigin) {
+        self.correlation.insert(k, v.clone());
     }
 
     /// returns the values of the correlation hashmap
@@ -411,14 +411,14 @@ impl GhostFocusHistory {
     fn add_specific_ray_history(
         &mut self,
         accumulated_rays: &Vec<HashMap<Uuid, Rays>>,
-        rays_uuid: &Uuid,
+        rays_uuid: Uuid,
         hist_idx: usize,
     ) {
         for (bounce, ray_vecs_in_bounce) in accumulated_rays.iter().enumerate() {
-            if ray_vecs_in_bounce.contains_key(rays_uuid) {
+            if ray_vecs_in_bounce.contains_key(&rays_uuid) {
                 let mut rays_per_bounce_history =
                     Vec::<Vec<MatrixXx3<Length>>>::with_capacity(ray_vecs_in_bounce.len());
-                if let Some(rays) = ray_vecs_in_bounce.get(rays_uuid) {
+                if let Some(rays) = ray_vecs_in_bounce.get(&rays_uuid) {
                     let mut rays_history =
                         Vec::<MatrixXx3<Length>>::with_capacity(rays.nr_of_rays(true));
                     for ray in rays {
@@ -429,7 +429,7 @@ impl GhostFocusHistory {
                     rays_per_bounce_history.push(rays_history);
                     self.ray_node_correlation[bounce].insert(
                         rays.uuid(),
-                        &RaysOrigin::new(*rays.parent_id(), *rays.node_origin()),
+                        &RaysOrigin::new(rays.parent_id(), *rays.node_origin()),
                     );
 
                     self.rays_pos_history[bounce] = rays_per_bounce_history;
@@ -460,7 +460,7 @@ impl GhostFocusHistory {
                     if bounce != 0 {
                         report_str += format!("bounce {bounce} at node '").as_str();
                     }
-                    if let Some(opt_ref) = graph.node_by_uuid(node_uuid) {
+                    if let Ok(opt_ref) = graph.node(node_uuid) {
                         report_str += format!(
                             "{}', ",
                             opt_ref
@@ -499,7 +499,7 @@ impl From<Vec<HashMap<Uuid, Rays>>> for GhostFocusHistory {
                 }
                 ray_node_bounce_correlation.insert(
                     rays.uuid(),
-                    &RaysOrigin::new(*rays.parent_id(), *rays.node_origin()),
+                    &RaysOrigin::new(rays.parent_id(), *rays.node_origin()),
                 );
                 rays_per_bounce_history.push(rays_history);
             }
@@ -533,7 +533,7 @@ impl From<(&Vec<HashMap<Uuid, Rays>>, Uuid, usize)> for GhostFocusHistory {
             ray_node_correlation,
         };
 
-        ghost_focus_history.add_specific_ray_history(acc_rays, &rays_uuid, hist_idx);
+        ghost_focus_history.add_specific_ray_history(acc_rays, rays_uuid, hist_idx);
 
         ghost_focus_history
     }
@@ -656,7 +656,7 @@ mod test_ghost_focus_analyzer {
     fn report() {
         let mut scenery = NodeGroup::default();
         let i_src = scenery
-            .add_node(&round_collimated_ray_source(millimeter!(10.0), joule!(2.), 5).unwrap())
+            .add_node(round_collimated_ray_source(millimeter!(10.0), joule!(2.), 5).unwrap())
             .unwrap();
         let mut lens = Lens::default();
         lens.set_coating(
@@ -671,10 +671,10 @@ mod test_ghost_focus_analyzer {
             &CoatingType::ConstantR { reflectivity: 0.2 },
         )
         .unwrap();
-        let i_l = scenery.add_node(&lens).unwrap();
+        let i_l = scenery.add_node(lens).unwrap();
         let mir1 = scenery
             .add_node(
-                &ThinMirror::new("mir 1")
+                ThinMirror::new("mir 1")
                     .with_tilt(degree!(45., 0., 0.))
                     .unwrap(),
             )
@@ -728,7 +728,7 @@ mod test_rays_node_correlation {
         let node_origin_uuid = Uuid::new_v4();
         let rays_uuid = Uuid::new_v4();
         let ro = RaysOrigin::new(Some(parent_rays_uuid), Some(node_origin_uuid));
-        let rnc = RaysNodeCorrelation::new(&rays_uuid, &ro);
+        let rnc = RaysNodeCorrelation::new(rays_uuid, &ro);
         assert_eq!(
             rnc.correlation
                 .get(&rays_uuid)
@@ -756,8 +756,8 @@ mod test_rays_node_correlation {
         let rays_uuid2 = Uuid::new_v4();
         let ro = RaysOrigin::new(Some(parent_rays_uuid), Some(node_origin_uuid));
         let ro2 = RaysOrigin::new(Some(parent_rays_uuid2), Some(node_origin_uuid2));
-        let mut rnc = RaysNodeCorrelation::new(&rays_uuid, &ro);
-        rnc.insert(&rays_uuid2, &ro2);
+        let mut rnc = RaysNodeCorrelation::new(rays_uuid, &ro);
+        rnc.insert(rays_uuid2, &ro2);
         assert_eq!(
             rnc.correlation
                 .get(&rays_uuid2)
@@ -822,11 +822,11 @@ mod test_rays_ghost_focus_history {
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(*rays1.uuid(), rays1.clone());
+        hash1.insert(rays1.uuid(), rays1.clone());
 
         accumulated_rays.push(hash1);
 
-        let hist = GhostFocusHistory::from((&accumulated_rays, *rays1.uuid(), 0));
+        let hist = GhostFocusHistory::from((&accumulated_rays, rays1.uuid(), 0));
 
         assert_eq!(hist.rays_pos_history.len(), 1);
         assert_eq!(hist.rays_pos_history[0].len(), 1);
@@ -857,7 +857,7 @@ mod test_rays_ghost_focus_history {
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(*rays1.uuid(), rays1.clone());
+        hash1.insert(rays1.uuid(), rays1.clone());
 
         accumulated_rays.push(hash1);
 
@@ -900,8 +900,8 @@ mod test_rays_ghost_focus_history {
         let mut hash1 = HashMap::<Uuid, Rays>::new();
         let mut hash2 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(*rays1.uuid(), rays1.clone());
-        hash2.insert(*rays2.uuid(), rays2.clone());
+        hash1.insert(rays1.uuid(), rays1.clone());
+        hash2.insert(rays2.uuid(), rays2.clone());
 
         accumulated_rays.push(hash1);
         accumulated_rays.push(hash2);
@@ -1008,7 +1008,7 @@ mod test_rays_ghost_focus_history {
         .unwrap();
         let mut hash1 = HashMap::<Uuid, Rays>::new();
 
-        hash1.insert(*rays1.uuid(), rays1.clone());
+        hash1.insert(rays1.uuid(), rays1.clone());
         accumulated_rays.push(hash1);
 
         let mut ray_pos_history =
@@ -1026,7 +1026,7 @@ mod test_rays_ghost_focus_history {
             ray_node_correlation,
         };
 
-        hist.add_specific_ray_history(&accumulated_rays, &rays1.uuid(), 0);
+        hist.add_specific_ray_history(&accumulated_rays, rays1.uuid(), 0);
 
         assert_eq!(hist.rays_pos_history.len(), 1);
         assert_eq!(hist.rays_pos_history[0].len(), 1);

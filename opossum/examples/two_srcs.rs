@@ -9,18 +9,18 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let i_src1 = scenery.add_node(&collimated_line_ray_source(
+    let i_src1 = scenery.add_node(collimated_line_ray_source(
         millimeter!(20.0),
         joule!(1.0),
         21,
     )?)?;
-    let i_src2 = scenery.add_node(&collimated_line_ray_source(
+    let i_src2 = scenery.add_node(collimated_line_ray_source(
         millimeter!(20.0),
         joule!(1.0),
         21,
     )?)?;
-    let i_bs = scenery.add_node(&BeamSplitter::default())?;
-    let i_sd = scenery.add_node(&RayPropagationVisualizer::default())?;
+    let i_bs = scenery.add_node(BeamSplitter::default())?;
+    let i_sd = scenery.add_node(RayPropagationVisualizer::default())?;
 
     scenery.connect_nodes(i_src1, "output_1", i_bs, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(i_src2, "output_1", i_bs, "input_2", millimeter!(110.0))?;

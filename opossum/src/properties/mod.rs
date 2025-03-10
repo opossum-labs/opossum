@@ -233,7 +233,6 @@ mod test {
             .create("my graph", "my description", OpticGraph::default().into())
             .unwrap();
         let html_props = props.html_props("test123");
-        // check_logs(Level::Warn, vec!["property 'my graph' could not be converted to html. Skipping"]);
         assert_eq!(html_props.len(), 1);
     }
 }

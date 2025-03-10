@@ -14,7 +14,7 @@ fn main() {
     hm.add_to_hitmap(
         HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0)).unwrap()),
         1,
-        &uuid,
+        uuid,
     )
     .unwrap();
     assert!(hm
@@ -23,7 +23,7 @@ fn main() {
                 FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0)).unwrap()
             ),
             0,
-            &uuid,
+            uuid,
         )
         .is_err());
 }

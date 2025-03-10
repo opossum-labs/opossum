@@ -15,24 +15,24 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("filter system demo");
-    let i_s = scenery.add_node(&Source::new(
+    let i_s = scenery.add_node(Source::new(
         "Source",
         &LightData::Energy(DataEnergy {
             spectrum: create_he_ne_spec(1.0)?,
         }),
     ))?;
-    let i_bs = scenery.add_node(&BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap())?;
+    let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap())?;
     let filter_spectrum = Spectrum::from_csv("./opossum/opossum/NE03B.csv")?;
-    let i_f = scenery.add_node(&IdealFilter::new(
+    let i_f = scenery.add_node(IdealFilter::new(
         "filter",
         &FilterType::Spectrum(filter_spectrum),
     )?)?;
-    let i_d1 = scenery.add_node(&EnergyMeter::new(
+    let i_d1 = scenery.add_node(EnergyMeter::new(
         "Energy meter 1",
         opossum::nodes::Metertype::IdealEnergyMeter,
     ))?;
-    let i_d2 = scenery.add_node(&Spectrometer::default())?;
-    let i_d3 = scenery.add_node(&EnergyMeter::new(
+    let i_d2 = scenery.add_node(Spectrometer::default())?;
+    let i_d3 = scenery.add_node(EnergyMeter::new(
         "Energy meter 2",
         opossum::nodes::Metertype::IdealEnergyMeter,
     ))?;

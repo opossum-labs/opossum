@@ -77,7 +77,7 @@ impl Source {
     /// The light to be emitted from this source is defined in a [`LightData`] structure.
     ///
     /// # Panics
-    /// Panics if [`Properties`](crate::properties::Properties) `name` can not be set
+    /// Panics if [`Properties`](crate::properties::Properties) `light data` can not be set
     ///
     /// ## Example
     ///

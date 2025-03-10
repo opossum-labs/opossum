@@ -57,8 +57,8 @@ fn main() -> OpmResult<()> {
 
     let mut src = Source::new("Source", &LightData::Geometric(rays));
     src.set_isometry(Isometry::identity())?;
-    let src = scenery.add_node(&src)?;
-    let i_sd = scenery.add_node(&SpotDiagram::default())?;
+    let src = scenery.add_node(src)?;
+    let i_sd = scenery.add_node(SpotDiagram::default())?;
 
     scenery.connect_nodes(src, "output_1", i_sd, "input_1", millimeter!(100.))?;
 

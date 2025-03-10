@@ -1,6 +1,22 @@
 #![warn(missing_docs)]
 //! This module contains the concrete node types (lenses, filters, etc...)
-
+//!
+//! To simplify the creation of new node types, the `OpmNode` derive macro is provided.
+//! This macro automatically implements the `Analyzable`, `Alignable` and `LIDT` traits for the annotated struct.
+//! Furthermore it allows to specify the color of the node in the `dot` file by using the `opm_node` attribute.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use opm_macros_lib::OpmNode;
+//! use opossum::nodes::NodeAttr;
+//!  
+//! #[derive(OpmNode)]
+//! #[opm_node("red")]
+//! pub struct MyOpticNode {
+//!    node_attr: NodeAttr
+//! }
+//! ```
 mod beam_splitter;
 mod cylindric_lens;
 mod dummy;

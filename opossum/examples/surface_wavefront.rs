@@ -18,12 +18,12 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
-    let src = scenery.add_node(&round_collimated_ray_source(
+    let src = scenery.add_node(round_collimated_ray_source(
         millimeter!(5.0),
         joule!(1.0),
         5,
     )?)?;
-    let l1 = scenery.add_node(&Lens::new(
+    let l1 = scenery.add_node(Lens::new(
         "l1",
         millimeter!(200.0),
         millimeter!(-200.0),
@@ -43,10 +43,10 @@ fn main() -> OpmResult<()> {
         "output_1",
         &Aperture::BinaryCircle(circle),
     )?;
-    let l2 = scenery.add_node(&lens)?;
-    let det = scenery.add_node(&RayPropagationVisualizer::default())?;
-    let wf = scenery.add_node(&WaveFront::default())?;
-    let sd = scenery.add_node(&SpotDiagram::default())?;
+    let l2 = scenery.add_node(lens)?;
+    let det = scenery.add_node(RayPropagationVisualizer::default())?;
+    let wf = scenery.add_node(WaveFront::default())?;
+    let sd = scenery.add_node(SpotDiagram::default())?;
     scenery.connect_nodes(src, "output_1", l1, "input_1", millimeter!(30.0))?;
     scenery.connect_nodes(l1, "output_1", l2, "input_1", millimeter!(197.22992))?;
     scenery.connect_nodes(l2, "output_1", wf, "input_1", millimeter!(30.0))?;
