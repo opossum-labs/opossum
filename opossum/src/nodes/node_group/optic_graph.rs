@@ -16,9 +16,7 @@ use log::warn;
 use nalgebra::Vector3;
 use petgraph::{
     algo::{connected_components, is_cyclic_directed, toposort},
-    graph::{EdgeIndex, Edges},
-    prelude::DiGraph,
-    stable_graph::NodeIndex,
+    graph::{DiGraph, EdgeIndex, Edges, NodeIndex},
     visit::EdgeRef,
     Directed, Direction,
 };
@@ -68,11 +66,14 @@ impl OpticGraph {
         ));
         Ok(node_id)
     }
-    /// .
+    /// Add an [`OpticRef`] to this [`OpticGraph`].
+    ///
+    /// This function is similar to [`OpticGraph::add_node`] but allows to add an existing [`OpticRef`] to the graph.
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if the graph is set as `inverted` and a node is added. (This could end up in
+    /// a weird / undefined behaviour)
     pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<NodeIndex> {
         if self.is_inverted {
             return Err(OpossumError::OpticGroup(
@@ -80,6 +81,70 @@ impl OpticGraph {
             ));
         }
         Ok(self.g.add_node(node))
+    }
+    /// Delete a node from this [`OpticGraph`].
+    ///
+    /// Deletes a node with the given [`Uuid`] from the graph. All edges connected to this node will be removed as well.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the node with the given [`Uuid`] does not exist.
+    /// - the graph is set as `inverted`.
+    ///
+    /// # Panics
+    /// This function could theoretically panic if the uuid of the node is not found while looping over all nodes.
+    pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<()> {
+        if self.is_inverted {
+            return Err(OpossumError::OpticGroup(
+                "cannot delete nodes if group is set as inverted".into(),
+            ));
+        }
+        let mut node_deleted = false;
+        while let Some(node_idx) = self.next_node_with_uuid(node_id) {
+            // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
+            let node_id = self.node_by_idx(node_idx).unwrap().uuid();
+            self.g.remove_node(node_idx);
+            // Remove possibly no longer valid port mappings
+            self.input_port_map.remove_mapping_by_uuid(node_id);
+            self.output_port_map.remove_mapping_by_uuid(node_id);
+
+            node_deleted = true;
+        }
+        if !node_deleted {
+            return Err(OpossumError::OpticScenery(
+                "node with given uuid does not exist".into(),
+            ));
+        }
+        Ok(())
+    }
+    /// Return the first [`NodeId`] with the given [`Uuid`] in this [`OpticGraph`].
+    ///
+    /// This also includes reference nodes referring to the given [`Uuid`]. This function returns
+    /// `None` if no node with (or referring to) the given [`Uuid`] was found.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex lock fails.
+    fn next_node_with_uuid(&self, node_id: Uuid) -> Option<NodeIndex> {
+        for node_idx in self.g.node_indices() {
+            let node_ref = self.node_by_idx(node_idx).unwrap();
+            if node_ref.uuid() == node_id {
+                return Some(node_idx);
+            }
+            let node = node_ref.optical_ref.lock().expect("Mutex lock failed");
+            let node_attrs = node.node_attr().clone();
+            drop(node);
+            if node_attrs.node_type() == "reference" {
+                let ref_node_props = node_attrs.properties();
+                if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id") {
+                    if *ref_uuid == node_id {
+                        return Some(node_idx);
+                    }
+                }
+            }
+        }
+        None
     }
     /// Connect two optical nodes within this [`OpticGraph`].
     ///
@@ -313,11 +378,10 @@ impl OpticGraph {
         };
         Ok(())
     }
-    /// .
+    /// Returns the incoming data of a node in this [`OpticGraph`].
     ///
-    /// # Errors
-    ///
-    /// This function will return an error if .
+    /// This function returns the incoming data of a node with the given [`Uuid`]. If the node is an external node, the
+    /// incoming data is mapped to the internal node names.
     #[must_use]
     pub fn get_incoming(&self, node_id: Uuid, incoming_data: &LightResult) -> LightResult {
         if self.is_incoming_node(node_id) {
@@ -345,31 +409,11 @@ impl OpticGraph {
         }
     }
 
-    ///Clear the edges of an optic graph. Useful for back- and forth-propagation in ghost focus analysis
+    /// Clear the [`LightData`] stored in the edges of this [`OpticGraph`]. Useful for back-
+    /// and forth-propagation in ghost focus analysis.
     pub fn clear_edges(&mut self) {
-        let node_indices = self.g.node_indices();
-        for idx in node_indices {
-            let mut ids = Vec::<EdgeIndex>::new();
-            for edge in self.edges_directed(idx, Direction::Incoming) {
-                ids.push(edge.id());
-            }
-            for id in ids {
-                let light = self.g.edge_weight_mut(id);
-                if let Some(light) = light {
-                    light.set_data(None);
-                }
-            }
-
-            let mut ids = Vec::<EdgeIndex>::new();
-            for edge in self.edges_directed(idx, Direction::Outgoing) {
-                ids.push(edge.id());
-            }
-            for id in ids {
-                let light = self.g.edge_weight_mut(id);
-                if let Some(light) = light {
-                    light.set_data(None);
-                }
-            }
+        for edge in self.g.edge_weights_mut() {
+            edge.set_data(None);
         }
     }
     /// Return `true` if the node with the given [`Uuid`] is not connected to any other node.
@@ -1045,7 +1089,7 @@ mod test {
     use crate::{
         lightdata::DataEnergy,
         millimeter,
-        nodes::{BeamSplitter, Dummy, Source},
+        nodes::{BeamSplitter, Dummy, NodeReference, Source},
         ray::SplittingConfig,
         spectrum_helper::create_he_ne_spec,
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
@@ -1532,5 +1576,124 @@ mod test {
             deserialized.port_map(&PortType::Input).port_names(),
             vec!["input_1", "input_2"]
         );
+    }
+    #[test]
+    fn next_node_with_uuid_single() {
+        let mut graph = OpticGraph::default();
+        let i_d1 = graph.add_node(Dummy::default()).unwrap();
+        let i_d2 = graph.add_node(Dummy::default()).unwrap();
+        let ref_node = NodeReference::from_node(&graph.node(i_d1).unwrap());
+        let _ = graph.add_node(ref_node).unwrap();
+
+        assert!(graph.next_node_with_uuid(Uuid::nil()).is_none());
+        let mut nodes = vec![];
+        while let Some(node_idx) = graph.next_node_with_uuid(i_d2) {
+            nodes.push(graph.node_by_idx(node_idx).unwrap().uuid());
+            graph.g.remove_node(node_idx);
+        }
+        assert_eq!(nodes.len(), 1);
+        assert!(nodes.contains(&i_d2));
+    }
+    #[test]
+    fn next_node_with_uuid_ref() {
+        let mut graph = OpticGraph::default();
+        let i_d1 = graph.add_node(Dummy::default()).unwrap();
+        let _ = graph.add_node(Dummy::default()).unwrap();
+        let ref_node = NodeReference::from_node(&graph.node(i_d1).unwrap());
+        let i_ref = graph.add_node(ref_node).unwrap();
+
+        let mut nodes = vec![];
+        while let Some(node_idx) = graph.next_node_with_uuid(i_d1) {
+            nodes.push(graph.node_by_idx(node_idx).unwrap().uuid());
+            graph.g.remove_node(node_idx);
+        }
+        assert_eq!(nodes.len(), 2);
+        assert!(nodes.contains(&i_d1));
+        assert!(nodes.contains(&i_ref));
+    }
+    #[test]
+    fn delete_node() {
+        let mut graph = OpticGraph::default();
+        let i_d1 = graph.add_node(Dummy::default()).unwrap();
+        let i_d2 = graph.add_node(Dummy::default()).unwrap();
+        let ref_node = NodeReference::from_node(&graph.node(i_d1).unwrap());
+        let i_ref = graph.add_node(ref_node).unwrap();
+        graph
+            .connect_nodes(i_d1, "output_1", i_d2, "input_1", Length::zero())
+            .unwrap();
+        graph
+            .connect_nodes(i_d2, "output_1", i_ref, "input_1", Length::zero())
+            .unwrap();
+        assert!(graph.delete_node(Uuid::nil()).is_err());
+        graph.set_is_inverted(true);
+        assert!(graph.delete_node(i_d2).is_err());
+        graph.set_is_inverted(false);
+        assert_eq!(graph.g.node_count(), 3);
+        assert_eq!(graph.g.edge_count(), 2);
+        graph.delete_node(i_d2).unwrap();
+        assert_eq!(graph.g.node_count(), 2);
+        assert_eq!(graph.g.edge_count(), 0);
+    }
+    #[test]
+    fn delete_node_with_ref() {
+        let mut graph = OpticGraph::default();
+        let i_d1 = graph.add_node(Dummy::default()).unwrap();
+        let i_d2 = graph.add_node(Dummy::default()).unwrap();
+        let ref_node = NodeReference::from_node(&graph.node(i_d1).unwrap());
+        let i_ref = graph.add_node(ref_node).unwrap();
+        let i_d3 = graph.add_node(Dummy::default()).unwrap();
+        graph
+            .connect_nodes(i_d1, "output_1", i_d2, "input_1", Length::zero())
+            .unwrap();
+        graph
+            .connect_nodes(i_d2, "output_1", i_ref, "input_1", Length::zero())
+            .unwrap();
+        graph
+            .connect_nodes(i_ref, "output_1", i_d3, "input_1", Length::zero())
+            .unwrap();
+        graph
+            .map_port(i_d1, &PortType::Input, "input_1", "ext_input")
+            .unwrap();
+        graph
+            .map_port(i_d3, &PortType::Output, "output_1", "ext_output")
+            .unwrap();
+        assert_eq!(graph.g.node_count(), 4);
+        assert_eq!(graph.g.edge_count(), 3);
+        assert_eq!(graph.input_port_map.len(), 1);
+        assert_eq!(graph.output_port_map.len(), 1);
+        graph.delete_node(i_d1).unwrap();
+        assert_eq!(graph.g.node_count(), 2);
+        assert_eq!(graph.g.edge_count(), 0);
+        assert_eq!(graph.input_port_map.len(), 0);
+        assert_eq!(graph.output_port_map.len(), 1);
+    }
+    #[test]
+    fn delete_node_with_mapped_ref() {
+        let mut graph = OpticGraph::default();
+        let i_d1 = graph.add_node(Dummy::default()).unwrap();
+        let i_d2 = graph.add_node(Dummy::default()).unwrap();
+        let ref_node = NodeReference::from_node(&graph.node(i_d1).unwrap());
+        let i_ref = graph.add_node(ref_node).unwrap();
+        graph
+            .connect_nodes(i_d1, "output_1", i_d2, "input_1", Length::zero())
+            .unwrap();
+        graph
+            .connect_nodes(i_d2, "output_1", i_ref, "input_1", Length::zero())
+            .unwrap();
+        graph
+            .map_port(i_d1, &PortType::Input, "input_1", "ext_input")
+            .unwrap();
+        graph
+            .map_port(i_ref, &PortType::Output, "output_1", "ext_output")
+            .unwrap();
+        assert_eq!(graph.g.node_count(), 3);
+        assert_eq!(graph.g.edge_count(), 2);
+        assert_eq!(graph.input_port_map.len(), 1);
+        assert_eq!(graph.output_port_map.len(), 1);
+        graph.delete_node(i_d1).unwrap();
+        assert_eq!(graph.g.node_count(), 1);
+        assert_eq!(graph.g.edge_count(), 0);
+        assert_eq!(graph.input_port_map.len(), 0);
+        assert_eq!(graph.output_port_map.len(), 0);
     }
 }
