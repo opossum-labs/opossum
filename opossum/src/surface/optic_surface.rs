@@ -30,6 +30,7 @@ pub struct OpticSurface {
     #[serde(skip)]
     geo_surface: GeoSurfaceRef,
     anchor_point_iso: Isometry,
+    #[serde(skip_serializing_if = "Aperture::is_none", default)]
     aperture: Aperture,
     coating: CoatingType,
     lidt: Fluence,

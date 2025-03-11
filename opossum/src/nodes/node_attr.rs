@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
+use super::fluence_detector::Fluence;
 use crate::{
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,
@@ -15,9 +16,7 @@ use crate::{
     J_per_cm2,
 };
 
-use super::fluence_detector::Fluence;
-
-/// Struct for sotring common attributes of optical nodes.
+/// Struct for storing common attributes of optical nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeAttr {
     #[serde(skip)]

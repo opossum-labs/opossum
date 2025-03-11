@@ -84,6 +84,11 @@ pub enum Aperture {
     Stack(StackConfig),
 }
 impl Aperture {
+    #[must_use]
+    /// Check if the aperture is [`Aperture::None`]
+    pub const fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.
     #[must_use]
