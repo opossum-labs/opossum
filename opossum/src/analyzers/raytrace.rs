@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Analyzer for sequential ray tracing
 use super::{Analyzer, AnalyzerType};
 use crate::{

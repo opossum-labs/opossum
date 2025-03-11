@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use log::{info, warn};
 use nalgebra::{Point3, Vector3};
 use num::Zero;

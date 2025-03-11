@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! The basic structure of an OPOSSUM model.
 //!
 //! It contains the [`OpmDocument`] structure, which holds a (toplevel) [`NodeGroup`] representing the actual optical model
@@ -25,6 +26,8 @@ use std::{
 };
 
 #[derive(Debug, Serialize, Deserialize)]
+/// The main structure of an OPOSSUM model.
+/// It contains the [`NodeGroup`] representing the optical model, a list of analyzers and a global configuration.
 pub struct OpmDocument {
     #[serde(rename = "opm file version")]
     opm_file_version: String,
@@ -146,16 +149,20 @@ impl OpmDocument {
             OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
         })
     }
+    /// Add an analyzer to this [`OpmDocument`].
     pub fn add_analyzer(&mut self, analyzer: AnalyzerType) {
         self.analyzers.push(analyzer);
     }
+    /// Returns a reference to the scenery of this [`OpmDocument`].
     #[must_use]
     pub const fn scenery(&self) -> &NodeGroup {
         &self.scenery
     }
+    /// Returns a mutable reference to the scenery of this [`OpmDocument`].
     pub fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
     }
+    /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]
     pub fn analyzers(&self) -> Vec<AnalyzerType> {
         self.analyzers.clone()

@@ -1,6 +1,6 @@
 //! Analyzer performing a ghost focus analysis using ray tracing
+#![warn(missing_docs)]
 use std::collections::{hash_map::Values, HashMap};
-
 use log::{info, warn};
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
 use plotters::style::RGBAColor;

@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Module for handling optical surface coatings
 
 use crate::{error::OpmResult, ray::Ray};
@@ -13,11 +14,16 @@ pub use ideal_ar::IdealAR;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+/// Enum for different types of optical coatings
 pub enum CoatingType {
     /// Perfect anti-reflective coating. Reflectivity is always 0.0
     IdealAR,
     /// Ideal coating with a constant given reflectivity
-    ConstantR { reflectivity: f64 },
+    ConstantR {
+        /// Reflectivity of the coating. Must be in the range [0.0, 1.0] where 0.0 means 
+        /// no reflection and 1.0 means full reflection. 
+        reflectivity: f64
+    },
     /// Fesnel reflection (e.g. uncaoted surface)
     Fresnel,
 }
@@ -50,6 +56,9 @@ impl CoatingType {
         }
     }
 }
+/// Trait for optical coatings
+/// 
+/// Each coating model must implement this trait to be used in the ray tracing simulation.
 pub trait Coating {
     /// Calculate the reflectivity based on the concrete model for an incoming [`Ray`] on a surface with
     /// a given `surface_normal` at the intersection point and the refractive index of the following medium.

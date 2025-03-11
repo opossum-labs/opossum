@@ -1,5 +1,5 @@
 //! Performing a (simple) energy flow analysis
-
+#![warn(missing_docs)]
 use super::Analyzer;
 use crate::{
     error::OpmResult, light_result::LightResult, nodes::NodeGroup, optic_node::OpticNode,

@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use super::{Coating, CoatingType};
 use crate::{
     error::{OpmResult, OpossumError},
