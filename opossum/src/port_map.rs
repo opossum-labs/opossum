@@ -43,6 +43,10 @@ impl PortMap {
             self.0.remove(input.0);
         }
     }
+    /// Remove all port mappings for the node with the given [`Uuid`].
+    pub fn remove_mapping_by_uuid(&mut self, node_id: Uuid) {
+        self.0.retain(|_, v| v.0 != node_id);
+    }
     /// Add a new mapping to this [`PortMap`].
     ///
     /// This function adds a new port mapping to this [`PortMap`] by assigning an external port name to an

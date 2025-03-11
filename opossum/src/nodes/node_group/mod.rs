@@ -151,6 +151,23 @@ impl NodeGroup {
         // self.store_node_uuid_in_rays_bundle(&node.optical_ref.borrow(), idx)?;
         Ok(uuid)
     }
+    /// Delete a node from the graph.
+    ///
+    /// This function deletes a node from the graph. The node is identified by its [`Uuid`]. It also
+    /// removes [`NodeReference`](crate::nodes::NodeReference)s the reference the node with the given [`Uuid`].
+    ///
+    /// The function returns a vector of [`Uuid`]s of the nodes that were deleted. It's a vector because it
+    /// contains the original `node_id` and all ids of the possible
+    /// [`NodeReference`](crate::nodes::NodeReference)s that were deleted.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the node does not exist.
+    /// - the graph is inverted.
+    pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
+        self.graph.delete_node(node_id)
+    }
     fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
         let node_ref = self.graph.node(node_id)?;
         let node = node_ref
