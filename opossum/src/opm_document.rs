@@ -5,13 +5,17 @@
 //!
 //! This module also handles reading and writing of `.opm` files.
 use crate::{
-    analyzers::AnalyzerType,
+    analyzers::{
+        energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
+        Analyzer, AnalyzerType,
+    },
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
     optic_node::OpticNode,
+    reporting::analysis_report::AnalysisReport,
     SceneryResources,
 };
-use log::warn;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
@@ -44,7 +48,8 @@ impl Default for OpmDocument {
 impl OpmDocument {
     /// Creates a new [`OpmDocument`].
     #[must_use]
-    pub fn new(scenery: NodeGroup) -> Self {
+    pub fn new(mut scenery: NodeGroup) -> Self {
+        scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
         Self {
             scenery,
             ..Default::default()
@@ -144,6 +149,10 @@ impl OpmDocument {
     pub fn add_analyzer(&mut self, analyzer: AnalyzerType) {
         self.analyzers.push(analyzer);
     }
+    #[must_use]
+    pub const fn scenery(&self) -> &NodeGroup {
+        &self.scenery
+    }
     pub fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
     }
@@ -163,6 +172,34 @@ impl OpmDocument {
             .graph_mut()
             .update_global_config(&Some(self.global_conf.clone()));
     }
+    /// Perform an analysis run of this [`OpmDocument`].
+    ///
+    /// This function will perform the analysis of the defined analyzers in the order they were added.
+    /// The results of the analysis will be returned as a vector of [`AnalysisReport`]s.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the individual analyzers fail to perform the analysis.
+    pub fn analyze(&mut self) -> OpmResult<Vec<AnalysisReport>> {
+        if self.analyzers.is_empty() {
+            info!("No analyzer defined in document. Stopping here.");
+            return Ok(vec![]);
+        }
+        let mut reports = vec![];
+        for ana in self.analyzers.iter().enumerate() {
+            let analyzer: &dyn Analyzer = match ana.1 {
+                AnalyzerType::Energy => &EnergyAnalyzer::default(),
+                AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
+                AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config.clone()),
+            };
+            info!("Analysis #{}", ana.0);
+            analyzer.analyze(&mut self.scenery)?;
+            reports.push(analyzer.report(&self.scenery)?);
+            self.scenery.clear_edges();
+            self.scenery.reset_data();
+        }
+        Ok(reports)
+    }
 }
 
 #[cfg(test)]
@@ -175,12 +212,13 @@ mod test {
         },
         degree, joule, millimeter, nanometer,
         nodes::{
-            round_collimated_ray_source, BeamSplitter, CylindricLens, Dummy, EnergyMeter,
-            FluenceDetector, IdealFilter, Lens, ParabolicMirror, ParaxialSurface,
-            RayPropagationVisualizer, ReflectiveGrating, Spectrometer, SpotDiagram, ThinMirror,
-            WaveFront, Wedge,
+            collimated_line_ray_source, round_collimated_ray_source, BeamSplitter, CylindricLens,
+            Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens, ParabolicMirror,
+            ParaxialSurface, RayPropagationVisualizer, ReflectiveGrating, Spectrometer,
+            SpotDiagram, ThinMirror, WaveFront, Wedge,
         },
-        optic_node::OpticNode,
+        optic_node::{Alignable, OpticNode},
+        refractive_index::RefrIndexConst,
         utils::test_helper::test_helper::check_logs,
     };
     use std::{
@@ -336,12 +374,54 @@ mod test {
         let analyzer = GhostFocusAnalyzer::new(GhostFocusConfig::default());
         analyzer.analyze(&mut scenery).unwrap();
         check_logs(log::Level::Warn, vec![]);
-        // let mut doc = OpmDocument::new(scenery);
-        // // doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
-        // doc.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
-        // doc.save_to_file(Path::new(
-        //     "../opossum/playground/all_nodes_integration_test.opm",
-        // ))
-        // .unwrap();
+    }
+    #[test]
+    fn full_analysis_with_save_and_load() {
+        let mut scenery = NodeGroup::new("Lens Ray-trace test");
+        let src = scenery
+            .add_node(collimated_line_ray_source(millimeter!(20.0), joule!(1.0), 6).unwrap())
+            .unwrap();
+        let lens1 = Wedge::new(
+            "Wedge",
+            millimeter!(10.0),
+            degree!(0.0),
+            &RefrIndexConst::new(1.5068).unwrap(),
+        )
+        .unwrap()
+        .with_tilt(degree!(15.0, 0.0, 0.0))
+        .unwrap();
+        let l1 = scenery.add_node(lens1).unwrap();
+        let lens2 = Lens::new(
+            "Lens 2",
+            millimeter!(205.55),
+            millimeter!(-205.55),
+            millimeter!(2.79),
+            &RefrIndexConst::new(1.5068).unwrap(),
+        )
+        .unwrap()
+        .with_tilt(degree!(15.0, 0.0, 0.0))
+        .unwrap();
+        let l2 = scenery.add_node(lens2).unwrap();
+        let det = scenery
+            .add_node(RayPropagationVisualizer::new("Ray plot", None).unwrap())
+            .unwrap();
+        scenery
+            .connect_nodes(src, "output_1", l1, "input_1", millimeter!(50.0))
+            .unwrap();
+        scenery
+            .connect_nodes(l1, "output_1", l2, "input_1", millimeter!(50.0))
+            .unwrap();
+        scenery
+            .connect_nodes(l2, "output_1", det, "input_1", millimeter!(50.0))
+            .unwrap();
+        let mut doc = OpmDocument::new(scenery);
+        doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+        let temp_model_file = NamedTempFile::new().unwrap();
+        doc.save_to_file(temp_model_file.path()).unwrap();
+
+        testing_logger::setup();
+        let mut doc = OpmDocument::from_file(temp_model_file.path()).unwrap();
+        let _ = doc.analyze().unwrap();
+        check_logs(log::Level::Warn, vec![]);
     }
 }

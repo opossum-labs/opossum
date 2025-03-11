@@ -5,14 +5,10 @@ use env_logger::Env;
 use log::{error, info, warn};
 #[cfg(feature = "bevy")]
 use opossum::bevy_main;
-use opossum::optic_node::OpticNode;
+use opossum::reporting::analysis_report::AnalysisReport;
 #[cfg(feature = "bevy")]
 use opossum::SceneryBevyData;
 use opossum::{
-    analyzers::{
-        energy::EnergyAnalyzer, ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
-        Analyzer, AnalyzerType,
-    },
     console::{Args, PartialArgs},
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
@@ -77,9 +73,8 @@ fn create_data_dir(report_directory: &Path) -> OpmResult<()> {
 }
 fn create_report_and_data_files(
     report_directory: &Path,
-    analyzer: &dyn Analyzer,
+    report: &AnalysisReport,
     report_number: usize,
-    scenery: &NodeGroup,
 ) -> OpmResult<()> {
     let mut output = create_dot_or_report_file_instance(
         report_directory,
@@ -87,20 +82,13 @@ fn create_report_and_data_files(
         "yaml",
         "analysis report",
     )?;
-    let analysis_report = analyzer.report(scenery)?;
-    write!(
-        output,
-        "{}",
-        serde_yaml::to_string(&analysis_report).unwrap()
-    )
-    .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
+    write!(output, "{}", serde_yaml::to_string(&report).unwrap())
+        .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let mut report_path = report_directory.to_path_buf();
-    analysis_report.export_data(&report_path)?;
+    report.export_data(&report_path)?;
     report_path.push(format!("report_{report_number}.html"));
     info!("Write html report to {}", report_path.display());
-    analysis_report
-        .to_html_report()?
-        .generate_html(&report_path)?;
+    report.to_html_report()?.generate_html(&report_path)?;
     Ok(())
 }
 
@@ -116,41 +104,12 @@ fn opossum() -> OpmResult<()> {
 
     //read scenery model from file and deserialize it
     let mut document = read_and_parse_model(&opossum_args.file_path)?;
-    let analyzers = document.analyzers();
-    let scenery = document.scenery_mut();
     //create the dot file of the scenery
     create_data_dir(&opossum_args.report_directory)?;
-    create_dot_file(&opossum_args.report_directory, scenery)?;
-    if analyzers.is_empty() {
-        info!("No analyzer defined in document. Stopping here.");
-    } else {
-        for ana in analyzers.iter().enumerate() {
-            let analyzer: &dyn Analyzer = match ana.1 {
-                AnalyzerType::Energy => &EnergyAnalyzer::default(),
-                AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
-                AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config.clone()),
-                _ => {
-                    return Err(OpossumError::Analysis(
-                        "specified analyzer not found".into(),
-                    ))
-                }
-            };
-            info!("Analysis #{}", ana.0);
-            scenery.clear_edges();
-            scenery.reset_data();
-            analyzer.analyze(scenery)?;
-            #[cfg(feature = "bevy")]
-            let analysis_report = create_report_and_data_files(
-                &opossum_args.report_directory,
-                base_file_name,
-                &scenery,
-                &opossum_args.analyzer,
-            )?;
-            #[cfg(not(feature = "bevy"))]
-            create_report_and_data_files(&opossum_args.report_directory, analyzer, ana.0, scenery)?;
-            #[cfg(feature = "bevy")]
-            bevy_main::bevy_main(SceneryBevyData::from_report(&analysis_report));
-        }
+    create_dot_file(&opossum_args.report_directory, document.scenery())?;
+    let reports = document.analyze()?;
+    for report in reports.iter().enumerate() {
+        create_report_and_data_files(&opossum_args.report_directory, report.1, report.0)?;
     }
     Ok(())
 }
@@ -182,12 +141,11 @@ mod test {
     fn create_report_file_test() {
         let mut document =
             read_and_parse_model(&Path::new("./files_for_testing/opm/opticscenery.opm")).unwrap();
-        let scenery = document.scenery_mut();
+        let reports = document.analyze().unwrap();
         let report_file = create_report_and_data_files(
             &Path::new("./files_for_testing/report/_not_valid/"),
-            &EnergyAnalyzer::default(),
+            &reports[0],
             0,
-            &scenery,
         );
         assert!(report_file.is_err());
     }

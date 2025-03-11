@@ -72,9 +72,9 @@ use uuid::Uuid;
 /// **Note**: The group node does currently ignore all [`Aperture`](crate::aperture::Aperture) definitions on its publicly
 /// mapped input and output ports.
 pub struct NodeGroup {
-    #[serde(skip)]
-    graph: OpticGraph,
     node_attr: NodeAttr,
+    // #[serde(skip)]
+    graph: OpticGraph,
     #[serde(skip)]
     input_port_distances: BTreeMap<String, Length>,
     #[serde(skip)]
@@ -89,9 +89,6 @@ impl Default for NodeGroup {
                 "show group fully expanded in dot diagram?",
                 false.into(),
             )
-            .unwrap();
-        node_attr
-            .create_property("graph", "optical graph", OpticGraph::default().into())
             .unwrap();
         Self {
             graph: OpticGraph::default(),
@@ -129,10 +126,6 @@ impl NodeGroup {
         let node_id = self.graph.add_node(node)?;
         // save uuid of node in rays if present
         self.store_node_uuid_in_rays_bundle(node_id)?;
-
-        self.node_attr
-            .set_property("graph", self.graph.clone().into())
-            .unwrap();
         Ok(node_id)
     }
     /// Adds a node to the graph by reference.
@@ -156,9 +149,6 @@ impl NodeGroup {
         self.graph.add_node_ref(node)?;
         // save uuid of node in rays if present
         // self.store_node_uuid_in_rays_bundle(&node.optical_ref.borrow(), idx)?;
-        self.node_attr
-            .set_property("graph", self.graph.clone().into())
-            .unwrap();
         Ok(uuid)
     }
     fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
@@ -220,8 +210,6 @@ impl NodeGroup {
     ///   - the source node / port or target node / port does not exist.
     ///   - the source node / port or target node / port is already connected.
     ///   - the node connection would form a loop in the graph.
-    ///
-    /// In addition this function returns an [`OpossumError::Properties`] if the (internal) property "graph" cannot be set.
     pub fn connect_nodes(
         &mut self,
         src_id: Uuid,
@@ -250,9 +238,7 @@ impl NodeGroup {
         external_name: &str,
     ) -> OpmResult<()> {
         self.graph
-            .map_port(input_node, &PortType::Input, internal_name, external_name)?;
-        self.node_attr
-            .set_property("graph", self.graph.clone().into())
+            .map_port(input_node, &PortType::Input, internal_name, external_name)
     }
     /// Map an output port of an internal node to an external port of the group.
     ///
@@ -271,9 +257,7 @@ impl NodeGroup {
         external_name: &str,
     ) -> OpmResult<()> {
         self.graph
-            .map_port(output_node, &PortType::Output, internal_name, external_name)?;
-        self.node_attr
-            .set_property("graph", self.graph.clone().into())
+            .map_port(output_node, &PortType::Output, internal_name, external_name)
     }
     /// Defines and returns the node/port identifier to connect the edges in the dot format
     /// # Parameters
@@ -499,9 +483,15 @@ impl NodeGroup {
         }
     }
 
-    ///clears the edges of a graph. Necessary for ghost focus analysis
+    /// Clears the edges of a graph. Necessary for ghost focus analysis.
     pub fn clear_edges(&mut self) {
         self.graph.clear_edges();
+    }
+    /// Sets the graph of this [`NodeGroup`].
+    ///
+    /// This function shoud be used with caution. It is mainly used for deserialization purposes.
+    pub fn set_graph(&mut self, graph: OpticGraph) {
+        self.graph = graph;
     }
 }
 
@@ -525,10 +515,6 @@ impl OpticNode for NodeGroup {
         Ok(self)
     }
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
-        // Synchronize properties with (internal) graph structure.
-        if let Proptype::OpticGraph(g) = &self.node_attr.get_property("graph")? {
-            self.graph = g.clone();
-        }
         self.graph.set_is_inverted(self.node_attr.inverted());
         Ok(())
     }

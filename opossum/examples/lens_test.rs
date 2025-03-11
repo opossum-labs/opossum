@@ -30,7 +30,7 @@ fn main() -> OpmResult<()> {
         millimeter!(205.55),
         millimeter!(-205.55),
         millimeter!(2.79),
-        &RefrIndexConst::new(1.5068).unwrap(),
+        &RefrIndexConst::new(1.5068)?,
     )?
     .with_tilt(degree!(15.0, 0.0, 0.0))?;
     let l2 = scenery.add_node(lens2)?;
