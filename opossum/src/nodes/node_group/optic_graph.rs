@@ -94,13 +94,13 @@ impl OpticGraph {
     ///
     /// # Panics
     /// This function could theoretically panic if the uuid of the node is not found while looping over all nodes.
-    pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<()> {
+    pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
         if self.is_inverted {
             return Err(OpossumError::OpticGroup(
                 "cannot delete nodes if group is set as inverted".into(),
             ));
         }
-        let mut node_deleted = false;
+        let mut nodes_deleted = vec![];
         while let Some(node_idx) = self.next_node_with_uuid(node_id) {
             // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
             let node_id = self.node_by_idx(node_idx).unwrap().uuid();
@@ -109,14 +109,14 @@ impl OpticGraph {
             self.input_port_map.remove_mapping_by_uuid(node_id);
             self.output_port_map.remove_mapping_by_uuid(node_id);
 
-            node_deleted = true;
+            nodes_deleted.push(node_id);
         }
-        if !node_deleted {
+        if nodes_deleted.is_empty() {
             return Err(OpossumError::OpticScenery(
                 "node with given uuid does not exist".into(),
             ));
         }
-        Ok(())
+        Ok(nodes_deleted)
     }
     /// Return the first [`NodeId`] with the given [`Uuid`] in this [`OpticGraph`].
     ///
@@ -1630,9 +1630,10 @@ mod test {
         graph.set_is_inverted(false);
         assert_eq!(graph.g.node_count(), 3);
         assert_eq!(graph.g.edge_count(), 2);
-        graph.delete_node(i_d2).unwrap();
+        let deleted_nodes = graph.delete_node(i_d2).unwrap();
         assert_eq!(graph.g.node_count(), 2);
         assert_eq!(graph.g.edge_count(), 0);
+        assert!(deleted_nodes.contains(&i_d2));
     }
     #[test]
     fn delete_node_with_ref() {
@@ -1661,11 +1662,13 @@ mod test {
         assert_eq!(graph.g.edge_count(), 3);
         assert_eq!(graph.input_port_map.len(), 1);
         assert_eq!(graph.output_port_map.len(), 1);
-        graph.delete_node(i_d1).unwrap();
+        let deleted_nodes = graph.delete_node(i_d1).unwrap();
         assert_eq!(graph.g.node_count(), 2);
         assert_eq!(graph.g.edge_count(), 0);
         assert_eq!(graph.input_port_map.len(), 0);
         assert_eq!(graph.output_port_map.len(), 1);
+        assert!(deleted_nodes.contains(&i_d1));
+        assert!(deleted_nodes.contains(&i_ref));
     }
     #[test]
     fn delete_node_with_mapped_ref() {
