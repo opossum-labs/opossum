@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
-use nalgebra::Vector3;
-use crate::ray::Ray;
 use super::{Coating, CoatingType};
+use crate::ray::Ray;
+use nalgebra::Vector3;
 
 /// Simulation of a Fresnel reflection (e.g. uncaoted surface)
 ///

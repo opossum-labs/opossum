@@ -1039,12 +1039,6 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
     }
     Ok(())
 }
-
-impl From<OpticGraph> for Proptype {
-    fn from(value: OpticGraph) -> Self {
-        Self::OpticGraph(value)
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;

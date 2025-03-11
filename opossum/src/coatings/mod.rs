@@ -20,9 +20,9 @@ pub enum CoatingType {
     IdealAR,
     /// Ideal coating with a constant given reflectivity
     ConstantR {
-        /// Reflectivity of the coating. Must be in the range [0.0, 1.0] where 0.0 means 
-        /// no reflection and 1.0 means full reflection. 
-        reflectivity: f64
+        /// Reflectivity of the coating. Must be in the range [0.0, 1.0] where 0.0 means
+        /// no reflection and 1.0 means full reflection.
+        reflectivity: f64,
     },
     /// Fesnel reflection (e.g. uncaoted surface)
     Fresnel,
@@ -57,7 +57,7 @@ impl CoatingType {
     }
 }
 /// Trait for optical coatings
-/// 
+///
 /// Each coating model must implement this trait to be used in the ray tracing simulation.
 pub trait Coating {
     /// Calculate the reflectivity based on the concrete model for an incoming [`Ray`] on a surface with
