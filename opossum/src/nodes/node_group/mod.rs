@@ -296,7 +296,7 @@ impl NodeGroup {
                     "port {port_name} is not mapped"
                 )));
             };
-            Ok(format!("i{}:{}", port_info.0, port_info.1))
+            Ok(format!("i{}:{}", port_info.0.as_simple().to_string(), port_info.1))
         } else {
             Ok(format!("{node_id}:{port_name}"))
         }
