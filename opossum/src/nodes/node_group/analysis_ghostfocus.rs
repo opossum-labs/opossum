@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use super::NodeGroup;
 use crate::{
     analyzers::{ghostfocus::AnalysisGhostFocus, GhostFocusConfig},

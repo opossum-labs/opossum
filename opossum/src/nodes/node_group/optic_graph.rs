@@ -34,6 +34,8 @@ use std::{
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
 
+type ConnectionInfo = (Uuid, String, Uuid, String, Length);
+
 /// Data structure representing an optical graph
 #[derive(Debug, Default, Clone)]
 pub struct OpticGraph {
@@ -853,34 +855,34 @@ impl Serialize for OpticGraph {
     where
         S: serde::Serializer,
     {
-        let g = self.g.clone();
         let mut graph = serializer.serialize_struct("graph", 4)?;
-        let nodes = g.node_weights().cloned().collect::<Vec<OpticRef>>();
+        let nodes = self.g.node_weights().cloned().collect::<Vec<OpticRef>>();
         graph.serialize_field("nodes", &nodes)?;
-        let edgeidx = g
+        let edgeidx = self
+            .g
             .edge_indices()
             .map(|e| {
                 (
-                    g.node_weight(g.edge_endpoints(e).unwrap().0)
+                    self.g
+                        .node_weight(self.g.edge_endpoints(e).unwrap().0)
                         .unwrap()
                         .uuid(),
-                    g.node_weight(g.edge_endpoints(e).unwrap().1)
+                    self.g.edge_weight(e).unwrap().src_port().to_owned(),
+                    self.g
+                        .node_weight(self.g.edge_endpoints(e).unwrap().1)
                         .unwrap()
                         .uuid(),
-                    g.edge_weight(e).unwrap().src_port(),
-                    g.edge_weight(e).unwrap().target_port(),
-                    *g.edge_weight(e).unwrap().distance(),
+                    self.g.edge_weight(e).unwrap().target_port().to_owned(),
+                    *self.g.edge_weight(e).unwrap().distance(),
                 )
             })
-            .collect::<Vec<EdgeInfo<'_>>>();
+            .collect::<Vec<ConnectionInfo>>();
         graph.serialize_field("edges", &edgeidx)?;
         graph.serialize_field("input_map", &self.input_port_map)?;
         graph.serialize_field("output_map", &self.output_port_map)?;
         graph.end()
     }
 }
-
-type EdgeInfo<'a> = (Uuid, Uuid, &'a str, &'a str, Length);
 
 impl<'de> Deserialize<'de> for OpticGraph {
     #[allow(clippy::too_many_lines)]
@@ -943,7 +945,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
             {
                 let mut g = OpticGraph::default();
                 let mut nodes: Option<Vec<OpticRef>> = None;
-                let mut edges: Option<Vec<EdgeInfo<'_>>> = None;
+                let mut edges: Option<Vec<ConnectionInfo>> = None;
                 let mut input_map: Option<PortMap> = None;
                 let mut output_map: Option<PortMap> = None;
                 while let Some(key) = map.next_key()? {
@@ -958,7 +960,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                             if edges.is_some() {
                                 return Err(de::Error::duplicate_field("edges"));
                             }
-                            edges = Some(map.next_value::<Vec<EdgeInfo<'_>>>()?);
+                            edges = Some(map.next_value::<Vec<ConnectionInfo>>()?);
                         }
                         Field::InputPortMap => {
                             if input_map.is_some() {
@@ -985,7 +987,7 @@ impl<'de> Deserialize<'de> for OpticGraph {
                         .map_err(|e| de::Error::custom(e.to_string()))?;
                 }
                 for edge in &edges {
-                    g.connect_nodes(edge.0, edge.2, edge.1, edge.3, edge.4)
+                    g.connect_nodes(edge.0, &edge.1, edge.2, &edge.3, edge.4)
                         .map_err(|e| {
                             de::Error::custom(format!("connecting OpticGraph nodes failed: {e}"))
                         })?;
@@ -1036,12 +1038,6 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
         ref_node.node_attr_mut().set_name(&ref_name);
     }
     Ok(())
-}
-
-impl From<OpticGraph> for Proptype {
-    fn from(value: OpticGraph) -> Self {
-        Self::OpticGraph(value)
-    }
 }
 #[cfg(test)]
 mod test {

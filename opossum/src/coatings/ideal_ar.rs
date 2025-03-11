@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use super::{Coating, CoatingType};
 use crate::ray::Ray;
 use nalgebra::Vector3;

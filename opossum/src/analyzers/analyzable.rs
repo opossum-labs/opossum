@@ -1,5 +1,5 @@
 //! Marker trait for an optical node that can be analyzed
-
+#![warn(missing_docs)]
 use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,

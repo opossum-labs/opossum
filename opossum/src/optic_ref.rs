@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    nodes::{create_node_ref, NodeAttr},
+    nodes::{create_node_ref, NodeAttr, OpticGraph},
     optic_senery_rsc::SceneryResources,
 };
 
@@ -95,6 +95,14 @@ impl Serialize for OpticRef {
                 .expect("Mutex lock failed")
                 .node_attr(),
         )?;
+        if let Ok(group_node) = self
+            .optical_ref
+            .lock()
+            .expect("Mutex lock failed")
+            .as_group()
+        {
+            node.serialize_field("graph", &group_node.graph())?;
+        }
         node.end()
     }
 }
@@ -108,8 +116,9 @@ impl<'de> Deserialize<'de> for OpticRef {
         enum Field {
             NodeType,
             Attributes,
+            Graph,
         }
-        const FIELDS: &[&str] = &["type", "attributes"];
+        const FIELDS: &[&str] = &["type", "attributes", "graph"];
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -125,7 +134,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                         &self,
                         formatter: &mut std::fmt::Formatter<'_>,
                     ) -> std::fmt::Result {
-                        formatter.write_str("`type`, or `attributes`")
+                        formatter.write_str("`type`, `attributes`, or `graph`")
                     }
                     fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
                     where
@@ -134,6 +143,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                         match value {
                             "type" => Ok(Field::NodeType),
                             "attributes" => Ok(Field::Attributes),
+                            "graph" => Ok(Field::Graph),
                             _ => Err(de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -177,6 +187,7 @@ impl<'de> Deserialize<'de> for OpticRef {
             {
                 let mut node_type = None;
                 let mut node_attributes = None;
+                let mut node_graph = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::NodeType => {
@@ -191,6 +202,12 @@ impl<'de> Deserialize<'de> for OpticRef {
                             }
                             node_attributes = Some(map.next_value::<NodeAttr>()?);
                         }
+                        Field::Graph => {
+                            if node_graph.is_some() {
+                                return Err(de::Error::duplicate_field("graph"));
+                            }
+                            node_graph = Some(map.next_value::<OpticGraph>()?);
+                        }
                     }
                 }
                 let node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
@@ -202,6 +219,15 @@ impl<'de> Deserialize<'de> for OpticRef {
                     .lock()
                     .expect("Mutex lock failed")
                     .set_node_attr(node_attributes);
+                if let Ok(group_node) = node
+                    .optical_ref
+                    .lock()
+                    .expect("Mutex lock failed")
+                    .as_group()
+                {
+                    group_node
+                        .set_graph(node_graph.ok_or_else(|| de::Error::missing_field("graph"))?);
+                }
                 // group node: assign props to graph
                 node.optical_ref
                     .lock()

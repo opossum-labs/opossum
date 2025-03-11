@@ -174,7 +174,7 @@ impl<'a> IntoIterator for &'a Properties {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{nodes::OpticGraph, utils::test_helper::test_helper::check_logs};
+    use crate::utils::test_helper::test_helper::check_logs;
     use assert_matches::assert_matches;
     use log::Level;
     #[test]
@@ -228,10 +228,6 @@ mod test {
         assert_eq!(html_props.name, "my prop");
         assert_eq!(html_props.description, "my description");
         assert_eq!(html_props.prop_value, "1");
-
-        props
-            .create("my graph", "my description", OpticGraph::default().into())
-            .unwrap();
         let html_props = props.html_props("test123");
         assert_eq!(html_props.len(), 1);
     }

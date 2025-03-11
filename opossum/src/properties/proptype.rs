@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+//! Module for handling properties of optical nodes.
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     aperture::Aperture,
@@ -7,8 +9,7 @@ use crate::{
         fluence_detector::{fluence_data::FluenceData, Fluence},
         ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity,
-        FilterType, Metertype, OpticGraph, Spectrometer, SpectrometerType, SpotDiagram,
-        WaveFrontData,
+        FilterType, Metertype, Spectrometer, SpectrometerType, SpotDiagram, WaveFrontData,
     },
     optic_ports::OpticPorts,
     ray::SplittingConfig,
@@ -52,8 +53,6 @@ pub enum Proptype {
     Bool(bool),
     /// An optional [`LightData`] property
     LightData(EnumProxy<Option<LightData>>),
-    /// A property for storing a complete `OpticGraph` to be used by [`NodeGroup`](crate::nodes::NodeGroup).
-    OpticGraph(OpticGraph),
     /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterType(EnumProxy<FilterType>),
     /// Property for storing a [`SplittingConfig`] of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
@@ -95,8 +94,9 @@ pub enum Proptype {
     Length(Length),
     /// an energy value
     Energy(Energy),
-    /// a optical refractive index model
+    /// a (2D) geometric angle (e.g. component tilt)
     Angle(Angle),
+    /// an optical refractive index model
     RefractiveIndex(EnumProxy<RefractiveIndexType>),
     /// a (node) location / orientation
     Isometry(EnumProxy<Option<Isometry>>),
@@ -232,6 +232,7 @@ impl From<Vector2<f64>> for Proptype {
         Self::Vec2(value)
     }
 }
+/// Generate a string suffix for an ordinal number
 #[must_use]
 pub fn count_str(i: usize) -> String {
     let mod_i = i % 10;
@@ -244,6 +245,9 @@ pub fn count_str(i: usize) -> String {
     format!("{i}{suf}")
 }
 
+/// Generate a value string with a SI prefix.
+///
+/// Helper function to format a value with a SI prefix.
 #[must_use]
 pub fn format_value_with_prefix(value: f64) -> String {
     if value.is_nan() {
