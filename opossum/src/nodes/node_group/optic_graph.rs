@@ -261,6 +261,40 @@ impl OpticGraph {
         self.output_port_map.remove_mapping(src_id, src_port);
         Ok(())
     }
+    /// Disconnect two optical nodes within this [`OpticGraph`].
+    ///
+    /// This function deletes the connection between two nodes, referenced by the [`Uuid`] of the
+    /// source node and the name of the source port. **Note**: It's not necessary to specify the target node,
+    /// as the connection is uniquely identified by the source node and the source port.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///  - the node with the given [`Uuid`] does not exist.
+    ///  - the node's given port is not connected.
+    pub fn disconnect_nodes(&mut self, src_id: Uuid, src_port: &str) -> OpmResult<()> {
+        let src_idx = self.node_idx_by_uuid(src_id).ok_or_else(|| {
+            OpossumError::OpticScenery("node with given index does not exist".into())
+        })?;
+        let edges = self.g.edges_directed(src_idx, Direction::Outgoing);
+        let edge_ref = edges
+            .into_iter()
+            .filter(|idx| idx.weight().src_port() == src_port)
+            .last();
+        if let Some(edge_ref) = edge_ref {
+            self.g.remove_edge(edge_ref.id());
+            Ok(())
+        } else {
+            let node_ref = self.node(src_id)?;
+            let node_info = node_ref
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            Err(OpossumError::OpticScenery(format!(
+                "source node {node_info} with port <{src_port}> is not connected"
+            )))
+        }
+    }
     /// Returns a reference to the input port map of this [`OpticGraph`].
     #[must_use]
     pub const fn port_map(&self, port_type: &PortType) -> &PortMap {
@@ -1698,5 +1732,19 @@ mod test {
         assert_eq!(graph.g.edge_count(), 0);
         assert_eq!(graph.input_port_map.len(), 0);
         assert_eq!(graph.output_port_map.len(), 0);
+    }
+    #[test]
+    fn disconnect_nodes() {
+        let mut graph = OpticGraph::default();
+        let i_d1 = graph.add_node(Dummy::default()).unwrap();
+        let i_d2 = graph.add_node(Dummy::default()).unwrap();
+        graph
+            .connect_nodes(i_d1, "output_1", i_d2, "input_1", Length::zero())
+            .unwrap();
+        assert_eq!(graph.g.edge_count(), 1);
+        assert!(graph.disconnect_nodes(Uuid::nil(), "output_1").is_err());
+        assert!(graph.disconnect_nodes(i_d1, "wrong").is_err());
+        graph.disconnect_nodes(i_d1, "output_1").unwrap();
+        assert_eq!(graph.g.edge_count(), 0);
     }
 }
