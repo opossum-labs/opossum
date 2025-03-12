@@ -265,23 +265,16 @@ impl Spectrum {
     /// The calculated value represents the average wavelength and is therefore returned as the "center wavelength" of this [`Spectrum`].
     #[must_use]
     pub fn center_wavelength(&self) -> Length {
-        let spec_int_vec = self
-            .data
-            .windows(2)
-            .map(|l| (l[1].0 - l[0].0) * (l[1].1 + l[0].1))
-            .collect::<Vec<f64>>();
-        let weighted_spec_int_vec = self
-            .data
-            .windows(2)
-            .map(|l| (l[1].0 - l[0].0) * (l[1].1.mul_add(l[1].0, l[0].1 * l[0].0)))
-            .collect::<Vec<f64>>();
-
-        let weighted_spec_int_kahan: kahan::KahanSum<f64> =
-            weighted_spec_int_vec.iter().kahan_sum();
-        let spec_int_kahan: kahan::KahanSum<f64> = spec_int_vec.iter().kahan_sum();
-        let center_wavelength = weighted_spec_int_kahan.sum() / spec_int_kahan.sum();
-
-        micrometer!(center_wavelength)
+        let mut weighted_sum = 0.0;
+        let mut total_weight = 0.0;
+        for bin in self.data.windows(2) {
+            let bin_width = bin[1].0 - bin[0].0;
+            let bin_center = bin[0].0;
+            let bin_weight = bin[0].1 * bin_width;
+            weighted_sum += bin_center * bin_weight;
+            total_weight += bin_weight;
+        }
+        micrometer!(weighted_sum / total_weight)
     }
     /// Return the value at a given wavelength.
     ///

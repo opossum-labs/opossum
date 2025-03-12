@@ -2293,6 +2293,22 @@ mod test {
         );
     }
     #[test]
+    fn to_spectrum_central_wvl() {
+        let e = joule!(1.0);
+        let mut rays = Rays::default();
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), e).unwrap();
+        rays.add_ray(ray);
+        let ray = Ray::new_collimated(Point3::origin(), nanometer!(527.0), e).unwrap();
+        rays.add_ray(ray);
+        assert_relative_eq!(
+            rays.to_spectrum(&nanometer!(0.1))
+                .unwrap()
+                .center_wavelength()
+                .value,
+            nanometer!(790.0).value
+        );
+    }
+    #[test]
     fn split() {
         let ray1 = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0)).unwrap();
         let ray2 = Ray::new_collimated(Point3::origin(), nanometer!(1050.0), joule!(2.0)).unwrap();
@@ -2302,8 +2318,6 @@ mod test {
         assert!(rays.split(&SplittingConfig::Ratio(1.1)).is_err());
         assert!(rays.split(&SplittingConfig::Ratio(-0.1)).is_err());
         let split_rays = rays.split(&SplittingConfig::Ratio(0.2)).unwrap();
-        // assert_eq!(rays.absolute_z_of_last_surface(), z_position);
-        // assert_eq!(split_rays.absolute_z_of_last_surface(), z_position);
         assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
         assert_abs_diff_eq!(
             split_rays.total_energy().get::<joule>(),
