@@ -16,7 +16,7 @@ use crate::{
     lightdata::LightData,
     nodes::{fluence_detector::Fluence, NodeAttr, NodeGroup, NodeReference},
     optic_ports::{OpticPorts, PortType},
-    optic_senery_rsc::SceneryResources,
+    optic_scenery_rsc::SceneryResources,
     properties::{Properties, Proptype},
     rays::Rays,
     refractive_index::RefractiveIndexType,

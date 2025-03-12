@@ -73,7 +73,6 @@ use uuid::Uuid;
 /// mapped input and output ports.
 pub struct NodeGroup {
     node_attr: NodeAttr,
-    // #[serde(skip)]
     graph: OpticGraph,
     #[serde(skip)]
     input_port_distances: BTreeMap<String, Length>,

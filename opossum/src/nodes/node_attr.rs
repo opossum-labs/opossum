@@ -10,7 +10,7 @@ use super::fluence_detector::Fluence;
 use crate::{
     error::{OpmResult, OpossumError},
     optic_ports::OpticPorts,
-    optic_senery_rsc::SceneryResources,
+    optic_scenery_rsc::SceneryResources,
     properties::{Properties, Proptype},
     utils::geom_transformation::Isometry,
     J_per_cm2,

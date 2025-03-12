@@ -1,3 +1,4 @@
+//! General endpoints
 use actix_web::{
     get,
     web::{self, Data},

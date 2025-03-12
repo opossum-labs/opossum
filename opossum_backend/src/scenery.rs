@@ -1,3 +1,4 @@
+//! Routes for managing the scenery (top-level NodeGroup)
 use crate::app_state::AppState;
 use actix_web::{
     get, post,

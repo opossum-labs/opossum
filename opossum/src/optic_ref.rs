@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::{
     analyzers::Analyzable,
     nodes::{create_node_ref, NodeAttr, OpticGraph},
-    optic_senery_rsc::SceneryResources,
+    optic_scenery_rsc::SceneryResources,
 };
 
 #[derive(Clone)]

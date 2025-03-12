@@ -8,7 +8,7 @@ use crate::{
     optic_node::OpticNode,
     optic_ports::PortType,
     optic_ref::OpticRef,
-    optic_senery_rsc::SceneryResources,
+    optic_scenery_rsc::SceneryResources,
     port_map::PortMap,
     properties::{proptype::format_quantity, Proptype},
 };
