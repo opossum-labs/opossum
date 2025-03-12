@@ -238,6 +238,20 @@ impl NodeGroup {
         self.graph
             .connect_nodes(src_id, src_port, target_id, target_port, distance)
     }
+    /// Disconnect two optical nodes within this [`NodeGroup`].
+    ///
+    /// This function deletes the connection between two nodes, referenced by the [`Uuid`] of the
+    /// source node and the name of the source port. **Note**: It's not necessary to specify the target node,
+    /// as the connection is uniquely identified by the source node and the source port.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///  - the node with the given [`Uuid`] does not exist.
+    ///  - the node's given port is not connected.
+    pub fn disconnect_nodes(&mut self, src_id: Uuid, src_port: &str) -> OpmResult<()> {
+        self.graph.disconnect_nodes(src_id, src_port)
+    }
     /// Map an input port of an internal node to an external port of the group.
     ///
     /// In oder to use a [`NodeGroup`] from the outside, internal nodes / ports must be mapped to be visible. The
