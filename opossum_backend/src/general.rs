@@ -1,15 +1,14 @@
 //! General endpoints
+use crate::app_state::AppState;
 use actix_web::{
     get,
     web::{self, Data},
-    HttpResponse, Responder, Result,
+    Responder,
 };
 use opossum::get_version;
 use serde::Serialize;
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
-
-use crate::app_state::AppState;
 
 /// Generate a nice welcome
 ///
@@ -17,7 +16,7 @@ use crate::app_state::AppState;
 #[utoipa::path(get, path="/", responses((status = 200, body = str)), tag="general")]
 #[get("/")]
 pub async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("OPOSSUM backend")
+    "OPOSSUM backend"
 }
 
 /// Structure holding the version information
@@ -33,12 +32,11 @@ struct VersionInfo {
 
 #[utoipa::path(get, responses((status = OK, body = VersionInfo)), tag="general")]
 #[get("/version")]
-pub async fn version() -> Result<impl Responder> {
-    let version_info = VersionInfo {
+pub async fn version() -> impl Responder {
+    web::Json(VersionInfo {
         backend_version: env!("CARGO_PKG_VERSION").to_string(),
         opossum_version: get_version(),
-    };
-    Ok(web::Json(version_info))
+    })
 }
 
 pub fn configure(store: Data<AppState>) -> impl FnOnce(&mut ServiceConfig<'_>) {

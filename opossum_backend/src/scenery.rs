@@ -1,12 +1,10 @@
 //! Routes for managing the scenery (top-level NodeGroup)
 use crate::app_state::AppState;
 use actix_web::{
-    get, post,
-    web::{self, Data, Json},
-    HttpResponse, Responder,
+    delete, get, post, web::{self, Data, Json}, HttpResponse, Responder
 };
 use log::{error, info};
-use opossum::{meter, nodes::create_node_ref, optic_node::OpticNode, OpmDocument};
+use opossum::{analyzers::AnalyzerType, meter, nodes::create_node_ref, optic_node::OpticNode, OpmDocument, SceneryResources};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -26,8 +24,54 @@ async fn nr_of_nodes(data: web::Data<AppState>) -> impl Responder {
     let scenery = data.scenery.lock().unwrap();
     HttpResponse::Ok().body(scenery.nr_of_nodes().to_string())
 }
+#[utoipa::path(tag = "scenery")]
+#[get("/global_conf")]
+async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
+    let global_conf = data.global_conf.lock().unwrap();
+    HttpResponse::Ok().json(global_conf.clone())
+}
+#[utoipa::path(tag = "scenery")]
+#[post("/global_conf")]
+async fn post_global_conf(data: web::Data<AppState>, new_global_conf: web::Json<SceneryResources>) -> impl Responder {
+    let mut global_conf = data.global_conf.lock().unwrap();
+    *global_conf = new_global_conf.into_inner();
+    HttpResponse::Ok().json(global_conf.clone())
+}
+#[utoipa::path(tag = "scenery")]
+#[get("/analyzers")]
+async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
+    let analyzers = data.analyzers.lock().unwrap();
+    web::Json(analyzers.clone())
+}
+#[utoipa::path(tag = "scenery")]
+#[get("/analyzers/{index}")]
+async fn get_analyzer(data: web::Data<AppState>, index: web::Path<usize>) -> impl Responder {
+    let analyzers = data.analyzers.lock().unwrap();
+    analyzers.get(*index).map_or_else(
+        || HttpResponse::NotFound().body("Analyzer not found"),
+        |analyzer| HttpResponse::Ok().json(analyzer),
+    )
+}
+#[utoipa::path(tag = "scenery")]
+#[post("/analyzers")]
+async fn add_analyzer(data: web::Data<AppState>, analyzer: web::Json<AnalyzerType>) -> impl Responder {
+    let mut analyzers = data.analyzers.lock().unwrap();
+    analyzers.push(analyzer.into_inner());
+    web::Json(analyzers.clone())
+}
+#[utoipa::path(tag = "scenery")]
+#[delete("/analyzers/{index}")]
+async fn delete_analyzer(data: web::Data<AppState>, _index: web::Path<usize>) -> impl Responder {
+    let mut _analyzers = data.analyzers.lock().unwrap();
+    // if analyzers.remove(*index).is_some() {
+    //     HttpResponse::Ok().json(analyzers.clone())
+    // } else {
+        HttpResponse::NotFound().body("Analyzer not found")
+    // }
+}
+/// Add a new node to the toplevel scenery
 #[utoipa::path(tag = "node")]
-#[post("/node")]
+#[post("/nodes")]
 async fn add_node(data: web::Data<AppState>, node_type: String) -> impl Responder {
     if let Ok(node_ref) = create_node_ref(&node_type) {
         let mut scenery = data.scenery.lock().unwrap();
@@ -41,12 +85,10 @@ async fn add_node(data: web::Data<AppState>, node_type: String) -> impl Responde
     }
 }
 #[utoipa::path(tag = "node")]
-#[get("/node/{uuid}")]
-async fn get_node(data: web::Data<AppState>, uuid_str: web::Path<String>) -> impl Responder {
+#[get("/nodes/{uuid}")]
+async fn get_node(data: web::Data<AppState>, path: web::Path<Uuid>) -> impl Responder {
+    let uuid= path.into_inner();
     let scenery = data.scenery.lock().unwrap();
-    let Ok(uuid) = uuid_str.parse() else {
-        return HttpResponse::BadRequest().body("Invalid UUID");
-    };
     scenery.node(uuid).map_or_else(
         |_| HttpResponse::NotFound().body("Node not found"),
         |node| HttpResponse::Ok().json(node),
@@ -110,6 +152,12 @@ pub fn configure(store: Data<AppState>) -> impl FnOnce(&mut ServiceConfig<'_>) {
         config
             .app_data(store)
             .service(name)
+            .service(get_global_conf)
+            .service(post_global_conf)
+            .service(get_analyzers)
+            .service(get_analyzer)
+            .service(add_analyzer)
+            .service(delete_analyzer)
             .service(add_node)
             .service(get_node)
             .service(nr_of_nodes)

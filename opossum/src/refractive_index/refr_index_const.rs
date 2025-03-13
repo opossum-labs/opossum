@@ -3,6 +3,7 @@
 //! This model simply returns a wavelength independant constant value.
 use serde::Deserialize;
 use serde::Serialize;
+use utoipa::ToSchema;
 
 use super::{RefractiveIndex, RefractiveIndexType};
 use crate::error::OpmResult;
@@ -17,7 +18,7 @@ pub fn refr_index_vaccuum() -> RefractiveIndexType {
     RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap())
 }
 /// Constant refractive index model
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, ToSchema)]
 pub struct RefrIndexConst {
     refractive_index: f64,
 }
