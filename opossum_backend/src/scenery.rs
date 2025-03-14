@@ -1,16 +1,15 @@
 //! Routes for managing the scenery (top-level `NodeGroup`)
 use crate::{app_state::AppState, error::ErrorResponse};
 use actix_web::{
-    delete, get, post,
+    delete, get, post, put,
     web::{self, Data, Json},
     HttpResponse, Responder,
 };
-use log::{error, info};
 use opossum::{
     analyzers::AnalyzerType, meter, nodes::create_node_ref, optic_node::OpticNode,
     optic_ref::OpticRef, OpmDocument, SceneryResources,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -18,7 +17,7 @@ use uuid::Uuid;
 /// Get name of toplevel scenery
 #[utoipa::path(responses((status = 200, body = str)), tag="scenery")]
 #[get("/name")]
-async fn name(data: web::Data<AppState>) -> impl Responder {
+async fn get_name(data: web::Data<AppState>) -> impl Responder {
     let scenery = data.scenery.lock().unwrap();
     HttpResponse::Ok().body(scenery.name())
 }
@@ -105,8 +104,32 @@ async fn get_node(
     drop(scenery);
     Ok(web::Json(node_ref))
 }
-#[derive(ToSchema, Deserialize)]
-struct ConnectNodes {
+#[utoipa::path(tag = "node")]
+#[put("/nodes/{uuid}")]
+async fn put_node(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<OpticRef>, ErrorResponse> {
+    let uuid = path.into_inner();
+    let scenery = data.scenery.lock().unwrap();
+    let node_ref = scenery.node(uuid)?;
+    drop(scenery);
+    Ok(web::Json(node_ref))
+}
+#[utoipa::path(tag = "node")]
+#[delete("/nodes/{uuid}")]
+async fn delete_node(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<Vec<Uuid>>, ErrorResponse> {
+    let uuid = path.into_inner();
+    let mut scenery = data.scenery.lock().unwrap();
+    let deleted_nodes = scenery.delete_node(uuid)?;
+    drop(scenery);
+    Ok(web::Json(deleted_nodes))
+}
+#[derive(ToSchema, Serialize, Deserialize)]
+struct ConnectInfo {
     src_uuid: Uuid,
     src_port: String,
     target_uuid: Uuid,
@@ -117,22 +140,17 @@ struct ConnectNodes {
 #[post("/connect")]
 async fn connect_nodes(
     data: web::Data<AppState>,
-    connect_info: Json<ConnectNodes>,
-) -> impl Responder {
+    connect_info: Json<ConnectInfo>,
+) -> Result<Json<ConnectInfo>, ErrorResponse> {
     let mut scenery = data.scenery.lock().unwrap();
-    if let Err(e) = scenery.connect_nodes(
+    scenery.connect_nodes(
         connect_info.src_uuid,
         &connect_info.src_port,
         connect_info.target_uuid,
         &connect_info.target_port,
         meter!(connect_info.distance),
-    ) {
-        error!("error connecting nodes: {}", e.to_string());
-        HttpResponse::BadRequest().body(e.to_string())
-    } else {
-        info!("nodes connected");
-        HttpResponse::Ok().json("Nodes connected")
-    }
+    )?;
+    Ok(connect_info)
 }
 #[utoipa::path(tag = "scenery")]
 #[get("/opmfile")]
@@ -159,16 +177,18 @@ pub fn configure(store: Data<AppState>) -> impl FnOnce(&mut ServiceConfig<'_>) {
     |config: &mut ServiceConfig<'_>| {
         config
             .app_data(store)
-            .service(name)
+            .service(get_name)
             .service(get_global_conf)
             .service(post_global_conf)
             .service(get_analyzers)
             .service(get_analyzer)
             .service(add_analyzer)
             .service(delete_analyzer)
+            .service(nr_of_nodes)
             .service(add_node)
             .service(get_node)
-            .service(nr_of_nodes)
+            .service(put_node)
+            .service(delete_node)
             .service(connect_nodes)
             .service(get_opmfile)
             .service(load_opmfile);
