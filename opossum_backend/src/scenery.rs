@@ -1,10 +1,15 @@
-//! Routes for managing the scenery (top-level NodeGroup)
-use crate::app_state::AppState;
+//! Routes for managing the scenery (top-level `NodeGroup`)
+use crate::{app_state::AppState, error::ErrorResponse};
 use actix_web::{
-    delete, get, post, web::{self, Data, Json}, HttpResponse, Responder
+    delete, get, post,
+    web::{self, Data, Json},
+    HttpResponse, Responder,
 };
 use log::{error, info};
-use opossum::{analyzers::AnalyzerType, meter, nodes::create_node_ref, optic_node::OpticNode, OpmDocument, SceneryResources};
+use opossum::{
+    analyzers::AnalyzerType, meter, nodes::create_node_ref, optic_node::OpticNode,
+    optic_ref::OpticRef, OpmDocument, SceneryResources,
+};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -32,7 +37,10 @@ async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
 }
 #[utoipa::path(tag = "scenery")]
 #[post("/global_conf")]
-async fn post_global_conf(data: web::Data<AppState>, new_global_conf: web::Json<SceneryResources>) -> impl Responder {
+async fn post_global_conf(
+    data: web::Data<AppState>,
+    new_global_conf: web::Json<SceneryResources>,
+) -> impl Responder {
     let mut global_conf = data.global_conf.lock().unwrap();
     *global_conf = new_global_conf.into_inner();
     HttpResponse::Ok().json(global_conf.clone())
@@ -54,7 +62,10 @@ async fn get_analyzer(data: web::Data<AppState>, index: web::Path<usize>) -> imp
 }
 #[utoipa::path(tag = "scenery")]
 #[post("/analyzers")]
-async fn add_analyzer(data: web::Data<AppState>, analyzer: web::Json<AnalyzerType>) -> impl Responder {
+async fn add_analyzer(
+    data: web::Data<AppState>,
+    analyzer: web::Json<AnalyzerType>,
+) -> impl Responder {
     let mut analyzers = data.analyzers.lock().unwrap();
     analyzers.push(analyzer.into_inner());
     web::Json(analyzers.clone())
@@ -66,33 +77,33 @@ async fn delete_analyzer(data: web::Data<AppState>, _index: web::Path<usize>) ->
     // if analyzers.remove(*index).is_some() {
     //     HttpResponse::Ok().json(analyzers.clone())
     // } else {
-        HttpResponse::NotFound().body("Analyzer not found")
+    HttpResponse::NotFound().body("Analyzer not found")
     // }
 }
 /// Add a new node to the toplevel scenery
 #[utoipa::path(tag = "node")]
 #[post("/nodes")]
-async fn add_node(data: web::Data<AppState>, node_type: String) -> impl Responder {
-    if let Ok(node_ref) = create_node_ref(&node_type) {
-        let mut scenery = data.scenery.lock().unwrap();
-        if scenery.add_node_ref(node_ref.clone()).is_ok() {
-            HttpResponse::Ok().json(node_ref)
-        } else {
-            HttpResponse::InternalServerError().json("Failed to add node")
-        }
-    } else {
-        HttpResponse::BadRequest().body(format!("Node type '{node_type}' not found"))
-    }
+async fn add_node(
+    data: web::Data<AppState>,
+    node_type: String,
+) -> Result<Json<OpticRef>, ErrorResponse> {
+    let node_ref = create_node_ref(&node_type)?;
+    let mut scenery = data.scenery.lock().unwrap();
+    scenery.add_node_ref(node_ref.clone())?;
+    drop(scenery);
+    Ok(web::Json(node_ref))
 }
 #[utoipa::path(tag = "node")]
 #[get("/nodes/{uuid}")]
-async fn get_node(data: web::Data<AppState>, path: web::Path<Uuid>) -> impl Responder {
-    let uuid= path.into_inner();
+async fn get_node(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<OpticRef>, ErrorResponse> {
+    let uuid = path.into_inner();
     let scenery = data.scenery.lock().unwrap();
-    scenery.node(uuid).map_or_else(
-        |_| HttpResponse::NotFound().body("Node not found"),
-        |node| HttpResponse::Ok().json(node),
-    )
+    let node_ref = scenery.node(uuid)?;
+    drop(scenery);
+    Ok(web::Json(node_ref))
 }
 #[derive(ToSchema, Deserialize)]
 struct ConnectNodes {
@@ -123,18 +134,15 @@ async fn connect_nodes(
         HttpResponse::Ok().json("Nodes connected")
     }
 }
-#[utoipa::path(tag = "node")]
+#[utoipa::path(tag = "scenery")]
 #[get("/opmfile")]
-async fn get_opmfile(data: web::Data<AppState>) -> impl Responder {
+async fn get_opmfile(data: web::Data<AppState>) -> Result<String, ErrorResponse> {
     let scenery = data.scenery.lock().unwrap();
     let doc = OpmDocument::new(scenery.clone());
     drop(scenery);
-    doc.to_opm_file_string().map_or_else(
-        |_| HttpResponse::UnprocessableEntity().body("Error writing to file"),
-        |doc_string| HttpResponse::Ok().body(doc_string),
-    )
+    Ok(doc.to_opm_file_string()?)
 }
-#[utoipa::path(tag = "node")]
+#[utoipa::path(tag = "scenery")]
 #[post("/opmfile")]
 async fn load_opmfile(data: web::Data<AppState>, opm_file_string: String) -> impl Responder {
     match &mut OpmDocument::from_string(&opm_file_string) {

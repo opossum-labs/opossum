@@ -15,9 +15,9 @@ pub use analyzable::Analyzable;
 pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 use std::fmt::Display;
 use strum::EnumIter;
+use utoipa::ToSchema;
 
 /// Type of analysis to be performed.
 ///

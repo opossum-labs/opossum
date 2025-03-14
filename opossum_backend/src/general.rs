@@ -6,7 +6,7 @@ use actix_web::{
     Responder,
 };
 use opossum::get_version;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 
@@ -20,7 +20,7 @@ pub async fn hello() -> impl Responder {
 }
 
 /// Structure holding the version information
-#[derive(ToSchema, Serialize)]
+#[derive(ToSchema, Serialize, Deserialize)]
 struct VersionInfo {
     /// version of the OPOSSUM API backend
     #[schema(example = "0.1.0")]
@@ -42,5 +42,28 @@ pub async fn version() -> impl Responder {
 pub fn configure(store: Data<AppState>) -> impl FnOnce(&mut ServiceConfig<'_>) {
     |config: &mut ServiceConfig<'_>| {
         config.app_data(store).service(version).service(hello);
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use actix_web::{body::to_bytes, dev::Service, http::StatusCode, test, App};
+
+    #[actix_web::test]
+    async fn get_hello() {
+        let app = test::init_service(App::new().service(hello)).await;
+        let req = test::TestRequest::get().uri("/").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let response_body = resp.into_body();
+        assert_eq!(to_bytes(response_body).await.unwrap(), "OPOSSUM backend");
+    }
+    #[actix_web::test]
+    async fn get_version() {
+        let app = test::init_service(App::new().service(version)).await;
+        let req = test::TestRequest::get().uri("/version").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let _: VersionInfo = test::read_body_json(resp).await;
     }
 }

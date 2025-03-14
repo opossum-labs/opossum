@@ -1,6 +1,6 @@
 use actix_cors::Cors;
 use actix_web::{
-    dev::Server, http::StatusCode, middleware::Logger, web, App, HttpResponse, HttpServer,
+    dev::Server, middleware::Logger, web, App, HttpResponse, HttpServer, ResponseError,
 };
 use env_logger::Env;
 use std::net::Ipv4Addr;
@@ -8,12 +8,12 @@ use utoipa::OpenApi;
 use utoipa_actix_web::AppExt;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{app_state::AppState, general, scenery};
+use crate::{app_state::AppState, error::ErrorResponse, general, scenery};
 
-async fn not_found() -> actix_web::Result<HttpResponse> {
-    Ok(HttpResponse::build(StatusCode::NOT_FOUND)
-        .content_type("text/html; charset=utf-8")
-        .body("<h1>Error 404</h1>"))
+async fn not_found() -> HttpResponse {
+    let error = ErrorResponse::not_found();
+    let mut res = actix_web::HttpResponseBuilder::new(error.status_code());
+    res.json(error)
 }
 
 /// Start the API server.

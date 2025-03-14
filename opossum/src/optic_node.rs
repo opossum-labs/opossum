@@ -238,7 +238,6 @@ pub trait OpticNode: Dottable {
             optic_surf.set_anchor_point_iso(anchor_point_iso);
         } else {
             let mut optic_surf = OpticSurface::default();
-            // optic_surf.set_aperture(Aperture::BinaryCircle(CircleConfig::new(centimeter!(1.25), centimeter!(0.,0.))?));
             optic_surf.set_geo_surface(geo_surface);
             optic_surf.set_anchor_point_iso(anchor_point_iso);
             self.ports_mut()
