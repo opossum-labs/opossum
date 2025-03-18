@@ -1,18 +1,12 @@
 //! Routes for managing the scenery (top-level `NodeGroup`)
 use crate::{app_state::AppState, error::ErrorResponse};
 use actix_web::{
-    delete, get, post, put,
-    web::{self, Data, Json},
+    delete, get, post,
+    web::{self, Data},
     HttpResponse, Responder,
 };
-use opossum::{
-    analyzers::AnalyzerType, meter, nodes::create_node_ref, optic_node::OpticNode,
-    optic_ref::OpticRef, OpmDocument, SceneryResources,
-};
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use opossum::{analyzers::AnalyzerType, optic_node::OpticNode, OpmDocument, SceneryResources};
 use utoipa_actix_web::service_config::ServiceConfig;
-use uuid::Uuid;
 
 /// Get name of toplevel scenery
 #[utoipa::path(responses((status = 200, body = str)), tag="scenery")]
@@ -79,79 +73,7 @@ async fn delete_analyzer(data: web::Data<AppState>, _index: web::Path<usize>) ->
     HttpResponse::NotFound().body("Analyzer not found")
     // }
 }
-/// Add a new node to the toplevel scenery
-#[utoipa::path(tag = "node")]
-#[post("/nodes")]
-async fn add_node(
-    data: web::Data<AppState>,
-    node_type: String,
-) -> Result<Json<OpticRef>, ErrorResponse> {
-    let node_ref = create_node_ref(&node_type)?;
-    let mut scenery = data.scenery.lock().unwrap();
-    scenery.add_node_ref(node_ref.clone())?;
-    drop(scenery);
-    Ok(web::Json(node_ref))
-}
-#[utoipa::path(tag = "node")]
-#[get("/nodes/{uuid}")]
-async fn get_node(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-) -> Result<Json<OpticRef>, ErrorResponse> {
-    let uuid = path.into_inner();
-    let scenery = data.scenery.lock().unwrap();
-    let node_ref = scenery.node(uuid)?;
-    drop(scenery);
-    Ok(web::Json(node_ref))
-}
-#[utoipa::path(tag = "node")]
-#[put("/nodes/{uuid}")]
-async fn put_node(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-) -> Result<Json<OpticRef>, ErrorResponse> {
-    let uuid = path.into_inner();
-    let scenery = data.scenery.lock().unwrap();
-    let node_ref = scenery.node(uuid)?;
-    drop(scenery);
-    Ok(web::Json(node_ref))
-}
-#[utoipa::path(tag = "node")]
-#[delete("/nodes/{uuid}")]
-async fn delete_node(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-) -> Result<Json<Vec<Uuid>>, ErrorResponse> {
-    let uuid = path.into_inner();
-    let mut scenery = data.scenery.lock().unwrap();
-    let deleted_nodes = scenery.delete_node(uuid)?;
-    drop(scenery);
-    Ok(web::Json(deleted_nodes))
-}
-#[derive(ToSchema, Serialize, Deserialize)]
-struct ConnectInfo {
-    src_uuid: Uuid,
-    src_port: String,
-    target_uuid: Uuid,
-    target_port: String,
-    distance: f64,
-}
-#[utoipa::path(tag = "node")]
-#[post("/connect")]
-async fn connect_nodes(
-    data: web::Data<AppState>,
-    connect_info: Json<ConnectInfo>,
-) -> Result<Json<ConnectInfo>, ErrorResponse> {
-    let mut scenery = data.scenery.lock().unwrap();
-    scenery.connect_nodes(
-        connect_info.src_uuid,
-        &connect_info.src_port,
-        connect_info.target_uuid,
-        &connect_info.target_port,
-        meter!(connect_info.distance),
-    )?;
-    Ok(connect_info)
-}
+
 #[utoipa::path(tag = "scenery")]
 #[get("/opmfile")]
 async fn get_opmfile(data: web::Data<AppState>) -> Result<String, ErrorResponse> {
@@ -162,15 +84,14 @@ async fn get_opmfile(data: web::Data<AppState>) -> Result<String, ErrorResponse>
 }
 #[utoipa::path(tag = "scenery")]
 #[post("/opmfile")]
-async fn load_opmfile(data: web::Data<AppState>, opm_file_string: String) -> impl Responder {
-    match &mut OpmDocument::from_string(&opm_file_string) {
-        Ok(doc) => {
-            let mut scenery = data.scenery.lock().unwrap();
-            doc.scenery_mut().clone_into(&mut scenery);
-            HttpResponse::Ok().body("")
-        }
-        Err(e) => HttpResponse::UnprocessableEntity().body(format!("Error reading file: {e}")),
-    }
+async fn post_opmfile(
+    data: web::Data<AppState>,
+    opm_file_string: String,
+) -> Result<&'static str, ErrorResponse> {
+    let doc = &mut OpmDocument::from_string(&opm_file_string)?;
+    let mut scenery = data.scenery.lock().unwrap();
+    doc.scenery_mut().clone_into(&mut scenery);
+    Ok("")
 }
 
 pub fn configure(store: Data<AppState>) -> impl FnOnce(&mut ServiceConfig<'_>) {
@@ -185,12 +106,7 @@ pub fn configure(store: Data<AppState>) -> impl FnOnce(&mut ServiceConfig<'_>) {
             .service(add_analyzer)
             .service(delete_analyzer)
             .service(nr_of_nodes)
-            .service(add_node)
-            .service(get_node)
-            .service(put_node)
-            .service(delete_node)
-            .service(connect_nodes)
             .service(get_opmfile)
-            .service(load_opmfile);
+            .service(post_opmfile);
     }
 }

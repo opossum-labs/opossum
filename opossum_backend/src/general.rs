@@ -10,15 +10,6 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 
-/// Generate a nice welcome
-///
-/// Simply return the text `OPOSSUM backend`.
-#[utoipa::path(get, path="/", responses((status = 200, body = str)), tag="general")]
-#[get("/")]
-pub async fn hello() -> impl Responder {
-    "OPOSSUM backend"
-}
-
 /// Structure holding the version information
 #[derive(ToSchema, Serialize, Deserialize)]
 struct VersionInfo {
@@ -30,7 +21,19 @@ struct VersionInfo {
     opossum_version: String,
 }
 
-#[utoipa::path(get, responses((status = OK, body = VersionInfo)), tag="general")]
+/// Return a welcome message
+///
+/// Simply return the text `OPOSSUM backend`. This is mostly for checking that the client is communication with the correct server.
+#[utoipa::path(get, path="/", responses((status = OK, description = "Fixed answer string", body = str, example = "OPOSSUM backend")), tag="general")]
+#[get("/")]
+pub async fn hello() -> &'static str {
+    "OPOSSUM backend"
+}
+
+/// Return a version information
+///
+/// Return the version numbers of the OPOSSUM library and the backend server.
+#[utoipa::path(get, responses((status = OK, description = "Version information", body = VersionInfo)), tag="general")]
 #[get("/version")]
 pub async fn version() -> impl Responder {
     web::Json(VersionInfo {

@@ -1,11 +1,18 @@
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use opossum::error::OpossumError;
 use serde::Serialize;
+use utoipa::ToSchema;
 
-#[derive(Debug, Serialize)]
+/// Structure holding an error mesaage
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ErrorResponse {
+    /// HTTP status
+    #[schema(example = "400")]
     status: u16,
+    /// Error category (normally corresponds to `OpossumError` enum)
+    #[schema(example = "OpticScenery")]
     category: String,
+    /// Description message of the error
     message: String,
 }
 impl ErrorResponse {

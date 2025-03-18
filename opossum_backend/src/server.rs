@@ -8,7 +8,7 @@ use utoipa::OpenApi;
 use utoipa_actix_web::AppExt;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{app_state::AppState, error::ErrorResponse, general, scenery};
+use crate::{app_state::AppState, error::ErrorResponse, general, nodes, scenery};
 
 async fn not_found() -> HttpResponse {
     let error = ErrorResponse::not_found();
@@ -46,6 +46,10 @@ pub fn start() -> Server {
             .map(|app| app.wrap(Logger::default()))
             .map(|app| app.wrap(Cors::permissive())) // change this in production !!!
             .app_data(app_state.clone())
+            .service(
+                utoipa_actix_web::scope("/api/scenery")
+                    .configure(nodes::configure(app_state.clone())),
+            )
             .service(
                 utoipa_actix_web::scope("/api/scenery")
                     .configure(scenery::configure(app_state.clone())),
