@@ -1,8 +1,7 @@
 //! General endpoints
-use crate::app_state::AppState;
 use actix_web::{
     get,
-    web::{self, Data},
+    web::{self},
     Responder,
 };
 use opossum::get_version;
@@ -41,12 +40,11 @@ pub async fn version() -> impl Responder {
         opossum_version: get_version(),
     })
 }
-
-pub fn configure(store: Data<AppState>) -> impl FnOnce(&mut ServiceConfig<'_>) {
-    |config: &mut ServiceConfig<'_>| {
-        config.app_data(store).service(version).service(hello);
-    }
+pub fn config(cfg: &mut ServiceConfig<'_>) {
+    cfg.service(version);
+    cfg.service(hello);
 }
+
 #[cfg(test)]
 mod test {
     use super::*;

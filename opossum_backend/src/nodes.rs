@@ -1,7 +1,7 @@
 use crate::{app_state::AppState, error::ErrorResponse};
 use actix_web::{
     delete, get, post, put,
-    web::{self, Data, Json},
+    web::{self, Json},
 };
 use opossum::{meter, nodes::create_node_ref, optic_ref::OpticRef};
 use serde::{Deserialize, Serialize};
@@ -27,9 +27,10 @@ async fn add_node(
     node_type: String,
 ) -> Result<Json<OpticRef>, ErrorResponse> {
     let node_ref = create_node_ref(&node_type)?;
-    let mut scenery = data.scenery.lock().unwrap();
+    let mut document = data.document.lock().unwrap();
+    let scenery = document.scenery_mut();
     scenery.add_node_ref(node_ref.clone())?;
-    drop(scenery);
+    drop(document);
     Ok(web::Json(node_ref))
 }
 #[utoipa::path(tag = "node",
@@ -44,9 +45,9 @@ async fn get_node(
     path: web::Path<Uuid>,
 ) -> Result<Json<OpticRef>, ErrorResponse> {
     let uuid = path.into_inner();
-    let scenery = data.scenery.lock().unwrap();
-    let node_ref = scenery.node(uuid)?;
-    drop(scenery);
+    let document = data.document.lock().unwrap();
+    let node_ref = document.scenery().node(uuid)?;
+    drop(document);
     Ok(web::Json(node_ref))
 }
 /// Update node properties
@@ -57,10 +58,12 @@ async fn put_node(
     path: web::Path<Uuid>,
 ) -> Result<Json<OpticRef>, ErrorResponse> {
     let uuid = path.into_inner();
-    let scenery = data.scenery.lock().unwrap();
-    let node_ref = scenery.node(uuid)?;
-    drop(scenery);
-    Ok(web::Json(node_ref))
+    let mut document = data.document.lock().unwrap();
+    let scenery = document.scenery_mut();
+    let _node_ref = scenery.node(uuid)?;
+    drop(document);
+    todo!();
+    // Ok(web::Json(node_ref))
 }
 /// Delete a node
 #[utoipa::path(tag = "node")]
@@ -70,9 +73,10 @@ async fn delete_node(
     path: web::Path<Uuid>,
 ) -> Result<Json<Vec<Uuid>>, ErrorResponse> {
     let uuid = path.into_inner();
-    let mut scenery = data.scenery.lock().unwrap();
+    let mut document = data.document.lock().unwrap();
+    let scenery = document.scenery_mut();
     let deleted_nodes = scenery.delete_node(uuid)?;
-    drop(scenery);
+    drop(document);
     Ok(web::Json(deleted_nodes))
 }
 /// Connection Information
@@ -90,7 +94,7 @@ struct ConnectInfo {
     distance: f64,
 }
 /// Connect two nodes
-/// 
+///
 /// Connect to optical nodes by the given connection info.
 #[utoipa::path(tag = "node")]
 #[post("/connection")]
@@ -98,13 +102,16 @@ async fn post_connection(
     data: web::Data<AppState>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, ErrorResponse> {
-    data.scenery.lock().unwrap().connect_nodes(
+    let mut document = data.document.lock().unwrap();
+    let scenery = document.scenery_mut();
+    scenery.connect_nodes(
         connect_info.src_uuid,
         &connect_info.src_port,
         connect_info.target_uuid,
         &connect_info.target_port,
         meter!(connect_info.distance),
     )?;
+    drop(document);
     Ok(connect_info)
 }
 /// Disconnect two nodes
@@ -114,22 +121,18 @@ async fn delete_connection(
     data: web::Data<AppState>,
     connect_info: Json<ConnectInfo>,
 ) -> Result<Json<ConnectInfo>, ErrorResponse> {
-    data.scenery
-        .lock()
-        .unwrap()
-        .disconnect_nodes(connect_info.src_uuid, &connect_info.src_port)?;
+    let mut document = data.document.lock().unwrap();
+    let scenery = document.scenery_mut();
+    scenery.disconnect_nodes(connect_info.src_uuid, &connect_info.src_port)?;
+    drop(document);
     Ok(connect_info)
 }
 
-pub fn configure(store: Data<AppState>) -> impl FnOnce(&mut ServiceConfig<'_>) {
-    |config: &mut ServiceConfig<'_>| {
-        config
-            .app_data(store)
-            .service(add_node)
-            .service(get_node)
-            .service(put_node)
-            .service(delete_node)
-            .service(post_connection)
-            .service(delete_connection);
-    }
+pub fn config(cfg: &mut ServiceConfig<'_>) {
+    cfg.service(add_node);
+    cfg.service(get_node);
+    cfg.service(put_node);
+    cfg.service(delete_node);
+    cfg.service(post_connection);
+    cfg.service(delete_connection);
 }

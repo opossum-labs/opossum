@@ -25,7 +25,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 /// The main structure of an OPOSSUM model.
 /// It contains the [`NodeGroup`] representing the optical model, a list of analyzers and a global configuration.
 pub struct OpmDocument {
@@ -120,9 +120,7 @@ impl OpmDocument {
     ///   - the file path cannot be created.
     ///   - it cannot write into the file (e.g. no space).
     pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
-        let serialized = serde_yaml::to_string(&self).map_err(|e| {
-            OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
-        })?;
+        let serialized = self.to_opm_file_string()?;
         let mut output = File::create(path).map_err(|e| {
             OpossumError::OpticScenery(format!(
                 "could not create file path: {}: {}",
@@ -149,9 +147,29 @@ impl OpmDocument {
             OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
         })
     }
+    /// Returns the list of analyzers of this [`OpmDocument`].
+    #[must_use]
+    pub fn analyzers(&self) -> Vec<AnalyzerType> {
+        self.analyzers.clone()
+    }
     /// Add an analyzer to this [`OpmDocument`].
     pub fn add_analyzer(&mut self, analyzer: AnalyzerType) {
         self.analyzers.push(analyzer);
+    }
+    /// Remove an analyzer from this [`OpmDocument`].
+    ///
+    /// This function removes an [`AnalyzerType`] with the given `index` from this [`OpmDocument`].
+    /// # Errors
+    ///
+    /// This function will return an error if an [`AnalyzerType`] with the given `index` was not found.
+    pub fn remove_analyzer(&mut self, index: usize) -> OpmResult<()> {
+        if index >= self.analyzers.len() {
+            return Err(OpossumError::OpmDocument(format!(
+                "Analyzer with index {index} does not exist"
+            )));
+        }
+        self.analyzers.remove(index);
+        Ok(())
     }
     /// Returns a reference to the scenery of this [`OpmDocument`].
     #[must_use]
@@ -161,11 +179,6 @@ impl OpmDocument {
     /// Returns a mutable reference to the scenery of this [`OpmDocument`].
     pub fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
-    }
-    /// Returns the list of analyzers of this [`OpmDocument`].
-    #[must_use]
-    pub fn analyzers(&self) -> Vec<AnalyzerType> {
-        self.analyzers.clone()
     }
     /// Returns a reference to the global config of this [`OpmDocument`].
     #[must_use]
