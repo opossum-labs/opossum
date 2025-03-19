@@ -16,7 +16,11 @@ struct NodeInfo {
     node_type: String,
 }
 /// Return a list of nodes in the toplevel scenery
-#[utoipa::path(tag = "node")]
+#[utoipa::path(tag = "node",
+responses(
+    (status = OK, body= Vec<NodeInfo>, description = "successful", content_type="application/json"),
+)
+)]
 #[get("/nodes")]
 async fn get_nodes(data: web::Data<AppState>) -> Result<Json<Vec<NodeInfo>>, ErrorResponse> {
     let document = data.document.lock().unwrap();
@@ -27,13 +31,13 @@ async fn get_nodes(data: web::Data<AppState>) -> Result<Json<Vec<NodeInfo>>, Err
         .iter()
         .map(|n| {
             let node = n.optical_ref.lock().unwrap();
-            let name=node.name();
+            let name = node.name();
             let node_type = node.node_type();
             drop(node);
             NodeInfo {
                 uuid: n.uuid(),
                 name,
-                node_type
+                node_type,
             }
         })
         .collect();
@@ -75,6 +79,10 @@ async fn post_node(
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "UUID of the optical node"),
+    ),
+    responses(
+        (status = OK, description = "get all node properties", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
 /// Get all node properties
@@ -90,7 +98,12 @@ async fn get_node(
     Ok(web::Json(node_ref))
 }
 /// Update node properties
-#[utoipa::path(tag = "node")]
+#[utoipa::path(tag = "node",
+    responses(
+        (status = OK, description = "node properties updated", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
 #[put("/nodes/{uuid}")]
 async fn put_node(
     data: web::Data<AppState>,
@@ -105,7 +118,14 @@ async fn put_node(
     // Ok(web::Json(node_ref))
 }
 /// Delete a node
-#[utoipa::path(tag = "node")]
+///
+/// This function deletes a node node. It also deletes reference nodes which refer to this node.
+/// A list of UUIDs of the effectively deleted nodes is returned.
+#[utoipa::path(tag = "node",
+responses(
+    (status = OK, body= Vec<Uuid>, description = "UUIDs of the deleted nodes", content_type="application/json"),
+    (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+))]
 #[delete("/nodes/{uuid}")]
 async fn delete_node(
     data: web::Data<AppState>,

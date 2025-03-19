@@ -153,6 +153,7 @@ pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
 ///
 /// Returns a vector of tuples containing the name and the description of all
 /// avialable nodes in OPOSSUM.
+#[must_use]
 pub fn node_types() -> Vec<(&'static str, &'static str)> {
     vec![
         ("dummy", "dummy node"),

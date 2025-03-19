@@ -1,20 +1,23 @@
 //! Routes for managing the scenery (top-level `NodeGroup`)
 use crate::{app_state::AppState, error::ErrorResponse, nodes};
 use actix_web::{
-    delete, get, post,
+    delete, get,
+    http::StatusCode,
+    post,
     web::{self},
     HttpResponse, Responder,
 };
 use opossum::{analyzers::AnalyzerType, optic_node::OpticNode, OpmDocument, SceneryResources};
 use utoipa_actix_web::service_config::ServiceConfig;
 
-/// Create new (empty) scenery ([`OpmDocument`])
-#[utoipa::path(responses((status = 200, body = str)), tag="scenery")]
+/// Create new (empty) scenery
+#[utoipa::path(responses((status = 200, description = "empty scenery sucessfully created")), tag="scenery")]
 #[post("/")]
 async fn post_scenery(data: web::Data<AppState>) -> impl Responder {
     let mut document = data.document.lock().unwrap();
     *document = OpmDocument::default();
-    ""
+    drop(document);
+    HttpResponse::new(StatusCode::OK)
 }
 /// Get name of toplevel scenery
 #[utoipa::path(responses((status = 200, body = str)), tag="scenery")]

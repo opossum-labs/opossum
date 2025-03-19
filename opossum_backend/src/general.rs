@@ -21,7 +21,7 @@ struct VersionInfo {
 ///
 /// Simply return the text `OPOSSUM backend`. This is mostly for checking that the client is communication with the correct server.
 #[utoipa::path(get, path="/", responses((status = OK, description = "Fixed answer string", body = str, example = "OPOSSUM backend")), tag="general")]
-#[get("")]
+#[get("/")]
 async fn get_hello() -> &'static str {
     "OPOSSUM backend"
 }

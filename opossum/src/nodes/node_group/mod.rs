@@ -209,6 +209,7 @@ impl NodeGroup {
         self.graph.node(node_id)
     }
     /// Returns all nodes of this [`NodeGroup`].
+    #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
         self.graph.nodes()
     }
