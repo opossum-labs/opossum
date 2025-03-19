@@ -9,6 +9,36 @@ use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
+#[derive(Serialize, Deserialize, ToSchema)]
+struct NodeInfo {
+    uuid: Uuid,
+    name: String,
+    node_type: String,
+}
+/// Return a list of nodes in the toplevel scenery
+#[utoipa::path(tag = "node")]
+#[get("/nodes")]
+async fn get_nodes(data: web::Data<AppState>) -> Result<Json<Vec<NodeInfo>>, ErrorResponse> {
+    let document = data.document.lock().unwrap();
+    let scenery = document.scenery().clone();
+    drop(document);
+    let nodes_info: Vec<NodeInfo> = scenery
+        .nodes()
+        .iter()
+        .map(|n| {
+            let node = n.optical_ref.lock().unwrap();
+            let name=node.name();
+            let node_type = node.node_type();
+            drop(node);
+            NodeInfo {
+                uuid: n.uuid(),
+                name,
+                node_type
+            }
+        })
+        .collect();
+    Ok(Json(nodes_info))
+}
 /// Add a new node to the toplevel scenery
 #[utoipa::path(tag = "node",
     request_body(content = String,
@@ -17,21 +47,30 @@ use uuid::Uuid;
         example ="dummy"
     ),
     responses(
-        (status = OK, description = "Node successfully created", content_type="application/json"),
+        (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "Node of the given type not found", content_type="application/json")
     )
 )]
 #[post("/nodes")]
-async fn add_node(
+async fn post_node(
     data: web::Data<AppState>,
     node_type: String,
-) -> Result<Json<OpticRef>, ErrorResponse> {
+) -> Result<Json<NodeInfo>, ErrorResponse> {
     let node_ref = create_node_ref(&node_type)?;
     let mut document = data.document.lock().unwrap();
     let scenery = document.scenery_mut();
     scenery.add_node_ref(node_ref.clone())?;
     drop(document);
-    Ok(web::Json(node_ref))
+    let node = node_ref.optical_ref.lock().unwrap();
+    let name = node.name();
+    let node_type = node.node_type();
+    drop(node);
+    let node_info = NodeInfo {
+        uuid: node_ref.uuid(),
+        name,
+        node_type,
+    };
+    Ok(Json(node_info))
 }
 #[utoipa::path(tag = "node",
     params(
@@ -129,7 +168,8 @@ async fn delete_connection(
 }
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {
-    cfg.service(add_node);
+    cfg.service(get_nodes);
+    cfg.service(post_node);
     cfg.service(get_node);
     cfg.service(put_node);
     cfg.service(delete_node);

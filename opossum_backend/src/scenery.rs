@@ -106,7 +106,6 @@ async fn post_opmfile(
     drop(document);
     Ok("")
 }
-
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_scenery);
     cfg.service(get_name);

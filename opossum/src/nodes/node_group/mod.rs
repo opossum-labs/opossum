@@ -208,6 +208,10 @@ impl NodeGroup {
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
         self.graph.node(node_id)
     }
+    /// Returns all nodes of this [`NodeGroup`].
+    pub fn nodes(&self) -> Vec<&OpticRef> {
+        self.graph.nodes()
+    }
     /// Returns the number of nodes of this [`NodeGroup`].
     #[must_use]
     pub fn nr_of_nodes(&self) -> usize {
