@@ -4973,6 +4973,7 @@ dependencies = [
  "log",
  "opossum",
  "serde",
+ "serde_json",
  "uom",
  "utoipa",
  "utoipa-actix-web",

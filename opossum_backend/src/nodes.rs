@@ -1,12 +1,11 @@
-use crate::{app_state::AppState, error::ErrorResponse};
+use crate::{app_state::AppState, error::ErrorResponse, utils::update_node_attr};
 use actix_web::{
-    delete, get, post, put,
+    delete, get, patch, post,
     web::{self, Json, PathConfig},
 };
 use opossum::{
     meter,
     nodes::{create_node_ref, NodeAttr},
-    optic_ref::OpticRef,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -111,25 +110,31 @@ async fn get_node(
     drop(document);
     Ok(web::Json(node_attr))
 }
-/// Update node properties
+/// Modify node properties
+///
+/// Modify the properteis (`NodeAttr`) if a node specified by its UUID.
 #[utoipa::path(tag = "node",
     responses(
         (status = OK, description = "node properties updated", content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
-#[put("/nodes/{uuid}")]
-async fn put_node(
+#[patch("/nodes/{uuid}")]
+#[allow(clippy::significant_drop_tightening)]
+async fn patch_node(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<Json<OpticRef>, ErrorResponse> {
+    updated_props: Json<serde_json::Value>,
+) -> Result<Json<NodeAttr>, ErrorResponse> {
     let uuid = path.into_inner();
-    let mut document = data.document.lock().unwrap();
-    let scenery = document.scenery_mut();
-    let _node_ref = scenery.node(uuid)?;
+    let document = data.document.lock().unwrap();
+    let node = document.scenery().node(uuid)?;
     drop(document);
-    todo!();
-    // Ok(web::Json(node_ref))
+    let mut optic_ref = node.optical_ref.lock().unwrap();
+    let node_attr = optic_ref.node_attr_mut();
+    let update_json = updated_props.into_inner();
+    *node_attr = update_node_attr(node_attr, &update_json)?;
+    Ok(web::Json(node_attr.clone()))
 }
 /// Delete a node
 ///
@@ -205,7 +210,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_nodes);
     cfg.service(post_node);
     cfg.service(get_node);
-    cfg.service(put_node);
+    cfg.service(patch_node);
     cfg.service(delete_node);
     cfg.service(post_connection);
     cfg.service(delete_connection);
