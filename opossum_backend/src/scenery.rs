@@ -10,10 +10,10 @@ use actix_web::{
 use opossum::{analyzers::AnalyzerType, optic_node::OpticNode, OpmDocument, SceneryResources};
 use utoipa_actix_web::service_config::ServiceConfig;
 
-/// Create new (empty) scenery
-#[utoipa::path(responses((status = 200, description = "empty scenery sucessfully created")), tag="scenery")]
-#[post("/")]
-async fn post_scenery(data: web::Data<AppState>) -> impl Responder {
+/// Delete the current scenry and create new (empty) one
+#[utoipa::path(responses((status = 200, description = "scenery deleted and new one sucessfully created")), tag="scenery")]
+#[delete("/")]
+async fn delete_scenery(data: web::Data<AppState>) -> impl Responder {
     let mut document = data.document.lock().unwrap();
     *document = OpmDocument::default();
     drop(document);
@@ -110,7 +110,7 @@ async fn post_opmfile(
     Ok("")
 }
 pub fn config(cfg: &mut ServiceConfig<'_>) {
-    cfg.service(post_scenery);
+    cfg.service(delete_scenery);
     cfg.service(get_name);
     cfg.service(get_global_conf);
     cfg.service(post_global_conf);
