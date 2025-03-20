@@ -19,7 +19,6 @@ use crate::{
 /// Struct for storing common attributes of optical nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeAttr {
-    #[serde(skip)]
     node_type: String,
     name: String,
     ports: OpticPorts,

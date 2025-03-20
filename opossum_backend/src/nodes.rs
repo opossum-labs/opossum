@@ -1,7 +1,7 @@
 use crate::{app_state::AppState, error::ErrorResponse};
 use actix_web::{
     delete, get, post, put,
-    web::{self, Json},
+    web::{self, Json, PathConfig},
 };
 use opossum::{meter, nodes::create_node_ref, optic_ref::OpticRef};
 use serde::{Deserialize, Serialize};
@@ -195,4 +195,27 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_node);
     cfg.service(post_connection);
     cfg.service(delete_connection);
+    cfg.app_data(PathConfig::default().error_handler(|err, _req| {
+        ErrorResponse::new(400, "parse error", &err.to_string()).into()
+    }));
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{app_state::AppState, error::ErrorResponse};
+    use actix_web::{dev::Service, http::StatusCode, test, web::Data, App};
+    use uuid::Uuid;
+
+    #[actix_web::test]
+    async fn get_node() {
+        let app_state = Data::new(AppState::default());
+        let app = test::init_service(App::new().app_data(app_state).service(super::get_node)).await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/nodes/{}", Uuid::nil()))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        let e: ErrorResponse = test::read_body_json(resp).await;
+        assert_eq!(e.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(e.category(), "OpticScenery");
+    }
 }

@@ -1,10 +1,10 @@
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use opossum::error::OpossumError;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 /// Structure holding an error mesaage
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ErrorResponse {
     /// HTTP status
     #[schema(example = "400")]
@@ -17,6 +17,14 @@ pub struct ErrorResponse {
 }
 impl ErrorResponse {
     #[must_use]
+    pub fn new(status: u16, category: &str, message: &str) -> Self {
+        Self {
+            status,
+            category: category.to_string(),
+            message: message.to_string(),
+        }
+    }
+    #[must_use]
     pub fn not_found() -> Self {
         Self {
             status: StatusCode::NOT_FOUND.as_u16(),
@@ -24,12 +32,25 @@ impl ErrorResponse {
             message: "the OPOSSUM API endpoint was not found".to_string(),
         }
     }
+    #[must_use]
+    pub const fn status(&self) -> u16 {
+        self.status
+    }
+    #[must_use]
+    pub fn category(&self) -> &str {
+        &self.category
+    }
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
 }
 impl std::fmt::Display for ErrorResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)
     }
 }
+
 impl From<OpossumError> for ErrorResponse {
     fn from(error: OpossumError) -> Self {
         let (status, category) = match &error {
