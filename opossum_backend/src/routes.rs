@@ -1,4 +1,4 @@
-pub use crate::{general, scenery};
+pub use crate::{general, pages, scenery};
 use utoipa_actix_web::{scope, service_config::ServiceConfig};
 
 pub fn root_config(cfg: &mut ServiceConfig<'_>) {

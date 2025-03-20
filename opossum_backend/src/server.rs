@@ -8,7 +8,7 @@ use utoipa::OpenApi;
 use utoipa_actix_web::AppExt;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{app_state::AppState, error::ErrorResponse, routes};
+use crate::{app_state::AppState, error::ErrorResponse, pages, routes};
 
 async fn not_found() -> HttpResponse {
     let error = ErrorResponse::not_found();
@@ -50,6 +50,7 @@ pub fn start() -> Server {
             .openapi_service(|api| {
                 SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", api)
             })
+            .service(pages::welcome)
             .default_service(web::route().to(not_found))
             .into_app()
     })
