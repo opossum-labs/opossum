@@ -73,7 +73,6 @@ use uuid::Uuid;
 /// mapped input and output ports.
 pub struct NodeGroup {
     node_attr: NodeAttr,
-    // #[serde(skip)]
     graph: OpticGraph,
     #[serde(skip)]
     input_port_distances: BTreeMap<String, Length>,
@@ -208,6 +207,11 @@ impl NodeGroup {
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
         self.graph.node(node_id)
+    }
+    /// Returns all nodes of this [`NodeGroup`].
+    #[must_use]
+    pub fn nodes(&self) -> Vec<&OpticRef> {
+        self.graph.nodes()
     }
     /// Returns the number of nodes of this [`NodeGroup`].
     #[must_use]

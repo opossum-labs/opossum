@@ -17,12 +17,13 @@ pub use raytrace::RayTraceConfig;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
+use utoipa::ToSchema;
 
 /// Type of analysis to be performed.
 ///
 /// While the individual analyzers are implemented as traits, this enum is necessary for serialization / desrialization.
 #[non_exhaustive]
-#[derive(EnumIter, PartialEq, Debug, Serialize, Deserialize, Clone)]
+#[derive(EnumIter, PartialEq, Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub enum AnalyzerType {
     /// Simple energy flow analysis of an optical spectrum.
     ///
@@ -32,11 +33,13 @@ pub enum AnalyzerType {
     /// Ray tracing analysis.
     ///
     /// This mode simulates a bundle of optical ray propagating through a scenery.
+    #[schema(value_type=())]
     RayTrace(RayTraceConfig),
     /// Ghost focus analysis.
     ///
     /// This mode also performs ray tracing but considers parasitic back reflections from surfaces wtih a
     /// given number of bounces.
+    #[schema(value_type=())]
     GhostFocus(GhostFocusConfig),
 }
 impl Display for AnalyzerType {

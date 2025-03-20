@@ -1,6 +1,6 @@
 use actix_cors::Cors;
 use actix_web::{
-    dev::Server, http::StatusCode, middleware::Logger, web, App, HttpResponse, HttpServer,
+    dev::Server, middleware::Logger, web, App, HttpResponse, HttpServer, ResponseError,
 };
 use env_logger::Env;
 use std::net::Ipv4Addr;
@@ -8,12 +8,12 @@ use utoipa::OpenApi;
 use utoipa_actix_web::AppExt;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{app_state::AppState, general, scenery};
+use crate::{app_state::AppState, error::ErrorResponse, pages, routes};
 
-async fn not_found() -> actix_web::Result<HttpResponse> {
-    Ok(HttpResponse::build(StatusCode::NOT_FOUND)
-        .content_type("text/html; charset=utf-8")
-        .body("<h1>Error 404</h1>"))
+async fn not_found() -> HttpResponse {
+    let error = ErrorResponse::not_found();
+    let mut res = actix_web::HttpResponseBuilder::new(error.status_code());
+    res.json(error)
 }
 
 /// Start the API server.
@@ -33,29 +33,24 @@ pub fn start() -> Server {
             (name = "general", description = "general endpoints."),
             (name = "scenery", description = "endpoints dealing with the toplevel scenery."),
             (name = "node", description = "endpoints dealing with handling of optical nodes."),
-        )
+        ),
     )]
-    pub struct ApiDoc;
+    pub struct ApiDocs;
 
     env_logger::init_from_env(Env::default().default_filter_or("info"));
     let app_state = web::Data::new(AppState::default());
     HttpServer::new(move || {
         App::new()
             .into_utoipa_app()
-            .openapi(ApiDoc::openapi())
+            .openapi(ApiDocs::openapi())
             .map(|app| app.wrap(Logger::default()))
             .map(|app| app.wrap(Cors::permissive())) // change this in production !!!
             .app_data(app_state.clone())
-            .service(
-                utoipa_actix_web::scope("/api/scenery")
-                    .configure(scenery::configure(app_state.clone())),
-            )
-            .service(
-                utoipa_actix_web::scope("/api").configure(general::configure(app_state.clone())),
-            )
+            .configure(routes::root_config)
             .openapi_service(|api| {
                 SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", api)
             })
+            .service(pages::welcome)
             .default_service(web::route().to(not_found))
             .into_app()
     })

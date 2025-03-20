@@ -1,11 +1,13 @@
 #![warn(missing_docs)]
 use crate::refractive_index::{refr_index_vaccuum, RefractiveIndexType};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
 /// Structure handling scenery wide resources (e.g. ambient medium)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SceneryResources {
     /// Refractive index of the ambient medium
+    #[schema(value_type=())]
     pub ambient_refr_index: RefractiveIndexType,
 }
 

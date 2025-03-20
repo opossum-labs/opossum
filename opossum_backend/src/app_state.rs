@@ -1,15 +1,15 @@
 use std::sync::Mutex;
 
-use opossum::nodes::NodeGroup;
+use opossum::OpmDocument;
 
 #[derive(Default)]
 pub struct AppState {
-    pub scenery: Mutex<NodeGroup>,
+    pub document: Mutex<OpmDocument>,
 }
 impl Clone for AppState {
     fn clone(&self) -> Self {
         Self {
-            scenery: Mutex::new(self.scenery.lock().unwrap().clone()),
+            document: Mutex::new(self.document.lock().unwrap().clone()),
         }
     }
 }

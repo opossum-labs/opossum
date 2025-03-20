@@ -1,119 +1,125 @@
-use crate::app_state::AppState;
+//! Routes for managing the scenery (top-level `NodeGroup`)
+use crate::{app_state::AppState, error::ErrorResponse, nodes};
 use actix_web::{
-    get, post,
-    web::{self, Data, Json},
+    delete, get,
+    http::StatusCode,
+    post,
+    web::{self},
     HttpResponse, Responder,
 };
-use log::{error, info};
-use opossum::{meter, nodes::create_node_ref, optic_node::OpticNode, OpmDocument};
-use serde::Deserialize;
-use utoipa::ToSchema;
+use opossum::{analyzers::AnalyzerType, optic_node::OpticNode, OpmDocument, SceneryResources};
 use utoipa_actix_web::service_config::ServiceConfig;
-use uuid::Uuid;
 
+/// Delete the current scenry and create new (empty) one
+#[utoipa::path(responses((status = 200, description = "scenery deleted and new one sucessfully created")), tag="scenery")]
+#[delete("/")]
+async fn delete_scenery(data: web::Data<AppState>) -> impl Responder {
+    let mut document = data.document.lock().unwrap();
+    *document = OpmDocument::default();
+    drop(document);
+    HttpResponse::new(StatusCode::OK)
+}
 /// Get name of toplevel scenery
 #[utoipa::path(responses((status = 200, body = str)), tag="scenery")]
 #[get("/name")]
-async fn name(data: web::Data<AppState>) -> impl Responder {
-    let scenery = data.scenery.lock().unwrap();
-    HttpResponse::Ok().body(scenery.name())
+async fn get_name(data: web::Data<AppState>) -> impl Responder {
+    let name = data.document.lock().unwrap().scenery().name();
+    HttpResponse::Ok().body(name)
 }
 /// Get number of toplevel nodes
 #[utoipa::path(get, responses((status = 200, body = str)), tag="scenery")]
 #[get("/nr_of_nodes")]
 async fn nr_of_nodes(data: web::Data<AppState>) -> impl Responder {
-    let scenery = data.scenery.lock().unwrap();
-    HttpResponse::Ok().body(scenery.nr_of_nodes().to_string())
+    let nr_of_nodes = data.document.lock().unwrap().scenery().nr_of_nodes();
+    HttpResponse::Ok().body(nr_of_nodes.to_string())
 }
-#[utoipa::path(tag = "node")]
-#[post("/node")]
-async fn add_node(data: web::Data<AppState>, node_type: String) -> impl Responder {
-    if let Ok(node_ref) = create_node_ref(&node_type) {
-        let mut scenery = data.scenery.lock().unwrap();
-        if scenery.add_node_ref(node_ref.clone()).is_ok() {
-            HttpResponse::Ok().json(node_ref)
-        } else {
-            HttpResponse::InternalServerError().json("Failed to add node")
-        }
-    } else {
-        HttpResponse::BadRequest().body(format!("Node type '{node_type}' not found"))
-    }
+#[utoipa::path(tag = "scenery")]
+#[get("/global_conf")]
+#[allow(clippy::significant_drop_tightening)] // no idea, how to fix this ...
+async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
+    let document = data.document.lock().unwrap();
+    let global_conf = document.global_conf();
+    HttpResponse::Ok().json(global_conf)
 }
-#[utoipa::path(tag = "node")]
-#[get("/node/{uuid}")]
-async fn get_node(data: web::Data<AppState>, uuid_str: web::Path<String>) -> impl Responder {
-    let scenery = data.scenery.lock().unwrap();
-    let Ok(uuid) = uuid_str.parse() else {
-        return HttpResponse::BadRequest().body("Invalid UUID");
-    };
-    scenery.node(uuid).map_or_else(
-        |_| HttpResponse::NotFound().body("Node not found"),
-        |node| HttpResponse::Ok().json(node),
-    )
-}
-#[derive(ToSchema, Deserialize)]
-struct ConnectNodes {
-    src_uuid: Uuid,
-    src_port: String,
-    target_uuid: Uuid,
-    target_port: String,
-    distance: f64,
-}
-#[utoipa::path(tag = "node")]
-#[post("/connect")]
-async fn connect_nodes(
+#[utoipa::path(tag = "scenery")]
+#[post("/global_conf")]
+async fn post_global_conf(
     data: web::Data<AppState>,
-    connect_info: Json<ConnectNodes>,
+    new_global_conf: web::Json<SceneryResources>,
 ) -> impl Responder {
-    let mut scenery = data.scenery.lock().unwrap();
-    if let Err(e) = scenery.connect_nodes(
-        connect_info.src_uuid,
-        &connect_info.src_port,
-        connect_info.target_uuid,
-        &connect_info.target_port,
-        meter!(connect_info.distance),
-    ) {
-        error!("error connecting nodes: {}", e.to_string());
-        HttpResponse::BadRequest().body(e.to_string())
-    } else {
-        info!("nodes connected");
-        HttpResponse::Ok().json("Nodes connected")
-    }
+    let global_conf = new_global_conf.into_inner();
+    data.document
+        .lock()
+        .unwrap()
+        .set_global_conf(global_conf.clone());
+    HttpResponse::Ok().json(global_conf)
 }
-#[utoipa::path(tag = "node")]
-#[get("/opmfile")]
-async fn get_opmfile(data: web::Data<AppState>) -> impl Responder {
-    let scenery = data.scenery.lock().unwrap();
-    let doc = OpmDocument::new(scenery.clone());
-    drop(scenery);
-    doc.to_opm_file_string().map_or_else(
-        |_| HttpResponse::UnprocessableEntity().body("Error writing to file"),
-        |doc_string| HttpResponse::Ok().body(doc_string),
+#[utoipa::path(tag = "scenery")]
+#[get("/analyzers")]
+async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
+    let analyzers = data.document.lock().unwrap().analyzers();
+    web::Json(analyzers)
+}
+#[utoipa::path(tag = "scenery")]
+#[get("/analyzers/{index}")]
+async fn get_analyzer(data: web::Data<AppState>, index: web::Path<usize>) -> impl Responder {
+    let analyzers = data.document.lock().unwrap().analyzers();
+    analyzers.get(*index).map_or_else(
+        || HttpResponse::NotFound().body("Analyzer not found"),
+        |analyzer| HttpResponse::Ok().json(analyzer),
     )
 }
-#[utoipa::path(tag = "node")]
-#[post("/opmfile")]
-async fn load_opmfile(data: web::Data<AppState>, opm_file_string: String) -> impl Responder {
-    match &mut OpmDocument::from_string(&opm_file_string) {
-        Ok(doc) => {
-            let mut scenery = data.scenery.lock().unwrap();
-            doc.scenery_mut().clone_into(&mut scenery);
-            HttpResponse::Ok().body("")
-        }
-        Err(e) => HttpResponse::UnprocessableEntity().body(format!("Error reading file: {e}")),
-    }
+#[utoipa::path(tag = "scenery")]
+#[post("/analyzers")]
+async fn add_analyzer(
+    data: web::Data<AppState>,
+    analyzer: web::Json<AnalyzerType>,
+) -> impl Responder {
+    let analyzer = analyzer.into_inner();
+    let mut document = data.document.lock().unwrap();
+    document.add_analyzer(analyzer);
+    web::Json(document.analyzers())
 }
-
-pub fn configure(store: Data<AppState>) -> impl FnOnce(&mut ServiceConfig<'_>) {
-    |config: &mut ServiceConfig<'_>| {
-        config
-            .app_data(store)
-            .service(name)
-            .service(add_node)
-            .service(get_node)
-            .service(nr_of_nodes)
-            .service(connect_nodes)
-            .service(get_opmfile)
-            .service(load_opmfile);
-    }
+#[utoipa::path(tag = "scenery")]
+#[delete("/analyzers/{index}")]
+async fn delete_analyzer(
+    data: web::Data<AppState>,
+    index: web::Path<usize>,
+) -> Result<&'static str, ErrorResponse> {
+    let index = index.into_inner();
+    let mut document = data.document.lock().unwrap();
+    document.remove_analyzer(index)?;
+    drop(document);
+    Ok("")
+}
+#[utoipa::path(tag = "scenery")]
+#[get("/opmfile")]
+async fn get_opmfile(data: web::Data<AppState>) -> Result<String, ErrorResponse> {
+    let document = data.document.lock().unwrap();
+    Ok(document.to_opm_file_string()?)
+}
+#[utoipa::path(tag = "scenery")]
+#[post("/opmfile")]
+async fn post_opmfile(
+    data: web::Data<AppState>,
+    opm_file_string: String,
+) -> Result<&'static str, ErrorResponse> {
+    let mut document = data.document.lock().unwrap();
+    *document = OpmDocument::from_string(&opm_file_string)?;
+    drop(document);
+    Ok("")
+}
+pub fn config(cfg: &mut ServiceConfig<'_>) {
+    cfg.service(delete_scenery);
+    cfg.service(get_name);
+    cfg.service(get_global_conf);
+    cfg.service(post_global_conf);
+    cfg.service(get_analyzers);
+    cfg.service(get_analyzer);
+    cfg.service(add_analyzer);
+    cfg.service(delete_analyzer);
+    cfg.service(nr_of_nodes);
+    cfg.service(get_opmfile);
+    cfg.service(post_opmfile);
+    cfg.configure(nodes::config);
 }

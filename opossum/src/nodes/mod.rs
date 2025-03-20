@@ -149,6 +149,34 @@ pub fn create_node_ref(node_type: &str) -> OpmResult<OpticRef> {
         ))),
     }
 }
+/// Return a list of all available node types.
+///
+/// Returns a vector of tuples containing the name and the description of all
+/// avialable nodes in OPOSSUM.
+#[must_use]
+pub fn node_types() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("dummy", "dummy node"),
+        ("beam splitter", "ideal beam splitter"),
+        ("energy meter", "ideal energy meter"),
+        ("group", "group node containing othe nodes or groups"),
+        ("ideal filter", "ideal filter"),
+        ("reflective grating", "reflective optical grating"),
+        ("reference", "node referencing another node"),
+        ("lens", "spherical lens"),
+        ("cylindric lens", "cylindric lens"),
+        ("source", "light source"),
+        ("spectrometer", "ideal spectrometer"),
+        ("spot diagram", "spot diagram detector"),
+        ("wavefront monitor", "wavefront detector"),
+        ("paraxial surface", "ideal thin lens"),
+        ("ray propagation", "ray propagation plotter"),
+        ("fluence detector", "fluence detector"),
+        ("wedge", "wedged substrate (prism)"),
+        ("mirror", "ideal flat / spherical mirror"),
+        ("parabolic mirror", "parabolic mirror"),
+    ]
+}
 #[cfg(test)]
 mod test {
     use super::*;

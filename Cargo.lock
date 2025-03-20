@@ -4957,6 +4957,7 @@ dependencies = [
  "testing_logger",
  "tinytemplate",
  "uom",
+ "utoipa",
  "uuid",
  "vergen-git2",
  "voronator",

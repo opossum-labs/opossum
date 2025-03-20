@@ -1,26 +1,13 @@
-use actix_web::{
-    get,
-    web::{self, Data},
-    HttpResponse, Responder, Result,
-};
-use opossum::get_version;
-use serde::Serialize;
+//! General endpoints
+use actix_web::{get, web::Json, Responder};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 
-use crate::app_state::AppState;
-
-/// Generate a nice welcome
-///
-/// Simply return the text `OPOSSUM backend`.
-#[utoipa::path(get, path="/", responses((status = 200, body = str)), tag="general")]
-#[get("/")]
-pub async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("OPOSSUM backend")
-}
+use crate::error::ErrorResponse;
 
 /// Structure holding the version information
-#[derive(ToSchema, Serialize)]
+#[derive(ToSchema, Serialize, Deserialize)]
 struct VersionInfo {
     /// version of the OPOSSUM API backend
     #[schema(example = "0.1.0")]
@@ -30,18 +17,72 @@ struct VersionInfo {
     opossum_version: String,
 }
 
-#[utoipa::path(get, responses((status = OK, body = VersionInfo)), tag="general")]
-#[get("/version")]
-pub async fn version() -> Result<impl Responder> {
-    let version_info = VersionInfo {
-        backend_version: env!("CARGO_PKG_VERSION").to_string(),
-        opossum_version: get_version(),
-    };
-    Ok(web::Json(version_info))
+/// Return a welcome message
+///
+/// Simply return the text `OPOSSUM backend`. This is mostly for checking that the client is communication with the correct server.
+#[utoipa::path(get, path="/", responses((status = OK, description = "Fixed answer string", body = str, example = "OPOSSUM backend")), tag="general")]
+#[get("/")]
+async fn get_hello() -> &'static str {
+    "OPOSSUM backend"
 }
 
-pub fn configure(store: Data<AppState>) -> impl FnOnce(&mut ServiceConfig<'_>) {
-    |config: &mut ServiceConfig<'_>| {
-        config.app_data(store).service(version).service(hello);
+/// Return a version information
+///
+/// Return the version numbers of the OPOSSUM library and the backend server.
+#[utoipa::path(get, responses((status = OK, description = "success", body = VersionInfo)), tag="general")]
+#[get("/version")]
+async fn get_version() -> impl Responder {
+    Json(VersionInfo {
+        backend_version: env!("CARGO_PKG_VERSION").to_string(),
+        opossum_version: opossum::get_version(),
+    })
+}
+#[derive(Deserialize, Serialize, ToSchema)]
+struct NodeType {
+    node_type: String,
+    description: String,
+}
+/// Return a list of all available node types of OPOSSUM
+///
+/// Return a list of strings of available node types from the OPOSSUM library.
+#[utoipa::path(get, responses((status = OK, description = "success", body = Vec<NodeType>)), tag="general")]
+#[get("/node_types")]
+async fn get_node_types() -> Result<Json<Vec<NodeType>>, ErrorResponse> {
+    let types = opossum::nodes::node_types();
+    let node_types: Vec<NodeType> = types
+        .iter()
+        .map(|t| NodeType {
+            node_type: t.0.into(),
+            description: t.1.into(),
+        })
+        .collect();
+    Ok(Json(node_types))
+}
+pub fn config(cfg: &mut ServiceConfig<'_>) {
+    cfg.service(get_version);
+    cfg.service(get_hello);
+    cfg.service(get_node_types);
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use actix_web::{body::to_bytes, dev::Service, http::StatusCode, test, App};
+
+    #[actix_web::test]
+    async fn get_hello() {
+        let app = test::init_service(App::new().service(super::get_hello)).await;
+        let req = test::TestRequest::get().uri("/").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let response_body = resp.into_body();
+        assert_eq!(to_bytes(response_body).await.unwrap(), "OPOSSUM backend");
+    }
+    #[actix_web::test]
+    async fn get_version() {
+        let app = test::init_service(App::new().service(super::get_version)).await;
+        let req = test::TestRequest::get().uri("/version").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let _: VersionInfo = test::read_body_json(resp).await;
     }
 }
