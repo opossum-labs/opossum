@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Module for storing references to optical nodes.
 use serde::{
-    de::{self, MapAccess, SeqAccess, Visitor},
+    de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
@@ -78,15 +78,7 @@ impl Serialize for OpticRef {
     where
         S: serde::Serializer,
     {
-        let mut node = serializer.serialize_struct("node", 3)?;
-        node.serialize_field(
-            "type",
-            &self
-                .optical_ref
-                .lock()
-                .expect("Mutex lock failed")
-                .node_type(),
-        )?;
+        let mut node = serializer.serialize_struct("node", 2)?;
         node.serialize_field(
             "attributes",
             &self
@@ -114,11 +106,10 @@ impl<'de> Deserialize<'de> for OpticRef {
         D: serde::Deserializer<'de>,
     {
         enum Field {
-            NodeType,
             Attributes,
             Graph,
         }
-        const FIELDS: &[&str] = &["type", "attributes", "graph"];
+        const FIELDS: &[&str] = &["attributes", "graph"];
 
         impl<'de> Deserialize<'de> for Field {
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -134,14 +125,13 @@ impl<'de> Deserialize<'de> for OpticRef {
                         &self,
                         formatter: &mut std::fmt::Formatter<'_>,
                     ) -> std::fmt::Result {
-                        formatter.write_str("`type`, `attributes`, or `graph`")
+                        formatter.write_str("`attributes`, or `graph`")
                     }
                     fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
                     where
                         E: de::Error,
                     {
                         match value {
-                            "type" => Ok(Field::NodeType),
                             "attributes" => Ok(Field::Attributes),
                             "graph" => Ok(Field::Graph),
                             _ => Err(de::Error::unknown_field(value, FIELDS)),
@@ -161,41 +151,15 @@ impl<'de> Deserialize<'de> for OpticRef {
                 formatter.write_str("a struct OpticRef")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<OpticRef, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
-                let node_type = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let properties = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                let node =
-                    create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
-                node.optical_ref
-                    .lock()
-                    .expect("Mutex lock failed")
-                    .set_properties(properties)
-                    .map_err(|e| de::Error::custom(e.to_string()))?;
-                Ok(node)
-            }
-
             fn visit_map<A>(self, mut map: A) -> std::result::Result<OpticRef, A::Error>
             where
                 A: MapAccess<'de>,
             {
-                let mut node_type = None;
+                // let mut node_type = None;
                 let mut node_attributes = None;
                 let mut node_graph = None;
                 while let Some(key) = map.next_key()? {
                     match key {
-                        Field::NodeType => {
-                            if node_type.is_some() {
-                                return Err(de::Error::duplicate_field("type"));
-                            }
-                            node_type = Some(map.next_value()?);
-                        }
                         Field::Attributes => {
                             if node_attributes.is_some() {
                                 return Err(de::Error::duplicate_field("attributes"));
@@ -210,9 +174,10 @@ impl<'de> Deserialize<'de> for OpticRef {
                         }
                     }
                 }
-                let node_type = node_type.ok_or_else(|| de::Error::missing_field("type"))?;
+
                 let node_attributes =
                     node_attributes.ok_or_else(|| de::Error::missing_field("attributes"))?;
+                let node_type = &node_attributes.node_type();
                 let node =
                     create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
                 node.optical_ref
