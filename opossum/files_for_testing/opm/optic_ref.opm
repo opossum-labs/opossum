@@ -1,7 +1,5 @@
-type: dummy
 attributes:
-  alignment: null
-  isometry: null
+  node_type: dummy
   name: test123
   uuid: 587ee70f-6f52-4420-89f6-e1618ff4dbdb
   lidt: 10000.
@@ -29,7 +27,6 @@ attributes:
             - 0.0
             - 0.0
             - 0.0
-        aperture: None
         coating: IdealAR
         lidt: 10000.0
     outputs:
@@ -55,7 +52,6 @@ attributes:
             - 0.0
             - 0.0
             - 0.0
-        aperture: None
         coating: IdealAR
         lidt: 10000.0
   inverted: false

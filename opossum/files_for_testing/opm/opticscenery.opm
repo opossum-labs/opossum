@@ -1,19 +1,20 @@
 opm file version: '0'
 scenery:
   node_attr:
+    node_type: group
     name: OpticScenery demo
     ports:
       inputs: {}
       outputs: {}
-    uuid: bd5cebe6-030e-427d-b725-4d4a657c0b48
+    uuid: df1fc497-4e6d-413d-8160-d7facb93aa27
     lidt: 10000.0
     props:
       expand view: !Bool false
     inverted: false
   graph:
     nodes:
-    - type: dummy
-      attributes:
+    - attributes:
+        node_type: dummy
         name: dummy1
         ports:
           inputs:
@@ -39,7 +40,6 @@ scenery:
                   - 0.0
                   - 0.0
                   - 0.0
-              aperture: None
               coating: IdealAR
               lidt: 10000.0
           outputs:
@@ -65,15 +65,14 @@ scenery:
                   - 0.0
                   - 0.0
                   - 0.0
-              aperture: None
               coating: IdealAR
               lidt: 10000.0
-        uuid: c3b44ddf-7d35-4ff5-a298-8b05db96ca5e
+        uuid: cc2aa814-61f0-470e-8c66-6d611e4e88a0
         lidt: 10000.0
         props: {}
         inverted: false
-    - type: dummy
-      attributes:
+    - attributes:
+        node_type: dummy
         name: dummy2
         ports:
           inputs:
@@ -99,7 +98,6 @@ scenery:
                   - 0.0
                   - 0.0
                   - 0.0
-              aperture: None
               coating: IdealAR
               lidt: 10000.0
           outputs:
@@ -125,17 +123,16 @@ scenery:
                   - 0.0
                   - 0.0
                   - 0.0
-              aperture: None
               coating: IdealAR
               lidt: 10000.0
-        uuid: 88a0d839-7733-48e1-b43b-64d383314719
+        uuid: 9e04cd4d-a09b-4300-addb-987d495ca5e3
         lidt: 10000.0
         props: {}
         inverted: false
     edges:
-    - - c3b44ddf-7d35-4ff5-a298-8b05db96ca5e
+    - - cc2aa814-61f0-470e-8c66-6d611e4e88a0
       - output_1
-      - 88a0d839-7733-48e1-b43b-64d383314719
+      - 9e04cd4d-a09b-4300-addb-987d495ca5e3
       - input_1
       - 0.0
     input_map: {}

@@ -3,7 +3,11 @@ use actix_web::{
     delete, get, post, put,
     web::{self, Json, PathConfig},
 };
-use opossum::{meter, nodes::create_node_ref, optic_ref::OpticRef};
+use opossum::{
+    meter,
+    nodes::{create_node_ref, NodeAttr},
+    optic_ref::OpticRef,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -17,9 +21,9 @@ struct NodeInfo {
 }
 /// Return a list of nodes in the toplevel scenery
 #[utoipa::path(tag = "node",
-responses(
-    (status = OK, body= Vec<NodeInfo>, description = "successful", content_type="application/json"),
-)
+    responses(
+        (status = OK, body= Vec<NodeInfo>, description = "successful", content_type="application/json"),
+    )
 )]
 #[get("/nodes")]
 async fn get_nodes(data: web::Data<AppState>) -> Result<Json<Vec<NodeInfo>>, ErrorResponse> {
@@ -85,17 +89,27 @@ async fn post_node(
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
-/// Get all node properties
+/// Get all properties of the specified node
+///
+/// Return all properties (`NodeAttr`) of the node specified by its UUID. **Note**: This function only returns `NodeAttr`,
+/// even for group nodes. A possible `graph` structure is omitted.
 #[get("/nodes/{uuid}")]
 async fn get_node(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<Json<OpticRef>, ErrorResponse> {
+) -> Result<Json<NodeAttr>, ErrorResponse> {
     let uuid = path.into_inner();
     let document = data.document.lock().unwrap();
-    let node_ref = document.scenery().node(uuid)?;
+    let node_attr = document
+        .scenery()
+        .node(uuid)?
+        .optical_ref
+        .lock()
+        .unwrap()
+        .node_attr()
+        .clone();
     drop(document);
-    Ok(web::Json(node_ref))
+    Ok(web::Json(node_attr))
 }
 /// Update node properties
 #[utoipa::path(tag = "node",
