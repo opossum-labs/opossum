@@ -44,13 +44,11 @@ clap = { version = "4", features = ["derive", "string"] } # command line argumen
 rprompt = "2"
 strum = { version = "0.26", features = ["derive"] }
 
-uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
+uuid = { version = "1", features = ["v4", "fast-rng", "serde", "js"] }
 
 chrono = { version= "0.4", features = ["serde"] }
 
 embed-doc-image = "0.1" # allows for embedded images in the rust API doc
-
-getrandom= {version ="0.2.15", features= ["js"]}
 
 image="0.25"
 tempfile="3"
