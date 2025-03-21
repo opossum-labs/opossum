@@ -13,3 +13,6 @@ jobs=8
 [rust]
 debug--assertions = true
 
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
+

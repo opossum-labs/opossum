@@ -15,6 +15,9 @@ publish = true
 build = "build.rs"
 readme = "../README.md"
 
+[lib]
+crate-type = ["cdylib", "rlib"] # necessary for wasm build
+
 [package.metadata.wix]
 upgrade-guid = "6A79F3B1-0417-472C-8C99-F1ADB17DE27D"
 path-guid = "56710F06-5772-4D76-BA9F-83122E49A2C3"
@@ -38,7 +41,6 @@ plotters = "0.3"
 approx = "0.5" # assert macros for comparison of floats with tolerance
 clap = { version = "4", features = ["derive", "string"] } # command line argument parser
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rprompt = "2"
 strum = { version = "0.26", features = ["derive"] }
 
@@ -48,6 +50,8 @@ chrono = { version= "0.4", features = ["serde"] }
 
 embed-doc-image = "0.1" # allows for embedded images in the rust API doc
 
+getrandom= {version ="0.2.15", features= ["js"]}
+
 image="0.25"
 tempfile="3"
 rand="0.9"
@@ -55,7 +59,7 @@ sobol="1"
 itertools = "0.14"
 nalgebra = {version = "0.33", features = ["serde-serialize", "rayon"]}
 colorous = "1"
-strum_macros = "0.26"
+strum_macros = "0.27.1"
 delaunator = "1"
 num = "0.4"
 kahan = "0.1"
@@ -63,7 +67,6 @@ log = "0.4"
 env_logger= "0.11"
 roots = "0.0.8"
 voronator = "0.2"
-# fast-surface-nets = "0.2.0"
 rayon = "1.10"
 
 tinytemplate = "1"
@@ -73,6 +76,7 @@ bevy_flycam = { version= "0.15", optional =true }
 spade = "2.12"
 earcutr = "0.4.3"
 utoipa = {version ="5.3.1", features = ["actix_extras", "uuid"] }
+wasm-bindgen = "0.2"
 
 [lints.rust]
 # missing_docs = "warn"
