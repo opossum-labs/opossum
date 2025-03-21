@@ -22,3 +22,4 @@ uom = {version="0.36", features = ["serde"] }
 utoipa = {version ="5.3.1", features = ["actix_extras", "uuid"] }
 utoipa-actix-web = "0.1"
 utoipa-swagger-ui = { version ="9.0.0", features = ["actix-web", "vendored"] }
+serde_json = { version = "1"}

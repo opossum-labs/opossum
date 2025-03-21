@@ -6,3 +6,4 @@ pub mod pages;
 pub mod routes;
 pub mod scenery;
 pub mod server;
+pub mod utils;
