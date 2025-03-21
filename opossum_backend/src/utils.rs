@@ -14,6 +14,7 @@ pub fn update_node_attr(
     node_attr: &NodeAttr,
     updates: &serde_json::Value,
 ) -> Result<NodeAttr, ErrorResponse> {
+    let orig_uuid = node_attr.uuid();
     let mut node_attr_json = serde_json::to_value(node_attr).map_err(|e| {
         ErrorResponse::new(
             400,
@@ -22,13 +23,15 @@ pub fn update_node_attr(
         )
     })?;
     update_json(&mut node_attr_json, updates)?;
-    let updated_node_attr = serde_json::from_value(node_attr_json).map_err(|e| {
+    let mut updated_node_attr: NodeAttr = serde_json::from_value(node_attr_json).map_err(|e| {
         ErrorResponse::new(
             400,
             "deserialization error",
             &format!("error deserializing NodeAttr: {e}"),
         )
     })?;
+    // restore at uuid (they should not be changed)
+    updated_node_attr.set_uuid(orig_uuid);
     Ok(updated_node_attr)
 }
 
