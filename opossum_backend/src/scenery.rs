@@ -26,7 +26,7 @@ struct NrOfNodes(usize);
 /// Get number of toplevel nodes
 #[utoipa::path(get, responses((status = 200, body = NrOfNodes)), tag="scenery")]
 /// Get the number of toplevel nodes
-/// 
+///
 /// This function returns the number of toplevel nodes in the scenery. This function is mainly used
 /// for testing purposes.
 #[get("/nr_of_nodes")]
@@ -38,7 +38,7 @@ async fn nr_of_nodes(data: web::Data<AppState>) -> impl Responder {
     responses((status = 200, description = "Global configuration", body = SceneryResources))
 )]
 /// Get the global configuration of this model
-/// 
+///
 /// This function returns the global configuration of the model.
 #[get("/global_conf")]
 #[allow(clippy::significant_drop_tightening)] // no idea, how to fix this ...
@@ -51,7 +51,7 @@ async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
     responses((status = 200, description = "Global configuration", body = SceneryResources))
 )]
 /// Set the global configuration
-/// 
+///
 /// This function sets the global configuration of the model. The old global configuration is
 /// replaced by the new one.
 #[post("/global_conf")]
@@ -70,7 +70,7 @@ async fn post_global_conf(
     responses((status = 200, description = "List of analyzers", body = Vec<AnalyzerType>)),
 )]
 /// Get a list of all analyzers of this model
-/// 
+///
 /// This function returns a list of all analyzers of this model. Use the index to get a specific
 /// analyzer.
 #[get("/analyzers")]
@@ -82,7 +82,7 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
     responses((status = 200, description = "Analyzer", body = AnalyzerType))
 )]
 /// Get an analyzer
-/// 
+///
 /// This function returns the analyzer with the given index.
 #[get("/analyzers/{index}")]
 async fn get_analyzer(data: web::Data<AppState>, index: web::Path<usize>) -> impl Responder {
@@ -96,7 +96,7 @@ async fn get_analyzer(data: web::Data<AppState>, index: web::Path<usize>) -> imp
     responses((status = 200, body = Vec<AnalyzerType>)))]
 /// Add an analyzer to the model
 ///
-/// This function adds an analyzer to the model. 
+/// This function adds an analyzer to the model.
 #[post("/analyzers")]
 async fn add_analyzer(
     data: web::Data<AppState>,
@@ -112,7 +112,7 @@ async fn add_analyzer(
     (status = 404, description = "Analyzer not found"))
 )]
 /// Delete an analyzer
-/// 
+///
 /// This function deletes the analyzer with the given index.
 #[delete("/analyzers/{index}")]
 async fn delete_analyzer(
@@ -126,7 +126,7 @@ async fn delete_analyzer(
     Ok("")
 }
 /// Get the OPM file as string
-/// 
+///
 /// This function returns the OPM model file as string.
 #[utoipa::path(tag = "scenery", 
     responses((status = 200, description = "OPM file", body = String))
@@ -141,8 +141,8 @@ async fn get_opmfile(data: web::Data<AppState>) -> Result<String, ErrorResponse>
     (status = 400, description = "Error parsing OPM file"))
 )]
 /// Load an OPM file
-/// 
-/// This function reads a OPM model from the given OPM file string and replaces the current 
+///
+/// This function reads a OPM model from the given OPM file string and replaces the current
 /// scenery.
 #[post("/opmfile")]
 async fn post_opmfile(

@@ -18,67 +18,11 @@ struct NodeInfo {
     name: String,
     node_type: String,
 }
-/// Return a list of nodes in the toplevel scenery
-#[utoipa::path(tag = "node",
-    responses(
-        (status = OK, body= Vec<NodeInfo>, description = "successful", content_type="application/json"),
-    )
-)]
-#[get("/nodes")]
-async fn get_nodes(data: web::Data<AppState>) -> Result<Json<Vec<NodeInfo>>, ErrorResponse> {
-    let document = data.document.lock().unwrap();
-    let scenery = document.scenery().clone();
-    drop(document);
-    let nodes_info: Vec<NodeInfo> = scenery
-        .nodes()
-        .iter()
-        .map(|n| {
-            let node = n.optical_ref.lock().unwrap();
-            let name = node.name();
-            let node_type = node.node_type();
-            drop(node);
-            NodeInfo {
-                uuid: n.uuid(),
-                name,
-                node_type,
-            }
-        })
-        .collect();
-    Ok(Json(nodes_info))
-}
-/// Add a new node to the toplevel scenery
-#[utoipa::path(tag = "node",
-    request_body(content = String,
-        description = "type node the optical node to be created",
-        content_type = "application/json",
-        example ="dummy"
-    ),
-    responses(
-        (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "Node of the given type not found", content_type="application/json")
-    )
-)]
-#[post("/nodes")]
-async fn post_node(
-    data: web::Data<AppState>,
-    node_type: String,
-) -> Result<Json<NodeInfo>, ErrorResponse> {
-    let node_ref = create_node_ref(&node_type)?;
-    let mut document = data.document.lock().unwrap();
-    let scenery = document.scenery_mut();
-    scenery.add_node_ref(node_ref.clone())?;
-    drop(document);
-    let node = node_ref.optical_ref.lock().unwrap();
-    let name = node.name();
-    let node_type = node.node_type();
-    drop(node);
-    let node_info = NodeInfo {
-        uuid: node_ref.uuid(),
-        name,
-        node_type,
-    };
-    Ok(Json(node_info))
-}
+/// Get all nodes of a group node
+///
+/// Return a list of all nodes of a group node specified by its UUID.
+/// - **Note**: If the `nil` UUID is given (00000000-0000-0000-0000-000000000000), all toplevel nodes are returned.
+/// - **Note**: This function searches recursively for the UUID in the whole scenery.
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "UUID of the group node"),
@@ -88,41 +32,134 @@ async fn post_node(
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
     )
 )]
-/// Get all nodes of a group node
-///
-/// Return a list of all nodes of a group node specified by its UUID.
-/// - **Note**: This function searches recursively for the UUID in the whole scenery.
-#[get("/nodes/{uuid}/nodes")]
+#[get("/{uuid}/nodes")]
 async fn get_subnodes(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
 ) -> Result<Json<Vec<NodeInfo>>, ErrorResponse> {
-    let uuid = path.into_inner();
     let document = data.document.lock().unwrap();
     let scenery = document.scenery().clone();
-    let node_ref = scenery.node_recursive(uuid)?;
-    let mut node = node_ref.optical_ref.lock().unwrap();
-    let group_node = node
-        .as_group_mut()
-        .map_err(|e| ErrorResponse::new(400, "Node is not a group node", &e.to_string()))?;
-
-    let nodes_info: Vec<NodeInfo> = group_node
-        .nodes()
-        .iter()
-        .map(|n| {
-            let node = n.optical_ref.lock().unwrap();
-            let name = node.name();
-            let node_type = node.node_type();
-            drop(node);
-            NodeInfo {
-                uuid: n.uuid(),
-                name,
-                node_type,
-            }
-        })
-        .collect();
+    drop(document);
+    let uuid = path.into_inner();
+    let nodes_info: Vec<NodeInfo> = if uuid.is_nil() {
+        scenery
+            .nodes()
+            .iter()
+            .map(|n| {
+                let node = n.optical_ref.lock().unwrap();
+                let name = node.name();
+                let node_type = node.node_type();
+                drop(node);
+                NodeInfo {
+                    uuid: n.uuid(),
+                    name,
+                    node_type,
+                }
+            })
+            .collect()
+    } else {
+        scenery
+            .node_recursive(uuid)?
+            .optical_ref
+            .lock()
+            .unwrap()
+            .as_group_mut()?
+            .nodes()
+            .iter()
+            .map(|n| {
+                let node = n.optical_ref.lock().unwrap();
+                let name = node.name();
+                let node_type = node.node_type();
+                drop(node);
+                NodeInfo {
+                    uuid: n.uuid(),
+                    name,
+                    node_type,
+                }
+            })
+            .collect()
+    };
     Ok(Json(nodes_info))
 }
+/// Add a new node to a group node
+///
+/// This function adds a new optical node to a group node specified by its UUID.
+/// - **Note**: If the `nil` UUID is given (00000000-0000-0000-0000-000000000000), the node is added to the toplevel group.
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the optical node"),
+    ),
+    request_body(content = String,
+        description = "type node the optical node to be created",
+        content_type = "application/json",
+        example ="dummy"
+    ),
+    responses(
+        (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "Node of the given type not found, UUID not found, no group node", content_type="application/json")
+    )
+)]
+#[post("/{uuid}/nodes")]
+async fn post_subnode(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    node_type: String,
+) -> Result<Json<NodeInfo>, ErrorResponse> {
+    let new_node = create_node_ref(&node_type)?;
+    let mut document = data.document.lock().unwrap();
+    let scenery = document.scenery_mut();
+    let uuid = path.into_inner();
+    if uuid.is_nil() {
+        scenery.add_node_ref(new_node)?;
+    } else {
+        let node_ref = scenery.node_recursive(uuid)?;
+        node_ref
+            .optical_ref
+            .lock()
+            .unwrap()
+            .as_group_mut()?
+            .add_node_ref(new_node)?;
+    }
+    let node_ref = scenery.node_recursive(uuid)?;
+    let node = node_ref.optical_ref.lock().unwrap();
+    let name = node.name();
+    let node_type = node.node_type();
+    drop(node);
+    drop(document);
+    let node_info = NodeInfo {
+        uuid: node_ref.uuid(),
+        name,
+        node_type,
+    };
+    Ok(Json(node_info))
+}
+/// Delete a node
+///
+/// This function deletes a node. It also deletes reference nodes which refer to this node.
+/// A list of UUIDs of the effectively deleted nodes is returned.
+#[utoipa::path(tag = "node",
+responses(
+    (status = OK, body= Vec<Uuid>, description = "UUIDs of the deleted nodes", content_type="application/json"),
+    (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+))]
+#[delete("/{uuid}/nodes")]
+async fn delete_subnode(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<Vec<Uuid>>, ErrorResponse> {
+    let uuid = path.into_inner();
+    let mut document = data.document.lock().unwrap();
+    let scenery = document.scenery_mut();
+    let deleted_nodes = scenery.delete_node(uuid)?;
+    drop(document);
+    Ok(web::Json(deleted_nodes))
+}
+/// Get all properties of the specified node
+///
+/// Return all properties (`NodeAttr`) of the node specified by its UUID.
+/// - **Note**: This function only returns `NodeAttr`, even for group nodes.
+///   A possible `graph` structure is omitted.
+/// - **Note**: This function searches the node recursively in the whole scenery.
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "UUID of the optical node"),
@@ -132,14 +169,8 @@ async fn get_subnodes(
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
-/// Get all properties of the specified node
-///
-/// Return all properties (`NodeAttr`) of the node specified by its UUID.
-/// - **Note**: This function only returns `NodeAttr`, even for group nodes.
-///   A possible `graph` structure is omitted.
-/// - **Note**: This function searches the node recursively in the whole scenery.
-#[get("/nodes/{uuid}")]
-async fn get_node(
+#[get("/{uuid}/properties")]
+async fn get_properties(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
 ) -> Result<Json<NodeAttr>, ErrorResponse> {
@@ -166,9 +197,9 @@ async fn get_node(
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
-#[patch("/nodes/{uuid}")]
+#[patch("/{uuid}/properties")]
 #[allow(clippy::significant_drop_tightening)]
-async fn patch_node(
+async fn patch_properties(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     updated_props: Json<serde_json::Value>,
@@ -182,27 +213,6 @@ async fn patch_node(
     let update_json = updated_props.into_inner();
     *node_attr = update_node_attr(node_attr, &update_json)?;
     Ok(web::Json(node_attr.clone()))
-}
-/// Delete a node
-///
-/// This function deletes a node node. It also deletes reference nodes which refer to this node.
-/// A list of UUIDs of the effectively deleted nodes is returned.
-#[utoipa::path(tag = "node",
-responses(
-    (status = OK, body= Vec<Uuid>, description = "UUIDs of the deleted nodes", content_type="application/json"),
-    (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-))]
-#[delete("/nodes/{uuid}")]
-async fn delete_node(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-) -> Result<Json<Vec<Uuid>>, ErrorResponse> {
-    let uuid = path.into_inner();
-    let mut document = data.document.lock().unwrap();
-    let scenery = document.scenery_mut();
-    let deleted_nodes = scenery.delete_node(uuid)?;
-    drop(document);
-    Ok(web::Json(deleted_nodes))
 }
 /// Connection Information
 #[derive(ToSchema, Serialize, Deserialize)]
@@ -254,14 +264,16 @@ async fn delete_connection(
 }
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {
-    cfg.service(get_nodes);
-    cfg.service(post_node);
-    cfg.service(get_node);
-    cfg.service(patch_node);
-    cfg.service(delete_node);
     cfg.service(get_subnodes);
+    cfg.service(post_subnode);
+    cfg.service(delete_subnode);
+
+    cfg.service(get_properties);
+    cfg.service(patch_properties);
+
     cfg.service(post_connection);
     cfg.service(delete_connection);
+
     cfg.app_data(PathConfig::default().error_handler(|err, _req| {
         ErrorResponse::new(400, "parse error", &err.to_string()).into()
     }));
@@ -276,9 +288,14 @@ mod test {
     #[actix_web::test]
     async fn get_node() {
         let app_state = Data::new(AppState::default());
-        let app = test::init_service(App::new().app_data(app_state).service(super::get_node)).await;
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state)
+                .service(super::get_properties),
+        )
+        .await;
         let req = test::TestRequest::get()
-            .uri(&format!("/nodes/{}", Uuid::nil()))
+            .uri(&format!("/{}/properties", Uuid::new_v4()))
             .to_request();
         let resp = app.call(req).await.unwrap();
         let e: ErrorResponse = test::read_body_json(resp).await;
