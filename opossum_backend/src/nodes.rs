@@ -50,7 +50,7 @@ async fn get_nodes(data: web::Data<AppState>) -> Result<Json<Vec<NodeInfo>>, Err
 #[utoipa::path(tag = "node",
     request_body(content = String,
         description = "type node the optical node to be created",
-        content_type = "text/plain",
+        content_type = "application/json",
         example ="dummy"
     ),
     responses(
@@ -81,6 +81,50 @@ async fn post_node(
 }
 #[utoipa::path(tag = "node",
     params(
+        ("uuid" = Uuid, Path, description = "UUID of the group node"),
+    ),
+    responses(
+        (status = OK, description = "get all nodes of the group", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
+    )
+)]
+/// Get all nodes of a group node
+///
+/// Return a list of all nodes of a group node specified by its UUID.
+/// - **Note**: This function searches recursively for the UUID in the whole scenery.
+#[get("/nodes/{uuid}/nodes")]
+async fn get_subnodes(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<Vec<NodeInfo>>, ErrorResponse> {
+    let uuid = path.into_inner();
+    let document = data.document.lock().unwrap();
+    let scenery = document.scenery().clone();
+    let node_ref = scenery.node_recursive(uuid)?;
+    let mut node = node_ref.optical_ref.lock().unwrap();
+    let group_node = node
+        .as_group_mut()
+        .map_err(|e| ErrorResponse::new(400, "Node is not a group node", &e.to_string()))?;
+
+    let nodes_info: Vec<NodeInfo> = group_node
+        .nodes()
+        .iter()
+        .map(|n| {
+            let node = n.optical_ref.lock().unwrap();
+            let name = node.name();
+            let node_type = node.node_type();
+            drop(node);
+            NodeInfo {
+                uuid: n.uuid(),
+                name,
+                node_type,
+            }
+        })
+        .collect();
+    Ok(Json(nodes_info))
+}
+#[utoipa::path(tag = "node",
+    params(
         ("uuid" = Uuid, Path, description = "UUID of the optical node"),
     ),
     responses(
@@ -90,8 +134,10 @@ async fn post_node(
 )]
 /// Get all properties of the specified node
 ///
-/// Return all properties (`NodeAttr`) of the node specified by its UUID. **Note**: This function only returns `NodeAttr`,
-/// even for group nodes. A possible `graph` structure is omitted.
+/// Return all properties (`NodeAttr`) of the node specified by its UUID.
+/// - **Note**: This function only returns `NodeAttr`, even for group nodes.
+///   A possible `graph` structure is omitted.
+/// - **Note**: This function searches the node recursively in the whole scenery.
 #[get("/nodes/{uuid}")]
 async fn get_node(
     data: web::Data<AppState>,
@@ -101,7 +147,7 @@ async fn get_node(
     let document = data.document.lock().unwrap();
     let node_attr = document
         .scenery()
-        .node(uuid)?
+        .node_recursive(uuid)?
         .optical_ref
         .lock()
         .unwrap()
@@ -112,7 +158,8 @@ async fn get_node(
 }
 /// Modify node properties
 ///
-/// Modify the properteis (`NodeAttr`) if a node specified by its UUID.
+/// Modify the properties (`NodeAttr`) of a node specified by its UUID.
+/// - **Note**: This functino also searches the node recursively in the whole scenery.
 #[utoipa::path(tag = "node",
     responses(
         (status = OK, description = "node properties updated", content_type="application/json"),
@@ -128,7 +175,7 @@ async fn patch_node(
 ) -> Result<Json<NodeAttr>, ErrorResponse> {
     let uuid = path.into_inner();
     let document = data.document.lock().unwrap();
-    let node = document.scenery().node(uuid)?;
+    let node = document.scenery().node_recursive(uuid)?;
     drop(document);
     let mut optic_ref = node.optical_ref.lock().unwrap();
     let node_attr = optic_ref.node_attr_mut();
@@ -212,6 +259,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_node);
     cfg.service(patch_node);
     cfg.service(delete_node);
+    cfg.service(get_subnodes);
     cfg.service(post_connection);
     cfg.service(delete_connection);
     cfg.app_data(PathConfig::default().error_handler(|err, _req| {

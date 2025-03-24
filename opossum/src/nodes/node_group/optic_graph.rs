@@ -496,6 +496,35 @@ impl OpticGraph {
                 Ok,
             )
     }
+    /// Returns a reference to the optical node specified by its [`Uuid`].
+    ///
+    /// This function is similar to [`OpticGraph::node`] but also checks recursively for
+    /// the node in all sub-groups.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn node_recursive(&self, uuid: Uuid) -> OpmResult<OpticRef> {
+        if let Ok(node) = self.node(uuid) {
+            Ok(node)
+        } else {
+            for node_ref in self.g.node_weights() {
+                let mut node = node_ref
+                    .optical_ref
+                    .lock()
+                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+
+                if let Ok(group) = node.as_group_mut() {
+                    if let Ok(node) = group.graph.node_recursive(uuid) {
+                        return Ok(node);
+                    }
+                }
+            }
+            Err(OpossumError::OpticScenery(
+                "node with given uuid does not exist".into(),
+            ))
+        }
+    }
     /// Return a reference to the optical node specified by its node index.
     ///
     /// This function is mainly useful for setting up a reference node.
@@ -781,7 +810,7 @@ impl OpticGraph {
                 .optical_ref
                 .lock()
                 .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
-            if let Ok(group) = node.as_group() {
+            if let Ok(group) = node.as_group_mut() {
                 group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
             }
             let LightData::Geometric(rays) = incoming_edge.1 else {
@@ -830,7 +859,7 @@ impl OpticGraph {
             .optical_ref
             .lock()
             .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
-        if let Ok(group_node) = node.as_group() {
+        if let Ok(group_node) = node.as_group_mut() {
             Ok(group_node.get_mapped_port_str(light_port, &node_id)?)
         } else {
             Ok(format!("{node_id}:{light_port}"))
@@ -1123,7 +1152,7 @@ mod test {
     use crate::{
         lightdata::DataEnergy,
         millimeter,
-        nodes::{BeamSplitter, Dummy, NodeReference, Source},
+        nodes::{BeamSplitter, Dummy, NodeGroup, NodeReference, Source},
         ray::SplittingConfig,
         spectrum_helper::create_he_ne_spec,
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
@@ -1746,5 +1775,36 @@ mod test {
         assert!(graph.disconnect_nodes(i_d1, "wrong").is_err());
         graph.disconnect_nodes(i_d1, "output_1").unwrap();
         assert_eq!(graph.g.edge_count(), 0);
+    }
+    #[test]
+    fn node_recursive_simple() {
+        let mut graph = OpticGraph::default();
+        let i_d1 = graph.add_node(Dummy::default()).unwrap();
+        let i_d2 = graph.add_node(Dummy::default()).unwrap();
+
+        assert_eq!(graph.node_recursive(i_d1).unwrap().uuid(), i_d1);
+        assert_eq!(graph.node_recursive(i_d2).unwrap().uuid(), i_d2);
+        assert!(graph.node_recursive(uuid::Uuid::nil()).is_err());
+    }
+    #[test]
+    fn node_recursive_nested() {
+        let mut graph = OpticGraph::default();
+        let i_d = graph.add_node(Dummy::default()).unwrap();
+        let mut group = NodeGroup::default();
+        let i_g_d1 = group.add_node(Dummy::default()).unwrap();
+        let i_g_d2 = group.add_node(Dummy::default()).unwrap();
+
+        let mut group2 = NodeGroup::default();
+        let i_g_g2_d = group2.add_node(Dummy::default()).unwrap();
+
+        let i_g_g2 = group.add_node(group2).unwrap();
+
+        let i_g = graph.add_node(group).unwrap();
+        assert_eq!(graph.node_recursive(i_d).unwrap().uuid(), i_d);
+        assert_eq!(graph.node_recursive(i_g).unwrap().uuid(), i_g);
+        assert_eq!(graph.node_recursive(i_g_d1).unwrap().uuid(), i_g_d1);
+        assert_eq!(graph.node_recursive(i_g_d2).unwrap().uuid(), i_g_d2);
+        assert_eq!(graph.node_recursive(i_g_g2).unwrap().uuid(), i_g_g2);
+        assert_eq!(graph.node_recursive(i_g_g2_d).unwrap().uuid(), i_g_g2_d);
     }
 }

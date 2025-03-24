@@ -345,7 +345,7 @@ mod test {
         assert_eq!(node.node_type(), "spectrometer");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightseagreen");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {
