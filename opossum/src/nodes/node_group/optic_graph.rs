@@ -101,6 +101,7 @@ impl OpticGraph {
             ));
         }
         let mut nodes_deleted = vec![];
+        // delete node and/or references
         while let Some(node_idx) = self.next_node_with_uuid(node_id) {
             // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
             let node_id = self.node_by_idx(node_idx).unwrap().uuid();
@@ -110,6 +111,17 @@ impl OpticGraph {
             self.output_port_map.remove_mapping_by_uuid(node_id);
 
             nodes_deleted.push(node_id);
+        }
+        // now check if subnodes exist and delete recusively
+        for node_ref in self.nodes() {
+            let mut node = node_ref
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            if let Ok(group) = node.as_group_mut() {
+                let deleted_nodes = group.graph.delete_node(node_id)?;
+                nodes_deleted.extend(deleted_nodes);
+            }
         }
         if nodes_deleted.is_empty() {
             return Err(OpossumError::OpticScenery(
@@ -1761,6 +1773,22 @@ mod test {
         assert_eq!(graph.g.edge_count(), 0);
         assert_eq!(graph.input_port_map.len(), 0);
         assert_eq!(graph.output_port_map.len(), 0);
+    }
+    #[test]
+    fn delete_node_with_subnodes() {
+        let mut graph = OpticGraph::default();
+        let i_d1 = graph.add_node(Dummy::default()).unwrap();
+
+        let mut group = NodeGroup::default();
+        let _i_g_d1 = group.add_node(Dummy::default()).unwrap();
+        let ref_node = NodeReference::from_node(&graph.node(i_d1).unwrap());
+        let i_ref = group.add_node(ref_node).unwrap();
+        let _ = graph.add_node(group).unwrap();
+
+        let deleted_nodes = graph.delete_node(i_d1).unwrap();
+        assert_eq!(deleted_nodes.len(), 2);
+        assert!(deleted_nodes.contains(&i_d1));
+        assert!(deleted_nodes.contains(&i_ref));
     }
     #[test]
     fn disconnect_nodes() {
