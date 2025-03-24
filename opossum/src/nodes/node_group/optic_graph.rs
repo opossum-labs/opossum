@@ -85,6 +85,8 @@ impl OpticGraph {
     /// Delete a node from this [`OpticGraph`].
     ///
     /// Deletes a node with the given [`Uuid`] from the graph. All edges connected to this node will be removed as well.
+    /// This function also deletes all nodes (and sub-nodes) that reference the given node. The function returns a vector
+    /// of all deleted node [`Uuid`]s.
     ///
     /// # Errors
     ///
