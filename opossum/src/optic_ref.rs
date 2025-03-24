@@ -91,7 +91,7 @@ impl Serialize for OpticRef {
             .optical_ref
             .lock()
             .expect("Mutex lock failed")
-            .as_group()
+            .as_group_mut()
         {
             node.serialize_field("graph", &group_node.graph())?;
         }
@@ -188,7 +188,7 @@ impl<'de> Deserialize<'de> for OpticRef {
                     .optical_ref
                     .lock()
                     .expect("Mutex lock failed")
-                    .as_group()
+                    .as_group_mut()
                 {
                     group_node
                         .set_graph(node_graph.ok_or_else(|| de::Error::missing_field("graph"))?);

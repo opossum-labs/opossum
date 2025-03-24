@@ -208,6 +208,17 @@ impl NodeGroup {
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
         self.graph.node(node_id)
     }
+    /// Return a reference to the optical node specified by its [`Uuid`].
+    ///
+    /// This function is similar to [`node`](NodeGroup::node()), but it also recursively searches
+    /// for the node in the subnodes of the group.
+    ///
+    /// # Errors
+    ///
+    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
+    pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<OpticRef> {
+        self.graph.node_recursive(node_id)
+    }
     /// Returns all nodes of this [`NodeGroup`].
     #[must_use]
     pub fn nodes(&self) -> Vec<&OpticRef> {
@@ -546,7 +557,7 @@ impl OpticNode for NodeGroup {
         ports.set_apertures(ports_to_be_set.clone()).unwrap();
         ports
     }
-    fn as_group(&mut self) -> OpmResult<&mut NodeGroup> {
+    fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
         Ok(self)
     }
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
@@ -661,7 +672,7 @@ mod test {
         assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.expand_view().unwrap(), false);
         assert_eq!(node.node_color(), "yellow");
-        assert!(node.as_group().is_ok());
+        assert!(node.as_group_mut().is_ok());
         assert_eq!(node.graph.edge_count(), 0);
         assert_eq!(node.graph.node_count(), 0);
     }

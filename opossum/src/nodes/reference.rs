@@ -198,7 +198,7 @@ mod test {
         assert_eq!(node.node_type(), "reference");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightsalmon3");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn from_node() {

@@ -247,7 +247,7 @@ mod test {
             assert!(false, "cannot read focal length");
         }
         assert_eq!(node.node_color(), "palegreen");
-        assert!(node.as_group().is_err());
+        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {
