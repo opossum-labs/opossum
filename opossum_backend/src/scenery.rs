@@ -7,10 +7,12 @@ use actix_web::{
     web::{self},
     HttpResponse, Responder,
 };
-use opossum::{analyzers::AnalyzerType, optic_node::OpticNode, OpmDocument, SceneryResources};
+use opossum::{analyzers::AnalyzerType, OpmDocument, SceneryResources};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 
-/// Delete the current scenry and create new (empty) one
+/// Delete the current scenery and create new (empty) one
 #[utoipa::path(responses((status = 200, description = "scenery deleted and new one sucessfully created")), tag="scenery")]
 #[delete("/")]
 async fn delete_scenery(data: web::Data<AppState>) -> impl Responder {
@@ -19,29 +21,28 @@ async fn delete_scenery(data: web::Data<AppState>) -> impl Responder {
     drop(document);
     HttpResponse::new(StatusCode::OK)
 }
-/// Get name of toplevel scenery
-#[utoipa::path(responses((status = 200, body = str)), tag="scenery")]
-#[get("/name")]
-async fn get_name(data: web::Data<AppState>) -> impl Responder {
-    let name = data.document.lock().unwrap().scenery().name();
-    HttpResponse::Ok().body(name)
-}
+#[derive(Serialize, Deserialize, ToSchema)]
+struct NrOfNodes(usize);
 /// Get number of toplevel nodes
-#[utoipa::path(get, responses((status = 200, body = str)), tag="scenery")]
+#[utoipa::path(get, responses((status = 200, body = NrOfNodes)), tag="scenery")]
 #[get("/nr_of_nodes")]
 async fn nr_of_nodes(data: web::Data<AppState>) -> impl Responder {
     let nr_of_nodes = data.document.lock().unwrap().scenery().nr_of_nodes();
-    HttpResponse::Ok().body(nr_of_nodes.to_string())
+    web::Json(NrOfNodes(nr_of_nodes))
 }
-#[utoipa::path(tag = "scenery")]
+#[utoipa::path(tag = "scenery",
+    responses((status = 200, description = "Global configuration", body = SceneryResources))
+)]
 #[get("/global_conf")]
 #[allow(clippy::significant_drop_tightening)] // no idea, how to fix this ...
 async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
     let document = data.document.lock().unwrap();
-    let global_conf = document.global_conf();
-    HttpResponse::Ok().json(global_conf)
+    let global_conf = document.global_conf().lock().unwrap().clone();
+    web::Json(global_conf)
 }
-#[utoipa::path(tag = "scenery")]
+#[utoipa::path(tag = "scenery",
+    responses((status = 200, description = "Global configuration", body = SceneryResources))
+)]
 #[post("/global_conf")]
 async fn post_global_conf(
     data: web::Data<AppState>,
@@ -52,15 +53,19 @@ async fn post_global_conf(
         .lock()
         .unwrap()
         .set_global_conf(global_conf.clone());
-    HttpResponse::Ok().json(global_conf)
+    web::Json(global_conf)
 }
-#[utoipa::path(tag = "scenery")]
+#[utoipa::path(tag = "scenery",
+    responses((status = 200, description = "List of analyzers", body = Vec<AnalyzerType>)),
+)]
 #[get("/analyzers")]
 async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
     let analyzers = data.document.lock().unwrap().analyzers();
     web::Json(analyzers)
 }
-#[utoipa::path(tag = "scenery")]
+#[utoipa::path(tag = "scenery", 
+    responses((status = 200, description = "Analyzer", body = AnalyzerType))
+)]
 #[get("/analyzers/{index}")]
 async fn get_analyzer(data: web::Data<AppState>, index: web::Path<usize>) -> impl Responder {
     let analyzers = data.document.lock().unwrap().analyzers();
@@ -69,7 +74,8 @@ async fn get_analyzer(data: web::Data<AppState>, index: web::Path<usize>) -> imp
         |analyzer| HttpResponse::Ok().json(analyzer),
     )
 }
-#[utoipa::path(tag = "scenery")]
+#[utoipa::path(tag = "scenery", 
+    responses((status = 200, body = Vec<AnalyzerType>)))]
 #[post("/analyzers")]
 async fn add_analyzer(
     data: web::Data<AppState>,
@@ -80,7 +86,10 @@ async fn add_analyzer(
     document.add_analyzer(analyzer);
     web::Json(document.analyzers())
 }
-#[utoipa::path(tag = "scenery")]
+#[utoipa::path(tag = "scenery",
+    responses((status = 200, description = "Analyzer deleted"),
+    (status = 404, description = "Analyzer not found"))
+)]
 #[delete("/analyzers/{index}")]
 async fn delete_analyzer(
     data: web::Data<AppState>,
@@ -92,13 +101,18 @@ async fn delete_analyzer(
     drop(document);
     Ok("")
 }
-#[utoipa::path(tag = "scenery")]
+#[utoipa::path(tag = "scenery", 
+    responses((status = 200, description = "OPM file", body = String))
+)]
 #[get("/opmfile")]
 async fn get_opmfile(data: web::Data<AppState>) -> Result<String, ErrorResponse> {
     let document = data.document.lock().unwrap();
     Ok(document.to_opm_file_string()?)
 }
-#[utoipa::path(tag = "scenery")]
+#[utoipa::path(tag = "scenery",
+    responses((status = 200, description = "OPM file sucessfully parsed"),
+    (status = 400, description = "Error parsing OPM file"))
+)]
 #[post("/opmfile")]
 async fn post_opmfile(
     data: web::Data<AppState>,
@@ -111,7 +125,6 @@ async fn post_opmfile(
 }
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_scenery);
-    cfg.service(get_name);
     cfg.service(get_global_conf);
     cfg.service(post_global_conf);
     cfg.service(get_analyzers);
@@ -122,4 +135,55 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_opmfile);
     cfg.service(post_opmfile);
     cfg.configure(nodes::config);
+}
+#[cfg(test)]
+mod test {
+    use actix_web::{dev::Service, test, web::Data, App};
+    use opossum::{nodes::Dummy, SceneryResources};
+
+    use crate::{app_state::AppState, scenery::NrOfNodes};
+
+    #[actix_web::test]
+    async fn nr_of_nodes_delete_scenery() {
+        let app_state = Data::new(AppState::default());
+        let mut document = app_state.document.lock().unwrap();
+        let scenery = document.scenery_mut();
+        scenery.add_node(Dummy::default()).unwrap();
+        drop(document);
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state)
+                .service(super::delete_scenery)
+                .service(super::nr_of_nodes),
+        )
+        .await;
+        let req = test::TestRequest::get().uri("/nr_of_nodes").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+        let nr_of_nodes: NrOfNodes = test::read_body_json(resp).await;
+        assert_eq!(nr_of_nodes.0, 1);
+        let req = test::TestRequest::delete().uri("/").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+        let req = test::TestRequest::get().uri("/nr_of_nodes").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+        let nr_of_nodes: NrOfNodes = test::read_body_json(resp).await;
+        assert_eq!(nr_of_nodes.0, 0);
+    }
+    #[actix_web::test]
+    async fn get_global_conf() {
+        let app_state = Data::new(AppState::default());
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state)
+                .service(super::get_global_conf)
+                .service(super::post_global_conf),
+        )
+        .await;
+        let req = test::TestRequest::get().uri("/global_conf").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), 200);
+        let _: SceneryResources = test::read_body_json(resp).await; // Panics, if not valid JSON
+    }
 }
