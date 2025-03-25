@@ -82,8 +82,12 @@ fn create_report_and_data_files(
         "yaml",
         "analysis report",
     )?;
-    write!(output, "{}", serde_yaml::to_string(&report).unwrap())
-        .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
+    write!(
+        output,
+        "{}",
+        ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::default()).unwrap()
+    )
+    .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let mut report_path = report_directory.to_path_buf();
     report.export_data(&report_path)?;
     report_path.push(format!("report_{report_number}.html"));

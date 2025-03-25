@@ -29,7 +29,6 @@ use std::{
 /// The main structure of an OPOSSUM model.
 /// It contains the [`NodeGroup`] representing the optical model, a list of analyzers and a global configuration.
 pub struct OpmDocument {
-    #[serde(rename = "opm file version")]
     opm_file_version: String,
     #[serde(default)]
     scenery: NodeGroup,
@@ -69,23 +68,7 @@ impl OpmDocument {
         let contents = fs::read_to_string(path).map_err(|e| {
             OpossumError::OpmDocument(format!("cannot read file {} : {}", path.display(), e))
         })?;
-        let mut document: Self = serde_yaml::from_str(&contents)
-            .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
-        if document.opm_file_version != env!("OPM_FILE_VERSION") {
-            warn!("OPM file version does not match the used OPOSSUM version.");
-            warn!(
-                "read version '{}' <-> program file version '{}'",
-                document.opm_file_version,
-                env!("OPM_FILE_VERSION")
-            );
-            warn!("This file might haven been written by an older or newer version of OPOSSUM. The model import might not be correct.");
-        }
-        document.scenery.after_deserialization_hook()?;
-        document
-            .scenery
-            .graph_mut()
-            .update_global_config(&Some(document.global_conf.clone()));
-        Ok(document)
+        Self::from_string(&contents)
     }
     /// Create a new [`OpmDocument`] from the given `.opm` file string.
     ///
@@ -93,7 +76,7 @@ impl OpmDocument {
     ///
     /// This function will return an error if the parsing of the `.opm` file failed.
     pub fn from_string(file_string: &str) -> OpmResult<Self> {
-        let mut document: Self = serde_yaml::from_str(file_string)
+        let mut document: Self = ron::from_str(file_string)
             .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
         if document.opm_file_version != env!("OPM_FILE_VERSION") {
             warn!("OPM file version does not match the used OPOSSUM version.");
@@ -143,7 +126,7 @@ impl OpmDocument {
     ///
     /// This function will return an error if the serialization of the internal structures fail.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
-        serde_yaml::to_string(&self).map_err(|e| {
+        ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::default()).map_err(|e| {
             OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
         })
     }
@@ -273,7 +256,7 @@ mod test {
             OpmDocument::from_file(&Path::new("./files_for_testing/opm/incorrect_opm.opm"));
         assert_eq!(
             result.unwrap_err().to_string(),
-            "OpmDocument:parsing of model failed: missing field `opm file version`"
+            "OpmDocument:parsing of model failed: 1:2: Unexpected missing field named `opm_file_version` in `OpmDocument`"
         );
         assert!(
             OpmDocument::from_file(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))

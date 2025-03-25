@@ -83,11 +83,12 @@ impl Source {
     ///
     /// ```rust
     /// use opossum::{
-    /// lightdata::{DataEnergy, LightData},
+    /// lightdata::{light_data_builder::LightDataBuilder, energy_spectrum_builder::EnergyDataBuilder},
     /// nodes::Source,
     /// spectrum_helper::create_he_ne_spec};
     ///
-    /// let source=Source::new("My Source", &LightData::Energy(DataEnergy {spectrum: create_he_ne_spec(1.0).unwrap()}));
+    /// let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0).unwrap()));
+    /// let source=Source::new("My Source", light_data_builder);
     /// ```
     #[must_use]
     pub fn new(name: &str, light_data_builder: LightDataBuilder) -> Self {

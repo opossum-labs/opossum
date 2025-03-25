@@ -1647,8 +1647,9 @@ mod test {
             graph.port_map(&PortType::Input).port_names(),
             vec!["input_1", "input_2"]
         );
-        let serialized = serde_yaml::to_string(&graph).unwrap();
-        let deserialized: OpticGraph = serde_yaml::from_str(&serialized).unwrap();
+        let serialized =
+            ron::ser::to_string_pretty(&graph, ron::ser::PrettyConfig::default()).unwrap();
+        let deserialized: OpticGraph = ron::from_str(&serialized).unwrap();
         assert_eq!(
             deserialized.port_map(&PortType::Input).port_names(),
             vec!["input_1", "input_2"]

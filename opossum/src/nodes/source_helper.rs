@@ -123,8 +123,11 @@ mod test {
             panic!("property light data has wrong type");
         }
         let src = round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 3).unwrap();
-        if let Proptype::LightData(data) = src.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = &data.value {
+        if let Proptype::LightDataBuilder(light_data_builder) =
+            src.properties().get("light data").unwrap()
+        {
+            let data = light_data_builder.value.clone().unwrap().build().unwrap();
+            if let LightData::Geometric(rays) = data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
                     1.0,
