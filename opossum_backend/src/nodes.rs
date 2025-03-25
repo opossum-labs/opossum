@@ -103,33 +103,24 @@ async fn get_subnodes(
 async fn post_subnode(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    node_type: String,
+    node_type: web::Json<String>,
 ) -> Result<Json<NodeInfo>, ErrorResponse> {
+    let node_type = node_type.into_inner();
     let new_node = create_node_ref(&node_type)?;
     let mut document = data.document.lock().unwrap();
-    let scenery = document.scenery_mut();
-    let uuid = path.into_inner();
-    if uuid.is_nil() {
-        scenery.add_node_ref(new_node)?;
+        let uuid = path.into_inner();
+    let new_node_uuid=if uuid.is_nil() {
+        let scenery = document.scenery_mut();
+        scenery.add_node_ref(new_node.clone())?
     } else {
-        let node_ref = scenery.node_recursive(uuid)?;
-        node_ref
-            .optical_ref
-            .lock()
-            .unwrap()
-            .as_group_mut()?
-            .add_node_ref(new_node)?;
-    }
-    let node_ref = scenery.node_recursive(uuid)?;
-    let node = node_ref.optical_ref.lock().unwrap();
-    let name = node.name();
-    let node_type = node.node_type();
-    drop(node);
-    drop(document);
+        let scenery = document.scenery_mut();
+        scenery.node_recursive(uuid)?.optical_ref.lock().unwrap().as_group_mut()?.add_node_ref(new_node.clone())?  
+    };
+    let node = new_node.optical_ref.lock().unwrap();
     let node_info = NodeInfo {
-        uuid: node_ref.uuid(),
-        name,
-        node_type,
+        uuid: new_node_uuid,
+        name: node.name(),
+        node_type: node.node_type(),
     };
     Ok(Json(node_info))
 }
