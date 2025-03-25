@@ -13,7 +13,6 @@ use crate::{
     properties::Proptype,
     rays::Rays,
     spectrum::Spectrum,
-    utils::EnumProxy,
 };
 use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
@@ -25,6 +24,11 @@ pub enum FilterType {
     Constant(f64),
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
+}
+impl From<FilterType> for Proptype {
+    fn from(f: FilterType) -> Self {
+        Self::FilterType(f)
+    }
 }
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("darkgray")]
@@ -53,10 +57,7 @@ impl Default for IdealFilter {
             .create_property(
                 "filter type",
                 "used filter algorithm",
-                EnumProxy::<FilterType> {
-                    value: FilterType::Constant(1.0),
-                }
-                .into(),
+                FilterType::Constant(1.0).into(),
             )
             .unwrap();
         let mut idf = Self { node_attr };
@@ -80,13 +81,9 @@ impl IdealFilter {
             }
         }
         let mut filter = Self::default();
-        filter.node_attr.set_property(
-            "filter type",
-            EnumProxy::<FilterType> {
-                value: filter_type.clone(),
-            }
-            .into(),
-        )?;
+        filter
+            .node_attr
+            .set_property("filter type", filter_type.clone().into())?;
         filter.node_attr.set_name(name);
         Ok(filter)
     }
@@ -99,7 +96,7 @@ impl IdealFilter {
         if let Proptype::FilterType(filter_type) =
             self.node_attr.get_property("filter type").unwrap()
         {
-            filter_type.value.clone()
+            filter_type.clone()
         } else {
             panic!("wrong data type")
         }
@@ -112,13 +109,8 @@ impl IdealFilter {
     /// This function will return an error if a transmission factor > 1.0 is given (This would be an amplifiying filter :-) ).
     pub fn set_transmission(&mut self, transmission: f64) -> OpmResult<()> {
         if (0.0..=1.0).contains(&transmission) {
-            self.node_attr.set_property(
-                "filter type",
-                EnumProxy::<FilterType> {
-                    value: FilterType::Constant(transmission),
-                }
-                .into(),
-            )?;
+            self.node_attr
+                .set_property("filter type", FilterType::Constant(transmission).into())?;
             Ok(())
         } else {
             Err(OpossumError::Other(
@@ -136,10 +128,7 @@ impl IdealFilter {
         if density >= 0.0 {
             self.node_attr.set_property(
                 "filter type",
-                EnumProxy::<FilterType> {
-                    value: FilterType::Constant(f64::powf(10.0, -1.0 * density)),
-                }
-                .into(),
+                FilterType::Constant(f64::powf(10.0, -1.0 * density)).into(),
             )?;
             Ok(())
         } else {

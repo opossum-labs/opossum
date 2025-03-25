@@ -1,5 +1,7 @@
 use nalgebra::Vector3;
 use opossum::analyzers::{AnalyzerType, RayTraceConfig};
+use opossum::lightdata::light_data_builder::LightDataBuilder;
+use opossum::lightdata::ray_data_builder::RayDataBuilder;
 use opossum::nodes::{NodeGroup, NodeReference, ParaxialSurface, SpotDiagram, ThinMirror};
 use opossum::optic_node::Alignable;
 use opossum::refractive_index::{RefrIndexConst, RefractiveIndex};
@@ -7,9 +9,7 @@ use opossum::OpmDocument;
 use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
-    joule,
-    lightdata::LightData,
-    millimeter, nanometer,
+    joule, millimeter, nanometer,
     nodes::{Lens, RayPropagationVisualizer, Source},
     optic_node::OpticNode,
     position_distributions::Hexapolar,
@@ -56,9 +56,8 @@ fn main() -> OpmResult<()> {
         &UniformDist::new(joule!(1.))?,
         &Hexapolar::new(millimeter!(1.), 4)?,
     )?;
-    let light = LightData::Geometric(rays);
-
-    let mut src = Source::new("collimated ray source", &light);
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_alignment_wavelength(alignment_wvl)?;
     src.set_isometry(Isometry::identity())?;
     ////////////////////////////////////
@@ -324,9 +323,8 @@ fn main() -> OpmResult<()> {
         &UniformDist::new(joule!(1.))?,
         &Hexapolar::new(millimeter!(50.), 8)?,
     )?;
-
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("collimated ray source", &light);
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_alignment_wavelength(alignment_wvl)?;
     src.set_isometry(Isometry::identity())?;
 

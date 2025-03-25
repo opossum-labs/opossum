@@ -17,10 +17,14 @@ use std::{
     fmt::{Debug, Display},
     fs::File,
     ops::Range,
+    path::Path,
 };
-use uom::fmt::DisplayStyle::Abbreviation;
 use uom::num_traits::Zero;
 use uom::si::{f64::Length, length::micrometer, length::nanometer};
+use uom::{
+    fmt::DisplayStyle::Abbreviation,
+    si::{energy::joule, f64::Energy},
+};
 
 /// Structure for handling spectral data.
 ///
@@ -81,7 +85,7 @@ impl Spectrum {
     ///   - the file path is not found or could not be read.
     ///   - the file is empty.
     ///   - the file could not be parsed.
-    pub fn from_csv(path: &str) -> OpmResult<Self> {
+    pub fn from_csv(path: &Path) -> OpmResult<Self> {
         let file = File::open(path).map_err(|e| OpossumError::Spectrum(e.to_string()))?;
         let mut reader = ReaderBuilder::new()
             .has_headers(false)
@@ -108,6 +112,38 @@ impl Spectrum {
             ));
         }
         Ok(Self { data: datas })
+    }
+    /// Generate a spectrum from a list of narrow laser lines (center wavelength, Energy) and a spectrum resolution.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the resolution is not positive
+    /// - the wavelength is negative
+    /// - the energy is negative
+    /// - the list of lines is empty
+    pub fn from_laser_lines(lines: Vec<(Length, Energy)>, resolution: Length) -> OpmResult<Self> {
+        if lines.is_empty() {
+            return Err(OpossumError::Spectrum("no laser lines provided".into()));
+        }
+        if resolution <= Length::zero() {
+            return Err(OpossumError::Spectrum("resolution must be positive".into()));
+        }
+        let mut min_lambda = lines[0].0;
+        let mut max_lambda = lines[0].0;
+        for line in &lines {
+            if line.0 < min_lambda {
+                min_lambda = line.0;
+            }
+            if line.0 > max_lambda {
+                max_lambda = line.0;
+            }
+        }
+        let mut s = Self::new(min_lambda..max_lambda, resolution)?;
+        for line in lines {
+            s.add_single_peak(line.0, line.1.get::<joule>())?;
+        }
+        Ok(s)
     }
     fn lambda_vec(&self) -> Vec<f64> {
         self.data.iter().map(|data| data.0).collect()
@@ -657,7 +693,9 @@ mod test {
     }
     #[test]
     fn from_csv_ok() {
-        let s = Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_01.csv");
+        let s = Spectrum::from_csv(Path::new(
+            "files_for_testing/spectrum/spec_to_csv_test_01.csv",
+        ));
         assert!(s.is_ok());
         let s = s.unwrap();
         let lambdas = s.lambda_vec();
@@ -673,10 +711,19 @@ mod test {
     }
     #[test]
     fn from_csv_err() {
-        assert!(Spectrum::from_csv("wrong_path.csv").is_err());
-        assert!(Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_02.csv").is_err());
-        assert!(Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_03.csv").is_err());
-        assert!(Spectrum::from_csv("files_for_testing/spectrum/spec_to_csv_test_04.csv").is_err());
+        assert!(Spectrum::from_csv(Path::new("wrong_path.csv")).is_err());
+        assert!(Spectrum::from_csv(Path::new(
+            "files_for_testing/spectrum/spec_to_csv_test_02.csv"
+        ))
+        .is_err());
+        assert!(Spectrum::from_csv(Path::new(
+            "files_for_testing/spectrum/spec_to_csv_test_03.csv"
+        ))
+        .is_err());
+        assert!(Spectrum::from_csv(Path::new(
+            "files_for_testing/spectrum/spec_to_csv_test_04.csv"
+        ))
+        .is_err());
     }
     #[test]
     fn range() {
@@ -919,17 +966,18 @@ mod test {
     #[test]
     fn serialize() {
         let s = prep();
-        let s_yaml = serde_yaml::to_string(&s);
+        let s_yaml = ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::default());
         assert!(s_yaml.is_ok());
         assert_eq!(s_yaml.unwrap(),
-        "data:\n- - 1.0\n  - 0.0\n- - 1.5\n  - 0.0\n- - 2.0\n  - 0.0\n- - 2.5\n  - 0.0\n- - 3.0\n  - 0.0\n- - 3.5\n  - 0.0\n".to_string());
+        "(\r\n    data: [\r\n        (1.0, 0.0),\r\n        (1.5, 0.0),\r\n        (2.0, 0.0),\r\n        (2.5, 0.0),\r\n        (3.0, 0.0),\r\n        (3.5, 0.0),\r\n    ],\r\n)".to_string());
     }
     #[test]
     fn deserialize() {
-        let s: std::result::Result<Spectrum, serde_yaml::Error>=serde_yaml::from_str("data:\n- - 1.0\n  - 0.1\n- - 1.5\n  - 0.2\n- - 2.0\n  - 0.3\n- - 2.5\n  - 0.4\n- - 3.0\n  - 0.5\n- - 3.5\n  - 0.6\n");
-        assert!(s.is_ok());
+        let s: Spectrum =
+            ron::from_str("(data:[(1.0, 0.1),(1.5,0.2),(2.0,0.3),(2.5,0.4),(3.0,0.5),(3.5,0.6)])")
+                .unwrap();
         assert_eq!(
-            s.unwrap().data,
+            s.data,
             vec![
                 (1.0, 0.1),
                 (1.5, 0.2),

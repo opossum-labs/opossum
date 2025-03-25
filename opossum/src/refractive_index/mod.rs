@@ -15,6 +15,7 @@ pub use refr_index_const::RefrIndexConst;
 pub use refr_index_sellmeier1::RefrIndexSellmeier1;
 
 use crate::error::{OpmResult, OpossumError};
+use crate::properties::Proptype;
 
 /// Available models for the calculation of refractive index
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -59,6 +60,11 @@ impl RefractiveIndexType {
     }
 }
 
+impl From<RefractiveIndexType> for Proptype {
+    fn from(refr: RefractiveIndexType) -> Self {
+        Self::RefractiveIndex(refr)
+    }
+}
 /// All refractive index models must implement this trait.
 pub trait RefractiveIndex {
     /// Get the refractive index value of the current model for the given wavelength.

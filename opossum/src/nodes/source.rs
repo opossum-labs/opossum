@@ -14,14 +14,13 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule,
     light_result::{LightRays, LightResult},
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, LightData},
     millimeter,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    utils::EnumProxy,
 };
 use std::fmt::Debug;
 
@@ -54,7 +53,7 @@ impl Default for Source {
             .create_property(
                 "light data",
                 "data of the emitted light",
-                EnumProxy::<Option<LightData>> { value: None }.into(),
+                Option::<LightDataBuilder>::None.into(),
             )
             .unwrap();
 
@@ -83,25 +82,20 @@ impl Source {
     ///
     /// ```rust
     /// use opossum::{
-    /// lightdata::{DataEnergy, LightData},
+    /// lightdata::{light_data_builder::LightDataBuilder, energy_spectrum_builder::EnergyDataBuilder},
     /// nodes::Source,
     /// spectrum_helper::create_he_ne_spec};
     ///
-    /// let source=Source::new("My Source", &LightData::Energy(DataEnergy {spectrum: create_he_ne_spec(1.0).unwrap()}));
+    /// let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0).unwrap()));
+    /// let source=Source::new("My Source", light_data_builder);
     /// ```
     #[must_use]
-    pub fn new(name: &str, light: &LightData) -> Self {
+    pub fn new(name: &str, light_data_builder: LightDataBuilder) -> Self {
         let mut source = Self::default();
         source.node_attr.set_name(name);
         source
             .node_attr
-            .set_property(
-                "light data",
-                EnumProxy::<Option<LightData>> {
-                    value: Some(light.clone()),
-                }
-                .into(),
-            )
+            .set_property("light data", Some(light_data_builder).into())
             .unwrap();
         source.update_surfaces().unwrap();
         source
@@ -122,29 +116,24 @@ impl Source {
             .set_property("alignment wavelength", Proptype::LengthOption(Some(wvl)))
     }
 
-    /// Sets the light data of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
+    /// Sets the light data builder of this [`Source`]. The [`LightData`] provided here represents the input data of an `OpticScenery`.
     ///
     /// # Attributes
-    /// * `light_data`: [`LightData`] that shall be set
+    /// * `light_data_builder`: [`LightDataBuilder`] that shall be set
     ///
     /// # Errors
     /// This function returns an error if the property "light data" can not be set
-    pub fn set_light_data(&mut self, light_data: &LightData) -> OpmResult<()> {
-        self.node_attr.set_property(
-            "light data",
-            EnumProxy::<Option<LightData>> {
-                value: Some(light_data.clone()),
-            }
-            .into(),
-        )?;
+    pub fn set_light_data(&mut self, light_data_builder: LightDataBuilder) -> OpmResult<()> {
+        self.node_attr
+            .set_property("light data", Some(light_data_builder).into())?;
         Ok(())
     }
 }
 impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let light_prop = self.node_attr.get_property("light data").unwrap();
-        let data = if let Proptype::LightData(data) = &light_prop {
-            &data.value
+        let data = if let Proptype::LightDataBuilder(data) = &light_prop {
+            data
         } else {
             &None
         };
@@ -170,10 +159,14 @@ impl OpticNode for Source {
 }
 impl AnalysisEnergy for Source {
     fn analyze(&mut self, _incoming_data: LightResult) -> OpmResult<LightResult> {
-        if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {
-            let Some(data) = data.value.clone() else {
+        if let Ok(Proptype::LightDataBuilder(light_data_builder)) =
+            self.node_attr.get_property("light data")
+        {
+            let data = if let Some(light_data_builder) = light_data_builder.clone() {
+                light_data_builder.build()?
+            } else {
                 return Err(OpossumError::Analysis(
-                    "source has empty light data defined".into(),
+                    "source has empty light data builder".into(),
                 ));
             };
             Ok(LightResult::from([("output_1".into(), data)]))
@@ -190,10 +183,14 @@ impl AnalysisRayTrace for Source {
         _incoming_edges: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {
-            let Some(mut data) = data.value.clone() else {
+        if let Ok(Proptype::LightDataBuilder(light_data_builder)) =
+            self.node_attr.get_property("light data")
+        {
+            let mut data = if let Some(lightdata_builder) = light_data_builder.clone() {
+                lightdata_builder.build()?
+            } else {
                 return Err(OpossumError::Analysis(
-                    "source has empty light data defined".into(),
+                    "source has empty light data builder".into(),
                 ));
             };
             if let LightData::Geometric(rays) = &mut data {
@@ -269,10 +266,14 @@ impl AnalysisGhostFocus for Source {
             };
             bouncing_rays.clone()
         } else if bounce_lvl == 0 {
-            if let Ok(Proptype::LightData(data)) = self.node_attr.get_property("light data") {
-                let Some(mut data) = data.value.clone() else {
+            if let Ok(Proptype::LightDataBuilder(light_data_builder)) =
+                self.node_attr.get_property("light data")
+            {
+                let mut data = if let Some(lightdata_builder) = light_data_builder.clone() {
+                    lightdata_builder.build()?
+                } else {
                     return Err(OpossumError::Analysis(
-                        "source has empty light data defined".into(),
+                        "source has empty light data builder".into(),
                     ));
                 };
                 if let LightData::Geometric(rays) = &mut data {
@@ -317,8 +318,12 @@ impl AnalysisGhostFocus for Source {
 mod test {
     use super::*;
     use crate::{
-        lightdata::DataEnergy, nanometer, optic_ports::PortType, position_distributions::Hexapolar,
-        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
+        lightdata::{energy_spectrum_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
+        nanometer,
+        optic_ports::PortType,
+        position_distributions::Hexapolar,
+        spectrum_helper::create_he_ne_spec,
+        utils::geom_transformation::Isometry,
     };
     use assert_matches::assert_matches;
     use core::f64;
@@ -328,8 +333,8 @@ mod test {
         let mut node = Source::default();
         assert_eq!(node.name(), "source");
         assert_eq!(node.node_type(), "source");
-        if let Ok(Proptype::LightData(light_data)) = node.properties().get("light data") {
-            assert_eq!(light_data.value, None);
+        if let Ok(Proptype::LightDataBuilder(light_data)) = node.properties().get("light data") {
+            assert!(light_data.is_none());
         } else {
             panic!("cannot unpack light data property");
         };
@@ -339,7 +344,7 @@ mod test {
     }
     #[test]
     fn new() {
-        let source = Source::new("test", &LightData::Fourier);
+        let source = Source::new("test", LightDataBuilder::Fourier);
         assert_eq!(source.name(), "test");
     }
     #[test]
@@ -392,12 +397,14 @@ mod test {
     #[test]
     fn test_set_light_data() {
         let mut src = Source::default();
-        if let Ok(Proptype::LightData(light_data)) = src.properties().get("light data") {
-            assert_eq!(light_data.value, None);
+        if let Proptype::LightDataBuilder(light_data) = src.properties().get("light data").unwrap()
+        {
+            assert!(light_data.is_none());
         }
-        src.set_light_data(&LightData::Fourier).unwrap();
-        if let Ok(Proptype::LightData(light_data)) = src.properties().get("light data") {
-            assert_matches!(light_data.value.clone().unwrap(), LightData::Fourier);
+        src.set_light_data(LightDataBuilder::Fourier).unwrap();
+        if let Proptype::LightDataBuilder(light_data) = src.properties().get("light data").unwrap()
+        {
+            assert_matches!(light_data.clone().unwrap(), LightDataBuilder::Fourier);
         }
     }
     #[test]
@@ -408,17 +415,16 @@ mod test {
     }
     #[test]
     fn analyze_energy_ok() {
-        let light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
-        let mut node = Source::new("test", &light);
+        let light_builder =
+            LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0).unwrap()));
+        let mut node = Source::new("test", light_builder.clone());
         let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
         assert!(output.contains_key("output_1"));
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        assert_eq!(*output, light);
+        assert_eq!(*output, light_builder.build().unwrap());
     }
     #[test]
     fn analyze_raytrace_no_light_defined() {
@@ -431,7 +437,7 @@ mod test {
         );
         assert_eq!(
             output.unwrap_err(),
-            OpossumError::Analysis("source has empty light data defined".into())
+            OpossumError::Analysis("source has empty light data builder".into())
         );
     }
     #[test]
@@ -444,7 +450,8 @@ mod test {
             &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
         )
         .unwrap();
-        node.set_light_data(&LightData::Geometric(rays)).unwrap();
+        let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+        node.set_light_data(light_data_builder).unwrap();
         let output = AnalysisRayTrace::analyze(
             &mut node,
             LightResult::default(),
@@ -457,8 +464,8 @@ mod test {
         let mut node = Source::default();
         node.set_isometry(Isometry::identity()).unwrap();
         node.set_alignment_wavelength(nanometer!(630.0)).unwrap();
-        node.set_light_data(&LightData::Geometric(Rays::default()))
-            .unwrap();
+        let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(Rays::default()));
+        node.set_light_data(light_data_builder).unwrap();
         let output = AnalysisRayTrace::calc_node_positions(
             &mut node,
             LightResult::default(),
@@ -487,7 +494,7 @@ mod test {
         );
         assert_eq!(
             output.unwrap_err(),
-            OpossumError::Analysis("source has empty light data defined".into())
+            OpossumError::Analysis("source has empty light data builder".into())
         );
     }
     #[test]
@@ -500,8 +507,8 @@ mod test {
             &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
         )
         .unwrap();
-        node.set_light_data(&LightData::Geometric(rays.clone()))
-            .unwrap();
+        let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays.clone()));
+        node.set_light_data(light_data_builder).unwrap();
         let mut light_rays = LightRays::new();
         light_rays.insert("input_1".into(), vec![rays]);
         let output = AnalysisGhostFocus::analyze(
@@ -517,8 +524,8 @@ mod test {
     fn debug() {
         assert_eq!(format!("{:?}", Source::default()), "Source: no data");
         assert_eq!(
-            format!("{:?}", Source::new("hallo", &LightData::Fourier)),
-            "Source: No display defined for this type of LightData"
+            format!("{:?}", Source::new("hallo", LightDataBuilder::Fourier)),
+            "Source: Fourier"
         );
     }
 }

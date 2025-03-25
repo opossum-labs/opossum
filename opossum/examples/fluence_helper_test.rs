@@ -3,7 +3,7 @@ use opossum::{
     error::OpmResult,
     fluence_distributions::general_gaussian::General2DGaussian,
     joule,
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     millimeter, nanometer,
     nodes::{FluenceDetector, NodeGroup, ParaxialSurface, Source},
     optic_node::OpticNode,
@@ -32,7 +32,8 @@ fn main() -> OpmResult<()> {
         rays.nr_of_rays(true),
         peak.get::<joule_per_square_centimeter>()
     );
-    let mut source = Source::new("source", &LightData::Geometric(rays));
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let mut source = Source::new("source", light_data_builder);
     source.set_isometry(Isometry::identity())?;
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(source)?;

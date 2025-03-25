@@ -4,7 +4,7 @@ use num::Zero;
 use opossum::{
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
-    lightdata::{DataEnergy, LightData},
+    lightdata::{energy_spectrum_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
     nodes::{BeamSplitter, EnergyMeter, FilterType, IdealFilter, NodeGroup, Source, Spectrometer},
     ray::SplittingConfig,
     spectrum::Spectrum,
@@ -15,14 +15,11 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("filter system demo");
-    let i_s = scenery.add_node(Source::new(
-        "Source",
-        &LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0)?,
-        }),
-    ))?;
+    let light_data_builder =
+        LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0)?));
+    let i_s = scenery.add_node(Source::new("Source", light_data_builder))?;
     let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.6)).unwrap())?;
-    let filter_spectrum = Spectrum::from_csv("./opossum/opossum/NE03B.csv")?;
+    let filter_spectrum = Spectrum::from_csv(Path::new("./opossum/opossum/NE03B.csv"))?;
     let i_f = scenery.add_node(IdealFilter::new(
         "filter",
         &FilterType::Spectrum(filter_spectrum),

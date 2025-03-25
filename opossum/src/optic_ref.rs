@@ -224,8 +224,7 @@ mod test {
     #[test]
     fn serialize() {
         let optic_ref = OpticRef::new(Arc::new(Mutex::new(Dummy::default())), None);
-        let serialized = serde_yaml::to_string(&optic_ref);
-        assert!(serialized.is_ok());
+        let _ = ron::ser::to_string_pretty(&optic_ref, ron::ser::PrettyConfig::default()).unwrap();
     }
     #[test]
     fn deserialize() {
@@ -233,12 +232,10 @@ mod test {
         path.push("files_for_testing/opm/optic_ref.opm");
         let file_content = &mut "".to_owned();
         let _ = File::open(path).unwrap().read_to_string(file_content);
-        let deserialized: Result<OpticRef, serde_yaml::Error> = serde_yaml::from_str(&file_content);
-        assert!(deserialized.is_ok());
-        let optic_ref = deserialized.unwrap();
+        let optic_ref: OpticRef = ron::from_str(&file_content).unwrap();
         assert_eq!(
             optic_ref.uuid(),
-            uuid!("587ee70f-6f52-4420-89f6-e1618ff4dbdb")
+            uuid!("98248e7f-dc4c-4131-8710-f3d5be2ff087")
         );
         let optic_ref = optic_ref.optical_ref.lock().expect("Mutex lock failed");
         assert_eq!(optic_ref.node_type(), "dummy");

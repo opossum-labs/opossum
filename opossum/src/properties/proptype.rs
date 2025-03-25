@@ -4,7 +4,7 @@ use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     aperture::Aperture,
     error::{OpmResult, OpossumError},
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, LightData},
     nodes::{
         fluence_detector::{fluence_data::FluenceData, Fluence},
         ray_propagation_visualizer::RayPositionHistories,
@@ -19,7 +19,6 @@ use crate::{
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
-        EnumProxy,
     },
 };
 use nalgebra::{Vector2, Vector3};
@@ -52,11 +51,11 @@ pub enum Proptype {
     /// A boolean property
     Bool(bool),
     /// An optional [`LightData`] property
-    LightData(EnumProxy<Option<LightData>>),
+    LightData(Option<LightData>),
     /// Property for storing a [`FilterType`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
-    FilterType(EnumProxy<FilterType>),
+    FilterType(FilterType),
     /// Property for storing a [`SplittingConfig`] of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
-    SplitterType(EnumProxy<SplittingConfig>),
+    SplitterType(SplittingConfig),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.
@@ -97,9 +96,9 @@ pub enum Proptype {
     /// a (2D) geometric angle (e.g. component tilt)
     Angle(Angle),
     /// an optical refractive index model
-    RefractiveIndex(EnumProxy<RefractiveIndexType>),
+    RefractiveIndex(RefractiveIndexType),
     /// a (node) location / orientation
-    Isometry(EnumProxy<Option<Isometry>>),
+    Isometry(Option<Isometry>),
     /// Three dimensional Vector
     Vec3(Vector3<f64>),
     /// an optional length parameter. used, e.g., for the alignment wavelength of the source
@@ -108,6 +107,8 @@ pub enum Proptype {
     HitMap(HitMap),
     /// 2-dimenstional vector
     Vec2(Vector2<f64>),
+    /// [`LightData`] build configuration
+    LightDataBuilder(Option<LightDataBuilder>),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.

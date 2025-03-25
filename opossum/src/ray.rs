@@ -19,6 +19,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule, meter,
     nodes::{fluence_detector::Fluence, FilterType},
+    properties::Proptype,
     rays::{FluenceRays, Rays},
     spectrum::Spectrum,
     surface::{
@@ -48,7 +49,11 @@ impl SplittingConfig {
         }
     }
 }
-
+impl From<SplittingConfig> for Proptype {
+    fn from(config: SplittingConfig) -> Self {
+        Self::SplitterType(config)
+    }
+}
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {
@@ -1451,7 +1456,7 @@ mod test {
         let mut ray = Ray::new_collimated(position, nanometer!(502.0), e_1j).unwrap();
         let mut spec_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         spec_path.push("files_for_testing/spectrum/test_filter.csv");
-        let s = Spectrum::from_csv(spec_path.to_str().unwrap()).unwrap();
+        let s = Spectrum::from_csv(&spec_path).unwrap();
         let filter = FilterType::Spectrum(s);
         let _ = ray.filter_energy(&filter).unwrap();
         assert_eq!(ray.e, e_1j);

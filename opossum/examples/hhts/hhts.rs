@@ -14,7 +14,7 @@ use opossum::{
     energy_distributions::General2DGaussian,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     millimeter, nanometer,
     nodes::{
         BeamSplitter, Dummy, EnergyMeter, FilterType, IdealFilter, Lens, Metertype, NodeGroup,
@@ -138,7 +138,8 @@ fn main() -> OpmResult<()> {
     rays.add_rays(&mut rays_2w);
 
     let mut scenery = NodeGroup::new("HHT Sensor");
-    let mut src = Source::new("Source", &LightData::Geometric(rays));
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let mut src = Source::new("Source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(src)?;
     let input_group = scenery.add_node(hhts_input()?)?;
@@ -224,9 +225,9 @@ fn main() -> OpmResult<()> {
     let bs = group_bs.add_node(BeamSplitter::new("Dichroic BS HBSY21", &short_pass)?)?;
 
     // Long pass filter (1w)
-    let felh1000 = FilterType::Spectrum(Spectrum::from_csv(
+    let felh1000 = FilterType::Spectrum(Spectrum::from_csv(Path::new(
         "opossum/examples/hhts/FELH1000_Transmission.csv",
-    )?);
+    ))?);
     let mut node = IdealFilter::new("1w Longpass filter", &felh1000)?;
     node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
     let filter_1w = group_bs.add_node(node)?;
@@ -239,9 +240,9 @@ fn main() -> OpmResult<()> {
     )?;
 
     // Long pass filter (2w)
-    let fesh0700 = FilterType::Spectrum(Spectrum::from_csv(
+    let fesh0700 = FilterType::Spectrum(Spectrum::from_csv(Path::new(
         "opossum/examples/hhts/FESH0700_Transmission.csv",
-    )?);
+    ))?);
     let mut node = IdealFilter::new("2w Shortpass filter", &fesh0700)?;
     node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
     let filter_2w = group_bs.add_node(node)?;

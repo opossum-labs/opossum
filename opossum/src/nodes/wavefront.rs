@@ -380,10 +380,12 @@ mod test_wavefront_error_map {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use crate::lightdata::DataEnergy;
     use crate::optic_ports::PortType;
     use crate::utils::geom_transformation::Isometry;
     use crate::{
-        analyzers::RayTraceConfig, joule, lightdata::DataEnergy, millimeter, nanometer,
+        analyzers::RayTraceConfig, joule, millimeter, nanometer,
         nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
         spectrum_helper::create_he_ne_spec,
     };
