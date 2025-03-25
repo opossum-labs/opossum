@@ -108,20 +108,27 @@ async fn post_subnode(
     let node_type = node_type.into_inner();
     let new_node = create_node_ref(&node_type)?;
     let mut document = data.document.lock().unwrap();
-        let uuid = path.into_inner();
-    let new_node_uuid=if uuid.is_nil() {
-        let scenery = document.scenery_mut();
+    let uuid = path.into_inner();
+    let scenery = document.scenery_mut();
+    let new_node_uuid = if uuid.is_nil() {
         scenery.add_node_ref(new_node.clone())?
     } else {
-        let scenery = document.scenery_mut();
-        scenery.node_recursive(uuid)?.optical_ref.lock().unwrap().as_group_mut()?.add_node_ref(new_node.clone())?  
+        scenery
+            .node_recursive(uuid)?
+            .optical_ref
+            .lock()
+            .unwrap()
+            .as_group_mut()?
+            .add_node_ref(new_node.clone())?
     };
+    drop(document);
     let node = new_node.optical_ref.lock().unwrap();
     let node_info = NodeInfo {
         uuid: new_node_uuid,
         name: node.name(),
         node_type: node.node_type(),
     };
+    drop(node);
     Ok(Json(node_info))
 }
 /// Delete a node
