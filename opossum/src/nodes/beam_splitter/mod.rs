@@ -16,7 +16,7 @@ use crate::{
     rays::Rays,
     spectrum::{merge_spectra, Spectrum},
     surface::{geo_surface::GeoSurfaceRef, Plane},
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
 use std::sync::{Arc, Mutex};
@@ -51,10 +51,7 @@ impl Default for BeamSplitter {
             .create_property(
                 "splitter config",
                 "config data of the beam splitter",
-                EnumProxy::<SplittingConfig> {
-                    value: SplittingConfig::Ratio(0.5),
-                }
-                .into(),
+                SplittingConfig::Ratio(0.5).into(),
             )
             .unwrap();
         let mut bs = Self { node_attr };
@@ -75,13 +72,8 @@ impl BeamSplitter {
         }
         let mut bs = Self::default();
         bs.node_attr.set_name(name);
-        bs.node_attr.set_property(
-            "splitter config",
-            EnumProxy::<SplittingConfig> {
-                value: config.clone(),
-            }
-            .into(),
-        )?;
+        bs.node_attr
+            .set_property("splitter config", config.clone().into())?;
         bs.update_surfaces()?;
         Ok(bs)
     }
@@ -93,7 +85,7 @@ impl BeamSplitter {
     #[must_use]
     pub fn splitting_config(&self) -> SplittingConfig {
         if let Ok(Proptype::SplitterType(config)) = self.node_attr.get_property("splitter config") {
-            return config.value.clone();
+            return config.clone();
         }
         panic!("property `splitter config` does not exist or has wrong data format")
     }
@@ -102,13 +94,8 @@ impl BeamSplitter {
     /// # Errors
     /// This function returns an [`OpossumError::Other`] if the [`SplittingConfig`] is invalid.
     pub fn set_splitting_config(&mut self, config: &SplittingConfig) -> OpmResult<()> {
-        self.node_attr.set_property(
-            "splitter config",
-            EnumProxy::<SplittingConfig> {
-                value: config.clone(),
-            }
-            .into(),
-        )?;
+        self.node_attr
+            .set_property("splitter config", config.clone().into())?;
         Ok(())
     }
     fn split_spectrum(
@@ -222,7 +209,7 @@ impl BeamSplitter {
                         ));
                     }
 
-                    let split_rays = rays.split(&splitting_config.value)?;
+                    let split_rays = rays.split(&splitting_config)?;
                     (rays, split_rays)
                 }
                 _ => {
@@ -251,7 +238,7 @@ impl BeamSplitter {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
                         };
 
-                        let split_rays = rays.split(&splitting_config.value)?;
+                        let split_rays = rays.split(&splitting_config)?;
                         (rays, split_rays)
                     } else {
                         return Err(OpossumError::OpticPort(

@@ -8,7 +8,7 @@ use std::fmt::Display;
 use super::{
     energy_spectrum_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder, LightData,
 };
-use crate::{error::OpmResult, properties::Proptype, utils::EnumProxy};
+use crate::{error::OpmResult, properties::Proptype};
 
 /// Builder for the generation of [`LightData`].
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -45,8 +45,8 @@ impl Display for LightDataBuilder {
         }
     }
 }
-impl From<EnumProxy<Option<LightDataBuilder>>> for Proptype {
-    fn from(value: EnumProxy<Option<LightDataBuilder>>) -> Self {
+impl From<Option<LightDataBuilder>> for Proptype {
+    fn from(value: Option<LightDataBuilder>) -> Self {
         Self::LightDataBuilder(value)
     }
 }

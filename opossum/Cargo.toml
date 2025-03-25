@@ -30,7 +30,8 @@ opm_macros_lib = { path = "opm_macros_lib" }
 petgraph = { version = "0.7", features = ["serde-1"] } # the graph library
 uom = {version="0.36", features = ["serde"] }
 serde = { version = "1", features = ['rc'] }
-serde_yaml = "0.9"
+#serde_yaml = "0.9"
+ron="0.9"
 
 csv = "1"
 plotters = "0.3"
@@ -41,6 +42,7 @@ clap = { version = "4", features = ["derive", "string"] } # command line argumen
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rprompt = "2"
 strum = { version = "0.26", features = ["derive"] }
+strum_macros = "0.26"
 
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
 
@@ -55,7 +57,7 @@ sobol="1"
 itertools = "0.14"
 nalgebra = {version = "0.33", features = ["serde-serialize", "rayon"]}
 colorous = "1"
-strum_macros = "0.26"
+
 delaunator = "1"
 num = "0.4"
 kahan = "0.1"

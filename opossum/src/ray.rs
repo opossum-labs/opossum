@@ -19,6 +19,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule, meter,
     nodes::{fluence_detector::Fluence, FilterType},
+    properties::Proptype,
     rays::{FluenceRays, Rays},
     spectrum::Spectrum,
     surface::{
@@ -48,7 +49,11 @@ impl SplittingConfig {
         }
     }
 }
-
+impl From<SplittingConfig> for Proptype {
+    fn from(config: SplittingConfig) -> Self {
+        Self::SplitterType(config)
+    }
+}
 ///Struct that contains all information about an optical ray
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ray {

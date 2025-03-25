@@ -1,148 +1,129 @@
-opm file version: '0'
-scenery:
-  node_attr:
-    node_type: group
-    name: OpticScenery demo
-    ports:
-      inputs: {}
-      outputs: {}
-    uuid: df1fc497-4e6d-413d-8160-d7facb93aa27
-    lidt: 10000.0
-    props:
-      expand view: !Bool false
-    inverted: false
-  graph:
-    nodes:
-    - attributes:
-        node_type: dummy
-        name: dummy1
-        ports:
-          inputs:
-            input_1:
-              anchor_point_iso:
-                transform:
-                  rotation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                  - 1.0
-                  translation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                inverse:
-                  rotation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                  - 1.0
-                  translation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-              coating: IdealAR
-              lidt: 10000.0
-          outputs:
-            output_1:
-              anchor_point_iso:
-                transform:
-                  rotation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                  - 1.0
-                  translation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                inverse:
-                  rotation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                  - 1.0
-                  translation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-              coating: IdealAR
-              lidt: 10000.0
-        uuid: cc2aa814-61f0-470e-8c66-6d611e4e88a0
-        lidt: 10000.0
-        props: {}
-        inverted: false
-    - attributes:
-        node_type: dummy
-        name: dummy2
-        ports:
-          inputs:
-            input_1:
-              anchor_point_iso:
-                transform:
-                  rotation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                  - 1.0
-                  translation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                inverse:
-                  rotation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                  - 1.0
-                  translation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-              coating: IdealAR
-              lidt: 10000.0
-          outputs:
-            output_1:
-              anchor_point_iso:
-                transform:
-                  rotation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                  - 1.0
-                  translation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                inverse:
-                  rotation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-                  - 1.0
-                  translation:
-                  - 0.0
-                  - 0.0
-                  - 0.0
-              coating: IdealAR
-              lidt: 10000.0
-        uuid: 9e04cd4d-a09b-4300-addb-987d495ca5e3
-        lidt: 10000.0
-        props: {}
-        inverted: false
-    edges:
-    - - cc2aa814-61f0-470e-8c66-6d611e4e88a0
-      - output_1
-      - 9e04cd4d-a09b-4300-addb-987d495ca5e3
-      - input_1
-      - 0.0
-    input_map: {}
-    output_map: {}
-global:
-  ambient_refr_index: !Const
-    refractive_index: 1.0
-analyzers:
-- !RayTrace
-  min_energy_per_ray: 1e-12
-  max_number_of_bounces: 1000
-  max_number_of_refractions: 1000
-  missed_surface_strategy: Stop
+(
+    opm_file_version: "0",
+    scenery: (
+        node_attr: (
+            node_type: "group",
+            name: "OpticScenery demo",
+            ports: (
+                inputs: {},
+                outputs: {},
+            ),
+            uuid: "1369c599-1750-43c4-8ff8-2ad317507397",
+            lidt: 10000.0,
+            props: {
+                "expand view": Bool(false),
+            },
+            inverted: false,
+        ),
+        graph: (
+            nodes: [
+                (
+                    attributes: (
+                        node_type: "dummy",
+                        name: "dummy1",
+                        ports: (
+                            inputs: {
+                                "input_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                        inverse: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: IdealAR,
+                                    lidt: 10000.0,
+                                ),
+                            },
+                            outputs: {
+                                "output_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                        inverse: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: IdealAR,
+                                    lidt: 10000.0,
+                                ),
+                            },
+                        ),
+                        uuid: "f9b965c3-0b5b-4d00-8e83-a435ad5b1f8b",
+                        lidt: 10000.0,
+                        props: {},
+                        inverted: false,
+                    ),
+                ),
+                (
+                    attributes: (
+                        node_type: "dummy",
+                        name: "dummy2",
+                        ports: (
+                            inputs: {
+                                "input_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                        inverse: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: IdealAR,
+                                    lidt: 10000.0,
+                                ),
+                            },
+                            outputs: {
+                                "output_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                        inverse: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: IdealAR,
+                                    lidt: 10000.0,
+                                ),
+                            },
+                        ),
+                        uuid: "881bad60-f450-4db5-bf96-098896e1edbe",
+                        lidt: 10000.0,
+                        props: {},
+                        inverted: false,
+                    ),
+                ),
+            ],
+            edges: [
+                ("f9b965c3-0b5b-4d00-8e83-a435ad5b1f8b", "output_1", "881bad60-f450-4db5-bf96-098896e1edbe", "input_1", 0.0),
+            ],
+            input_map: ({}),
+            output_map: ({}),
+        ),
+    ),
+    global: (
+        ambient_refr_index: Const((
+            refractive_index: 1.0,
+        )),
+    ),
+    analyzers: [
+        RayTrace((
+            min_energy_per_ray: 0.000000000001,
+            max_number_of_bounces: 1000,
+            max_number_of_refractions: 1000,
+            missed_surface_strategy: Stop,
+        )),
+    ],
+)

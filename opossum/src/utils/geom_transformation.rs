@@ -2,7 +2,6 @@
 #![warn(missing_docs)]
 use std::fmt::Display;
 
-use super::EnumProxy;
 use crate::{
     degree,
     error::{OpmResult, OpossumError},
@@ -405,14 +404,9 @@ impl Display for Isometry {
         )
     }
 }
-impl From<EnumProxy<Option<Isometry>>> for Proptype {
-    fn from(value: EnumProxy<Option<Isometry>>) -> Self {
-        Self::Isometry(value)
-    }
-}
 impl From<Option<Isometry>> for Proptype {
     fn from(value: Option<Isometry>) -> Self {
-        Self::Isometry(EnumProxy { value })
+        Self::Isometry(value)
     }
 }
 #[cfg(feature = "bevy")]
@@ -980,12 +974,5 @@ mod test {
     #[test]
     fn from() {
         assert_matches!(Some(Isometry::identity()).into(), Proptype::Isometry(_));
-        assert_matches!(
-            EnumProxy {
-                value: Some(Isometry::identity())
-            }
-            .into(),
-            Proptype::Isometry(_)
-        );
     }
 }

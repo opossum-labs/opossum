@@ -8,7 +8,9 @@ use crate::{
     analyzers::Analyzable,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    lightdata::LightData,
+    lightdata::{
+        light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder, LightData,
+    },
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     optic_ref::OpticRef,
@@ -16,7 +18,6 @@ use crate::{
     rays::Rays,
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
     surface::optic_surface::OpticSurface,
-    utils::EnumProxy,
     SceneryResources,
 };
 use num::Zero;
@@ -178,23 +179,18 @@ impl NodeGroup {
         };
         let node_props = node_props.clone();
         drop(node);
-        if let Proptype::LightData(ld) = node_props {
-            if let Some(LightData::Geometric(rays)) = &ld.value {
-                let mut new_rays = rays.clone();
-                new_rays.set_node_origin_uuid(node_id);
+        if let Proptype::LightData(Some(LightData::Geometric(rays))) = node_props {
+            let mut new_rays = rays;
+            new_rays.set_node_origin_uuid(node_id);
 
-                let mut node_ref = node_ref
-                    .optical_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
-                node_ref.node_attr_mut().set_property(
-                    "light data",
-                    EnumProxy::<Option<LightData>> {
-                        value: Some(LightData::Geometric(new_rays)),
-                    }
-                    .into(),
-                )?;
-            }
+            let mut node_ref = node_ref
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            node_ref.node_attr_mut().set_property(
+                "light data",
+                Some(LightDataBuilder::Geometric(RayDataBuilder::Raw(new_rays))).into(),
+            )?;
         }
         Ok(())
     }
@@ -737,7 +733,7 @@ mod test {
         let mut scenery = NodeGroup::default();
         scenery.add_node(Dummy::default()).unwrap();
         let report = scenery.toplevel_report().unwrap();
-        assert!(serde_yaml::to_string(&report).is_ok());
+        assert!(ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::default()).is_ok());
         // How shall we further parse the output?
     }
     #[test]
