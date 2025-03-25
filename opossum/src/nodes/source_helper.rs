@@ -108,7 +108,7 @@ mod test {
         if let Proptype::LightDataBuilder(light_data_builder) =
             src.properties().get("light data").unwrap()
         {
-            let data = light_data_builder.value.clone().unwrap().build().unwrap();
+            let data = light_data_builder.clone().unwrap().build().unwrap();
             if let LightData::Geometric(rays) = data {
                 assert_eq!(rays.nr_of_rays(true), 1);
                 assert_abs_diff_eq!(
@@ -126,7 +126,7 @@ mod test {
         if let Proptype::LightDataBuilder(light_data_builder) =
             src.properties().get("light data").unwrap()
         {
-            let data = light_data_builder.value.clone().unwrap().build().unwrap();
+            let data = light_data_builder.clone().unwrap().build().unwrap();
             if let LightData::Geometric(rays) = data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
@@ -150,7 +150,7 @@ mod test {
         if let Proptype::LightDataBuilder(light_data_builder) =
             src.properties().get("light data").unwrap()
         {
-            let data = light_data_builder.value.clone().unwrap().build().unwrap();
+            let data = light_data_builder.clone().unwrap().build().unwrap();
             if let LightData::Geometric(rays) = &data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
@@ -166,7 +166,7 @@ mod test {
         }
         let src = point_ray_source(degree!(1.0), joule!(1.0)).unwrap();
         if let Proptype::LightData(data) = src.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = &data.value {
+            if let Some(LightData::Geometric(rays)) = &data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
                     1.0,
@@ -192,7 +192,7 @@ mod test {
 
         let s = collimated_line_ray_source(millimeter!(1.0), joule!(1.0), 2).unwrap();
         if let Proptype::LightData(data) = s.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = &data.value {
+            if let Some(LightData::Geometric(rays)) = &data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
                     1.0,

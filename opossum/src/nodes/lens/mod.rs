@@ -11,7 +11,7 @@ use crate::{
     radian,
     refractive_index::{RefrIndexConst, RefractiveIndex, RefractiveIndexType},
     surface::{geo_surface::GeoSurfaceRef, Plane, Sphere},
-    utils::{geom_transformation::Isometry, EnumProxy},
+    utils::geom_transformation::Isometry,
 };
 #[cfg(feature = "bevy")]
 use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
@@ -80,10 +80,7 @@ impl Default for Lens {
             .create_property(
                 "refractive index",
                 "refractive index of the lens material",
-                EnumProxy::<RefractiveIndexType> {
-                    value: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
-                }
-                .into(),
+                RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()).into(),
             )
             .unwrap();
         let mut lens = Self { node_attr };
@@ -133,13 +130,8 @@ impl Lens {
         lens.node_attr
             .set_property("center thickness", center_thickness.into())?;
 
-        lens.node_attr.set_property(
-            "refractive index",
-            EnumProxy::<RefractiveIndexType> {
-                value: refractive_index.to_enum(),
-            }
-            .into(),
-        )?;
+        lens.node_attr
+            .set_property("refractive index", refractive_index.to_enum().into())?;
         lens.update_surfaces()?;
         Ok(lens)
     }
@@ -377,10 +369,7 @@ mod test {
         else {
             panic!()
         };
-        assert_eq!(
-            (*index).value.get_refractive_index(Length::zero()).unwrap(),
-            1.5
-        );
+        assert_eq!((*index).get_refractive_index(Length::zero()).unwrap(), 1.5);
     }
     #[test]
     fn new() {
@@ -416,9 +405,8 @@ mod test {
             panic!()
         };
         assert_eq!(*roc, millimeter!(11.0));
-        let Ok(Proptype::RefractiveIndex(EnumProxy::<RefractiveIndexType> {
-            value: RefractiveIndexType::Const(ref_index_const),
-        })) = node.node_attr.get_property("refractive index")
+        let Ok(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_index_const))) =
+            node.node_attr.get_property("refractive index")
         else {
             panic!()
         };

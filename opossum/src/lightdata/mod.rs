@@ -68,7 +68,10 @@ impl DataEnergy {
 }
 #[cfg(test)]
 mod test {
-    use crate::{properties::Proptype, spectrum_helper::create_visible_spec, utils::EnumProxy};
+    use crate::{
+        lightdata::light_data_builder::LightDataBuilder, properties::Proptype,
+        spectrum_helper::create_visible_spec,
+    };
 
     use super::*;
     use assert_matches::assert_matches;
@@ -92,9 +95,7 @@ mod test {
     }
     #[test]
     fn from() {
-        let ld = Proptype::from(EnumProxy::<Option<LightData>> {
-            value: Some(LightData::Fourier),
-        });
-        assert_matches!(ld, Proptype::LightData(_));
+        let ld = Proptype::from(Some(LightDataBuilder::Fourier));
+        assert_matches!(ld, Proptype::LightDataBuilder(_));
     }
 }

@@ -21,7 +21,6 @@ use crate::{
     properties::Proptype,
     ray::Ray,
     rays::Rays,
-    utils::EnumProxy,
 };
 use std::fmt::Debug;
 
@@ -54,7 +53,7 @@ impl Default for Source {
             .create_property(
                 "light data",
                 "data of the emitted light",
-                EnumProxy::<Option<LightDataBuilder>> { value: None }.into(),
+                Option::<LightDataBuilder>::None.into(),
             )
             .unwrap();
 
@@ -96,13 +95,7 @@ impl Source {
         source.node_attr.set_name(name);
         source
             .node_attr
-            .set_property(
-                "light data",
-                EnumProxy::<Option<LightDataBuilder>> {
-                    value: Some(light_data_builder),
-                }
-                .into(),
-            )
+            .set_property("light data", Some(light_data_builder).into())
             .unwrap();
         source.update_surfaces().unwrap();
         source
@@ -131,13 +124,8 @@ impl Source {
     /// # Errors
     /// This function returns an error if the property "light data" can not be set
     pub fn set_light_data(&mut self, light_data_builder: LightDataBuilder) -> OpmResult<()> {
-        self.node_attr.set_property(
-            "light data",
-            EnumProxy::<Option<LightDataBuilder>> {
-                value: Some(light_data_builder),
-            }
-            .into(),
-        )?;
+        self.node_attr
+            .set_property("light data", Some(light_data_builder).into())?;
         Ok(())
     }
 }
@@ -145,7 +133,7 @@ impl Debug for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let light_prop = self.node_attr.get_property("light data").unwrap();
         let data = if let Proptype::LightDataBuilder(data) = &light_prop {
-            &data.value
+            data
         } else {
             &None
         };
@@ -174,7 +162,7 @@ impl AnalysisEnergy for Source {
         if let Ok(Proptype::LightDataBuilder(light_data_builder)) =
             self.node_attr.get_property("light data")
         {
-            let data = if let Some(light_data_builder) = light_data_builder.value.clone() {
+            let data = if let Some(light_data_builder) = light_data_builder.clone() {
                 light_data_builder.build()?
             } else {
                 return Err(OpossumError::Analysis(
@@ -198,7 +186,7 @@ impl AnalysisRayTrace for Source {
         if let Ok(Proptype::LightDataBuilder(light_data_builder)) =
             self.node_attr.get_property("light data")
         {
-            let mut data = if let Some(lightdata_builder) = light_data_builder.value.clone() {
+            let mut data = if let Some(lightdata_builder) = light_data_builder.clone() {
                 lightdata_builder.build()?
             } else {
                 return Err(OpossumError::Analysis(
@@ -281,7 +269,7 @@ impl AnalysisGhostFocus for Source {
             if let Ok(Proptype::LightDataBuilder(light_data_builder)) =
                 self.node_attr.get_property("light data")
             {
-                let mut data = if let Some(lightdata_builder) = light_data_builder.value.clone() {
+                let mut data = if let Some(lightdata_builder) = light_data_builder.clone() {
                     lightdata_builder.build()?
                 } else {
                     return Err(OpossumError::Analysis(
@@ -346,7 +334,7 @@ mod test {
         assert_eq!(node.name(), "source");
         assert_eq!(node.node_type(), "source");
         if let Ok(Proptype::LightDataBuilder(light_data)) = node.properties().get("light data") {
-            assert_eq!(light_data.value, None);
+            assert!(light_data.is_none());
         } else {
             panic!("cannot unpack light data property");
         };
@@ -409,12 +397,14 @@ mod test {
     #[test]
     fn test_set_light_data() {
         let mut src = Source::default();
-        if let Ok(Proptype::LightDataBuilder(light_data)) = src.properties().get("light data") {
-            assert_eq!(light_data.value, None);
+        if let Proptype::LightDataBuilder(light_data) = src.properties().get("light data").unwrap()
+        {
+            assert!(light_data.is_none());
         }
         src.set_light_data(LightDataBuilder::Fourier).unwrap();
-        if let Ok(Proptype::LightDataBuilder(light_data)) = src.properties().get("light data") {
-            assert_matches!(light_data.value.clone().unwrap(), LightDataBuilder::Fourier);
+        if let Proptype::LightDataBuilder(light_data) = src.properties().get("light data").unwrap()
+        {
+            assert_matches!(light_data.clone().unwrap(), LightDataBuilder::Fourier);
         }
     }
     #[test]

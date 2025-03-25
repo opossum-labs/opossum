@@ -271,7 +271,7 @@ pub trait AnalysisRayTrace: OpticNode {
             degree!(0.)
         };
 
-        Ok((index_model.value.clone(), *center_thickness, angle))
+        Ok((index_model.clone(), *center_thickness, angle))
     }
 }
 
