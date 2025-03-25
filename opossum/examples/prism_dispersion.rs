@@ -6,7 +6,7 @@ use opossum::{
     degree,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     millimeter, nanometer,
     nodes::{NodeGroup, RayPropagationVisualizer, Source, SpotDiagram, Wedge},
     optic_node::{Alignable, OpticNode},
@@ -46,8 +46,8 @@ fn main() -> OpmResult<()> {
     rays_1w.add_rays(&mut rays_2w);
 
     let mut scenery = NodeGroup::default();
-    let light = LightData::Geometric(rays_1w);
-    let mut light_src = Source::new("collimated ray source", &light);
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays_1w));
+    let mut light_src = Source::new("collimated ray source", light_data_builder);
     light_src.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(light_src)?;
 

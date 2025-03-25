@@ -4,7 +4,7 @@ use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     aperture::Aperture,
     error::{OpmResult, OpossumError},
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, LightData},
     nodes::{
         fluence_detector::{fluence_data::FluenceData, Fluence},
         ray_propagation_visualizer::RayPositionHistories,
@@ -108,6 +108,8 @@ pub enum Proptype {
     HitMap(HitMap),
     /// 2-dimenstional vector
     Vec2(Vector2<f64>),
+    /// [`LightData`] build configuration
+    LightDataBuilder(EnumProxy<Option<LightDataBuilder>>),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.

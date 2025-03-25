@@ -5,7 +5,7 @@ use num::Zero;
 use opossum::{
     analyzers::AnalyzerType,
     error::OpmResult,
-    lightdata::{DataEnergy, LightData},
+    lightdata::{energy_spectrum_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
     nanometer,
     nodes::{BeamSplitter, Dummy, FilterType, IdealFilter, NodeGroup, Source},
     ray::SplittingConfig,
@@ -16,18 +16,12 @@ use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("beam combiner demo");
-    let i_s1 = scenery.add_node(Source::new(
-        "Source 1",
-        &LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        }),
-    ))?;
-    let i_s2 = scenery.add_node(Source::new(
-        "Source 2",
-        &LightData::Energy(DataEnergy {
-            spectrum: create_nd_glass_spec(1.0)?,
-        }),
-    ))?;
+    let light_data_builder =
+        LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0)?));
+    let i_s1 = scenery.add_node(Source::new("Source 1", light_data_builder))?;
+    let light_data_builder =
+        LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_nd_glass_spec(1.0)?));
+    let i_s2 = scenery.add_node(Source::new("Source 2", light_data_builder))?;
     let i_bs = scenery.add_node(BeamSplitter::new("bs", &SplittingConfig::Ratio(0.5)).unwrap())?;
     let filter_spectrum = generate_filter_spectrum(
         nanometer!(400.0)..nanometer!(1100.0),

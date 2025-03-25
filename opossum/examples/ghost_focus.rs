@@ -5,7 +5,7 @@ use opossum::{
     energy_distributions::General2DGaussian,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, Source, ThinMirror},
     optic_node::{Alignable, OpticNode},
@@ -35,8 +35,8 @@ fn main() -> OpmResult<()> {
         &HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?,
     )?;
 
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("collimated ray source", &light);
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     let i_src = scenery.add_node(src)?;
     let mut lens = Lens::default();

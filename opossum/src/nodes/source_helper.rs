@@ -3,7 +3,7 @@
 use super::Source;
 use crate::{
     error::OpmResult,
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     nanometer,
     optic_node::OpticNode,
     position_distributions::{Grid, Hexapolar},
@@ -34,8 +34,8 @@ pub fn round_collimated_ray_source(
         energy,
         &Hexapolar::new(radius, nr_of_rings)?,
     )?;
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("collimated ray source", &light);
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let mut src = Source::new("collimated line ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)
 }
@@ -60,8 +60,8 @@ pub fn collimated_line_ray_source(
         energy,
         &Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?,
     )?;
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("collimated line ray source", &light);
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let mut src = Source::new("collimated line ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)
 }
@@ -84,15 +84,18 @@ pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> 
         nanometer!(1000.0),
         energy,
     )?;
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("point ray source", &light);
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let mut src = Source::new("point ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)
 }
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{degree, joule, millimeter, optic_node::OpticNode, properties::Proptype, ray::Ray};
+    use crate::{
+        degree, joule, lightdata::LightData, millimeter, optic_node::OpticNode,
+        properties::Proptype, ray::Ray,
+    };
     use approx::assert_abs_diff_eq;
     use uom::si::energy::joule;
     #[test]
@@ -102,8 +105,11 @@ mod test {
         assert!(round_collimated_ray_source(millimeter!(1.0), joule!(f64::INFINITY), 3).is_err());
         assert!(round_collimated_ray_source(millimeter!(-0.1), joule!(1.0), 3).is_err());
         let src = round_collimated_ray_source(Length::zero(), joule!(1.0), 3).unwrap();
-        if let Proptype::LightData(light_data) = src.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = &light_data.value {
+        if let Proptype::LightDataBuilder(light_data_builder) =
+            src.properties().get("light data").unwrap()
+        {
+            let data = light_data_builder.value.clone().unwrap().build().unwrap();
+            if let LightData::Geometric(rays) = data {
                 assert_eq!(rays.nr_of_rays(true), 1);
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
@@ -138,8 +144,11 @@ mod test {
         assert!(point_ray_source(degree!(180.0), Energy::zero()).is_err());
         assert!(point_ray_source(degree!(190.0), Energy::zero()).is_err());
         let src = point_ray_source(Angle::zero(), joule!(1.0)).unwrap();
-        if let Proptype::LightData(data) = src.properties().get("light data").unwrap() {
-            if let Some(LightData::Geometric(rays)) = &data.value {
+        if let Proptype::LightDataBuilder(light_data_builder) =
+            src.properties().get("light data").unwrap()
+        {
+            let data = light_data_builder.value.clone().unwrap().build().unwrap();
+            if let LightData::Geometric(rays) = &data {
                 assert_abs_diff_eq!(
                     rays.total_energy().get::<joule>(),
                     1.0,

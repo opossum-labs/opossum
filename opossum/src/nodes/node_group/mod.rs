@@ -655,7 +655,7 @@ mod test {
         analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
         joule,
         light_result::LightResult,
-        lightdata::LightData,
+        lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
         millimeter, nanometer,
         nodes::{test_helper::test_helper::*, Dummy, EnergyMeter, Source},
         optic_node::OpticNode,
@@ -771,8 +771,9 @@ mod test {
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.1)).unwrap(),
         );
         let mut scenery = NodeGroup::default();
+        let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
         let i_s = scenery
-            .add_node(Source::new("src", &LightData::Geometric(rays)))
+            .add_node(Source::new("src", light_data_builder))
             .unwrap();
         let mut em = EnergyMeter::default();
         em.set_isometry(Isometry::identity()).unwrap();

@@ -4,7 +4,7 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     millimeter, nanometer,
     nodes::{EnergyMeter, FluenceDetector, Lens, NodeGroup, RayPropagationVisualizer, Source},
     optic_node::OpticNode,
@@ -24,7 +24,8 @@ fn main() -> OpmResult<()> {
         &UniformDist::new(joule!(1.))?,
         &Grid::new((millimeter!(9.), millimeter!(9.)), (100, 100))?,
     )?;
-    let mut source = Source::new("src", &LightData::Geometric(rays));
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let mut source = Source::new("src", light_data_builder);
     source.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(source)?;
     let fd1 = scenery.add_node(FluenceDetector::new("before lens"))?;

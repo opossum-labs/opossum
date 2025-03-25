@@ -8,7 +8,7 @@ use opossum::{
     energy_distributions::UniformDist,
     error::OpmResult,
     joule,
-    lightdata::LightData,
+    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, NodeReference, RayPropagationVisualizer, Source, ThinMirror},
     optic_node::{Alignable, OpticNode},
@@ -43,9 +43,8 @@ pub fn main() -> OpmResult<()> {
         &UniformDist::new(joule!(1.))?,
         &Hexapolar::new(millimeter!(10.), 10)?,
     )?;
-
-    let light = LightData::Geometric(rays);
-    let mut src = Source::new("collimated ray source", &light);
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_alignment_wavelength(alignment_wvl)?;
     src.set_isometry(Isometry::identity())?;
 

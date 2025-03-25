@@ -1,5 +1,9 @@
 #![warn(missing_docs)]
 //! Data structures containing the light information flowing between [`OpticNode`s](crate::optic_node::OpticNode).
+
+pub mod energy_spectrum_builder;
+pub mod light_data_builder;
+pub mod ray_data_builder;
 use crate::{error::OpmResult, joule, nodes::FilterType, rays::Rays, spectrum::Spectrum};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -35,6 +39,7 @@ impl Display for LightData {
         }
     }
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 /// Data structure for storing [`LightData::Energy`] data.
 ///
@@ -85,10 +90,6 @@ mod test {
     fn debug() {
         assert_eq!(format!("{:?}", LightData::Fourier), "Fourier");
     }
-    // #[test]
-    // fn export_wrong() {
-    //     assert!(LightData::Fourier.export(Path::new("")).is_err());
-    // }
     #[test]
     fn from() {
         let ld = Proptype::from(EnumProxy::<Option<LightData>> {
@@ -96,12 +97,4 @@ mod test {
         });
         assert_matches!(ld, Proptype::LightData(_));
     }
-    // #[test]
-    // fn data_energy_pdf_report() {
-    //     assert!(DataEnergy {
-    //         spectrum: create_visible_spec()
-    //     }
-    //     .pdf_report()
-    //     .is_ok());
-    // }
 }
