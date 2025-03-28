@@ -10,7 +10,6 @@ use opossum::{
     optic_node::OpticNode,
     optic_ports::PortType,
     position_distributions::Grid,
-    rays::Rays,
     refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
     OpmDocument,
@@ -19,12 +18,11 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Fresnel coating example");
-    let rays = Rays::new_collimated(
-        nanometer!(1000.),
-        &UniformDist::new(joule!(1.))?,
-        &Grid::new((millimeter!(9.), millimeter!(9.)), (100, 100))?,
-    )?;
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+        pos_dist: Grid::new((millimeter!(9.), millimeter!(9.)), (100, 100))?.into(),
+        energy_dist: UniformDist::new(joule!(1.))?.into(),
+        wave_length: nanometer!(1000.),
+    });
     let mut source = Source::new("src", light_data_builder);
     source.set_isometry(Isometry::identity())?;
     let src = scenery.add_node(source)?;

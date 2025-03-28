@@ -16,13 +16,6 @@ use uom::si::f64::Length;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("laser system");
     // Main beam line
-
-    // let source = Source::new(
-    //     "Source",
-    //     &LightData::Energy(DataEnergy {
-    //         spectrum: create_he_ne_spec(1.0)?,
-    //     }),
-    // );
     let source = round_collimated_ray_source(millimeter!(1.0), joule!(1.0), 3)?;
     let i_src = scenery.add_node(source)?;
     let i_l1 = scenery.add_node(ParaxialSurface::new("f=100", millimeter!(100.0))?)?;

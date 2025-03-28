@@ -25,7 +25,7 @@ fn main() -> OpmResult<()> {
         RectangleConfig::new(millimeter!(15.), millimeter!(15.), millimeter!(0.0, 0.0))?;
     let aperture = Aperture::BinaryRectangle(rect_config);
 
-    dummy.set_aperture(&PortType::Input, "front", &aperture)?;
+    dummy.set_aperture(&PortType::Input, "input_1", &aperture)?;
     let dummy = dummy.with_decenter(millimeter!(-5.0, 5.0, 0.0))?;
 
     let i_d = scenery.add_node(dummy)?;

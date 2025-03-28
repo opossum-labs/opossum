@@ -18,8 +18,15 @@ use super::LightData;
 pub enum RayDataBuilder {
     /// Raw [`Rays`] data.
     Raw(Rays),
-    /// Collimated [`Rays`] data with a given [`PosDistType`] and [`EnergyDistType`] as well as a given wavelength.
-    Collimated(PosDistType, EnergyDistType, Length),
+    /// Collimated [`Rays`] data with a given [`PosDistType`] and [`EnergyDistType`] as well as a given single wavelength.
+    Collimated {
+        /// Position distribution.
+        pos_dist: PosDistType,
+        /// Energy distribution.
+        energy_dist: EnergyDistType,
+        /// Wavelength of the rays.
+        wave_length: Length,
+    },
 }
 
 impl RayDataBuilder {
@@ -30,7 +37,11 @@ impl RayDataBuilder {
     pub fn build(self) -> OpmResult<LightData> {
         match self {
             Self::Raw(rays) => Ok(LightData::Geometric(rays)),
-            Self::Collimated(pos_dist, energy_dist, wave_length) => {
+            Self::Collimated {
+                pos_dist,
+                energy_dist,
+                wave_length,
+            } => {
                 let rays =
                     Rays::new_collimated(wave_length, energy_dist.generate(), pos_dist.generate())?;
                 Ok(LightData::Geometric(rays))
@@ -43,7 +54,11 @@ impl Display for RayDataBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Raw(r) => write!(f, "Raw({r})"),
-            Self::Collimated(pos_dist, energy_dist, wave_length) => {
+            Self::Collimated {
+                pos_dist,
+                energy_dist,
+                wave_length,
+            } => {
                 write!(
                     f,
                     "Collimated({pos_dist:?}, {energy_dist:?}, {wave_length:?})"
