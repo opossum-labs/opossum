@@ -12,6 +12,7 @@ use opossum::{
     optic_ports::PortType,
     position_distributions::HexagonalTiling,
     radian,
+    spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
     OpmDocument,
 };
@@ -31,7 +32,7 @@ fn main() -> OpmResult<()> {
             false,
         )?
         .into(),
-        wave_length: nanometer!(1000.0),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
     });
     let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;

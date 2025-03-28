@@ -4,14 +4,12 @@
 //! This builder allows easier serialization / deserialization in OPM files.
 use std::fmt::Display;
 
+use super::LightData;
 use crate::{
     energy_distributions::EnergyDistType, error::OpmResult, position_distributions::PosDistType,
-    rays::Rays,
+    rays::Rays, spectral_distribution::SpecDistType,
 };
 use serde::{Deserialize, Serialize};
-use uom::si::f64::Length;
-
-use super::LightData;
 
 /// Builder for the generation of [`LightData::Geometric`].
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -25,7 +23,7 @@ pub enum RayDataBuilder {
         /// Energy distribution.
         energy_dist: EnergyDistType,
         /// Wavelength of the rays.
-        wave_length: Length,
+        spect_dist: SpecDistType,
     },
 }
 
@@ -40,10 +38,13 @@ impl RayDataBuilder {
             Self::Collimated {
                 pos_dist,
                 energy_dist,
-                wave_length,
+                spect_dist,
             } => {
-                let rays =
-                    Rays::new_collimated(wave_length, energy_dist.generate(), pos_dist.generate())?;
+                let rays = Rays::new_collimated_with_spectrum(
+                    spect_dist.generate(),
+                    energy_dist.generate(),
+                    pos_dist.generate(),
+                )?;
                 Ok(LightData::Geometric(rays))
             }
         }
@@ -57,11 +58,11 @@ impl Display for RayDataBuilder {
             Self::Collimated {
                 pos_dist,
                 energy_dist,
-                wave_length,
+                spect_dist,
             } => {
                 write!(
                     f,
-                    "Collimated({pos_dist:?}, {energy_dist:?}, {wave_length:?})"
+                    "Collimated({pos_dist:?}, {energy_dist:?}, {spect_dist:?})"
                 )
             }
         }

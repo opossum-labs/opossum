@@ -999,9 +999,9 @@ mod test {
     #[test]
     fn serialize() {
         let s = prep();
-        let s_yaml = ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n"));
-        assert!(s_yaml.is_ok());
-        assert_eq!(s_yaml.unwrap(),
+        let s_ron =
+            ron::ser::to_string_pretty(&s, ron::ser::PrettyConfig::new().new_line("\n")).unwrap();
+        assert_eq!(s_ron,
         "(\n    data: [\n        (1.0, 0.0),\n        (1.5, 0.0),\n        (2.0, 0.0),\n        (2.5, 0.0),\n        (3.0, 0.0),\n        (3.5, 0.0),\n    ],\n)".to_string());
     }
     #[test]

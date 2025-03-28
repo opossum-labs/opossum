@@ -11,6 +11,7 @@ use opossum::{
     optic_ports::PortType,
     position_distributions::Grid,
     refractive_index::RefrIndexConst,
+    spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
     OpmDocument,
 };
@@ -21,7 +22,7 @@ fn main() -> OpmResult<()> {
     let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
         pos_dist: Grid::new((millimeter!(9.), millimeter!(9.)), (100, 100))?.into(),
         energy_dist: UniformDist::new(joule!(1.))?.into(),
-        wave_length: nanometer!(1000.),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.), 1.0)])?.into(),
     });
     let mut source = Source::new("src", light_data_builder);
     source.set_isometry(Isometry::identity())?;

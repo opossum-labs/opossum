@@ -9,6 +9,7 @@ use crate::{
     optic_node::OpticNode,
     position_distributions::{Grid, Hexapolar},
     rays::Rays,
+    spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;
@@ -33,7 +34,7 @@ pub fn round_collimated_ray_source(
     let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
         pos_dist: Hexapolar::new(radius, nr_of_rings)?.into(),
         energy_dist: UniformDist::new(energy)?.into(),
-        wave_length: nanometer!(1000.0),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
     });
     let mut src = Source::new("collimated line ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
@@ -58,7 +59,7 @@ pub fn collimated_line_ray_source(
     let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
         pos_dist: Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?.into(),
         energy_dist: UniformDist::new(energy)?.into(),
-        wave_length: nanometer!(1000.0),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
     });
     let mut src = Source::new("collimated line ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
