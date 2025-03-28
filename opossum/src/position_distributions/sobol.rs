@@ -3,12 +3,14 @@ use super::PositionDistribution;
 use crate::error::{OpmResult, OpossumError};
 use nalgebra::{point, Point3};
 use num::Zero;
+use serde::{Deserialize, Serialize};
 use sobol::{params::JoeKuoD6, Sobol};
 use uom::si::f64::Length;
 
 /// Rectangluar, low-discrepancy quasirandom distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Sobol_sequence)
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SobolDist {
     nr_of_points: usize,
     side_length_x: Length,
@@ -66,6 +68,11 @@ impl PositionDistribution for SobolDist {
             points.push(point!(point_x, point_y, Length::zero()));
         }
         points
+    }
+}
+impl From<SobolDist> for super::PosDistType {
+    fn from(f: SobolDist) -> Self {
+        Self::Sobol(f)
     }
 }
 #[cfg(test)]

@@ -4,18 +4,21 @@ use num::Zero;
 use opossum::{
     analyzers::AnalyzerType,
     error::OpmResult,
+    joule,
     lightdata::{energy_spectrum_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
+    nanometer,
     nodes::{Dummy, EnergyMeter, NodeGroup, Source},
     optic_node::OpticNode,
-    spectrum_helper::create_he_ne_spec,
     OpmDocument,
 };
 use uom::si::f64::Length;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Inverse Group test");
-    let light_data_builder =
-        LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0)?));
+    let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+        vec![(nanometer!(633.0), joule!(1.0))],
+        nanometer!(1.0),
+    ));
     let i_s = scenery.add_node(Source::new("Source", light_data_builder))?;
 
     let mut group = NodeGroup::default();

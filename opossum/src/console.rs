@@ -253,13 +253,13 @@ mod test {
         let path_inexistent_file = Path::new("./files_for_testing/opm/nonexistent.opm");
         let path_inexistent_dir =
             Path::new("./files_for_testing/this_dir_does_not_exist/empty.opm");
-        let path_not_yaml = Path::new("./files_for_testing/opm/is_not_a_opm.txt");
+        let path_not_opm = Path::new("./files_for_testing/opm/is_not_a_opm.txt");
         let path_is_dir = Path::new("./files_for_testing/opm/");
 
         assert_eq!(file_path_is_valid(path_valid), true);
         assert_eq!(file_path_is_valid(path_inexistent_file), false);
         assert_eq!(file_path_is_valid(path_inexistent_dir), false);
-        assert_eq!(file_path_is_valid(path_not_yaml), false);
+        assert_eq!(file_path_is_valid(path_not_opm), false);
         assert_eq!(file_path_is_valid(path_is_dir), false);
     }
     #[test]
@@ -267,7 +267,7 @@ mod test {
         let path_valid = "./files_for_testing/opm/opticscenery.opm";
         let path_inexistent_file = "./files_for_testing/opm/nonexistent.opm";
         let path_inexistent_dir = "./files_for_testing/this_dir_does_not_exist/empty.opm";
-        let path_not_yaml = "./files_for_testing/opm/is_not_an_opm.txt";
+        let path_not_opm = "./files_for_testing/opm/is_not_an_opm.txt";
         let path_is_dir = "./files_for_testing/opm/";
 
         assert_eq!(
@@ -276,7 +276,7 @@ mod test {
         );
         assert_eq!(eval_file_path_input(path_inexistent_file), None);
         assert_eq!(eval_file_path_input(path_inexistent_dir), None);
-        assert_eq!(eval_file_path_input(path_not_yaml), None);
+        assert_eq!(eval_file_path_input(path_not_opm), None);
         assert_eq!(eval_file_path_input(path_is_dir), None);
     }
     #[test]
@@ -295,7 +295,7 @@ mod test {
     }
     #[test]
     fn get_parent_dir_test() {
-        let path_valid = "./files_for_testing/opm/empty_yaml.yaml".to_owned();
+        let path_valid = "./files_for_testing/opm/my_file.opm".to_owned();
         assert_eq!(
             get_parent_dir(&PathBuf::from(path_valid)),
             PathBuf::from("./files_for_testing/opm")

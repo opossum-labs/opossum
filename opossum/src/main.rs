@@ -79,13 +79,13 @@ fn create_report_and_data_files(
     let mut output = create_dot_or_report_file_instance(
         report_directory,
         &format!("report_{report_number}"),
-        "yaml",
+        "ron",
         "analysis report",
     )?;
     write!(
         output,
         "{}",
-        ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::default()).unwrap()
+        ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::new().new_line("\n")).unwrap()
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let mut report_path = report_directory.to_path_buf();

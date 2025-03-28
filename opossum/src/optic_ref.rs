@@ -224,7 +224,9 @@ mod test {
     #[test]
     fn serialize() {
         let optic_ref = OpticRef::new(Arc::new(Mutex::new(Dummy::default())), None);
-        let _ = ron::ser::to_string_pretty(&optic_ref, ron::ser::PrettyConfig::default()).unwrap();
+        let _ =
+            ron::ser::to_string_pretty(&optic_ref, ron::ser::PrettyConfig::new().new_line("\n"))
+                .unwrap();
     }
     #[test]
     fn deserialize() {

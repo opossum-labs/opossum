@@ -12,7 +12,7 @@ use opossum::{
     optic_ports::PortType,
     position_distributions::HexagonalTiling,
     radian,
-    rays::Rays,
+    spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
     OpmDocument,
 };
@@ -21,21 +21,19 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     scenery.node_attr_mut().set_name("Folded Telescope");
-
-    let rays = Rays::new_collimated(
-        nanometer!(1000.0),
-        &General2DGaussian::new(
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+        pos_dist: HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?.into(),
+        energy_dist: General2DGaussian::new(
             joule!(2.),
             millimeter!(0., 0.),
             millimeter!(8., 8.),
             5.,
             radian!(0.),
             false,
-        )?,
-        &HexagonalTiling::new(millimeter!(15.0), 25, millimeter!(0.0, 0.))?,
-    )?;
-
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+        )?
+        .into(),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    });
     let mut src = Source::new("collimated ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     let i_src = scenery.add_node(src)?;

@@ -733,7 +733,10 @@ mod test {
         let mut scenery = NodeGroup::default();
         scenery.add_node(Dummy::default()).unwrap();
         let report = scenery.toplevel_report().unwrap();
-        assert!(ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::default()).is_ok());
+        assert!(
+            ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::new().new_line("\n"))
+                .is_ok()
+        );
         // How shall we further parse the output?
     }
     #[test]

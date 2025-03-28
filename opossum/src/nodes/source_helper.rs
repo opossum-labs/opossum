@@ -2,12 +2,14 @@
 //! Helper functions for easier creation of `standard` ray [`Source`]s.
 use super::Source;
 use crate::{
+    energy_distributions::UniformDist,
     error::OpmResult,
     lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
     nanometer,
     optic_node::OpticNode,
     position_distributions::{Grid, Hexapolar},
     rays::Rays,
+    spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;
@@ -29,12 +31,11 @@ pub fn round_collimated_ray_source(
     energy: Energy,
     nr_of_rings: u8,
 ) -> OpmResult<Source> {
-    let rays = Rays::new_uniform_collimated(
-        nanometer!(1000.0),
-        energy,
-        &Hexapolar::new(radius, nr_of_rings)?,
-    )?;
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+        pos_dist: Hexapolar::new(radius, nr_of_rings)?.into(),
+        energy_dist: UniformDist::new(energy)?.into(),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    });
     let mut src = Source::new("collimated line ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)
@@ -55,12 +56,11 @@ pub fn collimated_line_ray_source(
     energy: Energy,
     nr_of_points_y: usize,
 ) -> OpmResult<Source> {
-    let rays = Rays::new_uniform_collimated(
-        nanometer!(1000.0),
-        energy,
-        &Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?,
-    )?;
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Collimated {
+        pos_dist: Grid::new((Length::zero(), size_y), (1, nr_of_points_y))?.into(),
+        energy_dist: UniformDist::new(energy)?.into(),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+    });
     let mut src = Source::new("collimated line ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)

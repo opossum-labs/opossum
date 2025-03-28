@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use super::SpectralDistribution;
@@ -8,6 +9,7 @@ use crate::utils::math_distribution_functions::gaussian;
 use itertools::Itertools;
 use kahan::KahanSummator;
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Gaussian {
     wvl_range: (Length, Length),
     num_points: usize,
@@ -92,6 +94,11 @@ impl SpectralDistribution for Gaussian {
             .zip(wvls.iter())
             .map(|v| (meter!(*v.1), *v.0 / sum))
             .collect_vec())
+    }
+}
+impl From<Gaussian> for super::SpecDistType {
+    fn from(g: Gaussian) -> Self {
+        Self::Gaussian(g)
     }
 }
 #[cfg(test)]

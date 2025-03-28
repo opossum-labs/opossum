@@ -1648,7 +1648,8 @@ mod test {
             vec!["input_1", "input_2"]
         );
         let serialized =
-            ron::ser::to_string_pretty(&graph, ron::ser::PrettyConfig::default()).unwrap();
+            ron::ser::to_string_pretty(&graph, ron::ser::PrettyConfig::new().new_line("\n"))
+                .unwrap();
         let deserialized: OpticGraph = ron::from_str(&serialized).unwrap();
         assert_eq!(
             deserialized.port_map(&PortType::Input).port_names(),
