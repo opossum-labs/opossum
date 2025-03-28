@@ -4,10 +4,11 @@ use crate::error::{OpmResult, OpossumError};
 use super::PositionDistribution;
 use nalgebra::{point, Point3};
 use num::Zero;
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Circular, hexapolar distribution
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Hexapolar {
     nr_of_rings: u8,
     radius: Length,
@@ -52,6 +53,11 @@ impl PositionDistribution for Hexapolar {
             }
         }
         points
+    }
+}
+impl From<Hexapolar> for super::PosDistType {
+    fn from(dist: Hexapolar) -> Self {
+        Self::Hexapolar(dist)
     }
 }
 #[cfg(test)]

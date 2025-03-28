@@ -17,6 +17,7 @@
 //! ```
 //! `points` now contains a vector of 10 randomly-placed 3D points within the rectangle (-0.5 mm .. 0.5 mm) x (-1.0 mm .. 1.0 mm).
 use nalgebra::Point3;
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 mod fibonacci;
@@ -39,4 +40,23 @@ pub trait PositionDistribution {
     ///
     /// This function generates a vector of 3D points (of dimension [`Length`]) with the given parameters defined earlier.
     fn generate(&self) -> Vec<Point3<Length>>;
+}
+
+/// Enum for the different types of position distributions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PosDistType {
+    /// Rectangular, uniform random distribution
+    Random(random::Random),
+    /// Rectangular, evenly-sized grid distribution
+    Grid(grid::Grid),
+    /// Hexagonal tiling distribution
+    HexagonalTiling(hexagonal_tiling::HexagonalTiling),
+    /// Hexapolar distribution
+    Hexapolar(hexapolar::Hexapolar),
+    /// Fibonacci rectangle distribution
+    FibonacciRectangle(fibonacci::FibonacciRectangle),
+    /// Fibonacci ellipse distribution
+    FibonacciEllipse(fibonacci::FibonacciEllipse),
+    /// Pseudo random Sobol distribution
+    Sobol(sobol::SobolDist),
 }

@@ -38,14 +38,14 @@ impl Coating for ConstantR {
     ) -> f64 {
         self.reflectivity
     }
-
-    fn to_enum(&self) -> super::CoatingType {
-        CoatingType::ConstantR {
-            reflectivity: self.reflectivity,
+}
+impl From<ConstantR> for CoatingType {
+    fn from(coating: ConstantR) -> Self {
+        Self::ConstantR {
+            reflectivity: coating.reflectivity,
         }
     }
 }
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -64,10 +64,10 @@ mod test {
         assert!(ConstantR::new(1.1).is_err());
     }
     #[test]
-    fn to_enum() {
+    fn from() {
         let coating = ConstantR::new(0.5).unwrap();
         assert!(matches!(
-            coating.to_enum(),
+            coating.into(),
             CoatingType::ConstantR { reflectivity: 0.5 }
         ));
     }

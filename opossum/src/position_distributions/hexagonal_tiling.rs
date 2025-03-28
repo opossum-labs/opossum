@@ -9,10 +9,11 @@ use crate::{
 use super::PositionDistribution;
 use nalgebra::{Point2, Point3, Vector3};
 use num::{ToPrimitive, Zero};
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Circular, hexapolar distribution
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HexagonalTiling {
     nr_of_hex_along_radius: u8,
     radius: Length,
@@ -93,25 +94,10 @@ impl PositionDistribution for HexagonalTiling {
         }
         points
     }
-    // fn generate(&self) -> Vec<Point3<Length>> {
-    //     let mut points: Vec<Point3<Length>> = Vec::new();
-    //     // Add center point
-    //     points.push(Point3::origin());
+}
 
-    //     let radius_step = self.radius/self.nr_of_hex_along_radius.to_f64().unwrap();
-    //     for i in 1_u8..self.nr_of_hex_along_radius+1{
-    //         // let mut last_point = points.last().unwrap().clone();
-    //         // last_point.x += radius_step;
-    //         let mut hex = Point3::origin();
-    //         hex.x += radius_step*i.to_f64().unwrap();
-    //         for j in 0_u8..6{
-    //             for k in 0_u8..i{
-    //                 points.push(hex);
-    //                 let angle = PI/3.*(2.+j.to_f64().unwrap());
-    //                 hex = hex + Vector3::new(f64::cos(angle)*radius_step, f64::sin(angle)*radius_step,Length::zero());
-    //             }
-    //         }
-    //     }
-    //     points
-    // }
+impl From<HexagonalTiling> for super::PosDistType {
+    fn from(hexagonal_tiling: HexagonalTiling) -> Self {
+        Self::HexagonalTiling(hexagonal_tiling)
+    }
 }

@@ -7,11 +7,13 @@ use crate::error::{OpmResult, OpossumError};
 use super::PositionDistribution;
 use nalgebra::{point, Point3};
 use num::{ToPrimitive, Zero};
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular Fibonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FibonacciRectangle {
     nr_of_rays: usize,
     side_length_x: Length,
@@ -62,11 +64,15 @@ impl PositionDistribution for FibonacciRectangle {
         points
     }
 }
-
+impl From<FibonacciRectangle> for super::PosDistType {
+    fn from(f: FibonacciRectangle) -> Self {
+        Self::FibonacciRectangle(f)
+    }
+}
 /// Rectangular Fibbonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FibonacciEllipse {
     nr_of_rays: usize,
     radius_x: Length,
@@ -119,7 +125,11 @@ impl PositionDistribution for FibonacciEllipse {
         points
     }
 }
-
+impl From<FibonacciEllipse> for super::PosDistType {
+    fn from(f: FibonacciEllipse) -> Self {
+        Self::FibonacciEllipse(f)
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;

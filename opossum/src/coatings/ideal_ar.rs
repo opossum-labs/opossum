@@ -19,11 +19,12 @@ impl Coating for IdealAR {
     ) -> f64 {
         0.0
     }
-    fn to_enum(&self) -> super::CoatingType {
-        CoatingType::IdealAR
+}
+impl From<IdealAR> for CoatingType {
+    fn from(_coating: IdealAR) -> Self {
+        Self::IdealAR
     }
 }
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -31,9 +32,9 @@ mod test {
     use nalgebra::vector;
 
     #[test]
-    fn to_enum() {
+    fn from() {
         let coating = IdealAR;
-        assert!(matches!(coating.to_enum(), CoatingType::IdealAR));
+        assert!(matches!(coating.into(), CoatingType::IdealAR));
     }
     #[test]
     fn calc_refl() {

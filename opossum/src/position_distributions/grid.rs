@@ -7,10 +7,11 @@ use crate::{
 };
 use nalgebra::Point3;
 use num::Zero;
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, evenly-sized grid distribution
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Grid {
     nr_of_points: (usize, usize),
     side_length: (Length, Length),
@@ -91,6 +92,11 @@ impl PositionDistribution for Grid {
     }
 }
 
+impl From<Grid> for super::PosDistType {
+    fn from(grid: Grid) -> Self {
+        Self::Grid(grid)
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
