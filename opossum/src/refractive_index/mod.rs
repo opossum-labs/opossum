@@ -66,7 +66,7 @@ impl From<RefractiveIndexType> for Proptype {
     }
 }
 /// All refractive index models must implement this trait.
-pub trait RefractiveIndex {
+pub trait RefractiveIndex: {
     /// Get the refractive index value of the current model for the given wavelength.
     ///
     /// # Errors
