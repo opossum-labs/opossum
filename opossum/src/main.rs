@@ -85,7 +85,7 @@ fn create_report_and_data_files(
     write!(
         output,
         "{}",
-        ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::default()).unwrap()
+        ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::new().new_line("\n")).unwrap()
     )
     .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let mut report_path = report_directory.to_path_buf();

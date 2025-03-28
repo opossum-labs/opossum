@@ -126,9 +126,9 @@ impl OpmDocument {
     ///
     /// This function will return an error if the serialization of the internal structures fail.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
-        ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::default()).map_err(|e| {
-            OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
-        })
+        ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::new().new_line("\n")).map_err(
+            |e| OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}")),
+        )
     }
     /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]
