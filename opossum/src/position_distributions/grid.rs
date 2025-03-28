@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, evenly-sized grid distribution
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Grid {
     nr_of_points: (usize, usize),
     side_length: (Length, Length),

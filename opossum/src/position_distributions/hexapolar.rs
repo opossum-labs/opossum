@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Circular, hexapolar distribution
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Hexapolar {
     nr_of_rings: u8,
     radius: Length,

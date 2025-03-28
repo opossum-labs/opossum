@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, uniform random distribution
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Random {
     nr_of_points: usize,
     side_length_x: Length,

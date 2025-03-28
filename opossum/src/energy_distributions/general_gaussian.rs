@@ -8,11 +8,14 @@ use crate::{
 };
 use kahan::KahanSummator;
 use nalgebra::Point2;
+use serde::{Deserialize, Serialize};
 use uom::si::{
     angle::radian,
     energy::joule,
     f64::{Angle, Energy, Length},
 };
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct General2DGaussian {
     total_energy: Energy,
     mu_xy: Point2<Length>,
@@ -122,7 +125,11 @@ impl EnergyDistribution for General2DGaussian {
         self.total_energy
     }
 }
-
+impl From<General2DGaussian> for super::EnergyDistType {
+    fn from(g: General2DGaussian) -> Self {
+        Self::General2DGaussian(g)
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;

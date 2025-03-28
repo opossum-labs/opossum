@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Circular, hexapolar distribution
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct HexagonalTiling {
     nr_of_hex_along_radius: u8,
     radius: Length,

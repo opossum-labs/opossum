@@ -43,7 +43,7 @@ pub trait PositionDistribution {
 }
 
 /// Enum for the different types of position distributions
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PosDistType {
     /// Rectangular, uniform random distribution
     Random(random::Random),
@@ -59,4 +59,19 @@ pub enum PosDistType {
     FibonacciEllipse(fibonacci::FibonacciEllipse),
     /// Pseudo random Sobol distribution
     Sobol(sobol::SobolDist),
+}
+impl PosDistType {
+    /// Generate the point distribution.
+    #[must_use]
+    pub fn generate(&self) -> &dyn PositionDistribution {
+        match self {
+            Self::Random(dist) => dist,
+            Self::Grid(dist) => dist,
+            Self::HexagonalTiling(dist) => dist,
+            Self::Hexapolar(dist) => dist,
+            Self::FibonacciRectangle(dist) => dist,
+            Self::FibonacciEllipse(dist) => dist,
+            Self::Sobol(dist) => dist,
+        }
+    }
 }

@@ -10,7 +10,7 @@ use uom::si::f64::Length;
 /// Rectangluar, low-discrepancy quasirandom distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Sobol_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SobolDist {
     nr_of_points: usize,
     side_length_x: Length,

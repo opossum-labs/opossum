@@ -13,7 +13,7 @@ use uom::si::f64::Length;
 /// Rectangular Fibonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct FibonacciRectangle {
     nr_of_rays: usize,
     side_length_x: Length,
@@ -72,7 +72,7 @@ impl From<FibonacciRectangle> for super::PosDistType {
 /// Rectangular Fibbonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct FibonacciEllipse {
     nr_of_rays: usize,
     radius_x: Length,
