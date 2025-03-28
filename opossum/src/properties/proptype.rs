@@ -91,6 +91,8 @@ pub enum Proptype {
     WfLambda(f64, Length),
     /// a geometrical length
     Length(Length),
+    /// an optional length parameter. used, e.g., for the alignment wavelength of the source
+    LengthOption(Option<Length>),
     /// an energy value
     Energy(Energy),
     /// a (2D) geometric angle (e.g. component tilt)
@@ -101,8 +103,6 @@ pub enum Proptype {
     Isometry(Option<Isometry>),
     /// Three dimensional Vector
     Vec3(Vector3<f64>),
-    /// an optional length parameter. used, e.g., for the alignment wavelength of the source
-    LengthOption(Option<Length>),
     /// a hit map (position fo rays hitting a given surface)
     HitMap(HitMap),
     /// 2-dimenstional vector

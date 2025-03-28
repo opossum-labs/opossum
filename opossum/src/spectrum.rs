@@ -139,7 +139,7 @@ impl Spectrum {
                 max_lambda = line.0;
             }
         }
-        let mut s = Self::new(min_lambda..max_lambda, resolution)?;
+        let mut s = Self::new(min_lambda..max_lambda + 2.0 * resolution, resolution)?;
         for line in lines {
             s.add_single_peak(line.0, line.1.get::<joule>())?;
         }
@@ -631,6 +631,7 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{joule, nanometer};
     use crate::{
         spectrum_helper::{
             create_he_ne_spec, create_nd_glass_spec, create_nir_spec, create_visible_spec,
@@ -657,39 +658,6 @@ mod test {
                 (3.5, 0.0)
             ]
         );
-    }
-    #[test]
-    fn visible_spectrum() {
-        let s = create_visible_spec();
-        assert_eq!(s.lambda_vec().first().unwrap(), &0.38);
-        assert_abs_diff_eq!(s.lambda_vec().last().unwrap(), &0.7499);
-    }
-    #[test]
-    fn nir_spec() {
-        assert_eq!(create_nir_spec().lambda_vec().first().unwrap(), &0.8);
-    }
-    #[test]
-    fn nd_glass_spec() {
-        let s = create_nd_glass_spec(1.0);
-        assert!(s.is_ok());
-        let s = s.unwrap();
-        assert_eq!(s.lambda_vec().first().unwrap(), &0.8);
-        assert!(create_nd_glass_spec(-1.0).is_err());
-    }
-    #[test]
-    fn new_negative_resolution() {
-        let s = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(-0.5));
-        assert!(s.is_err());
-    }
-    #[test]
-    fn new_wrong_range() {
-        let s = Spectrum::new(micrometer!(4.0)..micrometer!(1.0), micrometer!(0.5));
-        assert!(s.is_err());
-    }
-    #[test]
-    fn new_negative_range() {
-        let s = Spectrum::new(micrometer!(-1.0)..micrometer!(4.0), micrometer!(0.5));
-        assert!(s.is_err());
     }
     #[test]
     fn from_csv_ok() {
@@ -724,6 +692,71 @@ mod test {
             "files_for_testing/spectrum/spec_to_csv_test_04.csv"
         ))
         .is_err());
+    }
+    #[test]
+    fn from_laser_lines_single() {
+        let s = Spectrum::from_laser_lines(vec![(micrometer!(1.0), joule!(1.0))], nanometer!(1.0))
+            .unwrap();
+        assert_eq!(s.total_energy(), 1.0);
+        assert_abs_diff_eq!(s.data[0].0, 1.0);
+        assert_abs_diff_eq!(s.data[1].0, 1.001);
+        assert_abs_diff_eq!(s.data[0].1, 1000.0, epsilon = 1.0E-9);
+        assert_abs_diff_eq!(s.data[1].1, 0.0);
+    }
+    #[test]
+    fn from_laser_lines_double() {
+        let s = Spectrum::from_laser_lines(
+            vec![
+                (micrometer!(1.0), joule!(1.0)),
+                (micrometer!(1.010), joule!(0.5)),
+            ],
+            nanometer!(1.0),
+        )
+        .unwrap();
+        assert_abs_diff_eq!(s.total_energy(), 1.5, epsilon = 1.0E-9);
+        assert_abs_diff_eq!(s.data[0].0, 1.0);
+        assert_abs_diff_eq!(s.data[0].1, 1000.0, epsilon = 1.0E-9);
+        assert_abs_diff_eq!(s.data[1].0, 1.001);
+        assert_abs_diff_eq!(s.data[1].1, 0.0);
+        assert_abs_diff_eq!(s.data[2].0, 1.002);
+        assert_abs_diff_eq!(s.data[2].1, 0.0);
+        assert_abs_diff_eq!(s.data[10].0, 1.010);
+        assert_abs_diff_eq!(s.data[10].1, 500.0, epsilon = 1.0E-9);
+        assert_abs_diff_eq!(s.data[11].0, 1.011);
+        assert_abs_diff_eq!(s.data[11].1, 0.0);
+    }
+    #[test]
+    fn visible_spectrum() {
+        let s = create_visible_spec();
+        assert_eq!(s.lambda_vec().first().unwrap(), &0.38);
+        assert_abs_diff_eq!(s.lambda_vec().last().unwrap(), &0.7499);
+    }
+    #[test]
+    fn nir_spec() {
+        assert_eq!(create_nir_spec().lambda_vec().first().unwrap(), &0.8);
+    }
+    #[test]
+    fn nd_glass_spec() {
+        let s = create_nd_glass_spec(1.0);
+        assert!(s.is_ok());
+        let s = s.unwrap();
+        assert_eq!(s.lambda_vec().first().unwrap(), &0.8);
+        assert!(create_nd_glass_spec(-1.0).is_err());
+    }
+    #[test]
+    fn new_negative_resolution() {
+        let s = Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(-0.5));
+        assert!(s.is_err());
+    }
+    #[test]
+    fn new_wrong_range() {
+        let s = Spectrum::new(micrometer!(4.0)..micrometer!(1.0), micrometer!(0.5));
+        assert!(s.is_err());
+    }
+    #[test]
+    fn new_negative_range() {
+        let s = Spectrum::new(micrometer!(-1.0)..micrometer!(4.0), micrometer!(0.5));
+        assert!(s.is_err());
     }
     #[test]
     fn range() {
