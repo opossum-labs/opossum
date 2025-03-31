@@ -10,13 +10,14 @@ use crate::{
     rays::Rays, spectral_distribution::SpecDistType,
 };
 use serde::{Deserialize, Serialize};
+use uom::si::{f64::Length, length::meter};
 
 /// Builder for the generation of [`LightData::Geometric`].
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RayDataBuilder {
     /// Raw [`Rays`] data.
     Raw(Rays),
-    /// Collimated [`Rays`] data with a given [`PosDistType`] and [`EnergyDistType`] as well as a given single wavelength.
+    /// Collimated [`Rays`] data with a given [`PosDistType`], [`EnergyDistType`], and [`SpecDistType`].
     Collimated {
         /// Position distribution.
         pos_dist: PosDistType,
@@ -24,6 +25,19 @@ pub enum RayDataBuilder {
         energy_dist: EnergyDistType,
         /// Wavelength of the rays.
         spect_dist: SpecDistType,
+    },
+    /// Point source [`Rays`] data with a given [`PosDistType`], [`EnergyDistType`], and [`SpecDistType`].
+    /// All rays start on the optical axis and are emitted within a cone. The cone is defined by the
+    /// position distribution **after the rays have propagated the given reference length**.
+    PointSrc {
+        /// Position distribution.
+        pos_dist: PosDistType,
+        /// Energy distribution.
+        energy_dist: EnergyDistType,
+        /// Wavelength of the rays.
+        spect_dist: SpecDistType,
+        /// Length
+        reference_length: Length,
     },
 }
 
@@ -47,6 +61,20 @@ impl RayDataBuilder {
                 )?;
                 Ok(LightData::Geometric(rays))
             }
+            Self::PointSrc {
+                pos_dist,
+                energy_dist,
+                spect_dist,
+                reference_length,
+            } => {
+                let rays = Rays::new_point_src_with_spectrum(
+                    spect_dist.generate(),
+                    energy_dist.generate(),
+                    pos_dist.generate(),
+                    reference_length,
+                )?;
+                Ok(LightData::Geometric(rays))
+            }
         }
     }
 }
@@ -63,6 +91,18 @@ impl Display for RayDataBuilder {
                 write!(
                     f,
                     "Collimated({pos_dist:?}, {energy_dist:?}, {spect_dist:?})"
+                )
+            }
+            Self::PointSrc {
+                pos_dist,
+                energy_dist,
+                spect_dist,
+                reference_length,
+            } => {
+                write!(
+                    f,
+                    "PointSrc({pos_dist:?}, {energy_dist:?}, {spect_dist:?}, {}m)",
+                    reference_length.get::<meter>()
                 )
             }
         }

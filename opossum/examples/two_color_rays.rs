@@ -5,7 +5,7 @@ use opossum::{
     analyzers::{AnalyzerType, RayTraceConfig},
     error::OpmResult,
     joule,
-    lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+    lightdata::light_data_builder::LightDataBuilder,
     millimeter, nanometer,
     nodes::{Lens, NodeGroup, RayPropagationVisualizer, Source, SpotDiagram},
     position_distributions::{FibonacciEllipse, Hexapolar},
@@ -38,7 +38,7 @@ fn main() -> OpmResult<()> {
     rays_1w.add_rays(&mut rays_3w);
 
     let mut scenery = NodeGroup::default();
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays_1w));
+    let light_data_builder = LightDataBuilder::Geometric(rays_1w.into());
     let src = scenery.add_node(Source::new("collimated ray source", light_data_builder))?;
     let l1 = scenery.add_node(Lens::new(
         "l1",

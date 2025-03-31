@@ -2,6 +2,7 @@
 //! Module for creation and handling of optical spectra
 use crate::{
     error::{OpmResult, OpossumError},
+    lightdata::energy_spectrum_builder::EnergyDataBuilder,
     micrometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{f64_to_usize, usize_to_f64},
@@ -538,6 +539,11 @@ impl<'a> IntoIterator for &'a Spectrum {
     type Item = &'a (f64, f64);
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+impl From<Spectrum> for EnergyDataBuilder {
+    fn from(spectrum: Spectrum) -> Self {
+        Self::Raw(spectrum)
     }
 }
 impl Display for Spectrum {
