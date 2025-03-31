@@ -45,11 +45,12 @@ mod test {
     use super::EnergyAnalyzer;
     use crate::{
         analyzers::Analyzer,
+        joule,
         lightdata::{
             energy_spectrum_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder,
         },
+        nanometer,
         nodes::{EnergyMeter, NodeGroup, Source},
-        spectrum_helper::create_he_ne_spec,
     };
     #[test]
     fn analyze_empty_scene() {
@@ -59,8 +60,10 @@ mod test {
     }
     fn create_scene() -> NodeGroup {
         let mut scenery = NodeGroup::default();
-        let light_data_builder =
-            LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0).unwrap()));
+        let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+            vec![(nanometer!(633.0), joule!(1.0))],
+            nanometer!(1.0),
+        ));
         let src = Source::new("source", light_data_builder);
         let i_src = scenery.add_node(src).unwrap();
         let i_em = scenery.add_node(EnergyMeter::default()).unwrap();

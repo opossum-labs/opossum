@@ -8,9 +8,7 @@ use crate::{
     analyzers::Analyzable,
     dottable::Dottable,
     error::{OpmResult, OpossumError},
-    lightdata::{
-        light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder, LightData,
-    },
+    lightdata::{light_data_builder::LightDataBuilder, LightData},
     optic_node::OpticNode,
     optic_ports::{OpticPorts, PortType},
     optic_ref::OpticRef,
@@ -189,7 +187,7 @@ impl NodeGroup {
                 .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
             node_ref.node_attr_mut().set_property(
                 "light data",
-                Some(LightDataBuilder::Geometric(RayDataBuilder::Raw(new_rays))).into(),
+                Some(LightDataBuilder::Geometric(new_rays.into())).into(),
             )?;
         }
         Ok(())
@@ -651,7 +649,7 @@ mod test {
         analyzers::{energy::AnalysisEnergy, raytrace::AnalysisRayTrace, RayTraceConfig},
         joule,
         light_result::LightResult,
-        lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
+        lightdata::light_data_builder::LightDataBuilder,
         millimeter, nanometer,
         nodes::{test_helper::test_helper::*, Dummy, EnergyMeter, Source},
         optic_node::OpticNode,
@@ -770,7 +768,7 @@ mod test {
             Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(0.1)).unwrap(),
         );
         let mut scenery = NodeGroup::default();
-        let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+        let light_data_builder = LightDataBuilder::Geometric(rays.into());
         let i_s = scenery
             .add_node(Source::new("src", light_data_builder))
             .unwrap();

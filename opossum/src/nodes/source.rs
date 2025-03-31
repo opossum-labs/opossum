@@ -318,12 +318,8 @@ impl AnalysisGhostFocus for Source {
 mod test {
     use super::*;
     use crate::{
-        lightdata::{energy_spectrum_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
-        nanometer,
-        optic_ports::PortType,
-        position_distributions::Hexapolar,
-        spectrum_helper::create_he_ne_spec,
-        utils::geom_transformation::Isometry,
+        nanometer, optic_ports::PortType, position_distributions::Hexapolar,
+        spectrum_helper::create_he_ne_spec, utils::geom_transformation::Isometry,
     };
     use assert_matches::assert_matches;
     use core::f64;
@@ -415,8 +411,7 @@ mod test {
     }
     #[test]
     fn analyze_energy_ok() {
-        let light_builder =
-            LightDataBuilder::Energy(EnergyDataBuilder::Raw(create_he_ne_spec(1.0).unwrap()));
+        let light_builder = LightDataBuilder::Energy(create_he_ne_spec(1.0).unwrap().into());
         let mut node = Source::new("test", light_builder.clone());
         let output = AnalysisEnergy::analyze(&mut node, LightResult::default()).unwrap();
         assert!(output.contains_key("output_1"));
@@ -450,7 +445,7 @@ mod test {
             &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
         )
         .unwrap();
-        let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+        let light_data_builder = LightDataBuilder::Geometric(rays.into());
         node.set_light_data(light_data_builder).unwrap();
         let output = AnalysisRayTrace::analyze(
             &mut node,
@@ -464,7 +459,7 @@ mod test {
         let mut node = Source::default();
         node.set_isometry(Isometry::identity()).unwrap();
         node.set_alignment_wavelength(nanometer!(630.0)).unwrap();
-        let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(Rays::default()));
+        let light_data_builder = LightDataBuilder::Geometric(Rays::default().into());
         node.set_light_data(light_data_builder).unwrap();
         let output = AnalysisRayTrace::calc_node_positions(
             &mut node,
@@ -507,7 +502,7 @@ mod test {
             &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
         )
         .unwrap();
-        let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays.clone()));
+        let light_data_builder = LightDataBuilder::Geometric(rays.clone().into());
         node.set_light_data(light_data_builder).unwrap();
         let mut light_rays = LightRays::new();
         light_rays.insert("input_1".into(), vec![rays]);

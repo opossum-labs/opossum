@@ -7,7 +7,9 @@ use crate::{
     energy_distributions::EnergyDistribution,
     error::{OpmResult, OpossumError},
     fluence_distributions::FluenceDistribution,
-    joule, meter, micrometer, millimeter, nanometer,
+    joule,
+    lightdata::ray_data_builder::RayDataBuilder,
+    meter, micrometer, millimeter, nanometer,
     nodes::{
         fluence_detector::{fluence_data::FluenceData, Fluence},
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
@@ -388,6 +390,71 @@ impl Rays {
             ];
             let ray = Ray::new(position, direction, wave_length, energy_per_ray)?;
             rays.push(ray);
+        }
+        Ok(Self {
+            rays,
+            node_origin: None,
+            uuid: Uuid::new_v4(),
+            parent_id: None,
+            parent_pos_split_idx: 0,
+        })
+    }
+    /// Generate a set of rays representing a point source.
+    ///
+    /// This function generates a bundle of rays with a given spectral distribution, energy distribution, and position distribution
+    /// representing a point source. The origin of all rays is (0,0,0). The direction of the rays is calculated from the position distribution
+    /// the ray bundle has after propagaing along the optical axis by the reference length.
+    ///
+    /// # Errors
+    /// This function returns an error if
+    /// - the given distributions return an error
+    /// - the given reference length is <= 0.0, NaN or +inf
+    pub fn new_point_src_with_spectrum(
+        spectral_distribution: &dyn SpectralDistribution,
+        energy_strategy: &dyn EnergyDistribution,
+        pos_strategy: &dyn PositionDistribution,
+        reference_length: Length,
+    ) -> OpmResult<Self> {
+        if reference_length.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "reference length must be positive".into(),
+            ));
+        }
+        if !reference_length.is_normal() {
+            return Err(OpossumError::Other(
+                "reference length must be finite".into(),
+            ));
+        }
+        let ray_pos = pos_strategy.generate();
+        let dist = spectral_distribution.generate()?;
+
+        //currently the energy distribution only works in the x-y plane. therefore, all points are projected to this plane
+        let ray_pos_plane = ray_pos
+            .iter()
+            .map(|p| Point2::<Length>::new(p.x, p.y))
+            .collect::<Vec<Point2<Length>>>();
+        //apply distribution strategy
+        let mut ray_energies = energy_strategy.apply(&ray_pos_plane);
+        energy_strategy.renormalize(&mut ray_energies);
+
+        //create rays
+        let nr_of_rays = ray_pos.len();
+        let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
+        for (pos, energy) in izip!(ray_pos.iter(), ray_energies.iter()) {
+            let direction = Vector3::new(
+                pos.x.get::<millimeter>(),
+                pos.y.get::<millimeter>(),
+                reference_length.get::<millimeter>(),
+            );
+            for value in &dist {
+                let ray = Ray::new(
+                    millimeter!(0.0, 0.0, 0.0),
+                    direction,
+                    value.0,
+                    *energy * value.1,
+                )?;
+                rays.push(ray);
+            }
         }
         Ok(Self {
             rays,
@@ -1472,7 +1539,11 @@ impl From<Vec<Ray>> for Rays {
         }
     }
 }
-
+impl From<Rays> for RayDataBuilder {
+    fn from(value: Rays) -> Self {
+        Self::Raw(value)
+    }
+}
 impl<'a> IntoIterator for &'a mut Rays {
     type IntoIter = std::slice::IterMut<'a, Ray>;
     type Item = &'a mut Ray;

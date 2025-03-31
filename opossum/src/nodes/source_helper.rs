@@ -2,17 +2,16 @@
 //! Helper functions for easier creation of `standard` ray [`Source`]s.
 use super::Source;
 use crate::{
+    degree,
     energy_distributions::UniformDist,
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     lightdata::{light_data_builder::LightDataBuilder, ray_data_builder::RayDataBuilder},
-    nanometer,
+    millimeter, nanometer,
     optic_node::OpticNode,
     position_distributions::{Grid, Hexapolar},
-    rays::Rays,
     spectral_distribution::LaserLines,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::Point3;
 use num::Zero;
 use uom::si::f64::{Angle, Energy, Length};
 
@@ -77,14 +76,18 @@ pub fn collimated_line_ray_source(
 ///  - the given energy is < 0.0, Nan, or +inf.
 ///  - the given angle is < 0.0 degrees or >= 180.0 degrees.
 pub fn point_ray_source(cone_angle: Angle, energy: Energy) -> OpmResult<Source> {
-    let rays = Rays::new_hexapolar_point_source(
-        Point3::origin(),
-        cone_angle,
-        3,
-        nanometer!(1000.0),
-        energy,
-    )?;
-    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(rays));
+    if cone_angle.is_sign_negative() || cone_angle >= degree!(180.0) {
+        return Err(OpossumError::Other(
+            "cone angle must be within (0.0..180.0) degrees range".into(),
+        ));
+    }
+    let size_after_unit_length = (cone_angle / 2.0).tan().value;
+    let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::PointSrc {
+        pos_dist: Hexapolar::new(millimeter!(size_after_unit_length), 3)?.into(),
+        energy_dist: UniformDist::new(energy)?.into(),
+        spect_dist: LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        reference_length: millimeter!(1.0),
+    });
     let mut src = Source::new("point ray source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
     Ok(src)
