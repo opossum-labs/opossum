@@ -506,11 +506,11 @@ impl Plottable for Spectrum {
         let data = self.data.clone();
         let mut spec_mat = MatrixXx2::zeros(data.len());
         for (i, s) in data.iter().enumerate() {
-            spec_mat[(i, 0)] = s.0;
+            spec_mat[(i, 0)] = s.0 * 1000.0; // micrometer -> nanometer
             spec_mat[(i, 1)] = s.1;
         }
         match plt_type {
-            PlotType::Line2D(_) | PlotType::Scatter2D(_) => {
+            PlotType::Line2D(_) | PlotType::Scatter2D(_) | PlotType::Histogram2D(_) => {
                 let plt_series = PlotSeries::new(
                     &PlotData::Dim2 { xy_data: spec_mat },
                     RGBAColor(255, 0, 0, 1.),
@@ -528,9 +528,8 @@ impl Plottable for Spectrum {
             .set(&PlotArgs::PlotSize((800, 800)))?;
         Ok(())
     }
-
     fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::Line2D(plt_params.clone())
+        PlotType::Histogram2D(plt_params.clone())
     }
 }
 

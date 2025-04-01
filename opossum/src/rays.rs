@@ -1156,16 +1156,18 @@ impl Rays {
     ///   - [`Rays`] is empty
     ///   - the `resolution` is invalid (negative, infinite)
     pub fn to_spectrum(&self, resolution: &Length) -> OpmResult<Spectrum> {
-        let mut range = self
-            .wavelength_range()
-            .ok_or_else(|| OpossumError::Other("from_rays: rays seems to be empty".into()))?;
-        range.end += *resolution * 2.0; // add 2* resolution to be sure to have all rays included in the wavelength range...
-        let mut spectrum = Spectrum::new(range, *resolution)?;
-        for ray in &self.rays {
-            if ray.valid() {
-                spectrum.add_single_peak(ray.wavelength(), ray.energy().get::<joule>())?;
-            }
+        let lines = self
+            .rays
+            .iter()
+            .filter(|r| r.valid())
+            .map(|r| (r.wavelength(), r.energy()))
+            .collect::<Vec<(Length, Energy)>>();
+        if lines.is_empty() {
+            return Err(OpossumError::Other(
+                "ray bundle is empty - cannot create spectrum".into(),
+            ));
         }
+        let spectrum = Spectrum::from_laser_lines(lines, *resolution)?;
         Ok(spectrum)
     }
     /// Set the refractive index of the medium all [`Rays`] are propagating in.
