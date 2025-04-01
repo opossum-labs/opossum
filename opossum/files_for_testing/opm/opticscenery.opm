@@ -8,7 +8,7 @@
                 inputs: {},
                 outputs: {},
             ),
-            uuid: "1369c599-1750-43c4-8ff8-2ad317507397",
+            uuid: "24bc1e01-d555-4d8f-bfd8-6f51b95370fb",
             lidt: 10000.0,
             props: {
                 "expand view": Bool(false),
@@ -55,7 +55,7 @@
                                 ),
                             },
                         ),
-                        uuid: "f9b965c3-0b5b-4d00-8e83-a435ad5b1f8b",
+                        uuid: "dcf93fc6-0748-4072-a5e2-faeb6085aeca",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -99,7 +99,7 @@
                                 ),
                             },
                         ),
-                        uuid: "881bad60-f450-4db5-bf96-098896e1edbe",
+                        uuid: "24acf9ae-3a45-4907-b1e0-fb011a4eb1fe",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -107,7 +107,7 @@
                 ),
             ],
             edges: [
-                ("f9b965c3-0b5b-4d00-8e83-a435ad5b1f8b", "output_1", "881bad60-f450-4db5-bf96-098896e1edbe", "input_1", 0.0),
+                ("dcf93fc6-0748-4072-a5e2-faeb6085aeca", "output_1", "24acf9ae-3a45-4907-b1e0-fb011a4eb1fe", "input_1", 0.0),
             ],
             input_map: ({}),
             output_map: ({}),
@@ -118,12 +118,12 @@
             refractive_index: 1.0,
         )),
     ),
-    analyzers: [
-        RayTrace((
+    analyzers: {
+        "ab4918cb-eb67-44c3-a083-60c2189ebaec": RayTrace((
             min_energy_per_ray: 0.000000000001,
             max_number_of_bounces: 1000,
             max_number_of_refractions: 1000,
             missed_surface_strategy: Stop,
         )),
-    ],
+    },
 )
