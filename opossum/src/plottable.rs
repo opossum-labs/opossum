@@ -37,6 +37,8 @@ pub enum PlotType {
     // Scatter3D,
     ///Line plot in two dimensions for pairwise data
     Line2D(PlotParameters),
+    ///Histogram plot in two dimensions for pairwise data
+    Histogram2D(PlotParameters),
     // ///Line plot in three dimensions for 3D data
     // Line3D,
     ///Line plot for multiple lines, e.g. rays, in two dimensions with pairwise data
@@ -54,6 +56,7 @@ impl PlotType {
             Self::ColorMesh(p)
             | Self::Scatter2D(p)
             | Self::Line2D(p)
+            | Self::Histogram2D(p)
             | Self::MultiLine3D(p)
             | Self::MultiLine2D(p)
             | Self::TriangulatedSurface(p) => p,
@@ -64,6 +67,7 @@ impl PlotType {
             Self::ColorMesh(p)
             | Self::Scatter2D(p)
             | Self::Line2D(p)
+            | Self::Histogram2D(p)
             | Self::MultiLine3D(p)
             | Self::MultiLine2D(p)
             | Self::TriangulatedSurface(p) => p,
@@ -77,6 +81,7 @@ impl PlotType {
             Self::TriangulatedSurface(_) => Self::plot_triangulated_surface(plot, backend),
             Self::Scatter2D(_) => Self::plot_2d_scatter(plot, backend),
             Self::Line2D(_) => Self::plot_2d_line(plot, backend),
+            Self::Histogram2D(_) => Self::plot_2d_histogram(plot, backend),
             Self::MultiLine3D(_) => Self::plot_3d_multi_line(plot, backend),
             Self::MultiLine2D(_) => Self::plot_2d_multi_line(plot, backend),
         };
@@ -168,6 +173,44 @@ impl PlotType {
         }
     }
 
+    fn draw_histogram_2d<'a, 'b, T: DrawingBackend + 'a + 'b>(
+        chart: &'a mut ChartContext<'b, T, Cartesian2d<RangedCoordf64, RangedCoordf64>>,
+        x: &DVectorView<'_, f64>,
+        y: &DVectorView<'_, f64>,
+        line_color: RGBAColor,
+        label: Option<String>,
+    ) {
+        println!("Draw histogram 2D");
+        // get data points as vector
+        let points = x
+            .iter()
+            .zip(y.iter())
+            .map(|(x, y)| (*x, *y))
+            .collect::<Vec<(f64, f64)>>();
+        // add horizontal lines for plotting a histogram style
+        let mut hist_points = Vec::with_capacity(points.len() * 2);
+        hist_points.push((points[0].0, 0.0));
+        if let Some(first_point) = points.first() {
+            hist_points.push((first_point.0, 0.0));
+        }
+        for point_pair in points.windows(2) {
+            hist_points.push(point_pair[0]);
+            hist_points.push((point_pair[1].0, point_pair[0].1));
+        }
+        if let Some(last_point) = points.last() {
+            hist_points.push((last_point.0, 0.0));
+        }
+        let series_anno = chart
+            .draw_series(LineSeries::new(hist_points, line_color))
+            .unwrap();
+        if let Some(l) = label {
+            let label_color =
+                RGBAColor(line_color.0, line_color.1, line_color.2, 1.).stroke_width(8);
+            series_anno
+                .label(&l)
+                .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], label_color));
+        }
+    }
     fn draw_line_3d<T: DrawingBackend>(
         chart: &mut ChartContext<
             '_,
@@ -398,7 +441,7 @@ impl PlotType {
             let mut label_flag = false;
             for plt_series in plt_series_vec {
                 if let PlotData::Dim2 { xy_data } = plt_series.get_plot_series_data() {
-                    Self::draw_line_2d(
+                    Self::draw_histogram_2d(
                         &mut chart,
                         &xy_data.column(0),
                         &xy_data.column(1),
@@ -419,6 +462,40 @@ impl PlotType {
         root.present().unwrap();
     }
 
+    fn plot_2d_histogram<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
+        if let Some(plt_series_vec) = plt.get_plot_series_vec() {
+            let mut chart = Self::create_2d_plot_chart(
+                root,
+                plt.bounds.x.unwrap(),
+                plt.bounds.y.unwrap(),
+                &plt.label,
+                true,
+                true,
+            );
+
+            let mut label_flag = false;
+            for plt_series in plt_series_vec {
+                if let PlotData::Dim2 { xy_data } = plt_series.get_plot_series_data() {
+                    Self::draw_line_2d(
+                        &mut chart,
+                        &xy_data.column(0),
+                        &xy_data.column(1),
+                        *plt_series.get_series_color(),
+                        plt_series.get_series_label(),
+                    );
+                    label_flag |= plt_series.get_series_label().is_some();
+                } else {
+                    warn!("Wrong PlotData stored for this plot type! Must use Dim2! Not all series will be plotted!");
+                }
+            }
+            if label_flag {
+                Self::config_series_label_2d(&mut chart);
+            }
+        } else {
+            warn!("No plot series defined! Cannot create plot!!");
+        }
+        root.present().unwrap();
+    }
     fn plot_2d_scatter<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
         if let Some(plt_series_vec) = plt.get_plot_series_vec() {
             let root = if plt_series_vec.len() > 5 {
@@ -847,7 +924,7 @@ impl PlotType {
 #[derive(Debug, Clone)]
 ///Enum to define the type of plot that should be created
 pub enum PlotData {
-    ///[`PlotData`] for [`PlotType::Scatter2D`] & [`PlotType::Line2D`]
+    ///[`PlotData`] for [`PlotType::Scatter2D`], [`PlotType::Line2D`], and [`PlotType::Histogram2D`]
     Dim2 {
         /// Pairwise 2D data (e.g. x, y data), structured as Matrix with N rows and two columns (x,y)
         xy_data: MatrixXx2<f64>,
