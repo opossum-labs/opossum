@@ -4,13 +4,14 @@ use actix_web::{
     delete, get,
     http::StatusCode,
     post,
-    web::{self},
+    web::{self, Json},
     HttpResponse, Responder,
 };
 use opossum::{analyzers::AnalyzerType, OpmDocument, SceneryResources};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
+use uuid::Uuid;
 
 /// Delete the current scenery and create new (empty) one
 #[utoipa::path(responses((status = 200, description = "scenery deleted and new one sucessfully created")), tag="scenery")]
@@ -78,22 +79,23 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
     let analyzers = data.document.lock().unwrap().analyzers();
     web::Json(analyzers)
 }
+
 #[utoipa::path(tag = "scenery", 
     responses((status = 200, description = "Analyzer", body = AnalyzerType))
 )]
 /// Get an analyzer
 ///
 /// This function returns the analyzer with the given index.
-#[get("/analyzers/{index}")]
-async fn get_analyzer(data: web::Data<AppState>, index: web::Path<usize>) -> impl Responder {
-    let analyzers = data.document.lock().unwrap().analyzers();
-    analyzers.get(*index).map_or_else(
-        || HttpResponse::NotFound().body("Analyzer not found"),
-        |analyzer| HttpResponse::Ok().json(analyzer),
-    )
+#[get("/analyzers/{Uuid}")]
+async fn get_analyzer(
+    data: web::Data<AppState>,
+    id: web::Path<Uuid>,
+) -> Result<Json<AnalyzerType>, ErrorResponse> {
+    let analyzer_type = data.document.lock().unwrap().analyzer(*id)?;
+    Ok(Json(analyzer_type))
 }
 #[utoipa::path(tag = "scenery", 
-    responses((status = 200, body = Vec<AnalyzerType>)))]
+    responses((status = 200, body = Uuid, )))]
 /// Add an analyzer to the model
 ///
 /// This function adds an analyzer to the model.
@@ -103,9 +105,8 @@ async fn add_analyzer(
     analyzer: web::Json<AnalyzerType>,
 ) -> impl Responder {
     let analyzer = analyzer.into_inner();
-    let mut document = data.document.lock().unwrap();
-    document.add_analyzer(analyzer);
-    web::Json(document.analyzers())
+    let uuid = data.document.lock().unwrap().add_analyzer(analyzer);
+    Json(uuid)
 }
 #[utoipa::path(tag = "scenery",
     responses((status = 200, description = "Analyzer deleted"),
@@ -114,15 +115,13 @@ async fn add_analyzer(
 /// Delete an analyzer
 ///
 /// This function deletes the analyzer with the given index.
-#[delete("/analyzers/{index}")]
+#[delete("/analyzers/{uuid}")]
 async fn delete_analyzer(
     data: web::Data<AppState>,
-    index: web::Path<usize>,
+    index: web::Path<Uuid>,
 ) -> Result<&'static str, ErrorResponse> {
     let index = index.into_inner();
-    let mut document = data.document.lock().unwrap();
-    document.remove_analyzer(index)?;
-    drop(document);
+    data.document.lock().unwrap().remove_analyzer(index)?;
     Ok("")
 }
 /// Get the OPM file as string

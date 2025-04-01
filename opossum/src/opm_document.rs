@@ -19,11 +19,13 @@ use crate::{
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     fs::{self, File},
     io::Write,
     path::Path,
     sync::{Arc, Mutex},
 };
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 /// The main structure of an OPOSSUM model.
@@ -35,7 +37,7 @@ pub struct OpmDocument {
     #[serde(default, rename = "global")]
     global_conf: Arc<Mutex<SceneryResources>>,
     #[serde(default)]
-    analyzers: Vec<AnalyzerType>,
+    analyzers: HashMap<Uuid, AnalyzerType>,
 }
 impl Default for OpmDocument {
     fn default() -> Self {
@@ -43,7 +45,7 @@ impl Default for OpmDocument {
             opm_file_version: env!("OPM_FILE_VERSION").to_string(),
             scenery: NodeGroup::default(),
             global_conf: Arc::new(Mutex::new(SceneryResources::default())),
-            analyzers: vec![],
+            analyzers: HashMap::default(),
         }
     }
 }
@@ -132,27 +134,44 @@ impl OpmDocument {
     }
     /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]
-    pub fn analyzers(&self) -> Vec<AnalyzerType> {
+    pub fn analyzers(&self) -> HashMap<Uuid, AnalyzerType> {
         self.analyzers.clone()
     }
+    /// Return an [`AnalyzerType`] with the given [`Uuid`] from this [`OpmDocument`].
+    ///
+    /// # Errors
+    ///
+    /// This functions returns an error if the [`AnalyzerType`] with the given [`Uuid`] was not found.
+    pub fn analyzer(&self, id: Uuid) -> OpmResult<AnalyzerType> {
+        self.analyzers.get(&id).map_or_else(
+            || {
+                Err(OpossumError::OpmDocument(
+                    "Analyzer with given Uuid not found.".into(),
+                ))
+            },
+            |analyzer_type| Ok(analyzer_type.clone()),
+        )
+    }
     /// Add an analyzer to this [`OpmDocument`].
-    pub fn add_analyzer(&mut self, analyzer: AnalyzerType) {
-        self.analyzers.push(analyzer);
+    pub fn add_analyzer(&mut self, analyzer: AnalyzerType) -> Uuid {
+        let uuid = Uuid::new_v4();
+        self.analyzers.insert(uuid, analyzer);
+        uuid
     }
     /// Remove an analyzer from this [`OpmDocument`].
     ///
-    /// This function removes an [`AnalyzerType`] with the given `index` from this [`OpmDocument`].
+    /// This function removes an [`AnalyzerType`] with the given [`Uuid`] from this [`OpmDocument`].
     /// # Errors
     ///
-    /// This function will return an error if an [`AnalyzerType`] with the given `index` was not found.
-    pub fn remove_analyzer(&mut self, index: usize) -> OpmResult<()> {
-        if index >= self.analyzers.len() {
-            return Err(OpossumError::OpmDocument(format!(
-                "Analyzer with index {index} does not exist"
-            )));
+    /// This function will return an error if an [`AnalyzerType`] with the given [`Uuid`] was not found.
+    pub fn remove_analyzer(&mut self, id: Uuid) -> OpmResult<()> {
+        if self.analyzers.remove(&id).is_some() {
+            Ok(())
+        } else {
+            Err(OpossumError::OpmDocument(
+                "Analyzer with given Uuid not found".into(),
+            ))
         }
-        self.analyzers.remove(index);
-        Ok(())
     }
     /// Returns a reference to the scenery of this [`OpmDocument`].
     #[must_use]
@@ -190,7 +209,7 @@ impl OpmDocument {
         }
         let mut reports = vec![];
         for ana in self.analyzers.iter().enumerate() {
-            let analyzer: &dyn Analyzer = match ana.1 {
+            let analyzer: &dyn Analyzer = match ana.1 .1 {
                 AnalyzerType::Energy => &EnergyAnalyzer::default(),
                 AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
                 AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config.clone()),
@@ -284,6 +303,28 @@ mod test {
         document.add_analyzer(AnalyzerType::Energy);
         document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
         assert_eq!(document.analyzers().len(), 2);
+    }
+    #[test]
+    fn analyzer() {
+        let mut document = OpmDocument::default();
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+
+        assert!(document.analyzer(uuid1).is_ok());
+        assert!(document.analyzer(uuid2).is_ok());
+        assert!(document.analyzer(Uuid::nil()).is_err());
+    }
+    #[test]
+    fn remove_analyzer() {
+        let mut document = OpmDocument::default();
+        let uuid1 = document.add_analyzer(AnalyzerType::Energy);
+        let uuid2 = document.add_analyzer(AnalyzerType::Energy);
+
+        assert!(document.remove_analyzer(uuid1).is_ok());
+        assert_eq!(document.analyzers.len(), 1);
+        assert!(document.remove_analyzer(Uuid::nil()).is_err());
+        assert!(document.remove_analyzer(uuid2).is_ok());
+        assert!(document.analyzers.is_empty());
     }
     #[test]
     fn all_nodes_integration_test() {
