@@ -241,7 +241,8 @@ impl NodeAttr {
     ///
     /// The position is a [`Point3`] since the `x` & `y` coordinates represent the position on a 2D
     /// frontend diagram. The `z` component is used for the depth level for handling overlapping nodes.
-    pub fn gui_position(&self) -> Option<&Point3<i32>> {
+    #[must_use]
+    pub const fn gui_position(&self) -> Option<&Point3<i32>> {
         self.gui_position.as_ref()
     }
     /// Sets the GUI position of the optical node.

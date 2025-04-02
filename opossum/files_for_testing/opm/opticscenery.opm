@@ -8,7 +8,7 @@
                 inputs: {},
                 outputs: {},
             ),
-            uuid: "24bc1e01-d555-4d8f-bfd8-6f51b95370fb",
+            uuid: "e21faf29-7950-4ba8-abe5-7974af14fbaa",
             lidt: 10000.0,
             props: {
                 "expand view": Bool(false),
@@ -55,7 +55,7 @@
                                 ),
                             },
                         ),
-                        uuid: "dcf93fc6-0748-4072-a5e2-faeb6085aeca",
+                        uuid: "ea6e5d68-126e-4c74-8e55-eba48430b416",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -99,7 +99,7 @@
                                 ),
                             },
                         ),
-                        uuid: "24acf9ae-3a45-4907-b1e0-fb011a4eb1fe",
+                        uuid: "73f8a07d-b2ac-4a4a-afe6-ab32b547f36f",
                         lidt: 10000.0,
                         props: {},
                         inverted: false,
@@ -107,7 +107,7 @@
                 ),
             ],
             edges: [
-                ("dcf93fc6-0748-4072-a5e2-faeb6085aeca", "output_1", "24acf9ae-3a45-4907-b1e0-fb011a4eb1fe", "input_1", 0.0),
+                ("ea6e5d68-126e-4c74-8e55-eba48430b416", "output_1", "73f8a07d-b2ac-4a4a-afe6-ab32b547f36f", "input_1", 0.0),
             ],
             input_map: ({}),
             output_map: ({}),
@@ -119,11 +119,14 @@
         )),
     ),
     analyzers: {
-        "ab4918cb-eb67-44c3-a083-60c2189ebaec": RayTrace((
-            min_energy_per_ray: 0.000000000001,
-            max_number_of_bounces: 1000,
-            max_number_of_refractions: 1000,
-            missed_surface_strategy: Stop,
-        )),
+        "df7c7faf-4370-49cc-b704-22041cb14f50": (
+            analyzer_type: RayTrace((
+                min_energy_per_ray: 0.000000000001,
+                max_number_of_bounces: 1000,
+                max_number_of_refractions: 1000,
+                missed_surface_strategy: Stop,
+            )),
+            gui_position: None,
+        ),
     },
 )
