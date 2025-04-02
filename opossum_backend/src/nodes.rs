@@ -3,6 +3,7 @@ use actix_web::{
     delete, get, patch, post,
     web::{self, Json, PathConfig},
 };
+use nalgebra::Point3;
 use opossum::{
     meter,
     nodes::{create_node_ref, NodeAttr},
@@ -81,18 +82,26 @@ async fn get_subnodes(
     };
     Ok(Json(nodes_info))
 }
+
+#[derive(Serialize, Deserialize, ToSchema)]
+struct NewNode {
+    node_type: String,
+    gui_position: (i32, i32, i32),
+}
+
 /// Add a new node to a group node
 ///
 /// This function adds a new optical node to a group node specified by its UUID.
 /// - **Note**: If the `nil` UUID is given (00000000-0000-0000-0000-000000000000), the node is added to the toplevel group.
+/// - The node type as well as the coordinates of the corresponding GUI element must be given.
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "UUID of the optical node"),
     ),
-    request_body(content = String,
-        description = "type node the optical node to be created",
+    request_body(content = NewNode,
+        description = "type and GUI position of node the optical node to be created",
         content_type = "application/json",
-        example ="dummy"
+        example ="{\"node_type\": \"dummy\", \"gui_position\": [0,0,0]}"
     ),
     responses(
         (status = OK, body= NodeInfo, description = "Node successfully created", content_type="application/json"),
@@ -103,15 +112,23 @@ async fn get_subnodes(
 async fn post_subnode(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-    node_type: web::Json<String>,
+    node_type: web::Json<NewNode>,
 ) -> Result<Json<NodeInfo>, ErrorResponse> {
-    let node_type = node_type.into_inner();
-    let new_node = create_node_ref(&node_type)?;
+    let new_node_info = node_type.into_inner();
+    let new_node_ref = create_node_ref(&new_node_info.node_type)?;
+    let mut node = new_node_ref.optical_ref.lock().unwrap();
+    let node_attr = node.node_attr_mut();
+    node_attr.set_gui_position(Some(Point3::new(
+        new_node_info.gui_position.0,
+        new_node_info.gui_position.1,
+        new_node_info.gui_position.2,
+    )));
+    drop(node);
     let mut document = data.document.lock().unwrap();
     let uuid = path.into_inner();
     let scenery = document.scenery_mut();
     let new_node_uuid = if uuid.is_nil() {
-        scenery.add_node_ref(new_node.clone())?
+        scenery.add_node_ref(new_node_ref.clone())?
     } else {
         scenery
             .node_recursive(uuid)?
@@ -119,10 +136,10 @@ async fn post_subnode(
             .lock()
             .unwrap()
             .as_group_mut()?
-            .add_node_ref(new_node.clone())?
+            .add_node_ref(new_node_ref.clone())?
     };
     drop(document);
-    let node = new_node.optical_ref.lock().unwrap();
+    let node = new_node_ref.optical_ref.lock().unwrap();
     let node_info = NodeInfo {
         uuid: new_node_uuid,
         name: node.name(),
