@@ -17,6 +17,7 @@ use crate::{
     SceneryResources,
 };
 use log::{info, warn};
+use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -26,6 +27,22 @@ use std::{
     sync::{Arc, Mutex},
 };
 use uuid::Uuid;
+/// A structu containing the [`AnalyzerType`] together with its position on a frontend GUI.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnalyzerInfo {
+    analyzer_type: AnalyzerType,
+    gui_position: Option<Point3<i32>>,
+}
+impl AnalyzerInfo {
+    /// Creates a new [`AnalyzerInfo`].
+    #[must_use]
+    pub const fn new(analyzer_type: AnalyzerType, gui_position: Point3<i32>) -> Self {
+        Self {
+            analyzer_type,
+            gui_position: Some(gui_position),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 /// The main structure of an OPOSSUM model.
@@ -37,7 +54,7 @@ pub struct OpmDocument {
     #[serde(default, rename = "global")]
     global_conf: Arc<Mutex<SceneryResources>>,
     #[serde(default)]
-    analyzers: HashMap<Uuid, AnalyzerType>,
+    analyzers: HashMap<Uuid, AnalyzerInfo>,
 }
 impl Default for OpmDocument {
     fn default() -> Self {
@@ -134,28 +151,36 @@ impl OpmDocument {
     }
     /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]
-    pub fn analyzers(&self) -> HashMap<Uuid, AnalyzerType> {
+    pub fn analyzers(&self) -> HashMap<Uuid, AnalyzerInfo> {
         self.analyzers.clone()
     }
-    /// Return an [`AnalyzerType`] with the given [`Uuid`] from this [`OpmDocument`].
+    /// Return an [`AnalyzerInfo`] with the given [`Uuid`] from this [`OpmDocument`].
     ///
     /// # Errors
     ///
-    /// This functions returns an error if the [`AnalyzerType`] with the given [`Uuid`] was not found.
-    pub fn analyzer(&self, id: Uuid) -> OpmResult<AnalyzerType> {
+    /// This functions returns an error if the [`AnalyzerInfo`] with the given [`Uuid`] was not found.
+    pub fn analyzer(&self, id: Uuid) -> OpmResult<AnalyzerInfo> {
         self.analyzers.get(&id).map_or_else(
             || {
                 Err(OpossumError::OpmDocument(
                     "Analyzer with given Uuid not found.".into(),
                 ))
             },
-            |analyzer_type| Ok(analyzer_type.clone()),
+            |analyzer_info| Ok(analyzer_info.clone()),
         )
     }
     /// Add an analyzer to this [`OpmDocument`].
-    pub fn add_analyzer(&mut self, analyzer: AnalyzerType) -> Uuid {
+    pub fn add_analyzer(&mut self, analyzer_type: AnalyzerType) -> Uuid {
+        let analyzer_info = AnalyzerInfo {
+            analyzer_type,
+            gui_position: None,
+        };
+        self.add_analyzer_info(analyzer_info)
+    }
+    /// Add an analyzer (with a GUI position) to this [`OpmDocument`].
+    pub fn add_analyzer_info(&mut self, analyzer_info: AnalyzerInfo) -> Uuid {
         let uuid = Uuid::new_v4();
-        self.analyzers.insert(uuid, analyzer);
+        self.analyzers.insert(uuid, analyzer_info);
         uuid
     }
     /// Remove an analyzer from this [`OpmDocument`].
@@ -209,7 +234,7 @@ impl OpmDocument {
         }
         let mut reports = vec![];
         for ana in self.analyzers.iter().enumerate() {
-            let analyzer: &dyn Analyzer = match ana.1 .1 {
+            let analyzer: &dyn Analyzer = match ana.1 .1.analyzer_type.clone() {
                 AnalyzerType::Energy => &EnergyAnalyzer::default(),
                 AnalyzerType::RayTrace(config) => &RayTracingAnalyzer::new(config.clone()),
                 AnalyzerType::GhostFocus(config) => &GhostFocusAnalyzer::new(config.clone()),

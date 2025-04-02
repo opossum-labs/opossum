@@ -7,7 +7,8 @@ use actix_web::{
     web::{self, Json},
     HttpResponse, Responder,
 };
-use opossum::{analyzers::AnalyzerType, OpmDocument, SceneryResources};
+use nalgebra::Point3;
+use opossum::{analyzers::AnalyzerType, opm_document::AnalyzerInfo, OpmDocument, SceneryResources};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -79,7 +80,11 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
     let analyzers = data.document.lock().unwrap().analyzers();
     web::Json(analyzers)
 }
-
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct NewAnalyzerInfo {
+    analyzer_type: AnalyzerType,
+    gui_position: (i32, i32, i32),
+}
 #[utoipa::path(tag = "scenery", 
     responses((status = 200, description = "Analyzer", body = AnalyzerType))
 )]
@@ -90,11 +95,15 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
 async fn get_analyzer(
     data: web::Data<AppState>,
     id: web::Path<Uuid>,
-) -> Result<Json<AnalyzerType>, ErrorResponse> {
-    let analyzer_type = data.document.lock().unwrap().analyzer(*id)?;
-    Ok(Json(analyzer_type))
+) -> Result<Json<AnalyzerInfo>, ErrorResponse> {
+    let analyzer_info = data.document.lock().unwrap().analyzer(*id)?;
+    Ok(Json(analyzer_info))
 }
-#[utoipa::path(tag = "scenery", 
+#[utoipa::path(tag = "scenery", request_body(content = NewAnalyzerInfo,
+    description = "type and GUI position of node the analyzer to be created",
+    content_type = "application/json",
+    example ="{\"analyzer_type\": \"Energy\", \"gui_position\": [0,0,0]}"
+),
     responses((status = 200, body = Uuid, )))]
 /// Add an analyzer to the model
 ///
@@ -102,10 +111,22 @@ async fn get_analyzer(
 #[post("/analyzers")]
 async fn add_analyzer(
     data: web::Data<AppState>,
-    analyzer: web::Json<AnalyzerType>,
+    analyzer: web::Json<NewAnalyzerInfo>,
 ) -> impl Responder {
-    let analyzer = analyzer.into_inner();
-    let uuid = data.document.lock().unwrap().add_analyzer(analyzer);
+    let new_analyzer_info = analyzer.into_inner();
+    let analyzer_info = AnalyzerInfo::new(
+        new_analyzer_info.analyzer_type,
+        Point3::new(
+            new_analyzer_info.gui_position.0,
+            new_analyzer_info.gui_position.1,
+            new_analyzer_info.gui_position.2,
+        ),
+    );
+    let uuid = data
+        .document
+        .lock()
+        .unwrap()
+        .add_analyzer_info(analyzer_info);
     Json(uuid)
 }
 #[utoipa::path(tag = "scenery",

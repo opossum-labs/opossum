@@ -4971,6 +4971,7 @@ dependencies = [
  "actix-web",
  "env_logger",
  "log",
+ "nalgebra",
  "opossum",
  "serde",
  "serde_json",
