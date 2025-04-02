@@ -10,11 +10,6 @@ use crate::{
     radian,
 };
 use approx::relative_eq;
-#[cfg(feature = "bevy")]
-use bevy::{
-    math::{Quat, Vec3, Vec4},
-    transform::components::Transform,
-};
 use nalgebra::{vector, Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3};
 use num::Zero;
 use serde::{Deserialize, Serialize};
@@ -407,26 +402,6 @@ impl Display for Isometry {
 impl From<Option<Isometry>> for Proptype {
     fn from(value: Option<Isometry>) -> Self {
         Self::Isometry(value)
-    }
-}
-#[cfg(feature = "bevy")]
-#[allow(clippy::cast_possible_truncation)]
-const fn as_f32(x: f64) -> f32 {
-    x as f32
-}
-#[cfg(feature = "bevy")]
-impl From<Isometry> for Transform {
-    fn from(value: Isometry) -> Self {
-        let t = value.transform.translation;
-        let r = value.transform.rotation;
-        Self::from_translation(Vec3::new(as_f32(t.x), as_f32(t.y), as_f32(t.z))).with_rotation(
-            Quat::from_vec4(Vec4::new(
-                as_f32(r.i),
-                as_f32(r.j),
-                as_f32(r.k),
-                as_f32(r.w),
-            )),
-        )
     }
 }
 /// This function defines the coordinate axes on a plane.

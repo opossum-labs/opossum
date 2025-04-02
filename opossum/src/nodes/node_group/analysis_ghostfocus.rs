@@ -47,10 +47,7 @@ impl AnalysisGhostFocus for NodeGroup {
             let node_info = node.to_string();
             drop(node);
             if self.graph.is_stale_node(node_id) {
-                warn!(
-                    "graph contains stale (completely unconnected) node {}. Skipping.",
-                    node_info
-                );
+                warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");
             } else {
                 let incoming_edges = self.graph.get_incoming(
                     node_id,

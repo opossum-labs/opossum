@@ -3,11 +3,7 @@
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
-#[cfg(feature = "bevy")]
-use opossum::bevy_main;
 use opossum::reporting::analysis_report::AnalysisReport;
-#[cfg(feature = "bevy")]
-use opossum::SceneryBevyData;
 use opossum::{
     console::{Args, PartialArgs},
     error::{OpmResult, OpossumError},

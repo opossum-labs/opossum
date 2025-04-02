@@ -13,8 +13,6 @@ use crate::{
     surface::{geo_surface::GeoSurfaceRef, Cylinder, Plane},
     utils::geom_transformation::Isometry,
 };
-#[cfg(feature = "bevy")]
-use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
 use num::Zero;
 use opm_macros_lib::OpmNode;

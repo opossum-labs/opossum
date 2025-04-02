@@ -155,25 +155,6 @@ impl OpticNode for ThinMirror {
 
         Ok(())
     }
-    #[cfg(feature = "bevy")]
-    fn mesh(&self) -> Mesh {
-        #[allow(clippy::cast_possible_truncation)]
-        let thickness = if let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        {
-            center_thickness.value as f32
-        } else {
-            warn!("could not read center thickness. using 0.001 as default");
-            0.001_f32
-        };
-        let mesh: Mesh = Cuboid::new(0.3, 0.3, thickness).into();
-        if let Some(iso) = self.effective_iso() {
-            mesh.transformed_by(iso.into())
-        } else {
-            warn!("Node has no isometry defined. Mesh will be located at origin.");
-            mesh
-        }
-    }
 }
 impl AnalysisGhostFocus for ThinMirror {
     fn analyze(

@@ -180,7 +180,7 @@ impl AnalysisRayTrace for RayPropagationVisualizer {
 /// struct that holds the history of the rays' positions for rays of a specific wavelength
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RayPositionHistorySpectrum {
-    /// Ray history (This is a hack...only used for visualization with bevy...)
+    /// Ray history
     pub history: Vec<MatrixXx3<Length>>,
     center_wavelength: Length,
     wavelength_bin_size: Length,

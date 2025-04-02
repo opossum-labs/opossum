@@ -129,7 +129,7 @@ impl AnalysisGhostFocus for ParaxialSurface {
 
             apodized |= rays.apodize(surf.aperture(), &iso)?;
             if apodized {
-                warn!("Rays have been apodized at input aperture of {}. Results might not be accurate.", optic_name);
+                warn!("Rays have been apodized at input aperture of {optic_name}. Results might not be accurate.");
             }
             surf.evaluate_fluence_of_ray_bundle(rays, config.fluence_estimator())?;
         }

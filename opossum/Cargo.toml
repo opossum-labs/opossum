@@ -40,8 +40,8 @@ clap = { version = "4", features = ["derive", "string"] } # command line argumen
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rprompt = "2"
-strum = { version = "0.26", features = ["derive"] }
-strum_macros = "0.26"
+strum = { version = "0.27", features = ["derive"] }
+strum_macros = "0.27"
 
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
 
@@ -64,13 +64,9 @@ log = "0.4"
 env_logger= "0.11"
 roots = "0.0.8"
 voronator = "0.2"
-# fast-surface-nets = "0.2.0"
 rayon = "1.10"
 
 tinytemplate = "1"
-
-bevy={ version="0.15", optional=true }
-bevy_flycam = { version= "0.15", optional =true }
 spade = "2.12"
 earcutr = "0.4.3"
 utoipa = {version ="5.3.1", features = ["actix_extras", "uuid"] }
@@ -80,7 +76,6 @@ utoipa = {version ="5.3.1", features = ["actix_extras", "uuid"] }
 
 [features]
 doc-images = []
-bevy = ["dep:bevy", "dep:bevy_flycam"]
 
 [dev-dependencies]
 regex = "1"

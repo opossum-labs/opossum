@@ -1,7 +1,5 @@
 #![warn(missing_docs)]
 //! Contains the basic trait representing an optical element
-#[cfg(feature = "bevy")]
-use bevy::{math::primitives::Cuboid, render::mesh::Mesh};
 use log::warn;
 use nalgebra::{Point3, Vector3};
 use uom::si::f64::{Angle, Length};
@@ -420,17 +418,6 @@ pub trait OpticNode: Dottable {
         let align = Isometry::new(decenter, tilt)?;
         self.node_attr_mut().set_alignment(align);
         self.update_surfaces()
-    }
-    ///
-    #[cfg(feature = "bevy")]
-    fn mesh(&self) -> Mesh {
-        let mesh: Mesh = Cuboid::new(0.3, 0.3, 0.001).into();
-        if let Some(iso) = self.effective_iso() {
-            mesh.transformed_by(iso.into())
-        } else {
-            warn!("Node has no isometry defined. Mesh will be located at origin.");
-            mesh
-        }
     }
     /// Get a refrecne to a global configuration (if any).
     fn global_conf(&self) -> &Option<Arc<Mutex<SceneryResources>>> {
