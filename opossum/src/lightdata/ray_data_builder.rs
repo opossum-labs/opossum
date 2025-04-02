@@ -2,7 +2,7 @@
 //!
 //! This module provides a builder for the generation of [`LightData`] to be used in `Source`.
 //! This builder allows easier serialization / deserialization in OPM files.
-use std::fmt::Display;
+use std::{fmt::Display, path::PathBuf};
 
 use super::LightData;
 use crate::{
@@ -10,7 +10,10 @@ use crate::{
     rays::Rays, spectral_distribution::SpecDistType,
 };
 use serde::{Deserialize, Serialize};
-use uom::si::{f64::Length, length::meter};
+use uom::si::{
+    f64::{Energy, Length},
+    length::meter,
+};
 
 /// Builder for the generation of [`LightData::Geometric`].
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -38,6 +41,18 @@ pub enum RayDataBuilder {
         spect_dist: SpecDistType,
         /// Length
         reference_length: Length,
+    },
+    /// A bundle of rays emitted from a 2D black & white image specified by its file path, the actual (x/y) dimenstions of the image as well as the
+    /// total energy.
+    Image {
+        /// path to the image file
+        file_path: PathBuf,
+        /// x & y dimensions of the image
+        pixel_size: Length,
+        /// total energy
+        total_energy: Energy,
+        /// wavelength
+        wave_length: Length
     },
 }
 
@@ -75,6 +90,12 @@ impl RayDataBuilder {
                 )?;
                 Ok(LightData::Geometric(rays))
             }
+            Self::Image {
+                file_path,
+                pixel_size,
+                total_energy,
+                wave_length
+            } => Ok(LightData::Geometric(Rays::from_image(&file_path, pixel_size, total_energy, wave_length)?)),
         }
     }
 }
@@ -104,6 +125,14 @@ impl Display for RayDataBuilder {
                     "PointSrc({pos_dist:?}, {energy_dist:?}, {spect_dist:?}, {}m)",
                     reference_length.get::<meter>()
                 )
+            }
+            Self::Image {
+                file_path,
+                pixel_size,
+                total_energy,
+                wave_length
+            } => {
+                write!(f, "Image field({file_path:?}, {pixel_size:?}, {total_energy:?}, {wave_length:?})")
             }
         }
     }
