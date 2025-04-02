@@ -11,7 +11,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use uom::si::{
-    f64::{Energy, Length},
+    f64::{Angle, Energy, Length},
     length::meter,
 };
 
@@ -52,7 +52,9 @@ pub enum RayDataBuilder {
         /// total energy
         total_energy: Energy,
         /// wavelength
-        wave_length: Length
+        wave_length: Length,
+        /// cone angle of each point src per pixel
+        cone_angle: Angle
     },
 }
 
@@ -94,8 +96,9 @@ impl RayDataBuilder {
                 file_path,
                 pixel_size,
                 total_energy,
-                wave_length
-            } => Ok(LightData::Geometric(Rays::from_image(&file_path, pixel_size, total_energy, wave_length)?)),
+                wave_length,
+                cone_angle
+            } => Ok(LightData::Geometric(Rays::from_image(&file_path, pixel_size, total_energy, wave_length, cone_angle)?)),
         }
     }
 }
@@ -130,9 +133,10 @@ impl Display for RayDataBuilder {
                 file_path,
                 pixel_size,
                 total_energy,
-                wave_length
+                wave_length,
+                cone_angle
             } => {
-                write!(f, "Image field({file_path:?}, {pixel_size:?}, {total_energy:?}, {wave_length:?})")
+                write!(f, "Image field({file_path:?}, {pixel_size:?}, {total_energy:?}, {wave_length:?}, {cone_angle:?})")
             }
         }
     }

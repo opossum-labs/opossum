@@ -98,6 +98,7 @@ impl Rays {
         pixel_size: Length,
         energy: Energy,
         wave_length: Length,
+        cone_angle: Angle,
     ) -> OpmResult<Self> {
         let image_reader = ImageReader::open(file_path)
             .map_err(|e| OpossumError::Other(format!("could not read image from file: {e}")))?;
@@ -126,8 +127,8 @@ impl Rays {
                     -1.0* pixel_size * centered_positions.1, // image upside down
                     meter!(0.0),
                 );
-                let ray = Ray::new_collimated(position, wave_length, *pixel)?;
-                rays.add_ray(ray);
+                let mut point_rays = Rays::new_hexapolar_point_source(position, cone_angle, 3, wave_length, *pixel)?;
+                rays.add_rays(&mut point_rays);
             }
         }
         Ok(rays)
