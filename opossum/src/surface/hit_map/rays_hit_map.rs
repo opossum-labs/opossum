@@ -344,19 +344,15 @@ impl RaysHitMap {
             let bin_width: Length = (right - left) / usize_to_f64(nr_of_points.0);
             let bin_height: Length = (top - bottom) / usize_to_f64(nr_of_points.1);
 
-            let bin_size=Length::max(bin_width, bin_height);
-            let bin_area: Area = bin_size * bin_size;
-            let width_step = ((right - left) / (usize_to_f64(nr_of_points.0 - 1))).value;
-            let height_step = ((top - bottom) / (usize_to_f64(nr_of_points.1 - 1))).value;
+            let bin_area: Area = bin_width * bin_height;
 
-            let bin_step=f64::max(width_step, height_step);
+            let width_step = (right - left) / (usize_to_f64(nr_of_points.0 - 1));
+            let height_step = (top - bottom) / (usize_to_f64(nr_of_points.1 - 1));
+
             let mut fluence_matrix = DMatrix::<Fluence>::zeros(nr_of_points.1, nr_of_points.0);
             for hit_point in hit_points {
-                let x_index =
-                    f64_to_usize(((hit_point.position.x.value - left.value) / bin_step).floor());
-                let y_index = f64_to_usize(
-                    ((hit_point.position.y.value - bottom.value) / bin_step).floor(),
-                );
+                let x_index = f64_to_usize(((hit_point.position.x - left).value / width_step.value).floor());
+                let y_index = f64_to_usize(((hit_point.position.y - bottom).value/ height_step.value).floor());
                 let fluence = hit_point.value / bin_area;
                 fluence_matrix[(y_index, x_index)] += fluence;
             }

@@ -10,7 +10,7 @@ fn main() -> OpmResult<()> {
         pixel_size: micrometer!(50.0),
         total_energy: joule!(1.0),
         wave_length: nanometer!(1000.0),
-        cone_angle: degree!(2.0)
+        cone_angle: degree!(0.0)
     });
     let mut src = Source::new("image source", light_data_builder);
     src.set_isometry(Isometry::identity())?;
@@ -20,7 +20,7 @@ fn main() -> OpmResult<()> {
     fluence_det.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
     let i_fd = scenery.add_node(fluence_det)?;
     scenery.connect_nodes(i_src, "output_1", i_lens, "input_1", millimeter!(200.0))?;
-    scenery.connect_nodes(i_lens, "output_1", i_fd, "input_1", millimeter!(200.0))?;
+    scenery.connect_nodes(i_lens, "output_1", i_fd, "input_1", millimeter!(205.0))?;
     let i_sd=scenery.add_node(SpotDiagram::default())?;
     scenery.connect_nodes(i_fd, "output_1", i_sd, "input_1", millimeter!(0.1))?;
     let mut doc = OpmDocument::new(scenery);
