@@ -10,10 +10,6 @@
                             rotation: (0.0, 0.0, 0.0, 1.0),
                             translation: (0.0, 0.0, 0.0),
                         ),
-                        inverse: (
-                            rotation: (0.0, 0.0, 0.0, 1.0),
-                            translation: (0.0, 0.0, 0.0),
-                        ),
                     ),
                     coating: IdealAR,
                     lidt: 10000.0,
@@ -23,10 +19,6 @@
                 "output_1": (
                     anchor_point_iso: (
                         transform: (
-                            rotation: (0.0, 0.0, 0.0, 1.0),
-                            translation: (0.0, 0.0, 0.0),
-                        ),
-                        inverse: (
                             rotation: (0.0, 0.0, 0.0, 1.0),
                             translation: (0.0, 0.0, 0.0),
                         ),

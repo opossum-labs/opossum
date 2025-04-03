@@ -12,7 +12,10 @@ use crate::{
 use approx::relative_eq;
 use nalgebra::{vector, Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3};
 use num::Zero;
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{self, MapAccess, Visitor},
+    Deserialize, Serialize,
+};
 use uom::si::{
     angle::radian,
     f64::{Angle, Length},
@@ -20,9 +23,10 @@ use uom::si::{
 };
 
 /// Struct to store the isometric transofmeation matrix and its inverse
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
 pub struct Isometry {
     transform: Isometry3<f64>,
+    #[serde(skip_serializing)]
     inverse: Isometry3<f64>,
 }
 impl Isometry {
@@ -402,6 +406,87 @@ impl Display for Isometry {
 impl From<Option<Isometry>> for Proptype {
     fn from(value: Option<Isometry>) -> Self {
         Self::Isometry(value)
+    }
+}
+/// Custom deserializer for [`Isometry`]
+/// 
+/// This is necessary since only the `transform` field need to be serialized and deserialized while the
+/// `inverse` field is automatically calculated during deserialization.
+impl<'de> Deserialize<'de> for Isometry {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        enum Field {
+            Transform,
+        }
+        const FIELDS: &[&str] = &["transform"];
+
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct FieldVisitor;
+
+                impl Visitor<'_> for FieldVisitor {
+                    type Value = Field;
+
+                    fn expecting(
+                        &self,
+                        formatter: &mut std::fmt::Formatter<'_>,
+                    ) -> std::fmt::Result {
+                        formatter.write_str("`transform`")
+                    }
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
+                    where
+                        E: de::Error,
+                    {
+                        match value {
+                            "transform" => Ok(Field::Transform),
+                            _ => Err(de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+
+        struct OpticRefVisitor;
+
+        impl<'de> Visitor<'de> for OpticRefVisitor {
+            type Value = Isometry;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a struct OpticRef")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> std::result::Result<Isometry, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                // let mut node_type = None;
+                let mut transform = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Transform => {
+                            if transform.is_some() {
+                                return Err(de::Error::duplicate_field("attributes"));
+                            }
+                            transform = Some(map.next_value::<Isometry3<f64>>()?);
+                        }
+                    }
+                }
+
+                let transform = transform.ok_or_else(|| de::Error::missing_field("transform"))?;
+                let iso = Isometry {
+                    transform,
+                    inverse: transform.inverse(),
+                };
+                Ok(iso)
+            }
+        }
+        deserializer.deserialize_struct("OpticRef", FIELDS, OpticRefVisitor)
     }
 }
 /// This function defines the coordinate axes on a plane.
