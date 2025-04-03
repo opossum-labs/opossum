@@ -54,7 +54,7 @@ pub enum RayDataBuilder {
         /// wavelength
         wave_length: Length,
         /// cone angle of each point src per pixel
-        cone_angle: Angle
+        cone_angle: Angle,
     },
 }
 
@@ -97,8 +97,14 @@ impl RayDataBuilder {
                 pixel_size,
                 total_energy,
                 wave_length,
-                cone_angle
-            } => Ok(LightData::Geometric(Rays::from_image(&file_path, pixel_size, total_energy, wave_length, cone_angle)?)),
+                cone_angle,
+            } => Ok(LightData::Geometric(Rays::from_image(
+                &file_path,
+                pixel_size,
+                total_energy,
+                wave_length,
+                cone_angle,
+            )?)),
         }
     }
 }
@@ -134,7 +140,7 @@ impl Display for RayDataBuilder {
                 pixel_size,
                 total_energy,
                 wave_length,
-                cone_angle
+                cone_angle,
             } => {
                 write!(f, "Image field({file_path:?}, {pixel_size:?}, {total_energy:?}, {wave_length:?}, {cone_angle:?})")
             }

@@ -44,7 +44,7 @@ strum = { version = "0.27", features = ["derive"] }
 strum_macros = "0.27"
 
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
-
+libm = {version="0.2"}
 chrono = { version= "0.4", features = ["serde"] }
 
 embed-doc-image = "0.1" # allows for embedded images in the rust API doc

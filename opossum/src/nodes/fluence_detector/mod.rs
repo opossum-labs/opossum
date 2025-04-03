@@ -100,7 +100,7 @@ impl OpticNode for FluenceDetector {
         else {
             return None;
         };
-        if let Ok(fluence_data) = hit_map.calc_fluence_map((50, 50), estimator) {
+        if let Ok(fluence_data) = hit_map.calc_fluence_map((100, 83), estimator) {
             props
                 .create(
                     &format!("Fluence ({})", fluence_data.estimator()),

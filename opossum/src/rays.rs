@@ -107,27 +107,28 @@ impl Rays {
             .map_err(|e| OpossumError::Other(format!("could decode image file: {e}")))?
             .to_luma8();
         let (width, height) = gray_image.dimensions();
-        // let (x_length_per_px, y_length_per_px) =
-        //     (pixel_size / (width as f64), pixel_size / (height as f64));
         let pixel_data = gray_image.into_raw(); // Extract pixel values as a Vec<u8>
                                                 // Create an nalgebra matrix with the correct dimensions
         let image_matrix = DMatrix::from_row_slice(height as usize, width as usize, &pixel_data);
         // Normalize image (sum=1)
-        let sum = image_matrix.iter().fold(0u64, |sum, x| sum + (*x as u64));
-        let energy_matrix = image_matrix.map(|p| energy * (p as f64) / (sum as f64));
-        let mut rays = Rays::default();
+        let sum = image_matrix
+            .iter()
+            .fold(0.0f64, |sum: f64, x: &u8| sum + usize_to_f64(*x as usize));
+        let energy_matrix = image_matrix.map(|p| energy * f64::from(p) / sum);
+        let mut rays = Self::default();
         for (y, row) in energy_matrix.row_iter().enumerate() {
             for (x, pixel) in row.iter().enumerate() {
                 let centered_positions = (
-                    (x as f64) - (width as f64) / 2.0,
-                    (y as f64) - (height as f64) / 2.0,
+                    usize_to_f64(x) - f64::from(width) / 2.0,
+                    usize_to_f64(y) - f64::from(height) / 2.0,
                 );
                 let position = Point3::new(
                     pixel_size * centered_positions.0,
-                    -1.0* pixel_size * centered_positions.1, // image upside down
+                    -1.0 * pixel_size * centered_positions.1, // image upside down
                     meter!(0.0),
                 );
-                let mut point_rays = Rays::new_hexapolar_point_source(position, cone_angle, 3, wave_length, *pixel)?;
+                let mut point_rays =
+                    Self::new_hexapolar_point_source(position, cone_angle, 3, wave_length, *pixel)?;
                 rays.add_rays(&mut point_rays);
             }
         }
