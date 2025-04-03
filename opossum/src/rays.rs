@@ -36,6 +36,7 @@ use crate::{
 };
 
 use approx::relative_eq;
+use image::{GrayImage, ImageReader};
 use itertools::{izip, Itertools};
 use kahan::KahanSummator;
 use log::warn;
@@ -45,7 +46,7 @@ use nalgebra::{
 };
 use num::ToPrimitive;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, ops::Range};
+use std::{fmt::Display, ops::Range, path::Path};
 use uom::{
     num_traits::Zero,
     si::{
@@ -84,6 +85,55 @@ impl Default for Rays {
 }
 
 impl Rays {
+    /// Create a light field of rays emitted from a 2D image.
+    ///
+    /// Each pixel of the image represents a point ray source, whose energy is defined by the pixel intensity.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the image cannot be read
+    pub fn from_image(
+        file_path: &Path,
+        pixel_size: Length,
+        energy: Energy,
+        wave_length: Length,
+        cone_angle: Angle,
+    ) -> OpmResult<Self> {
+        let image_reader = ImageReader::open(file_path)
+            .map_err(|e| OpossumError::Other(format!("could not read image from file: {e}")))?;
+        let gray_image: GrayImage = image_reader
+            .decode()
+            .map_err(|e| OpossumError::Other(format!("could decode image file: {e}")))?
+            .to_luma8();
+        let (width, height) = gray_image.dimensions();
+        let pixel_data = gray_image.into_raw(); // Extract pixel values as a Vec<u8>
+                                                // Create an nalgebra matrix with the correct dimensions
+        let image_matrix = DMatrix::from_row_slice(height as usize, width as usize, &pixel_data);
+        // Normalize image (sum=1)
+        let sum = image_matrix
+            .iter()
+            .fold(0.0f64, |sum: f64, x: &u8| sum + usize_to_f64(*x as usize));
+        let energy_matrix = image_matrix.map(|p| energy * f64::from(p) / sum);
+        let mut rays = Self::default();
+        for (y, row) in energy_matrix.row_iter().enumerate() {
+            for (x, pixel) in row.iter().enumerate() {
+                let centered_positions = (
+                    usize_to_f64(x) - f64::from(width) / 2.0,
+                    usize_to_f64(y) - f64::from(height) / 2.0,
+                );
+                let position = Point3::new(
+                    pixel_size * centered_positions.0,
+                    -1.0 * pixel_size * centered_positions.1, // image upside down
+                    meter!(0.0),
+                );
+                let mut point_rays =
+                    Self::new_hexapolar_point_source(position, cone_angle, 3, wave_length, *pixel)?;
+                rays.add_rays(&mut point_rays);
+            }
+        }
+        Ok(rays)
+    }
     /// Generate a set of collimated rays (collinear with optical axis) with uniform energy distribution.
     ///
     /// This functions generates a bundle of (collimated) rays of the given wavelength and the given *total* energy. The energy is
