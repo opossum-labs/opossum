@@ -63,6 +63,15 @@ impl AnalysisReport {
     pub fn add_node_report(&mut self, report: NodeReport) {
         self.node_reports.push(report);
     }
+    /// Serialize this [`AnalysisReport`] to a file string.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the serialization of the [`AnalysisReport`] fails.
+    pub fn to_file_string(&self) -> OpmResult<String> {
+        ron::ser::to_string_pretty(&self, ron::ser::PrettyConfig::new().new_line("\n"))
+            .map_err(|e| OpossumError::Other(format!("Error serializing AnalysisReport: {e}")))
+    }
     /// Export data of each [`NodeReport`] of this [`AnalysisReport`].
     ///
     /// # Errors

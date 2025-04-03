@@ -78,12 +78,8 @@ fn create_report_and_data_files(
         "ron",
         "analysis report",
     )?;
-    write!(
-        output,
-        "{}",
-        ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::new().new_line("\n")).unwrap()
-    )
-    .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
+    write!(output, "{}", report.to_file_string()?)
+        .map_err(|e| OpossumError::Other(format!("writing report file failed: {e}")))?;
     let mut report_path = report_directory.to_path_buf();
     report.export_data(&report_path)?;
     report_path.push(format!("report_{report_number}.html"));
@@ -94,17 +90,17 @@ fn create_report_and_data_files(
 
 fn opossum() -> OpmResult<()> {
     // by default, log everything from level `info` and up.
-    env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     warn!(
         "Current work dir: {}",
         env::current_dir().unwrap().display()
     );
-    //parse CLI arguments
+    // parse CLI arguments
     let opossum_args = Args::try_from(PartialArgs::parse())?;
 
-    //read scenery model from file and deserialize it
+    // read scenery model from file and deserialize it
     let mut document = read_and_parse_model(&opossum_args.file_path)?;
-    //create the dot file of the scenery
+    // create the dot file of the scenery
     create_data_dir(&opossum_args.report_directory)?;
     create_dot_file(&opossum_args.report_directory, document.scenery())?;
     let reports = document.analyze()?;
