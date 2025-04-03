@@ -409,7 +409,7 @@ impl From<Option<Isometry>> for Proptype {
     }
 }
 /// Custom deserializer for [`Isometry`]
-/// 
+///
 /// This is necessary since only the `transform` field need to be serialized and deserialized while the
 /// `inverse` field is automatically calculated during deserialization.
 impl<'de> Deserialize<'de> for Isometry {
