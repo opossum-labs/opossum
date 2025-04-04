@@ -380,14 +380,11 @@ mod test_wavefront_error_map {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    use crate::lightdata::DataEnergy;
-    use crate::optic_ports::PortType;
-    use crate::utils::geom_transformation::Isometry;
     use crate::{
         analyzers::RayTraceConfig, joule, millimeter, nanometer,
-        nodes::test_helper::test_helper::*, position_distributions::Hexapolar, rays::Rays,
-        spectrum_helper::create_he_ne_spec,
+        nodes::test_helper::test_helper::*, optic_ports::PortType,
+        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
+        utils::geom_transformation::Isometry,
     };
     #[test]
     fn default() {
@@ -468,9 +465,7 @@ mod test {
         let mut node = WaveFront::default();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input);

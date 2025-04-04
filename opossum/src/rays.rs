@@ -231,22 +231,22 @@ impl Rays {
         &self.parent_pos_split_idx
     }
     /// Sets the parent uuid of this ray bundle
-    pub fn set_parent_uuid(&mut self, parent_uuid: Uuid) {
+    pub const fn set_parent_uuid(&mut self, parent_uuid: Uuid) {
         self.parent_id = Some(parent_uuid);
     }
 
     /// Sets the uuid of this ray bundle
-    pub fn set_uuid(&mut self, uuid: Uuid) {
+    pub const fn set_uuid(&mut self, uuid: Uuid) {
         self.uuid = uuid;
     }
 
     /// Sets the node origin uuid of this ray bundle
-    pub fn set_node_origin_uuid(&mut self, node_uuid: Uuid) {
+    pub const fn set_node_origin_uuid(&mut self, node_uuid: Uuid) {
         self.node_origin = Some(node_uuid);
     }
 
     /// Sets the parent node split index node origin uuid of this ray bundle
-    pub fn set_parent_node_split_idx(&mut self, split_idx: usize) {
+    pub const fn set_parent_node_split_idx(&mut self, split_idx: usize) {
         self.parent_pos_split_idx = split_idx;
     }
 
@@ -1018,7 +1018,7 @@ impl Rays {
                     reflected_rays.add_ray(reflected);
                 } else {
                     rays_missed = true;
-                };
+                }
                 valid_rays_found = true;
             }
         }
@@ -1083,7 +1083,7 @@ impl Rays {
                     reflected_rays.add_ray(reflected);
                 } else {
                     rays_missed = true;
-                };
+                }
                 valid_rays_found = true;
             }
         }
@@ -1150,7 +1150,7 @@ impl Rays {
             return Err(OpossumError::Other(
                 "threshold energy must be finite".into(),
             ));
-        };
+        }
         let _ = self
             .rays
             .iter_mut()
@@ -1165,7 +1165,7 @@ impl Rays {
     pub fn central_wavelength(&self) -> Option<Length> {
         if self.rays.is_empty() {
             return None;
-        };
+        }
         let mut center = Length::zero() * Energy::zero();
         for ray in self.rays.iter().filter(|r| r.valid()) {
             center += ray.energy() * ray.wavelength();
@@ -1179,7 +1179,7 @@ impl Rays {
     pub fn wavelength_range(&self) -> Option<Range<Length>> {
         if self.rays.is_empty() {
             return None;
-        };
+        }
         let mut min = millimeter!(f64::INFINITY);
         let mut max = Length::zero();
         for ray in &self.rays {
@@ -1522,7 +1522,7 @@ impl FluenceRays {
 
     /// Returns a mutable reference to the helper rays of these [`FluenceRays`]
     #[must_use]
-    pub fn rays_mut(&mut self) -> &mut Rays {
+    pub const fn rays_mut(&mut self) -> &mut Rays {
         &mut self.helper_rays
     }
 

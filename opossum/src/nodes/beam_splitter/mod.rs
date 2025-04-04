@@ -8,7 +8,7 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{raytrace::MissedSurfaceStrategy, AnalyzerType},
     error::{OpmResult, OpossumError},
-    lightdata::{DataEnergy, LightData},
+    lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
@@ -104,19 +104,19 @@ impl BeamSplitter {
     ) -> OpmResult<(Option<Spectrum>, Option<Spectrum>)> {
         if let Some(in1) = input {
             match in1 {
-                LightData::Energy(e) => {
+                LightData::Energy(spectrum) => {
                     match self.splitting_config() {
                         SplittingConfig::Ratio(r) => {
-                            let mut s = e.spectrum.clone();
+                            let mut s = spectrum.clone();
                             s.scale_vertical(&r)?;
                             let out1_spectrum = Some(s);
-                            let mut s = e.spectrum.clone();
+                            let mut s = spectrum.clone();
                             s.scale_vertical(&(1.0 - r))?;
                             let out2_spectrum = Some(s);
                             Ok((out1_spectrum, out2_spectrum))
                         },
                         SplittingConfig::Spectrum(spec) => {
-                            let mut s = e.spectrum.clone();
+                            let mut s = spectrum.clone();
                             let split_spectrum=s.split_by_spectrum(&spec);
                             let out1_spectrum = Some(s);
                             let out2_spectrum = Some(split_spectrum);
@@ -147,14 +147,10 @@ impl BeamSplitter {
         let mut out1_data: Option<LightData> = None;
         let mut out2_data: Option<LightData> = None;
         if let Some(out1_spec) = out1_spec {
-            out1_data = Some(LightData::Energy(DataEnergy {
-                spectrum: out1_spec,
-            }));
+            out1_data = Some(LightData::Energy(out1_spec));
         }
         if let Some(out2_spec) = out2_spec {
-            out2_data = Some(LightData::Energy(DataEnergy {
-                spectrum: out2_spec,
-            }));
+            out2_data = Some(LightData::Energy(out2_spec));
         }
         Ok((out1_data, out2_data))
     }
@@ -172,7 +168,7 @@ impl BeamSplitter {
 
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
-        };
+        }
         let Proptype::SplitterType(splitting_config) =
             self.node_attr.get_property("splitter config")?.clone()
         else {
@@ -202,7 +198,7 @@ impl BeamSplitter {
                             rays.apodize(aperture, &self.effective_surface_iso(in1_port)?)?;
                         } else {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
-                        };
+                        }
                     } else {
                         return Err(OpossumError::OpticPort(
                             "input optic surface not found".into(),
@@ -236,8 +232,7 @@ impl BeamSplitter {
                             rays.apodize(aperture, &self.effective_surface_iso(in2_port)?)?;
                         } else {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
-                        };
-
+                        }
                         let split_rays = rays.split(&splitting_config)?;
                         (rays, split_rays)
                     } else {
@@ -266,7 +261,7 @@ impl BeamSplitter {
             }
         } else {
             return Err(OpossumError::OpticPort("ouput aperture not found".into()));
-        };
+        }
         if let Some(aperture) = self.ports().aperture(&PortType::Output, out2_port) {
             in_ray2.apodize(aperture, &iso)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -274,7 +269,7 @@ impl BeamSplitter {
             }
         } else {
             return Err(OpossumError::OpticPort("ouput aperture not found".into()));
-        };
+        }
         Ok((
             Some(LightData::Geometric(in_ray1)),
             Some(LightData::Geometric(in_ray2)),

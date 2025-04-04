@@ -106,7 +106,7 @@ impl OpticSurface {
         self.aperture = aperture;
     }
     /// Sets the coating of this [`OpticSurface`].
-    pub fn set_coating(&mut self, coating: CoatingType) {
+    pub const fn set_coating(&mut self, coating: CoatingType) {
         self.coating = coating;
     }
     /// Returns a reference to the geo surface of this [`OpticSurface`].
@@ -213,7 +213,7 @@ impl OpticSurface {
                         peak_fluence,
                         rays.bounce_lvl(),
                     );
-                };
+                }
             } else {
                 warn!("Could not estimate maximum fluence of ray bundle! Ray bundle will be ignored during calculation");
             }
@@ -241,7 +241,7 @@ impl OpticSurface {
     }
 
     /// Sets the anchor point isometry of this [`OpticSurface`]
-    pub fn set_anchor_point_iso(&mut self, iso: Isometry) {
+    pub const fn set_anchor_point_iso(&mut self, iso: Isometry) {
         self.anchor_point_iso = iso;
     }
 

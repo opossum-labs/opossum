@@ -132,7 +132,7 @@ impl OpticPorts {
 
     /// Returns a reference to the input / output ports of this [`OpticPorts`].
     #[must_use]
-    pub fn ports_mut(&mut self, port_type: &PortType) -> &mut BTreeMap<String, OpticSurface> {
+    pub const fn ports_mut(&mut self, port_type: &PortType) -> &mut BTreeMap<String, OpticSurface> {
         let (mut input_ports, mut output_ports) = (&mut self.inputs, &mut self.outputs);
         if self.inverted {
             (input_ports, output_ports) = (output_ports, input_ports);
@@ -254,7 +254,7 @@ impl OpticPorts {
     /// Mark the [`OpticPorts`] as `inverted`.
     ///
     /// This swaps input and output ports.
-    pub fn set_inverted(&mut self, inverted: bool) {
+    pub const fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;
     }
 }

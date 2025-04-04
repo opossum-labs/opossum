@@ -20,9 +20,7 @@ impl AnalysisEnergy for Lens {
 mod test {
     use super::Lens;
     use crate::{
-        analyzers::energy::AnalysisEnergy,
-        light_result::LightResult,
-        lightdata::{DataEnergy, LightData},
+        analyzers::energy::AnalysisEnergy, light_result::LightResult, lightdata::LightData,
         spectrum_helper::create_he_ne_spec,
     };
 
@@ -38,9 +36,7 @@ mod test {
         let mut lens = Lens::default();
         let incoming_data = LightResult::from([(
             "input_1".into(),
-            LightData::Energy(DataEnergy {
-                spectrum: create_he_ne_spec(1.0).unwrap(),
-            }),
+            LightData::Energy(create_he_ne_spec(1.0).unwrap()),
         )]);
         let result = lens.analyze(incoming_data.clone()).unwrap();
         assert_eq!(result.get("output_1"), incoming_data.get("input_1"));

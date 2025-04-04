@@ -4,6 +4,7 @@ use num::ToPrimitive;
 
 use crate::error::OpmResult;
 use crate::optic_ports::{OpticPorts, PortType};
+use std::fmt::Write as _;
 
 /// This trait deals with the translation of the [`NodeGroup`](crate::nodes::NodeGroup) structure to the dot-file
 /// format which is needed to visualize the graphs
@@ -190,31 +191,36 @@ pub trait Dottable {
             *port_1_count += 1;
         } else if ax_nums.0 == 1 && ax_nums.1 == 1 {
             if rankdir == "LR" {
-                dot_str.push_str(&format!(  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>\n", 
+                let _ = writeln!(dot_str, "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>", 
                                                 row_col_span,
                                                 row_col_span,
                                                 self.node_color(),
                                                 node_cell_size,
                                                 node_cell_size,
-                                                node_name));
+                                                node_name);
             } else {
-                dot_str.push_str(&format!(  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>\n", 
+                let _= writeln!(dot_str,
+                  "<TD FIXEDSIZE=\"TRUE\" ROWSPAN=\"{}\" COLSPAN=\"{}\" BGCOLOR=\"{}\" WIDTH=\"{}\" HEIGHT=\"{}\" BORDER=\"1\" ALIGN=\"CENTER\" CELLPADDING=\"0\" STYLE=\"ROUNDED\">{}</TD>", 
                 row_col_span,
                 row_col_span,
                 self.node_color(),
                 node_cell_size,
                 16+row_col_span-1,
-                node_name));
+                node_name);
             }
         } else if (ax_nums.0 == 0 || ax_nums.0 == num_cells - 1)
             && (ax_nums.1 == 1 || ax_nums.1 == num_cells - 2)
         {
             let size = (node_cell_size - (num_cells - 4) * 16) / 2;
             if rankdir == "LR" {
-                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>\n"));
+                let _ = writeln!(
+                    dot_str,
+                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>"
+                );
             } else {
-                dot_str.push_str(
-                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"1\"> </TD>\n",
+                let _ = writeln!(
+                    dot_str,
+                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"1\"> </TD>"
                 );
             }
         } else if (ax_nums.1 == 0 || ax_nums.1 == num_cells - 1)
@@ -222,19 +228,27 @@ pub trait Dottable {
         {
             let size = (node_cell_size - (num_cells - 4) * 16) / 2;
             if rankdir == "LR" {
-                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>\n"));
+                let _ = writeln!(
+                    dot_str,
+                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"{size}\"> </TD>"
+                );
             } else {
-                dot_str.push_str(&format!("<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"{size}\" HEIGHT=\"1\"> </TD>\n"));
+                let _ = writeln!(
+                    dot_str,
+                    "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"{size}\" HEIGHT=\"1\"> </TD>"
+                );
             }
         } else if rankdir == "LR" {
-            dot_str.push_str(
-                "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"16\"> </TD>\n",
+            let _ = writeln!(
+                dot_str,
+                "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"16\"> </TD>"
             );
         } else {
-            dot_str.push_str(
-                "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"1\"> </TD>\n",
+            let _ = writeln!(
+                dot_str,
+                "<TD FIXEDSIZE=\"TRUE\" ALIGN=\"CENTER\" WIDTH=\"16\" HEIGHT=\"1\"> </TD>"
             );
-        };
+        }
         dot_str
     }
 
@@ -315,7 +329,7 @@ pub trait Dottable {
                         node_name,
                         rankdir,
                     ));
-                };
+                }
             }
             *indent_level -= 1;
             dot_str.push_str(&self.create_html_like_container("row", indent_level, false, 0));
@@ -324,7 +338,7 @@ pub trait Dottable {
         dot_str.push_str(&self.create_html_like_container("table", indent_level, false, -1));
 
         //end node-shape description
-        dot_str.push_str(&format!("{}>];\n", "\t".repeat(*indent_level)));
+        let _ = writeln!(dot_str, "{}>];", "\t".repeat(*indent_level));
         dot_str
     }
 }

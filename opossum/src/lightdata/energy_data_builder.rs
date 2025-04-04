@@ -5,9 +5,15 @@
 use crate::{error::OpmResult, spectrum::Spectrum};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf};
-use uom::si::f64::{Energy, Length};
+use uom::{
+    fmt::DisplayStyle::Abbreviation,
+    si::{
+        f64::{Energy, Length},
+        length::nanometer,
+    },
+};
 
-use super::{DataEnergy, LightData};
+use super::LightData;
 
 /// Builder for the generation of energy spectra.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -26,16 +32,14 @@ impl EnergyDataBuilder {
     /// This function will return an error if the concrete implementation of the builder fails.
     pub fn build(&self) -> OpmResult<LightData> {
         match self {
-            Self::Raw(s) => Ok(LightData::Energy(DataEnergy {
-                spectrum: s.clone(),
-            })),
+            Self::Raw(s) => Ok(LightData::Energy(s.clone())),
             Self::FromFile(p) => {
                 let spectrum = Spectrum::from_csv(p)?;
-                Ok(LightData::Energy(DataEnergy { spectrum }))
+                Ok(LightData::Energy(spectrum))
             }
             Self::LaserLines(l, r) => {
                 let spectrum = Spectrum::from_laser_lines(l.clone(), *r)?;
-                Ok(LightData::Energy(DataEnergy { spectrum }))
+                Ok(LightData::Energy(spectrum))
             }
         }
     }
@@ -46,7 +50,14 @@ impl Display for EnergyDataBuilder {
         match self {
             Self::Raw(s) => write!(f, "Raw({s})"),
             Self::FromFile(p) => write!(f, "FromFile({})", p.display()),
-            Self::LaserLines(l, r) => write!(f, "LaserLines({:?}, {})", l, r.value),
+            Self::LaserLines(l, r) => {
+                write!(
+                    f,
+                    "LaserLines({:?}, {:.3})",
+                    l,
+                    r.into_format_args(nanometer, Abbreviation)
+                )
+            }
         }
     }
 }

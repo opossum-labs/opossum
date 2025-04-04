@@ -65,8 +65,8 @@ impl BouncedHitMap {
                     rhm.add_hit_point(HitPoint::Fluence(fluence_hit_point))?;
                     self.hit_map.insert(uuid, rhm);
                 }
-            };
-        };
+            }
+        }
         Ok(())
     }
     /// Returns a reference to a [`RaysHitMap`] in this [`BouncedHitMap`]
@@ -90,6 +90,7 @@ impl HitMap {
     ///
     /// This function returns a vector of intersection points (with energies) of [`Rays`](crate::rays::Rays) that hit the surface.
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn hit_map(&self) -> &[BouncedHitMap] {
         &self.hit_map
     }

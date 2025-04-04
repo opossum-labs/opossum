@@ -237,7 +237,7 @@ impl ParabolicMirror {
             return Err(OpossumError::Other(
                 "focal length must not be 0.0 and finite".into(),
             ));
-        };
+        }
         if let Some(oa_angle) = oa_angle_opt {
             if !oa_angle.is_finite() {
                 return Err(OpossumError::Other("off-axis angle and finite".into()));
@@ -247,14 +247,14 @@ impl ParabolicMirror {
                     "off-axis angle must be smaller than 180°".into(),
                 ));
             }
-        };
+        }
         if let Some(oa_dir) = oa_dir_opt {
             if !oa_dir.x.is_finite() || !oa_dir.y.is_finite() || oa_dir.norm() < f64::EPSILON {
                 return Err(OpossumError::Other(
                     "off-axis direction values must be finite and the vector norm non-zero".into(),
                 ));
             }
-        };
+        }
         Ok(())
     }
     /// sets the properties of this parabola
@@ -490,8 +490,7 @@ impl AnalysisRayTrace for ParabolicMirror {
         };
         if rays.is_empty() {
             return Ok(LightResult::default());
-        };
-
+        }
         let Some(surf) = self.get_optic_surface_mut(in_port) else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
@@ -532,7 +531,7 @@ mod test {
         },
         degree, joule,
         light_result::{light_result_to_light_rays, LightResult},
-        lightdata::{DataEnergy, LightData},
+        lightdata::LightData,
         meter, millimeter, nanometer,
         nodes::ParabolicMirror,
         optic_node::OpticNode,
@@ -956,9 +955,7 @@ mod test {
     #[test]
     fn analysis_raytrace_lightdata_energy() {
         let mut node = ParabolicMirror::default();
-        let light_data = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let light_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         let input = LightResult::from([("input_1".into(), light_data)]);
         assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
     }
@@ -1009,9 +1006,7 @@ mod test {
     #[test]
     fn analysis_energy() {
         let mut node = ParabolicMirror::default();
-        let light_data = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let light_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         let input = LightResult::from([("input_1".into(), light_data)]);
         let output = AnalysisEnergy::analyze(&mut node, input);
         assert!(output.is_ok());

@@ -25,13 +25,13 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
+use std::fmt::Write as _;
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
 };
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
-
 type ConnectionInfo = (Uuid, String, Uuid, String, Length);
 
 /// Data structure representing an optical graph
@@ -423,7 +423,7 @@ impl OpticGraph {
             PortType::Output => self
                 .output_port_map
                 .add(external_name, node_id, internal_name),
-        };
+        }
         Ok(())
     }
     /// Returns the incoming data of a node in this [`OpticGraph`].
@@ -849,7 +849,7 @@ impl OpticGraph {
                     } else {
                         node.set_isometry(node_iso)?;
                         drop(node);
-                    };
+                    }
                 }
             } else {
                 return Err(OpossumError::Analysis(
@@ -913,10 +913,11 @@ impl OpticGraph {
             let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port())?;
             let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port())?;
 
-            dot_string.push_str(&format!(
-                "  {src_edge_str} -> {target_edge_str} [label=\"{}\"]\n",
+            let _ = writeln!(
+                dot_string,
+                "  {src_edge_str} -> {target_edge_str} [label=\"{}\"]",
                 format_quantity(meter, dist)
-            ));
+            );
         }
         dot_string.push_str("}\n");
         Ok(dot_string)
@@ -963,7 +964,7 @@ impl OpticGraph {
         self.is_inverted
     }
     /// Sets the is inverted of this [`OpticGraph`].
-    pub fn set_is_inverted(&mut self, is_inverted: bool) {
+    pub const fn set_is_inverted(&mut self, is_inverted: bool) {
         self.is_inverted = is_inverted;
     }
     /// Sets the external distances of this [`OpticGraph`].
@@ -1164,7 +1165,6 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
 mod test {
     use super::*;
     use crate::{
-        lightdata::DataEnergy,
         millimeter,
         nodes::{BeamSplitter, Dummy, NodeGroup, NodeReference, Source},
         ray::SplittingConfig,
@@ -1563,17 +1563,15 @@ mod test {
     fn analyze_ok() {
         let mut graph = prepare_group();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         let output = graph.analyze_energy(&input);
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("output_1"));
         let output = output.get("output_1").unwrap().clone();
-        let energy = if let LightData::Energy(data) = output {
-            data.spectrum.total_energy()
+        let energy = if let LightData::Energy(s) = output {
+            s.total_energy()
         } else {
             panic!()
         };
@@ -1583,9 +1581,7 @@ mod test {
     fn analyze_wrong_input_data() {
         let mut graph = prepare_group();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("wrong".into(), input_light.clone());
         let output = graph.analyze_energy(&input).unwrap();
         assert!(output.is_empty());
@@ -1595,9 +1591,7 @@ mod test {
     fn analyze_inverse() {
         let mut graph = prepare_group();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         graph.set_is_inverted(true);
         input.insert("output_1".into(), input_light);
         let output = graph.analyze_energy(&input);
@@ -1605,8 +1599,8 @@ mod test {
         let output = output.unwrap();
         assert!(output.contains_key("input_1"));
         let output = output.get("input_1").unwrap().clone();
-        let energy = if let LightData::Energy(data) = output {
-            data.spectrum.total_energy()
+        let energy = if let LightData::Energy(s) = output {
+            s.total_energy()
         } else {
             panic!()
         };
@@ -1625,9 +1619,7 @@ mod test {
             .unwrap();
         graph.set_is_inverted(true);
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light);
         let output = graph.analyze_energy(&input);
         assert!(output.is_err());

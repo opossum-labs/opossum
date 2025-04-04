@@ -82,7 +82,7 @@ impl Source {
     ///
     /// ```rust
     /// use opossum::{
-    /// lightdata::{light_data_builder::LightDataBuilder, energy_spectrum_builder::EnergyDataBuilder},
+    /// lightdata::{light_data_builder::LightDataBuilder, energy_data_builder::EnergyDataBuilder},
     /// nodes::Source,
     /// spectrum_helper::create_he_ne_spec};
     ///
@@ -206,7 +206,7 @@ impl AnalysisRayTrace for Source {
                             return Err(OpossumError::OpticPort(
                                 "output aperture not found".into(),
                             ));
-                        };
+                        }
                     }
                 }
             }

@@ -197,14 +197,13 @@ impl AnalysisRayTrace for ParaxialSurface {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 } else {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
+                }
                 if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
                     rays.apodize(aperture, &iso)?;
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 } else {
                     return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-
+                }
                 let mut light_result = LightResult::default();
                 light_result.insert(out_port.into(), LightData::Geometric(rays));
                 Ok(light_result)

@@ -21,6 +21,7 @@ use crate::{
 use num::Zero;
 pub use optic_graph::OpticGraph;
 use serde::{Deserialize, Serialize};
+use std::fmt::Write as _;
 use std::{
     collections::{BTreeMap, HashMap},
     fs::{self, File},
@@ -392,7 +393,7 @@ impl NodeGroup {
             .insert(port_name.to_string(), distance);
     }
     /// Returns a mutable reference to the underlying [`OpticGraph`] of this [`NodeGroup`].
-    pub fn graph_mut(&mut self) -> &mut OpticGraph {
+    pub const fn graph_mut(&mut self) -> &mut OpticGraph {
         &mut self.graph
     }
     /// Returns a mutable reference to the underlying [`OpticGraph`] of this [`NodeGroup`].
@@ -430,12 +431,18 @@ impl NodeGroup {
     /// Returns the dot-file header of this [`NodeGroup`] graph.
     fn add_dot_header(&self, rankdir: &str) -> String {
         let mut dot_string = String::from("digraph {\n\tfontsize = 10;\n");
-        dot_string.push_str("\tcompound = true;\n");
-        dot_string.push_str(&format!("\trankdir = \"{rankdir}\";\n"));
-        dot_string.push_str(&format!("\tlabel=\"{}\"\n", self.node_attr.name()));
-        dot_string.push_str("\tfontname=\"Courier-monospace\"\n");
-        dot_string.push_str("\tnode [fontname=\"Courier-monospace\" fontsize = 10]\n");
-        dot_string.push_str("\tedge [fontname=\"Courier-monospace\" fontsize = 10]\n\n");
+        let _ = writeln!(dot_string, "\tcompound = true;");
+        let _ = writeln!(dot_string, "\trankdir = \"{rankdir}\";");
+        let _ = writeln!(dot_string, "\tlabel=\"{}\"", self.node_attr.name());
+        let _ = writeln!(dot_string, "\tfontname=\"Courier-monospace\"");
+        let _ = writeln!(
+            dot_string,
+            "\tnode [fontname=\"Courier-monospace\" fontsize = 10]"
+        );
+        let _ = writeln!(
+            dot_string,
+            "\tedge [fontname=\"Courier-monospace\" fontsize = 10]\n"
+        );
         dot_string
     }
     /// Export the optic graph, including ports, into the `dot` format to be used in combination with

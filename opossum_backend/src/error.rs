@@ -37,10 +37,12 @@ impl ErrorResponse {
         self.status
     }
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn category(&self) -> &str {
         &self.category
     }
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn message(&self) -> &str {
         &self.message
     }

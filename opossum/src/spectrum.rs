@@ -2,7 +2,7 @@
 //! Module for creation and handling of optical spectra
 use crate::{
     error::{OpmResult, OpossumError},
-    lightdata::energy_spectrum_builder::EnergyDataBuilder,
+    lightdata::energy_data_builder::EnergyDataBuilder,
     micrometer,
     plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{f64_to_usize, usize_to_f64},
@@ -436,6 +436,20 @@ impl Spectrum {
             .zip(resampled_spec.data.iter())
             .map(|d| (d.0 .0, d.0 .1 * d.1 .1))
             .collect();
+    }
+    /// Filter a spectrum with a given filter type.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
+    pub fn filter_with_type(&mut self, filter_type: &crate::nodes::FilterType) -> OpmResult<()> {
+        match filter_type {
+            crate::nodes::FilterType::Constant(t) => self.scale_vertical(t)?,
+            crate::nodes::FilterType::Spectrum(s2) => {
+                self.filter(s2);
+            }
+        }
+        Ok(())
     }
     /// Modify and generate spectrum for a beamsplitter.
     #[must_use]

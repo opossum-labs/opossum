@@ -166,7 +166,7 @@ fn calculate_single_node_position(
             }
         } else {
             graph.set_node_isometry(&incoming_edges, node_id, *up_direction)?;
-        };
+        }
     } else {
         info!("Node {node_info} has already been placed. Leaving untouched.");
     }
