@@ -35,12 +35,8 @@ mod test {
     use approx::{assert_abs_diff_eq, AbsDiffEq};
 
     use crate::{
-        analyzers::energy::AnalysisEnergy,
-        light_result::LightResult,
-        lightdata::{DataEnergy, LightData},
-        nodes::BeamSplitter,
-        optic_node::OpticNode,
-        ray::SplittingConfig,
+        analyzers::energy::AnalysisEnergy, light_result::LightResult, lightdata::LightData,
+        nodes::BeamSplitter, optic_node::OpticNode, ray::SplittingConfig,
         spectrum_helper::create_he_ne_spec,
     };
 
@@ -57,21 +53,19 @@ mod test {
         let mut input = LightResult::default();
         input.insert(
             "input_1".into(),
-            LightData::Energy(DataEnergy {
-                spectrum: create_he_ne_spec(1.0).unwrap(),
-            }),
+            LightData::Energy(create_he_ne_spec(1.0).unwrap()),
         );
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         let result = output.clone().get("out1_trans1_refl2").unwrap().clone();
-        let energy = if let LightData::Energy(e) = result {
-            e.spectrum.total_energy()
+        let energy = if let LightData::Energy(s) = result {
+            s.total_energy()
         } else {
             0.0
         };
         assert_eq!(energy, 0.6);
         let result = output.clone().get("out2_trans2_refl1").unwrap().clone();
-        let energy = if let LightData::Energy(e) = result {
-            e.spectrum.total_energy()
+        let energy = if let LightData::Energy(s) = result {
+            s.total_energy()
         } else {
             0.0
         };
@@ -83,21 +77,17 @@ mod test {
         let mut input = LightResult::default();
         input.insert(
             "input_1".into(),
-            LightData::Energy(DataEnergy {
-                spectrum: create_he_ne_spec(1.0).unwrap(),
-            }),
+            LightData::Energy(create_he_ne_spec(1.0).unwrap()),
         );
         input.insert(
             "input_2".into(),
-            LightData::Energy(DataEnergy {
-                spectrum: create_he_ne_spec(0.5).unwrap(),
-            }),
+            LightData::Energy(create_he_ne_spec(0.5).unwrap()),
         );
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         let energy_output1 = if let LightData::Energy(s) =
             output.clone().get("out1_trans1_refl2").unwrap().clone()
         {
-            s.spectrum.total_energy()
+            s.total_energy()
         } else {
             0.0
         };
@@ -105,7 +95,7 @@ mod test {
         let energy_output2 = if let LightData::Energy(s) =
             output.clone().get("out2_trans2_refl1").unwrap().clone()
         {
-            s.spectrum.total_energy()
+            s.total_energy()
         } else {
             0.0
         };
@@ -118,27 +108,23 @@ mod test {
         let mut input = LightResult::default();
         input.insert(
             "out1_trans1_refl2".into(),
-            LightData::Energy(DataEnergy {
-                spectrum: create_he_ne_spec(1.0).unwrap(),
-            }),
+            LightData::Energy(create_he_ne_spec(1.0).unwrap()),
         );
         input.insert(
             "out2_trans2_refl1".into(),
-            LightData::Energy(DataEnergy {
-                spectrum: create_he_ne_spec(0.5).unwrap(),
-            }),
+            LightData::Energy(create_he_ne_spec(0.5).unwrap()),
         );
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         let energy_output1 =
             if let LightData::Energy(s) = output.clone().get("input_1").unwrap().clone() {
-                s.spectrum.total_energy()
+                s.total_energy()
             } else {
                 0.0
             };
 
         let energy_output2 =
             if let LightData::Energy(s) = output.clone().get("input_2").unwrap().clone() {
-                s.spectrum.total_energy()
+                s.total_energy()
             } else {
                 0.0
             };

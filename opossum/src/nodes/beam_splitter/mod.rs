@@ -8,7 +8,7 @@ use super::node_attr::NodeAttr;
 use crate::{
     analyzers::{raytrace::MissedSurfaceStrategy, AnalyzerType},
     error::{OpmResult, OpossumError},
-    lightdata::{DataEnergy, LightData},
+    lightdata::LightData,
     optic_node::OpticNode,
     optic_ports::PortType,
     properties::Proptype,
@@ -104,19 +104,19 @@ impl BeamSplitter {
     ) -> OpmResult<(Option<Spectrum>, Option<Spectrum>)> {
         if let Some(in1) = input {
             match in1 {
-                LightData::Energy(e) => {
+                LightData::Energy(spectrum) => {
                     match self.splitting_config() {
                         SplittingConfig::Ratio(r) => {
-                            let mut s = e.spectrum.clone();
+                            let mut s = spectrum.clone();
                             s.scale_vertical(&r)?;
                             let out1_spectrum = Some(s);
-                            let mut s = e.spectrum.clone();
+                            let mut s = spectrum.clone();
                             s.scale_vertical(&(1.0 - r))?;
                             let out2_spectrum = Some(s);
                             Ok((out1_spectrum, out2_spectrum))
                         },
                         SplittingConfig::Spectrum(spec) => {
-                            let mut s = e.spectrum.clone();
+                            let mut s = spectrum.clone();
                             let split_spectrum=s.split_by_spectrum(&spec);
                             let out1_spectrum = Some(s);
                             let out2_spectrum = Some(split_spectrum);
@@ -147,14 +147,10 @@ impl BeamSplitter {
         let mut out1_data: Option<LightData> = None;
         let mut out2_data: Option<LightData> = None;
         if let Some(out1_spec) = out1_spec {
-            out1_data = Some(LightData::Energy(DataEnergy {
-                spectrum: out1_spec,
-            }));
+            out1_data = Some(LightData::Energy(out1_spec));
         }
         if let Some(out2_spec) = out2_spec {
-            out2_data = Some(LightData::Energy(DataEnergy {
-                spectrum: out2_spec,
-            }));
+            out2_data = Some(LightData::Energy(out2_spec));
         }
         Ok((out1_data, out2_data))
     }

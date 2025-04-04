@@ -5,9 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-use super::{
-    energy_spectrum_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder, LightData,
-};
+use super::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder, LightData};
 use crate::{error::OpmResult, properties::Proptype};
 
 /// Builder for the generation of [`LightData`].
@@ -48,5 +46,46 @@ impl Display for LightDataBuilder {
 impl From<Option<LightDataBuilder>> for Proptype {
     fn from(value: Option<LightDataBuilder>) -> Self {
         Self::LightDataBuilder(value)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{joule, nanometer, rays::Rays};
+
+    #[test]
+    fn from_light_data_builder_to_proptype() {
+        let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+            vec![(nanometer!(1000.0), joule!(1.0))],
+            nanometer!(1.0),
+        ));
+        let proptype: Proptype = Some(light_data_builder).into();
+        assert!(matches!(proptype, Proptype::LightDataBuilder(_)));
+    }
+    #[test]
+    fn display_light_data_builder() {
+        let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+            vec![(nanometer!(1000.0), joule!(1.0))],
+            nanometer!(1.0),
+        ));
+        assert_eq!(
+            format!("{light_data_builder}"),
+            "Energy(LaserLines([(1.0000000000000002e-6 m^1, 1.0 m^2 kg^1 s^-2)], 1.000 nm))"
+        );
+    }
+    #[test]
+    fn build_light_data() {
+        let light_data_builder = LightDataBuilder::Energy(EnergyDataBuilder::LaserLines(
+            vec![(nanometer!(1000.0), joule!(1.0))],
+            nanometer!(1.0),
+        ));
+        let light_data = light_data_builder.build().unwrap();
+        assert!(matches!(light_data, LightData::Energy(_)));
+        let light_data_builder = LightDataBuilder::Fourier;
+        let light_data = light_data_builder.build().unwrap();
+        assert!(matches!(light_data, LightData::Fourier));
+        let light_data_builder = LightDataBuilder::Geometric(RayDataBuilder::Raw(Rays::default()));
+        let light_data = light_data_builder.build().unwrap();
+        assert!(matches!(light_data, LightData::Geometric(_)));
     }
 }

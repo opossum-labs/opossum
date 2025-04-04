@@ -190,10 +190,10 @@ impl AnalysisEnergy for IdealFilter {
         let Some(input) = incoming_data.get(in_port) else {
             return Ok(LightResult::default());
         };
-        if let LightData::Energy(e) = input {
-            let mut new_data = e.clone();
-            new_data.filter(&self.filter_type())?;
-            let light_data = LightData::Energy(new_data);
+        if let LightData::Energy(s) = input {
+            let mut new_spectrum = s.clone();
+            new_spectrum.filter_with_type(&self.filter_type())?;
+            let light_data = LightData::Energy(new_spectrum);
             Ok(LightResult::from([(out_port.into(), light_data)]))
         } else {
             Err(OpossumError::Analysis("expected energy light data".into()))
@@ -252,15 +252,9 @@ mod test {
     use uom::si::energy::joule;
 
     use crate::{
-        analyzers::RayTraceConfig,
-        joule,
-        lightdata::{DataEnergy, LightData},
-        millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
-        optic_ports::PortType,
-        position_distributions::Hexapolar,
-        rays::Rays,
-        spectrum_helper::create_he_ne_spec,
+        analyzers::RayTraceConfig, joule, lightdata::LightData, millimeter, nanometer,
+        nodes::test_helper::test_helper::*, optic_ports::PortType,
+        position_distributions::Hexapolar, rays::Rays, spectrum_helper::create_he_ne_spec,
         utils::geom_transformation::Isometry,
     };
 
@@ -341,9 +335,7 @@ mod test {
     fn analyze_wrong() {
         let mut node = IdealFilter::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.is_empty());
@@ -356,9 +348,7 @@ mod test {
     fn analyze_energy_ok() {
         let mut node = IdealFilter::new("test", &FilterType::Constant(0.5)).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         assert!(
             AnalysisRayTrace::analyze(&mut node, input.clone(), &RayTraceConfig::default())
@@ -370,9 +360,7 @@ mod test {
         let output = output.get("output_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        let expected_output_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(0.5).unwrap(),
-        });
+        let expected_output_light = LightData::Energy(create_he_ne_spec(0.5).unwrap());
         assert_eq!(*output, expected_output_light);
     }
     #[test]
@@ -407,9 +395,7 @@ mod test {
         let mut node = IdealFilter::new("test", &FilterType::Constant(0.5)).unwrap();
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("input_1"));
@@ -417,9 +403,7 @@ mod test {
         let output = output.get("input_1");
         assert!(output.is_some());
         let output = output.clone().unwrap();
-        let expected_output_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(0.5).unwrap(),
-        });
+        let expected_output_light = LightData::Energy(create_he_ne_spec(0.5).unwrap());
         assert_eq!(*output, expected_output_light);
     }
 }

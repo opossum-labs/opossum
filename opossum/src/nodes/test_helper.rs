@@ -5,7 +5,7 @@ pub mod test_helper {
         aperture::{Aperture, CircleConfig},
         joule,
         light_result::LightResult,
-        lightdata::{DataEnergy, LightData},
+        lightdata::LightData,
         millimeter, nanometer,
         optic_node::OpticNode,
         optic_ports::PortType,
@@ -53,9 +53,7 @@ pub mod test_helper {
     pub fn test_analyze_wrong_data_type<T: Default + AnalysisRayTrace>(input_port_name: &str) {
         let mut node = T::default();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         assert!(
             node.ports()
                 .names(&PortType::Input)

@@ -531,7 +531,7 @@ mod test {
         },
         degree, joule,
         light_result::{light_result_to_light_rays, LightResult},
-        lightdata::{DataEnergy, LightData},
+        lightdata::LightData,
         meter, millimeter, nanometer,
         nodes::ParabolicMirror,
         optic_node::OpticNode,
@@ -955,9 +955,7 @@ mod test {
     #[test]
     fn analysis_raytrace_lightdata_energy() {
         let mut node = ParabolicMirror::default();
-        let light_data = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let light_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         let input = LightResult::from([("input_1".into(), light_data)]);
         assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
     }
@@ -1008,9 +1006,7 @@ mod test {
     #[test]
     fn analysis_energy() {
         let mut node = ParabolicMirror::default();
-        let light_data = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let light_data = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         let input = LightResult::from([("input_1".into(), light_data)]);
         let output = AnalysisEnergy::analyze(&mut node, input);
         assert!(output.is_ok());

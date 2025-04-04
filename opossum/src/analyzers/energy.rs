@@ -46,9 +46,7 @@ mod test {
     use crate::{
         analyzers::Analyzer,
         joule,
-        lightdata::{
-            energy_spectrum_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder,
-        },
+        lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
         nanometer,
         nodes::{EnergyMeter, NodeGroup, Source},
     };

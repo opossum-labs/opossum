@@ -185,7 +185,7 @@ impl AnalysisRayTrace for NodeReference {
 mod test {
     use super::*;
     use crate::{
-        lightdata::{DataEnergy, LightData},
+        lightdata::LightData,
         nodes::{test_helper::test_helper::*, Dummy, NodeGroup, Source},
         optic_ports::PortType,
         spectrum_helper::create_he_ne_spec,
@@ -283,9 +283,7 @@ mod test {
         let mut node = NodeReference::from_node(&scenery.node(node_id).unwrap());
 
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
         assert!(output.contains_key("output_1"));
@@ -302,9 +300,7 @@ mod test {
         let mut node = NodeReference::from_node(&scenery.node(node_id).unwrap());
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input).unwrap();
@@ -322,9 +318,7 @@ mod test {
         let mut node = NodeReference::from_node(&scenery.node(node_id).unwrap());
         node.set_inverted(true).unwrap();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light.clone());
 
         let output = AnalysisEnergy::analyze(&mut node, input);

@@ -1165,7 +1165,6 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
 mod test {
     use super::*;
     use crate::{
-        lightdata::DataEnergy,
         millimeter,
         nodes::{BeamSplitter, Dummy, NodeGroup, NodeReference, Source},
         ray::SplittingConfig,
@@ -1564,17 +1563,15 @@ mod test {
     fn analyze_ok() {
         let mut graph = prepare_group();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("input_1".into(), input_light.clone());
         let output = graph.analyze_energy(&input);
         assert!(output.is_ok());
         let output = output.unwrap();
         assert!(output.contains_key("output_1"));
         let output = output.get("output_1").unwrap().clone();
-        let energy = if let LightData::Energy(data) = output {
-            data.spectrum.total_energy()
+        let energy = if let LightData::Energy(s) = output {
+            s.total_energy()
         } else {
             panic!()
         };
@@ -1584,9 +1581,7 @@ mod test {
     fn analyze_wrong_input_data() {
         let mut graph = prepare_group();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("wrong".into(), input_light.clone());
         let output = graph.analyze_energy(&input).unwrap();
         assert!(output.is_empty());
@@ -1596,9 +1591,7 @@ mod test {
     fn analyze_inverse() {
         let mut graph = prepare_group();
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         graph.set_is_inverted(true);
         input.insert("output_1".into(), input_light);
         let output = graph.analyze_energy(&input);
@@ -1606,8 +1599,8 @@ mod test {
         let output = output.unwrap();
         assert!(output.contains_key("input_1"));
         let output = output.get("input_1").unwrap().clone();
-        let energy = if let LightData::Energy(data) = output {
-            data.spectrum.total_energy()
+        let energy = if let LightData::Energy(s) = output {
+            s.total_energy()
         } else {
             panic!()
         };
@@ -1626,9 +1619,7 @@ mod test {
             .unwrap();
         graph.set_is_inverted(true);
         let mut input = LightResult::default();
-        let input_light = LightData::Energy(DataEnergy {
-            spectrum: create_he_ne_spec(1.0).unwrap(),
-        });
+        let input_light = LightData::Energy(create_he_ne_spec(1.0).unwrap());
         input.insert("output_1".into(), input_light);
         let output = graph.analyze_energy(&input);
         assert!(output.is_err());

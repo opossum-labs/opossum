@@ -6,7 +6,7 @@ use opossum::{
     analyzers::AnalyzerType,
     error::OpmResult,
     joule,
-    lightdata::{energy_spectrum_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
+    lightdata::{energy_data_builder::EnergyDataBuilder, light_data_builder::LightDataBuilder},
     nanometer,
     nodes::{BeamSplitter, Dummy, FilterType, IdealFilter, NodeGroup, Source},
     ray::SplittingConfig,
