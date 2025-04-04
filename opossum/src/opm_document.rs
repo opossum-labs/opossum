@@ -204,11 +204,12 @@ impl OpmDocument {
         &self.scenery
     }
     /// Returns a mutable reference to the scenery of this [`OpmDocument`].
-    pub fn scenery_mut(&mut self) -> &mut NodeGroup {
+    pub const fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
     }
     /// Returns a reference to the global config of this [`OpmDocument`].
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn global_conf(&self) -> &Mutex<SceneryResources> {
         &self.global_conf
     }

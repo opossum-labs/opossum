@@ -301,7 +301,7 @@ pub trait OpticNode: Dottable {
                         }
                     }
                     _ => self.set_property(prop.0, prop.1.prop().clone())?,
-                };
+                }
             }
         }
         Ok(())

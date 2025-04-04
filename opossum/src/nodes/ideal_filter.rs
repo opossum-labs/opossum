@@ -234,14 +234,13 @@ impl AnalysisRayTrace for IdealFilter {
             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         } else {
             return Err(OpossumError::OpticPort("input aperture not found".into()));
-        };
+        }
         if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
             rays.apodize(aperture, &iso)?;
             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         } else {
             return Err(OpossumError::OpticPort("output aperture not found".into()));
-        };
-
+        }
         let light_data = LightData::Geometric(rays);
         Ok(LightResult::from([(out_port.into(), light_data)]))
     }

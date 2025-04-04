@@ -268,7 +268,7 @@ impl RaysHitMap {
                     ));
                 }
             }
-        };
+        }
         Ok(())
     }
 
@@ -313,7 +313,7 @@ impl RaysHitMap {
                     ))
                 }
             },
-        };
+        }
         Ok(())
     }
 

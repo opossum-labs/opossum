@@ -35,17 +35,17 @@ impl SobolDist {
             return Err(OpossumError::Other(
                 "At least one side length must be != zero".into(),
             ));
-        };
+        }
         if side_length_x.is_sign_negative() || !side_length_x.is_finite() {
             return Err(OpossumError::Other(
                 "side_length_x must be >= zero and finite".into(),
             ));
-        };
+        }
         if side_length_y.is_sign_negative() || !side_length_y.is_finite() {
             return Err(OpossumError::Other(
                 "side_length_y must be >= zero and finite".into(),
             ));
-        };
+        }
         if nr_of_points.is_zero() {
             return Err(OpossumError::Other("nr_of_points must be >= 1.".into()));
         }

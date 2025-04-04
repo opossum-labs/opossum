@@ -148,7 +148,7 @@ impl OpticNode for EnergyMeter {
                     Some(energy)
                 }
             };
-        };
+        }
         let mut props = Properties::default();
         if let Some(e) = energy {
             props.create("Energy", "Output energy", e.into()).unwrap();

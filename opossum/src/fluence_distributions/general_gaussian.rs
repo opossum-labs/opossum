@@ -44,10 +44,10 @@ impl General2DGaussian {
             return Err(OpossumError::Other(
                 "Energy must be greater than zero finite!".into(),
             ));
-        };
+        }
         if !mu_xy.x.is_finite() || !mu_xy.y.is_finite() {
             return Err(OpossumError::Other("Mean values must be finite!".into()));
-        };
+        }
         if !sigma_xy.x.is_normal()
             || !sigma_xy.y.is_normal()
             || sigma_xy.x.is_sign_negative()
@@ -56,14 +56,12 @@ impl General2DGaussian {
             return Err(OpossumError::Other(
                 "Standard deviations must be greater than zero and finite!".into(),
             ));
-        };
-
+        }
         if !theta.is_finite() {
             return Err(OpossumError::Other(
                 "Angle the distribution must be finite!".into(),
             ));
-        };
-
+        }
         Ok(Self {
             total_energy,
             mu_xy,

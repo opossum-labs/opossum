@@ -351,11 +351,11 @@ impl RayTraceConfig {
         self.max_number_of_bounces
     }
     /// Sets the max number of bounces of this [`RayTraceConfig`].
-    pub fn set_max_number_of_bounces(&mut self, max_number_of_bounces: usize) {
+    pub const fn set_max_number_of_bounces(&mut self, max_number_of_bounces: usize) {
         self.max_number_of_bounces = max_number_of_bounces;
     }
     /// Sets the max number of refractions of this [`RayTraceConfig`].
-    pub fn set_max_number_of_refractions(&mut self, max_number_of_refractions: usize) {
+    pub const fn set_max_number_of_refractions(&mut self, max_number_of_refractions: usize) {
         self.max_number_of_refractions = max_number_of_refractions;
     }
     /// Returns the max number of refractions of this [`RayTraceConfig`].
@@ -369,7 +369,10 @@ impl RayTraceConfig {
         &self.missed_surface_strategy
     }
     /// Sets the `missed surface strategy` of this [`RayTraceConfig`].
-    pub fn set_missed_surface_strategy(&mut self, missed_surface_strategy: MissedSurfaceStrategy) {
+    pub const fn set_missed_surface_strategy(
+        &mut self,
+        missed_surface_strategy: MissedSurfaceStrategy,
+    ) {
         self.missed_surface_strategy = missed_surface_strategy;
     }
 }

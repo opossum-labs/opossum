@@ -45,6 +45,7 @@ impl NodeReport {
     }
     /// Returns a reference to the uuid of this [`NodeReport`].
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn uuid(&self) -> &str {
         &self.uuid
     }
@@ -57,7 +58,7 @@ impl NodeReport {
         self.show_item
     }
     /// Sets wether a [`NodeReport`] should be displayed or hidden by default (see above).
-    pub fn set_show_item(&mut self, show_item: bool) {
+    pub const fn set_show_item(&mut self, show_item: bool) {
         self.show_item = show_item;
     }
     /// Return an [`HtmlNodeReport`] from this [`NodeReport`].

@@ -131,7 +131,7 @@ impl Ray {
     }
 
     /// Marks the ray as helper ray if `is_helper` is true
-    pub fn set_is_helper(&mut self, is_helper: bool) {
+    pub const fn set_is_helper(&mut self, is_helper: bool) {
         self.is_helper = is_helper;
     }
     /// Create a new collimated ray with 3 additional helper rays.
@@ -218,7 +218,7 @@ impl Ray {
     ///
     /// Necessary for ghost focus analysis of reflective optics
     //todo: nicer way around this "hack" would be cool
-    pub fn reduce_bounce_counter(&mut self) {
+    pub const fn reduce_bounce_counter(&mut self) {
         self.number_of_bounces -= 1;
     }
 
@@ -767,7 +767,7 @@ impl Ray {
         self.valid
     }
     /// Invalidates this [`Ray`].
-    pub fn set_invalid(&mut self) {
+    pub const fn set_invalid(&mut self) {
         self.valid = false;
     }
     /// Get [`Ray`] translated and rotated by given [`Isometry`]

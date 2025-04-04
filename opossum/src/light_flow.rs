@@ -48,7 +48,7 @@ impl LightFlow {
     pub fn set_data(&mut self, data: Option<LightData>) {
         self.data = data;
     }
-    pub fn inverse(&mut self) {
+    pub const fn inverse(&mut self) {
         std::mem::swap(&mut self.src_port, &mut self.target_port);
     }
     pub const fn distance(&self) -> &Length {

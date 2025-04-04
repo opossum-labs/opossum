@@ -54,7 +54,7 @@ impl VoronoiedData {
         let z_data = if let Some(z_data) = z_data_opt {
             if xy_coordinates.shape().0 != z_data.len() {
                 return Err(OpossumError::Other("Number of point coordinates and data value is not the same! Cannot assign values to voronoi cells!".into()));
-            };
+            }
             let mut z_data_voronoi = DVector::from_element(voronoi_diagram.sites.len(), f64::NAN);
             z_data_voronoi
                 .view_mut((0, 0), (z_data.len(), 1))
@@ -153,8 +153,7 @@ pub fn interpolate_3d_scatter_data(
         return Err(OpossumError::Other(
             "Length of interpolation ranges must be larger than 1 to define the interpolation bounds".into(),
         ));
-    };
-
+    }
     if scattered_data.column(0).len() < 3 {
         return Err(OpossumError::Other(
             "Number of scattered data points must be at least 3 to define a triangle, which is necessary to interpolate!".into(),
@@ -213,7 +212,7 @@ pub fn linspace<T: Float + Scalar>(start: T, end: T, num: usize) -> OpmResult<DV
         return Err(OpossumError::Other(
             "start and end values must be finite!".into(),
         ));
-    };
+    }
     let mut linspace = DVector::<T>::from_element(num, start);
     if num < 2 {
         warn!("Using linspace with less than two elements results in an empty Vector for num=0 or a Vector with one entry being num=start");
@@ -398,8 +397,7 @@ pub fn interpolate_3d_triangulated_scatter_data(
         return Err(OpossumError::Other(
             "Cannot interpolate data, as one of the interpolation vectors have zero length".into(),
         ));
-    };
-
+    }
     let mut triangulation: DelaunayTriangulation<PointWithHeight> = DelaunayTriangulation::new();
     //copy points of voronoi diag into spade triangulation
     for (p, z) in voronoi.voronoi_diagram.sites.iter().zip(z_data.iter()) {

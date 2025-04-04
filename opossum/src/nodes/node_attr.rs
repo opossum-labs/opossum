@@ -150,7 +150,7 @@ impl NodeAttr {
         }
     }
     /// Sets the isometry of this [`NodeAttr`].
-    pub fn set_isometry(&mut self, isometry: Isometry) {
+    pub const fn set_isometry(&mut self, isometry: Isometry) {
         self.isometry = Some(isometry);
     }
     /// Returns a reference to the isometry of this [`NodeAttr`].
@@ -167,7 +167,7 @@ impl NodeAttr {
     ///
     /// # Panics
     /// This function could theoretically panic if the property `alignment` is not defined.
-    pub fn set_alignment(&mut self, isometry: Isometry) {
+    pub const fn set_alignment(&mut self, isometry: Isometry) {
         self.alignment = Some(isometry);
     }
     /// Returns a reference to the global config (if any) of this [`NodeAttr`].
@@ -184,7 +184,7 @@ impl NodeAttr {
         self.name = name.to_string();
     }
     /// Sets this [`NodeAttr`] as `inverted`.
-    pub fn set_inverted(&mut self, inverted: bool) {
+    pub const fn set_inverted(&mut self, inverted: bool) {
         self.inverted = inverted;
     }
     /// Returns a reference to the optic ports of this [`NodeAttr`].
@@ -195,7 +195,7 @@ impl NodeAttr {
 
     /// Returns a mutable reference to the optic ports of this [`NodeAttr`].
     #[must_use]
-    pub fn ports_mut(&mut self) -> &mut OpticPorts {
+    pub const fn ports_mut(&mut self) -> &mut OpticPorts {
         &mut self.ports
     }
     /// Sets the apertures of this [`NodeAttr`].
@@ -209,7 +209,7 @@ impl NodeAttr {
         self.uuid
     }
     ///Sets the uuid of this [`NodeAttr`].
-    pub fn set_uuid(&mut self, uuid: Uuid) {
+    pub const fn set_uuid(&mut self, uuid: Uuid) {
         self.uuid = uuid;
     }
 
@@ -246,7 +246,7 @@ impl NodeAttr {
         self.gui_position.as_ref()
     }
     /// Sets the GUI position of the optical node.
-    pub fn set_gui_position(&mut self, gui_position: Option<Point3<i32>>) {
+    pub const fn set_gui_position(&mut self, gui_position: Option<Point3<i32>>) {
         self.gui_position = gui_position;
     }
 }

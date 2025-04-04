@@ -29,7 +29,7 @@ impl UniformDist {
             return Err(OpossumError::Other(
                 "Energy must be greater than zero finite!".into(),
             ));
-        };
+        }
         Ok(Self { total_energy })
     }
 }

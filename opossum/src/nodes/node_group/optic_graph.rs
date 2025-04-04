@@ -25,13 +25,13 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
+use std::fmt::Write as _;
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
 };
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
-
 type ConnectionInfo = (Uuid, String, Uuid, String, Length);
 
 /// Data structure representing an optical graph
@@ -423,7 +423,7 @@ impl OpticGraph {
             PortType::Output => self
                 .output_port_map
                 .add(external_name, node_id, internal_name),
-        };
+        }
         Ok(())
     }
     /// Returns the incoming data of a node in this [`OpticGraph`].
@@ -849,7 +849,7 @@ impl OpticGraph {
                     } else {
                         node.set_isometry(node_iso)?;
                         drop(node);
-                    };
+                    }
                 }
             } else {
                 return Err(OpossumError::Analysis(
@@ -913,10 +913,11 @@ impl OpticGraph {
             let src_edge_str = self.create_node_edge_str(end_nodes.0, light.src_port())?;
             let target_edge_str = self.create_node_edge_str(end_nodes.1, light.target_port())?;
 
-            dot_string.push_str(&format!(
-                "  {src_edge_str} -> {target_edge_str} [label=\"{}\"]\n",
+            let _ = writeln!(
+                dot_string,
+                "  {src_edge_str} -> {target_edge_str} [label=\"{}\"]",
                 format_quantity(meter, dist)
-            ));
+            );
         }
         dot_string.push_str("}\n");
         Ok(dot_string)
@@ -963,7 +964,7 @@ impl OpticGraph {
         self.is_inverted
     }
     /// Sets the is inverted of this [`OpticGraph`].
-    pub fn set_is_inverted(&mut self, is_inverted: bool) {
+    pub const fn set_is_inverted(&mut self, is_inverted: bool) {
         self.is_inverted = is_inverted;
     }
     /// Sets the external distances of this [`OpticGraph`].

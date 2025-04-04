@@ -35,7 +35,7 @@ impl Isometry {
     /// # Attributes
     /// - `translation`: vector of translation for each axis as [`Length`]
     /// - `axes_angles`: rotation [`Angle`]s for each axis
-    ///    Note: the rotation is applied in the order x -> y -> z
+    ///   Note: the rotation is applied in the order x -> y -> z
     ///
     /// # Errors
     /// his function return an error if the
@@ -112,7 +112,7 @@ impl Isometry {
     /// Internally, rotation is handled in radians
     /// # Attributes
     /// - `axes_angles`: rotation [`Angle`]s for each axis
-    ///    Note: the rotation is applied in the order x -> y -> z
+    ///   Note: the rotation is applied in the order x -> y -> z
     ///
     /// # Errors
     /// his function return an error if the
@@ -506,7 +506,7 @@ pub fn define_plane_coordinate_axes_directions(
         return Err(OpossumError::Other(
             "plane normal vector must have a non zero length!".into(),
         ));
-    };
+    }
     //define the coordinate axes of the view onto the plane that is defined by the propagation axis as normal vector
     let (vec1, vec2) = if plane_normal_vector.cross(&Vector3::x()).norm() < f64::EPSILON {
         //parallel to the x-axis: co_ax_1: z-axis / co_ax2: y-axis
@@ -569,13 +569,12 @@ pub fn project_points_to_plane(
         return Err(OpossumError::Other(
             "plane normal vector must have a non zero length and be finite!".into(),
         ));
-    };
+    }
     if plane_normal_anchor.iter().any(|x| !f64::is_finite(*x)) {
         return Err(OpossumError::Other(
             "plane normal anchor must be finite!".into(),
         ));
-    };
-
+    }
     let mut pos_projection = MatrixXx3::<f64>::zeros(points_to_project.len());
     for (row, pos) in points_to_project.iter().enumerate() {
         let normed_normal_vec = plane_normal_vector / plane_normal_vector.norm();
@@ -613,13 +612,12 @@ pub fn project_pos_to_plane_with_base_vectors(
         return Err(OpossumError::Other(
             "plane normal vector must have a non zero length and be finite!".into(),
         ));
-    };
+    }
     if plane_normal_anchor.iter().any(|x| !f64::is_finite(*x)) {
         return Err(OpossumError::Other(
             "plane normal anchor must be finite!".into(),
         ));
-    };
-
+    }
     let (plane_co_ax_1, plane_co_ax_2) = if let (Some(plane_base_vec_1), Some(plane_base_vec_2)) =
         (plane_base_vec_1_opt, plane_base_vec_2_opt)
     {
@@ -644,14 +642,12 @@ pub fn project_pos_to_plane_with_base_vectors(
         return Err(OpossumError::Other(
             "base vector of the plane contains non-finite values!".into(),
         ));
-    };
-
+    }
     if relative_eq!(plane_co_ax_1.norm(), 0.0) || relative_eq!(plane_co_ax_2.norm(), 0.0) {
         return Err(OpossumError::Other(
             "base vector of the plane has a length of zero!".into(),
         ));
-    };
-
+    }
     let mut pos_projection = MatrixXx2::<f64>::zeros(points_to_project.len());
     for (row, pos) in points_to_project.iter().enumerate() {
         let closest_to_axis_vec = pos

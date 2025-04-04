@@ -206,7 +206,7 @@ impl AnalysisRayTrace for Source {
                             return Err(OpossumError::OpticPort(
                                 "output aperture not found".into(),
                             ));
-                        };
+                        }
                     }
                 }
             }

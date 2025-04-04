@@ -44,7 +44,7 @@ impl Gaussian {
             return Err(OpossumError::Other(
                 "range start must be positive and finite".into(),
             ));
-        };
+        }
         if !wvl_range.1.is_normal() || wvl_range.1.is_sign_negative() {
             return Err(OpossumError::Other(
                 "range end must be positive and finite".into(),
@@ -54,18 +54,17 @@ impl Gaussian {
             return Err(OpossumError::Other(
                 "mean value must be positive and finite!".into(),
             ));
-        };
+        }
         if !fwhm.is_normal() || fwhm.is_sign_negative() {
             return Err(OpossumError::Other(
                 "fwhm must be greater than zero and finite!".into(),
             ));
-        };
+        }
         if !power.is_normal() || power.is_sign_negative() {
             return Err(OpossumError::Other(
                 "power of the distribution must be positive and finite!".into(),
             ));
-        };
-
+        }
         Ok(Self {
             wvl_range,
             num_points,

@@ -172,7 +172,7 @@ impl BeamSplitter {
 
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
-        };
+        }
         let Proptype::SplitterType(splitting_config) =
             self.node_attr.get_property("splitter config")?.clone()
         else {
@@ -202,7 +202,7 @@ impl BeamSplitter {
                             rays.apodize(aperture, &self.effective_surface_iso(in1_port)?)?;
                         } else {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
-                        };
+                        }
                     } else {
                         return Err(OpossumError::OpticPort(
                             "input optic surface not found".into(),
@@ -236,8 +236,7 @@ impl BeamSplitter {
                             rays.apodize(aperture, &self.effective_surface_iso(in2_port)?)?;
                         } else {
                             return Err(OpossumError::OpticPort("input aperture not found".into()));
-                        };
-
+                        }
                         let split_rays = rays.split(&splitting_config)?;
                         (rays, split_rays)
                     } else {
@@ -266,7 +265,7 @@ impl BeamSplitter {
             }
         } else {
             return Err(OpossumError::OpticPort("ouput aperture not found".into()));
-        };
+        }
         if let Some(aperture) = self.ports().aperture(&PortType::Output, out2_port) {
             in_ray2.apodize(aperture, &iso)?;
             if let AnalyzerType::RayTrace(config) = analyzer_type {
@@ -274,7 +273,7 @@ impl BeamSplitter {
             }
         } else {
             return Err(OpossumError::OpticPort("ouput aperture not found".into()));
-        };
+        }
         Ok((
             Some(LightData::Geometric(in_ray1)),
             Some(LightData::Geometric(in_ray2)),

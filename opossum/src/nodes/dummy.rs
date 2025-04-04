@@ -108,14 +108,13 @@ impl AnalysisRayTrace for Dummy {
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 } else {
                     return Err(OpossumError::OpticPort("input aperture not found".into()));
-                };
+                }
                 if let Some(aperture) = self.ports().aperture(&PortType::Output, out_port) {
                     rays.apodize(aperture, &iso)?;
                     rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 } else {
                     return Err(OpossumError::OpticPort("output aperture not found".into()));
-                };
-
+                }
                 Ok(LightResult::from([(
                     out_port.into(),
                     LightData::Geometric(rays),
