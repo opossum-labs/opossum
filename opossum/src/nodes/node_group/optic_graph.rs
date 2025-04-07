@@ -172,6 +172,9 @@ impl OpticGraph {
     ///   - if a node/port combination was already connected earlier
     ///   - the connection of the nodes would form a loop in the network.
     ///   - the given geometric distance between the nodes is not finite.
+    ///
+    /// # Panics
+    /// This function will panic if the mutex lock fails.
     pub fn connect_nodes(
         &mut self,
         src_id: Uuid,
@@ -186,81 +189,77 @@ impl OpticGraph {
             ));
         }
         let src_node = self.node_idx_by_uuid(src_id).ok_or_else(|| {
-            OpossumError::OpticScenery("source node with given index does not exist".into())
+            OpossumError::OpticScenery("source node with given id does not exist".into())
         })?;
         let source = self.g.node_weight(src_node).ok_or_else(|| {
-            OpossumError::OpticScenery("source node with given index does not exist".into())
+            OpossumError::OpticScenery("source node with given id does not exist".into())
         })?;
         if !source
             .optical_ref
             .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+            .unwrap()
             .ports()
             .names(&PortType::Output)
             .contains(&src_port.into())
         {
+            let src_ports = source
+                .optical_ref
+                .lock()
+                .unwrap()
+                .ports()
+                .names(&PortType::Output)
+                .join(", ");
             return Err(OpossumError::OpticScenery(format!(
-                "source node {} does not have a port {}",
-                source
-                    .optical_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
-                src_port
+                "source node {} does not have an output port {}. Possible values are: {}",
+                source.optical_ref.lock().unwrap(),
+                src_port,
+                src_ports
             )));
         }
         let target_node = self.node_idx_by_uuid(target_id).ok_or_else(|| {
-            OpossumError::OpticScenery("target node with given index does not exist".into())
+            OpossumError::OpticScenery("target node with given id does not exist".into())
         })?;
         let target = self.g.node_weight(target_node).ok_or_else(|| {
-            OpossumError::OpticScenery("target node with given index does not exist".into())
+            OpossumError::OpticScenery("target node with given id does not exist".into())
         })?;
         if !target
             .optical_ref
             .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
+            .unwrap()
             .ports()
             .names(&PortType::Input)
             .contains(&target_port.into())
         {
+            let target_ports = target
+                .optical_ref
+                .lock()
+                .unwrap()
+                .ports()
+                .names(&PortType::Input)
+                .join(", ");
             return Err(OpossumError::OpticScenery(format!(
-                "target node {} does not have a port {}",
-                target
-                    .optical_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
-                target_port
+                "target node {} does not have an input port {}. Possible values are: {}",
+                target.optical_ref.lock().unwrap(),
+                target_port,
+                target_ports
             )));
         }
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "src node <{}> with port <{}> is already connected",
-                source
-                    .optical_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
+                source.optical_ref.lock().unwrap(),
                 src_port
             )));
         }
         if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} with port <{}> is already connected",
-                target
-                    .optical_ref
-                    .lock()
-                    .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?,
+                target.optical_ref.lock().unwrap(),
                 target_port
             )));
         }
-        let src_name = source
-            .optical_ref
-            .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
-            .name();
-        let target_name = target
-            .optical_ref
-            .lock()
-            .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?
-            .name();
+        let src_name = source.optical_ref.lock().unwrap().name();
+        let target_name = target.optical_ref.lock().unwrap().name();
         let light = LightFlow::new(src_port, target_port, distance)?;
         let edge_index = self.g.add_edge(src_node, target_node, light);
         if is_cyclic_directed(&self.g) {
@@ -1207,13 +1206,15 @@ mod test {
         let sn1_i = og.add_node(Dummy::default()).unwrap();
         let sn2_i = og.add_node(Dummy::default()).unwrap();
         // wrong port names
-        assert!(og
+        let err = og
             .connect_nodes(sn1_i, "wrong", sn2_i, "input_1", Length::zero())
-            .is_err());
+            .unwrap_err();
+        assert_eq!(err.to_string(), "OpticScenery:source node 'dummy' (dummy) does not have an output port wrong. Possible values are: output_1");
         assert_eq!(og.g.edge_count(), 0);
-        assert!(og
+        let err = og
             .connect_nodes(sn1_i, "output_1", sn2_i, "wrong", Length::zero())
-            .is_err());
+            .unwrap_err();
+        assert_eq!(err.to_string(), "OpticScenery:target node 'dummy' (dummy) does not have an input port wrong. Possible values are: input_1");
         assert_eq!(og.g.edge_count(), 0);
     }
     #[test]
