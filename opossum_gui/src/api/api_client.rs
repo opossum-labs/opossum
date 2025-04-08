@@ -119,11 +119,10 @@ impl HTTPAPIClient {
     ) -> Result<R, String> {
         if res.status().is_success() {
             if res.content_length().map_or_else(|| 0, |n| n) > 0 {
-                if let Ok(res) = res.json::<R>().await {
-                    Ok(res)
-                } else {
-                    Err("Error deserializing response to requested struct!".to_string())
-                }
+                (res.json::<R>().await).map_or_else(
+                    |_| Err("Error deserializing response to requested struct!".to_string()),
+                    |res| Ok(res),
+                )
             } else {
                 // just to receive a value i nothing has been sent back
                 let json_val = json!("");

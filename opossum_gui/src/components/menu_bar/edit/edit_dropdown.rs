@@ -81,7 +81,7 @@ pub fn use_add_node(n_type: String, group_id: Uuid) -> Callback<Event<MouseData>
                     .get_node_properties(node_info.uuid())
                     .await
                 {
-                    Ok(node_attr) => NODES_STORE.write().add_node(node_info, node_attr),
+                    Ok(node_attr) => NODES_STORE.write().add_node(&node_info, &node_attr),
                     Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                 },
                 Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
@@ -90,16 +90,22 @@ pub fn use_add_node(n_type: String, group_id: Uuid) -> Callback<Event<MouseData>
     })
 }
 #[must_use]
-pub fn use_add_analyzer(analyzer: AnalyzerType, _group_id: Uuid) -> Callback<Event<MouseData>> {
+pub fn use_add_analyzer(
+    analyzer_type: AnalyzerType,
+    _group_id: Uuid,
+) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
-        let analyzer = analyzer.clone();
+        let analyzer_type = analyzer_type.clone();
         spawn(async move {
-            match HTTP_API_CLIENT().post_add_analyzer(analyzer.clone()).await {
+            match HTTP_API_CLIENT()
+                .post_add_analyzer(analyzer_type.clone())
+                .await
+            {
                 Ok(_) => {
                     OPOSSUM_UI_LOGS
                         .write()
-                        .add_log(&format!("Added analyzer: {analyzer}"));
-                    NODES_STORE.write().add_analyzer(analyzer);
+                        .add_log(&format!("Added analyzer: {analyzer_type}"));
+                    NODES_STORE.write().add_analyzer(&analyzer_type);
                 }
                 Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
             }

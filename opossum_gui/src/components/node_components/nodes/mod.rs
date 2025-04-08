@@ -185,7 +185,7 @@ impl NodesStore {
         Point2D::new(new_x, new_y)
     }
 
-    pub fn add_node(&mut self, node_info: NodeInfo, node_attr: NodeAttr) {
+    pub fn add_node(&mut self, node_info: &NodeInfo, node_attr: &NodeAttr) {
         let pos = self.find_position();
         let input_ports = node_attr
             .ports()
@@ -216,7 +216,7 @@ impl NodesStore {
             .add_log(&format!("Added node: {}", node_info.node_type()));
     }
 
-    pub fn add_analyzer(&mut self, analyzer: AnalyzerType) {
+    pub fn add_analyzer(&mut self, analyzer: &AnalyzerType) {
         let pos = self.find_position();
 
         let new_node = NodeElement::new(

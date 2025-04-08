@@ -1,20 +1,22 @@
 use dioxus::prelude::*;
-
 use crate::ACTIVE_NODE;
 
 #[component]
 pub fn NodePropertyConfigMenu() -> Element {
-    if let Some(node_attr) = ACTIVE_NODE() {
-        rsx!(
-            div { class: "property-config-window",
-                h3 { "Node Properties" }
-                p { {format!("Node Name: {}", node_attr.name())} }
-                        // Add more properties here as needed
+    ACTIVE_NODE().map_or_else(
+        || {
+            rsx! {
+                div { class: "property-config-window", "No node selected" }
             }
-        )
-    } else {
-        rsx! {
-            div { class: "property-config-window", "No node selected" }
-        }
-    }
+        },
+        |node_attr| {
+            rsx!(
+                div { class: "property-config-window",
+                    h3 { "Node Properties" }
+                    p { {format!("Node Name: {}", node_attr.name())} }
+                            // Add more properties here as needed
+                }
+            )
+        },
+    )
 }

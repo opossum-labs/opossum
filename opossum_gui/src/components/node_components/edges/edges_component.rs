@@ -59,7 +59,7 @@ impl Edges {
             self.edges_mut().remove(key);
         }
     }
-    pub fn remove_edge(&mut self, conn_info: ConnectInfo) {
+    pub fn remove_edge(&mut self, conn_info: &ConnectInfo) {
         self.edges.remove(&format!(
             "{}_{}",
             conn_info.src_uuid().as_simple(),
@@ -411,7 +411,7 @@ pub fn use_delete_edge(conn_info: ConnectInfo) -> Callback<Event<MouseData>> {
         spawn(async move {
             match HTTP_API_CLIENT().delete_connection(conn_info).await {
                 Ok(conn_info) => {
-                    EDGES.write().remove_edge(conn_info);
+                    EDGES.write().remove_edge(&conn_info);
                     OPOSSUM_UI_LOGS
                         .write()
                         .add_log("Removed edge successfully!");

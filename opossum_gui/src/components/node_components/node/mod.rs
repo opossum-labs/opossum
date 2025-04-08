@@ -33,7 +33,7 @@ impl NodeElement {
         z_index: usize,
         ports: Ports,
     ) -> Self {
-        NodeElement {
+        Self {
             x,
             y,
             id,
