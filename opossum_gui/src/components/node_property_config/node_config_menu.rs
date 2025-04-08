@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::ACTIVE_NODE;
+use dioxus::prelude::*;
 
 #[component]
 pub fn NodePropertyConfigMenu() -> Element {

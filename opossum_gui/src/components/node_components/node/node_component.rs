@@ -52,7 +52,7 @@ pub fn Node(node: NodeElement) -> Element {
                         class: "node-body",
                         style: format!(
                             "height: {}px;",
-                            node_size.y * (1. - header_scale) + (port_height_factor - 1.) * 32.,
+                            node_size.y.mul_add(1. - header_scale, (port_height_factor - 1.) * 32.),
                         ),
                         NodePorts {
                             node_width: node_size.x,

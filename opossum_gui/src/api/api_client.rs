@@ -191,6 +191,16 @@ impl HTTPAPIClient {
         )
         .await
     }
+    /// Delete a node and all its connections.
+    ///
+    /// This function will return a vector of [`Uuid`]s that were actually deleted. This could include
+    /// the provided [`Uuid`] and possibly any other nodes that reference it.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the provided [`Uuid`] cannot be serialized or found
+    /// - the returned response cannot be deserialized into a vector of [`Uuid`]
     pub async fn delete_node(&self, id: Uuid) -> Result<Vec<Uuid>, String> {
         self.delete::<String, Vec<Uuid>>(
             &format!("/api/scenery/{}/nodes", id.as_simple()),
@@ -198,11 +208,22 @@ impl HTTPAPIClient {
         )
         .await
     }
-
+    /// Get the properties of a node.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the provided [`Uuid`] cannot be serialized or found
+    /// - the properties cannot be deserialized into the [`NodeAttr`] struct
     pub async fn get_node_properties(&self, uuid: Uuid) -> Result<NodeAttr, String> {
         self.get::<NodeAttr>(&format!("/api/scenery/{}/properties", uuid.as_simple()))
             .await
     }
+    /// Connect two nodes.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
     pub async fn post_add_connection(
         &self,
         connection: ConnectInfo,
@@ -210,7 +231,11 @@ impl HTTPAPIClient {
         self.post::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
             .await
     }
-
+    /// Delete a connection between two nodes.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
     pub async fn delete_connection(&self, connection: ConnectInfo) -> Result<ConnectInfo, String> {
         self.delete::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
             .await

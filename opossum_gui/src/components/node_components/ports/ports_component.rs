@@ -50,10 +50,10 @@ pub fn NodePort(
         let port_name = port_name.clone();
         move |e: Event<MouseData>| {
             if let Some(offset) = offset.read().offset() {
-                let x = e.page_coordinates().x - offset.0
-                    + (-e.element_coordinates().x + port_w_h / 2.) * zoom_factor;
-                let y = e.page_coordinates().y - offset.1
-                    + (-e.element_coordinates().y + port_w_h / 2.) * zoom_factor;
+                let x = (-e.element_coordinates().x + port_w_h / 2.)
+                    .mul_add(zoom_factor, e.page_coordinates().x - offset.0);
+                let y = (-e.element_coordinates().y + port_w_h / 2.)
+                    .mul_add(zoom_factor, e.page_coordinates().y - offset.1);
                 let start_end = Point2D::new(x, y);
                 edge_in_creation.set(Some(EdgeCreation::new(
                     node_id,
@@ -74,10 +74,10 @@ pub fn NodePort(
             if let (Some(edge_start), Some(offset)) =
                 (edge_in_creation.read().as_ref(), offset.read().offset())
             {
-                let x = e.page_coordinates().x - offset.0
-                    + (-e.element_coordinates().x + port_w_h / 2.) * zoom_factor;
-                let y = e.page_coordinates().y - offset.1
-                    + (-e.element_coordinates().y + port_w_h / 2.) * zoom_factor;
+                let x = (-e.element_coordinates().x + port_w_h / 2.)
+                    .mul_add(zoom_factor, e.page_coordinates().x - offset.0);
+                let y = (-e.element_coordinates().y + port_w_h / 2.)
+                    .mul_add(zoom_factor, e.page_coordinates().y - offset.1);
 
                 let (
                     src_node,
@@ -172,7 +172,7 @@ pub fn NodePorts(
     rsx! {
         for (i , in_port) in input_ports.iter().enumerate() {
             {
-                let port_y = node_height / 2. - port_w_h / 2. - border_radius + i as f64 * 20.;
+                let port_y = (i as f64).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
                 let port_x = -port_w_h / 2. - 3. * border_radius / 2.;
                 rsx! {
                     NodePort {
@@ -188,8 +188,8 @@ pub fn NodePorts(
         }
         for (i , out_port) in output_ports.iter().enumerate() {
             {
-                let port_y = node_height / 2. - port_w_h / 2. - border_radius + i as f64 * 20.;
-                let port_x = node_width - port_w_h / 2. - border_radius / 2.;
+                let port_y = (i as f64).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
+                let port_x = (i as f64).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
                 rsx! {
                     NodePort {
                         port_w_h,

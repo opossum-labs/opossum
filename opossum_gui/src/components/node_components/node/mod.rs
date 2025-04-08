@@ -15,10 +15,10 @@ use super::{
 pub struct NodeElement {
     x: f64,
     y: f64,
-    z_index: usize,
     id: Uuid,
     name: String,
     is_active: bool,
+    z_index: usize,
     ports: Ports,
 }
 
@@ -132,8 +132,8 @@ impl NodeElement {
 
 impl ZoomShift for NodeElement {
     fn zoom_shift(&mut self, zoom_factor: f64, offset: (f64, f64), shift: (f64, f64)) {
-        let new_x = offset.0 + (self.x() - shift.0) * zoom_factor;
-        let new_y = offset.1 + (self.y() - shift.1) * zoom_factor;
+        let new_x = (self.x() - shift.0).mul_add(zoom_factor, offset.0);
+        let new_y = (self.y() - shift.1).mul_add(zoom_factor, offset.1);
         self.set_x(new_x);
         self.set_y(new_y);
     }

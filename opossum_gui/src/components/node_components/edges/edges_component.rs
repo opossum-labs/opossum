@@ -169,13 +169,13 @@ impl EdgeCreation {
 
 impl ZoomShift for EdgeCreation {
     fn zoom_shift(&mut self, zoom_factor: f64, shift: (f64, f64), zoom_center: (f64, f64)) {
-        let new_start_x = shift.0 + (self.start_x() - zoom_center.0) * zoom_factor;
-        let new_start_y = shift.1 + (self.start_y() - zoom_center.1) * zoom_factor;
+        let new_start_x = (self.start_x() - zoom_center.0).mul_add(zoom_factor, shift.0);
+        let new_start_y = (self.start_y() - zoom_center.1).mul_add(zoom_factor, shift.1);
         self.set_start_x(new_start_x);
         self.set_start_y(new_start_y);
 
-        let new_end_x = shift.0 + (self.end_x() - zoom_center.0) * zoom_factor;
-        let new_end_y = shift.1 + (self.end_y() - zoom_center.1) * zoom_factor;
+        let new_end_x = (self.end_x() - zoom_center.0).mul_add(zoom_factor, shift.0);
+        let new_end_y = (self.end_y() - zoom_center.1).mul_add(zoom_factor, shift.1);
         self.set_end_x(new_end_x);
         self.set_end_y(new_end_y);
 
@@ -286,13 +286,13 @@ impl Edge {
 
 impl ZoomShift for Edge {
     fn zoom_shift(&mut self, zoom_factor: f64, shift: (f64, f64), zoom_center: (f64, f64)) {
-        let new_start_x = shift.0 + (self.start_x() - zoom_center.0) * zoom_factor;
-        let new_start_y = shift.1 + (self.start_y() - zoom_center.1) * zoom_factor;
+        let new_start_x = (self.start_x() - zoom_center.0).mul_add(zoom_factor, shift.0);
+        let new_start_y = (self.start_y() - zoom_center.1).mul_add(zoom_factor, shift.1);
         self.set_start_x(new_start_x);
         self.set_start_y(new_start_y);
 
-        let new_end_x = shift.0 + (self.end_x() - zoom_center.0) * zoom_factor;
-        let new_end_y = shift.1 + (self.end_y() - zoom_center.1) * zoom_factor;
+        let new_end_x = (self.end_x() - zoom_center.0).mul_add(zoom_factor, shift.0);
+        let new_end_y = (self.end_y() - zoom_center.1).mul_add(zoom_factor, shift.1);
         self.set_end_x(new_end_x);
         self.set_end_y(new_end_y);
 
