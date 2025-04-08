@@ -203,8 +203,13 @@ impl AnalysisRayTrace for Source {
                 ));
             };
             if let LightData::Geometric(rays) = &mut data {
+                if let Ok(Proptype::Isometry(Some(iso))) =
+                    self.node_attr.get_property("light data iso")
+                {
+                    *rays = rays.transformed_by_iso(iso);
+                }
                 if let Ok(iso) = self.effective_surface_iso("input_1") {
-                    *rays = rays.transformed_rays(&iso);
+                    *rays = rays.transformed_by_iso(&iso);
                     // consider aperture only if not inverted (there is only an output port)
                     if !self.inverted() {
                         if let Some(aperture) = self.ports().aperture(&PortType::Output, "output_1")
@@ -286,8 +291,13 @@ impl AnalysisGhostFocus for Source {
                     ));
                 };
                 if let LightData::Geometric(rays) = &mut data {
+                    if let Ok(Proptype::Isometry(Some(iso))) =
+                        self.node_attr.get_property("light data iso")
+                    {
+                        *rays = rays.transformed_by_iso(iso);
+                    }
                     let iso = self.effective_surface_iso("output_1")?;
-                    *rays = rays.transformed_rays(&iso);
+                    *rays = rays.transformed_by_iso(&iso);
 
                     vec![rays.clone()]
                 } else {
@@ -463,7 +473,7 @@ mod test {
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
-            &Hexapolar::new(millimeter!(1.0), 1).unwrap(),
+            &Hexapolar::new(millimeter!(1.0), 0).unwrap(),
         )
         .unwrap();
         let light_data_builder = LightDataBuilder::Geometric(rays.into());
@@ -472,8 +482,52 @@ mod test {
             &mut node,
             LightResult::default(),
             &RayTraceConfig::default(),
-        );
-        assert!(output.is_ok());
+        )
+        .unwrap();
+        let light_data = output.get("output_1").unwrap();
+        if let LightData::Geometric(rays) = light_data {
+            assert_eq!(rays.nr_of_rays(true), 1);
+            let ray = rays.iter().next().unwrap();
+            assert_eq!(ray.wavelength(), nanometer!(1000.0));
+            assert_eq!(ray.position().x, millimeter!(0.0));
+            assert_eq!(ray.position().y, millimeter!(0.0));
+            assert_eq!(ray.position().z, millimeter!(0.0));
+        } else {
+            panic!("no geometric light data found")
+        }
+    }
+    #[test]
+    fn analyze_raytrace_light_data_iso() {
+        let mut node = Source::default();
+        node.set_isometry(Isometry::identity()).unwrap();
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(1.0), 0).unwrap(),
+        )
+        .unwrap();
+        let light_data_builder = LightDataBuilder::Geometric(rays.into());
+        node.set_light_data(light_data_builder).unwrap();
+        let light_iso = Isometry::new_translation(millimeter!(0.0, 1.0, 0.0)).unwrap();
+        node.set_property("light data iso", Some(light_iso).into())
+            .unwrap();
+        let output = AnalysisRayTrace::analyze(
+            &mut node,
+            LightResult::default(),
+            &RayTraceConfig::default(),
+        )
+        .unwrap();
+        let light_data = output.get("output_1").unwrap();
+        if let LightData::Geometric(rays) = light_data {
+            assert_eq!(rays.nr_of_rays(true), 1);
+            let ray = rays.iter().next().unwrap();
+            assert_eq!(ray.wavelength(), nanometer!(1000.0));
+            assert_eq!(ray.position().x, millimeter!(0.0));
+            assert_eq!(ray.position().y, millimeter!(1.0));
+            assert_eq!(ray.position().z, millimeter!(0.0));
+        } else {
+            panic!("no geometric light data found")
+        }
     }
     #[test]
     fn calc_node_position_ok_alignement_wavelength_set() {

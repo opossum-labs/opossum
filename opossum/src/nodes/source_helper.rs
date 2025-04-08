@@ -67,7 +67,7 @@ pub fn collimated_line_ray_source(
 /// Create a point [`Source`] on the optical axis with a given cone angle.
 ///
 /// This is a convenience function, which generates a [`Ray`](crate::ray::Ray) [`Source`] containing a hexapolar, cone-shaped ray bundle at 1000 nm
-/// and a given energy. The origin of all [`Rays`] is at the origin of optical axis (0.0, 0.0, 0.0). The direction of the cone is symmetric along the optical axis
+/// and a given energy. The origin of all [`Rays`](crate::rays::Rays) is at the origin of optical axis (0.0, 0.0, 0.0). The direction of the cone is symmetric along the optical axis
 /// in positive direction (z-axis). If the given `cone_angle` is zero, this function generates a [`Source`] a single ray along the optical axis.
 ///
 /// # Errors
