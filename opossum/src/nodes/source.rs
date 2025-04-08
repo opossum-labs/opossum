@@ -21,6 +21,7 @@ use crate::{
     properties::Proptype,
     ray::Ray,
     rays::Rays,
+    utils::geom_transformation::Isometry,
 };
 use std::fmt::Debug;
 
@@ -37,6 +38,8 @@ use std::fmt::Debug;
 ///
 /// ## Properties
 ///   - `light data`
+///   - `light data iso`
+///   - `alignment wavelength`
 ///
 /// **Note**: If a [`Source`] is configured as `inverted` the initial output port becomes an input port and further data is discarded.
 #[derive(OpmNode, Clone)]
@@ -56,7 +59,13 @@ impl Default for Source {
                 Option::<LightDataBuilder>::None.into(),
             )
             .unwrap();
-
+        node_attr
+            .create_property(
+                "light data iso",
+                "isometry of the emitted light field",
+                Option::<Isometry>::None.into(),
+            )
+            .unwrap();
         node_attr
             .create_property(
                 "alignment wavelength",
@@ -329,10 +338,22 @@ mod test {
         let mut node = Source::default();
         assert_eq!(node.name(), "source");
         assert_eq!(node.node_type(), "source");
-        if let Ok(Proptype::LightDataBuilder(light_data)) = node.properties().get("light data") {
+        if let Proptype::LightDataBuilder(light_data) = node.properties().get("light data").unwrap()
+        {
             assert!(light_data.is_none());
         } else {
-            panic!("cannot unpack light data property");
+            panic!("wrong type for `light data` property");
+        };
+        if let Proptype::Isometry(iso) = node.properties().get("light data iso").unwrap() {
+            assert!(iso.is_none());
+        } else {
+            panic!("wrong type for `light data iso` property");
+        };
+        if let Proptype::LengthOption(wvl) = node.properties().get("alignment wavelength").unwrap()
+        {
+            assert!(wvl.is_none());
+        } else {
+            panic!("wrong type for `alignment wavelength` property");
         };
         assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.node_color(), "slateblue");
