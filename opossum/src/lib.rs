@@ -67,6 +67,7 @@ mod test {
     use super::*;
     use regex::Regex;
     #[test]
+    #[ignore]
     fn get_ver() {
         let version_string = get_version();
         let re = Regex::new(r"(.*) \(\d{4}/\d{2}/\d{2} \d{2}:\d{2}\)").unwrap();

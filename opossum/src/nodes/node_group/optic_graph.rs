@@ -109,8 +109,8 @@ impl OpticGraph {
             let node_id = self.node_by_idx(node_idx).unwrap().uuid();
             self.g.remove_node(node_idx);
             // Remove possibly no longer valid port mappings
-            self.input_port_map.remove_mapping_by_uuid(node_id);
-            self.output_port_map.remove_mapping_by_uuid(node_id);
+            self.input_port_map.remove_all_from_uuid(node_id);
+            self.output_port_map.remove_all_from_uuid(node_id);
 
             nodes_deleted.push(node_id);
         }
@@ -269,9 +269,9 @@ impl OpticGraph {
             )));
         }
         // remove input port mapping, if no loner valid
-        self.input_port_map.remove_mapping(target_id, target_port);
+        self.input_port_map.remove(target_id, target_port);
         // remove output port mapping, if no loner valid
-        self.output_port_map.remove_mapping(src_id, src_port);
+        self.output_port_map.remove(src_id, src_port);
         Ok(())
     }
     /// Disconnect two optical nodes within this [`OpticGraph`].

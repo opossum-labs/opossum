@@ -22,9 +22,7 @@ use crate::{
     surface::{geo_surface::GeoSurfaceRef, hit_map::HitMap, optic_surface::OpticSurface, Plane},
     utils::geom_transformation::Isometry,
 };
-use core::fmt::Debug;
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
 /// This is the basic trait that must be implemented by all concrete optical components.
@@ -467,16 +465,6 @@ pub trait OpticNode: Dottable {
             .get_optic_surface(&surf_name.to_owned())
     }
 }
-impl Debug for dyn OpticNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self, f)
-    }
-}
-impl Display for dyn OpticNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}' ({})", self.name(), self.node_type())
-    }
-}
 /// Helper trait for optical elements that can be locally aligned
 pub trait Alignable: OpticNode + Sized {
     /// Locally decenter an optical element.
@@ -542,5 +530,73 @@ pub trait LIDT: OpticNode + Analyzable + Sized {
         }
         self.node_attr_mut().set_lidt(&lidt);
         Ok(self)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use approx::assert_abs_diff_eq;
+
+    use super::*;
+    use crate::{degree, millimeter, nodes::Dummy};
+
+    #[test]
+    fn set_alignment() {
+        let mut node = Dummy::default();
+        let decenter = millimeter!(1.0, 2.0, 3.0);
+        let tilt = degree!(0.1, 0.2, 0.3);
+        assert!(node.set_alignment(decenter, tilt).is_ok());
+        let alignment = node.node_attr().alignment().clone().unwrap();
+        assert_abs_diff_eq!(alignment.translation().x.value, decenter.x.value);
+        assert_abs_diff_eq!(alignment.translation().y.value, decenter.y.value);
+        assert_abs_diff_eq!(alignment.translation().z.value, decenter.z.value);
+        assert_abs_diff_eq!(alignment.rotation().x.value, tilt.x.value);
+        assert_abs_diff_eq!(alignment.rotation().y.value, tilt.y.value);
+        assert_abs_diff_eq!(alignment.rotation().z.value, tilt.z.value);
+    }
+    #[test]
+    fn effective_node_iso() {
+        let mut node = Dummy::default();
+        let decenter = millimeter!(1.0, 2.0, 3.0);
+        let tilt = degree!(0.0, 0.0, 0.0);
+        let iso = Isometry::new(decenter, tilt).unwrap();
+        node.set_isometry(iso).unwrap();
+        let local_trans = millimeter!(4.0, 5.0, 6.0);
+        node.set_alignment(local_trans, degree!(0.0, 0.0, 0.0))
+            .unwrap();
+        let iso = node.effective_node_iso().unwrap();
+        assert_abs_diff_eq!(
+            iso.translation().x.value,
+            decenter.x.value + local_trans.x.value
+        );
+        assert_abs_diff_eq!(
+            iso.translation().y.value,
+            decenter.y.value + local_trans.y.value
+        );
+        assert_abs_diff_eq!(
+            iso.translation().z.value,
+            decenter.z.value + local_trans.z.value
+        );
+    }
+    #[test]
+    fn effective_surface_iso() {
+        let mut node = Dummy::default();
+        let decenter = millimeter!(1.0, 2.0, 3.0);
+        let tilt = degree!(0.1, 0.2, 0.3);
+        node.set_alignment(decenter, tilt).unwrap();
+        let msg = node.effective_surface_iso("input_1").unwrap_err();
+        assert_eq!(
+            msg.to_string(),
+            "Opossum Error:Other:no effective node iso defined"
+        );
+        node.set_isometry(Isometry::identity()).unwrap();
+        let msg = node.effective_surface_iso("wrong").unwrap_err();
+        assert_eq!(
+            msg.to_string(),
+            "Opossum Error:Other:no surface with name wrong defined"
+        );
+        let iso = node.effective_surface_iso("input_1").unwrap();
+        assert_abs_diff_eq!(iso.translation().x.value, decenter.x.value);
+        assert_abs_diff_eq!(iso.translation().y.value, decenter.y.value);
+        assert_abs_diff_eq!(iso.translation().z.value, decenter.z.value);
     }
 }
