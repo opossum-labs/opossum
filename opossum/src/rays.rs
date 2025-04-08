@@ -1424,9 +1424,9 @@ impl Rays {
         };
         Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), wvl, joule!(1.0))
     }
-    /// Return a ray bundle transformed by agiven [`Isometry`].
+    /// Return a ray bundle transformed by a given [`Isometry`].
     #[must_use]
-    pub fn transformed_rays(&self, isometry: &Isometry) -> Self {
+    pub fn transformed_by_iso(&self, isometry: &Isometry) -> Self {
         let mut rays = self.clone();
         for ray in &mut rays {
             *ray = ray.transformed_ray(isometry);
