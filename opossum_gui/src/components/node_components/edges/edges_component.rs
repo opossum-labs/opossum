@@ -16,24 +16,29 @@ pub struct Edges {
     edges: HashMap<String, Edge>,
 }
 impl Edges {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             edges: HashMap::new(),
         }
     }
     pub fn add_edge(&mut self, edge: Edge) {
-        self.edges.insert(edge.start_port_id().clone(), edge);
+        self.edges.insert(edge.start_port_id(), edge);
     }
-    pub fn get_edge(&self, id: String) -> Option<&Edge> {
-        self.edges.get(&id)
+    #[must_use]
+    pub fn get_edge(&self, id: &str) -> Option<&Edge> {
+        self.edges.get(id)
     }
-    pub fn get_edge_mut(&mut self, id: String) -> Option<&mut Edge> {
-        self.edges.get_mut(&id)
+    #[must_use]
+    pub fn get_edge_mut(&mut self, id: &str) -> Option<&mut Edge> {
+        self.edges.get_mut(id)
     }
-    pub fn edges(&self) -> &HashMap<String, Edge> {
+    #[must_use]
+    pub const fn edges(&self) -> &HashMap<String, Edge> {
         &self.edges
     }
-    pub fn edges_mut(&mut self) -> &mut HashMap<String, Edge> {
+    #[must_use]
+    pub const fn edges_mut(&mut self) -> &mut HashMap<String, Edge> {
         &mut self.edges
     }
 
@@ -84,6 +89,7 @@ pub struct EdgeCreation {
 }
 
 impl EdgeCreation {
+    #[must_use]
     pub fn new(
         src_node: Uuid,
         src_port: String,
@@ -108,46 +114,55 @@ impl EdgeCreation {
             bezier_offset: bezier_offset * connection_factor,
         }
     }
-    pub fn port_type(&self) -> &PortType {
+    #[must_use]
+    pub const fn port_type(&self) -> &PortType {
         &self.src_port_type
     }
+    #[must_use]
     pub fn port_name(&self) -> String {
         self.src_port.clone()
     }
-    pub fn node_id(&self) -> Uuid {
+    #[must_use]
+    pub const fn node_id(&self) -> Uuid {
         self.src_node
     }
+    #[must_use]
     pub fn start_port_id(&self) -> String {
         format!("{}_{}", self.src_node.as_simple(), self.src_port)
     }
-    pub fn start_x(&self) -> f64 {
+    #[must_use]
+    pub const fn start_x(&self) -> f64 {
         self.start_x
     }
-    pub fn start_y(&self) -> f64 {
+    #[must_use]
+    pub const fn start_y(&self) -> f64 {
         self.start_y
     }
-    pub fn end_x(&self) -> f64 {
+    #[must_use]
+    pub const fn end_x(&self) -> f64 {
         self.end_x
     }
-    pub fn end_y(&self) -> f64 {
+    #[must_use]
+    pub const fn end_y(&self) -> f64 {
         self.end_y
     }
-    pub fn bezier_offset(&self) -> f64 {
+    #[must_use]
+    pub const fn bezier_offset(&self) -> f64 {
         self.bezier_offset
     }
-    pub fn set_end_x(&mut self, end_x: f64) {
+    pub const fn set_end_x(&mut self, end_x: f64) {
         self.end_x = end_x;
     }
-    pub fn set_end_y(&mut self, end_y: f64) {
+    pub const fn set_end_y(&mut self, end_y: f64) {
         self.end_y = end_y;
     }
-    pub fn set_bezier_offset(&mut self, bezier_offset: f64) {
+    pub const fn set_bezier_offset(&mut self, bezier_offset: f64) {
         self.bezier_offset = bezier_offset;
     }
-    pub fn set_start_x(&mut self, start_x: f64) {
+    pub const fn set_start_x(&mut self, start_x: f64) {
         self.start_x = start_x;
     }
-    pub fn set_start_y(&mut self, start_y: f64) {
+    pub const fn set_start_y(&mut self, start_y: f64) {
         self.start_y = start_y;
     }
 }
@@ -179,7 +194,8 @@ pub struct Edge {
 }
 
 impl Edge {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         conn_info: ConnectInfo,
         start_x: f64,
         start_y: f64,
@@ -196,6 +212,7 @@ impl Edge {
             bezier_offset,
         }
     }
+    #[must_use]
     pub fn start_port_id(&self) -> String {
         format!(
             "{}_{}",
@@ -203,6 +220,7 @@ impl Edge {
             self.conn_info.src_port()
         )
     }
+    #[must_use]
     pub fn end_port_id(&self) -> String {
         format!(
             "{}_{}",
@@ -210,38 +228,43 @@ impl Edge {
             self.conn_info.target_port()
         )
     }
-    pub fn start_x(&self) -> f64 {
+    #[must_use]
+    pub const fn start_x(&self) -> f64 {
         self.start_x
     }
-    pub fn start_y(&self) -> f64 {
+    #[must_use]
+    pub const fn start_y(&self) -> f64 {
         self.start_y
     }
-    pub fn end_x(&self) -> f64 {
+    #[must_use]
+    pub const fn end_x(&self) -> f64 {
         self.end_x
     }
-    pub fn end_y(&self) -> f64 {
+    #[must_use]
+    pub const fn end_y(&self) -> f64 {
         self.end_y
     }
-    pub fn set_start_x(&mut self, start_x: f64) {
+    pub const fn set_start_x(&mut self, start_x: f64) {
         self.start_x = start_x;
     }
-    pub fn set_start_y(&mut self, start_y: f64) {
+    pub const fn set_start_y(&mut self, start_y: f64) {
         self.start_y = start_y;
     }
-    pub fn set_end_x(&mut self, end_x: f64) {
+    pub const fn set_end_x(&mut self, end_x: f64) {
         self.end_x = end_x;
     }
-    pub fn set_end_y(&mut self, end_y: f64) {
+    pub const fn set_end_y(&mut self, end_y: f64) {
         self.end_y = end_y;
     }
-    pub fn set_bezier_offset(&mut self, bezier_offset: f64) {
+    pub const fn set_bezier_offset(&mut self, bezier_offset: f64) {
         self.bezier_offset = bezier_offset;
     }
-    pub fn bezier_offset(&self) -> f64 {
+    #[must_use]
+    pub const fn bezier_offset(&self) -> f64 {
         self.bezier_offset
     }
-
-    pub fn distance(&self) -> f64 {
+    #[must_use]
+    pub const fn distance(&self) -> f64 {
         self.conn_info.distance()
     }
 
@@ -255,7 +278,7 @@ impl Edge {
             self.set_end_y(self.end_y() + y_shift);
         }
     }
-
+    #[must_use]
     pub fn is_connected(&self, node_id: Uuid) -> bool {
         self.conn_info.src_uuid() == node_id || self.conn_info.target_uuid() == node_id
     }
@@ -348,7 +371,7 @@ pub fn EdgeComponent(edge: Edge) -> Element {
     rsx! {
         path {
             d: new_path,
-            oncontextmenu: use_edge_context_menu(edge.conn_info.clone()),
+            oncontextmenu: use_edge_context_menu(edge.conn_info),
             stroke: "black",
             fill: "transparent",
             stroke_width: format!("{}", 2. * ZOOM.read().current()),
@@ -366,7 +389,7 @@ pub fn EdgeComponent(edge: Edge) -> Element {
         }
     }
 }
-
+#[must_use]
 pub fn use_edge_context_menu(conn_info: ConnectInfo) -> Callback<Event<MouseData>> {
     use_callback(move |evt: Event<MouseData>| {
         evt.prevent_default();
@@ -381,7 +404,7 @@ pub fn use_edge_context_menu(conn_info: ConnectInfo) -> Callback<Event<MouseData
         );
     })
 }
-
+#[must_use]
 pub fn use_delete_edge(conn_info: ConnectInfo) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let conn_info = conn_info.clone();
@@ -391,9 +414,9 @@ pub fn use_delete_edge(conn_info: ConnectInfo) -> Callback<Event<MouseData>> {
                     EDGES.write().remove_edge(conn_info);
                     OPOSSUM_UI_LOGS
                         .write()
-                        .add_log("Removed edge successfully!".to_owned());
+                        .add_log("Removed edge successfully!");
                 }
-                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(err_str),
+                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
             }
         });
     })

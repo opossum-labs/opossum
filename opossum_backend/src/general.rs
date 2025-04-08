@@ -20,10 +20,13 @@ pub struct VersionInfo {
 }
 
 impl VersionInfo {
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn backend_version(&self) -> &str {
         &self.backend_version
     }
-
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn opossum_version(&self) -> &str {
         &self.opossum_version
     }

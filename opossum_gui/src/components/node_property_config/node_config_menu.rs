@@ -4,7 +4,7 @@ use crate::ACTIVE_NODE;
 
 #[component]
 pub fn NodePropertyConfigMenu() -> Element {
-    if let Some(node_attr) = ACTIVE_NODE().clone() {
+    if let Some(node_attr) = ACTIVE_NODE() {
         rsx!(
             div { class: "property-config-window",
                 h3 { "Node Properties" }

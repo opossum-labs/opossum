@@ -9,7 +9,8 @@ struct PlotLayout {
     legend: bool,
 }
 impl PlotLayout {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             title: "nice title",
             legend: true,
@@ -42,17 +43,16 @@ pub fn PlotComponent() -> Element {
         let plot_data_json = serde_json::to_string(&plot_data).unwrap();
         async move {
             let script = format!(
-                r#"
+                r"
             function createPlot(){{
                 if (typeof opossumPlots !== 'undefined' && typeof Plotly !== 'undefined'){{
-                    const plotData = {}
-                    opossumPlots.createPlot('{}', plotData)
+                    const plotData = {plot_data_json}
+                    opossumPlots.createPlot('{plot_id}', plotData)
                     clearInterval(interval);  // Stoppe das Polling, sobald der Plot erstellt wurde
                 }}
             }}
             const interval = setInterval(createPlot, 100);  // Alle 100ms nach dem Element suchen
-            "#,
-                plot_data_json, plot_id
+            "
             );
 
             document::eval(&script);

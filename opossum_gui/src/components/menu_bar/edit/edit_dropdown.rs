@@ -17,7 +17,7 @@ pub fn EditDropdownMenu() -> Element {
             match HTTP_API_CLIENT().get_node_types().await {
                 Ok(node_types) => Some(node_types),
                 Err(err_str) => {
-                    OPOSSUM_UI_LOGS.write().add_log(err_str);
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str);
                     None
                 }
             }
@@ -55,7 +55,7 @@ pub fn EditDropdownMenu() -> Element {
         }
     }
 }
-
+#[must_use]
 pub fn use_delete_scenery() -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         spawn(async move {
@@ -64,14 +64,14 @@ pub fn use_delete_scenery() -> Callback<Event<MouseData>> {
                     NODES_STORE.write().delete_nodes();
                     OPOSSUM_UI_LOGS
                         .write()
-                        .add_log("Scenery cleared successfully!".to_owned());
+                        .add_log("Scenery cleared successfully!");
                 }
-                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(err_str),
+                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
             }
         });
     })
 }
-
+#[must_use]
 pub fn use_add_node(n_type: String, group_id: Uuid) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let n_type = n_type.clone();
@@ -82,14 +82,14 @@ pub fn use_add_node(n_type: String, group_id: Uuid) -> Callback<Event<MouseData>
                     .await
                 {
                     Ok(node_attr) => NODES_STORE.write().add_node(node_info, node_attr),
-                    Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(err_str),
+                    Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                 },
-                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(err_str),
+                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
             }
         });
     })
 }
-
+#[must_use]
 pub fn use_add_analyzer(analyzer: AnalyzerType, _group_id: Uuid) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let analyzer = analyzer.clone();
@@ -98,10 +98,10 @@ pub fn use_add_analyzer(analyzer: AnalyzerType, _group_id: Uuid) -> Callback<Eve
                 Ok(_) => {
                     OPOSSUM_UI_LOGS
                         .write()
-                        .add_log(format!("Added analyzer: {}", analyzer));
-                    NODES_STORE.write().add_analyzer(analyzer)
+                        .add_log(&format!("Added analyzer: {analyzer}"));
+                    NODES_STORE.write().add_analyzer(analyzer);
                 }
-                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(err_str),
+                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
             }
         });
     })

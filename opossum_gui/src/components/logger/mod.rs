@@ -14,17 +14,17 @@ impl Default for Logs {
 }
 
 impl Logs {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             logs: Signal::new(Vec::<String>::new()),
         }
     }
-
-    pub fn logs(&self) -> Signal<Vec<String>> {
+    #[must_use]
+    pub const fn logs(&self) -> Signal<Vec<String>> {
         self.logs
     }
-
-    pub fn add_log(&mut self, log_msg: String) {
+    pub fn add_log(&mut self, log_msg: &str) {
         let dt = chrono::offset::Local::now();
         self.logs().write().push(format!(
             "{:0>2}:{:0>2}:{:0>2} [log]:\t{}",
@@ -32,6 +32,6 @@ impl Logs {
             dt.minute(),
             dt.second(),
             log_msg
-        ))
+        ));
     }
 }

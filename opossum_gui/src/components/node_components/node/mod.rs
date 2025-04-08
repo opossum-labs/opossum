@@ -23,7 +23,8 @@ pub struct NodeElement {
 }
 
 impl NodeElement {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         x: f64,
         y: f64,
         id: Uuid,
@@ -42,52 +43,61 @@ impl NodeElement {
             ports,
         }
     }
-    pub fn ports(&self) -> &Ports {
+    #[must_use]
+    pub const fn ports(&self) -> &Ports {
         &self.ports
     }
-    pub fn input_ports(&self) -> &Vec<String> {
+    #[must_use]
+    pub const fn input_ports(&self) -> &Vec<String> {
         self.ports.input_ports()
     }
-    pub fn output_ports(&self) -> &Vec<String> {
+    #[must_use]
+    pub const fn output_ports(&self) -> &Vec<String> {
         self.ports.output_ports()
     }
-    pub fn z_index(&self) -> usize {
+    #[must_use]
+    pub const fn z_index(&self) -> usize {
         self.z_index
     }
-    pub fn set_z_index(&mut self, z_index: usize) {
+    pub const fn set_z_index(&mut self, z_index: usize) {
         self.z_index = z_index;
     }
-    pub fn set_inactive(&mut self) {
+    pub const fn set_inactive(&mut self) {
         self.is_active = false;
     }
-    pub fn set_active(&mut self) {
+    pub const fn set_active(&mut self) {
         self.is_active = true;
     }
-    pub fn is_active(&self) -> bool {
+    #[must_use]
+    pub const fn is_active(&self) -> bool {
         self.is_active
     }
-    pub fn set_x(&mut self, new_x: f64) {
+    pub const fn set_x(&mut self, new_x: f64) {
         self.x = new_x;
     }
-    pub fn set_y(&mut self, new_y: f64) {
+    pub const fn set_y(&mut self, new_y: f64) {
         self.y = new_y;
     }
     pub fn set_name(&mut self, name: String) {
         self.name = name;
     }
-    pub fn x(&self) -> f64 {
+    #[must_use]
+    pub const fn x(&self) -> f64 {
         self.x
     }
-    pub fn y(&self) -> f64 {
+    #[must_use]
+    pub const fn y(&self) -> f64 {
         self.y
     }
+    #[must_use]
     pub fn name(&self) -> String {
         self.name.clone()
     }
-    pub fn id(&self) -> &Uuid {
+    #[must_use]
+    pub const fn id(&self) -> &Uuid {
         &self.id
     }
-    pub fn set_id(&mut self, id: Uuid) {
+    pub const fn set_id(&mut self, id: Uuid) {
         self.id = id;
     }
 

@@ -21,22 +21,25 @@ pub struct NodeInfo {
 }
 
 impl NodeInfo {
-    pub fn new(uuid: Uuid, name: String, node_type: String) -> Self {
+    #[must_use]
+    pub const fn new(uuid: Uuid, name: String, node_type: String) -> Self {
         Self {
             uuid,
             name,
             node_type,
         }
     }
-
-    pub fn uuid(&self) -> Uuid {
+    #[must_use]
+    pub const fn uuid(&self) -> Uuid {
         self.uuid
     }
-
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn name(&self) -> &str {
         &self.name
     }
-
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn node_type(&self) -> &str {
         &self.node_type
     }
@@ -267,7 +270,8 @@ pub struct ConnectInfo {
 }
 
 impl ConnectInfo {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         src_uuid: Uuid,
         src_port: String,
         target_uuid: Uuid,
@@ -282,20 +286,26 @@ impl ConnectInfo {
             distance,
         }
     }
-
-    pub fn src_uuid(&self) -> Uuid {
+    #[must_use]
+    pub const fn src_uuid(&self) -> Uuid {
         self.src_uuid
     }
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn src_port(&self) -> &str {
         &self.src_port
     }
-    pub fn target_uuid(&self) -> Uuid {
+    #[must_use]
+    pub const fn target_uuid(&self) -> Uuid {
         self.target_uuid
     }
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn target_port(&self) -> &str {
         &self.target_port
     }
-    pub fn distance(&self) -> f64 {
+    #[must_use]
+    pub const fn distance(&self) -> f64 {
         self.distance
     }
 }

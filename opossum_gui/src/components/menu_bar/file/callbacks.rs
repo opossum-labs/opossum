@@ -52,7 +52,7 @@ pub fn use_open_project() -> Callback<Event<MouseData>> {
                 } else {
                     OPOSSUM_UI_LOGS
                         .write()
-                        .add_log("No opm file found, cannot open project!".into());
+                        .add_log("No opm file found, cannot open project!");
                 }
             }
         }

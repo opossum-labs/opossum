@@ -1,7 +1,7 @@
 use dioxus::{desktop::use_window, prelude::*};
 
 use crate::components::menu_bar::sub_menu_item::MenuItem;
-
+#[must_use]
 pub fn use_maximize(mut maximize_symbol: Signal<&'static str>) -> Callback<Event<MouseData>> {
     let window = use_window();
     use_callback(move |_| {
@@ -14,14 +14,14 @@ pub fn use_maximize(mut maximize_symbol: Signal<&'static str>) -> Callback<Event
         }
     })
 }
-
+#[must_use]
 pub fn use_close() -> Callback<Event<MouseData>> {
     let window = use_window();
     use_callback(move |_| {
         window.close();
     })
 }
-
+#[must_use]
 pub fn use_minimize() -> Callback<Event<MouseData>> {
     let window = use_window();
     use_callback(move |_| {

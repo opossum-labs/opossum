@@ -22,21 +22,22 @@ impl Default for HTTPAPIClient {
 }
 
 impl HTTPAPIClient {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             client: Client::new(),
             base_url: "http://localhost:8001".to_string(),
         }
     }
-
-    pub fn client(&self) -> &Client {
+    #[must_use]
+    pub const fn client(&self) -> &Client {
         &self.client
     }
-
-    pub fn base_url(&self) -> &String {
+    #[must_use]
+    pub const fn base_url(&self) -> &String {
         &self.base_url
     }
-
+    #[must_use]
     pub fn url(&self, route: &str) -> String {
         format!("{}{}", self.base_url, route)
     }
@@ -50,7 +51,7 @@ impl HTTPAPIClient {
         if let Ok(response) = res {
             self.process_response::<R>(response).await
         } else {
-            Err(format!("Error on post request on route: \"{}\"", route))
+            Err(format!("Error on post request on route: \"{route}\""))
         }
     }
 
@@ -63,7 +64,7 @@ impl HTTPAPIClient {
         if let Ok(response) = res {
             self.process_response::<R>(response).await
         } else {
-            Err(format!("Error on put request on route: \"{}\"", route))
+            Err(format!("Error on put request on route: \"{route}\""))
         }
     }
 
@@ -81,7 +82,7 @@ impl HTTPAPIClient {
         if let Ok(response) = res {
             self.process_response::<R>(response).await
         } else {
-            Err(format!("Error on patch request on route: \"{}\"", route))
+            Err(format!("Error on patch request on route: \"{route}\""))
         }
     }
 
@@ -99,7 +100,7 @@ impl HTTPAPIClient {
         if let Ok(response) = res {
             self.process_response::<R>(response).await
         } else {
-            Err(format!("Error on delete request from route: \"{}\"", route))
+            Err(format!("Error on delete request from route: \"{route}\""))
         }
     }
 
@@ -108,7 +109,7 @@ impl HTTPAPIClient {
         if let Ok(response) = res {
             self.process_response::<R>(response).await
         } else {
-            Err(format!("Error on get request from route: \"{}\"", route))
+            Err(format!("Error on get request from route: \"{route}\""))
         }
     }
 
@@ -126,11 +127,7 @@ impl HTTPAPIClient {
             } else {
                 // just to receive a value i nothing has been sent back
                 let json_val = json!("");
-                if let Ok(deserialized) = serde_json::from_value(json_val) {
-                    Ok(deserialized)
-                } else {
-                    Err("Error deserializing default string if no content returns!".to_string())
-                }
+                serde_json::from_value(json_val).map_or_else(|_| Err("Error deserializing default string if no content returns!".to_string()), |deserialized| Ok(deserialized))
             }
         } else if let Ok(err_res) = res.json::<ErrorResponse>().await {
             Err(format!(
@@ -157,7 +154,7 @@ impl HTTPAPIClient {
 
     //Scenery api calls
     pub async fn delete_scenery(&self) -> Result<String, String> {
-        self.delete::<String, String>("/api/scenery/", "".to_string())
+        self.delete::<String, String>("/api/scenery/", String::new())
             .await
     }
     // pub async fn get_analyzers(&self) -> Result<Vec<AnalyzerType>, String> {
@@ -198,7 +195,7 @@ impl HTTPAPIClient {
     pub async fn delete_node(&self, id: Uuid) -> Result<Vec<Uuid>, String> {
         self.delete::<String, Vec<Uuid>>(
             &format!("/api/scenery/{}/nodes", id.as_simple()),
-            "".to_string(),
+            String::new(),
         )
         .await
     }

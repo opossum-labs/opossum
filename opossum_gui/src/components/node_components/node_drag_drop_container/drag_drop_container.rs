@@ -54,19 +54,23 @@ pub struct Zoom {
 }
 
 impl Zoom {
-    pub fn new(current: f64, previous: f64) -> Self {
+    #[must_use]
+    pub const fn new(current: f64, previous: f64) -> Self {
         Self { current, previous }
     }
-    pub fn current(&self) -> f64 {
+    #[must_use]
+    pub const fn current(&self) -> f64 {
         self.current
     }
-    pub fn set_current(&mut self, current: f64) {
+    pub const fn set_current(&mut self, current: f64) {
         self.previous = self.current;
         self.current = current;
     }
-    pub fn previous(&self) -> f64 {
+    #[must_use]
+    pub const fn previous(&self) -> f64 {
         self.previous
     }
+    #[must_use]
     pub fn zoom_factor(&self) -> f64 {
         self.current / self.previous
     }

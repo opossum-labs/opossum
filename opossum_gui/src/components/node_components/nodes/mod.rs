@@ -16,43 +16,44 @@ use super::{
     NodeElement, NodeOffset,
 };
 
-#[derive(Clone, PartialEq, Default)]
+#[derive(Clone, Eq, PartialEq, Default)]
 pub struct NodesStore {
     optic_nodes: Signal<Vec<NodeElement>>,
     analyzer_nodes: Signal<HashMap<Uuid, AnalyzerType>>,
 }
 
 impl NodesStore {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             optic_nodes: Signal::new(Vec::<NodeElement>::new()),
             analyzer_nodes: Signal::new(HashMap::<Uuid, AnalyzerType>::new()),
         }
     }
-
+    #[must_use]
     pub fn size() -> Point2D<f64> {
-        Point2D::new(130., 130. / 1.6180339887)
+        Point2D::new(130., 130. / 1.618_033_988_7)
     }
-
-    pub fn optic_nodes(&self) -> Signal<Vec<NodeElement>> {
+    #[must_use]
+    pub const fn optic_nodes(&self) -> Signal<Vec<NodeElement>> {
         self.optic_nodes
     }
-
-    pub fn analyzer_nodes(&self) -> Signal<HashMap<Uuid, AnalyzerType>> {
+    #[must_use]
+    pub const fn analyzer_nodes(&self) -> Signal<HashMap<Uuid, AnalyzerType>> {
         self.analyzer_nodes
     }
-    pub fn optic_nodes_mut(&mut self) -> &mut Signal<Vec<NodeElement>> {
+    pub const fn optic_nodes_mut(&mut self) -> &mut Signal<Vec<NodeElement>> {
         &mut self.optic_nodes
     }
 
-    pub fn analyzer_nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, AnalyzerType>> {
+    pub const fn analyzer_nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, AnalyzerType>> {
         &mut self.analyzer_nodes
     }
-
+    #[must_use]
     pub fn nr_of_optic_nodes(&self) -> usize {
         self.optic_nodes().read().len()
     }
-
+    #[must_use]
     pub fn available_analyzers() -> Vec<AnalyzerType> {
         vec![
             AnalyzerType::Energy,
@@ -78,11 +79,11 @@ impl NodesStore {
                     node_container_offset.1,
                     elem_offset.0,
                     elem_offset.1,
-                )
+                );
             };
         }
     }
-
+    #[must_use]
     pub fn get_active_node_id(&self) -> Option<Uuid> {
         self.optic_nodes()
             .read()
@@ -94,14 +95,14 @@ impl NodesStore {
     pub fn set_node_active(&mut self, id: Uuid, z_index: usize) {
         let nr_of_nodes = self.nr_of_optic_nodes();
         self.optic_nodes_mut().write().iter_mut().for_each(|n| {
-            if *n.id() != id {
+            if *n.id() == id {
+                n.set_active();
+                n.set_z_index(nr_of_nodes);
+            } else {
                 n.set_inactive();
                 if z_index <= n.z_index() {
                     n.set_z_index(n.z_index() - 1);
                 }
-            } else {
-                n.set_active();
-                n.set_z_index(nr_of_nodes);
             }
         });
 
@@ -117,7 +118,7 @@ impl NodesStore {
         self.optic_nodes_mut()
             .write()
             .iter_mut()
-            .for_each(|n| n.set_inactive());
+            .for_each(NodeElement::set_inactive);
     }
 
     pub fn delete_node(&mut self, node_id: Uuid) {
@@ -126,7 +127,7 @@ impl NodesStore {
             .position(|n| *n.id() == node_id)
             .map(|i| (self.optic_nodes().read().index(i).z_index(), i))
         {
-            OPOSSUM_UI_LOGS.write().add_log(format!(
+            OPOSSUM_UI_LOGS.write().add_log(&format!(
                 "Removed node: {} (id:{node_id})",
                 self.optic_nodes().read().index(idx).name()
             ));
@@ -154,22 +155,18 @@ impl NodesStore {
             self.delete_node(*node_id);
         }
         if self.nr_of_optic_nodes() == 0 {
-            OPOSSUM_UI_LOGS
-                .write()
-                .add_log("Removed all nodes!".to_owned());
+            OPOSSUM_UI_LOGS.write().add_log("Removed all nodes!");
         } else {
-            OPOSSUM_UI_LOGS
-                .write()
-                .add_log("Error removing all nodes!".to_owned());
+            OPOSSUM_UI_LOGS.write().add_log("Error removing all nodes!");
         }
     }
-
+    #[must_use]
     pub fn find_position(&self) -> Point2D<f64> {
         let zoom_factor = ZOOM.read().zoom_factor();
-        let size = NodesStore::size();
+        let size = Self::size();
         let mut new_x = size.x * zoom_factor;
         let mut new_y = size.x * zoom_factor;
-        let phi = 1. / 1.6180339887;
+        let phi = 1. / 1.618_033_988_7;
         loop {
             let mut position_found = true;
             for node in self.optic_nodes().read().iter() {
@@ -216,7 +213,7 @@ impl NodesStore {
         self.set_node_active(node_info.uuid(), new_node.z_index());
         OPOSSUM_UI_LOGS
             .write()
-            .add_log(format!("Added node: {}", node_info.node_type()));
+            .add_log(&format!("Added node: {}", node_info.node_type()));
     }
 
     pub fn add_analyzer(&mut self, analyzer: AnalyzerType) {
@@ -234,7 +231,7 @@ impl NodesStore {
 
         self.optic_nodes_mut().write().push(new_node);
     }
-
+    #[must_use]
     pub fn get_min_max_position(&self) -> (f64, f64, f64, f64) {
         let (mut min_x, mut min_y, mut max_y, mut max_x) = (0., 0., 0., 0.);
         for (idx, node) in self.optic_nodes().read().iter().enumerate() {

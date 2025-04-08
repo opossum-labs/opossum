@@ -45,7 +45,7 @@ pub fn Node(node: NodeElement) -> Element {
 
             GraphNodeContent {
                 node_header: rsx! {
-                    GraphNodeHeader { node_name: node.name().to_owned(), node_id: *node.id(), node_size }
+                    GraphNodeHeader { node_name: node.name(), node_id: *node.id(), node_size }
                 },
                 node_body: rsx! {
                     div {
@@ -68,7 +68,7 @@ pub fn Node(node: NodeElement) -> Element {
         }
     }
 }
-
+#[must_use]
 pub fn use_node_context_menu(node_id: Uuid) -> Callback<Event<MouseData>> {
     use_callback(move |evt: Event<MouseData>| {
         evt.prevent_default();
@@ -80,7 +80,7 @@ pub fn use_node_context_menu(node_id: Uuid) -> Callback<Event<MouseData>> {
         );
     })
 }
-
+#[must_use]
 pub fn use_delete_node(node_id: Uuid) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let node_id = node_id;
@@ -91,7 +91,7 @@ pub fn use_delete_node(node_id: Uuid) -> Callback<Event<MouseData>> {
                         NODES_STORE.write().delete_node(*id);
                     }
                 }
-                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(err_str),
+                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
             }
         });
     })

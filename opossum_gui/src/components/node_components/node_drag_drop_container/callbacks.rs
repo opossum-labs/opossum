@@ -18,7 +18,7 @@ pub fn use_on_mouse_move() -> impl FnMut(Event<MouseData>) {
             dragged_node.read().elem_offset(),
         ) {
             NODES_STORE.write().drag_node(id, elem_offset, &event.data);
-        };
+        }
         if let (Some(edge_creation), Some(offset)) =
             (edge_in_creation.write().as_mut(), offset.read().offset())
         {
@@ -100,7 +100,7 @@ pub fn use_on_key_down() -> impl FnMut(Event<KeyboardData>) {
                                 NODES_STORE.write().delete_node(*id);
                             }
                         }
-                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(err_str),
+                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                     }
                 });
             }

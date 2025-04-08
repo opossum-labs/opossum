@@ -9,22 +9,25 @@ use crate::{
     },
     EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
 };
-#[derive(Clone, PartialEq, Default)]
+#[derive(Clone, Eq, PartialEq, Default)]
 pub struct Ports {
     input_ports: Vec<String>,
     output_ports: Vec<String>,
 }
 impl Ports {
-    pub fn new(input_ports: Vec<String>, output_ports: Vec<String>) -> Self {
-        Ports {
+    #[must_use]
+    pub const fn new(input_ports: Vec<String>, output_ports: Vec<String>) -> Self {
+        Self {
             input_ports,
             output_ports,
         }
     }
-    pub fn input_ports(&self) -> &Vec<String> {
+    #[must_use]
+    pub const fn input_ports(&self) -> &Vec<String> {
         &self.input_ports
     }
-    pub fn output_ports(&self) -> &Vec<String> {
+    #[must_use]
+    pub const fn output_ports(&self) -> &Vec<String> {
         &self.output_ports
     }
 }
@@ -126,7 +129,7 @@ pub fn NodePort(
                             target_y,
                             70. * zoom_factor,
                         )),
-                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(err_str),
+                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                     }
                 });
             }

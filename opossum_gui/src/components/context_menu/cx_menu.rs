@@ -8,34 +8,36 @@ pub struct CxMenu {
     pub entries: Vec<(String, Callback<Event<MouseData>>)>,
 }
 impl CxMenu {
-    pub fn height(num_entries: usize) -> f64 {
+    #[must_use]
+    pub const fn height(num_entries: usize) -> f64 {
         22.4 * num_entries as f64 + 2. * Self::padding()
     }
-
-    pub fn width() -> f64 {
+    #[must_use]
+    pub const fn width() -> f64 {
         150. + 2. * Self::padding()
     }
-    pub fn padding() -> f64 {
+    #[must_use]
+    pub const fn padding() -> f64 {
         2.
     }
-
-    pub fn entries(&self) -> &Vec<(String, Callback<Event<MouseData>>)> {
+    #[must_use]
+    pub const fn entries(&self) -> &Vec<(String, Callback<Event<MouseData>>)> {
         &self.entries
     }
 
     pub fn set(&mut self, cx_menu: Self) {
         *self = cx_menu;
     }
-
+    #[must_use]
     pub fn new(x: f64, y: f64, entries: Vec<(String, Callback<Event<MouseData>>)>) -> Option<Self> {
         if let Some(rect) = MAIN_WINDOW_SIZE.read().as_ref() {
             let mut x = x;
             let mut y = y;
             if x + Self::width() > rect.width {
-                x -= Self::width()
+                x -= Self::width();
             }
             if y + Self::height(entries.len()) > rect.height {
-                y -= Self::height(entries.len())
+                y -= Self::height(entries.len());
             }
             Some(Self { x, y, entries })
         } else {

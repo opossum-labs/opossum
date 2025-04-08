@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 pub fn Logger() -> Element {
     let log_id = "log-container".to_owned();
     rsx! {
-        div { class: "log-container", id: log_id.clone(),
+        div { class: "log-container", id: log_id,
             for log in OPOSSUM_UI_LOGS.read().logs.iter() {
                 p {
                     class: "log-entry",
