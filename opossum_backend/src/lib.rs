@@ -7,3 +7,9 @@ pub mod routes;
 pub mod scenery;
 pub mod server;
 pub mod utils;
+
+pub use opossum::{
+    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
+    nodes::NodeAttr,
+    optic_ports::PortType,
+};

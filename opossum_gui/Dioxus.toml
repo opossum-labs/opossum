@@ -1,0 +1,28 @@
+[application]
+icon = "icons/icon.ico"
+# App (Project) Name
+name = "opossum_gui"
+
+[web.app]
+
+# HTML title tag content
+title = "opossum_gui"
+
+# include `assets` in web platform
+[desktop.resource]
+
+# Additional CSS style files
+style = ["assets/main.css"]
+
+[web.resource.dev]
+
+# Javascript code file
+# serve: [dev-server] only
+script = []
+
+[bundle]
+identifier = "opossum"
+publisher= "thrill"
+# icon_path = "icons/icon.ico"
+# icon = ["assets/favicon.ico"]
+

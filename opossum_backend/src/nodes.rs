@@ -14,10 +14,32 @@ use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, ToSchema)]
-struct NodeInfo {
+pub struct NodeInfo {
     uuid: Uuid,
     name: String,
     node_type: String,
+}
+
+impl NodeInfo {
+    pub fn new(uuid: Uuid, name: String, node_type: String) -> Self {
+        Self {
+            uuid,
+            name,
+            node_type,
+        }
+    }
+
+    pub fn uuid(&self) -> Uuid {
+        self.uuid
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn node_type(&self) -> &str {
+        &self.node_type
+    }
 }
 /// Get all nodes of a group node
 ///
@@ -84,7 +106,7 @@ async fn get_subnodes(
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
-struct NewNode {
+pub struct NewNode {
     node_type: String,
     gui_position: (i32, i32, i32),
 }
@@ -230,8 +252,8 @@ async fn patch_properties(
     Ok(web::Json(node_attr.clone()))
 }
 /// Connection Information
-#[derive(ToSchema, Serialize, Deserialize)]
-struct ConnectInfo {
+#[derive(ToSchema, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConnectInfo {
     /// UUID of the source node
     src_uuid: Uuid,
     /// name of the (outgoing) source port
@@ -242,6 +264,40 @@ struct ConnectInfo {
     target_port: String,
     /// geometric distance between nodes (optical axis) in meters.
     distance: f64,
+}
+
+impl ConnectInfo {
+    pub fn new(
+        src_uuid: Uuid,
+        src_port: String,
+        target_uuid: Uuid,
+        target_port: String,
+        distance: f64,
+    ) -> Self {
+        Self {
+            src_uuid,
+            src_port,
+            target_uuid,
+            target_port,
+            distance,
+        }
+    }
+
+    pub fn src_uuid(&self) -> Uuid {
+        self.src_uuid
+    }
+    pub fn src_port(&self) -> &str {
+        &self.src_port
+    }
+    pub fn target_uuid(&self) -> Uuid {
+        self.target_uuid
+    }
+    pub fn target_port(&self) -> &str {
+        &self.target_port
+    }
+    pub fn distance(&self) -> f64 {
+        self.distance
+    }
 }
 /// Connect two nodes
 ///

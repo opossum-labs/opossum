@@ -1,0 +1,203 @@
+use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use opossum_backend::{nodes::ConnectInfo, PortType};
+use uuid::Uuid;
+
+use crate::{
+    components::node_components::{
+        edges::edges_component::{Edge, EdgeCreation},
+        NodeOffset,
+    },
+    EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
+};
+#[derive(Clone, PartialEq, Default)]
+pub struct Ports {
+    input_ports: Vec<String>,
+    output_ports: Vec<String>,
+}
+impl Ports {
+    pub fn new(input_ports: Vec<String>, output_ports: Vec<String>) -> Self {
+        Ports {
+            input_ports,
+            output_ports,
+        }
+    }
+    pub fn input_ports(&self) -> &Vec<String> {
+        &self.input_ports
+    }
+    pub fn output_ports(&self) -> &Vec<String> {
+        &self.output_ports
+    }
+}
+
+#[component]
+pub fn NodePort(
+    port_w_h: f64,
+    port_x: f64,
+    port_y: f64,
+    node_id: Uuid,
+    port_name: String,
+    port_type: PortType,
+) -> Element {
+    let mut edge_in_creation = use_context::<Signal<Option<EdgeCreation>>>();
+    let offset = use_context::<Signal<NodeOffset>>();
+    let zoom_factor = ZOOM.read().current();
+
+    let on_mouse_down = {
+        let port_type = port_type.clone();
+        let port_name = port_name.clone();
+        move |e: Event<MouseData>| {
+            if let Some(offset) = offset.read().offset() {
+                let x = e.page_coordinates().x - offset.0
+                    + (-e.element_coordinates().x + port_w_h / 2.) * zoom_factor;
+                let y = e.page_coordinates().y - offset.1
+                    + (-e.element_coordinates().y + port_w_h / 2.) * zoom_factor;
+                let start_end = Point2D::new(x, y);
+                edge_in_creation.set(Some(EdgeCreation::new(
+                    node_id,
+                    port_name.clone(),
+                    port_type.clone(),
+                    start_end,
+                    start_end,
+                    70. * zoom_factor,
+                )));
+            }
+        }
+    };
+
+    let on_mouse_up = {
+        let zoom_factor = ZOOM.read().current();
+        let port_name = port_name.clone();
+        move |e: Event<MouseData>| {
+            if let (Some(edge_start), Some(offset)) =
+                (edge_in_creation.read().as_ref(), offset.read().offset())
+            {
+                let x = e.page_coordinates().x - offset.0
+                    + (-e.element_coordinates().x + port_w_h / 2.) * zoom_factor;
+                let y = e.page_coordinates().y - offset.1
+                    + (-e.element_coordinates().y + port_w_h / 2.) * zoom_factor;
+
+                let (
+                    src_node,
+                    src_port,
+                    target_node,
+                    target_port,
+                    src_x,
+                    src_y,
+                    target_x,
+                    target_y,
+                ) = if edge_start.port_type() == &PortType::Output {
+                    (
+                        edge_start.node_id(),
+                        edge_start.port_name(),
+                        node_id,
+                        port_name.clone(),
+                        edge_start.start_x(),
+                        edge_start.start_y(),
+                        x,
+                        y,
+                    )
+                } else {
+                    (
+                        node_id,
+                        port_name.clone(),
+                        edge_start.node_id(),
+                        edge_start.port_name(),
+                        x,
+                        y,
+                        edge_start.start_x(),
+                        edge_start.start_y(),
+                    )
+                };
+
+                spawn(async move {
+                    let conn_info = ConnectInfo::new(
+                        src_node,
+                        src_port.clone(),
+                        target_node,
+                        target_port.clone(),
+                        0.,
+                    );
+                    match HTTP_API_CLIENT().post_add_connection(conn_info).await {
+                        Ok(conn_info) => EDGES.write().add_edge(Edge::new(
+                            conn_info,
+                            src_x,
+                            src_y,
+                            target_x,
+                            target_y,
+                            70. * zoom_factor,
+                        )),
+                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(err_str),
+                    }
+                });
+            }
+            edge_in_creation.set(None);
+        }
+    };
+    let port_class = if port_type == PortType::Input {
+        "input-port"
+    } else {
+        "output-port"
+    };
+    rsx! {
+        div {
+            onmousedown: on_mouse_down,
+            onmouseup: on_mouse_up,
+            id: format!("{}_{}", node_id.as_simple().to_string(), port_name),
+            class: "port {port_class}",
+            style: format!(
+                "left: {}px; top: {}px; width: {}px; height: {}px;",
+                port_x,
+                port_y,
+                port_w_h,
+                port_w_h,
+            ),
+        }
+    }
+}
+
+#[component]
+pub fn NodePorts(
+    node_width: f64,
+    node_height: f64,
+    node_id: Uuid,
+    input_ports: Vec<String>,
+    output_ports: Vec<String>,
+) -> Element {
+    let port_w_h = 12.;
+    let border_radius = 1.;
+
+    rsx! {
+        for (i , in_port) in input_ports.iter().enumerate() {
+            {
+                let port_y = node_height / 2. - port_w_h / 2. - border_radius + i as f64 * 20.;
+                let port_x = -port_w_h / 2. - 3. * border_radius / 2.;
+                rsx! {
+                    NodePort {
+                        port_w_h,
+                        port_x,
+                        port_y,
+                        node_id,
+                        port_name: in_port.clone(),
+                        port_type: PortType::Input,
+                    }
+                }
+            }
+        }
+        for (i , out_port) in output_ports.iter().enumerate() {
+            {
+                let port_y = node_height / 2. - port_w_h / 2. - border_radius + i as f64 * 20.;
+                let port_x = node_width - port_w_h / 2. - border_radius / 2.;
+                rsx! {
+                    NodePort {
+                        port_w_h,
+                        port_x,
+                        port_y,
+                        node_id,
+                        port_name: out_port.clone(),
+                        port_type: PortType::Output,
+                    }
+                }
+            }
+        }
+    }
+}

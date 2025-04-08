@@ -1,4 +1,6 @@
 //! General endpoints
+use std::fmt::Display;
+
 use actix_web::{get, web::Json, Responder};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -8,13 +10,23 @@ use crate::error::ErrorResponse;
 
 /// Structure holding the version information
 #[derive(ToSchema, Serialize, Deserialize)]
-struct VersionInfo {
+pub struct VersionInfo {
     /// version of the OPOSSUM API backend
     #[schema(example = "0.1.0")]
     backend_version: String,
     /// version of the OPOSSUM library (possibly including the git hash)
     #[schema(example = "0.6.0-18-g80cb67f (2025/02/19 15:29)")]
     opossum_version: String,
+}
+
+impl VersionInfo {
+    pub fn backend_version(&self) -> &str {
+        &self.backend_version
+    }
+
+    pub fn opossum_version(&self) -> &str {
+        &self.opossum_version
+    }
 }
 
 /// Return a welcome message
@@ -38,9 +50,14 @@ async fn get_version() -> impl Responder {
     })
 }
 #[derive(Deserialize, Serialize, ToSchema)]
-struct NodeType {
+pub struct NodeType {
     node_type: String,
     description: String,
+}
+impl Display for NodeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.node_type)
+    }
 }
 /// Return a list of all available node types of OPOSSUM
 ///
