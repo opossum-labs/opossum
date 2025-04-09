@@ -332,25 +332,26 @@ pub fn EdgesComponent() -> Element {
 #[component]
 pub fn EdgeCreationComponent() -> Element {
     let edge_opt_sig = use_context::<Signal<Option<EdgeCreation>>>();
-    if let Some(edge) = edge_opt_sig() {
-        let new_path = define_bezier_path(
-            edge.start_x(),
-            edge.start_y(),
-            edge.end_x(),
-            edge.end_y(),
-            edge.bezier_offset(),
-        );
-        rsx! {
-            path {
-                d: new_path,
-                stroke: "black",
-                fill: "transparent",
-                stroke_width: format!("{}", 2. * ZOOM.read().current()),
+    edge_opt_sig().map_or_else(
+        || rsx! {},
+        |edge| {
+            let new_path = define_bezier_path(
+                edge.start_x(),
+                edge.start_y(),
+                edge.end_x(),
+                edge.end_y(),
+                edge.bezier_offset(),
+            );
+            rsx! {
+                path {
+                    d: new_path,
+                    stroke: "black",
+                    fill: "transparent",
+                    stroke_width: format!("{}", 2. * ZOOM.read().current()),
+                }
             }
-        }
-    } else {
-        rsx! {}
-    }
+        },
+    )
 }
 
 #[component]

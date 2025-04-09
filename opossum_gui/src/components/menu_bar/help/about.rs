@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::HTTP_API_CLIENT;
 use dioxus::prelude::*;
 

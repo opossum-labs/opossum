@@ -1,4 +1,5 @@
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use opossum_backend::usize_to_f64;
 use uuid::Uuid;
 
 use crate::components::node_components::DraggedNode;
@@ -23,7 +24,7 @@ pub fn GraphNodeContent(
 pub fn GraphNodeHeader(node_name: String, node_id: Uuid, node_size: Point2D<f64>) -> Element {
     let mut dragged_node: Signal<DraggedNode> = use_context::<Signal<DraggedNode>>();
 
-    let font_fac = 6. * node_name.len() as f64 / (0.95 * node_size.x);
+    let font_fac = 6. * usize_to_f64(node_name.len()) / (0.95 * node_size.x);
     let font_size = if font_fac > 1. { 10. / font_fac } else { 10. };
     let header_scale = 0.3;
 

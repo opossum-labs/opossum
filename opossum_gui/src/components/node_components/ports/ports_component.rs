@@ -1,5 +1,5 @@
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{nodes::ConnectInfo, PortType};
+use opossum_backend::{nodes::ConnectInfo, usize_to_f64, PortType};
 use uuid::Uuid;
 
 use crate::{
@@ -172,7 +172,7 @@ pub fn NodePorts(
     rsx! {
         for (i , in_port) in input_ports.iter().enumerate() {
             {
-                let port_y = (i as f64).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
+                let port_y = usize_to_f64(i).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
                 let port_x = -port_w_h / 2. - 3. * border_radius / 2.;
                 rsx! {
                     NodePort {
@@ -188,8 +188,8 @@ pub fn NodePorts(
         }
         for (i , out_port) in output_ports.iter().enumerate() {
             {
-                let port_y = (i as f64).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
-                let port_x = (i as f64).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
+                let port_y = usize_to_f64(i).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
+                let port_x = usize_to_f64(i).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
                 rsx! {
                     NodePort {
                         port_w_h,

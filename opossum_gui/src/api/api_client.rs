@@ -41,7 +41,11 @@ impl HTTPAPIClient {
     pub fn url(&self, route: &str) -> String {
         format!("{}{}", self.base_url, route)
     }
-
+    /// Send a POST reqeust to the given route with the provided body.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the request fails or if the response cannot be deserialized into the expected type.
     pub async fn post<B: Serialize + DeserializeOwned + Clone, R: Serialize + DeserializeOwned>(
         &self,
         route: &str,
@@ -54,7 +58,13 @@ impl HTTPAPIClient {
             Err(format!("Error on post request on route: \"{route}\""))
         }
     }
-
+    /// Send a PUT request to the given route with the provided body.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the request fails (e.g. the route is not reachable)
+    /// - the response cannot be deserialized into the expected type
     pub async fn put<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
         &self,
         route: &str,
@@ -68,6 +78,14 @@ impl HTTPAPIClient {
         }
     }
 
+    /// Send a PATCH request to the given route with the provided body.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///
+    /// - the request fails (e.g. the route is not reachable)
+    /// - the response cannot be deserialized into the expected type
     pub async fn patch<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
         &self,
         route: &str,
@@ -86,6 +104,14 @@ impl HTTPAPIClient {
         }
     }
 
+    /// Send a DELETE request to the given route with the provided body.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///
+    /// - the request fails (e.g. the route is not reachable)
+    /// - the response cannot be deserialized into the expected type
     pub async fn delete<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
         &self,
         route: &str,
@@ -104,6 +130,13 @@ impl HTTPAPIClient {
         }
     }
 
+    /// Send a GET request to the given route.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the request fails (e.g. the route is not reachable)
+    /// - the response cannot be deserialized into the expected type
     pub async fn get<R: Serialize + DeserializeOwned>(&self, route: &str) -> Result<R, String> {
         let res = self.client().get(self.url(route)).send().await;
         if let Ok(response) = res {
@@ -113,6 +146,12 @@ impl HTTPAPIClient {
         }
     }
 
+    /// Process the response from the server.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the response cannot be deserialized into the expected type
     pub async fn process_response<R: Serialize + DeserializeOwned>(
         &self,
         res: Response,
@@ -141,17 +180,44 @@ impl HTTPAPIClient {
     }
 
     //General api calls
+
+    /// Send reqeust to get the version of the opossum backend and the opossum library.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the `VersionInfo` struct cannot be deserialized
     pub async fn get_version(&self) -> Result<VersionInfo, String> {
         self.get::<VersionInfo>("/api/version").await
     }
+    /// Send a request to get all available node types.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the response cannot be deserialized into a vector of [`NodeType`] structs.
     pub async fn get_node_types(&self) -> Result<Vec<NodeType>, String> {
         self.get::<Vec<NodeType>>("/api/node_types").await
     }
+    /// Send a request to check if the bace url is reachable and corresponds to the opossum backend.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the request fails (e.g. the base url is not reachable)
+    /// - the response cannot be deserialized into a string
     pub async fn get_api_welcome(&self) -> Result<String, String> {
         self.get::<String>("/api/").await
     }
 
-    //Scenery api calls
+    // Scenery api calls
+
+    /// Send a request to delete the current scenery.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the request fails (e.g. the scenery is not valid)
     pub async fn delete_scenery(&self) -> Result<String, String> {
         self.delete::<String, String>("/api/scenery/", String::new())
             .await
@@ -160,6 +226,13 @@ impl HTTPAPIClient {
     //     self.get::<Vec<AnalyzerType>>("/api/scenery/analyzers")
     //         .await
     // }
+
+    /// Send a request to add an analyzer to the scenery.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the provided [`AnalyzerType`] cannot be serialized
     pub async fn post_add_analyzer(
         &self,
         analyzer: AnalyzerType,
@@ -176,10 +249,24 @@ impl HTTPAPIClient {
     //         .await
     // }
 
-    //Node api calls
+    /// Get all nodes in the current scenery
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the request fails (e.g. the scenery is not valid)
+    /// - the response cannot be deserialized into a vector of [`NodeInfo`] structs
     pub async fn get_nodes(&self) -> Result<Vec<NodeInfo>, String> {
         self.get::<Vec<NodeInfo>>("/api/scenery/nodes").await
     }
+    /// Send a request to add a node to the scenery.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the provided [`NodeType`] cannot be serialized
+    /// - the request fails (e.g. the node type is not valid)
+    /// - the response cannot be deserialized into the [`NodeInfo`] struct
     pub async fn post_add_node(
         &self,
         node_type: String,

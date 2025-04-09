@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
 use crate::{
     components::{
@@ -8,6 +9,7 @@ use crate::{
     CONTEXT_MENU, HTTP_API_CLIENT, NODES_STORE, OPOSSUM_UI_LOGS, ZOOM,
 };
 use dioxus::prelude::*;
+use opossum_backend::usize_to_f64;
 use uuid::Uuid;
 
 #[component]
@@ -16,7 +18,7 @@ pub fn Node(node: NodeElement) -> Element {
 
     let input_ports = node.input_ports();
     let output_ports = node.output_ports();
-    let port_height_factor = output_ports.len().max(input_ports.len()) as f64;
+    let port_height_factor = usize_to_f64(output_ports.len().max(input_ports.len()));
     let on_mouse_down = {
         let id = *node.id();
         let z_index = node.z_index();

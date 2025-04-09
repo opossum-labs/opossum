@@ -1,5 +1,6 @@
 use crate::{components::menu_bar::sub_menu_item::MenuItem, MAIN_WINDOW_SIZE};
 use dioxus::prelude::*;
+use opossum_backend::usize_to_f64;
 
 #[derive(Clone, PartialEq)]
 pub struct CxMenu {
@@ -10,7 +11,7 @@ pub struct CxMenu {
 impl CxMenu {
     #[must_use]
     pub const fn height(num_entries: usize) -> f64 {
-        22.4 * num_entries as f64 + 2. * Self::padding()
+        22.4 * usize_to_f64(num_entries) + 2. * Self::padding()
     }
     #[must_use]
     pub const fn width() -> f64 {
@@ -30,7 +31,7 @@ impl CxMenu {
     }
     #[must_use]
     pub fn new(x: f64, y: f64, entries: Vec<(String, Callback<Event<MouseData>>)>) -> Option<Self> {
-        if let Some(rect) = MAIN_WINDOW_SIZE.read().as_ref() {
+        MAIN_WINDOW_SIZE.read().as_ref().map(|rect| {
             let mut x = x;
             let mut y = y;
             if x + Self::width() > rect.width {
@@ -39,10 +40,8 @@ impl CxMenu {
             if y + Self::height(entries.len()) > rect.height {
                 y -= Self::height(entries.len());
             }
-            Some(Self { x, y, entries })
-        } else {
-            None
-        }
+            Self { x, y, entries }
+        })
     }
 }
 
