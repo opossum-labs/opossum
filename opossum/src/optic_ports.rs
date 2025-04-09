@@ -26,6 +26,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
 /// Type of an [`OpticPorts`]
+#[derive(Clone, Eq, PartialEq)]
 pub enum PortType {
     /// input port, receiving [`LightData`](crate::lightdata::LightData)
     Input,

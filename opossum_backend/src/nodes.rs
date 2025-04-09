@@ -14,10 +14,35 @@ use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, ToSchema)]
-struct NodeInfo {
+pub struct NodeInfo {
     uuid: Uuid,
     name: String,
     node_type: String,
+}
+
+impl NodeInfo {
+    #[must_use]
+    pub const fn new(uuid: Uuid, name: String, node_type: String) -> Self {
+        Self {
+            uuid,
+            name,
+            node_type,
+        }
+    }
+    #[must_use]
+    pub const fn uuid(&self) -> Uuid {
+        self.uuid
+    }
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn node_type(&self) -> &str {
+        &self.node_type
+    }
 }
 /// Get all nodes of a group node
 ///
@@ -84,7 +109,7 @@ async fn get_subnodes(
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
-struct NewNode {
+pub struct NewNode {
     node_type: String,
     gui_position: (i32, i32, i32),
 }
@@ -230,8 +255,8 @@ async fn patch_properties(
     Ok(web::Json(node_attr.clone()))
 }
 /// Connection Information
-#[derive(ToSchema, Serialize, Deserialize)]
-struct ConnectInfo {
+#[derive(ToSchema, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConnectInfo {
     /// UUID of the source node
     src_uuid: Uuid,
     /// name of the (outgoing) source port
@@ -242,6 +267,47 @@ struct ConnectInfo {
     target_port: String,
     /// geometric distance between nodes (optical axis) in meters.
     distance: f64,
+}
+
+impl ConnectInfo {
+    #[must_use]
+    pub const fn new(
+        src_uuid: Uuid,
+        src_port: String,
+        target_uuid: Uuid,
+        target_port: String,
+        distance: f64,
+    ) -> Self {
+        Self {
+            src_uuid,
+            src_port,
+            target_uuid,
+            target_port,
+            distance,
+        }
+    }
+    #[must_use]
+    pub const fn src_uuid(&self) -> Uuid {
+        self.src_uuid
+    }
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn src_port(&self) -> &str {
+        &self.src_port
+    }
+    #[must_use]
+    pub const fn target_uuid(&self) -> Uuid {
+        self.target_uuid
+    }
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn target_port(&self) -> &str {
+        &self.target_port
+    }
+    #[must_use]
+    pub const fn distance(&self) -> f64 {
+        self.distance
+    }
 }
 /// Connect two nodes
 ///
