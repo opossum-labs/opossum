@@ -80,10 +80,16 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
     let analyzers = data.document.lock().unwrap().analyzers();
     web::Json(analyzers)
 }
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct NewAnalyzerInfo {
     analyzer_type: AnalyzerType,
     gui_position: (i32, i32, i32),
+}
+
+impl NewAnalyzerInfo {
+    pub fn new(analyzer_type: AnalyzerType, gui_position: (i32, i32, i32)) -> Self {
+        Self { analyzer_type, gui_position }
+    }
 }
 #[utoipa::path(tag = "scenery", 
     responses((status = 200, description = "Analyzer", body = AnalyzerType))

@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use opossum_backend::AnalyzerType;
+use opossum_backend::{nodes::NewNode, scenery::NewAnalyzerInfo, AnalyzerType};
 use uuid::Uuid;
 
 use crate::{
@@ -75,8 +75,9 @@ pub fn use_delete_scenery() -> Callback<Event<MouseData>> {
 pub fn use_add_node(n_type: String, group_id: Uuid) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let n_type = n_type.clone();
+        let new_node_info = NewNode::new(n_type.clone(),(0,0,0));
         spawn(async move {
-            match HTTP_API_CLIENT().post_add_node(n_type, group_id).await {
+            match HTTP_API_CLIENT().post_add_node(new_node_info, group_id).await {
                 Ok(node_info) => match HTTP_API_CLIENT()
                     .get_node_properties(node_info.uuid())
                     .await
@@ -96,9 +97,10 @@ pub fn use_add_analyzer(
 ) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let analyzer_type = analyzer_type.clone();
+        let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type.clone(), (0, 0, 0));
         spawn(async move {
             match HTTP_API_CLIENT()
-                .post_add_analyzer(analyzer_type.clone())
+                .post_add_analyzer(new_analyzer_info)
                 .await
             {
                 Ok(_) => {

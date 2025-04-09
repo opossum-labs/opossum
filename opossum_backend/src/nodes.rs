@@ -108,10 +108,16 @@ async fn get_subnodes(
     Ok(Json(nodes_info))
 }
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
 pub struct NewNode {
     node_type: String,
     gui_position: (i32, i32, i32),
+}
+
+impl NewNode {
+    pub fn new(node_type: String, gui_position: (i32, i32, i32)) -> Self {
+        Self { node_type, gui_position }
+    }
 }
 
 /// Add a new node to a group node

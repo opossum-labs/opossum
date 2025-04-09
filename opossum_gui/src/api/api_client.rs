@@ -1,8 +1,5 @@
 use opossum_backend::{
-    error::ErrorResponse,
-    general::{NodeType, VersionInfo},
-    nodes::{ConnectInfo, NodeInfo},
-    AnalyzerType, NodeAttr,
+    error::ErrorResponse, general::{NodeType, VersionInfo}, nodes::{ConnectInfo, NewNode, NodeInfo}, scenery::NewAnalyzerInfo, NodeAttr
 };
 use reqwest::{Client, Response};
 use serde::{de::DeserializeOwned, Serialize};
@@ -235,9 +232,9 @@ impl HTTPAPIClient {
     /// - the provided [`AnalyzerType`] cannot be serialized
     pub async fn post_add_analyzer(
         &self,
-        analyzer: AnalyzerType,
-    ) -> Result<Vec<AnalyzerType>, String> {
-        self.post::<AnalyzerType, Vec<AnalyzerType>>("/api/scenery/analyzers", analyzer)
+        new_analyzer_info: NewAnalyzerInfo,
+    ) -> Result<Uuid, String> {
+        self.post::<NewAnalyzerInfo, Uuid>("/api/scenery/analyzers", new_analyzer_info)
             .await
     }
     // pub async fn get_analyzer_at_index(&self, index: usize) -> Result<AnalyzerType, String> {
@@ -269,12 +266,12 @@ impl HTTPAPIClient {
     /// - the response cannot be deserialized into the [`NodeInfo`] struct
     pub async fn post_add_node(
         &self,
-        node_type: String,
+        new_node_info: NewNode,
         group_id: Uuid,
     ) -> Result<NodeInfo, String> {
-        self.post::<String, NodeInfo>(
+        self.post::<NewNode, NodeInfo>(
             &format!("/api/scenery/{}/nodes", group_id.as_simple()),
-            node_type,
+            new_node_info,
         )
         .await
     }
