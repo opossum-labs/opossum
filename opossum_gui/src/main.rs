@@ -19,10 +19,10 @@ struct ApiResponse {
     opossum_version: String,
 }
 
-const MAIN_CSS: Asset = asset!(".\\assets\\main.css");
-const PLOTLY_JS: Asset = asset!(".\\assets\\plotly.js");
-const THREE_MOD_JS: Asset = asset!("./assets/three_mod.js");
-const ORBIT_CTRLS: Asset = asset!("./assets/orbitControls.js");
+const MAIN_CSS: Asset = asset!("./assets/main.css");
+// const PLOTLY_JS: Asset = asset!("./assets/plotly.js");
+// const THREE_MOD_JS: Asset = asset!("./assets/three_mod.js");
+// const ORBIT_CTRLS: Asset = asset!("./assets/orbitControls.js");
 fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
@@ -44,7 +44,7 @@ fn main() {
                     .with_background_color((37, 37, 37, 1))
                     // .with_menu(None)
                     .with_icon(
-                        Icon::from_path(".\\assets\\favicon.ico", None)
+                        Icon::from_path("./assets/favicon.ico", None)
                             .expect("Could not load icon"),
                     ),
             )
@@ -65,9 +65,9 @@ fn App() -> Element {
     let mut main_window = use_signal(|| None::<Rc<MountedData>>);
     rsx! {
         document::Link { rel: "stylesheet", href: MAIN_CSS }
-        document::Script { src: PLOTLY_JS }
-        document::Script { r#type: "module", src: ORBIT_CTRLS }
-        document::Script { r#type: "module", src: THREE_MOD_JS }
+        // document::Script { src: PLOTLY_JS }
+        // document::Script { r#type: "module", src: ORBIT_CTRLS }
+        // document::Script { r#type: "module", src: THREE_MOD_JS }
         div {
             class: "col-flex container",
             oncontextmenu: move |evt| {

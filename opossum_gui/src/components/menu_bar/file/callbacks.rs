@@ -28,7 +28,7 @@ pub fn use_save_file() -> Callback<Event<MouseData>> {
             .set_directory("/")
             .set_title("Save OPOSSUM setup file")
             .add_filter("Opossum setup file", &["opm"])
-            .pick_file();
+            .save_file();
     })
 }
 

@@ -1,5 +1,5 @@
 [application]
-icon = "icons/icon.ico"
+icon = "assets/favicon.ico"
 # App (Project) Name
 name = "opossum_gui"
 
@@ -23,6 +23,3 @@ script = []
 [bundle]
 identifier = "opossum"
 publisher= "thrill"
-# icon_path = "icons/icon.ico"
-# icon = ["assets/favicon.ico"]
-

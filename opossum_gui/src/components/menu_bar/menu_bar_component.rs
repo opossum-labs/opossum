@@ -8,7 +8,7 @@ use crate::components::menu_bar::{
     help::help_dropdown::HelpDropdownMenu,
 };
 
-const FAVICON: Asset = asset!(".\\assets\\favicon.ico");
+const FAVICON: Asset = asset!("./assets/favicon.ico");
 
 #[component]
 pub fn MenuBar() -> Element {

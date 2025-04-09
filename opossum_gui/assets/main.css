@@ -1,15 +1,14 @@
 /* styles.css */
-html, body {
+html,
+body {
     margin: 0;
     padding: 0;
     height: 100vh;
     width: 100vw;
     font-family: Arial;
-  }  
-
+}
 
 /* Linke Menüleiste */
-
 
 /* Rechte Drag-and-Drop-Fläche */
 .drop-container {
@@ -21,69 +20,73 @@ html, body {
     align-items: stretch;
     padding: 0;
 }
-.context-menu-item{
+
+.context-menu-item {
     margin: 1px;
-    padding: 3px 1px 0px 5px ;
+    padding: 3px 1px 0px 5px;
     text-decoration: none;
     display: flex;
     align-items: center;
-    position:relative;
+    position: relative;
     color: white;
     border-radius: 3px;
 }
 
-.context-menu-item:hover{
+.context-menu-item:hover {
     cursor: pointer;
     background-color: #525252;
 
 }
 
-#context-menu{
-    position: absolute; 
+#context-menu {
+    position: absolute;
     background: #303030;
-    border: 1px solid gray; 
-    box-shadow: 2px 2px 6px rgba(0,0,0,0.2); 
+    border: 1px solid gray;
+    box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
     border-radius: 3px;
     font-size: 10pt;
     z-index: 100000000000000;
 }
 
-.graph-hierarchy{
-    padding: 10px; 
-    display: flex; 
-    gap: 10px; 
+.graph-hierarchy {
+    padding: 10px;
+    display: flex;
+    gap: 10px;
 }
 
 .prevent-select {
-    -webkit-user-select: none; /* Safari */
-    -ms-user-select: none; /* IE 10 and IE 11 */
-    user-select: none; /* Standard syntax */
-  }
+    -webkit-user-select: none;
+    /* Safari */
+    -ms-user-select: none;
+    /* IE 10 and IE 11 */
+    user-select: none;
+    /* Standard syntax */
+}
 
-  #node_drop_down_menu{
+#node_drop_down_menu {
     max-height: 500px;
     overflow-y: scroll;
-  }
+}
 
-   /* width */
+/* width */
 ::-webkit-scrollbar {
     width: 10px;
-  }
-  
-  /* Track */
-  ::-webkit-scrollbar-track {
+}
+
+/* Track */
+::-webkit-scrollbar-track {
     background: rgb(39, 39, 39);
-  }
-  
-  /* Handle */
-  ::-webkit-scrollbar-thumb {
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
     background: rgb(82, 82, 82);
-  }
-  
-  /* Handle on hover */
-  ::-webkit-scrollbar-thumb:hover {
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
     background: rgb(100, 100, 100);
-  } 
+}
 
 
 /* Drag-Objekt */
@@ -92,19 +95,19 @@ html, body {
     position: relative;
 }
 
-.node-content{
+.node-content {
     position: relative;
     display: flex;
     flex-direction: column;
 }
 
-.node-body{
+.node-body {
     position: relative;
     width: 100%;
 }
 
-.node-header{
-    position:relative;
+.node-header {
+    position: relative;
     width: 100%;
     border-bottom: 1px solid rgb(120, 120, 120);
     display: flex;
@@ -116,36 +119,38 @@ html, body {
     color: white;
     overflow: hidden;
     white-space: nowrap;
-    white-space: nowrap; /* Kein Zeilenumbruch */
+    white-space: nowrap;
+    /* Kein Zeilenumbruch */
 }
 
 
-.node-header:active{
+.node-header:active {
     cursor: grabbing;
 }
 
-.node{
-    position:absolute;
+.node {
+    position: absolute;
     border: 1px solid rgb(120, 120, 120);
-    box-shadow: 10px 5px 5px rgba(0,0,0,0.3);
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3);
     border-radius: 10px 10px 4px 4px;
-    background-color: rgb(39, 39, 39);;
+    background-color: rgb(39, 39, 39);
+    ;
 }
 
-.node:not(.active-node):hover{
-    box-shadow: 10px 5px 5px rgba(0,0,0,0.3), 0 0 10px #87c5f8;
+.node:not(.active-node):hover {
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87c5f8;
 }
 
 
-.active-node{
-    box-shadow: 10px 5px 5px rgba(0,0,0,0.3),  0 0 10px #87c5f8;
+.active-node {
+    box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87c5f8;
 }
 
 .port {
     position: absolute;
     border-radius: 30%;
     border: 1px solid rgb(120, 120, 120);
-    cursor:pointer;
+    cursor: pointer;
 }
 
 .output-port {
@@ -156,12 +161,12 @@ html, body {
     background-color: rgb(197, 216, 255);
 }
 
-  .plottt{
+.plottt {
     height: 400px;
     width: 500px;
-  }
+}
 
-  .log-container {
+.log-container {
     z-index: 99999;
     height: 120px;
     overflow-y: scroll;
@@ -179,28 +184,29 @@ html, body {
 }
 
 .node_attributes {
-    position:relative;
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
 
 .node_attributes input {
-    position:relative;
+    position: relative;
     top: 2px;
 }
 
-path{
+path {
     /* stroke-width: 2; */
     transition: stroke-width 0.1s, filter 0.1s;
 }
-path:hover{
+
+path:hover {
     /* stroke-width: 3; */
     cursor: pointer;
     filter: drop-shadow(0px 0px 4px rgba(0, 0, 0, 0.5));
 }
 
-.canvas-container{
+.canvas-container {
     width: 100%;
     height: 100%;
     background-color: red;
@@ -212,8 +218,6 @@ canvas {
     height: 100%;
     display: block;
 }
-
-
 
 .property-config-window {
     max-width: 250px;
@@ -228,33 +232,37 @@ canvas {
 
 }
 
-
-.col-flex{
+.col-flex {
     display: flex;
     flex-grow: 1;
-    flex-direction: column; /* Stellt sicher, dass die Kinder untereinander liegen */
+    flex-direction: column;
+    /* Stellt sicher, dass die Kinder untereinander liegen */
 }
-.row-flex{
+
+.row-flex {
     display: flex;
     flex-grow: 1;
-    flex-direction: row; /* Stellt sicher, dass die Kinder untereinander liegen */
+    flex-direction: row;
+    /* Stellt sicher, dass die Kinder untereinander liegen */
 }
 
 /* Allgemeiner Stil für das Layout */
 .container {
     position: absolute;
     display: flex;
-    height: 100%; 
-    width: 100%; 
-    flex-direction: column; /* Stellt sicher, dass die Kinder untereinander liegen */
+    height: 100%;
+    width: 100%;
+    flex-direction: column;
+    /* Stellt sicher, dass die Kinder untereinander liegen */
     overflow: hidden;
 }
 
-.container > * {
-    width: 100%;  /* Alle direkten Kinder des Containers nehmen die volle Breite ein */
+.container>* {
+    width: 100%;
+    /* Alle direkten Kinder des Containers nehmen die volle Breite ein */
 }
 
-.title-bar{
+.title-bar {
     z-index: 1000000000;
     position: relative;
     max-height: 30px;
@@ -266,7 +274,7 @@ canvas {
 
 }
 
-#title-bar-icon{
+#title-bar-icon {
     padding: 0px 10px 0px 10px;
     background-color: rgb(105, 105, 105);
     margin: 0 5px 0 5px;
@@ -275,73 +283,83 @@ canvas {
     object-fit: contain;
 }
 
-.title-bar-item:hover{
+.title-bar-item:hover {
     background-color: rgb(56, 56, 56);
     border-radius: 4px;
 }
-.title-bar-submenu-item{
+
+.title-bar-submenu-item {
     cursor: pointer;
     color: white;
     padding: 0;
     text-decoration: none;
     display: block;
-    position:relative;
+    position: relative;
 }
 
-
-.title-bar-item{
+.title-bar-item {
     padding: 5px 10px 5px 10px;
     margin-top: 10px;
     margin-bottom: 10px;
     color: rgb(207, 207, 207);
-    justify-content: center;    
+    justify-content: center;
     font-size: 10pt;
-    cursor:context-menu;    
+    cursor: context-menu;
 }
 
- .dropbtn {
+.dropbtn {
     background-color: #04AA6D;
     color: white;
     padding: 16px;
     font-size: 10pt;
     border: none;
-  }
-  
-  .dropdown {
+}
+
+.dropdown {
     position: relative;
     display: inline-block;
-  }
-  .dropdown-content{
-      background-color: #303030;
-      min-width: 160px;
-      box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-      font-size: 10pt;
-      border-radius: 5px;
-      border: 1px solid rgb(100, 100, 100);
-  }
-  .dropdown-content:not(.submenu) {
+}
+
+.dropdown-content {
+    background-color: #303030;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+    font-size: 10pt;
+    border-radius: 5px;
+    border: 1px solid rgb(100, 100, 100);
+}
+
+.dropdown-content:not(.submenu) {
     display: none;
     position: absolute;
-  }
-  
-  .dropdown-content a {
+}
+
+.dropdown-content a {
     position: relative;
     color: white;
     padding: 10px 10px;
     text-decoration: none;
     display: block;
-  }
-  
-  .dropdown-content a:hover {background-color: #5a5a5a;}
-  
-  .dropdown:hover .dropdown-content:not(.submenu) {display: block;}
-  
-  .dropdown:hover .dropbtn {background-color: #3e8e41;} 
+}
 
-  .dropdown-content .expand:hover .submenu{display:block;}
+.dropdown-content a:hover {
+    background-color: #5a5a5a;
+}
+
+.dropdown:hover .dropdown-content:not(.submenu) {
+    display: block;
+}
+
+.dropdown:hover .dropbtn {
+    background-color: #3e8e41;
+}
+
+.dropdown-content .expand:hover .submenu {
+    display: block;
+}
 
 .dropdown-content .submenu {
-    display:none;
+    display: none;
     left: 100%;
     top: -1px;
     margin: 0;
@@ -355,17 +373,19 @@ canvas {
     padding: 10px 10px;
     text-decoration: none;
     display: block;
-  }
+}
 
-.title-bar-dropdown-content{
+.title-bar-dropdown-content {
     margin: 5px 0px 5px -10px;
 }
 
-.dropdown:hover .title-bar-dropdown-content:not(.submenu) {display: block;} 
+.dropdown:hover .title-bar-dropdown-content:not(.submenu) {
+    display: block;
+}
 
-.title-bar-control{
-    float:right;
-    display:flex;
+.title-bar-control {
+    float: right;
+    display: flex;
     align-items: center;
 }
 
@@ -374,9 +394,10 @@ canvas {
     max-height: 100%;
     align-items: center;
 }
-#menu-window-events{
-    display:flex;
-    flex-grow:1;
+
+#menu-window-events {
+    display: flex;
+    flex-grow: 1;
 }
 
 /* Die rechte Gruppe nach rechts schieben */
@@ -386,13 +407,15 @@ canvas {
     align-items: center;
 }
 
-#minimize, #maximize, #restore #close{
+#minimize,
+#maximize,
+#restore #close {
     max-height: 90%;
 }
 
-#about-window{
+#about-window {
     top: 0;
-    left:0;
+    left: 0;
     position: absolute;
     background-color: rgba(155, 155, 155, 0.826);
     height: 100vh;
@@ -402,7 +425,7 @@ canvas {
     justify-content: center;
 }
 
-#about-info{
+#about-info {
     position: relative;
     background-color: rgb(233, 233, 233);
     height: 40%;
@@ -416,12 +439,12 @@ canvas {
     border-radius: 20px;
 }
 
-#about-logo{
+#about-logo {
     position: relative;
     width: 100%;
 }
 
-#about-close{
+#about-close {
     position: absolute;
     top: 10px;
     right: 10px;
@@ -433,6 +456,7 @@ canvas {
     align-items: center;
     justify-content: center;
 }
-#about-close:hover{
+
+#about-close:hover {
     background-color: rgb(211, 211, 211);
 }

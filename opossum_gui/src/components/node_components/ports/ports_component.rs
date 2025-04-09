@@ -189,7 +189,7 @@ pub fn NodePorts(
         for (i , out_port) in output_ports.iter().enumerate() {
             {
                 let port_y = usize_to_f64(i).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
-                let port_x = usize_to_f64(i).mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
+                let port_x = node_width - port_w_h / 2. - border_radius / 2.;
                 rsx! {
                     NodePort {
                         port_w_h,
