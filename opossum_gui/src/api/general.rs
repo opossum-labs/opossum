@@ -1,0 +1,35 @@
+//! General api calls
+
+use super::http_client::HTTPAPIClient;
+use opossum_backend::general::{NodeType, VersionInfo};
+
+/// Send reqeust to get the version of the opossum backend and the opossum library.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the `VersionInfo` struct cannot be deserialized
+pub async fn get_version(client: &HTTPAPIClient) -> Result<VersionInfo, String> {
+    client.get::<VersionInfo>("/api/version").await
+}
+
+/// Send a request to get all available node types.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the response cannot be deserialized into a vector of [`NodeType`] structs.
+pub async fn get_node_types(client: &HTTPAPIClient) -> Result<Vec<NodeType>, String> {
+    client.get::<Vec<NodeType>>("/api/node_types").await
+}
+
+/// Send a request to check if the bace url is reachable and corresponds to the opossum backend.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the request fails (e.g. the base url is not reachable)
+/// - the response cannot be deserialized into a string
+pub async fn get_api_welcome(client: &HTTPAPIClient) -> Result<String, String> {
+    client.get::<String>("/api/").await
+}

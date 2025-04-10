@@ -1,13 +1,12 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::{api::api_client, HTTP_API_CLIENT};
+use crate::{api, HTTP_API_CLIENT};
 use dioxus::prelude::*;
 
 const LOGO: Asset = asset!(".\\assets\\LogoBanner.svg");
 
 #[component]
 pub fn About(mut show_about: Signal<bool>) -> Element {
-    let future =
-        use_resource(move || async move { api_client::get_version(&HTTP_API_CLIENT()).await });
+    let future = use_resource(move || async move { api::get_version(&HTTP_API_CLIENT()).await });
 
     match &*future.read_unchecked() {
         Some(Ok(response)) => rsx! {

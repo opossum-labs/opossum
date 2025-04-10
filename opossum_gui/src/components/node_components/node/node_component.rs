@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
 use crate::{
-    api::api_client,
+    api::{self},
     components::{
         context_menu::cx_menu::CxMenu,
         graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader},
@@ -88,7 +88,7 @@ pub fn use_delete_node(node_id: Uuid) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let node_id = node_id;
         spawn(async move {
-            match api_client::delete_node(&HTTP_API_CLIENT(), node_id).await {
+            match api::delete_node(&HTTP_API_CLIENT(), node_id).await {
                 Ok(id_vec) => {
                     for id in &id_vec {
                         NODES_STORE.write().delete_node(*id);
