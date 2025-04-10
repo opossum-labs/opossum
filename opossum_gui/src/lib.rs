@@ -1,4 +1,4 @@
-use api::api_client::HTTPAPIClient;
+use api::http_client::HTTPAPIClient;
 use components::{
     context_menu::cx_menu::CxMenu,
     logger::Logs,

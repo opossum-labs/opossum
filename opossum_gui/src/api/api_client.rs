@@ -1,333 +1,174 @@
 use opossum_backend::{
-    error::ErrorResponse, general::{NodeType, VersionInfo}, nodes::{ConnectInfo, NewNode, NodeInfo}, scenery::NewAnalyzerInfo, NodeAttr
+    general::{NodeType, VersionInfo},
+    nodes::{ConnectInfo, NewNode, NodeInfo},
+    scenery::NewAnalyzerInfo,
+    NodeAttr,
 };
-use reqwest::{Client, Response};
-use serde::{de::DeserializeOwned, Serialize};
-use serde_json::json;
+
+use super::http_client::HTTPAPIClient;
 use uuid::Uuid;
 
-#[derive(Clone)]
-pub struct HTTPAPIClient {
-    client: Client,
-    base_url: String,
+//General api calls
+
+/// Send reqeust to get the version of the opossum backend and the opossum library.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the `VersionInfo` struct cannot be deserialized
+pub async fn get_version(client: &HTTPAPIClient) -> Result<VersionInfo, String> {
+    client.get::<VersionInfo>("/api/version").await
+}
+/// Send a request to get all available node types.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the response cannot be deserialized into a vector of [`NodeType`] structs.
+pub async fn get_node_types(client: &HTTPAPIClient) -> Result<Vec<NodeType>, String> {
+    client.get::<Vec<NodeType>>("/api/node_types").await
+}
+/// Send a request to check if the bace url is reachable and corresponds to the opossum backend.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the request fails (e.g. the base url is not reachable)
+/// - the response cannot be deserialized into a string
+pub async fn get_api_welcome(client: &HTTPAPIClient) -> Result<String, String> {
+    client.get::<String>("/api/").await
 }
 
-impl Default for HTTPAPIClient {
-    fn default() -> Self {
-        Self::new()
-    }
+// Scenery api calls
+
+/// Send a request to delete the current scenery.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the request fails (e.g. the scenery is not valid)
+pub async fn delete_scenery(client: &HTTPAPIClient) -> Result<String, String> {
+    client
+        .delete::<String, String>("/api/scenery/", String::new())
+        .await
 }
+// pub async fn get_analyzers(&self) -> Result<Vec<AnalyzerType>, String> {
+//     self.get::<Vec<AnalyzerType>>("/api/scenery/analyzers")
+//         .await
+// }
 
-impl HTTPAPIClient {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-            base_url: "http://localhost:8001".to_string(),
-        }
-    }
-    #[must_use]
-    pub const fn client(&self) -> &Client {
-        &self.client
-    }
-    #[must_use]
-    pub const fn base_url(&self) -> &String {
-        &self.base_url
-    }
-    #[must_use]
-    pub fn url(&self, route: &str) -> String {
-        format!("{}{}", self.base_url, route)
-    }
-    /// Send a POST reqeust to the given route with the provided body.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the request fails or if the response cannot be deserialized into the expected type.
-    pub async fn post<B: Serialize + DeserializeOwned + Clone, R: Serialize + DeserializeOwned>(
-        &self,
-        route: &str,
-        body: B,
-    ) -> Result<R, String> {
-        let res = self.client().post(self.url(route)).json(&body).send().await;
-        if let Ok(response) = res {
-            self.process_response::<R>(response).await
-        } else {
-            Err(format!("Error on post request on route: \"{route}\""))
-        }
-    }
-    /// Send a PUT request to the given route with the provided body.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the request fails (e.g. the route is not reachable)
-    /// - the response cannot be deserialized into the expected type
-    pub async fn put<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
-        &self,
-        route: &str,
-        body: B,
-    ) -> Result<R, String> {
-        let res = self.client().put(self.url(route)).json(&body).send().await;
-        if let Ok(response) = res {
-            self.process_response::<R>(response).await
-        } else {
-            Err(format!("Error on put request on route: \"{route}\""))
-        }
-    }
+/// Send a request to add an analyzer to the scenery.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the provided [`AnalyzerType`] cannot be serialized
+pub async fn post_add_analyzer(
+    client: &HTTPAPIClient,
+    new_analyzer_info: NewAnalyzerInfo,
+) -> Result<Uuid, String> {
+    client
+        .post::<NewAnalyzerInfo, Uuid>("/api/scenery/analyzers", new_analyzer_info)
+        .await
+}
+// pub async fn get_analyzer_at_index(&self, index: usize) -> Result<AnalyzerType, String> {
+//     self.get::<AnalyzerType>(&format!("/api/scenery/analyzers/{}", index))
+//         .await
+// }
+// pub async fn delete_analyzer_at_index(&self, index: usize) -> Result<String, String> {
+//     self.delete::<String>(&format!("/api/scenery/analyzers/{}", index), index)
+//         .await
+// }
 
-    /// Send a PATCH request to the given route with the provided body.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    ///
-    /// - the request fails (e.g. the route is not reachable)
-    /// - the response cannot be deserialized into the expected type
-    pub async fn patch<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
-        &self,
-        route: &str,
-        body: B,
-    ) -> Result<R, String> {
-        let res = self
-            .client()
-            .patch(self.url(route))
-            .json(&body)
-            .send()
-            .await;
-        if let Ok(response) = res {
-            self.process_response::<R>(response).await
-        } else {
-            Err(format!("Error on patch request on route: \"{route}\""))
-        }
-    }
-
-    /// Send a DELETE request to the given route with the provided body.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    ///
-    /// - the request fails (e.g. the route is not reachable)
-    /// - the response cannot be deserialized into the expected type
-    pub async fn delete<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
-        &self,
-        route: &str,
-        body: B,
-    ) -> Result<R, String> {
-        let res = self
-            .client()
-            .delete(self.url(route))
-            .json(&body)
-            .send()
-            .await;
-        if let Ok(response) = res {
-            self.process_response::<R>(response).await
-        } else {
-            Err(format!("Error on delete request from route: \"{route}\""))
-        }
-    }
-
-    /// Send a GET request to the given route.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the request fails (e.g. the route is not reachable)
-    /// - the response cannot be deserialized into the expected type
-    pub async fn get<R: Serialize + DeserializeOwned>(&self, route: &str) -> Result<R, String> {
-        let res = self.client().get(self.url(route)).send().await;
-        if let Ok(response) = res {
-            self.process_response::<R>(response).await
-        } else {
-            Err(format!("Error on get request from route: \"{route}\""))
-        }
-    }
-
-    /// Process the response from the server.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the response cannot be deserialized into the expected type
-    pub async fn process_response<R: Serialize + DeserializeOwned>(
-        &self,
-        res: Response,
-    ) -> Result<R, String> {
-        if res.status().is_success() {
-            if res.content_length().map_or_else(|| 0, |n| n) > 0 {
-                (res.json::<R>().await).map_or_else(
-                    |_| Err("Error deserializing response to requested struct!".to_string()),
-                    |res| Ok(res),
-                )
-            } else {
-                // just to receive a value i nothing has been sent back
-                let json_val = json!("");
-                serde_json::from_value(json_val).map_or_else(|_| Err("Error deserializing default string if no content returns!".to_string()), |deserialized| Ok(deserialized))
-            }
-        } else if let Ok(err_res) = res.json::<ErrorResponse>().await {
-            Err(format!(
-                "Error {}: {} - {}",
-                err_res.status(),
-                err_res.category(),
-                err_res.message()
-            ))
-        } else {
-            Err("Error deserializing response to ErrorResponse struct!".to_string())
-        }
-    }
-
-    //General api calls
-
-    /// Send reqeust to get the version of the opossum backend and the opossum library.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the `VersionInfo` struct cannot be deserialized
-    pub async fn get_version(&self) -> Result<VersionInfo, String> {
-        self.get::<VersionInfo>("/api/version").await
-    }
-    /// Send a request to get all available node types.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the response cannot be deserialized into a vector of [`NodeType`] structs.
-    pub async fn get_node_types(&self) -> Result<Vec<NodeType>, String> {
-        self.get::<Vec<NodeType>>("/api/node_types").await
-    }
-    /// Send a request to check if the bace url is reachable and corresponds to the opossum backend.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the request fails (e.g. the base url is not reachable)
-    /// - the response cannot be deserialized into a string
-    pub async fn get_api_welcome(&self) -> Result<String, String> {
-        self.get::<String>("/api/").await
-    }
-
-    // Scenery api calls
-
-    /// Send a request to delete the current scenery.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the request fails (e.g. the scenery is not valid)
-    pub async fn delete_scenery(&self) -> Result<String, String> {
-        self.delete::<String, String>("/api/scenery/", String::new())
-            .await
-    }
-    // pub async fn get_analyzers(&self) -> Result<Vec<AnalyzerType>, String> {
-    //     self.get::<Vec<AnalyzerType>>("/api/scenery/analyzers")
-    //         .await
-    // }
-
-    /// Send a request to add an analyzer to the scenery.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the provided [`AnalyzerType`] cannot be serialized
-    pub async fn post_add_analyzer(
-        &self,
-        new_analyzer_info: NewAnalyzerInfo,
-    ) -> Result<Uuid, String> {
-        self.post::<NewAnalyzerInfo, Uuid>("/api/scenery/analyzers", new_analyzer_info)
-            .await
-    }
-    // pub async fn get_analyzer_at_index(&self, index: usize) -> Result<AnalyzerType, String> {
-    //     self.get::<AnalyzerType>(&format!("/api/scenery/analyzers/{}", index))
-    //         .await
-    // }
-    // pub async fn delete_analyzer_at_index(&self, index: usize) -> Result<String, String> {
-    //     self.delete::<String>(&format!("/api/scenery/analyzers/{}", index), index)
-    //         .await
-    // }
-
-    /// Get all nodes in the current scenery
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the request fails (e.g. the scenery is not valid)
-    /// - the response cannot be deserialized into a vector of [`NodeInfo`] structs
-    pub async fn get_nodes(&self) -> Result<Vec<NodeInfo>, String> {
-        self.get::<Vec<NodeInfo>>("/api/scenery/nodes").await
-    }
-    /// Send a request to add a node to the scenery.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the provided [`NodeType`] cannot be serialized
-    /// - the request fails (e.g. the node type is not valid)
-    /// - the response cannot be deserialized into the [`NodeInfo`] struct
-    pub async fn post_add_node(
-        &self,
-        new_node_info: NewNode,
-        group_id: Uuid,
-    ) -> Result<NodeInfo, String> {
-        self.post::<NewNode, NodeInfo>(
+/// Get all nodes in the current scenery
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the request fails (e.g. the scenery is not valid)
+/// - the response cannot be deserialized into a vector of [`NodeInfo`] structs
+pub async fn get_nodes(client: &HTTPAPIClient) -> Result<Vec<NodeInfo>, String> {
+    client.get::<Vec<NodeInfo>>("/api/scenery/nodes").await
+}
+/// Send a request to add a node to the scenery.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the provided [`NodeType`] cannot be serialized
+/// - the request fails (e.g. the node type is not valid)
+/// - the response cannot be deserialized into the [`NodeInfo`] struct
+pub async fn post_add_node(
+    client: &HTTPAPIClient,
+    new_node_info: NewNode,
+    group_id: Uuid,
+) -> Result<NodeInfo, String> {
+    client
+        .post::<NewNode, NodeInfo>(
             &format!("/api/scenery/{}/nodes", group_id.as_simple()),
             new_node_info,
         )
         .await
-    }
-    /// Delete a node and all its connections.
-    ///
-    /// This function will return a vector of [`Uuid`]s that were actually deleted. This could include
-    /// the provided [`Uuid`] and possibly any other nodes that reference it.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the provided [`Uuid`] cannot be serialized or found
-    /// - the returned response cannot be deserialized into a vector of [`Uuid`]
-    pub async fn delete_node(&self, id: Uuid) -> Result<Vec<Uuid>, String> {
-        self.delete::<String, Vec<Uuid>>(
+}
+/// Delete a node and all its connections.
+///
+/// This function will return a vector of [`Uuid`]s that were actually deleted. This could include
+/// the provided [`Uuid`] and possibly any other nodes that reference it.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the provided [`Uuid`] cannot be serialized or found
+/// - the returned response cannot be deserialized into a vector of [`Uuid`]
+pub async fn delete_node(client: &HTTPAPIClient, id: Uuid) -> Result<Vec<Uuid>, String> {
+    client
+        .delete::<String, Vec<Uuid>>(
             &format!("/api/scenery/{}/nodes", id.as_simple()),
             String::new(),
         )
         .await
-    }
-    /// Get the properties of a node.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the provided [`Uuid`] cannot be serialized or found
-    /// - the properties cannot be deserialized into the [`NodeAttr`] struct
-    pub async fn get_node_properties(&self, uuid: Uuid) -> Result<NodeAttr, String> {
-        self.get::<NodeAttr>(&format!("/api/scenery/{}/properties", uuid.as_simple()))
-            .await
-    }
-    /// Connect two nodes.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
-    pub async fn post_add_connection(
-        &self,
-        connection: ConnectInfo,
-    ) -> Result<ConnectInfo, String> {
-        self.post::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
-            .await
-    }
-    /// Delete a connection between two nodes.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
-    pub async fn delete_connection(&self, connection: ConnectInfo) -> Result<ConnectInfo, String> {
-        self.delete::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
-            .await
-    }
-    // pub async fn put_node_properties(&self, uuid: Uuid, props: NodeAttr) -> Result<NodeAttr, String> {
-    //     self.put::<NodeAttr, NodeAttr>(&format!("/api/scenery/nodes/{}", uuid.as_simple().to_string()), props.serialize(serializer)).await
-    // }
-    // pub async fn patch_node_properties(&self, uuid: Uuid, props: NodeAttr) -> Result<NodeAttr, String> {
-    //     self.put::<NodeAttr, NodeAttr>(&format!("/api/scenery/nodes/{}", uuid.as_simple().to_string()), props.serialize(serializer)).await
-    // }
 }
+/// Get the properties of a node.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the provided [`Uuid`] cannot be serialized or found
+/// - the properties cannot be deserialized into the [`NodeAttr`] struct
+pub async fn get_node_properties(client: &HTTPAPIClient, uuid: Uuid) -> Result<NodeAttr, String> {
+    client
+        .get::<NodeAttr>(&format!("/api/scenery/{}/properties", uuid.as_simple()))
+        .await
+}
+/// Connect two nodes.
+///
+/// # Errors
+///
+/// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
+pub async fn post_add_connection(
+    client: &HTTPAPIClient,
+    connection: ConnectInfo,
+) -> Result<ConnectInfo, String> {
+    client
+        .post::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
+        .await
+}
+/// Delete a connection between two nodes.
+///
+/// # Errors
+///
+/// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
+pub async fn delete_connection(
+    client: &HTTPAPIClient,
+    connection: ConnectInfo,
+) -> Result<ConnectInfo, String> {
+    client
+        .delete::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
+        .await
+}
+// pub async fn put_node_properties(&self, uuid: Uuid, props: NodeAttr) -> Result<NodeAttr, String> {
+//     self.put::<NodeAttr, NodeAttr>(&format!("/api/scenery/nodes/{}", uuid.as_simple().to_string()), props.serialize(serializer)).await
+// }
+// pub async fn patch_node_properties(&self, uuid: Uuid, props: NodeAttr) -> Result<NodeAttr, String> {
+//     self.put::<NodeAttr, NodeAttr>(&format!("/api/scenery/nodes/{}", uuid.as_simple().to_string()), props.serialize(serializer)).await
+// }

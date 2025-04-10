@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
+    api::api_client,
     components::{
         context_menu::cx_menu::CxMenu,
         node_components::node_drag_drop_container::drag_drop_container::ZoomShift,
@@ -410,7 +411,7 @@ pub fn use_delete_edge(conn_info: ConnectInfo) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let conn_info = conn_info.clone();
         spawn(async move {
-            match HTTP_API_CLIENT().delete_connection(conn_info).await {
+            match api_client::delete_connection(&HTTP_API_CLIENT(), conn_info).await {
                 Ok(conn_info) => {
                     EDGES.write().remove_edge(&conn_info);
                     OPOSSUM_UI_LOGS

@@ -10,14 +10,7 @@ use opossum_gui::{
     },
     MainWindowSize, CONTEXT_MENU, MAIN_WINDOW_SIZE,
 };
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-#[derive(Deserialize, Serialize, Debug)]
-struct ApiResponse {
-    backend_version: String,
-    opossum_version: String,
-}
 
 const MAIN_CSS: Asset = asset!("./assets/main.css");
 // const PLOTLY_JS: Asset = asset!("./assets/plotly.js");
@@ -44,8 +37,7 @@ fn main() {
                     .with_background_color((37, 37, 37, 1))
                     // .with_menu(None)
                     .with_icon(
-                        Icon::from_path("./assets/favicon.ico", None)
-                            .expect("Could not load icon"),
+                        Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
                     ),
             )
             .launch(App);

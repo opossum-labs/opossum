@@ -9,7 +9,7 @@ use opossum_backend::{
 };
 use uuid::Uuid;
 
-use crate::{ACTIVE_NODE, EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM};
+use crate::{api::api_client, ACTIVE_NODE, EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM};
 
 use super::{
     node_drag_drop_container::drag_drop_container::ZoomShift, ports::ports_component::Ports,
@@ -107,7 +107,7 @@ impl NodesStore {
         });
 
         spawn(async move {
-            if let Ok(node_attr) = HTTP_API_CLIENT().get_node_properties(id).await {
+            if let Ok(node_attr) = api_client::get_node_properties(&HTTP_API_CLIENT(), id).await {
                 let mut active_node = ACTIVE_NODE.write();
                 *active_node = Some(node_attr);
             }

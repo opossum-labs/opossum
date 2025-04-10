@@ -87,8 +87,12 @@ pub struct NewAnalyzerInfo {
 }
 
 impl NewAnalyzerInfo {
-    pub fn new(analyzer_type: AnalyzerType, gui_position: (i32, i32, i32)) -> Self {
-        Self { analyzer_type, gui_position }
+    #[must_use]
+    pub const fn new(analyzer_type: AnalyzerType, gui_position: (i32, i32, i32)) -> Self {
+        Self {
+            analyzer_type,
+            gui_position,
+        }
     }
 }
 #[utoipa::path(tag = "scenery", 

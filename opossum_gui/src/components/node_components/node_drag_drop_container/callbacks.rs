@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use super::{drag_drop_container::ZoomShift, DraggedNode, NodeOffset};
 use crate::{
-    components::node_components::edges::edges_component::EdgeCreation, EDGES, HTTP_API_CLIENT,
-    NODES_STORE, OPOSSUM_UI_LOGS, ZOOM,
+    api::api_client, components::node_components::edges::edges_component::EdgeCreation, EDGES,
+    HTTP_API_CLIENT, NODES_STORE, OPOSSUM_UI_LOGS, ZOOM,
 };
 use dioxus::prelude::*;
 
@@ -94,7 +94,7 @@ pub fn use_on_key_down() -> impl FnMut(Event<KeyboardData>) {
         if e.data().key() == Key::Delete {
             if let Some(active_node_id) = NODES_STORE.read().get_active_node_id() {
                 spawn(async move {
-                    match HTTP_API_CLIENT().delete_node(active_node_id).await {
+                    match api_client::delete_node(&HTTP_API_CLIENT(), active_node_id).await {
                         Ok(id_vec) => {
                             for id in &id_vec {
                                 NODES_STORE.write().delete_node(*id);

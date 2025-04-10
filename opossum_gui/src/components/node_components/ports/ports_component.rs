@@ -3,6 +3,7 @@ use opossum_backend::{nodes::ConnectInfo, usize_to_f64, PortType};
 use uuid::Uuid;
 
 use crate::{
+    api::api_client,
     components::node_components::{
         edges::edges_component::{Edge, EdgeCreation},
         NodeOffset,
@@ -120,7 +121,7 @@ pub fn NodePort(
                         target_port.clone(),
                         0.,
                     );
-                    match HTTP_API_CLIENT().post_add_connection(conn_info).await {
+                    match api_client::post_add_connection(&HTTP_API_CLIENT(), conn_info).await {
                         Ok(conn_info) => EDGES.write().add_edge(Edge::new(
                             conn_info,
                             src_x,

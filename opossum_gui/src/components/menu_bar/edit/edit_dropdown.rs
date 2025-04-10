@@ -3,6 +3,7 @@ use opossum_backend::{nodes::NewNode, scenery::NewAnalyzerInfo, AnalyzerType};
 use uuid::Uuid;
 
 use crate::{
+    api::api_client,
     components::{
         menu_bar::{edit::node_dropdown_menu::NodeDropDownMenu, sub_menu_item::MenuItem},
         node_components::NodesStore,
@@ -14,7 +15,7 @@ use crate::{
 pub fn EditDropdownMenu() -> Element {
     let future = use_resource({
         move || async move {
-            match HTTP_API_CLIENT().get_node_types().await {
+            match api_client::get_node_types(&HTTP_API_CLIENT()).await {
                 Ok(node_types) => Some(node_types),
                 Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -59,7 +60,7 @@ pub fn EditDropdownMenu() -> Element {
 pub fn use_delete_scenery() -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         spawn(async move {
-            match HTTP_API_CLIENT().delete_scenery().await {
+            match api_client::delete_scenery(&HTTP_API_CLIENT()).await {
                 Ok(_) => {
                     NODES_STORE.write().delete_nodes();
                     OPOSSUM_UI_LOGS
@@ -75,16 +76,17 @@ pub fn use_delete_scenery() -> Callback<Event<MouseData>> {
 pub fn use_add_node(n_type: String, group_id: Uuid) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let n_type = n_type.clone();
-        let new_node_info = NewNode::new(n_type.clone(),(0,0,0));
+        let new_node_info = NewNode::new(n_type, (0, 0, 0));
         spawn(async move {
-            match HTTP_API_CLIENT().post_add_node(new_node_info, group_id).await {
-                Ok(node_info) => match HTTP_API_CLIENT()
-                    .get_node_properties(node_info.uuid())
-                    .await
-                {
-                    Ok(node_attr) => NODES_STORE.write().add_node(&node_info, &node_attr),
-                    Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                },
+            match api_client::post_add_node(&HTTP_API_CLIENT(), new_node_info, group_id).await {
+                Ok(node_info) => {
+                    match api_client::get_node_properties(&HTTP_API_CLIENT(), node_info.uuid())
+                        .await
+                    {
+                        Ok(node_attr) => NODES_STORE.write().add_node(&node_info, &node_attr),
+                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                    }
+                }
                 Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
             }
         });
@@ -99,10 +101,7 @@ pub fn use_add_analyzer(
         let analyzer_type = analyzer_type.clone();
         let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type.clone(), (0, 0, 0));
         spawn(async move {
-            match HTTP_API_CLIENT()
-                .post_add_analyzer(new_analyzer_info)
-                .await
-            {
+            match api_client::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer_info).await {
                 Ok(_) => {
                     OPOSSUM_UI_LOGS
                         .write()
