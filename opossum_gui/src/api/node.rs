@@ -4,7 +4,7 @@ use opossum_backend::{
 };
 use uuid::Uuid;
 
-use super::http_client::HTTPAPIClient;
+use super::http_client::HTTPClient;
 
 /// Get all nodes in the current scenery
 ///
@@ -13,7 +13,7 @@ use super::http_client::HTTPAPIClient;
 /// This function will return an error if
 /// - the request fails (e.g. the scenery is not valid)
 /// - the response cannot be deserialized into a vector of [`NodeInfo`] structs
-pub async fn get_nodes(client: &HTTPAPIClient) -> Result<Vec<NodeInfo>, String> {
+pub async fn get_nodes(client: &HTTPClient) -> Result<Vec<NodeInfo>, String> {
     client.get::<Vec<NodeInfo>>("/api/scenery/nodes").await
 }
 /// Send a request to add a node to the scenery.
@@ -25,7 +25,7 @@ pub async fn get_nodes(client: &HTTPAPIClient) -> Result<Vec<NodeInfo>, String> 
 /// - the request fails (e.g. the node type is not valid)
 /// - the response cannot be deserialized into the [`NodeInfo`] struct
 pub async fn post_add_node(
-    client: &HTTPAPIClient,
+    client: &HTTPClient,
     new_node_info: NewNode,
     group_id: Uuid,
 ) -> Result<NodeInfo, String> {
@@ -46,7 +46,7 @@ pub async fn post_add_node(
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized or found
 /// - the returned response cannot be deserialized into a vector of [`Uuid`]
-pub async fn delete_node(client: &HTTPAPIClient, id: Uuid) -> Result<Vec<Uuid>, String> {
+pub async fn delete_node(client: &HTTPClient, id: Uuid) -> Result<Vec<Uuid>, String> {
     client
         .delete::<String, Vec<Uuid>>(
             &format!("/api/scenery/{}/nodes", id.as_simple()),
@@ -61,7 +61,7 @@ pub async fn delete_node(client: &HTTPAPIClient, id: Uuid) -> Result<Vec<Uuid>, 
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized or found
 /// - the properties cannot be deserialized into the [`NodeAttr`] struct
-pub async fn get_node_properties(client: &HTTPAPIClient, uuid: Uuid) -> Result<NodeAttr, String> {
+pub async fn get_node_properties(client: &HTTPClient, uuid: Uuid) -> Result<NodeAttr, String> {
     client
         .get::<NodeAttr>(&format!("/api/scenery/{}/properties", uuid.as_simple()))
         .await
@@ -72,7 +72,7 @@ pub async fn get_node_properties(client: &HTTPAPIClient, uuid: Uuid) -> Result<N
 ///
 /// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
 pub async fn post_add_connection(
-    client: &HTTPAPIClient,
+    client: &HTTPClient,
     connection: ConnectInfo,
 ) -> Result<ConnectInfo, String> {
     client
@@ -85,7 +85,7 @@ pub async fn post_add_connection(
 ///
 /// This function will return an error if the provided [`ConnectInfo`] cannot be serialized or if the request fails.
 pub async fn delete_connection(
-    client: &HTTPAPIClient,
+    client: &HTTPClient,
     connection: ConnectInfo,
 ) -> Result<ConnectInfo, String> {
     client

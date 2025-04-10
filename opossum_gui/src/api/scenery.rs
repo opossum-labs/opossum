@@ -3,7 +3,7 @@
 use opossum_backend::scenery::NewAnalyzerInfo;
 use uuid::Uuid;
 
-use super::http_client::HTTPAPIClient;
+use super::http_client::HTTPClient;
 
 /// Send a request to delete the current scenery.
 ///
@@ -11,7 +11,7 @@ use super::http_client::HTTPAPIClient;
 ///
 /// This function will return an error if
 /// - the request fails (e.g. the scenery is not valid)
-pub async fn delete_scenery(client: &HTTPAPIClient) -> Result<String, String> {
+pub async fn delete_scenery(client: &HTTPClient) -> Result<String, String> {
     client
         .delete::<String, String>("/api/scenery/", String::new())
         .await
@@ -28,7 +28,7 @@ pub async fn delete_scenery(client: &HTTPAPIClient) -> Result<String, String> {
 /// This function will return an error if
 /// - the provided [`AnalyzerType`] cannot be serialized
 pub async fn post_add_analyzer(
-    client: &HTTPAPIClient,
+    client: &HTTPClient,
     new_analyzer_info: NewAnalyzerInfo,
 ) -> Result<Uuid, String> {
     client

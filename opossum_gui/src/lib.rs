@@ -1,4 +1,4 @@
-use api::http_client::HTTPAPIClient;
+use api::http_client::HTTPClient;
 use components::{
     context_menu::cx_menu::CxMenu,
     logger::Logs,
@@ -19,7 +19,7 @@ pub struct MainWindowSize {
 }
 
 static OPOSSUM_UI_LOGS: GlobalSignal<Logs> = Signal::global(Logs::new);
-static HTTP_API_CLIENT: GlobalSignal<HTTPAPIClient> = Signal::global(HTTPAPIClient::new);
+static HTTP_API_CLIENT: GlobalSignal<HTTPClient> = Signal::global(HTTPClient::new);
 static EDGES: GlobalSignal<Edges> = Signal::global(Edges::new);
 pub static NODES_STORE: GlobalSignal<NodesStore> = Signal::global(NodesStore::new);
 static ZOOM: GlobalSignal<Zoom> = Signal::global(|| Zoom::new(1., 1.));

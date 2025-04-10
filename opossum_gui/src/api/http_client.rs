@@ -4,18 +4,18 @@ use serde::{de::DeserializeOwned, Serialize};
 use serde_json::json;
 
 #[derive(Clone)]
-pub struct HTTPAPIClient {
+pub struct HTTPClient {
     client: Client,
     base_url: String,
 }
 
-impl Default for HTTPAPIClient {
+impl Default for HTTPClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl HTTPAPIClient {
+impl HTTPClient {
     #[must_use]
     pub fn new() -> Self {
         Self {
