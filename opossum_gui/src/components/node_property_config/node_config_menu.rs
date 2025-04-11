@@ -14,7 +14,7 @@ pub fn NodePropertyConfigMenu() -> Element {
                 div { class: "property-config-window",
                     h3 { "Node Properties" }
                     p { {format!("Node Name: {}", node_attr.name())} }
-                            // Add more properties here as needed
+                                // Add more properties here as needed
                 }
             )
         },

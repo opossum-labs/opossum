@@ -22,28 +22,36 @@ pub fn MenuBar() -> Element {
         }
     });
     rsx! {
-        div { class: "title-bar",
-
-            div { class: "menu-group",
-                img {
-                    src: FAVICON,
-                    class: "title-bar-item",
-                    id: "title-bar-icon",
+        nav { class: "navbar navbar-expand-lg bg-body-tertiary",
+            div { class: "container-fluid",
+                a { class: "navbar-brand", "OPOSSUM" }
+                ul { class: "navbar-nav me-auto",
+                    li { class: "nav-item dropdown",
+                        a {
+                            class: "nav-link dropdown-toggle",
+                            role: "button",
+                            "data-bs-toggle": "dropdown",
+                            "File"
+                        }
+                        ul { class: "dropdown-menu",
+                            li {
+                                a { class: "dropdown-item", href: "#", "New Project" }
+                            }
+                            li {
+                                a { class: "dropdown-item", href: "#", "Open Project" }
+                            }
+                            li {
+                                a { class: "dropdown-item", href: "#", "Save Project" }
+                            }
+                        }
+                    }
+                    li { class: "nav-item dropdown",
+                        a { class: "nav-link active", href: "#", "Edit" }
+                    }
+                    li { class: "nav-item dropdown",
+                        a { class: "nav-link active", href: "#", "Help" }
+                    }
                 }
-                FileDropdownMenu {}
-                EditDropdownMenu {}
-                HelpDropdownMenu {}
-            }
-            div {
-                class: "menu-group",
-                id: "menu-window-events",
-                onmouseup: use_on_mouse_up(is_dragging),
-                onmousedown: use_on_mouse_down(is_dragging),
-                onmousemove: use_on_mouse_move(is_dragging),
-                ondoubleclick: use_on_double_click(maximize_symbol),
-            }
-            div { class: "menu-group menu-right",
-                ControlsMenu { maximize_symbol }
             }
         }
     }

@@ -34,7 +34,7 @@ fn main() {
             .with_cfg(
                 dioxus::desktop::Config::new()
                     .with_window(window)
-                    .with_background_color((37, 37, 37, 1))
+                    // .with_background_color((37, 37, 37, 1))
                     // .with_menu(None)
                     .with_icon(
                         Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
@@ -56,47 +56,12 @@ fn App() -> Element {
     use_context_provider(|| Signal::new(Uuid::nil()));
     let mut main_window = use_signal(|| None::<Rc<MountedData>>);
     rsx! {
-        document::Link { rel: "stylesheet", href: MAIN_CSS }
+        // document::Stylesheet {href: MAIN_CSS }
+        document::Stylesheet { href: asset!("./assets/bootstrap.min.css") }
+        document::Script { src: asset!("./assets/bootstrap.bundle.min.js") }
         // document::Script { src: PLOTLY_JS }
         // document::Script { r#type: "module", src: ORBIT_CTRLS }
         // document::Script { r#type: "module", src: THREE_MOD_JS }
-        div {
-            class: "col-flex container",
-            oncontextmenu: move |evt| {
-                evt.prevent_default();
-            },
-            onclick: move |_| {
-                let mut cx_menu = CONTEXT_MENU.write();
-                *cx_menu = None;
-            },
-            ContextMenu { cx_menu: CONTEXT_MENU.read().clone() }
-            MenuBar {}
-            div {
-                class: "row-flex",
-                onmounted: move |e| { main_window.set(Some(e.data())) },
-                onresize: move |_: Event<ResizeData>| {
-                    spawn(async move {
-                        if let Some(main_window) = main_window.read().as_ref() {
-                            if let Ok(rect) = main_window.get_client_rect().await {
-                                let mut main_window_size = MAIN_WINDOW_SIZE.write();
-                                *main_window_size = Some(MainWindowSize {
-                                    width: rect.size.width,
-                                    height: rect.size.height,
-                                });
-                            }
-                        }
-                    });
-                },
-                NodePropertyConfigMenu {}
-
-                div { class: "col-flex",
-
-                    NodeDragDropContainer {}
-                    // ThreeJSComponent {  },
-                    // PlotComponent {  },
-                    Logger {}
-                }
-            }
-        }
+        div { class: "row", MenuBar {} }
     }
 }
