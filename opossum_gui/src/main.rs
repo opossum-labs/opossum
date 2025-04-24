@@ -1,7 +1,7 @@
 #![windows_subsystem = "windows"]
-use std::rc::Rc;
 
 use dioxus::prelude::*;
+use opossum_gui::router::Route;
 use opossum_gui::{
     components::{
         context_menu::cx_menu::ContextMenu, logger::logger_component::Logger,
@@ -10,12 +10,12 @@ use opossum_gui::{
     },
     MainWindowSize, CONTEXT_MENU, MAIN_WINDOW_SIZE,
 };
-use uuid::Uuid;
 
 const MAIN_CSS: Asset = asset!("./assets/main.css");
 // const PLOTLY_JS: Asset = asset!("./assets/plotly.js");
 // const THREE_MOD_JS: Asset = asset!("./assets/three_mod.js");
 // const ORBIT_CTRLS: Asset = asset!("./assets/orbitControls.js");
+
 fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
@@ -23,45 +23,40 @@ fn main() {
             tao::{self, platform::windows::IconExtWindows, window::Icon},
             wry::dpi::PhysicalSize,
         };
-        let window = tao::window::WindowBuilder::new()
-            .with_resizable(true)
-            .with_inner_size(PhysicalSize::new(1000, 800))
-            .with_background_color((37, 37, 37, 1))
-            // .with_decorations(false)
-            .with_title("Opossum");
+        // let window = tao::window::WindowBuilder::new()
+        //     .with_resizable(true)
+        //     .with_inner_size(PhysicalSize::new(1000, 800))
+        //     //.with_background_color((37, 37, 37, 1))
+        //     // .with_decorations(false)
+        //     .with_title("Opossum");
 
         dioxus::LaunchBuilder::new()
             .with_cfg(
                 dioxus::desktop::Config::new()
-                    .with_window(window)
+                    //.with_window(window)
                     // .with_background_color((37, 37, 37, 1))
                     // .with_menu(None)
-                    .with_icon(
-                        Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
-                    ),
+                     .with_icon(
+                         Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
+                     ),
             )
-            .launch(App);
+            .launch(app);
     }
 
     #[cfg(not(feature = "desktop"))]
     fn launch_app() {
-        dioxus::launch(App);
+        dioxus::launch(app);
     }
 
     launch_app();
 }
 
 #[component]
-fn App() -> Element {
-    use_context_provider(|| Signal::new(Uuid::nil()));
-    let mut main_window = use_signal(|| None::<Rc<MountedData>>);
+fn app() -> Element {
     rsx! {
         // document::Stylesheet {href: MAIN_CSS }
         document::Stylesheet { href: asset!("./assets/bootstrap.min.css") }
         document::Script { src: asset!("./assets/bootstrap.bundle.min.js") }
-        // document::Script { src: PLOTLY_JS }
-        // document::Script { r#type: "module", src: ORBIT_CTRLS }
-        // document::Script { r#type: "module", src: THREE_MOD_JS }
-        div { class: "row", MenuBar {} }
+        div { "data-bs-theme": "dark", class: "d-flex flex-column vh-100", Router::<Route> {} }
     }
 }

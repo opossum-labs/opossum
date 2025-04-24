@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use serde::Serialize;
 
-const PLOT_FUNCS: Asset = asset!(".\\src\\components\\plot\\plot.js");
+const PLOT_FUNCS: Asset = asset!("./src/components/plot/plot.js");
 
 #[derive(Serialize)]
 struct PlotLayout {

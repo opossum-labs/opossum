@@ -6,6 +6,7 @@ pub fn Logger() -> Element {
     let log_id = "log-container".to_owned();
     rsx! {
         div { class: "log-container", id: log_id,
+            h5 { "Logs" }
             for log in OPOSSUM_UI_LOGS.read().logs.iter() {
                 p {
                     class: "log-entry",

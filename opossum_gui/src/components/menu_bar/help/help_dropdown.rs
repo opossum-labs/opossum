@@ -19,7 +19,7 @@ pub fn HelpDropdownMenu() -> Element {
         {
             if *about_window.read() {
                 rsx! {
-                    About { show_about: about_window }
+                    About {} // show_about: about_window }
                 }
             } else {
                 rsx! {}
