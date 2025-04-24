@@ -1,5 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
+use crate::utils::math_utils::usize_to_f64;
 use crate::{
     api::{self},
     components::{
@@ -10,7 +11,6 @@ use crate::{
     CONTEXT_MENU, HTTP_API_CLIENT, NODES_STORE, OPOSSUM_UI_LOGS, ZOOM,
 };
 use dioxus::prelude::*;
-use opossum_backend::usize_to_f64;
 use uuid::Uuid;
 
 #[component]

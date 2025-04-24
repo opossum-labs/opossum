@@ -49,9 +49,6 @@ impl NodeAttr {
     ///   - `inverted`: `false`
     ///   - `apertures`: default [`OpticPorts`] structure
     ///   - `alignment`: `None`
-    /// # Panics
-    ///
-    /// Panics theoretically if the standard properties could not be created.
     #[must_use]
     pub fn new(node_type: &str) -> Self {
         Self {

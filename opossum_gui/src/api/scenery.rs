@@ -1,6 +1,6 @@
 //! Scenery api calls
 
-use opossum_backend::scenery::NewAnalyzerInfo;
+use crate::opm_types::*;
 use uuid::Uuid;
 
 use super::http_client::HTTPClient;

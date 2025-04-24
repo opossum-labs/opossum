@@ -1,7 +1,7 @@
 //! General api calls
 
 use super::http_client::HTTPClient;
-use opossum_backend::general::{NodeType, VersionInfo};
+use crate::opm_types::*;
 
 /// Send reqeust to get the version of the opossum backend and the opossum library.
 ///

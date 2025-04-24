@@ -3,10 +3,8 @@ use std::{collections::HashMap, ops::Index};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 pub mod nodes_component;
 
+use crate::opm_types::*;
 pub use nodes_component::Nodes;
-use opossum_backend::{
-    nodes::NodeInfo, AnalyzerType, GhostFocusConfig, NodeAttr, PortType, RayTraceConfig,
-};
 use uuid::Uuid;
 
 use crate::{api, ACTIVE_NODE, EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM};
@@ -181,7 +179,6 @@ impl NodesStore {
                 break;
             }
         }
-
         Point2D::new(new_x, new_y)
     }
 

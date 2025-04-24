@@ -36,9 +36,9 @@ fn main() {
                     //.with_window(window)
                     // .with_background_color((37, 37, 37, 1))
                     // .with_menu(None)
-                     .with_icon(
-                         Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
-                     ),
+                    .with_icon(
+                        Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
+                    ),
             )
             .launch(app);
     }

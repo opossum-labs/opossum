@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::opm_types::*;
 use crate::{
     api::{self},
     components::{
@@ -9,7 +10,6 @@ use crate::{
     CONTEXT_MENU, EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{nodes::ConnectInfo, PortType};
 use uuid::Uuid;
 
 #[derive(Clone, PartialEq, Default)]

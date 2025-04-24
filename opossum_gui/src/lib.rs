@@ -1,3 +1,9 @@
+pub mod api;
+pub mod components;
+pub mod opm_types;
+pub mod router;
+pub mod utils;
+
 use api::http_client::HTTPClient;
 use components::{
     context_menu::cx_menu::CxMenu,
@@ -8,11 +14,8 @@ use components::{
     },
 };
 use dioxus::signals::{GlobalSignal, Signal};
-use opossum_backend::NodeAttr;
 
-pub mod api;
-pub mod components;
-pub mod router;
+use opm_types::NodeAttr;
 
 pub struct MainWindowSize {
     pub width: f64,

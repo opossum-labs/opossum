@@ -1,7 +1,4 @@
-use opossum_backend::{
-    nodes::{ConnectInfo, NewNode, NodeInfo},
-    NodeAttr,
-};
+use crate::opm_types::*;
 use uuid::Uuid;
 
 use super::http_client::HTTPClient;

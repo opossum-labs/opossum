@@ -5,7 +5,8 @@ use dioxus::prelude::*;
 const LOGO: Asset = asset!("./assets/LogoBanner.svg");
 
 #[component]
-pub fn About() -> Element {//mut show_about: Signal<bool>) -> Element {
+pub fn About() -> Element {
+    //mut show_about: Signal<bool>) -> Element {
     let future = use_resource(move || async move { api::get_version(&HTTP_API_CLIENT()).await });
 
     match &*future.read_unchecked() {

@@ -1,7 +1,10 @@
 use dioxus::prelude::*;
 use uuid::Uuid;
 
-use crate::components::{logger::logger_component::Logger, node_property_config::node_config_menu::NodePropertyConfigMenu};
+use crate::components::{
+    logger::logger_component::Logger,
+    node_property_config::node_config_menu::NodePropertyConfigMenu,
+};
 
 #[component]
 pub fn App() -> Element {
@@ -16,14 +19,14 @@ pub fn App() -> Element {
         //     }
         // }
         div { class: "d-flex flex-column h-100 text-bg-dark",
-           
+
                 div { class: "container-fluid",
                     div { class: "row",
                         div { class: "col-2", NodePropertyConfigMenu {} }
                         div { class: "col", "Node Editor" }
                     }
                 }
-            
+
             footer {
                 class: "footer mt-auto py-2",
                 style: "background-color:rgb(119, 119, 119);",

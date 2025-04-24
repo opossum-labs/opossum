@@ -9,12 +9,12 @@ use dioxus::prelude::*;
 #[derive(Routable, Clone, PartialEq)]
 pub enum Route {
     #[layout(MenuBar)]
-        #[route("/")]
-        App,
-        #[nest("/about")]
-            #[route("/")]
-             About,
-        #[end_nest]
+    #[route("/")]
+    App,
+    #[nest("/about")]
+    #[route("/")]
+    About,
+    #[end_nest]
     #[end_layout]
     #[route("/:..route")]
     PageNotFound { route: Vec<String> },

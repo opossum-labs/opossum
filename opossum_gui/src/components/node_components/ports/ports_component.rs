@@ -1,5 +1,6 @@
+use crate::opm_types::*;
+use crate::utils::math_utils::usize_to_f64;
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{nodes::ConnectInfo, usize_to_f64, PortType};
 use uuid::Uuid;
 
 use crate::{

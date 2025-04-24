@@ -1,5 +1,5 @@
+use crate::opm_types::*;
 use dioxus::prelude::*;
-use opossum_backend::{nodes::NewNode, scenery::NewAnalyzerInfo, AnalyzerType};
 use uuid::Uuid;
 
 use crate::{

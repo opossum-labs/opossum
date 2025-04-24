@@ -1,6 +1,6 @@
+use crate::utils::math_utils::usize_to_f64;
 use crate::{components::menu_bar::sub_menu_item::MenuItem, MAIN_WINDOW_SIZE};
 use dioxus::prelude::*;
-use opossum_backend::usize_to_f64;
 
 #[derive(Clone, PartialEq)]
 pub struct CxMenu {
