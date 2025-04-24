@@ -22,7 +22,7 @@ pub fn use_open_file() -> Callback<Event<MouseData>> {
     })
 }
 
-pub fn use_save_file() -> Callback<Event<MouseData>> {
+pub fn use_save_project() -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let _path = FileDialog::new()
             .set_directory("/")

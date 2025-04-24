@@ -1,7 +1,8 @@
 #![windows_subsystem = "windows"]
 
 use dioxus::prelude::*;
-use opossum_gui::router::Route;
+use opossum_gui::components::app::App;
+// use opossum_gui::router::Route;
 use opossum_gui::{
     components::{
         context_menu::cx_menu::ContextMenu, logger::logger_component::Logger,
@@ -34,7 +35,6 @@ fn main() {
             .with_cfg(
                 dioxus::desktop::Config::new()
                     //.with_window(window)
-                    // .with_background_color((37, 37, 37, 1))
                     // .with_menu(None)
                      .with_icon(
                          Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
@@ -42,12 +42,10 @@ fn main() {
             )
             .launch(app);
     }
-
     #[cfg(not(feature = "desktop"))]
     fn launch_app() {
         dioxus::launch(app);
     }
-
     launch_app();
 }
 
@@ -57,6 +55,7 @@ fn app() -> Element {
         // document::Stylesheet {href: MAIN_CSS }
         document::Stylesheet { href: asset!("./assets/bootstrap.min.css") }
         document::Script { src: asset!("./assets/bootstrap.bundle.min.js") }
-        div { "data-bs-theme": "dark", class: "d-flex flex-column vh-100", Router::<Route> {} }
+        // div { "data-bs-theme": "dark", class: "d-flex flex-column vh-100", Router::<Route> {} }
+        div { "data-bs-theme": "dark", class: "d-flex flex-column vh-100", App {} }
     }
 }

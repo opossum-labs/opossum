@@ -12,7 +12,6 @@ use opossum_backend::NodeAttr;
 
 pub mod api;
 pub mod components;
-pub mod router;
 
 pub struct MainWindowSize {
     pub width: f64,

@@ -3,18 +3,18 @@ use dioxus::{desktop::use_window, prelude::*};
 use crate::{
     components::menu_bar::{
         callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
+        file::callbacks::{use_new_project, use_open_project, use_save_project},
         controls::controls_menu::ControlsMenu,
         edit::edit_dropdown::EditDropdownMenu,
-        file::file_dropdown::FileDropdownMenu,
-        help::help_dropdown::HelpDropdownMenu,
-    },
-    router::Route,
+        help::about::About,
+    }
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
 
 #[component]
 pub fn MenuBar() -> Element {
+    let mut about_window = use_signal(|| false);
     let window = use_window();
     let is_dragging = use_signal(|| false);
     let maximize_symbol = use_signal(|| {
@@ -27,13 +27,11 @@ pub fn MenuBar() -> Element {
     rsx! {
         nav { class: "navbar navbar-expand-sm bg-body-tertiary",
             div { class: "container-fluid",
-                Link { to: Route::App,
-                    img {
-                        class: "navbar-brand",
-                        id: "about-logo",
-                        src: FAVICON,
-                        height: "40",
-                    }
+                img {
+                    class: "navbar-brand",
+                    id: "about-logo",
+                    src: FAVICON,
+                    height: "40",
                 }
                 ul { class: "navbar-nav me-auto",
                     li { class: "nav-item dropdown",
@@ -45,13 +43,19 @@ pub fn MenuBar() -> Element {
                         }
                         ul { class: "dropdown-menu",
                             li {
-                                a { class: "dropdown-item", href: "#", "New Project" }
+                                a { class: "dropdown-item", onclick: move |e| {
+                                    use_new_project()(e)
+                                }, "New Project",  }
                             }
                             li {
-                                a { class: "dropdown-item", href: "#", "Open Project" }
+                                a { class: "dropdown-item", onclick: move |e| {
+                                    use_open_project()(e)
+                                }, "Open Project",  }
                             }
                             li {
-                                a { class: "dropdown-item", href: "#", "Save Project" }
+                                a { class: "dropdown-item", onclick: move |e| {
+                                    use_save_project()(e)
+                                }, "Save Project",  }
                             }
                         }
                     }
@@ -61,6 +65,14 @@ pub fn MenuBar() -> Element {
                             role: "button",
                             "data-bs-toggle": "dropdown",
                             "Edit"
+                        }
+                        ul { class: "dropdown-menu",
+                            li {
+                                a { class: "dropdown-item", "Add Node"  }
+                            }
+                            li {
+                                a { class: "dropdown-item", "Add Analyzer"  }
+                            }
                         }
                     }
                     li { class: "nav-item dropdown",
@@ -72,7 +84,11 @@ pub fn MenuBar() -> Element {
                         }
                         ul { class: "dropdown-menu",
                             li {
-                                Link { class: "dropdown-item", to: Route::About, "About" }
+                                a {
+                                    class: "dropdown-item",
+                                    onclick: move |_| about_window.set(true),
+                                    "About"
+                                }
                             }
                         }
                     }
@@ -82,6 +98,14 @@ pub fn MenuBar() -> Element {
                 button { class: "btn-close" }
             }
         }
-        Outlet::<Route> {}
+        {
+            if *about_window.read() {
+                rsx! {
+                    About { show_about: about_window } // show_about: about_window
+                }
+            } else {
+                rsx! {}
+            }
+        }
     }
 }
