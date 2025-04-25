@@ -17,6 +17,7 @@ const FAVICON: Asset = asset!("./assets/favicon.ico");
 #[component]
 pub fn MenuBar() -> Element {
     let mut about_window = use_signal(|| false);
+    let node_selected=use_signal(|| String::new());
     let window = use_window();
     let is_dragging = use_signal(|| false);
     let maximize_symbol = use_signal(|| {
@@ -26,6 +27,7 @@ pub fn MenuBar() -> Element {
             "🗖"
         }
     });
+    println!("current selection: {}", node_selected);
     rsx! {
         nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",
             div { class: "container-fluid",
@@ -95,7 +97,7 @@ pub fn MenuBar() -> Element {
                                         "Add Node"
                                         Icon { height: 10, icon: FaAngleRight }
                                     }
-                                    ul { class: "dropdown-menu dropdown-submenu", NodesMenu {} }
+                                    ul { class: "dropdown-menu dropdown-submenu", NodesMenu {node_selected} }
                                 }
                                 li {
                                     a {

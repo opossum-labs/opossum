@@ -25,7 +25,7 @@ fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
         use dioxus::desktop::{
-            tao::{self, platform::windows::IconExtWindows, window::Icon},
+            tao::{self, window::Icon},
             wry::dpi::PhysicalSize,
         };
         // let window = tao::window::WindowBuilder::new()
@@ -40,9 +40,9 @@ fn main() {
                 dioxus::desktop::Config::new()
                     //.with_window(window)
                     // .with_menu(None)
-                     .with_icon(
-                         Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
-                     ),
+                    //  .with_icon(
+                    //      Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
+                    //  ),
             )
             .launch(app);
     }
