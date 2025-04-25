@@ -1,14 +1,15 @@
 use dioxus::{desktop::use_window, prelude::*};
-use dioxus_free_icons::{icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize, FaWindowMinimize}, Icon};
+use dioxus_free_icons::{
+    icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize, FaWindowMinimize},
+    Icon,
+};
 
-use crate::{
-    components::menu_bar::{
-        callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
-        file::callbacks::{use_new_project, use_open_project, use_save_project},
-        controls::controls_menu::ControlsMenu,
-        edit::edit_dropdown::EditDropdownMenu,
-        help::about::About,
-    }
+use crate::components::menu_bar::{
+    callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
+    controls::controls_menu::ControlsMenu,
+    edit::nodes_menu::NodesMenu,
+    file::callbacks::{use_new_project, use_open_project, use_save_project},
+    help::about::About,
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
@@ -94,22 +95,7 @@ pub fn MenuBar() -> Element {
                                         "Add Node"
                                         Icon { height: 10, icon: FaAngleRight }
                                     }
-                                    ul { class: "dropdown-menu dropdown-submenu",
-                                        li {
-                                            a {
-                                                class: "dropdown-item",
-                                                role: "button",
-                                                "Submenu item 1"
-                                            }
-                                        }
-                                        li {
-                                            a {
-                                                class: "dropdown-item",
-                                                role: "button",
-                                                "Submenu item 2"
-                                            }
-                                        }
-                                    }
+                                    ul { class: "dropdown-menu dropdown-submenu", NodesMenu {} }
                                 }
                                 li {
                                     a {
@@ -118,6 +104,7 @@ pub fn MenuBar() -> Element {
                                         "Add Analyzer"
                                         Icon { height: 10, icon: FaAngleRight }
                                     }
+                                    ul { class: "dropdown-menu dropdown-submenu" }
                                 }
                             }
                         }
