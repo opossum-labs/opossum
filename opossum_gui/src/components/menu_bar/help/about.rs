@@ -16,7 +16,9 @@ pub fn About(mut show_about: Signal<bool>) -> Element {
             p { "Loading about window failed" }
         },
         None => rsx!{
-            p { "Loading data..." }
+            div { class: "spinner-border", role: "status",
+                span { class: "visually-hidden", "Loading data..." }
+            }
         }
     };
     rsx!{
