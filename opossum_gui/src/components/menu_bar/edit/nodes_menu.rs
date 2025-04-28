@@ -4,6 +4,7 @@ use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 
 #[component]
 pub fn NodesMenu(node_selected: Signal<String>) -> Element {
+pub fn NodesMenu(node_selected: Signal<String>) -> Element {
     let future = use_resource({
         move || async move {
             match api::get_node_types(&HTTP_API_CLIENT()).await {

@@ -16,7 +16,7 @@ fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
         use dioxus::desktop::{
-            tao::{self, platform::windows::IconExtWindows, window::Icon},
+            tao::{self, window::Icon},
             wry::dpi::PhysicalSize,
         };
         // let window = tao::window::WindowBuilder::new()
