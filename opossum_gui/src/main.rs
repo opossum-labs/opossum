@@ -10,8 +10,6 @@ const MAIN_CSS: Asset = asset!("./assets/main.css");
 const MDB_CSS: Asset = asset!("./assets/mdb.min.css");
 const MDB_JS: Asset = asset!("./assets/mdb.umd.min.js");
 const MDB_SUB_CSS: Asset = asset!("./assets/mdb_submenu.css");
-// const BS_CSS: Asset = asset!("./assets/bootstrap.min.css");
-// const BS_JS: Asset = asset!("./assets/bootstrap.bundle.min.js");
 fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
