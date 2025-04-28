@@ -55,16 +55,20 @@ pub fn App() -> Element {
 
     rsx! {
         div { class: "d-flex flex-column text-bg-dark vh-100",
-            div { MenuBar { menu_item_selected } }
+            div {
+                MenuBar { menu_item_selected }
+            }
             div { class: "d-flex flex-row",
-            div { class: "p-1", NodePropertyConfigMenu {} }
-            div { class: "p-1 flex-grow-1", NodeEditor {command: node_editor_command} }
+                div { class: "p-1", NodePropertyConfigMenu {} }
+                div { class: "p-1 flex-grow-1",
+                    NodeEditor { command: node_editor_command }
+                }
             }
             footer {
                 class: "footer p-1",
                 style: "background-color:rgb(119, 119, 119);",
                 Logger {}
             }
-        } 
+        }
     }
 }

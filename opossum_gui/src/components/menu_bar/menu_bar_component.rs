@@ -152,15 +152,21 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                     }
                 }
                 div { class: "d-flex align-items-center",
-                    a { class: "text-secondary me-2", role: "button",
+                    a {
+                        class: "text-secondary me-2",
+                        role: "button",
                         onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinMinimize)),
                         Icon { width: 25, icon: FaWindowMinimize }
                     }
-                    a { class: "text-secondary me-2", role: "button",
+                    a {
+                        class: "text-secondary me-2",
+                        role: "button",
                         onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinMaximize)),
                         Icon { width: 25, icon: FaWindowMaximize }
                     }
-                    a { class: "text-secondary me-2", role: "button",
+                    a {
+                        class: "text-secondary me-2",
+                        role: "button",
                         onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinClose)),
                         Icon { width: 25, icon: FaPowerOff }
                     }

@@ -7,7 +7,7 @@ use crate::{
     HTTP_API_CLIENT, NODES_STORE, OPOSSUM_UI_LOGS,
 };
 
-pub fn use_delete_scenery() {
+pub fn delete_scenery() {
     spawn(async move {
         match api::delete_scenery(&HTTP_API_CLIENT()).await {
             Ok(_) => {
@@ -21,7 +21,7 @@ pub fn use_delete_scenery() {
     });
 }
 
-pub fn use_add_node(n_type: String, group_id: Uuid) {
+pub fn add_node(n_type: String, group_id: Uuid) {
     let new_node_info = NewNode::new(n_type, (0, 0, 0));
     spawn(async move {
         match api::post_add_node(&HTTP_API_CLIENT(), new_node_info, group_id).await {
@@ -36,7 +36,7 @@ pub fn use_add_node(n_type: String, group_id: Uuid) {
     });
 }
 
-pub fn use_add_analyzer(analyzer_type: AnalyzerType) {
+pub fn add_analyzer(analyzer_type: AnalyzerType) {
     let analyzer_type = analyzer_type.clone();
     let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type.clone(), (0, 0, 0));
     spawn(async move {

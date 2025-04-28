@@ -5,7 +5,7 @@ use crate::components::node_components::{
             use_on_double_click, use_on_key_down, use_on_mounted, use_on_mouse_move,
             use_on_mouse_up, use_on_resize, use_on_wheel,
         },
-        node_editor_commands::{use_add_node, use_delete_scenery},
+        node_editor_commands::{add_node, delete_scenery},
     },
     DraggedNode, NodeOffset, Nodes,
 };
@@ -37,11 +37,11 @@ pub fn NodeEditor(command: Signal<Option<NodeEditorCommand>>) -> Element {
             match command {
                 NodeEditorCommand::DeleteAll => {
                     println!("NodeEditor: Delete all nodes");
-                    use_delete_scenery();
+                    delete_scenery();
                 }
                 NodeEditorCommand::AddNode(node_type) => {
                     println!("NodeEditor: Node selected: {:?}", node_type);
-                    use_add_node(node_type.clone(), Uuid::nil());
+                    add_node(node_type.clone(), Uuid::nil());
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
                     println!("NodEditor: Analyzer selected: {:?}", analyzer_type);

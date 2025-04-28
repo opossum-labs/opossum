@@ -16,7 +16,7 @@ fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
         use dioxus::desktop::{
-            tao::{self, window::Icon},
+            tao::{self, platform::windows::IconExtWindows, window::Icon},
             wry::dpi::PhysicalSize,
         };
         // let window = tao::window::WindowBuilder::new()
@@ -31,9 +31,9 @@ fn main() {
                 dioxus::desktop::Config::new()
                     //.with_window(window)
                     // .with_menu(None)
-                    .with_icon(
-                        Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
-                    ),
+                     .with_icon(
+                         Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
+                     ),
             )
             .launch(app);
     }
@@ -47,11 +47,10 @@ fn main() {
 #[component]
 fn app() -> Element {
     rsx! {
-        document::Stylesheet {href: MAIN_CSS }
+        document::Stylesheet { href: MAIN_CSS }
         document::Stylesheet { href: MDB_CSS }
         document::Stylesheet { href: MDB_SUB_CSS }
         document::Script { src: MDB_JS }
-        App{}
-//        div { "data-bs-theme": "dark", class: "d-flex flex-column vh-100", App {} }
+        App {}
     }
 }
