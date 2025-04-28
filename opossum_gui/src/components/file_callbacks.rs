@@ -22,14 +22,16 @@ pub fn use_open_file() -> Callback<Event<MouseData>> {
     })
 }
 
-pub fn use_save_project() -> Callback<Event<MouseData>> {
-    use_callback(move |_: Event<MouseData>| {
-        let _path = FileDialog::new()
-            .set_directory("/")
-            .set_title("Save OPOSSUM setup file")
-            .add_filter("Opossum setup file", &["opm"])
-            .save_file();
-    })
+pub fn use_save_project() {
+    let _future = use_resource({
+        move || async move {
+            let _path = FileDialog::new()
+                .set_directory("/")
+                .set_title("Save OPOSSUM setup file")
+                .add_filter("Opossum setup file", &["opm"])
+                .save_file();
+        }
+    });
 }
 
 pub fn use_open_project() -> Callback<Event<MouseData>> {

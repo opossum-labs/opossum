@@ -4,7 +4,7 @@ use crate::{
     api::{self},
     components::{
         context_menu::cx_menu::CxMenu,
-        node_components::node_drag_drop_container::drag_drop_container::ZoomShift,
+        node_components::node_drag_drop_container::node_editor::ZoomShift,
     },
     CONTEXT_MENU, EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
 };

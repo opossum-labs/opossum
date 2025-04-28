@@ -8,4 +8,3 @@ pub fn PageNotFound(route: Vec<String>) -> Element {
         pre { color: "red", "log:\nattemped to navigate to: {route:?}" }
     }
 }
-

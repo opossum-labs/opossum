@@ -12,7 +12,7 @@ pub fn NodePropertyConfigMenu() -> Element {
         |node_attr| {
             rsx!(
                 div { class: "property-config-window",
-                    h3 { "Node Properties" }
+                    h5 { "Node Properties" }
                     p { {format!("Node Name: {}", node_attr.name())} }
                                 // Add more properties here as needed
                 }

@@ -1,12 +1,12 @@
 /* styles.css */
-html,
+/* html,
 body {
     margin: 0;
     padding: 0;
     height: 100vh;
     width: 100vw;
     font-family: Arial;
-}
+} */
 
 /* Linke Menüleiste */
 
@@ -91,7 +91,6 @@ body {
 
 /* Drag-Objekt */
 .draggable {
-    /* line-height: 61.8px; */
     position: relative;
 }
 
@@ -161,26 +160,15 @@ body {
     background-color: rgb(197, 216, 255);
 }
 
-.plottt {
+/* .plottt {
     height: 400px;
     width: 500px;
-}
+} */
 
 .log-container {
     z-index: 99999;
     height: 120px;
     overflow-y: scroll;
-    border-left: 1px solid rgb(66, 66, 66);
-    border-top: 1px solid rgb(66, 66, 66);
-    padding: 10px;
-    background-color: rgb(39, 39, 39);
-    color: #fff;
-    font-family: monospace;
-    width: calc(100%-10px);
-}
-
-.log-entry {
-    margin: 5px 0;
 }
 
 .node_attributes {
@@ -219,7 +207,7 @@ canvas {
     display: block;
 }
 
-.property-config-window {
+/* .property-config-window {
     max-width: 250px;
     width: 25%;
     min-width: 100px;
@@ -230,39 +218,39 @@ canvas {
     z-index: 100000;
     height: 100%;
 
-}
+} */
 
-.col-flex {
+/* .col-flex {
     display: flex;
     flex-grow: 1;
     flex-direction: column;
-    /* Stellt sicher, dass die Kinder untereinander liegen */
+    
 }
 
 .row-flex {
     display: flex;
     flex-grow: 1;
     flex-direction: row;
-    /* Stellt sicher, dass die Kinder untereinander liegen */
+
 }
 
-/* Allgemeiner Stil für das Layout */
+
 .container {
     position: absolute;
     display: flex;
     height: 100%;
     width: 100%;
     flex-direction: column;
-    /* Stellt sicher, dass die Kinder untereinander liegen */
+    
     overflow: hidden;
 }
 
 .container>* {
     width: 100%;
-    /* Alle direkten Kinder des Containers nehmen die volle Breite ein */
-}
 
-.title-bar {
+} */
+
+/* .title-bar {
     z-index: 1000000000;
     position: relative;
     max-height: 30px;
@@ -272,9 +260,9 @@ canvas {
     margin: 0;
     border-bottom: 1px solid rgb(66, 66, 66);
 
-}
+} */
 
-#title-bar-icon {
+/* #title-bar-icon {
     padding: 0px 10px 0px 10px;
     background-color: rgb(105, 105, 105);
     margin: 0 5px 0 5px;
@@ -286,9 +274,9 @@ canvas {
 .title-bar-item:hover {
     background-color: rgb(56, 56, 56);
     border-radius: 4px;
-}
+} */
 
-.title-bar-submenu-item {
+/* .title-bar-submenu-item {
     cursor: pointer;
     color: white;
     padding: 0;
@@ -305,9 +293,9 @@ canvas {
     justify-content: center;
     font-size: 10pt;
     cursor: context-menu;
-}
+} */
 
-.dropbtn {
+/* .dropbtn {
     background-color: #04AA6D;
     color: white;
     padding: 16px;
@@ -365,17 +353,17 @@ canvas {
     margin: 0;
     position: absolute;
     background-color: #303030;
-}
+} */
 
-.submenu a {
+/* .submenu a {
     position: relative;
     color: white;
     padding: 10px 10px;
     text-decoration: none;
     display: block;
-}
+} */
 
-.title-bar-dropdown-content {
+/* .title-bar-dropdown-content {
     margin: 5px 0px 5px -10px;
 }
 
@@ -387,9 +375,9 @@ canvas {
     float: right;
     display: flex;
     align-items: center;
-}
+} */
 
-.menu-group {
+/* .menu-group {
     display: flex;
     max-height: 100%;
     align-items: center;
@@ -400,7 +388,6 @@ canvas {
     flex-grow: 1;
 }
 
-/* Die rechte Gruppe nach rechts schieben */
 .menu-right {
     margin-left: auto;
     max-height: 100%;
@@ -411,4 +398,4 @@ canvas {
 #maximize,
 #restore #close {
     max-height: 90%;
-}
+} */

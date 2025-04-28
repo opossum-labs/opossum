@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::{drag_drop_container::ZoomShift, DraggedNode, NodeOffset};
+use super::{node_editor::ZoomShift, DraggedNode, NodeOffset};
 use crate::{
     api::{self},
     components::node_components::edges::edges_component::EdgeCreation,

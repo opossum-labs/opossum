@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 
 #[component]
-pub fn NodesMenu() -> Element {
+pub fn NodesMenu(node_selected: Signal<String>) -> Element {
     let future = use_resource({
         move || async move {
             match api::get_node_types(&HTTP_API_CLIENT()).await {
@@ -24,12 +24,17 @@ pub fn NodesMenu() -> Element {
         Some(None) => vec!["error receiving node list from server".to_owned()],
         _ => vec!["loading node list from server".to_owned()],
     };
-    rsx!{
+    rsx! {
         for element in node_list.into_iter() {
             {
                 rsx! {
                     li {
-                        a { class: "dropdown-item", role: "button", {element} }
+                        a {
+                            class: "dropdown-item",
+                            role: "button",
+                            onclick: move |_| node_selected.set(element.clone()),
+                            {element.clone()}
+                        }
                     }
                 }
             }

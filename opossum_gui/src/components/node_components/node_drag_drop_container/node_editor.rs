@@ -1,14 +1,17 @@
 use crate::components::node_components::{
     edges::edges_component::{EdgeCreation, EdgeCreationComponent, EdgesComponent},
-    node_drag_drop_container::callbacks::{
-        use_on_double_click, use_on_key_down, use_on_mounted, use_on_mouse_move, use_on_mouse_up,
-        use_on_resize, use_on_wheel,
+    node_drag_drop_container::{
+        callbacks::{
+            use_on_double_click, use_on_key_down, use_on_mounted, use_on_mouse_move,
+            use_on_mouse_up, use_on_resize, use_on_wheel,
+        },
+        node_editor_commands::{use_add_node, use_delete_scenery},
     },
-    nodes::Nodes,
-    DraggedNode, NodeOffset,
+    DraggedNode, NodeOffset, Nodes,
 };
 use dioxus::{html::geometry::WheelDelta, prelude::*};
 use std::rc::Rc;
+use uuid::Uuid;
 
 fn use_init_signals() {
     use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
@@ -17,10 +20,36 @@ fn use_init_signals() {
     use_context_provider(|| Signal::new(None::<EdgeCreation>));
 }
 
+#[derive(Debug)]
+pub enum NodeEditorCommand {
+    DeleteAll,
+    AddNode(String),
+    AddAnalyzer(String),
+}
+
 #[component]
-pub fn NodeDragDropContainer() -> Element {
+pub fn NodeEditor(command: Signal<Option<NodeEditorCommand>>) -> Element {
     use_init_signals();
 
+    use_effect(move || {
+        let command = command.read();
+        if let Some(command) = &*(command) {
+            match command {
+                NodeEditorCommand::DeleteAll => {
+                    println!("NodeEditor: Delete all nodes");
+                    use_delete_scenery();
+                }
+                NodeEditorCommand::AddNode(node_type) => {
+                    println!("NodeEditor: Node selected: {:?}", node_type);
+                    use_add_node(node_type.clone(), Uuid::nil());
+                }
+                NodeEditorCommand::AddAnalyzer(analyzer_type) => {
+                    println!("NodEditor: Analyzer selected: {:?}", analyzer_type);
+                    // use_add_analyzer(analyzer_type.clone());
+                }
+            }
+        }
+    });
     rsx! {
         div {
             onmounted: use_on_mounted(),

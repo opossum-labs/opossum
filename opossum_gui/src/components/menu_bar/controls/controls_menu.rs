@@ -1,6 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::components::menu_bar::sub_menu_item::MenuItem;
+// use crate::components::menu_bar::sub_menu_item::MenuItem;
 use dioxus::{desktop::use_window, prelude::*};
+
+use crate::components::menu_bar::controls::sub_menu_item::MenuItem;
 #[must_use]
 pub fn use_maximize(mut maximize_symbol: Signal<&'static str>) -> Callback<Event<MouseData>> {
     let window = use_window();

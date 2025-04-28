@@ -1,4 +1,4 @@
-use crate::{components::menu_bar::sub_menu_item::MenuItem, MAIN_WINDOW_SIZE};
+use crate::{components::menu_bar::controls::sub_menu_item::MenuItem, MAIN_WINDOW_SIZE};
 use dioxus::prelude::*;
 use opossum_backend::usize_to_f64;
 

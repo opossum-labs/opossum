@@ -3,6 +3,17 @@
 use super::http_client::HTTPClient;
 use opossum_backend::general::{NodeType, VersionInfo};
 
+/// Send a request to check if the bace url is reachable and corresponds to the opossum backend.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the request fails (e.g. the base url is not reachable)
+/// - the response cannot be deserialized into a string
+pub async fn get_api_welcome(client: &HTTPClient) -> Result<String, String> {
+    client.get::<String>("/api/").await
+}
+
 /// Send reqeust to get the version of the opossum backend and the opossum library.
 ///
 /// # Errors
@@ -23,13 +34,12 @@ pub async fn get_node_types(client: &HTTPClient) -> Result<Vec<NodeType>, String
     client.get::<Vec<NodeType>>("/api/node_types").await
 }
 
-/// Send a request to check if the bace url is reachable and corresponds to the opossum backend.
-///
-/// # Errors
-///
-/// This function will return an error if
-/// - the request fails (e.g. the base url is not reachable)
-/// - the response cannot be deserialized into a string
-pub async fn get_api_welcome(client: &HTTPClient) -> Result<String, String> {
-    client.get::<String>("/api/").await
-}
+// /// Send a request to get all available anaylzer types.
+// ///
+// /// # Errors
+// ///
+// /// This function will return an error if
+// /// - the response cannot be deserialized into a vector of [`NodeType`] structs.
+// pub async fn get_analyzer_types(client: &HTTPClient) -> Result<Vec<NodeType>, String> {
+//     client.get::<Vec<NodeType>>("/api/analyzer_types").await
+// }

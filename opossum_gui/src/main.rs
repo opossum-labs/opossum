@@ -2,17 +2,8 @@
 
 use dioxus::prelude::*;
 use opossum_gui::components::app::App;
-// use opossum_gui::router::Route;
-use opossum_gui::{
-    components::{
-        context_menu::cx_menu::ContextMenu, logger::logger_component::Logger,
-        menu_bar::menu_bar_component::MenuBar, node_components::NodeDragDropContainer,
-        node_property_config::node_config_menu::NodePropertyConfigMenu,
-    },
-    MainWindowSize, CONTEXT_MENU, MAIN_WINDOW_SIZE,
-};
 
-// const MAIN_CSS: Asset = asset!("./assets/main.css");
+const MAIN_CSS: Asset = asset!("./assets/main.css");
 // const PLOTLY_JS: Asset = asset!("./assets/plotly.js");
 // const THREE_MOD_JS: Asset = asset!("./assets/three_mod.js");
 // const ORBIT_CTRLS: Asset = asset!("./assets/orbitControls.js");
@@ -40,9 +31,9 @@ fn main() {
                 dioxus::desktop::Config::new()
                     //.with_window(window)
                     // .with_menu(None)
-                     .with_icon(
-                         Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
-                     ),
+                    .with_icon(
+                        Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
+                    ),
             )
             .launch(app);
     }
@@ -56,10 +47,11 @@ fn main() {
 #[component]
 fn app() -> Element {
     rsx! {
-        // document::Stylesheet {href: MAIN_CSS }
+        document::Stylesheet {href: MAIN_CSS }
         document::Stylesheet { href: MDB_CSS }
         document::Stylesheet { href: MDB_SUB_CSS }
         document::Script { src: MDB_JS }
-        div { "data-bs-theme": "dark", class: "d-flex flex-column vh-100", App {} }
+        App{}
+//        div { "data-bs-theme": "dark", class: "d-flex flex-column vh-100", App {} }
     }
 }

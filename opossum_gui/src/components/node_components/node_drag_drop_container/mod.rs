@@ -1,7 +1,8 @@
 use uuid::Uuid;
 mod callbacks;
-pub mod drag_drop_container;
-pub use drag_drop_container::NodeDragDropContainer;
+pub mod node_editor;
+pub use node_editor::{NodeEditor, NodeEditorCommand};
+mod node_editor_commands;
 
 #[derive(Clone, Copy)]
 pub struct DraggedNode {

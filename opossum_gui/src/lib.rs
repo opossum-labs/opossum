@@ -3,8 +3,7 @@ use components::{
     context_menu::cx_menu::CxMenu,
     logger::Logs,
     node_components::{
-        edges::edges_component::Edges, node_drag_drop_container::drag_drop_container::Zoom,
-        NodesStore,
+        edges::edges_component::Edges, node_drag_drop_container::node_editor::Zoom, NodesStore,
     },
 };
 use dioxus::signals::{GlobalSignal, Signal};

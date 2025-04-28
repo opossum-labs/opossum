@@ -1,31 +1,49 @@
-use dioxus::{desktop::use_window, prelude::*};
+use dioxus::prelude::*;
 use dioxus_free_icons::{
-    icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize, FaWindowMinimize},
+    icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
     Icon,
 };
 
 use crate::components::menu_bar::{
-    callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
-    controls::controls_menu::ControlsMenu,
-    edit::nodes_menu::NodesMenu,
-    file::callbacks::{use_new_project, use_open_project, use_save_project},
+    // callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
+    // controls::controls_menu::ControlsMenu,
+    edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+    // file::callbacks::{use_new_project, use_open_project, use_save_project},
     help::about::About,
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
 
+#[derive(Debug)]
+pub enum MenuSelection {
+    NewProject,
+    OpenProject,
+    SaveProject,
+    AddNode(String),
+    AddAnalyzer(String),
+    WinMaximize,
+    WinMinimize,
+    WinClose,
+}
 #[component]
-pub fn MenuBar() -> Element {
+pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
     let mut about_window = use_signal(|| false);
-    let window = use_window();
-    let is_dragging = use_signal(|| false);
-    let maximize_symbol = use_signal(|| {
-        if window.is_maximized() {
-            "🗗"
-        } else {
-            "🗖"
-        }
+    let node_selected = use_signal(|| String::new());
+    let analyzer_selected = use_signal(|| String::new());
+    // let window = use_window();
+    // let is_dragging = use_signal(|| false);
+    // let maximize_symbol = use_signal(|| {
+    //     if window.is_maximized() {
+    //         "🗗"
+    //     } else {
+    //         "🗖"
+    //     }
+    // });
+    use_effect(move || menu_item_selected.set(Some(MenuSelection::AddNode(node_selected()))));
+    use_effect(move || {
+        menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_selected())))
     });
+
     rsx! {
         nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",
             div { class: "container-fluid",
@@ -57,7 +75,7 @@ pub fn MenuBar() -> Element {
                                     a {
                                         class: "dropdown-item",
                                         role: "button",
-                                        onclick: move |e| { use_new_project()(e) },
+                                        onclick: move |_| { menu_item_selected.set(Some(MenuSelection::NewProject)) },
                                         "New Project"
                                     }
                                 }
@@ -65,7 +83,7 @@ pub fn MenuBar() -> Element {
                                     a {
                                         class: "dropdown-item",
                                         role: "button",
-                                        onclick: move |e| { use_open_project()(e) },
+                                        onclick: move |_| { menu_item_selected.set(Some(MenuSelection::OpenProject)) },
                                         "Open Project"
                                     }
                                 }
@@ -73,7 +91,7 @@ pub fn MenuBar() -> Element {
                                     a {
                                         class: "dropdown-item",
                                         role: "button",
-                                        onclick: move |e| { use_save_project()(e) },
+                                        onclick: move |_| { menu_item_selected.set(Some(MenuSelection::SaveProject)) },
                                         "Save Project"
                                     }
                                 }
@@ -95,7 +113,9 @@ pub fn MenuBar() -> Element {
                                         "Add Node"
                                         Icon { height: 10, icon: FaAngleRight }
                                     }
-                                    ul { class: "dropdown-menu dropdown-submenu", NodesMenu {} }
+                                    ul { class: "dropdown-menu dropdown-submenu",
+                                        NodesMenu { node_selected }
+                                    }
                                 }
                                 li {
                                     a {
@@ -104,7 +124,9 @@ pub fn MenuBar() -> Element {
                                         "Add Analyzer"
                                         Icon { height: 10, icon: FaAngleRight }
                                     }
-                                    ul { class: "dropdown-menu dropdown-submenu" }
+                                    ul { class: "dropdown-menu dropdown-submenu",
+                                        AnalyzersMenu { analyzer_selected }
+                                    }
                                 }
                             }
                         }
@@ -130,11 +152,17 @@ pub fn MenuBar() -> Element {
                     }
                 }
                 div { class: "d-flex align-items-center",
-                    a { class: "text-secondary me-2", href: "#",
+                    a { class: "text-secondary me-2", role: "button",
+                        onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinMinimize)),
                         Icon { width: 25, icon: FaWindowMinimize }
                     }
-                    a { class: "text-secondary me-2", href: "#",
+                    a { class: "text-secondary me-2", role: "button",
+                        onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinMaximize)),
                         Icon { width: 25, icon: FaWindowMaximize }
+                    }
+                    a { class: "text-secondary me-2", role: "button",
+                        onclick: move |_| menu_item_selected.set(Some(MenuSelection::WinClose)),
+                        Icon { width: 25, icon: FaPowerOff }
                     }
                 }
             }
@@ -142,7 +170,7 @@ pub fn MenuBar() -> Element {
         {
             if *about_window.read() {
                 rsx! {
-                    About { show_about: about_window } // show_about: about_window
+                    About { show_about: about_window }
                 }
             } else {
                 rsx! {}
