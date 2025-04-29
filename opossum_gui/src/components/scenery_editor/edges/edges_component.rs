@@ -4,9 +4,9 @@ use crate::{
     api::{self},
     components::{
         context_menu::cx_menu::CxMenu,
-        scenery_editor::graph_editor::graph_editor_component::ZoomShift,
+        scenery_editor::{graph_editor::graph_editor_component::ZoomShift, EDGES},
     },
-    CONTEXT_MENU, EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
+    CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{nodes::ConnectInfo, PortType};

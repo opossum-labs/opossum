@@ -4,8 +4,8 @@ use uuid::Uuid;
 use crate::components::{
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
-    scenery_editor::{graph_editor::NodeEditorCommand, GraphEditor},
     node_editor::NodeEditor,
+    scenery_editor::{graph_editor::NodeEditorCommand, GraphEditor},
 };
 
 #[component]
@@ -13,7 +13,7 @@ pub fn App() -> Element {
     use_context_provider(|| Signal::new(Uuid::nil()));
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
-    let selected_node=use_signal(|| None::<Uuid>);
+    let selected_node = use_signal(|| None::<Uuid>);
     // let mut main_window = use_signal(|| None::<Rc<MountedData>>);
 
     use_effect(move || {
@@ -60,9 +60,14 @@ pub fn App() -> Element {
                 MenuBar { menu_item_selected }
             }
             div { class: "d-flex flex-row",
-                div { class: "p-1", NodeEditor {node: selected_node} }
+                div { class: "p-1",
+                    NodeEditor { node: selected_node }
+                }
                 div { class: "p-1 flex-grow-1",
-                    GraphEditor { command: node_editor_command }
+                    GraphEditor {
+                        command: node_editor_command,
+                        node_selected: selected_node,
+                    }
                 }
             }
             footer {

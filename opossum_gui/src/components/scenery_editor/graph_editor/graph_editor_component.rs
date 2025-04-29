@@ -28,9 +28,12 @@ pub enum NodeEditorCommand {
 }
 
 #[component]
-pub fn GraphEditor(command: Signal<Option<NodeEditorCommand>>) -> Element {
+pub fn GraphEditor(
+    command: ReadOnlySignal<Option<NodeEditorCommand>>,
+    node_selected: Signal<Option<Uuid>>,
+) -> Element {
     use_init_signals();
-
+    println!("GraphEditor: command: {:?}", command);
     use_effect(move || {
         let command = command.read();
         if let Some(command) = &*(command) {

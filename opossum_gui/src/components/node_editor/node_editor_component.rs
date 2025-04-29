@@ -2,12 +2,12 @@ use dioxus::prelude::*;
 use uuid::Uuid;
 
 #[component]
-pub fn NodeEditor(node: Signal<Option<Uuid>>) -> Element {
-    let selected_node=node.read_unchecked();
+pub fn NodeEditor(node: ReadOnlySignal<Option<Uuid>>) -> Element {
+    let selected_node = node.read_unchecked();
     selected_node.map_or_else(
         || {
             rsx! {
-                div {"No node selected" }
+                div { "No node selected" }
             }
         },
         |uuid| {
@@ -15,7 +15,7 @@ pub fn NodeEditor(node: Signal<Option<Uuid>>) -> Element {
                 div {
                     h5 { "Node Properties" }
                     p { {format!("ID: {}", uuid)} }
-                    // Add more properties here as needed
+                                // Add more properties here as needed
                 }
             )
         },

@@ -4,7 +4,8 @@ use uuid::Uuid;
 
 use crate::{
     api::{self},
-    HTTP_API_CLIENT, NODES_STORE, OPOSSUM_UI_LOGS,
+    components::scenery_editor::NODES_STORE,
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 
 pub fn delete_scenery() {

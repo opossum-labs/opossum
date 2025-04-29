@@ -1,10 +1,9 @@
 pub mod app;
 pub mod context_menu;
 pub mod file_callbacks;
-pub mod graph_node;
 pub mod logger;
 pub mod menu_bar;
-pub mod scenery_editor;
 pub mod node_editor;
+pub mod scenery_editor;
 // pub mod plot;
 // pub mod render_3d;

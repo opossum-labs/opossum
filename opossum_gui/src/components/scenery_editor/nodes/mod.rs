@@ -9,11 +9,11 @@ use opossum_backend::{
 };
 use uuid::Uuid;
 
-use crate::{api, ACTIVE_NODE, EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM};
+use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM};
 
 use super::{
     graph_editor::graph_editor_component::ZoomShift, ports::ports_component::Ports, NodeElement,
-    NodeOffset,
+    NodeOffset, ACTIVE_NODE, EDGES,
 };
 
 #[derive(Clone, Eq, PartialEq, Default)]

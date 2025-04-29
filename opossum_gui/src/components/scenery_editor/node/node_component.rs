@@ -4,10 +4,14 @@ use crate::{
     api::{self},
     components::{
         context_menu::cx_menu::CxMenu,
-        graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader},
-        scenery_editor::{nodes::NodesStore, ports::ports_component::NodePorts},
+        scenery_editor::{
+            graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader},
+            nodes::NodesStore,
+            ports::ports_component::NodePorts,
+            NODES_STORE,
+        },
     },
-    CONTEXT_MENU, HTTP_API_CLIENT, NODES_STORE, OPOSSUM_UI_LOGS, ZOOM,
+    CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
 };
 use dioxus::prelude::*;
 use opossum_backend::usize_to_f64;
@@ -44,12 +48,12 @@ pub fn Node(node: NodeElement, node_activated: Signal<bool>) -> Element {
             class: "node draggable prevent-select {is_active}",
             style: "transform: scale({zoom}); transform-origin: center; position: absolute; left: {x}px; top: {y}px; z-index: {z_index};",
             onmousedown: on_mouse_down,
-            onclick: move |_| {
-                println!("Node clicked");
-                if !node.is_active {
-                    node_activated.set(true);
-                }
-            },
+            // onclick: move |_| {
+            //     println!("Node clicked");
+            //     if !node.is_active {
+            //         node_activated.set(true);
+            //     }
+            // },
             oncontextmenu: use_node_context_menu(*node.id()),
 
             GraphNodeContent {
@@ -80,6 +84,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<bool>) -> Element {
 #[must_use]
 pub fn use_node_context_menu(node_id: Uuid) -> Callback<Event<MouseData>> {
     use_callback(move |evt: Event<MouseData>| {
+        println!("Node context menu clicked");
         evt.prevent_default();
         let mut cx_menu = CONTEXT_MENU.write();
         *cx_menu = CxMenu::new(

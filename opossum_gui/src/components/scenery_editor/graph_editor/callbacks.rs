@@ -3,8 +3,8 @@ use std::rc::Rc;
 use super::{graph_editor_component::ZoomShift, DraggedNode, NodeOffset};
 use crate::{
     api::{self},
-    components::scenery_editor::edges::edges_component::EdgeCreation,
-    EDGES, HTTP_API_CLIENT, NODES_STORE, OPOSSUM_UI_LOGS, ZOOM,
+    components::scenery_editor::{edges::edges_component::EdgeCreation, EDGES, NODES_STORE},
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
 };
 use dioxus::prelude::*;
 

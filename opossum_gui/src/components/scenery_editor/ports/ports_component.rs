@@ -6,9 +6,9 @@ use crate::{
     api::{self},
     components::scenery_editor::{
         edges::edges_component::{Edge, EdgeCreation},
-        NodeOffset,
+        NodeOffset, EDGES,
     },
-    EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
 };
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct Ports {

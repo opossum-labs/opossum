@@ -4,10 +4,11 @@ use uuid::Uuid;
 pub mod node_component;
 pub use node_component::Node;
 
-use crate::{EDGES, ZOOM};
+use crate::ZOOM;
 
 use super::{
     graph_editor::graph_editor_component::ZoomShift, ports::ports_component::Ports, NodesStore,
+    EDGES,
 };
 
 #[derive(Clone, PartialEq, Default)]
