@@ -2,8 +2,8 @@ use api::http_client::HTTPClient;
 use components::{
     context_menu::cx_menu::CxMenu,
     logger::Logs,
-    node_components::{
-        edges::edges_component::Edges, node_drag_drop_container::node_editor::Zoom, NodesStore,
+    scenery_editor::{
+        edges::edges_component::Edges, graph_editor::graph_editor_component::Zoom, NodesStore,
     },
 };
 use dioxus::signals::{GlobalSignal, Signal};

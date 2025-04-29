@@ -7,7 +7,7 @@ pub use node_component::Node;
 use crate::{EDGES, ZOOM};
 
 use super::{
-    node_drag_drop_container::node_editor::ZoomShift, ports::ports_component::Ports, NodesStore,
+    graph_editor::graph_editor_component::ZoomShift, ports::ports_component::Ports, NodesStore,
 };
 
 #[derive(Clone, PartialEq, Default)]

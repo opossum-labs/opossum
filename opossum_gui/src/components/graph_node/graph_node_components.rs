@@ -2,7 +2,7 @@ use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::usize_to_f64;
 use uuid::Uuid;
 
-use crate::components::node_components::DraggedNode;
+use crate::components::scenery_editor::DraggedNode;
 
 #[component]
 pub fn GraphNodeContent(

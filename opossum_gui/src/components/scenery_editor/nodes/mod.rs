@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::{api, ACTIVE_NODE, EDGES, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM};
 
 use super::{
-    node_drag_drop_container::node_editor::ZoomShift, ports::ports_component::Ports, NodeElement,
+    graph_editor::graph_editor_component::ZoomShift, ports::ports_component::Ports, NodeElement,
     NodeOffset,
 };
 

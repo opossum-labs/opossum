@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-use super::{node_editor::ZoomShift, DraggedNode, NodeOffset};
+use super::{graph_editor_component::ZoomShift, DraggedNode, NodeOffset};
 use crate::{
     api::{self},
-    components::node_components::edges::edges_component::EdgeCreation,
+    components::scenery_editor::edges::edges_component::EdgeCreation,
     EDGES, HTTP_API_CLIENT, NODES_STORE, OPOSSUM_UI_LOGS, ZOOM,
 };
 use dioxus::prelude::*;

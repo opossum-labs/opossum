@@ -1,11 +1,11 @@
-use crate::components::node_components::{
+use crate::components::scenery_editor::{
     edges::edges_component::{EdgeCreation, EdgeCreationComponent, EdgesComponent},
-    node_drag_drop_container::{
+    graph_editor::{
         callbacks::{
             use_on_double_click, use_on_key_down, use_on_mounted, use_on_mouse_move,
             use_on_mouse_up, use_on_resize, use_on_wheel,
         },
-        node_editor_commands::{add_node, delete_scenery},
+        graph_editor_commands::{add_node, delete_scenery},
     },
     DraggedNode, NodeOffset, Nodes,
 };
@@ -28,7 +28,7 @@ pub enum NodeEditorCommand {
 }
 
 #[component]
-pub fn NodeEditor(command: Signal<Option<NodeEditorCommand>>) -> Element {
+pub fn GraphEditor(command: Signal<Option<NodeEditorCommand>>) -> Element {
     use_init_signals();
 
     use_effect(move || {

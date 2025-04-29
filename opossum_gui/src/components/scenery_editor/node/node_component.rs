@@ -5,7 +5,7 @@ use crate::{
     components::{
         context_menu::cx_menu::CxMenu,
         graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader},
-        node_components::{nodes::NodesStore, ports::ports_component::NodePorts},
+        scenery_editor::{nodes::NodesStore, ports::ports_component::NodePorts},
     },
     CONTEXT_MENU, HTTP_API_CLIENT, NODES_STORE, OPOSSUM_UI_LOGS, ZOOM,
 };
@@ -14,7 +14,7 @@ use opossum_backend::usize_to_f64;
 use uuid::Uuid;
 
 #[component]
-pub fn Node(node: NodeElement) -> Element {
+pub fn Node(node: NodeElement, node_activated: Signal<bool>) -> Element {
     let zoom = ZOOM.read().current();
 
     let input_ports = node.input_ports();
@@ -44,6 +44,12 @@ pub fn Node(node: NodeElement) -> Element {
             class: "node draggable prevent-select {is_active}",
             style: "transform: scale({zoom}); transform-origin: center; position: absolute; left: {x}px; top: {y}px; z-index: {z_index};",
             onmousedown: on_mouse_down,
+            onclick: move |_| {
+                println!("Node clicked");
+                if !node.is_active {
+                    node_activated.set(true);
+                }
+            },
             oncontextmenu: use_node_context_menu(*node.id()),
 
             GraphNodeContent {

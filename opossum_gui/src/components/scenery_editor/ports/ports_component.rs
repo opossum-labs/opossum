@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{
     api::{self},
-    components::node_components::{
+    components::scenery_editor::{
         edges::edges_component::{Edge, EdgeCreation},
         NodeOffset,
     },

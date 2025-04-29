@@ -1,8 +1,8 @@
 use uuid::Uuid;
 mod callbacks;
-pub mod node_editor;
-pub use node_editor::{NodeEditor, NodeEditorCommand};
-mod node_editor_commands;
+pub mod graph_editor_component;
+pub use graph_editor_component::{GraphEditor, NodeEditorCommand};
+mod graph_editor_commands;
 
 #[derive(Clone, Copy)]
 pub struct DraggedNode {
