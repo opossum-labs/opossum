@@ -70,7 +70,6 @@ pub fn App() -> Element {
                     }
                 }
             }
-            ZoomShiftContainer {}
             footer {
                 class: "footer p-1",
                 style: "background-color:rgb(119, 119, 119);",

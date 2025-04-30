@@ -19,17 +19,26 @@ use uuid::Uuid;
 
 #[component]
 pub fn Node(node: NodeElement, node_activated: Signal<bool>) -> Element {
-    let zoom = ZOOM.read().current();
-
+    // let zoom = ZOOM.read().current();
+    let mut shift=use_signal(||(0,0));
+    let mut is_dragging=use_signal(||false);
+    let mut current_mouse_pos=use_signal(||(0,0));
     let input_ports = node.input_ports();
     let output_ports = node.output_ports();
     let port_height_factor = usize_to_f64(output_ports.len().max(input_ports.len()));
     let on_mouse_down = {
+
         let id = *node.id();
         let z_index = node.z_index();
         let is_active = node.is_active();
         move |event: MouseEvent| {
             event.prevent_default();
+            current_mouse_pos
+                    .set((
+                        event.client_coordinates().x as i32,
+                        event.client_coordinates().y as i32,
+                    ));
+                is_dragging.set(true);
             if !is_active {
                 NODES_STORE.write().set_node_active(id, z_index);
             }
@@ -44,10 +53,28 @@ pub fn Node(node: NodeElement, node_activated: Signal<bool>) -> Element {
 
     rsx! {
         div {
-            draggable: "true",
+            //draggable: "true",
             class: "node draggable prevent-select {is_active}",
-            style: "transform: scale({zoom}); transform-origin: center; position: absolute; left: {x}px; top: {y}px; z-index: {z_index};",
+            style: format!("transform-origin: center; position: absolute; left: {}px; top: {}px; z-index: {z_index};", shift().0,shift().1),
             onmousedown: on_mouse_down,
+            onmouseup: move |_| {
+                is_dragging.set(false);
+            },
+            onmousemove: move |event| {
+                if is_dragging() {
+                    let rel_shift_x = event.client_coordinates().x as i32
+                        - current_mouse_pos().0;
+                    let rel_shift_y = event.client_coordinates().y as i32
+                        - current_mouse_pos().1;
+                    current_mouse_pos
+                        .set((
+                            event.client_coordinates().x as i32,
+                            event.client_coordinates().y as i32,
+                        ));
+                    shift.set((shift().0 + rel_shift_x, shift().1 + rel_shift_y));
+                    event.stop_propagation();
+                }
+            },
             // onclick: move |_| {
             //     println!("Node clicked");
             //     if !node.is_active {

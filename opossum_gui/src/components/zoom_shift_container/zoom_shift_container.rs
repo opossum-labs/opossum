@@ -9,17 +9,17 @@ pub fn ZoomShiftContainer() -> Element {
     rsx!{
         div {
             id: "editor",
-            style:  "background-color: #e5e5f7; width: 600px; height: 400px; overflow: hidden;",
+            style: "background-color: #e5e5f7; width: 600px; height: 400px; overflow: hidden;",
             onwheel: move |event| {
                 let delta = event.delta().strip_units().y;
-                if delta > 0.0 {
-                     zoom *=  1.1
-                } else {
-                     zoom /= 1.1
-                };
+                if delta > 0.0 { zoom *= 1.1 } else { zoom /= 1.1 };
             },
             onmousedown: move |event| {
-                current_mouse_pos.set((event.client_coordinates().x as i32, event.client_coordinates().y as i32));
+                current_mouse_pos
+                    .set((
+                        event.client_coordinates().x as i32,
+                        event.client_coordinates().y as i32,
+                    ));
                 is_dragging.set(true);
             },
             onmouseup: move |_| {
@@ -27,9 +27,15 @@ pub fn ZoomShiftContainer() -> Element {
             },
             onmousemove: move |event| {
                 if is_dragging() {
-                    let rel_shift_x = event.client_coordinates().x as i32 - current_mouse_pos().0;
-                    let rel_shift_y = event.client_coordinates().y as i32 - current_mouse_pos().1;
-                    current_mouse_pos.set((event.client_coordinates().x as i32, event.client_coordinates().y as i32));
+                    let rel_shift_x = event.client_coordinates().x as i32
+                        - current_mouse_pos().0;
+                    let rel_shift_y = event.client_coordinates().y as i32
+                        - current_mouse_pos().1;
+                    current_mouse_pos
+                        .set((
+                            event.client_coordinates().x as i32,
+                            event.client_coordinates().y as i32,
+                        ));
                     shift.set((shift().0 + rel_shift_x, shift().1 + rel_shift_y));
                 }
             },
