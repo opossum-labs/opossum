@@ -5,7 +5,7 @@ use crate::components::{
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
     node_editor::NodeEditor,
-    scenery_editor::{graph_editor::NodeEditorCommand, GraphEditor},
+    scenery_editor::{graph_editor::NodeEditorCommand, GraphEditor}, zoom_shift_container::zoom_shift_container::ZoomShiftContainer,
 };
 
 #[component]
@@ -70,6 +70,7 @@ pub fn App() -> Element {
                     }
                 }
             }
+            ZoomShiftContainer {}
             footer {
                 class: "footer p-1",
                 style: "background-color:rgb(119, 119, 119);",
