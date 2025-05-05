@@ -49,7 +49,7 @@ pub fn GraphEditor(
                     add_node(node_type.clone(), Uuid::nil());
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                    println!("NodEditor: Analyzer selected: {:?}", analyzer_type);
+                    println!("NodeEditor: Analyzer selected: {:?}", analyzer_type);
                     add_analyzer(analyzer_type.clone());
                 }
             }
@@ -100,7 +100,7 @@ pub fn GraphEditor(
                 class: "zoom-shift-container",
                 style: format!("transform: translate({}px, {}px) scale({zoom});", shift().0, shift().1),
 
-                Nodes {}
+                Nodes {node_activated: node_selected}
                 svg { width: "100%", height: "100%", class: "edge-creation",
                     {
                         rsx! {

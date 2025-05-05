@@ -6,8 +6,9 @@ use crate::components::{
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
     node_editor::NodeEditor,
     scenery_editor::{graph_editor::NodeEditorCommand, GraphEditor},
-    zoom_shift_container::zoom_shift_container::ZoomShiftContainer,
 };
+
+use super::file_callbacks::use_save_project;
 
 #[component]
 pub fn App() -> Element {
@@ -22,34 +23,35 @@ pub fn App() -> Element {
         if let Some(menu_item) = &*(menu_item) {
             match menu_item {
                 MenuSelection::AddNode(node_selected) => {
-                    println!("Node selected: {:?}", node_selected);
+                    println!("App::Node selected: {node_selected}");
                     node_editor_command
                         .set(Some(NodeEditorCommand::AddNode(node_selected.clone())));
                 }
                 MenuSelection::AddAnalyzer(analyzer_selected) => {
-                    println!("Analyzer selected: {:?}", analyzer_selected);
+                    println!("App::Analyzer selected: {analyzer_selected}");
                     node_editor_command.set(Some(NodeEditorCommand::AddAnalyzer(
                         analyzer_selected.clone(),
                     )));
                 }
                 MenuSelection::NewProject => {
-                    println!("New project selected");
+                    println!("App::New project selected");
                     node_editor_command.set(Some(NodeEditorCommand::DeleteAll));
                 }
                 MenuSelection::OpenProject => {
-                    println!("Open project selected");
+                    println!("App::Open project selected");
                 }
                 MenuSelection::SaveProject => {
-                    println!("Save project selected");
+                    println!("App::Save project selected");
+                    // use_save_project();
                 }
                 MenuSelection::WinMaximize => {
-                    println!("Window maximize selected");
+                    println!("App::Window maximize selected");
                 }
                 MenuSelection::WinMinimize => {
-                    println!("Window minimize selected");
+                    println!("App::Window minimize selected");
                 }
                 MenuSelection::WinClose => {
-                    println!("Window close selected");
+                    println!("App::Window close selected");
                 }
             }
         }

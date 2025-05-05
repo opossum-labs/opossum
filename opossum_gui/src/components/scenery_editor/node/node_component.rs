@@ -11,14 +11,14 @@ use crate::{
             NODES_STORE,
         },
     },
-    CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
+    CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::prelude::*;
 use opossum_backend::usize_to_f64;
 use uuid::Uuid;
 
 #[component]
-pub fn Node(node: NodeElement, node_activated: Signal<bool>) -> Element {
+pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element {
     // let zoom = ZOOM.read().current();
     let mut shift = use_signal(|| (0, 0));
     let mut is_dragging = use_signal(|| false);
@@ -39,11 +39,12 @@ pub fn Node(node: NodeElement, node_activated: Signal<bool>) -> Element {
             is_dragging.set(true);
             if !is_active {
                 NODES_STORE.write().set_node_active(id, z_index);
+                node_activated.set(Some(id));
             }
         }
     };
     let node_size = NodesStore::size();
-    let (x, y) = (node.x() - node_size.x / 2., node.y() - node_size.y / 2.);
+    // let (x, y) = (node.x() - node_size.x / 2., node.y() - node_size.y / 2.);
 
     let is_active = if node.is_active() { "active-node" } else { "" };
     let z_index = node.z_index();
@@ -73,12 +74,12 @@ pub fn Node(node: NodeElement, node_activated: Signal<bool>) -> Element {
                     event.stop_propagation();
                 }
             },
-            // onclick: move |_| {
-            //     println!("Node clicked");
-            //     if !node.is_active {
-            //         node_activated.set(true);
-            //     }
-            // },
+            onclick: move |_| {
+                println!("Node clicked");
+                if !node.is_active {
+                    node_activated.set(Some(node.id));
+                }
+            },
             oncontextmenu: use_node_context_menu(*node.id()),
 
             GraphNodeContent {

@@ -1,10 +1,9 @@
 use dioxus::prelude::*;
-
+use uuid::Uuid;
 use crate::components::scenery_editor::{Node, NODES_STORE};
 
 #[component]
-pub fn Nodes() -> Element {
-    let node_activated = use_signal(|| false);
+pub fn Nodes(node_activated: Signal<Option<Uuid>>) -> Element {
     rsx! {
         for node in NODES_STORE.read().optic_nodes().read().iter() {
             {

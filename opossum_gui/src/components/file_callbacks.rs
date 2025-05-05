@@ -1,6 +1,6 @@
 use crate::OPOSSUM_UI_LOGS;
 use dioxus::prelude::*;
-use rfd::FileDialog;
+use rfd::{AsyncFileDialog, FileDialog};
 use std::fs;
 
 pub fn use_new_project() -> Callback<Event<MouseData>> {
@@ -23,15 +23,26 @@ pub fn use_open_file() -> Callback<Event<MouseData>> {
 }
 
 pub fn use_save_project() {
-    let _future = use_resource({
-        move || async move {
-            let _path = FileDialog::new()
-                .set_directory("/")
-                .set_title("Save OPOSSUM setup file")
-                .add_filter("Opossum setup file", &["opm"])
-                .save_file();
-        }
-    });
+    // use_resource({
+    //      move || 
+    // spawn(async move {
+    //         let _path = FileDialog::new()
+    //             .set_directory("/")
+    //             .set_title("Save OPOSSUM setup file")
+    //             .add_filter("Opossum setup file", &["opm"])
+    //             .save_file();});
+    //    }
+    // });
+    let future = async {
+        let file = AsyncFileDialog::new()
+            .add_filter("text", &["txt", "rs"])
+            .add_filter("rust", &["rs", "toml"])
+            .set_directory("/")
+            .pick_file()
+            .await;
+    
+        let data = file.unwrap().read().await;
+    };
 }
 
 pub fn use_open_project() -> Callback<Event<MouseData>> {
