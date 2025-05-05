@@ -1,10 +1,7 @@
 use crate::components::scenery_editor::{
     edges::edges_component::{EdgeCreation, EdgeCreationComponent, EdgesComponent},
     graph_editor::{
-        callbacks::{
-            use_on_double_click, use_on_key_down, use_on_mounted,
-            use_on_resize,
-        },
+        callbacks::{use_on_double_click, use_on_key_down, use_on_mounted, use_on_resize},
         graph_editor_commands::{add_node, delete_scenery},
     },
     DraggedNode, NodeOffset, Nodes,
@@ -33,10 +30,10 @@ pub fn GraphEditor(
     node_selected: Signal<Option<Uuid>>,
 ) -> Element {
     use_init_signals();
-    let mut shift=use_signal(||(0,0));
-    let mut is_dragging=use_signal(||false);
-    let mut current_mouse_pos=use_signal(||(0,0));
-    let mut zoom=use_signal(||1.0);
+    let mut shift = use_signal(|| (0, 0));
+    let mut is_dragging = use_signal(|| false);
+    let mut current_mouse_pos = use_signal(|| (0, 0));
+    let mut zoom = use_signal(|| 1.0);
 
     use_effect(move || {
         let command = command.read();

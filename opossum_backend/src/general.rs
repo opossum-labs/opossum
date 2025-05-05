@@ -116,4 +116,20 @@ mod test {
         assert_eq!(resp.status(), StatusCode::OK);
         let _: VersionInfo = test::read_body_json(resp).await;
     }
+    #[actix_web::test]
+    async fn get_node_types() {
+        let app = test::init_service(App::new().service(super::get_node_types)).await;
+        let req = test::TestRequest::get().uri("/node_types").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let _: Vec<NodeType> = test::read_body_json(resp).await;
+    }
+    #[actix_web::test]
+    async fn get_analyzer_types() {
+        let app = test::init_service(App::new().service(super::get_analyzer_types)).await;
+        let req = test::TestRequest::get().uri("/analyzer_types").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let _: Vec<AnalyzerType> = test::read_body_json(resp).await;
+    }
 }

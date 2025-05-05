@@ -2,11 +2,11 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn ZoomShiftContainer() -> Element {
-    let mut shift=use_signal(||(0,0));
-    let mut is_dragging=use_signal(||false);
-    let mut current_mouse_pos=use_signal(||(0,0));
-    let mut zoom=use_signal(||1.0);
-    rsx!{
+    let mut shift = use_signal(|| (0, 0));
+    let mut is_dragging = use_signal(|| false);
+    let mut current_mouse_pos = use_signal(|| (0, 0));
+    let mut zoom = use_signal(|| 1.0);
+    rsx! {
         div {
             id: "editor",
             style: "background-color: #e5e5f7; width: 600px; height: 400px; overflow: hidden;",

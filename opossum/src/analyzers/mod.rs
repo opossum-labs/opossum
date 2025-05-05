@@ -45,10 +45,11 @@ pub enum AnalyzerType {
 }
 impl AnalyzerType {
     /// Returns the available analyzer types.
-    /// 
+    ///
     /// This function returns a vector of all available analyzer types. This is needed for
     /// the backend / gui to determine which analyzers are available.
-    pub fn analyzer_types() -> Vec<AnalyzerType> {
+    #[must_use]
+    pub fn analyzer_types() -> Vec<Self> {
         Self::iter().collect()
     }
 }

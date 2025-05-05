@@ -20,25 +20,23 @@ use uuid::Uuid;
 #[component]
 pub fn Node(node: NodeElement, node_activated: Signal<bool>) -> Element {
     // let zoom = ZOOM.read().current();
-    let mut shift=use_signal(||(0,0));
-    let mut is_dragging=use_signal(||false);
-    let mut current_mouse_pos=use_signal(||(0,0));
+    let mut shift = use_signal(|| (0, 0));
+    let mut is_dragging = use_signal(|| false);
+    let mut current_mouse_pos = use_signal(|| (0, 0));
     let input_ports = node.input_ports();
     let output_ports = node.output_ports();
     let port_height_factor = usize_to_f64(output_ports.len().max(input_ports.len()));
     let on_mouse_down = {
-
         let id = *node.id();
         let z_index = node.z_index();
         let is_active = node.is_active();
         move |event: MouseEvent| {
             event.prevent_default();
-            current_mouse_pos
-                    .set((
-                        event.client_coordinates().x as i32,
-                        event.client_coordinates().y as i32,
-                    ));
-                is_dragging.set(true);
+            current_mouse_pos.set((
+                event.client_coordinates().x as i32,
+                event.client_coordinates().y as i32,
+            ));
+            is_dragging.set(true);
             if !is_active {
                 NODES_STORE.write().set_node_active(id, z_index);
             }
