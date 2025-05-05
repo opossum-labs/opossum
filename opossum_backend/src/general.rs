@@ -2,6 +2,7 @@
 use std::fmt::Display;
 
 use actix_web::{get, web::Json, Responder};
+use opossum::analyzers::AnalyzerType;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -78,10 +79,20 @@ async fn get_node_types() -> Result<Json<Vec<NodeType>>, ErrorResponse> {
         .collect();
     Ok(Json(node_types))
 }
+/// Return a list of available analyzer types of OPOSSUM
+///
+/// Return a list of all available analyzer types from the OPOSSUM library.
+#[utoipa::path(get, responses((status = OK, description = "success", body = Vec<AnalyzerType>)), tag="general")]
+#[get("/analyzer_types")]
+async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, ErrorResponse> {
+    let analyzer_types = opossum::analyzers::AnalyzerType::analyzer_types();
+    Ok(Json(analyzer_types))
+}
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_version);
     cfg.service(get_hello);
     cfg.service(get_node_types);
+    cfg.service(get_analyzer_types);
 }
 #[cfg(test)]
 mod test {
