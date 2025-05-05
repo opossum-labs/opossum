@@ -10,21 +10,16 @@ path-guid = "E3D4E364-1CA1-45A4-A48B-ED66417EA5E0"
 license = false
 eula = false
 
-# temprary hack to make utoipa-swagger-ui 9.0.0 compile until a fix is available.
-[dependencies.zip]
-version = "=2.3.0"
-
 [dependencies]
 opossum = { path = "../opossum" }
 actix-web = "4"
 actix-cors = "0.7.0"
 env_logger = "0.11"
-log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
 uom = {version="0.36", features = ["serde"] }
 utoipa = {version ="5.3.1", features = ["actix_extras", "uuid"] }
 utoipa-actix-web = "0.1"
-utoipa-swagger-ui = { version ="9.0.0", features = ["actix-web", "vendored"] }
+utoipa-swagger-ui = { version ="9.0.1", features = ["actix-web", "vendored"] }
 serde_json = { version = "1"}
 nalgebra = { version = "0.33", features = ["serde-serialize"] }

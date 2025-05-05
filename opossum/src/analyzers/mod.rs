@@ -17,6 +17,7 @@ pub use raytrace::RayTraceConfig;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
+use strum::IntoEnumIterator;
 use utoipa::ToSchema;
 
 /// Type of analysis to be performed.
@@ -41,6 +42,15 @@ pub enum AnalyzerType {
     /// given number of bounces.
     #[schema(value_type=())]
     GhostFocus(GhostFocusConfig),
+}
+impl AnalyzerType {
+    /// Returns the available analyzer types.
+    /// 
+    /// This function returns a vector of all available analyzer types. This is needed for
+    /// the backend / gui to determine which analyzers are available.
+    pub fn analyzer_types() -> Vec<AnalyzerType> {
+        Self::iter().collect()
+    }
 }
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
