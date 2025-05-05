@@ -1,7 +1,7 @@
 //! General api calls
 
 use super::http_client::HTTPClient;
-use opossum_backend::general::{NodeType, VersionInfo};
+use opossum_backend::{general::{NodeType, VersionInfo}, AnalyzerType};
 
 /// Send a request to check if the bace url is reachable and corresponds to the opossum backend.
 ///
@@ -34,12 +34,12 @@ pub async fn get_node_types(client: &HTTPClient) -> Result<Vec<NodeType>, String
     client.get::<Vec<NodeType>>("/api/node_types").await
 }
 
-// /// Send a request to get all available anaylzer types.
-// ///
-// /// # Errors
-// ///
-// /// This function will return an error if
-// /// - the response cannot be deserialized into a vector of [`NodeType`] structs.
-// pub async fn get_analyzer_types(client: &HTTPClient) -> Result<Vec<NodeType>, String> {
-//     client.get::<Vec<NodeType>>("/api/analyzer_types").await
-// }
+/// Send a request to get all available anaylzer types.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the response cannot be deserialized into a vector of [`AnalyzerType`] structs.
+pub async fn get_analyzer_types(client: &HTTPClient) -> Result<Vec<AnalyzerType>, String> {
+    client.get::<Vec<AnalyzerType>>("/api/analyzer_types").await
+}

@@ -2,11 +2,12 @@ use crate::components::scenery_editor::{
     edges::edges_component::{EdgeCreation, EdgeCreationComponent, EdgesComponent},
     graph_editor::{
         callbacks::{use_on_double_click, use_on_key_down, use_on_mounted, use_on_resize},
-        graph_editor_commands::{add_node, delete_scenery},
+        graph_editor_commands::{add_analyzer, add_node, delete_scenery},
     },
     DraggedNode, NodeOffset, Nodes,
 };
 use dioxus::{html::geometry::WheelDelta, prelude::*};
+use opossum_backend::AnalyzerType;
 use std::rc::Rc;
 use uuid::Uuid;
 
@@ -21,7 +22,7 @@ fn use_init_signals() {
 pub enum NodeEditorCommand {
     DeleteAll,
     AddNode(String),
-    AddAnalyzer(String),
+    AddAnalyzer(AnalyzerType),
 }
 
 #[component]
@@ -49,7 +50,7 @@ pub fn GraphEditor(
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
                     println!("NodEditor: Analyzer selected: {:?}", analyzer_type);
-                    // use_add_analyzer(analyzer_type.clone());
+                    add_analyzer(analyzer_type.clone());
                 }
             }
         }

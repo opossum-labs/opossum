@@ -3,6 +3,7 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
     Icon,
 };
+use opossum_backend::AnalyzerType;
 
 use crate::components::menu_bar::{
     // callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
@@ -20,7 +21,7 @@ pub enum MenuSelection {
     OpenProject,
     SaveProject,
     AddNode(String),
-    AddAnalyzer(String),
+    AddAnalyzer(AnalyzerType),
     WinMaximize,
     WinMinimize,
     WinClose,
@@ -29,7 +30,7 @@ pub enum MenuSelection {
 pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
     let mut about_window = use_signal(|| false);
     let node_selected = use_signal(|| String::new());
-    let analyzer_selected = use_signal(|| String::new());
+    let analyzer_selected = use_signal(|| AnalyzerType::Energy);
     // let window = use_window();
     // let is_dragging = use_signal(|| false);
     // let maximize_symbol = use_signal(|| {

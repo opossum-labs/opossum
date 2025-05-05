@@ -56,11 +56,11 @@ impl AnalyzerType {
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = match self {
-            Self::Energy => "energy",
-            Self::RayTrace(_) => "ray tracing",
-            Self::GhostFocus(_) => "ghost focus",
+            Self::Energy => "Energy",
+            Self::RayTrace(_) => "RayTracing",
+            Self::GhostFocus(_) => "GhostFocus",
         };
-        write!(f, "{msg} analysis")
+        write!(f, "{msg}")
     }
 }
 #[cfg(test)]
@@ -68,14 +68,14 @@ mod test {
     use super::*;
     #[test]
     fn display() {
-        assert_eq!(format!("{}", AnalyzerType::Energy), "energy analysis");
+        assert_eq!(format!("{}", AnalyzerType::Energy), "Energy");
         assert_eq!(
             format!("{}", AnalyzerType::RayTrace(RayTraceConfig::default())),
-            "ray tracing analysis"
+            "RayTracing"
         );
         assert_eq!(
             format!("{}", AnalyzerType::GhostFocus(GhostFocusConfig::default())),
-            "ghost focus analysis"
+            "GhostFocus"
         );
     }
     #[test]
