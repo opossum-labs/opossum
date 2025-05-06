@@ -1,7 +1,7 @@
 use crate::components::scenery_editor::{
     edges::edges_component::{EdgeCreation, EdgeCreationComponent, EdgesComponent},
     graph_editor::{
-        callbacks::{use_on_double_click, use_on_key_down, use_on_mounted, use_on_resize},
+        callbacks::{use_on_key_down, use_on_mounted, use_on_resize},
         graph_editor_commands::{add_analyzer, add_node, delete_scenery},
     },
     DraggedNode, NodeOffset, Nodes,
@@ -25,16 +25,27 @@ pub enum NodeEditorCommand {
     AddAnalyzer(AnalyzerType),
 }
 
+#[derive(Clone, Copy)]
+pub struct EditorState {
+    pub drag_status: Signal<DragStatus>,
+}
+#[derive(Clone, Copy, Debug)]
+pub enum DragStatus {
+    None,
+    Graph,
+    Node(Uuid),
+    Edge
+}
 #[component]
 pub fn GraphEditor(
     command: ReadOnlySignal<Option<NodeEditorCommand>>,
     node_selected: Signal<Option<Uuid>>,
 ) -> Element {
     use_init_signals();
-    let mut shift = use_signal(|| (0, 0));
-    let mut is_dragging = use_signal(|| false);
+    let mut editor_status= use_context_provider(|| EditorState{drag_status: Signal::new(DragStatus::None)});
+    let mut graph_shift = use_signal(|| (0, 0));
     let mut current_mouse_pos = use_signal(|| (0, 0));
-    let mut zoom = use_signal(|| 1.0);
+    let mut graph_zoom = use_signal(|| 1.0);
 
     use_effect(move || {
         let command = command.read();
@@ -57,50 +68,59 @@ pub fn GraphEditor(
     });
     rsx! {
         div {
-            onmounted: use_on_mounted(),
-            //onmousemove: use_on_mouse_move(),
-            //onmouseup: use_on_mouse_up(),
-            //onwheel: use_on_wheel(),
-            onresize: use_on_resize(),
-            ondoubleclick: use_on_double_click(),
-            onkeydown: use_on_key_down(),
+            // onmounted: use_on_mounted(),
+            // onresize: use_on_resize(),
+            // ondoubleclick: use_on_double_click(),
+            // onkeydown: use_on_key_down(),
             onwheel: move |event| {
                 let delta = event.delta().strip_units().y;
-                if delta > 0.0 { zoom *= 1.1 } else { zoom /= 1.1 };
+                if delta > 0.0 { graph_zoom *= 1.1 } else { graph_zoom /= 1.1 };
             },
             onmousedown: move |event| {
+                println!("Graph mouse down");
                 current_mouse_pos
                     .set((
                         event.client_coordinates().x as i32,
                         event.client_coordinates().y as i32,
                     ));
-                is_dragging.set(true);
+                editor_status.drag_status.set(DragStatus::Graph);
             },
             onmouseup: move |_| {
-                is_dragging.set(false);
+                println!("Graph mouse up");
+                editor_status.drag_status.set(DragStatus::None);
             },
             onmousemove: move |event| {
-                if is_dragging() {
-                    let rel_shift_x = event.client_coordinates().x as i32
-                        - current_mouse_pos().0;
-                    let rel_shift_y = event.client_coordinates().y as i32
-                        - current_mouse_pos().1;
-                    current_mouse_pos
-                        .set((
-                            event.client_coordinates().x as i32,
-                            event.client_coordinates().y as i32,
-                        ));
-                    shift.set((shift().0 + rel_shift_x, shift().1 + rel_shift_y));
+                let drag_status = &*(editor_status.drag_status.read());
+                //let graph_zoom= &*(graph_zoom.read());
+                println!("drag_status: {:?}", drag_status);
+                match drag_status {
+                    DragStatus::Graph => {
+                        let rel_shift_x = event.client_coordinates().x as i32
+                            - current_mouse_pos().0;
+                        let rel_shift_y = event.client_coordinates().y as i32
+                            - current_mouse_pos().1;
+                        current_mouse_pos
+                            .set((
+                                event.client_coordinates().x as i32,
+                                event.client_coordinates().y as i32,
+                            ));
+                        graph_shift
+                            .set((graph_shift().0 + rel_shift_x, graph_shift().1 + rel_shift_y));
+                    }
+                    DragStatus::Node(_uuid) => {}
+                    _ => {}
                 }
             },
-            tabindex: "0",
-            class: "drop-container",
-            id: "drag_drop_container",
+            class: "graph-editor",
             div {
                 class: "zoom-shift-container",
-                style: format!("transform: translate({}px, {}px) scale({zoom});", shift().0, shift().1),
+                style: format!(
+                    "transform: translate({}px, {}px) scale({graph_zoom});",
+                    graph_shift().0,
+                    graph_shift().1,
+                ),
 
-                Nodes {node_activated: node_selected}
+                Nodes { node_activated: node_selected }
                 svg { width: "100%", height: "100%", class: "edge-creation",
                     {
                         rsx! {

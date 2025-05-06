@@ -5,10 +5,7 @@ use crate::{
     components::{
         context_menu::cx_menu::CxMenu,
         scenery_editor::{
-            graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader},
-            nodes::NodesStore,
-            ports::ports_component::NodePorts,
-            NODES_STORE,
+            graph_editor::graph_editor_component::{DragStatus, EditorState}, graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader}, nodes::NodesStore, ports::ports_component::NodePorts, NODES_STORE
         },
     },
     CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
@@ -19,66 +16,74 @@ use uuid::Uuid;
 
 #[component]
 pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element {
-    // let zoom = ZOOM.read().current();
+    let mut editor_status = use_context::<EditorState>();
     let mut shift = use_signal(|| (0, 0));
-    let mut is_dragging = use_signal(|| false);
+
     let mut current_mouse_pos = use_signal(|| (0, 0));
     let input_ports = node.input_ports();
     let output_ports = node.output_ports();
     let port_height_factor = usize_to_f64(output_ports.len().max(input_ports.len()));
-    let on_mouse_down = {
-        let id = *node.id();
-        let z_index = node.z_index();
-        let is_active = node.is_active();
-        move |event: MouseEvent| {
-            event.prevent_default();
-            current_mouse_pos.set((
-                event.client_coordinates().x as i32,
-                event.client_coordinates().y as i32,
-            ));
-            is_dragging.set(true);
-            if !is_active {
-                NODES_STORE.write().set_node_active(id, z_index);
-                node_activated.set(Some(id));
-            }
-        }
-    };
     let node_size = NodesStore::size();
-    // let (x, y) = (node.x() - node_size.x / 2., node.y() - node_size.y / 2.);
-
-    let is_active = if node.is_active() { "active-node" } else { "" };
+    
+    // let is_active = if node.is_active() { "active-node" } else { "" };
     let z_index = node.z_index();
     let header_scale = 0.3;
-
+    let id = *node.id();
+    let z_index = node.z_index();
+    //let is_active = node.is_active();
     rsx! {
         div {
-            //draggable: "true",
-            class: "node draggable prevent-select {is_active}",
-            style: format!("transform-origin: center; position: absolute; left: {}px; top: {}px; z-index: {z_index};", shift().0,shift().1),
-            onmousedown: on_mouse_down,
-            onmouseup: move |_| {
-                is_dragging.set(false);
+            class: "node",
+            style: format!(
+                "transform-origin: center; position: absolute; left: {}px; top: {}px; z-index: {z_index};",
+                shift().0,
+                shift().1,
+            ),
+            onmousedown: move |event: MouseEvent| {
+                println!("Node mouse down");
+                current_mouse_pos
+                    .set((
+                        event.client_coordinates().x as i32,
+                        event.client_coordinates().y as i32,
+                    ));
+                editor_status.drag_status.set(DragStatus::Node(id));
+                //if !is_active {
+                    NODES_STORE.write().set_node_active(id, z_index);
+                    node_activated.set(Some(id));
+                //}
+                event.stop_propagation();
+            },
+            onmouseup: move |event: MouseEvent| {
+                println!("Node mouse up");
+                editor_status.drag_status.set(DragStatus::None);
+                event.stop_propagation();
             },
             onmousemove: move |event| {
-                if is_dragging() {
-                    let rel_shift_x = event.client_coordinates().x as i32
-                        - current_mouse_pos().0;
-                    let rel_shift_y = event.client_coordinates().y as i32
-                        - current_mouse_pos().1;
-                    current_mouse_pos
-                        .set((
-                            event.client_coordinates().x as i32,
-                            event.client_coordinates().y as i32,
-                        ));
-                    shift.set((shift().0 + rel_shift_x, shift().1 + rel_shift_y));
-                    event.stop_propagation();
+                let drag_status = &*(editor_status.drag_status.read());
+                println!("Node drag_status: {:?}", drag_status);
+                match drag_status {
+                    DragStatus::Node(_id) => {
+                        let rel_shift_x = event.client_coordinates().x as i32
+                            - current_mouse_pos().0;
+                        let rel_shift_y = event.client_coordinates().y as i32
+                            - current_mouse_pos().1;
+                        current_mouse_pos
+                            .set((
+                                event.client_coordinates().x as i32,
+                                event.client_coordinates().y as i32,
+                            ));
+                        shift.set((shift().0 + rel_shift_x, shift().1 + rel_shift_y));
+                        event.stop_propagation();
+                    }
+                    DragStatus::Graph => {}
+                    _ => {}
                 }
             },
             onclick: move |_| {
                 println!("Node clicked");
-                if !node.is_active {
+                //if !node.is_active {
                     node_activated.set(Some(node.id));
-                }
+                //}
             },
             oncontextmenu: use_node_context_menu(*node.id()),
 
@@ -108,7 +113,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
     }
 }
 #[must_use]
-pub fn use_node_context_menu(node_id: Uuid) -> Callback<Event<MouseData>> {
+fn use_node_context_menu(node_id: Uuid) -> Callback<Event<MouseData>> {
     use_callback(move |evt: Event<MouseData>| {
         println!("Node context menu clicked");
         evt.prevent_default();
@@ -121,7 +126,7 @@ pub fn use_node_context_menu(node_id: Uuid) -> Callback<Event<MouseData>> {
     })
 }
 #[must_use]
-pub fn use_delete_node(node_id: Uuid) -> Callback<Event<MouseData>> {
+fn use_delete_node(node_id: Uuid) -> Callback<Event<MouseData>> {
     use_callback(move |_: Event<MouseData>| {
         let node_id = node_id;
         spawn(async move {

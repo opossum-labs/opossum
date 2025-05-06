@@ -8,7 +8,7 @@ pub fn Nodes(node_activated: Signal<Option<Uuid>>) -> Element {
         for node in NODES_STORE.read().optic_nodes().read().iter() {
             {
                 rsx! {
-                    Node { node: node.clone(), node_activated: node_activated.clone() }
+                    Node { node: node.1.clone(), node_activated: node_activated.clone() }
                 }
             }
         }

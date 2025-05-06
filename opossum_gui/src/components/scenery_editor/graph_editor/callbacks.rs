@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::{graph_editor_component::ZoomShift, DraggedNode, NodeOffset};
+use super::{DraggedNode, NodeOffset};
 use crate::{
     api::{self},
     components::scenery_editor::{edges::edges_component::EdgeCreation, EDGES, NODES_STORE},
@@ -8,51 +8,51 @@ use crate::{
 };
 use dioxus::prelude::*;
 
-pub fn use_on_mouse_move() -> impl FnMut(Event<MouseData>) {
-    let offset = use_context::<Signal<NodeOffset>>();
-    let dragged_node = use_context::<Signal<DraggedNode>>();
-    let mut edge_in_creation = use_context::<Signal<Option<EdgeCreation>>>();
+// pub fn use_on_mouse_move() -> impl FnMut(Event<MouseData>) {
+//     let offset = use_context::<Signal<NodeOffset>>();
+//     let dragged_node = use_context::<Signal<DraggedNode>>();
+//     let mut edge_in_creation = use_context::<Signal<Option<EdgeCreation>>>();
 
-    move |event: MouseEvent| {
-        if let (Some(id), Some(elem_offset)) = (
-            dragged_node.read().node_id(),
-            dragged_node.read().elem_offset(),
-        ) {
-            NODES_STORE.write().drag_node(id, elem_offset, &event.data);
-        }
-        if let (Some(edge_creation), Some(offset)) =
-            (edge_in_creation.write().as_mut(), offset.read().offset())
-        {
-            edge_creation.set_end_x(event.client_coordinates().x - offset.0);
-            edge_creation.set_end_y(event.client_coordinates().y - offset.1);
-        };
-    }
-}
+//     move |event: MouseEvent| {
+//         if let (Some(id), Some(elem_offset)) = (
+//             dragged_node.read().node_id(),
+//             dragged_node.read().elem_offset(),
+//         ) {
+//             NODES_STORE.write().drag_node(id, elem_offset, &event.data);
+//         }
+//         if let (Some(edge_creation), Some(offset)) =
+//             (edge_in_creation.write().as_mut(), offset.read().offset())
+//         {
+//             edge_creation.set_end_x(event.client_coordinates().x - offset.0);
+//             edge_creation.set_end_y(event.client_coordinates().y - offset.1);
+//         };
+//     }
+// }
 
-pub fn use_on_wheel() -> impl FnMut(Event<WheelData>) {
-    let offset = use_context::<Signal<NodeOffset>>();
-    let mut edge_in_creation = use_context::<Signal<Option<EdgeCreation>>>();
+// pub fn use_on_wheel() -> impl FnMut(Event<WheelData>) {
+//     let offset = use_context::<Signal<NodeOffset>>();
+//     let mut edge_in_creation = use_context::<Signal<Option<EdgeCreation>>>();
 
-    move |event: WheelEvent| {
-        ZOOM.write().set_zoom_from_scroll_event(&event);
-        let zoom_factor = ZOOM.read().zoom_factor();
-        let offset = offset.read();
-        if let Some(rect) = offset.offset() {
-            let mouse_x = event.data.page_coordinates().x - rect.0;
-            let mouse_y = event.data.page_coordinates().y - rect.1;
+//     move |event: WheelEvent| {
+//         ZOOM.write().set_zoom_from_scroll_event(&event);
+//         let zoom_factor = ZOOM.read().zoom_factor();
+//         let offset = offset.read();
+//         if let Some(rect) = offset.offset() {
+//             let mouse_x = event.data.page_coordinates().x - rect.0;
+//             let mouse_y = event.data.page_coordinates().y - rect.1;
 
-            NODES_STORE
-                .write()
-                .zoom_shift(zoom_factor, (mouse_x, mouse_y), (mouse_x, mouse_y));
-            EDGES
-                .write()
-                .zoom_shift(zoom_factor, (mouse_x, mouse_y), (mouse_x, mouse_y));
-            if let Some(edge_in_creation) = edge_in_creation.write().as_mut() {
-                edge_in_creation.zoom_shift(zoom_factor, (mouse_x, mouse_y), (mouse_x, mouse_y));
-            }
-        }
-    }
-}
+//             NODES_STORE
+//                 .write()
+//                 .zoom_shift(zoom_factor, (mouse_x, mouse_y), (mouse_x, mouse_y));
+//             EDGES
+//                 .write()
+//                 .zoom_shift(zoom_factor, (mouse_x, mouse_y), (mouse_x, mouse_y));
+//             if let Some(edge_in_creation) = edge_in_creation.write().as_mut() {
+//                 edge_in_creation.zoom_shift(zoom_factor, (mouse_x, mouse_y), (mouse_x, mouse_y));
+//             }
+//         }
+//     }
+// }
 
 pub fn use_on_resize() -> impl FnMut(Event<ResizeData>) {
     let drop_area = use_context::<Signal<Option<Rc<MountedData>>>>();
@@ -109,36 +109,36 @@ pub fn use_on_key_down() -> impl FnMut(Event<KeyboardData>) {
     }
 }
 
-pub fn use_on_double_click() -> impl FnMut(Event<MouseData>) {
-    let offset = use_context::<Signal<NodeOffset>>();
-    move |_: Event<MouseData>| {
-        let mut zoom = ZOOM.write();
-        let mut new_zoom = zoom.current();
-        if NODES_STORE.read().nr_of_optic_nodes() > 1 {
-            let (min_x, min_y, max_y, max_x) = NODES_STORE.read().get_min_max_position();
-            let (center_x, center_y) = ((max_x + min_x) / 2., (max_y + min_y) / 2.);
-            let min_dist = 150. * new_zoom;
-            if let Some((_, _, width, height)) = offset.read().offset() {
-                let max_zoom =
-                    ((max_x - min_x + min_dist) / width).max((max_y - min_y + min_dist) / height);
-                new_zoom /= max_zoom;
-                zoom.set_current(new_zoom);
+// pub fn use_on_double_click() -> impl FnMut(Event<MouseData>) {
+//     let offset = use_context::<Signal<NodeOffset>>();
+//     move |_: Event<MouseData>| {
+//         let mut zoom = ZOOM.write();
+//         let mut new_zoom = zoom.current();
+//         if NODES_STORE.read().nr_of_optic_nodes() > 1 {
+//             let (min_x, min_y, max_y, max_x) = NODES_STORE.read().get_min_max_position();
+//             let (center_x, center_y) = ((max_x + min_x) / 2., (max_y + min_y) / 2.);
+//             let min_dist = 150. * new_zoom;
+//             if let Some((_, _, width, height)) = offset.read().offset() {
+//                 let max_zoom =
+//                     ((max_x - min_x + min_dist) / width).max((max_y - min_y + min_dist) / height);
+//                 new_zoom /= max_zoom;
+//                 zoom.set_current(new_zoom);
 
-                //zoom to fit nodes around center of container
-                NODES_STORE.write().zoom_shift(
-                    zoom.zoom_factor(),
-                    (width / 2., height / 2.),
-                    (center_x, center_y),
-                );
+//                 //zoom to fit nodes around center of container
+//                 NODES_STORE.write().zoom_shift(
+//                     zoom.zoom_factor(),
+//                     (width / 2., height / 2.),
+//                     (center_x, center_y),
+//                 );
 
-                EDGES.write().zoom_shift(
-                    zoom.zoom_factor(),
-                    (width / 2., height / 2.),
-                    (center_x, center_y),
-                );
-            }
-        } else {
-            zoom.set_current(1.);
-        }
-    }
-}
+//                 EDGES.write().zoom_shift(
+//                     zoom.zoom_factor(),
+//                     (width / 2., height / 2.),
+//                     (center_x, center_y),
+//                 );
+//             }
+//         } else {
+//             zoom.set_current(1.);
+//         }
+//     }
+// }
