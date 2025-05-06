@@ -2,7 +2,7 @@
 use super::NodeElement;
 use crate::components::scenery_editor::{
     graph_editor::graph_editor_component::{DragStatus, EditorState},
-    graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader},
+    graph_node::graph_node_components::GraphNodeContent,
     nodes::NodesStore,
     ports::ports_component::NodePorts,
 };
@@ -14,7 +14,6 @@ use uuid::Uuid;
 pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element {
     let mut editor_status = use_context::<EditorState>();
     let mut node_store = use_context::<NodesStore>();
-    let mut current_mouse_pos = use_signal(|| (0, 0));
     let input_ports = node.input_ports();
     let output_ports = node.output_ports();
     let position = node.pos();
@@ -43,17 +42,11 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
                 position.1 as i32,
             ),
             onmousedown: move |event: MouseEvent| {
-                current_mouse_pos
-                    .set((
-                        event.client_coordinates().x as i32,
-                        event.client_coordinates().y as i32,
-                    ));
                 editor_status.drag_status.set(DragStatus::Node(id));
                 node_store.set_node_active(id, z_index);
                 node_activated.set(Some(id));
                 event.stop_propagation();
             },
-    
             //oncontextmenu: use_node_context_menu(*node.id()),
 
             GraphNodeContent {

@@ -1,11 +1,12 @@
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{nodes::ConnectInfo, usize_to_f64, PortType};
+use opossum_backend::{usize_to_f64, PortType};
 use uuid::Uuid;
 
 use crate::{
     api::{self},
     components::scenery_editor::{
-        edges::edges_component::{Edge, EdgeCreation},
+        edges::edges_component::{Edge, EdgeCreation, NewEdgeCreationStart},
+        graph_editor::graph_editor_component::{DragStatus, EditorState},
         EDGES,
     },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
@@ -42,8 +43,8 @@ pub fn NodePort(
     port_name: String,
     port_type: PortType,
 ) -> Element {
-    let mut edge_in_creation = use_context::<Signal<Option<EdgeCreation>>>();
-    let zoom_factor = 1.0;
+    // let mut edge_in_creation = use_context::<Signal<Option<EdgeCreation>>>();
+    let mut editor_status = use_context::<EditorState>();
     // let on_mouse_down = {
     //     let port_type = port_type.clone();
     //     let port_name = port_name.clone();
@@ -138,9 +139,23 @@ pub fn NodePort(
     } else {
         "output-port"
     };
+    let port_name_clone = port_name.clone();
     rsx! {
         div {
-            // onmousedown: on_mouse_down,
+            onmousedown: move |event: MouseEvent| {
+                println!("Port mouse down: {port_type:?}, {}", port_name_clone);
+                editor_status.drag_status.set(DragStatus::Edge(NewEdgeCreationStart{
+                    src_node: node_id,
+                    src_port: port_name_clone.clone(),
+                    src_port_type: port_type.clone(),
+                    start_pos: Point2D::new(
+                        port_x,
+                        port_y,
+                    ),
+                    bezier_offset: 70.,
+                }));
+                event.stop_propagation();
+            },
             // onmouseup: on_mouse_up,
             id: format!("{}_{}", node_id.as_simple().to_string(), port_name),
             class: "port {port_class}",

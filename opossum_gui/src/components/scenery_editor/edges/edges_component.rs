@@ -4,7 +4,7 @@ use crate::{
     api::{self},
     components::{
         context_menu::cx_menu::CxMenu,
-        scenery_editor::{graph_editor::graph_editor_component::ZoomShift, EDGES},
+        scenery_editor::{graph_editor::graph_editor_component::EditorState, EDGES},
     },
     CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
@@ -69,15 +69,16 @@ impl Edges {
     }
 }
 
-impl ZoomShift for Edges {
-    fn zoom_shift(&mut self, zoom_factor: f64, shift: (f64, f64), zoom_center: (f64, f64)) {
-        for edge in self.edges_mut().values_mut() {
-            edge.zoom_shift(zoom_factor, shift, zoom_center);
-        }
-    }
+#[derive(Clone, Debug)]
+pub struct NewEdgeCreationStart {
+    pub src_node: Uuid,
+    pub src_port: String,
+    pub src_port_type: PortType,
+    pub start_pos: Point2D<f64>,
+    pub bezier_offset: f64,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct EdgeCreation {
     src_node: Uuid,
     src_port: String,
@@ -165,22 +166,6 @@ impl EdgeCreation {
     }
     pub const fn set_start_y(&mut self, start_y: f64) {
         self.start_y = start_y;
-    }
-}
-
-impl ZoomShift for EdgeCreation {
-    fn zoom_shift(&mut self, zoom_factor: f64, shift: (f64, f64), zoom_center: (f64, f64)) {
-        let new_start_x = (self.start_x() - zoom_center.0).mul_add(zoom_factor, shift.0);
-        let new_start_y = (self.start_y() - zoom_center.1).mul_add(zoom_factor, shift.1);
-        self.set_start_x(new_start_x);
-        self.set_start_y(new_start_y);
-
-        let new_end_x = (self.end_x() - zoom_center.0).mul_add(zoom_factor, shift.0);
-        let new_end_y = (self.end_y() - zoom_center.1).mul_add(zoom_factor, shift.1);
-        self.set_end_x(new_end_x);
-        self.set_end_y(new_end_y);
-
-        self.set_bezier_offset(self.bezier_offset() * zoom_factor);
     }
 }
 
@@ -285,22 +270,6 @@ impl Edge {
     }
 }
 
-impl ZoomShift for Edge {
-    fn zoom_shift(&mut self, zoom_factor: f64, shift: (f64, f64), zoom_center: (f64, f64)) {
-        let new_start_x = (self.start_x() - zoom_center.0).mul_add(zoom_factor, shift.0);
-        let new_start_y = (self.start_y() - zoom_center.1).mul_add(zoom_factor, shift.1);
-        self.set_start_x(new_start_x);
-        self.set_start_y(new_start_y);
-
-        let new_end_x = (self.end_x() - zoom_center.0).mul_add(zoom_factor, shift.0);
-        let new_end_y = (self.end_y() - zoom_center.1).mul_add(zoom_factor, shift.1);
-        self.set_end_x(new_end_x);
-        self.set_end_y(new_end_y);
-
-        self.set_bezier_offset(self.bezier_offset() * zoom_factor);
-    }
-}
-
 fn define_bezier_path(
     start_x: f64,
     start_y: f64,
@@ -332,8 +301,9 @@ pub fn EdgesComponent() -> Element {
 
 #[component]
 pub fn EdgeCreationComponent() -> Element {
-    let edge_opt_sig = use_context::<Signal<Option<EdgeCreation>>>();
-    edge_opt_sig().map_or_else(
+    let editor_status = use_context::<EditorState>();
+    let edge_in_creation = &*(editor_status.edge_in_creation.read());
+    edge_in_creation.clone().map_or_else(
         || rsx! {},
         |edge| {
             let new_path = define_bezier_path(

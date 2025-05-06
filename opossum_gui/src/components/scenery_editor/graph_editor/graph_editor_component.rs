@@ -1,12 +1,12 @@
 use crate::{
     api,
     components::scenery_editor::{
-        edges::edges_component::{EdgeCreation, EdgeCreationComponent, EdgesComponent},
+        edges::edges_component::{EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart},
         nodes::{Nodes, NodesStore},
     },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
-use dioxus::{html::geometry::WheelDelta, prelude::*};
+use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::scenery::NewAnalyzerInfo;
 use opossum_backend::{nodes::NewNode, AnalyzerType};
 use std::rc::Rc;
@@ -27,13 +27,14 @@ pub enum NodeEditorCommand {
 #[derive(Clone, Copy)]
 pub struct EditorState {
     pub drag_status: Signal<DragStatus>,
+    pub edge_in_creation: Signal<Option<EdgeCreation>>,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum DragStatus {
     None,
     Graph,
     Node(Uuid),
-    Edge,
+    Edge(NewEdgeCreationStart),
 }
 #[component]
 pub fn GraphEditor(
@@ -43,11 +44,11 @@ pub fn GraphEditor(
     use_init_signals();
     let mut node_store = use_context_provider(|| NodesStore::default());
     let mut editor_status = use_context_provider(|| EditorState {
-        drag_status: Signal::new(DragStatus::None),
+        drag_status: Signal::new(DragStatus::None), edge_in_creation: Signal::new(None),
     });
     let mut graph_shift = use_signal(|| (0, 0));
-    let mut current_mouse_pos = use_signal(|| (0, 0));
     let mut graph_zoom = use_signal(|| 1.0);
+    let mut current_mouse_pos = use_signal(|| (0, 0));
 
     use_effect(move || {
         let command = command.read();
@@ -142,6 +143,28 @@ pub fn GraphEditor(
                                 ),
                             );
                     }
+                    DragStatus::Edge(edge_creation_start) => {
+                        println!("Edge creation: {:?}", edge_creation_start);
+                        let edge_creation=EdgeCreation::new(
+                            edge_creation_start.src_node,
+                            edge_creation_start.src_port.clone(),
+                            edge_creation_start.src_port_type.clone(),
+                            edge_creation_start.start_pos,
+                            Point2D::new(
+                                event.client_coordinates().x as f64 / graph_zoom(),
+                                event.client_coordinates().y as f64 / graph_zoom(),
+                            ),
+                            edge_creation_start.bezier_offset
+                        );
+                        editor_status.edge_in_creation.set(Some(edge_creation));
+
+                        // edge_creation.set_end(
+                        //     (
+                        //         event.client_coordinates().x as f64 / graph_zoom(),
+                        //         event.client_coordinates().y as f64 / graph_zoom(),
+                        //     ),
+                        // );
+                    }
                     _ => {}
                 }
             },
@@ -155,9 +178,8 @@ pub fn GraphEditor(
                     graph_shift().0,
                     graph_shift().1,
                 ),
-
                 Nodes { node_activated: node_selected }
-                svg { width: "100%", height: "100%", class: "edge-creation",
+                svg { width: "100%", height: "100%",
                     {
                         rsx! {
                             EdgesComponent {}
@@ -168,58 +190,4 @@ pub fn GraphEditor(
             }
         }
     }
-}
-
-#[derive(Clone, PartialEq)]
-pub struct Zoom {
-    current: f64,
-    previous: f64,
-}
-
-impl Zoom {
-    #[must_use]
-    pub const fn new(current: f64, previous: f64) -> Self {
-        Self { current, previous }
-    }
-    #[must_use]
-    pub const fn current(&self) -> f64 {
-        self.current
-    }
-    pub const fn set_current(&mut self, current: f64) {
-        self.previous = self.current;
-        self.current = current;
-    }
-    #[must_use]
-    pub const fn previous(&self) -> f64 {
-        self.previous
-    }
-    #[must_use]
-    pub fn zoom_factor(&self) -> f64 {
-        self.current / self.previous
-    }
-
-    pub fn set_zoom_from_scroll_event(&mut self, event: &WheelEvent) {
-        let zoom_factor = 1.1;
-        let mut new_zoom = self.current();
-
-        let delta_sign = match event.delta() {
-            WheelDelta::Pixels(px) => px.y.signum(),
-            WheelDelta::Lines(li) => li.y.signum(),
-            WheelDelta::Pages(pp) => pp.y.signum(),
-        };
-
-        if delta_sign.is_sign_negative() {
-            new_zoom *= zoom_factor;
-        } else {
-            new_zoom /= zoom_factor;
-        }
-
-        new_zoom = new_zoom.clamp(0.2, 5.0);
-
-        self.set_current(new_zoom);
-    }
-}
-
-pub trait ZoomShift {
-    fn zoom_shift(&mut self, zoom_factor: f64, shift: (f64, f64), zoom_center: (f64, f64));
 }
