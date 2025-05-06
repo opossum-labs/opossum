@@ -1,9 +1,9 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
 use crate::{
-    api::{self},
+    // api::{self},
     components::{
-        context_menu::cx_menu::CxMenu,
+        // context_menu::cx_menu::CxMenu,
         scenery_editor::{
             graph_editor::graph_editor_component::{DragStatus, EditorState},
             graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader},
@@ -11,7 +11,7 @@ use crate::{
             ports::ports_component::NodePorts,
         },
     },
-    CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+    // CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::prelude::*;
 use opossum_backend::usize_to_f64;
@@ -21,11 +21,10 @@ use uuid::Uuid;
 pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element {
     let mut editor_status = use_context::<EditorState>();
     let mut node_store = use_context::<NodesStore>();
-    let mut shift = use_signal(|| (0, 0));
-
     let mut current_mouse_pos = use_signal(|| (0, 0));
     let input_ports = node.input_ports();
     let output_ports = node.output_ports();
+    let position = node.pos();
     let port_height_factor = usize_to_f64(output_ports.len().max(input_ports.len()));
     let node_size = NodesStore::size();
 
@@ -40,8 +39,8 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
             class: "node",
             style: format!(
                 "transform-origin: center; position: absolute; left: {}px; top: {}px; z-index: {z_index};",
-                shift().0,
-                shift().1,
+                position.0 as i32,
+                position.1 as i32,
             ),
             onmousedown: move |event: MouseEvent| {
                 println!("Node mouse down");
@@ -60,32 +59,11 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
                 editor_status.drag_status.set(DragStatus::None);
                 event.stop_propagation();
             },
-            onmousemove: move |event| {
-                let drag_status = &*(editor_status.drag_status.read());
-                println!("Node drag_status: {:?}", drag_status);
-                match drag_status {
-                    DragStatus::Node(_id) => {
-                        let rel_shift_x = event.client_coordinates().x as i32
-                            - current_mouse_pos().0;
-                        let rel_shift_y = event.client_coordinates().y as i32
-                            - current_mouse_pos().1;
-                        current_mouse_pos
-                            .set((
-                                event.client_coordinates().x as i32,
-                                event.client_coordinates().y as i32,
-                            ));
-                        shift.set((shift().0 + rel_shift_x, shift().1 + rel_shift_y));
-                        event.stop_propagation();
-                    }
-                    DragStatus::Graph => {}
-                    _ => {}
-                }
-            },
             onclick: move |_| {
                 println!("Node clicked");
                 node_activated.set(Some(node.id));
             },
-            oncontextmenu: use_node_context_menu(*node.id()),
+            //oncontextmenu: use_node_context_menu(*node.id()),
 
             GraphNodeContent {
                 node_header: rsx! {
@@ -112,32 +90,32 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
         }
     }
 }
-#[must_use]
-fn use_node_context_menu(node_id: Uuid) -> Callback<Event<MouseData>> {
-    use_callback(move |evt: Event<MouseData>| {
-        println!("Node context menu clicked");
-        evt.prevent_default();
-        let mut cx_menu = CONTEXT_MENU.write();
-        *cx_menu = CxMenu::new(
-            evt.page_coordinates().x,
-            evt.page_coordinates().y,
-            vec![("Delete node".to_owned(), use_delete_node(node_id))],
-        );
-    })
-}
-#[must_use]
-fn use_delete_node(node_id: Uuid) -> Callback<Event<MouseData>> {
-    use_callback(move |_: Event<MouseData>| {
-        let node_id = node_id;
-        spawn(async move {
-            match api::delete_node(&HTTP_API_CLIENT(), node_id).await {
-                Ok(_id_vec) => {
-                    // for id in &id_vec {
-                    //    node_store.delete_node(*id);
-                    // }
-                }
-                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-            }
-        });
-    })
-}
+// #[must_use]
+// fn use_node_context_menu(node_id: Uuid) -> Callback<Event<MouseData>> {
+//     use_callback(move |evt: Event<MouseData>| {
+//         println!("Node context menu clicked");
+//         evt.prevent_default();
+//         let mut cx_menu = CONTEXT_MENU.write();
+//         *cx_menu = CxMenu::new(
+//             evt.page_coordinates().x,
+//             evt.page_coordinates().y,
+//             vec![("Delete node".to_owned(), use_delete_node(node_id))],
+//         );
+//     })
+// }
+// #[must_use]
+// fn use_delete_node(node_id: Uuid) -> Callback<Event<MouseData>> {
+//     use_callback(move |_: Event<MouseData>| {
+//         let node_id = node_id;
+//         spawn(async move {
+//             match api::delete_node(&HTTP_API_CLIENT(), node_id).await {
+//                 Ok(_id_vec) => {
+//                     // for id in &id_vec {
+//                     //    node_store.delete_node(*id);
+//                     // }
+//                 }
+//                 Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+//             }
+//         });
+//     })
+// }

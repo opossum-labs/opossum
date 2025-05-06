@@ -18,14 +18,6 @@ pub struct NodesStore {
 
 impl NodesStore {
     #[must_use]
-    pub fn new() -> Self {
-        Self {
-            optic_nodes: Signal::new(HashMap::<Uuid, NodeElement>::new()),
-            analyzer_nodes: Signal::new(HashMap::<Uuid, AnalyzerType>::new()),
-            active_node: Signal::new(None::<Uuid>),
-        }
-    }
-    #[must_use]
     pub fn size() -> Point2D<f64> {
         Point2D::new(130., 130. / 1.618_033_988_7)
     }
@@ -49,6 +41,11 @@ impl NodesStore {
         self.optic_nodes().read().len()
     }
 
+    pub fn shift_node_position(&mut self, node_id: &Uuid, shift: (f64, f64)) {
+        if let Some(node) = self.optic_nodes_mut().write().get_mut(node_id) {
+            node.shift_position(shift);
+        }
+    }
     // pub fn drag_node(&mut self, node_id: &Uuid, elem_offset: &(f64, f64), mouse_data: &MouseData) {
     //     let offset = use_context::<Signal<NodeOffset>>();
     //     if let Some(node_container_offset) = offset().offset() {

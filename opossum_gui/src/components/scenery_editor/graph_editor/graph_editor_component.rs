@@ -44,7 +44,7 @@ pub fn GraphEditor(
     node_selected: Signal<Option<Uuid>>,
 ) -> Element {
     use_init_signals();
-    let mut node_store = use_context_provider(|| NodesStore::new());
+    let mut node_store = use_context_provider(|| NodesStore::default());
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
     });
@@ -124,21 +124,22 @@ pub fn GraphEditor(
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());
                 println!("drag_status: {:?}", drag_status);
+                let rel_shift_x = event.client_coordinates().x as i32 - current_mouse_pos().0;
+                let rel_shift_y = event.client_coordinates().y as i32 - current_mouse_pos().1;
+                current_mouse_pos
+                    .set((
+                        event.client_coordinates().x as i32,
+                        event.client_coordinates().y as i32,
+                    ));
                 match drag_status {
                     DragStatus::Graph => {
-                        let rel_shift_x = event.client_coordinates().x as i32
-                            - current_mouse_pos().0;
-                        let rel_shift_y = event.client_coordinates().y as i32
-                            - current_mouse_pos().1;
-                        current_mouse_pos
-                            .set((
-                                event.client_coordinates().x as i32,
-                                event.client_coordinates().y as i32,
-                            ));
                         graph_shift
                             .set((graph_shift().0 + rel_shift_x, graph_shift().1 + rel_shift_y));
                     }
-                    DragStatus::Node(_uuid) => {}
+                    DragStatus::Node(id) => {
+                        node_store
+                            .shift_node_position(id, (rel_shift_x as f64, rel_shift_y as f64));
+                    }
                     _ => {}
                 }
             },

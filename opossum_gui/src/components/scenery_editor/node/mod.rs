@@ -56,7 +56,7 @@ impl NodeElement {
         self.name = name;
     }
     #[must_use]
-    pub const fn pos(&self) -> (f64, f64) {
+    pub fn pos(&self) -> (f64, f64) {
         self.pos
     }
     #[must_use]
@@ -71,6 +71,10 @@ impl NodeElement {
         self.id = id;
     }
 
+    pub fn shift_position(&mut self, shift: (f64, f64)) {
+        self.pos.0 += shift.0;
+        self.pos.1 += shift.1;
+    }
     // pub fn drag_node(
     //     &mut self,
     //     mouse_x: f64,
