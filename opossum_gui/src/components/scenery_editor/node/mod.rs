@@ -18,7 +18,7 @@ impl NodeElement {
     pub const fn new(
         name: String,
         id: Uuid,
-        pos: (f64,f64),
+        pos: (f64, f64),
         z_index: usize,
         ports: Ports,
     ) -> Self {
@@ -49,14 +49,14 @@ impl NodeElement {
     pub const fn set_z_index(&mut self, z_index: usize) {
         self.z_index = z_index;
     }
-    pub const fn set_pos(&mut self, new_pos: (f64,f64)) {
+    pub const fn set_pos(&mut self, new_pos: (f64, f64)) {
         self.pos = new_pos;
     }
     pub fn set_name(&mut self, name: String) {
         self.name = name;
     }
     #[must_use]
-    pub const fn pos(&self) -> (f64,f64) {
+    pub const fn pos(&self) -> (f64, f64) {
         self.pos
     }
     #[must_use]
@@ -99,4 +99,3 @@ impl NodeElement {
     //         .shift_if_connected(self.x() - x_init, self.y() - y_init, *self.id());
     // }
 }
-

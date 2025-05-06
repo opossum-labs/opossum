@@ -5,7 +5,10 @@ use crate::{
     components::{
         context_menu::cx_menu::CxMenu,
         scenery_editor::{
-            graph_editor::graph_editor_component::{DragStatus, EditorState}, graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader}, nodes::NodesStore, ports::ports_component::NodePorts, NODES_STORE
+            graph_editor::graph_editor_component::{DragStatus, EditorState},
+            graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader},
+            nodes::NodesStore,
+            ports::ports_component::NodePorts,
         },
     },
     CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
@@ -17,6 +20,7 @@ use uuid::Uuid;
 #[component]
 pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element {
     let mut editor_status = use_context::<EditorState>();
+    let mut node_store = use_context::<NodesStore>();
     let mut shift = use_signal(|| (0, 0));
 
     let mut current_mouse_pos = use_signal(|| (0, 0));
@@ -24,9 +28,9 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
     let output_ports = node.output_ports();
     let port_height_factor = usize_to_f64(output_ports.len().max(input_ports.len()));
     let node_size = NodesStore::size();
-    
+
     // let is_active = if node.is_active() { "active-node" } else { "" };
-    let z_index = node.z_index();
+    let _z_index = node.z_index();
     let header_scale = 0.3;
     let id = *node.id();
     let z_index = node.z_index();
@@ -47,10 +51,8 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
                         event.client_coordinates().y as i32,
                     ));
                 editor_status.drag_status.set(DragStatus::Node(id));
-                //if !is_active {
-                    NODES_STORE.write().set_node_active(id, z_index);
-                    node_activated.set(Some(id));
-                //}
+                node_store.set_node_active(id, z_index);
+                node_activated.set(Some(id));
                 event.stop_propagation();
             },
             onmouseup: move |event: MouseEvent| {
@@ -81,9 +83,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
             },
             onclick: move |_| {
                 println!("Node clicked");
-                //if !node.is_active {
-                    node_activated.set(Some(node.id));
-                //}
+                node_activated.set(Some(node.id));
             },
             oncontextmenu: use_node_context_menu(*node.id()),
 
@@ -131,10 +131,10 @@ fn use_delete_node(node_id: Uuid) -> Callback<Event<MouseData>> {
         let node_id = node_id;
         spawn(async move {
             match api::delete_node(&HTTP_API_CLIENT(), node_id).await {
-                Ok(id_vec) => {
-                    for id in &id_vec {
-                        NODES_STORE.write().delete_node(*id);
-                    }
+                Ok(_id_vec) => {
+                    // for id in &id_vec {
+                    //    node_store.delete_node(*id);
+                    // }
                 }
                 Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
             }

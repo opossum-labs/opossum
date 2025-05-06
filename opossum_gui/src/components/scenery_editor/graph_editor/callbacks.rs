@@ -3,7 +3,7 @@ use std::rc::Rc;
 use super::{DraggedNode, NodeOffset};
 use crate::{
     api::{self},
-    components::scenery_editor::{edges::edges_component::EdgeCreation, EDGES, NODES_STORE},
+    components::scenery_editor::{edges::edges_component::EdgeCreation, EDGES},
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
 };
 use dioxus::prelude::*;
@@ -90,24 +90,24 @@ pub fn use_on_mouse_up() -> impl FnMut(MouseEvent) {
     }
 }
 
-pub fn use_on_key_down() -> impl FnMut(Event<KeyboardData>) {
-    move |e: Event<KeyboardData>| {
-        if e.data().key() == Key::Delete {
-            if let Some(active_node_id) = NODES_STORE.read().get_active_node_id() {
-                spawn(async move {
-                    match api::delete_node(&HTTP_API_CLIENT(), active_node_id).await {
-                        Ok(id_vec) => {
-                            for id in &id_vec {
-                                NODES_STORE.write().delete_node(*id);
-                            }
-                        }
-                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                    }
-                });
-            }
-        }
-    }
-}
+// pub fn use_on_key_down() -> impl FnMut(Event<KeyboardData>) {
+//     move |e: Event<KeyboardData>| {
+//         if e.data().key() == Key::Delete {
+//             if let Some(active_node_id) = NODES_STORE.read().get_active_node_id() {
+//                 spawn(async move {
+//                     match api::delete_node(&HTTP_API_CLIENT(), active_node_id).await {
+//                         Ok(id_vec) => {
+//                             for id in &id_vec {
+//                                 NODES_STORE.write().delete_node(*id);
+//                             }
+//                         }
+//                         Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+//                     }
+//                 });
+//             }
+//         }
+//     }
+// }
 
 // pub fn use_on_double_click() -> impl FnMut(Event<MouseData>) {
 //     let offset = use_context::<Signal<NodeOffset>>();

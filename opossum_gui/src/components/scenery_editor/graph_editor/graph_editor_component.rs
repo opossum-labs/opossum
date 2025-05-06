@@ -1,13 +1,15 @@
-use crate::components::scenery_editor::{
-    edges::edges_component::{EdgeCreation, EdgeCreationComponent, EdgesComponent},
-    graph_editor::{
-        callbacks::{use_on_key_down, use_on_mounted, use_on_resize},
-        graph_editor_commands::{add_analyzer, add_node, delete_scenery},
+use crate::{
+    api,
+    components::scenery_editor::{
+        edges::edges_component::{EdgeCreation, EdgeCreationComponent, EdgesComponent},
+        nodes::{Nodes, NodesStore},
+        DraggedNode, NodeOffset,
     },
-    DraggedNode, NodeOffset, Nodes,
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::{html::geometry::WheelDelta, prelude::*};
-use opossum_backend::AnalyzerType;
+use opossum_backend::scenery::NewAnalyzerInfo;
+use opossum_backend::{nodes::NewNode, AnalyzerType};
 use std::rc::Rc;
 use uuid::Uuid;
 
@@ -34,7 +36,7 @@ pub enum DragStatus {
     None,
     Graph,
     Node(Uuid),
-    Edge
+    Edge,
 }
 #[component]
 pub fn GraphEditor(
@@ -42,7 +44,10 @@ pub fn GraphEditor(
     node_selected: Signal<Option<Uuid>>,
 ) -> Element {
     use_init_signals();
-    let mut editor_status= use_context_provider(|| EditorState{drag_status: Signal::new(DragStatus::None)});
+    let mut node_store = use_context_provider(|| NodesStore::new());
+    let mut editor_status = use_context_provider(|| EditorState {
+        drag_status: Signal::new(DragStatus::None),
+    });
     let mut graph_shift = use_signal(|| (0, 0));
     let mut current_mouse_pos = use_signal(|| (0, 0));
     let mut graph_zoom = use_signal(|| 1.0);
@@ -53,15 +58,42 @@ pub fn GraphEditor(
             match command {
                 NodeEditorCommand::DeleteAll => {
                     println!("NodeEditor: Delete all nodes");
-                    delete_scenery();
+                    // delete_scenery();
                 }
                 NodeEditorCommand::AddNode(node_type) => {
-                    println!("NodeEditor: Node selected: {:?}", node_type);
-                    add_node(node_type.clone(), Uuid::nil());
+                    println!("NodeEditor: AddNode: {:?}", node_type);
+                    let new_node_info = NewNode::new(node_type.to_owned(), (0, 0, 0));
+                    spawn(async move {
+                        match api::post_add_node(&HTTP_API_CLIENT(), new_node_info, Uuid::nil())
+                            .await
+                        {
+                            Ok(node_info) => {
+                                match api::get_node_properties(&HTTP_API_CLIENT(), node_info.uuid())
+                                    .await
+                                {
+                                    Ok(node_attr) => node_store.add_node(&node_info, &node_attr),
+                                    Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                                }
+                            }
+                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                        }
+                    });
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                    println!("NodeEditor: Analyzer selected: {:?}", analyzer_type);
-                    add_analyzer(analyzer_type.clone());
+                    println!("NodeEditor: AddAnalyzer: {:?}", analyzer_type);
+                    let analyzer_type = analyzer_type.clone();
+                    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type.clone(), (0, 0, 0));
+                    spawn(async move {
+                        match api::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer_info).await {
+                            Ok(_) => {
+                                OPOSSUM_UI_LOGS
+                                    .write()
+                                    .add_log(&format!("Added analyzer: {analyzer_type}"));
+                                node_store.add_analyzer(&analyzer_type);
+                            }
+                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                        }
+                    });
                 }
             }
         }
@@ -91,7 +123,6 @@ pub fn GraphEditor(
             },
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());
-                //let graph_zoom= &*(graph_zoom.read());
                 println!("drag_status: {:?}", drag_status);
                 match drag_status {
                     DragStatus::Graph => {

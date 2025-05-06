@@ -24,7 +24,7 @@ pub fn use_open_file() -> Callback<Event<MouseData>> {
 
 pub fn use_save_project() {
     // use_resource({
-    //      move || 
+    //      move ||
     // spawn(async move {
     //         let _path = FileDialog::new()
     //             .set_directory("/")
@@ -40,7 +40,7 @@ pub fn use_save_project() {
             .set_directory("/")
             .pick_file()
             .await;
-    
+
         let data = file.unwrap().read().await;
     };
 }

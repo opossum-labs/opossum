@@ -8,10 +8,7 @@ pub mod ports;
 use dioxus::signals::{GlobalSignal, Signal};
 use edges::edges_component::Edges;
 pub use graph_editor::{DraggedNode, GraphEditor, NodeOffset};
-pub use node::{Node, NodeElement};
-pub use nodes::{Nodes, NodesStore};
-use opossum_backend::NodeAttr;
+// pub use node::{Node, NodeElement};
+// pub use nodes::{Nodes, NodesStore};
 
-pub static NODES_STORE: GlobalSignal<NodesStore> = Signal::global(NodesStore::new);
-pub static ACTIVE_NODE: GlobalSignal<Option<NodeAttr>> = Signal::global(|| None::<NodeAttr>);
 static EDGES: GlobalSignal<Edges> = Signal::global(Edges::new);

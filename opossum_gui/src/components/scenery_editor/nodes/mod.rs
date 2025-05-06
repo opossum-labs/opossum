@@ -1,19 +1,19 @@
-use std::collections::HashMap;
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use std::collections::HashMap;
 pub mod nodes_component;
 
 pub use nodes_component::Nodes;
 use opossum_backend::{nodes::NodeInfo, AnalyzerType, NodeAttr, PortType};
 use uuid::Uuid;
 
+use super::{node::NodeElement, ports::ports_component::Ports, EDGES};
 use crate::{OPOSSUM_UI_LOGS, ZOOM};
-use super::{ports::ports_component::Ports, NodeElement, ACTIVE_NODE, EDGES};
 
-#[derive(Clone, Eq, PartialEq, Default)]
+#[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct NodesStore {
     optic_nodes: Signal<HashMap<Uuid, NodeElement>>,
     analyzer_nodes: Signal<HashMap<Uuid, AnalyzerType>>,
-    active_node: Signal<Option<Uuid>>
+    active_node: Signal<Option<Uuid>>,
 }
 
 impl NodesStore {
@@ -76,7 +76,7 @@ impl NodesStore {
     }
 
     pub fn set_node_active(&mut self, id: Uuid, z_index: usize) {
-        let mut active_node =  self.active_node.write();
+        let mut active_node = self.active_node.write();
         *active_node = Some(id);
         // let nr_of_nodes = self.nr_of_optic_nodes();
         // self.optic_nodes_mut().write().iter_mut().for_each(|n| {
@@ -120,7 +120,7 @@ impl NodesStore {
         //         }
         //     });
         //     self.optic_nodes_mut().write().remove(idx);
-            EDGES.write().remove_if_connected(node_id);
+        EDGES.write().remove_if_connected(node_id);
         //}
     }
 
@@ -133,7 +133,7 @@ impl NodesStore {
         }
     }
     #[must_use]
-    pub fn find_position(&self) -> (f64,f64) {
+    pub fn find_position(&self) -> (f64, f64) {
         let zoom_factor = ZOOM.read().zoom_factor();
         let size = Self::size();
         let mut new_pos = (size.x * zoom_factor, size.x * zoom_factor);
@@ -141,7 +141,9 @@ impl NodesStore {
         loop {
             let mut position_found = true;
             for node in self.optic_nodes().read().iter() {
-                if (node.1.pos().0 - new_pos.0).abs() < 10. && (node.1.pos().0 - new_pos.1).abs() < 10. {
+                if (node.1.pos().0 - new_pos.0).abs() < 10.
+                    && (node.1.pos().0 - new_pos.1).abs() < 10.
+                {
                     position_found = false;
                     new_pos.0 += size.x * f64::powi(phi, 3) * zoom_factor;
                     new_pos.1 += size.y * f64::powi(phi, 3) * zoom_factor;
@@ -171,13 +173,15 @@ impl NodesStore {
             .collect::<Vec<String>>();
 
         let new_node = NodeElement::new(
-            node_info.name().to_string(),   
+            node_info.name().to_string(),
             node_info.uuid(),
             pos,
             self.nr_of_optic_nodes(),
             Ports::new(input_ports, output_ports),
         );
-        self.optic_nodes_mut().write().insert(*new_node.id(),new_node.clone());
+        self.optic_nodes_mut()
+            .write()
+            .insert(*new_node.id(), new_node.clone());
         self.set_node_active(node_info.uuid(), new_node.z_index());
         OPOSSUM_UI_LOGS
             .write()

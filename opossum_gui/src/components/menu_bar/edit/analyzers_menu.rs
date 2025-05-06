@@ -1,6 +1,6 @@
+use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 use dioxus::prelude::*;
 use opossum_backend::AnalyzerType;
-use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 
 #[component]
 pub fn AnalyzersMenu(analyzer_selected: Signal<AnalyzerType>) -> Element {
@@ -19,8 +19,8 @@ pub fn AnalyzersMenu(analyzer_selected: Signal<AnalyzerType>) -> Element {
     let analyzer_list = match &*future.read_unchecked() {
         Some(Some(response)) => response
             .iter()
-            .map(|n| (n.to_owned(),format!("{n}")))
-            .collect::<Vec<(AnalyzerType,String)>>(),
+            .map(|n| (n.to_owned(), format!("{n}")))
+            .collect::<Vec<(AnalyzerType, String)>>(),
         Some(None) => vec![],
         _ => vec![],
     };
