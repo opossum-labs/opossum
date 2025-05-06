@@ -8,7 +8,4 @@ pub mod ports;
 use dioxus::signals::{GlobalSignal, Signal};
 use edges::edges_component::Edges;
 pub use graph_editor::{DraggedNode, GraphEditor, NodeOffset};
-// pub use node::{Node, NodeElement};
-// pub use nodes::{Nodes, NodesStore};
-
 static EDGES: GlobalSignal<Edges> = Signal::global(Edges::new);

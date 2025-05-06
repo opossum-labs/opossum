@@ -8,7 +8,7 @@ use crate::{
         edges::edges_component::{Edge, EdgeCreation},
         NodeOffset, EDGES,
     },
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS
 };
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct Ports {
@@ -44,7 +44,7 @@ pub fn NodePort(
 ) -> Element {
     let mut edge_in_creation = use_context::<Signal<Option<EdgeCreation>>>();
     let offset = use_context::<Signal<NodeOffset>>();
-    let zoom_factor = ZOOM.read().current();
+    let zoom_factor = 1.0;
 
     let on_mouse_down = {
         let port_type = port_type.clone();
@@ -52,9 +52,9 @@ pub fn NodePort(
         move |e: Event<MouseData>| {
             if let Some(offset) = offset.read().offset() {
                 let x = (-e.element_coordinates().x + port_w_h / 2.)
-                    .mul_add(zoom_factor, e.page_coordinates().x - offset.0);
+                    +e.page_coordinates().x - offset.0;
                 let y = (-e.element_coordinates().y + port_w_h / 2.)
-                    .mul_add(zoom_factor, e.page_coordinates().y - offset.1);
+                    +e.page_coordinates().y - offset.1;
                 let start_end = Point2D::new(x, y);
                 edge_in_creation.set(Some(EdgeCreation::new(
                     node_id,
@@ -62,23 +62,22 @@ pub fn NodePort(
                     port_type.clone(),
                     start_end,
                     start_end,
-                    70. * zoom_factor,
+                    70.,
                 )));
             }
         }
     };
 
     let on_mouse_up = {
-        let zoom_factor = ZOOM.read().current();
         let port_name = port_name.clone();
         move |e: Event<MouseData>| {
             if let (Some(edge_start), Some(offset)) =
                 (edge_in_creation.read().as_ref(), offset.read().offset())
             {
                 let x = (-e.element_coordinates().x + port_w_h / 2.)
-                    .mul_add(zoom_factor, e.page_coordinates().x - offset.0);
+                    +e.page_coordinates().x - offset.0;
                 let y = (-e.element_coordinates().y + port_w_h / 2.)
-                    .mul_add(zoom_factor, e.page_coordinates().y - offset.1);
+                    +e.page_coordinates().y - offset.1;
 
                 let (
                     src_node,

@@ -6,7 +6,7 @@ use crate::{
         context_menu::cx_menu::CxMenu,
         scenery_editor::{graph_editor::graph_editor_component::ZoomShift, EDGES},
     },
-    CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
+    CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{nodes::ConnectInfo, PortType};
@@ -348,7 +348,7 @@ pub fn EdgeCreationComponent() -> Element {
                     d: new_path,
                     stroke: "black",
                     fill: "transparent",
-                    stroke_width: format!("{}", 2. * ZOOM.read().current()),
+                    stroke_width: format!("{}", 2.),
                 }
             }
         },
@@ -376,7 +376,7 @@ pub fn EdgeComponent(edge: Edge) -> Element {
             oncontextmenu: use_edge_context_menu(edge.conn_info),
             stroke: "black",
             fill: "transparent",
-            stroke_width: format!("{}", 2. * ZOOM.read().current()),
+            stroke_width: format!("{}", 2.),
         }
         foreignObject {
             class: "distance-field",

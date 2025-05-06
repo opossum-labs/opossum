@@ -7,7 +7,7 @@ use opossum_backend::{nodes::NodeInfo, AnalyzerType, NodeAttr, PortType};
 use uuid::Uuid;
 
 use super::{node::NodeElement, ports::ports_component::Ports, EDGES};
-use crate::{OPOSSUM_UI_LOGS, ZOOM};
+use crate::OPOSSUM_UI_LOGS;
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct NodesStore {
@@ -17,10 +17,6 @@ pub struct NodesStore {
 }
 
 impl NodesStore {
-    #[must_use]
-    pub fn size() -> Point2D<f64> {
-        Point2D::new(130., 130. / 1.618_033_988_7)
-    }
     #[must_use]
     pub const fn optic_nodes(&self) -> Signal<HashMap<Uuid, NodeElement>> {
         self.optic_nodes
@@ -46,29 +42,9 @@ impl NodesStore {
             node.shift_position(shift);
         }
     }
-    // pub fn drag_node(&mut self, node_id: &Uuid, elem_offset: &(f64, f64), mouse_data: &MouseData) {
-    //     let offset = use_context::<Signal<NodeOffset>>();
-    //     if let Some(node_container_offset) = offset().offset() {
-    //         let coordinates = mouse_data.page_coordinates();
-    //         if let Some(n) = self
-    //             .optic_nodes_mut()
-    //             .write()
-    //             .iter_mut()
-    //             .find(|n| n.id() == node_id)
-    //         {
-    //             n.drag_node(
-    //                 coordinates.x,
-    //                 coordinates.y,
-    //                 node_container_offset.0,
-    //                 node_container_offset.1,
-    //                 elem_offset.0,
-    //                 elem_offset.1,
-    //             );
-    //         };
-    //     }
-    // }
+
     #[must_use]
-    pub fn get_active_node_id(&self) -> Option<Uuid> {
+    pub fn active_node(&self) -> Option<Uuid> {
         self.active_node.read().clone()
     }
 
@@ -131,9 +107,8 @@ impl NodesStore {
     }
     #[must_use]
     pub fn find_position(&self) -> (f64, f64) {
-        let zoom_factor = ZOOM.read().zoom_factor();
-        let size = Self::size();
-        let mut new_pos = (size.x * zoom_factor, size.x * zoom_factor);
+        let size = Point2D::new(130., 130. / 1.618_033_988_7);
+        let mut new_pos = (size.x, size.x);
         let phi = 1. / 1.618_033_988_7;
         loop {
             let mut position_found = true;
@@ -142,8 +117,8 @@ impl NodesStore {
                     && (node.1.pos().0 - new_pos.1).abs() < 10.
                 {
                     position_found = false;
-                    new_pos.0 += size.x * f64::powi(phi, 3) * zoom_factor;
-                    new_pos.1 += size.y * f64::powi(phi, 3) * zoom_factor;
+                    new_pos.0 += size.x * f64::powi(phi, 3);
+                    new_pos.1 += size.y * f64::powi(phi, 3);
                     break;
                 }
             }

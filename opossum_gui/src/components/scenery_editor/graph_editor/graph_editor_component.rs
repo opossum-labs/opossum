@@ -138,7 +138,7 @@ pub fn GraphEditor(
                     }
                     DragStatus::Node(id) => {
                         node_store
-                            .shift_node_position(id, (rel_shift_x as f64, rel_shift_y as f64));
+                            .shift_node_position(id, (rel_shift_x as f64/graph_zoom(), rel_shift_y as f64/graph_zoom()));
                     }
                     _ => {}
                 }

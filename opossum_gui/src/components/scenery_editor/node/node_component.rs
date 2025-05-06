@@ -1,19 +1,12 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use super::NodeElement;
-use crate::{
-    // api::{self},
-    components::{
-        // context_menu::cx_menu::CxMenu,
-        scenery_editor::{
-            graph_editor::graph_editor_component::{DragStatus, EditorState},
-            graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader},
-            nodes::NodesStore,
-            ports::ports_component::NodePorts,
-        },
-    },
-    // CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+use crate::components::scenery_editor::{
+    graph_editor::graph_editor_component::{DragStatus, EditorState},
+    graph_node::graph_node_components::{GraphNodeContent, GraphNodeHeader},
+    nodes::NodesStore,
+    ports::ports_component::NodePorts,
 };
-use dioxus::prelude::*;
+use dioxus::{html::geometry::euclid::Point2D, prelude::*};
 use opossum_backend::usize_to_f64;
 use uuid::Uuid;
 
@@ -26,17 +19,24 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
     let output_ports = node.output_ports();
     let position = node.pos();
     let port_height_factor = usize_to_f64(output_ports.len().max(input_ports.len()));
-    let node_size = NodesStore::size();
-
-    // let is_active = if node.is_active() { "active-node" } else { "" };
-    let _z_index = node.z_index();
+   
+    let active_node_id = node_store.active_node();
+    let is_active = if let Some(active_node_id) = active_node_id {
+        if active_node_id == *node.id() {
+            "active-node"
+        } else {
+            ""
+        }
+    } else {
+        ""
+    };
+    let node_size= Point2D::new(130., 130. / 1.618_033_988_7);
     let header_scale = 0.3;
     let id = *node.id();
     let z_index = node.z_index();
-    //let is_active = node.is_active();
     rsx! {
         div {
-            class: "node",
+            class: "node {is_active}",
             style: format!(
                 "transform-origin: center; position: absolute; left: {}px; top: {}px; z-index: {z_index};",
                 position.0 as i32,

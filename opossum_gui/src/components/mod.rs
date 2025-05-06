@@ -5,6 +5,5 @@ pub mod logger;
 pub mod menu_bar;
 pub mod node_editor;
 pub mod scenery_editor;
-pub mod zoom_shift_container;
 // pub mod plot;
 // pub mod render_3d;

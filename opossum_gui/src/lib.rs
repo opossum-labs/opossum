@@ -15,7 +15,7 @@ pub struct MainWindowSize {
 
 static OPOSSUM_UI_LOGS: GlobalSignal<Logs> = Signal::global(Logs::new);
 static HTTP_API_CLIENT: GlobalSignal<HTTPClient> = Signal::global(HTTPClient::new);
-static ZOOM: GlobalSignal<Zoom> = Signal::global(|| Zoom::new(1., 1.));
+// static ZOOM: GlobalSignal<Zoom> = Signal::global(|| Zoom::new(1., 1.));
 pub static MAIN_WINDOW_SIZE: GlobalSignal<Option<MainWindowSize>> =
     Signal::global(|| None::<MainWindowSize>);
 pub static CONTEXT_MENU: GlobalSignal<Option<CxMenu>> = Signal::global(|| None::<CxMenu>);

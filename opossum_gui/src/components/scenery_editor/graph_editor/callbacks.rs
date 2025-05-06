@@ -4,7 +4,7 @@ use super::{DraggedNode, NodeOffset};
 use crate::{
     api::{self},
     components::scenery_editor::{edges::edges_component::EdgeCreation, EDGES},
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, ZOOM,
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::prelude::*;
 
