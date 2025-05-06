@@ -19,7 +19,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
     let output_ports = node.output_ports();
     let position = node.pos();
     let port_height_factor = usize_to_f64(output_ports.len().max(input_ports.len()));
-   
+
     let active_node_id = node_store.active_node();
     let is_active = if let Some(active_node_id) = active_node_id {
         if active_node_id == *node.id() {
@@ -30,7 +30,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
     } else {
         ""
     };
-    let node_size= Point2D::new(130., 130. / 1.618_033_988_7);
+    let node_size = Point2D::new(130., 130. / 1.618_033_988_7);
     let header_scale = 0.3;
     let id = *node.id();
     let z_index = node.z_index();
@@ -43,7 +43,6 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
                 position.1 as i32,
             ),
             onmousedown: move |event: MouseEvent| {
-                println!("Node mouse down");
                 current_mouse_pos
                     .set((
                         event.client_coordinates().x as i32,
@@ -54,21 +53,11 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
                 node_activated.set(Some(id));
                 event.stop_propagation();
             },
-            onmouseup: move |event: MouseEvent| {
-                println!("Node mouse up");
-                editor_status.drag_status.set(DragStatus::None);
-                event.stop_propagation();
-            },
-            onclick: move |_| {
-                println!("Node clicked");
-                node_activated.set(Some(node.id));
-            },
+    
             //oncontextmenu: use_node_context_menu(*node.id()),
 
             GraphNodeContent {
-                node_header: rsx! {
-                    GraphNodeHeader { node_name: node.name(), node_id: *node.id(), node_size }
-                },
+                node_name: node.name(),
                 node_body: rsx! {
                     div {
                         class: "node-body",

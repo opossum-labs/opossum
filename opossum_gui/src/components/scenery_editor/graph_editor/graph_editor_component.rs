@@ -3,7 +3,6 @@ use crate::{
     components::scenery_editor::{
         edges::edges_component::{EdgeCreation, EdgeCreationComponent, EdgesComponent},
         nodes::{Nodes, NodesStore},
-        DraggedNode, NodeOffset,
     },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
@@ -15,8 +14,6 @@ use uuid::Uuid;
 
 fn use_init_signals() {
     use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
-    use_context_provider(|| Signal::new(DraggedNode::new(None, None)));
-    use_context_provider(|| Signal::new(NodeOffset::new(None)));
     use_context_provider(|| Signal::new(None::<EdgeCreation>));
 }
 
@@ -100,9 +97,9 @@ pub fn GraphEditor(
     });
     rsx! {
         div {
+            class: "graph-editor",
             // onmounted: use_on_mounted(),
             // onresize: use_on_resize(),
-            // ondoubleclick: use_on_double_click(),
             // onkeydown: use_on_key_down(),
             onwheel: move |event| {
                 let delta = event.delta().strip_units().y;
@@ -118,7 +115,6 @@ pub fn GraphEditor(
                 editor_status.drag_status.set(DragStatus::Graph);
             },
             onmouseup: move |_| {
-                println!("Graph mouse up");
                 editor_status.drag_status.set(DragStatus::None);
             },
             onmousemove: move |event| {
@@ -138,12 +134,20 @@ pub fn GraphEditor(
                     }
                     DragStatus::Node(id) => {
                         node_store
-                            .shift_node_position(id, (rel_shift_x as f64/graph_zoom(), rel_shift_y as f64/graph_zoom()));
+                            .shift_node_position(
+                                id,
+                                (
+                                    rel_shift_x as f64 / graph_zoom(),
+                                    rel_shift_y as f64 / graph_zoom(),
+                                ),
+                            );
                     }
                     _ => {}
                 }
             },
-            class: "graph-editor",
+            ondoubleclick: move |_| {
+                println!("Graph double click");
+            },
             div {
                 class: "zoom-shift-container",
                 style: format!(
