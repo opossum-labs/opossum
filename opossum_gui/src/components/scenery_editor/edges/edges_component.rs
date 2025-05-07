@@ -78,11 +78,16 @@ pub struct NewEdgeCreationStart {
     pub bezier_offset: f64,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct EdgeCreationPort {
+    pub node_id: Uuid,
+    pub port_name: String,
+    pub port_type: PortType,
+}
 #[derive(Clone, PartialEq, Debug)]
 pub struct EdgeCreation {
-    src_node: Uuid,
-    src_port: String,
-    src_port_type: PortType,
+    start_port: EdgeCreationPort,
+    end_port: Option<EdgeCreationPort>,
     start: Point2D<f64>,
     end: Point2D<f64>,
     bezier_offset: f64,
@@ -95,7 +100,6 @@ impl EdgeCreation {
         src_port: String,
         src_port_type: PortType,
         start: Point2D<f64>,
-        end: Point2D<f64>,
     ) -> Self {
         let connection_factor = if src_port_type == PortType::Input {
             -1.
@@ -103,29 +107,16 @@ impl EdgeCreation {
             1.
         };
         Self {
-            src_node,
-            src_port,
-            src_port_type,
+            start_port: EdgeCreationPort {
+                node_id: src_node,
+                port_name: src_port.clone(),
+                port_type: src_port_type,
+            },
+            end_port: None,
             start,
-            end,
+            end: start,
             bezier_offset: 50. * connection_factor,
         }
-    }
-    #[must_use]
-    pub const fn port_type(&self) -> &PortType {
-        &self.src_port_type
-    }
-    #[must_use]
-    pub fn port_name(&self) -> String {
-        self.src_port.clone()
-    }
-    #[must_use]
-    pub const fn node_id(&self) -> Uuid {
-        self.src_node
-    }
-    #[must_use]
-    pub fn start_port_id(&self) -> String {
-        format!("{}_{}", self.src_node.as_simple(), self.src_port)
     }
     #[must_use]
     pub const fn start(&self) -> Point2D<f64> {
@@ -135,24 +126,29 @@ impl EdgeCreation {
     pub const fn end(&self) -> Point2D<f64> {
         self.end
     }
+    pub fn shift_end(&mut self, shift: Point2D<f64>) {
+        self.end.x += shift.x;
+        self.end.y += shift.y;
+    }
     #[must_use]
     pub const fn bezier_offset(&self) -> f64 {
         self.bezier_offset
     }
-    pub const fn set_end_x(&mut self, end_x: f64) {
-        self.end.x = end_x;
+    pub fn set_end_port(&mut self, end_port: Option<EdgeCreationPort>) {
+        self.end_port = end_port;
     }
-    pub const fn set_end_y(&mut self, end_y: f64) {
-        self.end.y = end_y;
-    }
-    pub const fn set_bezier_offset(&mut self, bezier_offset: f64) {
-        self.bezier_offset = bezier_offset;
-    }
-    pub const fn set_start_x(&mut self, start_x: f64) {
-        self.start.x = start_x;
-    }
-    pub const fn set_start_y(&mut self, start_y: f64) {
-        self.start.y = start_y;
+    pub fn is_valid(&self) -> bool {
+        if let Some(end_port) = &self.end_port {
+            if end_port.node_id == self.start_port.node_id {
+                return false;
+            }
+            if end_port.port_type == self.start_port.port_type {
+                return false;
+            }
+            return true;
+        } else {
+            return false;
+        }
     }
 }
 

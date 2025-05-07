@@ -6,7 +6,10 @@ use crate::components::scenery_editor::{
     nodes::NodesStore,
     ports::ports_component::NodePorts,
 };
-use dioxus::{html::geometry::{euclid::Point2D, PixelsSize}, prelude::*};
+use dioxus::{
+    html::geometry::{euclid::Point2D, PixelsSize},
+    prelude::*,
+};
 use opossum_backend::usize_to_f64;
 use uuid::Uuid;
 

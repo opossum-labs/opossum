@@ -119,11 +119,19 @@ pub fn GraphEditor(
             },
             onmouseup: move |_| {
                 editor_status.drag_status.set(DragStatus::None);
-                editor_status.edge_in_creation.set(None);
+                let edge_in_creation=editor_status.edge_in_creation.read().clone();
+                if let Some(edge_in_creation) = edge_in_creation {
+                   if edge_in_creation.is_valid() {
+                    println!("Edge in creation valid");
+                   } else {
+                    println!("Edge in creation invalid");
+                    editor_status.edge_in_creation.set(None);
+                   }
+                }
             },
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());
-                println!("drag_status: {:?}", drag_status);
+                // println!("drag_status: {:?}", drag_status);
                 let rel_shift_x = event.client_coordinates().x as i32 - current_mouse_pos().0;
                 let rel_shift_y = event.client_coordinates().y as i32 - current_mouse_pos().1;
                 current_mouse_pos
@@ -154,22 +162,18 @@ pub fn GraphEditor(
                                 edge_creation_start.src_port.clone(),
                                 edge_creation_start.src_port_type.clone(),
                                 edge_creation_start.start_pos,
-                                edge_creation_start.start_pos,
                             );
                             editor_status.edge_in_creation.set(Some(edge_creation));
                         } else {
-                            let edge_in_creation = edge_in_creation.unwrap();
-                            let new_edge_creation = EdgeCreation::new(
-                                edge_creation_start.src_node,
-                                edge_creation_start.src_port.clone(),
-                                edge_creation_start.src_port_type.clone(),
-                                edge_in_creation.start(),
-                                Point2D::new(
-                                    edge_in_creation.end().x + rel_shift_x as f64 / graph_zoom(),
-                                    edge_in_creation.end().y + rel_shift_y as f64 / graph_zoom(),
-                                ),
-                            );
-                            editor_status.edge_in_creation.set(Some(new_edge_creation));
+                            let mut edge_in_creation = edge_in_creation.unwrap();
+                            edge_in_creation
+                                .shift_end(
+                                    Point2D::new(
+                                        rel_shift_x as f64 / graph_zoom(),
+                                        rel_shift_y as f64 / graph_zoom(),
+                                    ),
+                                );
+                            editor_status.edge_in_creation.set(Some(edge_in_creation));
                         }
                     }
                     _ => {}
@@ -187,11 +191,6 @@ pub fn GraphEditor(
                 ),
                 Nodes { node_activated: node_selected }
                 svg { width: "100%", height: "100%", overflow: "visible",
-                    path {
-                        class: "edge",
-                        d: "M10 10 L20 10 L20 20 L10 20 L10 10",
-                        style: "stroke:rgb(255, 0, 0); fill: none; stroke-width: 2px;",
-                    }
                     {
                         rsx! {
                             EdgesComponent {}

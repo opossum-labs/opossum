@@ -1,13 +1,16 @@
-use dioxus::{desktop::tao::event, html::geometry::{euclid::{default::Point2D}, PixelsSize}, prelude::*};
+use dioxus::{
+    html::geometry::{euclid::default::Point2D, PixelsSize},
+    prelude::*,
+};
 use opossum_backend::{usize_to_f64, PortType};
 use uuid::Uuid;
 
 use crate::{
     api::{self},
     components::scenery_editor::{
-        edges::edges_component::{Edge, EdgeCreation, NewEdgeCreationStart},
+        edges::edges_component::{EdgeCreation, EdgeCreationPort, NewEdgeCreationStart},
         graph_editor::graph_editor_component::{DragStatus, EditorState},
-        ports, EDGES,
+        EDGES,
     },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
@@ -149,19 +152,36 @@ pub fn NodePort(
                 }
             },
             onmouseenter: {
-                let port_name_clone = port_name.clone();
+                let port_name = port_name.clone();
                 let port_type = port_type.clone();
                 move |event: MouseEvent| {
-                    println!("Port mouse enter: {port_type:?}, {}", port_name_clone);
-                    event.stop_propagation();
+                    let edge_increation = editor_status.edge_in_creation.read().clone();
+                    if let Some(mut edge_in_creation) = edge_increation {
+                        println!("Port mouse enter: {port_type:?}, {}", port_name);
+                        edge_in_creation
+                            .set_end_port(
+                                Some(EdgeCreationPort {
+                                    node_id,
+                                    port_name: port_name.clone(),
+                                    port_type: port_type.clone(),
+                                }),
+                            );
+                        editor_status.edge_in_creation.set(Some(edge_in_creation));
+                        event.stop_propagation();
+                    }
                 }
             },
             onmouseleave: {
-                let port_name_clone = port_name.clone();
+                let port_name = port_name.clone();
                 let port_type = port_type.clone();
                 move |event: MouseEvent| {
-                    println!("Port mouse leave: {port_type:?}, {}", port_name_clone);
-                    event.stop_propagation();
+                    let edge_increation = editor_status.edge_in_creation.read().clone();
+                    if let Some(mut edge_in_creation) = edge_increation {
+                        println!("Port mouse enter: {port_type:?}, {}", port_name);
+                        edge_in_creation.set_end_port(None);
+                        editor_status.edge_in_creation.set(Some(edge_in_creation));
+                        event.stop_propagation();
+                    }
                 }
             },
             id: format!("{}_{}", node_id.as_simple().to_string(), port_name),
