@@ -64,18 +64,19 @@
 
 .node-content {
     position: relative;
-    display: flex;
-    flex-direction: column;
+    /* display: flex;
+    flex-direction: column; */
 }
 
 .node-body {
     position: relative;
-    width: 100%;
+    width: 130px;
 }
 
 .node-header {
     position: relative;
-    width: 100%;
+    width: 130px;
+    height: 30px;
     border-bottom: 1px solid rgb(120, 120, 120);
     display: flex;
     align-items: center;

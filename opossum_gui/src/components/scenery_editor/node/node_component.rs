@@ -41,7 +41,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
             class: "node {is_active}",
             draggable: false,
             style: format!(
-                "transform-origin: center; position: absolute; left: {}px; top: {}px; z-index: {z_index};",
+                "left: {}px; top: {}px; z-index: {z_index};",
                 position.x as i32,
                 position.y as i32,
             ),
@@ -61,10 +61,11 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
                         draggable: false,
                         style: format!(
                             "height: {}px;",
-                            node_size.y.mul_add(1. - header_scale, (port_height_factor - 1.) * 32.),
+                            // node_size.y.mul_add(1. - header_scale, (port_height_factor - 1.) * 32.),
+                            50.0
                         ),
                         NodePorts {
-                            node_body_position: Point2D::new(position.x, position.y + (node_size.y * header_scale)),
+                            node_body_position: Point2D::new(position.x, position.y + 30.0),
                             node_size: PixelsSize::new(node_size.x, node_size.y * (1. - header_scale)),
                             node_id: *node.id(),
                             ports: node.ports().clone(),

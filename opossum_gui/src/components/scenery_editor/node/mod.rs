@@ -1,4 +1,5 @@
 use dioxus::html::geometry::euclid::default::Point2D;
+use opossum_backend::PortType;
 use uuid::Uuid;
 pub mod node_component;
 pub use node_component::Node;
@@ -68,39 +69,11 @@ impl NodeElement {
     pub const fn id(&self) -> &Uuid {
         &self.id
     }
-    pub const fn set_id(&mut self, id: Uuid) {
-        self.id = id;
-    }
-
     pub fn shift_position(&mut self, shift: Point2D<f64>) {
         self.pos.x += shift.x;
         self.pos.y += shift.y;
     }
-    // pub fn drag_node(
-    //     &mut self,
-    //     mouse_x: f64,
-    //     mouse_y: f64,
-    //     offset_x: f64,
-    //     offset_y: f64,
-    //     elem_offset_x: f64,
-    //     elem_offset_y: f64,
-    // ) {
-    //     let size = NodesStore::size();
-
-    //     let x_init = self.x();
-    //     let y_init = self.y();
-
-    //     let shift_x = x_init - size.x / 2. + elem_offset_x;
-    //     let shift_y = y_init - size.y / 2. + elem_offset_y;
-
-    //     self.zoom_shift(
-    //         ZOOM.read().current(),
-    //         (mouse_x - offset_x, mouse_y - offset_y),
-    //         (shift_x, shift_y),
-    //     );
-
-    //     EDGES
-    //         .write()
-    //         .shift_if_connected(self.x() - x_init, self.y() - y_init, *self.id());
-    // }
+    pub fn port_position(self, port_type: PortType, port_name: &str) -> Point2D<f64> {
+        Point2D::new(0.0,0.0)
+    }
 }
