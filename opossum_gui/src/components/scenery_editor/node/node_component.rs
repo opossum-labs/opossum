@@ -59,6 +59,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
                             node_size.y.mul_add(1. - header_scale, (port_height_factor - 1.) * 32.),
                         ),
                         NodePorts {
+                            node_body_position: Point2D::new(position.0, position.1+(node_size.y*header_scale)),
                             node_width: node_size.x,
                             node_height: node_size.y * (1. - header_scale),
                             node_id: *node.id(),

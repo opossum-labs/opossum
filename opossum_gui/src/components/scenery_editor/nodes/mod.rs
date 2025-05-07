@@ -42,7 +42,6 @@ impl NodesStore {
             node.shift_position(shift);
         }
     }
-
     #[must_use]
     pub fn active_node(&self) -> Option<Uuid> {
         self.active_node.read().clone()

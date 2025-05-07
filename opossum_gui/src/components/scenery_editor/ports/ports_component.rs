@@ -7,6 +7,7 @@ use crate::{
     components::scenery_editor::{
         edges::edges_component::{Edge, EdgeCreation, NewEdgeCreationStart},
         graph_editor::graph_editor_component::{DragStatus, EditorState},
+        nodes::NodesStore,
         EDGES,
     },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
@@ -36,15 +37,19 @@ impl Ports {
 
 #[component]
 pub fn NodePort(
+    node_body_position: Point2D<f64>,
     port_w_h: f64,
-    port_x: f64,
-    port_y: f64,
+    port_pos: Point2D<f64>,
     node_id: Uuid,
     port_name: String,
     port_type: PortType,
 ) -> Element {
-    // let mut edge_in_creation = use_context::<Signal<Option<EdgeCreation>>>();
     let mut editor_status = use_context::<EditorState>();
+    // let nodes_store = use_context::<NodesStore>();
+    // let optic_nodes = nodes_store.optic_nodes()();
+    // let node_element = optic_nodes.get(&node_id).unwrap();
+    // let node_pos= node_element.pos();
+    // let node_pos = nodes_store.node_position(&node_id).unwrap();
     // let on_mouse_down = {
     //     let port_type = port_type.clone();
     //     let port_name = port_name.clone();
@@ -144,16 +149,18 @@ pub fn NodePort(
         div {
             onmousedown: move |event: MouseEvent| {
                 println!("Port mouse down: {port_type:?}, {}", port_name_clone);
-                editor_status.drag_status.set(DragStatus::Edge(NewEdgeCreationStart{
-                    src_node: node_id,
-                    src_port: port_name_clone.clone(),
-                    src_port_type: port_type.clone(),
-                    start_pos: Point2D::new(
-                        port_x,
-                        port_y,
-                    ),
-                    bezier_offset: 70.,
-                }));
+                let start_pos = Point2D::new(port_pos.x+node_body_position.x+port_w_h/2.0, port_pos.y+node_body_position.y+port_w_h/2.0);
+                editor_status
+                    .drag_status
+                    .set(
+                        DragStatus::Edge(NewEdgeCreationStart {
+                            src_node: node_id,
+                            src_port: port_name_clone.clone(),
+                            src_port_type: port_type.clone(),
+                            start_pos: start_pos,
+                            bezier_offset: 50.,
+                        }),
+                    );
                 event.stop_propagation();
             },
             // onmouseup: on_mouse_up,
@@ -161,8 +168,8 @@ pub fn NodePort(
             class: "port {port_class}",
             style: format!(
                 "left: {}px; top: {}px; width: {}px; height: {}px;",
-                port_x,
-                port_y,
+                port_pos.x,
+                port_pos.y,
                 port_w_h,
                 port_w_h,
             ),
@@ -172,6 +179,7 @@ pub fn NodePort(
 
 #[component]
 pub fn NodePorts(
+    node_body_position: Point2D<f64>,
     node_width: f64,
     node_height: f64,
     node_id: Uuid,
@@ -189,9 +197,9 @@ pub fn NodePorts(
                 let port_x = -port_w_h / 2. - 3. * border_radius / 2.;
                 rsx! {
                     NodePort {
+                        node_body_position,
                         port_w_h,
-                        port_x,
-                        port_y,
+                        port_pos: Point2D::new(port_x, port_y),
                         node_id,
                         port_name: in_port.clone(),
                         port_type: PortType::Input,
@@ -206,9 +214,9 @@ pub fn NodePorts(
                 let port_x = node_width - port_w_h / 2. - border_radius / 2.;
                 rsx! {
                     NodePort {
+                        node_body_position,
                         port_w_h,
-                        port_x,
-                        port_y,
+                        port_pos: Point2D::new(port_x, port_y),
                         node_id,
                         port_name: out_port.clone(),
                         port_type: PortType::Output,
