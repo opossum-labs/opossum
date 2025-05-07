@@ -111,17 +111,19 @@
     box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3), 0 0 10px #87c5f8;
 }
 
+/* Ports styling */
 .port {
     position: absolute;
     border-radius: 30%;
     border: 1px solid rgb(120, 120, 120);
     cursor: pointer;
 }
-
+.port:hover {
+    box-shadow: 0 0 10px #e68c05;
+}
 .output-port {
     background-color: rgba(206, 255, 208);
 }
-
 .input-port {
     background-color: rgb(197, 216, 255);
 }

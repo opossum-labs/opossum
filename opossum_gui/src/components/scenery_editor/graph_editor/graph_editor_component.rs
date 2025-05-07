@@ -147,35 +147,29 @@ pub fn GraphEditor(
                             );
                     }
                     DragStatus::Edge(edge_creation_start) => {
-                        let edge_in_creation=editor_status.edge_in_creation.read().clone();
-                       if edge_in_creation.is_none() {
+                        let edge_in_creation = editor_status.edge_in_creation.read().clone();
+                        if edge_in_creation.is_none() {
                             let edge_creation = EdgeCreation::new(
                                 edge_creation_start.src_node,
                                 edge_creation_start.src_port.clone(),
                                 edge_creation_start.src_port_type.clone(),
                                 edge_creation_start.start_pos,
-                                Point2D::new(
-                                    edge_creation_start.start_pos.x,
-                                    edge_creation_start.start_pos.y,
-                                ),
-                                50.,
+                                edge_creation_start.start_pos,
                             );
                             editor_status.edge_in_creation.set(Some(edge_creation));
                         } else {
                             let edge_in_creation = edge_in_creation.unwrap();
-
-                                let new_edge_creation = EdgeCreation::new(
-                                    edge_creation_start.src_node,
-                                    edge_creation_start.src_port.clone(),
-                                    edge_creation_start.src_port_type.clone(),
-                                    Point2D::new(edge_in_creation.start_x(), edge_in_creation.start_y()),
-                                    Point2D::new(
-                                        edge_in_creation.end_x() + rel_shift_x as f64 / graph_zoom(),
-                                        edge_in_creation.end_y() + rel_shift_y as f64 / graph_zoom(),
-                                    ),
-                                    50.,
-                                );
-                                editor_status.edge_in_creation.set(Some(new_edge_creation));
+                            let new_edge_creation = EdgeCreation::new(
+                                edge_creation_start.src_node,
+                                edge_creation_start.src_port.clone(),
+                                edge_creation_start.src_port_type.clone(),
+                                edge_in_creation.start(),
+                                Point2D::new(
+                                    edge_in_creation.end().x + rel_shift_x as f64 / graph_zoom(),
+                                    edge_in_creation.end().y + rel_shift_y as f64 / graph_zoom(),
+                                ),
+                            );
+                            editor_status.edge_in_creation.set(Some(new_edge_creation));
                         }
                     }
                     _ => {}

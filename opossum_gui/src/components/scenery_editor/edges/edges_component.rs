@@ -83,10 +83,8 @@ pub struct EdgeCreation {
     src_node: Uuid,
     src_port: String,
     src_port_type: PortType,
-    start_x: f64,
-    start_y: f64,
-    end_x: f64,
-    end_y: f64,
+    start: Point2D<f64>,
+    end: Point2D<f64>,
     bezier_offset: f64,
 }
 
@@ -98,7 +96,6 @@ impl EdgeCreation {
         src_port_type: PortType,
         start: Point2D<f64>,
         end: Point2D<f64>,
-        bezier_offset: f64,
     ) -> Self {
         let connection_factor = if src_port_type == PortType::Input {
             -1.
@@ -109,11 +106,9 @@ impl EdgeCreation {
             src_node,
             src_port,
             src_port_type,
-            start_x: start.x,
-            start_y: start.y,
-            end_x: end.x,
-            end_y: end.y,
-            bezier_offset: bezier_offset * connection_factor,
+            start,
+            end,
+            bezier_offset: 50. * connection_factor,
         }
     }
     #[must_use]
@@ -133,39 +128,31 @@ impl EdgeCreation {
         format!("{}_{}", self.src_node.as_simple(), self.src_port)
     }
     #[must_use]
-    pub const fn start_x(&self) -> f64 {
-        self.start_x
+    pub const fn start(&self) -> Point2D<f64> {
+        self.start
     }
     #[must_use]
-    pub const fn start_y(&self) -> f64 {
-        self.start_y
-    }
-    #[must_use]
-    pub const fn end_x(&self) -> f64 {
-        self.end_x
-    }
-    #[must_use]
-    pub const fn end_y(&self) -> f64 {
-        self.end_y
+    pub const fn end(&self) -> Point2D<f64> {
+        self.end
     }
     #[must_use]
     pub const fn bezier_offset(&self) -> f64 {
         self.bezier_offset
     }
     pub const fn set_end_x(&mut self, end_x: f64) {
-        self.end_x = end_x;
+        self.end.x = end_x;
     }
     pub const fn set_end_y(&mut self, end_y: f64) {
-        self.end_y = end_y;
+        self.end.y = end_y;
     }
     pub const fn set_bezier_offset(&mut self, bezier_offset: f64) {
         self.bezier_offset = bezier_offset;
     }
     pub const fn set_start_x(&mut self, start_x: f64) {
-        self.start_x = start_x;
+        self.start.x = start_x;
     }
     pub const fn set_start_y(&mut self, start_y: f64) {
-        self.start_y = start_y;
+        self.start.y = start_y;
     }
 }
 
@@ -270,23 +257,17 @@ impl Edge {
     }
 }
 
-fn define_bezier_path(
-    start_x: f64,
-    start_y: f64,
-    end_x: f64,
-    end_y: f64,
-    bezier_offset: f64,
-) -> String {
+fn define_bezier_path(start: Point2D<f64>, end: Point2D<f64>, bezier_offset: f64) -> String {
     format!(
         "M{},{} C{},{} {},{} {},{}",
-        start_x,
-        start_y,
-        start_x + bezier_offset,
-        start_y,
-        end_x - bezier_offset,
-        end_y,
-        end_x,
-        end_y,
+        start.x,
+        start.y,
+        start.x + bezier_offset,
+        start.y,
+        end.x - bezier_offset,
+        end.y,
+        end.x,
+        end.y,
     )
 }
 
@@ -306,13 +287,7 @@ pub fn EdgeCreationComponent() -> Element {
     edge_in_creation.clone().map_or_else(
         || rsx! {},
         |edge| {
-            let new_path = define_bezier_path(
-                edge.start_x(),
-                edge.start_y(),
-                edge.end_x(),
-                edge.end_y(),
-                edge.bezier_offset(),
-            );
+            let new_path = define_bezier_path(edge.start(), edge.end(), edge.bezier_offset());
             rsx! {
                 path {
                     d: new_path,
@@ -329,10 +304,8 @@ pub fn EdgeCreationComponent() -> Element {
 pub fn EdgeComponent(edge: Edge) -> Element {
     let mut distance_val = use_signal(|| format!("{}", edge.distance()));
     let new_path = define_bezier_path(
-        edge.start_x(),
-        edge.start_y(),
-        edge.end_x(),
-        edge.end_y(),
+        Point2D::new(edge.start_x(), edge.start_y()),
+        Point2D::new(edge.end_x(), edge.end_y()),
         edge.bezier_offset(),
     );
 

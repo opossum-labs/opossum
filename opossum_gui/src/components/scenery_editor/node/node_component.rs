@@ -6,7 +6,7 @@ use crate::components::scenery_editor::{
     nodes::NodesStore,
     ports::ports_component::NodePorts,
 };
-use dioxus::{html::geometry::euclid::Point2D, prelude::*};
+use dioxus::{html::geometry::{euclid::Point2D, PixelsSize}, prelude::*};
 use opossum_backend::usize_to_f64;
 use uuid::Uuid;
 
@@ -59,12 +59,10 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
                             node_size.y.mul_add(1. - header_scale, (port_height_factor - 1.) * 32.),
                         ),
                         NodePorts {
-                            node_body_position: Point2D::new(position.0, position.1+(node_size.y*header_scale)),
-                            node_width: node_size.x,
-                            node_height: node_size.y * (1. - header_scale),
+                            node_body_position: Point2D::new(position.0, position.1 + (node_size.y * header_scale)),
+                            node_size: PixelsSize::new(node_size.x, node_size.y * (1. - header_scale)),
                             node_id: *node.id(),
-                            input_ports: input_ports.clone(),
-                            output_ports: output_ports.clone(),
+                            ports: node.ports().clone(),
                         }
                     }
                 },

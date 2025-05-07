@@ -1,4 +1,4 @@
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus::{desktop::tao::event, html::geometry::{euclid::{default::Point2D}, PixelsSize}, prelude::*};
 use opossum_backend::{usize_to_f64, PortType};
 use uuid::Uuid;
 
@@ -7,8 +7,7 @@ use crate::{
     components::scenery_editor::{
         edges::edges_component::{Edge, EdgeCreation, NewEdgeCreationStart},
         graph_editor::graph_editor_component::{DragStatus, EditorState},
-        nodes::NodesStore,
-        EDGES,
+        ports, EDGES,
     },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
@@ -50,25 +49,6 @@ pub fn NodePort(
     // let node_element = optic_nodes.get(&node_id).unwrap();
     // let node_pos= node_element.pos();
     // let node_pos = nodes_store.node_position(&node_id).unwrap();
-    // let on_mouse_down = {
-    //     let port_type = port_type.clone();
-    //     let port_name = port_name.clone();
-    //     move |e: Event<MouseData>| {
-    //         let x = (-e.element_coordinates().x + port_w_h / 2.)
-    //             .mul_add(zoom_factor, e.page_coordinates().x);
-    //         let y = (-e.element_coordinates().y + port_w_h / 2.)
-    //             .mul_add(zoom_factor, e.page_coordinates().y);
-    //         let start_end = Point2D::new(x, y);
-    //         edge_in_creation.set(Some(EdgeCreation::new(
-    //             node_id,
-    //             port_name.clone(),
-    //             port_type.clone(),
-    //             start_end,
-    //             start_end,
-    //             70. * zoom_factor,
-    //         )));
-    //     }
-    // };
 
     // let on_mouse_up = {
     //     let zoom_factor = 1.0;
@@ -144,26 +124,46 @@ pub fn NodePort(
     } else {
         "output-port"
     };
-    let port_name_clone = port_name.clone();
     rsx! {
         div {
-            onmousedown: move |event: MouseEvent| {
-                println!("Port mouse down: {port_type:?}, {}", port_name_clone);
-                let start_pos = Point2D::new(port_pos.x+node_body_position.x+port_w_h/2.0, port_pos.y+node_body_position.y+port_w_h/2.0);
-                editor_status
-                    .drag_status
-                    .set(
-                        DragStatus::Edge(NewEdgeCreationStart {
-                            src_node: node_id,
-                            src_port: port_name_clone.clone(),
-                            src_port_type: port_type.clone(),
-                            start_pos: start_pos,
-                            bezier_offset: 50.,
-                        }),
+            onmousedown: {
+                let port_name = port_name.clone();
+                let port_type = port_type.clone();
+                move |event: MouseEvent| {
+                    let start_pos = Point2D::new(
+                        port_pos.x + node_body_position.x + port_w_h / 2.0,
+                        port_pos.y + node_body_position.y + port_w_h / 2.0,
                     );
-                event.stop_propagation();
+                    editor_status
+                        .drag_status
+                        .set(
+                            DragStatus::Edge(NewEdgeCreationStart {
+                                src_node: node_id,
+                                src_port: port_name.clone(),
+                                src_port_type: port_type.clone(),
+                                start_pos: start_pos,
+                                bezier_offset: 50.,
+                            }),
+                        );
+                    event.stop_propagation();
+                }
             },
-            // onmouseup: on_mouse_up,
+            onmouseenter: {
+                let port_name_clone = port_name.clone();
+                let port_type = port_type.clone();
+                move |event: MouseEvent| {
+                    println!("Port mouse enter: {port_type:?}, {}", port_name_clone);
+                    event.stop_propagation();
+                }
+            },
+            onmouseleave: {
+                let port_name_clone = port_name.clone();
+                let port_type = port_type.clone();
+                move |event: MouseEvent| {
+                    println!("Port mouse leave: {port_type:?}, {}", port_name_clone);
+                    event.stop_propagation();
+                }
+            },
             id: format!("{}_{}", node_id.as_simple().to_string(), port_name),
             class: "port {port_class}",
             style: format!(
@@ -180,20 +180,18 @@ pub fn NodePort(
 #[component]
 pub fn NodePorts(
     node_body_position: Point2D<f64>,
-    node_width: f64,
-    node_height: f64,
+    node_size: PixelsSize,
     node_id: Uuid,
-    input_ports: Vec<String>,
-    output_ports: Vec<String>,
+    ports: Ports,
 ) -> Element {
     let port_w_h = 12.;
     let border_radius = 1.;
 
     rsx! {
-        for (i , in_port) in input_ports.iter().enumerate() {
+        for (i , in_port) in ports.input_ports().iter().enumerate() {
             {
                 let port_y = usize_to_f64(i)
-                    .mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
+                    .mul_add(20., node_size.height / 2. - port_w_h / 2. - border_radius);
                 let port_x = -port_w_h / 2. - 3. * border_radius / 2.;
                 rsx! {
                     NodePort {
@@ -207,11 +205,11 @@ pub fn NodePorts(
                 }
             }
         }
-        for (i , out_port) in output_ports.iter().enumerate() {
+        for (i , out_port) in ports.output_ports().iter().enumerate() {
             {
                 let port_y = usize_to_f64(i)
-                    .mul_add(20., node_height / 2. - port_w_h / 2. - border_radius);
-                let port_x = node_width - port_w_h / 2. - border_radius / 2.;
+                    .mul_add(20., node_size.height / 2. - port_w_h / 2. - border_radius);
+                let port_x = node_size.width - port_w_h / 2. - border_radius / 2.;
                 rsx! {
                     NodePort {
                         node_body_position,
