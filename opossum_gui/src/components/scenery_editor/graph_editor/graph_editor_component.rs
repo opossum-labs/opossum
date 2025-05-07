@@ -102,6 +102,7 @@ pub fn GraphEditor(
     rsx! {
         div {
             class: "graph-editor",
+            draggable: false,
             // onmounted: use_on_mounted(),
             // onresize: use_on_resize(),
             onwheel: move |event| {
@@ -148,7 +149,7 @@ pub fn GraphEditor(
                         node_store
                             .shift_node_position(
                                 id,
-                                (
+                                Point2D::new(
                                     rel_shift_x as f64 / graph_zoom(),
                                     rel_shift_y as f64 / graph_zoom(),
                                 ),
@@ -184,6 +185,7 @@ pub fn GraphEditor(
             },
             div {
                 class: "zoom-shift-container",
+                draggable: false,
                 style: format!(
                     "transform: translate({}px, {}px) scale({graph_zoom});",
                     graph_shift().0,

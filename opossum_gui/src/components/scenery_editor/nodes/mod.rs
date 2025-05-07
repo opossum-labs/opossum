@@ -37,7 +37,7 @@ impl NodesStore {
         self.optic_nodes().read().len()
     }
 
-    pub fn shift_node_position(&mut self, node_id: &Uuid, shift: (f64, f64)) {
+    pub fn shift_node_position(&mut self, node_id: &Uuid, shift: Point2D<f64>) {
         if let Some(node) = self.optic_nodes_mut().write().get_mut(node_id) {
             node.shift_position(shift);
         }
@@ -105,19 +105,19 @@ impl NodesStore {
         }
     }
     #[must_use]
-    pub fn find_position(&self) -> (f64, f64) {
+    pub fn find_position(&self) -> Point2D<f64> {
         let size = Point2D::new(130., 130. / 1.618_033_988_7);
-        let mut new_pos = (size.x, size.x);
+        let mut new_pos = Point2D::new(size.x, size.x);
         let phi = 1. / 1.618_033_988_7;
         loop {
             let mut position_found = true;
             for node in self.optic_nodes().read().iter() {
-                if (node.1.pos().0 - new_pos.0).abs() < 10.
-                    && (node.1.pos().0 - new_pos.1).abs() < 10.
+                if (node.1.pos().x - new_pos.x).abs() < 10.
+                    && (node.1.pos().y - new_pos.y).abs() < 10.
                 {
                     position_found = false;
-                    new_pos.0 += size.x * f64::powi(phi, 3);
-                    new_pos.1 += size.y * f64::powi(phi, 3);
+                    new_pos.x += size.x * f64::powi(phi, 3);
+                    new_pos.y += size.y * f64::powi(phi, 3);
                     break;
                 }
             }
@@ -176,15 +176,15 @@ impl NodesStore {
         let (mut min_x, mut min_y, mut max_y, mut max_x) = (0., 0., 0., 0.);
         for (idx, node) in self.optic_nodes().read().iter().enumerate() {
             if idx == 0 {
-                min_x = node.1.pos().0;
-                min_y = node.1.pos().1;
-                max_y = node.1.pos().0;
-                max_x = node.1.pos().1;
+                min_x = node.1.pos().x;
+                min_y = node.1.pos().y;
+                max_y = node.1.pos().x;
+                max_x = node.1.pos().y;
             } else {
-                min_x = node.1.pos().0.min(min_x);
-                min_y = node.1.pos().1.min(min_y);
-                max_y = node.1.pos().0.max(max_y);
-                max_x = node.1.pos().1.max(max_x);
+                min_x = node.1.pos().x.min(min_x);
+                min_y = node.1.pos().y.min(min_y);
+                max_y = node.1.pos().x.max(max_y);
+                max_x = node.1.pos().y.max(max_x);
             }
         }
         (min_x, min_y, max_y, max_x)

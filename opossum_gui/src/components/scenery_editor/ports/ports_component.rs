@@ -129,6 +129,16 @@ pub fn NodePort(
     };
     rsx! {
         div {
+            id: format!("{}_{}", node_id.as_simple().to_string(), port_name),
+            class: "port {port_class}",
+            style: format!(
+                "left: {}px; top: {}px; width: {}px; height: {}px;",
+                port_pos.x,
+                port_pos.y,
+                port_w_h,
+                port_w_h,
+            ),
+            draggable: false,
             onmousedown: {
                 let port_name = port_name.clone();
                 let port_type = port_type.clone();
@@ -144,8 +154,7 @@ pub fn NodePort(
                                 src_node: node_id,
                                 src_port: port_name.clone(),
                                 src_port_type: port_type.clone(),
-                                start_pos: start_pos,
-                                bezier_offset: 50.,
+                                start_pos: start_pos
                             }),
                         );
                     event.stop_propagation();
@@ -184,15 +193,6 @@ pub fn NodePort(
                     }
                 }
             },
-            id: format!("{}_{}", node_id.as_simple().to_string(), port_name),
-            class: "port {port_class}",
-            style: format!(
-                "left: {}px; top: {}px; width: {}px; height: {}px;",
-                port_pos.x,
-                port_pos.y,
-                port_w_h,
-                port_w_h,
-            ),
         }
     }
 }

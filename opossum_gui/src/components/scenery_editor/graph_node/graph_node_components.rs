@@ -6,6 +6,7 @@ pub fn GraphNodeContent(node_name: String, node_body: Element, node_size: Point2
     rsx! {
         div {
             class: "node-content",
+            draggable: false,
             style: format!("width: {}px; height: {}px;", node_size.x, node_size.y),
             GraphNodeHeader { node_name, node_size }
             {node_body}

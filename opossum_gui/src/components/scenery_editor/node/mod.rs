@@ -1,3 +1,4 @@
+use dioxus::html::geometry::euclid::default::Point2D;
 use uuid::Uuid;
 pub mod node_component;
 pub use node_component::Node;
@@ -8,7 +9,7 @@ use super::ports::ports_component::Ports;
 pub struct NodeElement {
     name: String,
     id: Uuid,
-    pos: (f64, f64),
+    pos: Point2D<f64>,
     z_index: usize,
     ports: Ports,
 }
@@ -18,7 +19,7 @@ impl NodeElement {
     pub const fn new(
         name: String,
         id: Uuid,
-        pos: (f64, f64),
+        pos: Point2D<f64>,
         z_index: usize,
         ports: Ports,
     ) -> Self {
@@ -49,14 +50,14 @@ impl NodeElement {
     pub const fn set_z_index(&mut self, z_index: usize) {
         self.z_index = z_index;
     }
-    pub const fn set_pos(&mut self, new_pos: (f64, f64)) {
-        self.pos = new_pos;
+    pub const fn set_pos(&mut self, pos: Point2D<f64>) {
+        self.pos = pos;
     }
     pub fn set_name(&mut self, name: String) {
         self.name = name;
     }
     #[must_use]
-    pub fn pos(&self) -> (f64, f64) {
+    pub fn pos(&self) -> Point2D<f64> {
         self.pos
     }
     #[must_use]
@@ -71,9 +72,9 @@ impl NodeElement {
         self.id = id;
     }
 
-    pub fn shift_position(&mut self, shift: (f64, f64)) {
-        self.pos.0 += shift.0;
-        self.pos.1 += shift.1;
+    pub fn shift_position(&mut self, shift: Point2D<f64>) {
+        self.pos.x += shift.x;
+        self.pos.y += shift.y;
     }
     // pub fn drag_node(
     //     &mut self,

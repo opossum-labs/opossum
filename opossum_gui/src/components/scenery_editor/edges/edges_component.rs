@@ -75,7 +75,6 @@ pub struct NewEdgeCreationStart {
     pub src_port: String,
     pub src_port_type: PortType,
     pub start_pos: Point2D<f64>,
-    pub bezier_offset: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
