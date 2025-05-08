@@ -25,6 +25,14 @@ impl GraphStore {
     pub const fn analyzer_nodes(&self) -> Signal<HashMap<Uuid, AnalyzerType>> {
         self.analyzer_nodes
     }
+    #[must_use]
+    pub const fn edges(&self) -> Signal<Vec<Edge>> {
+        self.edges
+    }
+    #[must_use]
+    pub const fn edges_mut(&mut self) -> &mut Signal<Vec<Edge>> {
+        &mut self.edges
+    }
     pub const fn optic_nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
         &mut self.optic_nodes
     }
@@ -104,32 +112,32 @@ impl GraphStore {
             OPOSSUM_UI_LOGS.write().add_log("Error removing all nodes!");
         }
     }
-    #[must_use]
-    pub fn find_position(&self) -> Point2D<f64> {
-        let size = Point2D::new(130., 130. / 1.618_033_988_7);
-        let mut new_pos = Point2D::new(size.x, size.x);
-        let phi = 1. / 1.618_033_988_7;
-        loop {
-            let mut position_found = true;
-            for node in self.optic_nodes().read().iter() {
-                if (node.1.pos().x - new_pos.x).abs() < 10.
-                    && (node.1.pos().y - new_pos.y).abs() < 10.
-                {
-                    position_found = false;
-                    new_pos.x += size.x * f64::powi(phi, 3);
-                    new_pos.y += size.y * f64::powi(phi, 3);
-                    break;
-                }
-            }
-            if position_found {
-                break;
-            }
-        }
-        new_pos
-    }
+    // #[must_use]
+    // pub fn find_position(&self) -> Point2D<f64> {
+    //     let size = Point2D::new(130., 130. / 1.618_033_988_7);
+    //     let mut new_pos = Point2D::new(size.x, size.x);
+    //     let phi = 1. / 1.618_033_988_7;
+    //     loop {
+    //         let mut position_found = true;
+    //         for node in self.optic_nodes().read().iter() {
+    //             if (node.1.pos().x - new_pos.x).abs() < 10.
+    //                 && (node.1.pos().y - new_pos.y).abs() < 10.
+    //             {
+    //                 position_found = false;
+    //                 new_pos.x += size.x * f64::powi(phi, 3);
+    //                 new_pos.y += size.y * f64::powi(phi, 3);
+    //                 break;
+    //             }
+    //         }
+    //         if position_found {
+    //             break;
+    //         }
+    //     }
+    //     new_pos
+    // }
 
     pub fn add_node(&mut self, node_info: &NodeInfo, node_attr: &NodeAttr) {
-        let pos = self.find_position();
+        let pos = Point2D::new(100.0, 100.0);
         let input_ports = node_attr
             .ports()
             .ports(&PortType::Input)
@@ -160,7 +168,7 @@ impl GraphStore {
     }
 
     pub fn add_analyzer(&mut self, analyzer: &AnalyzerType) {
-        let pos = self.find_position();
+        let pos = Point2D::new(100.0, 100.0);
         let id = Uuid::new_v4();
         let new_node = NodeElement::new(
             format!("{analyzer}"),

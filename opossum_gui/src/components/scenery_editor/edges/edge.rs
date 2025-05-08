@@ -1,39 +1,27 @@
-use dioxus::html::geometry::euclid::default::Point2D;
-use opossum_backend::PortType;
-
-use crate::components::scenery_editor::node::NodeElement;
+use super::edges_component::EdgePort;
 
 #[derive(Clone, PartialEq)]
 pub struct Edge {
-    src_node: NodeElement,
-    target_node: NodeElement,
-    src_port: String,
-    target_port: String,
+    src_port: EdgePort,
+    target_port: EdgePort,
     distance: f64,
 }
 impl Edge {
     #[must_use]
-    pub const fn new(
-        src_node: NodeElement,
-        target_node: NodeElement,
-        src_port: String,
-        target_port: String,
-        distance: f64,
-    ) -> Self {
+    pub const fn new(src_port: EdgePort, target_port: EdgePort, distance: f64) -> Self {
         Self {
-            src_node,
-            target_node,
             src_port,
             target_port,
-            distance
+            distance,
         }
     }
-    #[must_use]
-    pub fn start_position(&self) -> Point2D<f64> {
-       self.src_node.abs_port_position(&PortType::Output, &self.src_port)
+    pub fn src_port(&self) -> &EdgePort {
+        &self.src_port
     }
-    #[must_use]
-    pub fn end_position(&self) -> Point2D<f64> {
-        self.target_node.abs_port_position(&PortType::Input, &self.target_port)
+    pub fn target_port(&self) -> &EdgePort {
+        &self.target_port
+    }
+    pub fn distance(&self) -> f64 {
+        self.distance
     }
 }

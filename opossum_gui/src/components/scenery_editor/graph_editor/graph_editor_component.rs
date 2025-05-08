@@ -1,8 +1,11 @@
 use crate::{
     api,
     components::scenery_editor::{
-        edges::edges_component::{
-            EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
+        edges::{
+            edge::Edge,
+            edges_component::{
+                EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
+            },
         },
         graph_store::GraphStore,
         nodes::Nodes,
@@ -111,7 +114,6 @@ pub fn GraphEditor(
                 if delta > 0.0 { graph_zoom *= 1.1 } else { graph_zoom /= 1.1 };
             },
             onmousedown: move |event| {
-                println!("Graph mouse down");
                 current_mouse_pos
                     .set((
                         event.client_coordinates().x as i32,
@@ -120,15 +122,20 @@ pub fn GraphEditor(
                 editor_status.drag_status.set(DragStatus::Graph);
             },
             onmouseup: move |_| {
+                let edges = node_store.edges_mut();
                 editor_status.drag_status.set(DragStatus::None);
                 let edge_in_creation = editor_status.edge_in_creation.read().clone();
                 if let Some(edge_in_creation) = edge_in_creation {
                     if edge_in_creation.is_valid() {
                         println!("Edge in creation valid");
+                        let start_port = edge_in_creation.start_port();
+                        let end_port = edge_in_creation.end_port().unwrap();
+                        let new_edge = Edge::new(start_port.clone(), end_port.clone(), 0.0);
+                        edges.push(new_edge);
                     } else {
                         println!("Edge in creation invalid");
-                        editor_status.edge_in_creation.set(None);
                     }
+                    editor_status.edge_in_creation.set(None);
                 }
             },
             onmousemove: move |event| {

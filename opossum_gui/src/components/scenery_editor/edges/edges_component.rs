@@ -4,7 +4,11 @@ use crate::{
     api::{self},
     components::{
         context_menu::cx_menu::CxMenu,
-        scenery_editor::{edges::define_bezier_path, graph_editor::graph_editor_component::EditorState},
+        scenery_editor::{
+            edges::{define_bezier_path, edge_component::EdgeComponent},
+            graph_editor::graph_editor_component::EditorState,
+            graph_store::GraphStore,
+        },
     },
     CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
@@ -80,15 +84,16 @@ pub struct NewEdgeCreationStart {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct EdgeCreationPort {
+pub struct EdgePort {
     pub node_id: Uuid,
     pub port_name: String,
     pub port_type: PortType,
 }
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct EdgeCreation {
-    start_port: EdgeCreationPort,
-    end_port: Option<EdgeCreationPort>,
+    start_port: EdgePort,
+    end_port: Option<EdgePort>,
     start: Point2D<f64>,
     end: Point2D<f64>,
     bezier_offset: f64,
@@ -108,7 +113,7 @@ impl EdgeCreation {
             1.
         };
         Self {
-            start_port: EdgeCreationPort {
+            start_port: EdgePort {
                 node_id: src_node,
                 port_name: src_port.clone(),
                 port_type: src_port_type,
@@ -135,7 +140,7 @@ impl EdgeCreation {
     pub const fn bezier_offset(&self) -> f64 {
         self.bezier_offset
     }
-    pub fn set_end_port(&mut self, end_port: Option<EdgeCreationPort>) {
+    pub fn set_end_port(&mut self, end_port: Option<EdgePort>) {
         self.end_port = end_port;
     }
     pub fn is_valid(&self) -> bool {
@@ -151,15 +156,22 @@ impl EdgeCreation {
             return false;
         }
     }
-}
 
+    pub fn start_port(&self) -> &EdgePort {
+        &self.start_port
+    }
+    pub fn end_port(&self) -> Option<&EdgePort> {
+        self.end_port.as_ref()
+    }
+}
 
 #[component]
 pub fn EdgesComponent() -> Element {
+    let graph_store = use_context::<GraphStore>();
     rsx! {
-        // for edge in EDGES.read().edges().values() {
-        //     // EdgeComponent { edge: edge.clone() }
-        // }
+        for edge in graph_store.edges()() {
+            EdgeComponent { edge: edge.clone() }
+        }
     }
 }
 
@@ -182,4 +194,3 @@ pub fn EdgeCreationComponent() -> Element {
         },
     )
 }
-

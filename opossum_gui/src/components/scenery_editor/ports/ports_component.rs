@@ -4,7 +4,7 @@ use opossum_backend::{usize_to_f64, PortType};
 use crate::{
     api::{self},
     components::scenery_editor::{
-        edges::edges_component::{EdgeCreationPort, NewEdgeCreationStart},
+        edges::edges_component::{EdgePort, NewEdgeCreationStart},
         graph_editor::graph_editor_component::{DragStatus, EditorState},
         node::{NodeElement, PORT_HEIGHT, PORT_WIDTH},
     },
@@ -156,7 +156,7 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
                         println!("Port mouse enter: {port_type:?}, {}", port_name);
                         edge_in_creation
                             .set_end_port(
-                                Some(EdgeCreationPort {
+                                Some(EdgePort {
                                     node_id: node_id,
                                     port_name: port_name.clone(),
                                     port_type: port_type.clone(),

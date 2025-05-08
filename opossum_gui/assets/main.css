@@ -81,13 +81,16 @@
     border-radius: 9px 9px 0px 0px;
     color: white;
     overflow: hidden;
-    white-space: nowrap;
-    /* Kein Zeilenumbruch */
+    white-space: nowrap; /* Kein Zeilenumbruch */
 }
 
 .node-header:active {
     cursor: grabbing;
 }
+
+.unselectable {
+    user-select: none;
+  }
 
 .node {
     position: absolute;
@@ -95,6 +98,7 @@
     box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3);
     border-radius: 10px 10px 4px 4px;
     background-color: rgb(39, 39, 39);
+    user-select: none;
 }
 
 .node:not(.active-node):hover {

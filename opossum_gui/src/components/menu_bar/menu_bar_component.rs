@@ -44,7 +44,6 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
     use_effect(move || {
         menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_selected())))
     });
-
     rsx! {
         nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",
             div { class: "container-fluid",

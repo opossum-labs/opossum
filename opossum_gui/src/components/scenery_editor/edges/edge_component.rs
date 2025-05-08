@@ -1,16 +1,30 @@
 use super::edge::Edge;
-use crate::components::scenery_editor::edges::define_bezier_path;
+use crate::components::scenery_editor::{edges::define_bezier_path, graph_store::GraphStore};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use opossum_backend::PortType;
 
 #[component]
 pub fn EdgeComponent(edge: Edge) -> Element {
-    // let mut distance_val = use_signal(|| format!("{}", edge.distance()));
+    let graph_store = use_context::<GraphStore>();
+    let optic_nodes = graph_store.optic_nodes();
+    let mut start_position = use_signal(|| Point2D::new(0.0, 0.0));
+    let mut end_position = use_signal(|| Point2D::new(0.0, 0.0));
+    let src_port = edge.src_port().clone();
+    let target_port = edge.target_port().clone();
 
-    let start_position = edge.start_position();
-    let end_position = edge.end_position();
+    use_effect(move || {
+        let optic_nodes = optic_nodes();
+        let src_node = optic_nodes.get(&src_port.node_id).unwrap();
+        let target_node = optic_nodes.get(&target_port.node_id).unwrap();
+        start_position.set(src_node.abs_port_position(&PortType::Output, &src_port.port_name));
+        end_position.set(target_node.abs_port_position(&PortType::Input, &target_port.port_name));
+    });
 
-    let new_path = define_bezier_path(start_position, end_position, 50.0);
-    let distance_field_position= Point2D::new((start_position.x+end_position.x)/2.0, (start_position.y+end_position.y)/2.0);
+    let new_path = define_bezier_path(start_position(), end_position(), 50.0);
+    let distance_field_position = Point2D::new(
+        (start_position().x + end_position().x) / 2.0,
+        (start_position().y + end_position().y) / 2.0,
+    );
     rsx! {
         path {
             d: new_path,
@@ -24,11 +38,7 @@ pub fn EdgeComponent(edge: Edge) -> Element {
             x: distance_field_position.x,
             y: distance_field_position.y,
             style: "background-color: white;",
-            input {
-                r#type: "number",
-                value: 0.0,
-                // oninput: move |e| distance_val.set(e.value()),
-            }
+            input { r#type: "number", value: 0.0 }
         }
     }
 }
