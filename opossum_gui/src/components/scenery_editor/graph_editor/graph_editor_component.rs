@@ -4,7 +4,8 @@ use crate::{
         edges::edges_component::{
             EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
         },
-        nodes::{Nodes, NodesStore},
+        graph_store::GraphStore,
+        nodes::Nodes,
     },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
@@ -44,7 +45,7 @@ pub fn GraphEditor(
     node_selected: Signal<Option<Uuid>>,
 ) -> Element {
     use_init_signals();
-    let mut node_store = use_context_provider(|| NodesStore::default());
+    let mut node_store = use_context_provider(|| GraphStore::default());
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
         edge_in_creation: Signal::new(None),

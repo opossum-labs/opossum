@@ -8,8 +8,6 @@ use crate::components::{
     scenery_editor::{graph_editor::NodeEditorCommand, GraphEditor},
 };
 
-use super::file_callbacks::use_save_project;
-
 #[component]
 pub fn App() -> Element {
     use_context_provider(|| Signal::new(Uuid::nil()));

@@ -1,11 +1,13 @@
-pub mod edges;
 pub mod graph_editor;
-pub mod graph_node;
-pub mod node;
-pub mod nodes;
-pub mod ports;
+
+mod edges;
+mod graph_store;
+mod node;
+mod nodes;
+mod ports;
+
+pub use graph_editor::GraphEditor;
 
 use dioxus::signals::{GlobalSignal, Signal};
-use edges::edges_component::Edges;
-pub use graph_editor::GraphEditor;
-static EDGES: GlobalSignal<Edges> = Signal::global(Edges::new);
+
+// static EDGES: GlobalSignal<Edges> = Signal::global(Edges::new);

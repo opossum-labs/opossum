@@ -2,8 +2,8 @@
 use super::NodeElement;
 use crate::components::scenery_editor::{
     graph_editor::graph_editor_component::{DragStatus, EditorState},
-    graph_node::graph_node_components::GraphNodeContent,
-    nodes::NodesStore,
+    graph_store::GraphStore,
+    node::graph_node_components::GraphNodeContent,
     ports::ports_component::NodePorts,
 };
 use dioxus::prelude::*;
@@ -12,7 +12,7 @@ use uuid::Uuid;
 #[component]
 pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element {
     let mut editor_status = use_context::<EditorState>();
-    let mut node_store = use_context::<NodesStore>();
+    let mut node_store = use_context::<GraphStore>();
     let position = node.pos();
     let active_node_id = node_store.active_node();
     let is_active = if let Some(active_node_id) = active_node_id {

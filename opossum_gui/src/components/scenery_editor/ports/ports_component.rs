@@ -1,14 +1,12 @@
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{usize_to_f64, PortType};
-use uuid::Uuid;
 
 use crate::{
     api::{self},
     components::scenery_editor::{
-        edges::edges_component::{EdgeCreation, EdgeCreationPort, NewEdgeCreationStart},
+        edges::edges_component::{EdgeCreationPort, NewEdgeCreationStart},
         graph_editor::graph_editor_component::{DragStatus, EditorState},
         node::{NodeElement, PORT_HEIGHT, PORT_WIDTH},
-        EDGES,
     },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };

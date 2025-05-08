@@ -1,11 +1,11 @@
 use dioxus::prelude::*;
 use uuid::Uuid;
 
-use crate::components::scenery_editor::{node::Node, nodes::NodesStore};
+use crate::components::scenery_editor::{graph_store::GraphStore, node::Node};
 
 #[component]
 pub fn Nodes(node_activated: Signal<Option<Uuid>>) -> Element {
-    let nodes_store = use_context::<NodesStore>();
+    let nodes_store = use_context::<GraphStore>();
     rsx! {
         for node in nodes_store.optic_nodes().read().iter() {
             {
