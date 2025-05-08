@@ -55,27 +55,27 @@ pub fn App() -> Element {
         }
     });
     rsx! {
-        div { class: "d-flex flex-column text-bg-dark vh-100",
-            div {
-                MenuBar { menu_item_selected }
+        div { class: "container-fluid text-bg-dark",
+            div { class: "row",
+                div { class: "col",
+                    MenuBar { menu_item_selected }
+                }
             }
-            div { class: "container-fluid",
-                div { class: "row",
-                    div { class: "col-2",
-                        NodeEditor { node: selected_node }
-                    }
-                    div { class: "col",
-                        GraphEditor {
-                            command: node_editor_command,
-                            node_selected: selected_node,
-                        }
+            div { class: "row",
+                div { class: "col-2",
+                    NodeEditor { node: selected_node }
+                }
+                div { class: "col",
+                    GraphEditor {
+                        command: node_editor_command,
+                        node_selected: selected_node,
                     }
                 }
             }
             div { class: "row",
                 div { class: "col",
                     footer {
-                        class: "footer",
+                        class: "footer p-1",
                         style: "background-color:rgb(119, 119, 119);",
                         Logger {}
                     }

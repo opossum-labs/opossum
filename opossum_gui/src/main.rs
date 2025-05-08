@@ -48,6 +48,6 @@ fn app() -> Element {
         document::Stylesheet { href: MDB_CSS }
         document::Stylesheet { href: MDB_SUB_CSS }
         document::Script { src: MDB_JS }
-        App {}
+        div { class: "vh-100", App {} }
     }
 }
