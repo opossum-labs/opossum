@@ -1,7 +1,4 @@
-use dioxus::{
-    html::geometry::{euclid::default::Point2D, PixelsSize},
-    prelude::*,
-};
+use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{usize_to_f64, PortType};
 use uuid::Uuid;
 
@@ -10,6 +7,7 @@ use crate::{
     components::scenery_editor::{
         edges::edges_component::{EdgeCreation, EdgeCreationPort, NewEdgeCreationStart},
         graph_editor::graph_editor_component::{DragStatus, EditorState},
+        node::{NodeElement, PORT_HEIGHT, PORT_WIDTH},
         EDGES,
     },
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
@@ -38,14 +36,7 @@ impl Ports {
 }
 
 #[component]
-pub fn NodePort(
-    node_body_position: Point2D<f64>,
-    port_w_h: f64,
-    port_pos: Point2D<f64>,
-    node_id: Uuid,
-    port_name: String,
-    port_type: PortType,
-) -> Element {
+pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> Element {
     let mut editor_status = use_context::<EditorState>();
     // let nodes_store = use_context::<NodesStore>();
     // let optic_nodes = nodes_store.optic_nodes()();
@@ -122,6 +113,9 @@ pub fn NodePort(
     //         edge_in_creation.set(None);
     //     }
     // };
+    let rel_port_position = node.rel_port_position(&port_type, &port_name);
+    let abs_port_position = node.abs_port_position(&port_type, &port_name);
+    let node_id = node.id();
     let port_class = if port_type == PortType::Input {
         "input-port"
     } else {
@@ -129,24 +123,19 @@ pub fn NodePort(
     };
     rsx! {
         div {
-            id: format!("{}_{}", node_id.as_simple().to_string(), port_name),
             class: "port {port_class}",
             style: format!(
                 "left: {}px; top: {}px; width: {}px; height: {}px;",
-                port_pos.x,
-                port_pos.y,
-                port_w_h,
-                port_w_h,
+                rel_port_position.x,
+                rel_port_position.y,
+                PORT_WIDTH,
+                PORT_HEIGHT,
             ),
             draggable: false,
             onmousedown: {
                 let port_name = port_name.clone();
                 let port_type = port_type.clone();
                 move |event: MouseEvent| {
-                    let start_pos = Point2D::new(
-                        port_pos.x + node_body_position.x + port_w_h / 2.0,
-                        port_pos.y + node_body_position.y + port_w_h / 2.0,
-                    );
                     editor_status
                         .drag_status
                         .set(
@@ -154,7 +143,7 @@ pub fn NodePort(
                                 src_node: node_id,
                                 src_port: port_name.clone(),
                                 src_port_type: port_type.clone(),
-                                start_pos: start_pos
+                                start_pos: abs_port_position,
                             }),
                         );
                     event.stop_propagation();
@@ -170,7 +159,7 @@ pub fn NodePort(
                         edge_in_creation
                             .set_end_port(
                                 Some(EdgeCreationPort {
-                                    node_id,
+                                    node_id: node_id,
                                     port_name: port_name.clone(),
                                     port_type: port_type.clone(),
                                 }),
@@ -198,48 +187,22 @@ pub fn NodePort(
 }
 
 #[component]
-pub fn NodePorts(
-    node_body_position: Point2D<f64>,
-    node_size: PixelsSize,
-    node_id: Uuid,
-    ports: Ports,
-) -> Element {
-    let port_w_h = 12.;
-    let border_radius = 1.;
-
+pub fn NodePorts(node: NodeElement) -> Element {
+    // let port_w_h = 12.;
+    // let border_radius = 1.;
     rsx! {
-        for (i , in_port) in ports.input_ports().iter().enumerate() {
-            {
-                let port_y = usize_to_f64(i)
-                    .mul_add(20., node_size.height / 2. - port_w_h / 2. - border_radius);
-                let port_x = -port_w_h / 2. - 3. * border_radius / 2.;
-                rsx! {
-                    NodePort {
-                        node_body_position,
-                        port_w_h,
-                        port_pos: Point2D::new(port_x, port_y),
-                        node_id,
-                        port_name: in_port.clone(),
-                        port_type: PortType::Input,
-                    }
-                }
+        for in_port in node.input_ports() {
+            NodePort {
+                node: node.clone(),
+                port_name: in_port,
+                port_type: PortType::Input,
             }
         }
-        for (i , out_port) in ports.output_ports().iter().enumerate() {
-            {
-                let port_y = usize_to_f64(i)
-                    .mul_add(20., node_size.height / 2. - port_w_h / 2. - border_radius);
-                let port_x = node_size.width - port_w_h / 2. - border_radius / 2.;
-                rsx! {
-                    NodePort {
-                        node_body_position,
-                        port_w_h,
-                        port_pos: Point2D::new(port_x, port_y),
-                        node_id,
-                        port_name: out_port.clone(),
-                        port_type: PortType::Output,
-                    }
-                }
+        for out_port in node.output_ports() {
+            NodePort {
+                node: node.clone(),
+                port_name: out_port,
+                port_type: PortType::Output,
             }
         }
     }

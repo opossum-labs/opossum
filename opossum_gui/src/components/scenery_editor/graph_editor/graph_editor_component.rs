@@ -120,19 +120,18 @@ pub fn GraphEditor(
             },
             onmouseup: move |_| {
                 editor_status.drag_status.set(DragStatus::None);
-                let edge_in_creation=editor_status.edge_in_creation.read().clone();
+                let edge_in_creation = editor_status.edge_in_creation.read().clone();
                 if let Some(edge_in_creation) = edge_in_creation {
-                   if edge_in_creation.is_valid() {
-                    println!("Edge in creation valid");
-                   } else {
-                    println!("Edge in creation invalid");
-                    editor_status.edge_in_creation.set(None);
-                   }
+                    if edge_in_creation.is_valid() {
+                        println!("Edge in creation valid");
+                    } else {
+                        println!("Edge in creation invalid");
+                        editor_status.edge_in_creation.set(None);
+                    }
                 }
             },
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());
-                // println!("drag_status: {:?}", drag_status);
                 let rel_shift_x = event.client_coordinates().x as i32 - current_mouse_pos().0;
                 let rel_shift_y = event.client_coordinates().y as i32 - current_mouse_pos().1;
                 current_mouse_pos

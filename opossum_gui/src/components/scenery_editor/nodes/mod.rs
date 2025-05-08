@@ -152,7 +152,7 @@ impl NodesStore {
         );
         self.optic_nodes_mut()
             .write()
-            .insert(*new_node.id(), new_node.clone());
+            .insert(new_node.id(), new_node.clone());
         self.set_node_active(node_info.uuid(), new_node.z_index());
         OPOSSUM_UI_LOGS
             .write()

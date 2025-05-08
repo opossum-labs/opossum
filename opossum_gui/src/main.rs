@@ -26,12 +26,11 @@ fn main() {
 
         dioxus::LaunchBuilder::new()
             .with_cfg(
-                dioxus::desktop::Config::new()
-                    //.with_window(window)
-                    // .with_menu(None)
-                    // .with_icon(
-                    //     Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
-                    // ),
+                dioxus::desktop::Config::new(), //.with_window(window)
+                                                // .with_menu(None)
+                                                // .with_icon(
+                                                //     Icon::from_path("./assets/favicon.ico", None).expect("Could not load icon"),
+                                                // ),
             )
             .launch(app);
     }
