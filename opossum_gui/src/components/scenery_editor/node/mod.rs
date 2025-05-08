@@ -52,10 +52,6 @@ impl NodeElement {
         }
     }
     #[must_use]
-    pub const fn ports(&self) -> &Ports {
-        &self.ports
-    }
-    #[must_use]
     pub const fn input_ports(&self) -> &Vec<String> {
         self.ports.input_ports()
     }
@@ -66,15 +62,6 @@ impl NodeElement {
     #[must_use]
     pub const fn z_index(&self) -> usize {
         self.z_index
-    }
-    pub const fn set_z_index(&mut self, z_index: usize) {
-        self.z_index = z_index;
-    }
-    pub const fn set_pos(&mut self, pos: Point2D<f64>) {
-        self.pos = pos;
-    }
-    pub fn set_name(&mut self, name: String) {
-        self.name = name;
     }
     #[must_use]
     pub fn pos(&self) -> Point2D<f64> {

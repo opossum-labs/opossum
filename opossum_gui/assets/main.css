@@ -115,7 +115,7 @@
     border-radius: 30%;
     border: 1px solid rgb(120, 120, 120);
     cursor: pointer;
-    transform: translate(-50%, -50%);;
+    transform: translate(-50%, -50%);
 }
 .port:hover {
     box-shadow: 0 0 10px #e68c05;
@@ -153,7 +153,7 @@ path {
 path:hover {
     /* stroke-width: 3; */
     cursor: pointer;
-    filter: drop-shadow(0px 0px 4px rgba(0, 0, 0, 0.5));
+    filter: drop-shadow(0px 0px 4px rgba(47, 197, 10, 0.5));
 }
 
 /* Three3D.js */

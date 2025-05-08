@@ -1,79 +1,11 @@
-use std::collections::HashMap;
-
-use crate::{
-    api::{self},
-    components::{
-        context_menu::cx_menu::CxMenu,
-        scenery_editor::{
-            edges::{define_bezier_path, edge_component::EdgeComponent},
-            graph_editor::graph_editor_component::EditorState,
-            graph_store::GraphStore,
-        },
-    },
-    CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+use crate::components::scenery_editor::{
+    edges::{define_bezier_path, edge_component::EdgeComponent},
+    graph_editor::graph_editor_component::EditorState,
+    graph_store::GraphStore,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{nodes::ConnectInfo, PortType};
+use opossum_backend::PortType;
 use uuid::Uuid;
-
-use super::edge::Edge;
-
-// #[derive(Clone, PartialEq, Default)]
-// pub struct Edges {
-//     edges: HashMap<String, Edge>,
-// }
-// impl Edges {
-//     #[must_use]
-//     pub fn new() -> Self {
-//         Self {
-//             edges: HashMap::new(),
-//         }
-//     }
-//     pub fn add_edge(&mut self, edge: Edge) {
-//         self.edges.insert(edge.start_port_id(), edge);
-//     }
-//     #[must_use]
-//     pub fn get_edge(&self, id: &str) -> Option<&Edge> {
-//         self.edges.get(id)
-//     }
-//     #[must_use]
-//     pub fn get_edge_mut(&mut self, id: &str) -> Option<&mut Edge> {
-//         self.edges.get_mut(id)
-//     }
-//     #[must_use]
-//     pub const fn edges(&self) -> &HashMap<String, Edge> {
-//         &self.edges
-//     }
-//     #[must_use]
-//     pub const fn edges_mut(&mut self) -> &mut HashMap<String, Edge> {
-//         &mut self.edges
-//     }
-
-//     pub fn shift_if_connected(&mut self, x_shift: f64, y_shift: f64, node_id: Uuid) {
-//         for edge in self.edges_mut().values_mut() {
-//             edge.shift_if_connected(x_shift, y_shift, node_id);
-//         }
-//     }
-//     pub fn remove_if_connected(&mut self, node_id: Uuid) {
-//         let keys_to_remove = self
-//             .edges()
-//             .iter()
-//             .filter(|(_, edge)| edge.is_connected(node_id))
-//             .map(|(k, _)| k.clone())
-//             .collect::<Vec<String>>();
-
-//         for key in &keys_to_remove {
-//             self.edges_mut().remove(key);
-//         }
-//     }
-//     pub fn remove_edge(&mut self, conn_info: &ConnectInfo) {
-//         self.edges.remove(&format!(
-//             "{}_{}",
-//             conn_info.src_uuid().as_simple(),
-//             conn_info.src_port()
-//         ));
-//     }
-// }
 
 #[derive(Clone, Debug)]
 pub struct NewEdgeCreationStart {
@@ -156,7 +88,6 @@ impl EdgeCreation {
             return false;
         }
     }
-
     pub fn start_port(&self) -> &EdgePort {
         &self.start_port
     }
@@ -164,7 +95,6 @@ impl EdgeCreation {
         self.end_port.as_ref()
     }
 }
-
 #[component]
 pub fn EdgesComponent() -> Element {
     let graph_store = use_context::<GraphStore>();
@@ -174,7 +104,6 @@ pub fn EdgesComponent() -> Element {
         }
     }
 }
-
 #[component]
 pub fn EdgeCreationComponent() -> Element {
     let editor_status = use_context::<EditorState>();

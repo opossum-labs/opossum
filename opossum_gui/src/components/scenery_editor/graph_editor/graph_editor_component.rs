@@ -13,8 +13,8 @@ use crate::{
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::scenery::NewAnalyzerInfo;
 use opossum_backend::{nodes::NewNode, AnalyzerType};
+use opossum_backend::{scenery::NewAnalyzerInfo, PortType};
 use std::rc::Rc;
 use uuid::Uuid;
 
@@ -128,8 +128,11 @@ pub fn GraphEditor(
                 if let Some(edge_in_creation) = edge_in_creation {
                     if edge_in_creation.is_valid() {
                         println!("Edge in creation valid");
-                        let start_port = edge_in_creation.start_port();
-                        let end_port = edge_in_creation.end_port().unwrap();
+                        let mut start_port = edge_in_creation.start_port();
+                        let mut end_port = edge_in_creation.end_port().unwrap();
+                        if start_port.port_type == PortType::Input {
+                            (start_port, end_port) = (end_port, start_port);
+                        }
                         let new_edge = Edge::new(start_port.clone(), end_port.clone(), 0.0);
                         edges.push(new_edge);
                     } else {

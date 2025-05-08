@@ -1,14 +1,10 @@
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{usize_to_f64, PortType};
+use dioxus::prelude::*;
+use opossum_backend::PortType;
 
-use crate::{
-    api::{self},
-    components::scenery_editor::{
-        edges::edges_component::{EdgePort, NewEdgeCreationStart},
-        graph_editor::graph_editor_component::{DragStatus, EditorState},
-        node::{NodeElement, PORT_HEIGHT, PORT_WIDTH},
-    },
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+use crate::components::scenery_editor::{
+    edges::edges_component::{EdgePort, NewEdgeCreationStart},
+    graph_editor::graph_editor_component::{DragStatus, EditorState},
+    node::{NodeElement, PORT_HEIGHT, PORT_WIDTH},
 };
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct Ports {
@@ -36,81 +32,6 @@ impl Ports {
 #[component]
 pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> Element {
     let mut editor_status = use_context::<EditorState>();
-    // let nodes_store = use_context::<NodesStore>();
-    // let optic_nodes = nodes_store.optic_nodes()();
-    // let node_element = optic_nodes.get(&node_id).unwrap();
-    // let node_pos= node_element.pos();
-    // let node_pos = nodes_store.node_position(&node_id).unwrap();
-
-    // let on_mouse_up = {
-    //     let zoom_factor = 1.0;
-    //     let port_name = port_name.clone();
-    //     move |e: Event<MouseData>| {
-    //         if let (Some(edge_start), Some(offset)) =
-    //             (edge_in_creation.read().as_ref(), offset.read().offset())
-    //         {
-    //             let x = (-e.element_coordinates().x + port_w_h / 2.)
-    //                 .mul_add(zoom_factor, e.page_coordinates().x - offset.0);
-    //             let y = (-e.element_coordinates().y + port_w_h / 2.)
-    //                 .mul_add(zoom_factor, e.page_coordinates().y - offset.1);
-
-    //             let (
-    //                 src_node,
-    //                 src_port,
-    //                 target_node,
-    //                 target_port,
-    //                 src_x,
-    //                 src_y,
-    //                 target_x,
-    //                 target_y,
-    //             ) = if edge_start.port_type() == &PortType::Output {
-    //                 (
-    //                     edge_start.node_id(),
-    //                     edge_start.port_name(),
-    //                     node_id,
-    //                     port_name.clone(),
-    //                     edge_start.start_x(),
-    //                     edge_start.start_y(),
-    //                     x,
-    //                     y,
-    //                 )
-    //             } else {
-    //                 (
-    //                     node_id,
-    //                     port_name.clone(),
-    //                     edge_start.node_id(),
-    //                     edge_start.port_name(),
-    //                     x,
-    //                     y,
-    //                     edge_start.start_x(),
-    //                     edge_start.start_y(),
-    //                 )
-    //             };
-
-    //             spawn(async move {
-    //                 let conn_info = ConnectInfo::new(
-    //                     src_node,
-    //                     src_port.clone(),
-    //                     target_node,
-    //                     target_port.clone(),
-    //                     0.,
-    //                 );
-    //                 match api::post_add_connection(&HTTP_API_CLIENT(), conn_info).await {
-    //                     Ok(conn_info) => EDGES.write().add_edge(Edge::new(
-    //                         conn_info,
-    //                         src_x,
-    //                         src_y,
-    //                         target_x,
-    //                         target_y,
-    //                         70. * zoom_factor,
-    //                     )),
-    //                     Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-    //                 }
-    //             });
-    //         }
-    //         edge_in_creation.set(None);
-    //     }
-    // };
     let rel_port_position = node.rel_port_position(&port_type, &port_name);
     let abs_port_position = node.abs_port_position(&port_type, &port_name);
     let node_id = node.id();

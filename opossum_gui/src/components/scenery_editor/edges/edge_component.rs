@@ -21,10 +21,15 @@ pub fn EdgeComponent(edge: Edge) -> Element {
     });
 
     let new_path = define_bezier_path(start_position(), end_position(), 50.0);
+
+    let distance_field_height = 25.0;
+    let distance_field_width = 60.0;
+
     let distance_field_position = Point2D::new(
-        (start_position().x + end_position().x) / 2.0,
-        (start_position().y + end_position().y) / 2.0,
+        (start_position().x + end_position().x) / 2.0 - distance_field_width / 2.0,
+        (start_position().y + end_position().y) / 2.0 - distance_field_height / 2.0,
     );
+
     rsx! {
         path {
             d: new_path,
@@ -34,11 +39,15 @@ pub fn EdgeComponent(edge: Edge) -> Element {
             stroke_width: format!("{}", 2.),
         }
         foreignObject {
-            class: "distance-field",
             x: distance_field_position.x,
             y: distance_field_position.y,
-            style: "background-color: white;",
-            input { r#type: "number", value: 0.0 }
+            width: distance_field_width,
+            height: distance_field_height,
+            input {
+                style: format!("width: {}pt; height: {}pt", distance_field_width, distance_field_height),
+                r#type: "number",
+                value: edge.distance(),
+            }
         }
     }
 }
