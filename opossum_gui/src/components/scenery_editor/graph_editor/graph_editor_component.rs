@@ -48,12 +48,12 @@ pub fn GraphEditor(
     node_selected: Signal<Option<Uuid>>,
 ) -> Element {
     use_init_signals();
-    let mut node_store = use_context_provider(|| GraphStore::default());
+    let mut graph_store = use_context_provider(|| GraphStore::default());
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
         edge_in_creation: Signal::new(None),
     });
-    let mut graph_shift = use_signal(|| (0, 0));
+    let mut graph_shift = use_signal(|| Point2D::<f64>::new(0.0, 0.0));
     let mut graph_zoom = use_signal(|| 1.0);
     let mut current_mouse_pos = use_signal(|| (0, 0));
 
@@ -76,7 +76,7 @@ pub fn GraphEditor(
                                 match api::get_node_properties(&HTTP_API_CLIENT(), node_info.uuid())
                                     .await
                                 {
-                                    Ok(node_attr) => node_store.add_node(&node_info, &node_attr),
+                                    Ok(node_attr) => graph_store.add_node(&node_info, &node_attr),
                                     Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                                 }
                             }
@@ -94,7 +94,7 @@ pub fn GraphEditor(
                                 OPOSSUM_UI_LOGS
                                     .write()
                                     .add_log(&format!("Added analyzer: {analyzer_type}"));
-                                node_store.add_analyzer(&analyzer_type);
+                                graph_store.add_analyzer(&analyzer_type);
                             }
                             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                         }
@@ -122,12 +122,11 @@ pub fn GraphEditor(
                 editor_status.drag_status.set(DragStatus::Graph);
             },
             onmouseup: move |_| {
-                let edges = node_store.edges_mut();
+                let edges = graph_store.edges_mut();
                 editor_status.drag_status.set(DragStatus::None);
                 let edge_in_creation = editor_status.edge_in_creation.read().clone();
                 if let Some(edge_in_creation) = edge_in_creation {
                     if edge_in_creation.is_valid() {
-                        println!("Edge in creation valid");
                         let mut start_port = edge_in_creation.start_port();
                         let mut end_port = edge_in_creation.end_port().unwrap();
                         if start_port.port_type == PortType::Input {
@@ -135,16 +134,14 @@ pub fn GraphEditor(
                         }
                         let new_edge = Edge::new(start_port.clone(), end_port.clone(), 0.0);
                         edges.push(new_edge);
-                    } else {
-                        println!("Edge in creation invalid");
+                        editor_status.edge_in_creation.set(None);
                     }
-                    editor_status.edge_in_creation.set(None);
                 }
             },
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());
-                let rel_shift_x = event.client_coordinates().x as i32 - current_mouse_pos().0;
-                let rel_shift_y = event.client_coordinates().y as i32 - current_mouse_pos().1;
+                let rel_shift_x = event.client_coordinates().x - current_mouse_pos().0 as f64;
+                let rel_shift_y = event.client_coordinates().y - current_mouse_pos().1 as f64;
                 current_mouse_pos
                     .set((
                         event.client_coordinates().x as i32,
@@ -153,10 +150,15 @@ pub fn GraphEditor(
                 match drag_status {
                     DragStatus::Graph => {
                         graph_shift
-                            .set((graph_shift().0 + rel_shift_x, graph_shift().1 + rel_shift_y));
+                            .set(
+                                Point2D::new(
+                                    graph_shift().x + rel_shift_x,
+                                    graph_shift().y + rel_shift_y,
+                                ),
+                            );
                     }
                     DragStatus::Node(id) => {
-                        node_store
+                        graph_store
                             .shift_node_position(
                                 id,
                                 Point2D::new(
@@ -191,6 +193,9 @@ pub fn GraphEditor(
                 }
             },
             ondoubleclick: move |_| {
+                let bounding_box = graph_store.get_bounding_box();
+                let center = bounding_box.center();
+                graph_shift.set(Point2D::new(-center.x, 250.0 - center.y));
                 println!("Graph double click");
             },
             div {
@@ -198,11 +203,15 @@ pub fn GraphEditor(
                 draggable: false,
                 style: format!(
                     "transform: translate({}px, {}px) scale({graph_zoom});",
-                    graph_shift().0,
-                    graph_shift().1,
+                    graph_shift().x,
+                    graph_shift().y,
                 ),
                 Nodes { node_activated: node_selected }
-                svg { width: "100%", height: "100%", overflow: "visible",
+                svg {
+                    width: "100%",
+                    height: "100%",
+                    overflow: "visible",
+                    tabindex: 0,
                     {
                         rsx! {
                             EdgesComponent {}

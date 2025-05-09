@@ -5,7 +5,7 @@ use opossum_backend::PortType;
 
 #[component]
 pub fn EdgeComponent(edge: Edge) -> Element {
-    let graph_store = use_context::<GraphStore>();
+    let mut graph_store = use_context::<GraphStore>();
     let optic_nodes = graph_store.optic_nodes();
     let mut start_position = use_signal(|| Point2D::new(0.0, 0.0));
     let mut end_position = use_signal(|| Point2D::new(0.0, 0.0));
@@ -33,7 +33,17 @@ pub fn EdgeComponent(edge: Edge) -> Element {
     rsx! {
         path {
             d: new_path,
-            // oncontextmenu: use_edge_context_menu(edge.conn_info),
+            tabindex: 0,
+            onkeydown: {
+                let edge = edge.clone();
+                move |event: Event<KeyboardData>| {
+                    event.prevent_default();
+                    if event.data().key() == Key::Delete {
+                        graph_store.delete_edge(&edge);
+                    }
+                    event.stop_propagation();
+                }
+            },
             stroke: "black",
             fill: "transparent",
             stroke_width: format!("{}", 2.),

@@ -6,15 +6,15 @@ use crate::components::scenery_editor::{
     node::graph_node_components::GraphNodeContent,
     ports::ports_component::NodePorts,
 };
-use dioxus::prelude::*;
+use dioxus::{desktop::tao::event, events::keyboard_types::KeyboardEvent, prelude::*};
 use uuid::Uuid;
 
 #[component]
 pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element {
     let mut editor_status = use_context::<EditorState>();
-    let mut node_store = use_context::<GraphStore>();
+    let mut graph_store = use_context::<GraphStore>();
     let position = node.pos();
-    let active_node_id = node_store.active_node();
+    let active_node_id = graph_store.active_node();
     let is_active = if let Some(active_node_id) = active_node_id {
         if active_node_id == node.id() {
             "active-node"
@@ -28,6 +28,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
     let z_index = node.z_index();
     rsx! {
         div {
+            tabindex: 0, // necessary to allow to receive keyboard focus
             class: "node {is_active}",
             draggable: false,
             style: format!(
@@ -37,12 +38,16 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
             ),
             onmousedown: move |event: MouseEvent| {
                 editor_status.drag_status.set(DragStatus::Node(id));
-                node_store.set_node_active(id, z_index);
+                graph_store.set_node_active(id, z_index);
                 node_activated.set(Some(id));
                 event.stop_propagation();
             },
-            //oncontextmenu: use_node_context_menu(*node.id()),
-
+            onkeydown: move |event| {
+                if event.data().key() == Key::Delete {
+                    graph_store.delete_node(id);
+                }
+                event.stop_propagation();
+            },
             GraphNodeContent {
                 node_name: node.name(),
                 node_body: rsx! {
@@ -78,7 +83,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
 //             match api::delete_node(&HTTP_API_CLIENT(), node_id).await {
 //                 Ok(_id_vec) => {
 //                     // for id in &id_vec {
-//                     //    node_store.delete_node(*id);
+//                     //    graph_store.delete_node(*id);
 //                     // }
 //                 }
 //                 Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
