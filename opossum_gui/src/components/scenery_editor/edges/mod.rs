@@ -1,6 +1,4 @@
 use dioxus::html::geometry::euclid::default::Point2D;
-
-pub mod edge;
 pub mod edge_component;
 pub mod edges_component;
 

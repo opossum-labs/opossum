@@ -1,15 +1,15 @@
 use crate::components::scenery_editor::{
-    edges::{
-        edge::Edge,
-        edges_component::{
-            EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-        },
+    edges::edges_component::{
+        EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
     },
     graph_store::GraphStore,
     nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::{nodes::NewNode, AnalyzerType};
+use opossum_backend::{
+    nodes::{ConnectInfo, NewNode},
+    AnalyzerType,
+};
 use opossum_backend::{scenery::NewAnalyzerInfo, PortType};
 use uuid::Uuid;
 
@@ -99,7 +99,13 @@ pub fn GraphEditor(
                         if start_port.port_type == PortType::Input {
                             (start_port, end_port) = (end_port, start_port);
                         }
-                        let new_edge = Edge::new(start_port.clone(), end_port.clone(), 0.0);
+                        let new_edge = ConnectInfo::new(
+                            start_port.node_id,
+                            start_port.port_name.clone(),
+                            end_port.node_id,
+                            end_port.port_name.clone(),
+                            0.0,
+                        );
                         spawn(async move {
                             graph_store.add_edge(new_edge).await;
                         });

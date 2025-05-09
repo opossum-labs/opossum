@@ -8,16 +8,15 @@ use dioxus::{
     prelude::*,
 };
 use opossum_backend::{
-    nodes::{ConnectInfo, NewNode, NodeInfo},
+    nodes::{ConnectInfo, NewNode},
     scenery::NewAnalyzerInfo,
-    AnalyzerType, NodeAttr, PortType,
+    AnalyzerType, PortType,
 };
 use uuid::Uuid;
 
 use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 
 use super::{
-    edges::edge::Edge,
     node::{NodeElement, HEADER_HEIGHT, NODE_WIDTH},
     ports::ports_component::Ports,
 };
@@ -25,7 +24,7 @@ use super::{
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct GraphStore {
     optic_nodes: Signal<HashMap<Uuid, NodeElement>>,
-    edges: Signal<Vec<Edge>>,
+    edges: Signal<Vec<ConnectInfo>>,
     analyzer_nodes: Signal<HashMap<Uuid, AnalyzerType>>,
     active_node: Signal<Option<Uuid>>,
 }
@@ -40,11 +39,11 @@ impl GraphStore {
         self.analyzer_nodes
     }
     #[must_use]
-    pub const fn edges(&self) -> Signal<Vec<Edge>> {
+    pub const fn edges(&self) -> Signal<Vec<ConnectInfo>> {
         self.edges
     }
     #[must_use]
-    pub const fn edges_mut(&mut self) -> &mut Signal<Vec<Edge>> {
+    pub const fn edges_mut(&mut self) -> &mut Signal<Vec<ConnectInfo>> {
         &mut self.edges
     }
     pub const fn optic_nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
@@ -87,31 +86,22 @@ impl GraphStore {
                     self.optic_nodes_mut().write().remove(&node_id);
                     // remove all edges no longer valid
                     let mut edges = self.edges()();
-                    edges.retain_mut(|e| {
-                        e.src_port().node_id != node_id && e.target_port().node_id != node_id
-                    });
+                    edges.retain_mut(|e| e.src_uuid() != node_id && e.target_uuid() != node_id);
                     *self.edges().write() = edges;
                 }
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
     }
-    pub async fn delete_edge(&mut self, edge: Edge) {
-        let connect_info = ConnectInfo::new(
-            edge.src_port().node_id,
-            edge.src_port().port_name.clone(),
-            edge.target_port().node_id,
-            edge.target_port().port_name.clone(),
-            edge.distance(),
-        );
-        match api::delete_connection(&HTTP_API_CLIENT(), connect_info).await {
+    pub async fn delete_edge(&mut self, edge: ConnectInfo) {
+        match api::delete_connection(&HTTP_API_CLIENT(), edge.clone()).await {
             Ok(_connect_info) => {
                 let edges = self.edges()();
                 let i = edges.iter().position(|e| {
-                    e.src_port().node_id == edge.src_port().node_id
-                        && e.src_port().port_name == edge.src_port().port_name
-                        && e.target_port().node_id == edge.target_port().node_id
-                        && e.target_port().port_name == edge.target_port().port_name
+                    e.src_uuid() == edge.src_uuid()
+                        && e.src_port() == edge.src_port()
+                        && e.target_uuid() == edge.target_uuid()
+                        && e.target_port() == edge.target_port()
                 });
                 if let Some(index) = i {
                     self.edges().write().remove(index);
@@ -129,15 +119,8 @@ impl GraphStore {
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
     }
-    pub async fn add_edge(&mut self, edge: Edge) {
-        let connect_info = ConnectInfo::new(
-            edge.src_port().node_id,
-            edge.src_port().port_name.clone(),
-            edge.target_port().node_id,
-            edge.target_port().port_name.clone(),
-            edge.distance(),
-        );
-        match api::post_add_connection(&HTTP_API_CLIENT(), connect_info).await {
+    pub async fn add_edge(&mut self, edge: ConnectInfo) {
+        match api::post_add_connection(&HTTP_API_CLIENT(), edge.clone()).await {
             Ok(_) => {
                 self.edges_mut().write().push(edge);
             }

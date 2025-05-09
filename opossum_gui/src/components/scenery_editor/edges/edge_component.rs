@@ -1,23 +1,23 @@
-use super::edge::Edge;
 use crate::components::scenery_editor::{edges::define_bezier_path, graph_store::GraphStore};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::PortType;
+use opossum_backend::{nodes::ConnectInfo, PortType};
 
 #[component]
-pub fn EdgeComponent(edge: Edge) -> Element {
+pub fn EdgeComponent(edge: ConnectInfo) -> Element {
     let mut graph_store = use_context::<GraphStore>();
     let optic_nodes = graph_store.optic_nodes();
     let mut start_position = use_signal(|| Point2D::new(0.0, 0.0));
     let mut end_position = use_signal(|| Point2D::new(0.0, 0.0));
-    let src_port = edge.src_port().clone();
-    let target_port = edge.target_port().clone();
 
-    use_effect(move || {
-        let optic_nodes = optic_nodes();
-        let src_node = optic_nodes.get(&src_port.node_id).unwrap();
-        let target_node = optic_nodes.get(&target_port.node_id).unwrap();
-        start_position.set(src_node.abs_port_position(&PortType::Output, &src_port.port_name));
-        end_position.set(target_node.abs_port_position(&PortType::Input, &target_port.port_name));
+    use_effect({
+        let edge = edge.clone();
+        move || {
+            let optic_nodes = optic_nodes();
+            let src_node = optic_nodes.get(&edge.src_uuid()).unwrap();
+            let target_node = optic_nodes.get(&edge.target_uuid()).unwrap();
+            start_position.set(src_node.abs_port_position(&PortType::Output, &edge.src_port()));
+            end_position.set(target_node.abs_port_position(&PortType::Input, &edge.target_port()));
+        }
     });
 
     let new_path = define_bezier_path(start_position(), end_position(), 50.0);
@@ -29,7 +29,6 @@ pub fn EdgeComponent(edge: Edge) -> Element {
         (start_position().x + end_position().x) / 2.0 - distance_field_width / 2.0,
         (start_position().y + end_position().y) / 2.0 - distance_field_height / 2.0,
     );
-
     rsx! {
         path {
             d: new_path,
@@ -37,8 +36,8 @@ pub fn EdgeComponent(edge: Edge) -> Element {
             onkeydown: {
                 let edge = edge.clone();
                 move |event: Event<KeyboardData>| {
+                    let edge = edge.clone();
                     if event.data().key() == Key::Delete {
-                        let edge = edge.clone();
                         spawn(async move { graph_store.delete_edge(edge).await });
                     }
                     event.stop_propagation();

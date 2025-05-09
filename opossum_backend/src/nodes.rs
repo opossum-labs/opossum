@@ -278,7 +278,6 @@ pub struct ConnectInfo {
     /// geometric distance between nodes (optical axis) in meters.
     distance: f64,
 }
-
 impl ConnectInfo {
     #[must_use]
     pub const fn new(
