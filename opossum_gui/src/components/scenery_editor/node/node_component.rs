@@ -44,7 +44,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
             },
             onkeydown: move |event| {
                 if event.data().key() == Key::Delete {
-                    graph_store.delete_node(id);
+                    spawn(async move { graph_store.delete_node(id).await });
                 }
                 event.stop_propagation();
             },

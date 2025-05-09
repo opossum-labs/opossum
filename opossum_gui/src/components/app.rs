@@ -1,16 +1,14 @@
-use dioxus::prelude::*;
-use uuid::Uuid;
-
 use crate::components::{
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
     node_editor::NodeEditor,
     scenery_editor::{graph_editor::NodeEditorCommand, GraphEditor},
 };
+use dioxus::prelude::*;
+use uuid::Uuid;
 
 #[component]
 pub fn App() -> Element {
-    use_context_provider(|| Signal::new(Uuid::nil()));
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
     let selected_node = use_signal(|| None::<Uuid>);
@@ -40,7 +38,6 @@ pub fn App() -> Element {
                 }
                 MenuSelection::SaveProject => {
                     println!("App::Save project selected");
-                    // use_save_project();
                 }
                 MenuSelection::WinMaximize => {
                     println!("App::Window maximize selected");

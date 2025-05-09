@@ -82,8 +82,8 @@ async fn get_analyzers(data: web::Data<AppState>) -> impl Responder {
 }
 #[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct NewAnalyzerInfo {
-    analyzer_type: AnalyzerType,
-    gui_position: (i32, i32, i32),
+    pub analyzer_type: AnalyzerType,
+    pub gui_position: (i32, i32, i32),
 }
 
 impl NewAnalyzerInfo {

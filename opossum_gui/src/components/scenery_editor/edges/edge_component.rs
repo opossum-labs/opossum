@@ -37,9 +37,9 @@ pub fn EdgeComponent(edge: Edge) -> Element {
             onkeydown: {
                 let edge = edge.clone();
                 move |event: Event<KeyboardData>| {
-                    event.prevent_default();
                     if event.data().key() == Key::Delete {
-                        graph_store.delete_edge(&edge);
+                        let edge = edge.clone();
+                        spawn(async move { graph_store.delete_edge(edge).await });
                     }
                     event.stop_propagation();
                 }

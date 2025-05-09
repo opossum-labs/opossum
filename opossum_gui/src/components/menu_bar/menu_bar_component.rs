@@ -4,6 +4,7 @@ use dioxus_free_icons::{
     Icon,
 };
 use opossum_backend::AnalyzerType;
+use rfd::FileDialog;
 
 use crate::components::menu_bar::{
     // callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
@@ -91,7 +92,14 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                     a {
                                         class: "dropdown-item",
                                         role: "button",
-                                        onclick: move |_| { menu_item_selected.set(Some(MenuSelection::SaveProject)) },
+                                        onclick: move |_| {
+                                            let _path = FileDialog::new()
+                                                .set_directory("/")
+                                                .set_title("Save OPOSSUM setup file")
+                                                .add_filter("Opossum setup file", &["opm"])
+                                                .save_file();
+                                        },
+                                        // menu_item_selected.set(Some(MenuSelection::SaveProject)) },
                                         "Save Project"
                                     }
                                 }

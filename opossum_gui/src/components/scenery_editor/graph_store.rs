@@ -7,10 +7,14 @@ use dioxus::{
     },
     prelude::*,
 };
-use opossum_backend::{nodes::NodeInfo, AnalyzerType, NodeAttr, PortType};
+use opossum_backend::{
+    nodes::{ConnectInfo, NewNode, NodeInfo},
+    scenery::NewAnalyzerInfo,
+    AnalyzerType, NodeAttr, PortType,
+};
 use uuid::Uuid;
 
-use crate::OPOSSUM_UI_LOGS;
+use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 
 use super::{
     edges::edge::Edge,
@@ -46,7 +50,6 @@ impl GraphStore {
     pub const fn optic_nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
         &mut self.optic_nodes
     }
-
     pub const fn analyzer_nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, AnalyzerType>> {
         &mut self.analyzer_nodes
     }
@@ -54,7 +57,6 @@ impl GraphStore {
     pub fn nr_of_optic_nodes(&self) -> usize {
         self.optic_nodes().read().len()
     }
-
     pub fn shift_node_position(&mut self, node_id: &Uuid, shift: Point2D<f64>) {
         if let Some(node) = self.optic_nodes_mut().write().get_mut(node_id) {
             node.shift_position(shift);
@@ -64,7 +66,6 @@ impl GraphStore {
     pub fn active_node(&self) -> Option<Uuid> {
         self.active_node.read().clone()
     }
-
     pub fn set_node_active(&mut self, id: Uuid, z_index: usize) {
         let mut active_node = self.active_node.write();
         *active_node = Some(id);
@@ -78,44 +79,70 @@ impl GraphStore {
         //         }
         //     }
         // });
-
-        // spawn(async move {
-        //     if let Ok(node_attr) = api::get_node_properties(&HTTP_API_CLIENT(), id).await {
-        //         let mut active_node = ACTIVE_NODE.write();
-        //         *active_node = Some(node_attr);
-        //     }
-        // });
     }
-    pub fn deactivate_nodes(&mut self) {
-        let mut active_node = self.active_node.write();
-        *active_node = None;
-    }
-    pub fn delete_node(&mut self, node_id: Uuid) {
-        self.optic_nodes_mut().write().remove(&node_id);
-        // remove all edges no longer valid
-        let mut edges = self.edges()();
-        edges.retain_mut(|e| e.src_port().node_id != node_id && e.target_port().node_id != node_id);
-        *self.edges().write() = edges;
-        OPOSSUM_UI_LOGS
-            .write()
-            .add_log(&format!("Removed node: {node_id}"));
-    }
-    pub fn delete_edge(&mut self, edge: &Edge) {
-        let edges = self.edges()();
-        let i = edges.iter().position(|e| {
-            e.src_port().node_id == edge.src_port().node_id
-                && e.src_port().port_name == edge.src_port().port_name
-                && e.target_port().node_id == edge.target_port().node_id
-                && e.target_port().port_name == edge.target_port().port_name
-        });
-        if let Some(index) = i {
-            self.edges().write().remove(index);
+    pub async fn delete_node(&mut self, node_id: Uuid) {
+        match api::delete_node(&HTTP_API_CLIENT(), node_id).await {
+            Ok(deleted_ids) => {
+                for node_id in deleted_ids {
+                    self.optic_nodes_mut().write().remove(&node_id);
+                    // remove all edges no longer valid
+                    let mut edges = self.edges()();
+                    edges.retain_mut(|e| {
+                        e.src_port().node_id != node_id && e.target_port().node_id != node_id
+                    });
+                    *self.edges().write() = edges;
+                }
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
     }
-    pub fn delete_all_nodes(&mut self) {
-        self.optic_nodes_mut().write().clear();
-        self.edges_mut().write().clear();
-        OPOSSUM_UI_LOGS.write().add_log("Removed all nodes!");
+    pub async fn delete_edge(&mut self, edge: Edge) {
+        let connect_info = ConnectInfo::new(
+            edge.src_port().node_id,
+            edge.src_port().port_name.clone(),
+            edge.target_port().node_id,
+            edge.target_port().port_name.clone(),
+            edge.distance(),
+        );
+        match api::delete_connection(&HTTP_API_CLIENT(), connect_info).await {
+            Ok(_connect_info) => {
+                let edges = self.edges()();
+                let i = edges.iter().position(|e| {
+                    e.src_port().node_id == edge.src_port().node_id
+                        && e.src_port().port_name == edge.src_port().port_name
+                        && e.target_port().node_id == edge.target_port().node_id
+                        && e.target_port().port_name == edge.target_port().port_name
+                });
+                if let Some(index) = i {
+                    self.edges().write().remove(index);
+                }
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+        }
+    }
+    pub async fn delete_all_nodes(&mut self) {
+        match api::delete_scenery(&HTTP_API_CLIENT()).await {
+            Ok(_) => {
+                self.optic_nodes_mut().write().clear();
+                self.edges_mut().write().clear();
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+        }
+    }
+    pub async fn add_edge(&mut self, edge: Edge) {
+        let connect_info = ConnectInfo::new(
+            edge.src_port().node_id,
+            edge.src_port().port_name.clone(),
+            edge.target_port().node_id,
+            edge.target_port().port_name.clone(),
+            edge.distance(),
+        );
+        match api::post_add_connection(&HTTP_API_CLIENT(), connect_info).await {
+            Ok(_) => {
+                self.edges_mut().write().push(edge);
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+        }
     }
     pub fn get_bounding_box(&self) -> Rect<f64> {
         let optic_nodes = self.optic_nodes()();
@@ -172,47 +199,58 @@ impl GraphStore {
     //     new_pos
     // }
 
-    pub fn add_node(&mut self, node_info: &NodeInfo, node_attr: &NodeAttr) {
-        let pos = Point2D::new(100.0, 100.0);
-        let input_ports = node_attr
-            .ports()
-            .ports(&PortType::Input)
-            .keys()
-            .cloned()
-            .collect::<Vec<String>>();
-        let output_ports = node_attr
-            .ports()
-            .ports(&PortType::Output)
-            .keys()
-            .cloned()
-            .collect::<Vec<String>>();
-
-        let new_node = NodeElement::new(
-            node_info.name().to_string(),
-            node_info.uuid(),
-            pos,
-            self.nr_of_optic_nodes(),
-            Ports::new(input_ports, output_ports),
-        );
-        self.optic_nodes_mut()
-            .write()
-            .insert(new_node.id(), new_node.clone());
-        self.set_node_active(node_info.uuid(), new_node.z_index());
-        OPOSSUM_UI_LOGS
-            .write()
-            .add_log(&format!("Added node: {}", node_info.node_type()));
+    pub async fn add_node(&mut self, new_node_info: NewNode) {
+        match api::post_add_node(&HTTP_API_CLIENT(), new_node_info, Uuid::nil()).await {
+            Ok(node_info) => {
+                match api::get_node_properties(&HTTP_API_CLIENT(), node_info.uuid()).await {
+                    Ok(node_attr) => {
+                        let input_ports = node_attr
+                            .ports()
+                            .ports(&PortType::Input)
+                            .keys()
+                            .cloned()
+                            .collect::<Vec<String>>();
+                        let output_ports = node_attr
+                            .ports()
+                            .ports(&PortType::Output)
+                            .keys()
+                            .cloned()
+                            .collect::<Vec<String>>();
+                        let new_node = NodeElement::new(
+                            node_info.name().to_string(),
+                            node_info.uuid(),
+                            Point2D::new(100.0, 100.0),
+                            self.nr_of_optic_nodes(),
+                            Ports::new(input_ports, output_ports),
+                        );
+                        self.optic_nodes_mut()
+                            .write()
+                            .insert(new_node.id(), new_node.clone());
+                        self.set_node_active(node_info.uuid(), new_node.z_index());
+                    }
+                    Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                }
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+        }
     }
 
-    pub fn add_analyzer(&mut self, analyzer: &AnalyzerType) {
-        let pos = Point2D::new(100.0, 100.0);
-        let id = Uuid::new_v4();
-        let new_node = NodeElement::new(
-            format!("{analyzer}"),
-            id,
-            pos,
-            self.nr_of_optic_nodes(),
-            Ports::new(vec![], vec![]),
-        );
-        self.optic_nodes_mut().write().insert(id, new_node);
+    pub async fn add_analyzer(&mut self, new_analyzer_info: NewAnalyzerInfo) {
+        match api::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer_info.clone()).await {
+            Ok(analyzer_id) => {
+                let new_node = NodeElement::new(
+                    format!("{}", new_analyzer_info.analyzer_type),
+                    analyzer_id,
+                    Point2D::new(
+                        new_analyzer_info.clone().gui_position.0 as f64,
+                        new_analyzer_info.gui_position.1 as f64,
+                    ),
+                    self.nr_of_optic_nodes(),
+                    Ports::new(vec![], vec![]),
+                );
+                self.optic_nodes_mut().write().insert(analyzer_id, new_node);
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+        }
     }
 }

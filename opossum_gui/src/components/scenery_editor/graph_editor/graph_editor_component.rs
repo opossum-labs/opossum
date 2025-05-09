@@ -1,27 +1,17 @@
-use crate::{
-    api,
-    components::scenery_editor::{
-        edges::{
-            edge::Edge,
-            edges_component::{
-                EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-            },
+use crate::components::scenery_editor::{
+    edges::{
+        edge::Edge,
+        edges_component::{
+            EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
         },
-        graph_store::GraphStore,
-        nodes::Nodes,
     },
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+    graph_store::GraphStore,
+    nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_backend::{nodes::NewNode, AnalyzerType};
 use opossum_backend::{scenery::NewAnalyzerInfo, PortType};
-use std::rc::Rc;
 use uuid::Uuid;
-
-fn use_init_signals() {
-    use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
-    use_context_provider(|| Signal::new(None::<EdgeCreation>));
-}
 
 #[derive(Debug)]
 pub enum NodeEditorCommand {
@@ -29,7 +19,6 @@ pub enum NodeEditorCommand {
     AddNode(String),
     AddAnalyzer(AnalyzerType),
 }
-
 #[derive(Clone, Copy)]
 pub struct EditorState {
     pub drag_status: Signal<DragStatus>,
@@ -47,7 +36,8 @@ pub fn GraphEditor(
     command: ReadOnlySignal<Option<NodeEditorCommand>>,
     node_selected: Signal<Option<Uuid>>,
 ) -> Element {
-    use_init_signals();
+    //  use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
+    // use_context_provider(|| Signal::new(None::<EdgeCreation>));
     let mut graph_store = use_context_provider(|| GraphStore::default());
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
@@ -62,43 +52,21 @@ pub fn GraphEditor(
         if let Some(command) = &*(command) {
             match command {
                 NodeEditorCommand::DeleteAll => {
-                    println!("NodeEditor: Delete all nodes");
-                    // delete_scenery();
+                    spawn(async move {
+                        graph_store.delete_all_nodes().await;
+                    });
                 }
                 NodeEditorCommand::AddNode(node_type) => {
-                    println!("NodeEditor: AddNode: {:?}", node_type);
-                    let new_node_info = NewNode::new(node_type.to_owned(), (0, 0, 0));
+                    let new_node_info = NewNode::new(node_type.to_owned(), (100, 100, 0));
                     spawn(async move {
-                        match api::post_add_node(&HTTP_API_CLIENT(), new_node_info, Uuid::nil())
-                            .await
-                        {
-                            Ok(node_info) => {
-                                match api::get_node_properties(&HTTP_API_CLIENT(), node_info.uuid())
-                                    .await
-                                {
-                                    Ok(node_attr) => graph_store.add_node(&node_info, &node_attr),
-                                    Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                                }
-                            }
-                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                        }
+                        graph_store.add_node(new_node_info).await;
                     });
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                    println!("NodeEditor: AddAnalyzer: {:?}", analyzer_type);
                     let analyzer_type = analyzer_type.clone();
-                    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type.clone(), (0, 0, 0));
-                    spawn(async move {
-                        match api::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer_info).await {
-                            Ok(_) => {
-                                OPOSSUM_UI_LOGS
-                                    .write()
-                                    .add_log(&format!("Added analyzer: {analyzer_type}"));
-                                graph_store.add_analyzer(&analyzer_type);
-                            }
-                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                        }
-                    });
+                    let new_analyzer_info =
+                        NewAnalyzerInfo::new(analyzer_type.clone(), (100, 100, 0));
+                    spawn(async move { graph_store.add_analyzer(new_analyzer_info).await });
                 }
             }
         }
@@ -122,7 +90,6 @@ pub fn GraphEditor(
                 editor_status.drag_status.set(DragStatus::Graph);
             },
             onmouseup: move |_| {
-                let edges = graph_store.edges_mut();
                 editor_status.drag_status.set(DragStatus::None);
                 let edge_in_creation = editor_status.edge_in_creation.read().clone();
                 if let Some(edge_in_creation) = edge_in_creation {
@@ -133,9 +100,11 @@ pub fn GraphEditor(
                             (start_port, end_port) = (end_port, start_port);
                         }
                         let new_edge = Edge::new(start_port.clone(), end_port.clone(), 0.0);
-                        edges.push(new_edge);
-                        editor_status.edge_in_creation.set(None);
+                        spawn(async move {
+                            graph_store.add_edge(new_edge).await;
+                        });
                     }
+                    editor_status.edge_in_creation.set(None);
                 }
             },
             onmousemove: move |event| {
