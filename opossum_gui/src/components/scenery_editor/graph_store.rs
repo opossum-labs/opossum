@@ -35,10 +35,6 @@ impl GraphStore {
         self.optic_nodes
     }
     #[must_use]
-    pub const fn analyzer_nodes(&self) -> Signal<HashMap<Uuid, AnalyzerType>> {
-        self.analyzer_nodes
-    }
-    #[must_use]
     pub const fn edges(&self) -> Signal<Vec<ConnectInfo>> {
         self.edges
     }
@@ -48,9 +44,6 @@ impl GraphStore {
     }
     pub const fn optic_nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
         &mut self.optic_nodes
-    }
-    pub const fn analyzer_nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, AnalyzerType>> {
-        &mut self.analyzer_nodes
     }
     #[must_use]
     pub fn nr_of_optic_nodes(&self) -> usize {
@@ -68,16 +61,6 @@ impl GraphStore {
     pub fn set_node_active(&mut self, id: Uuid, z_index: usize) {
         let mut active_node = self.active_node.write();
         *active_node = Some(id);
-        // let nr_of_nodes = self.nr_of_optic_nodes();
-        // self.optic_nodes_mut().write().iter_mut().for_each(|n| {
-        //     if *n.0 == id {
-        //         n.1.set_z_index(nr_of_nodes);
-        //     } else {
-        //         if z_index <= n.1.z_index() {
-        //             n.1.set_z_index(n.1.z_index() - 1);
-        //         }
-        //     }
-        // });
     }
     pub async fn delete_node(&mut self, node_id: Uuid) {
         match api::delete_node(&HTTP_API_CLIENT(), node_id).await {

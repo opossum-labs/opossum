@@ -1,5 +1,5 @@
 use dioxus::html::geometry::euclid::default::Point2D;
-use opossum_backend::{usize_to_f64, PortType};
+use opossum_backend::{usize_to_f64, AnalyzerType, PortType};
 use uuid::Uuid;
 mod graph_node_components;
 pub mod node_component;
@@ -25,9 +25,19 @@ pub const PORT_VER_SPACING: f64 = 16.0;
 pub const PORT_HEIGHT: f64 = 12.0;
 pub const PORT_WIDTH: f64 = 12.0;
 
+#[derive(Clone,PartialEq)]
+pub enum NodeType {
+    Optical(String),
+    Analyzer(AnalyzerType)
+}
+impl Default for NodeType {
+    fn default() -> Self {
+        Self::Optical(String::new())
+    }
+}
 #[derive(Clone, PartialEq, Default)]
 pub struct NodeElement {
-    name: String,
+    node_type: NodeType,
     id: Uuid,
     pos: Point2D<f64>,
     z_index: usize,
@@ -44,9 +54,9 @@ impl NodeElement {
         ports: Ports,
     ) -> Self {
         Self {
+            node_type: NodeType::Optical(name),
             pos,
             id,
-            name,
             z_index,
             ports,
         }
@@ -69,7 +79,10 @@ impl NodeElement {
     }
     #[must_use]
     pub fn name(&self) -> String {
-        self.name.clone()
+        match &self.node_type {
+            NodeType::Optical(name) => name.clone(),
+            NodeType::Analyzer(analyzer_type) => format!("{analyzer_type}"),
+        }
     }
     #[must_use]
     pub const fn id(&self) -> Uuid {
