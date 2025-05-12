@@ -2,16 +2,15 @@ use crate::components::{
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
     node_editor::NodeEditor,
-    scenery_editor::{graph_editor::NodeEditorCommand, GraphEditor},
+    scenery_editor::{graph_editor::NodeEditorCommand, node::NodeElement, GraphEditor},
 };
 use dioxus::prelude::*;
-use uuid::Uuid;
 
 #[component]
 pub fn App() -> Element {
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
-    let selected_node = use_signal(|| None::<Uuid>);
+    let selected_node = use_signal(|| None::<NodeElement>);
     // let mut main_window = use_signal(|| None::<Rc<MountedData>>);
 
     use_effect(move || {

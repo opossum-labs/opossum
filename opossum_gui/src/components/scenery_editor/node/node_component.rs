@@ -6,11 +6,11 @@ use crate::components::scenery_editor::{
     node::graph_node_components::GraphNodeContent,
     ports::ports_component::NodePorts,
 };
-use dioxus::{desktop::tao::event, events::keyboard_types::KeyboardEvent, prelude::*};
+use dioxus::prelude::*;
 use uuid::Uuid;
 
 #[component]
-pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element {
+pub fn Node(node: NodeElement, node_activated: Signal<Option<NodeElement>>) -> Element {
     let mut editor_status = use_context::<EditorState>();
     let mut graph_store = use_context::<GraphStore>();
     let position = node.pos();
@@ -38,8 +38,11 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
             ),
             onmousedown: move |event: MouseEvent| {
                 editor_status.drag_status.set(DragStatus::Node(id));
-                graph_store.set_node_active(id);
-                node_activated.set(Some(id));
+                let previously_selected = graph_store.active_node();
+                if previously_selected != Some(id) {
+                    graph_store.set_node_active(id);
+                    node_activated.set(Some(node.clone()));
+                }
                 event.stop_propagation();
             },
             onkeydown: move |event| {

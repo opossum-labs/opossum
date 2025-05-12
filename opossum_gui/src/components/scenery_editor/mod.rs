@@ -2,7 +2,7 @@ pub mod graph_editor;
 
 mod edges;
 mod graph_store;
-mod node;
+pub mod node;
 mod nodes;
 mod ports;
 

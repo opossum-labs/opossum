@@ -3,6 +3,7 @@ use crate::components::scenery_editor::{
         EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
     },
     graph_store::GraphStore,
+    node::NodeElement,
     nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -34,9 +35,9 @@ pub enum DragStatus {
 #[component]
 pub fn GraphEditor(
     command: ReadOnlySignal<Option<NodeEditorCommand>>,
-    node_selected: Signal<Option<Uuid>>,
+    node_selected: Signal<Option<NodeElement>>,
 ) -> Element {
-    //  use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
+    // use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
     // use_context_provider(|| Signal::new(None::<EdgeCreation>));
     let mut graph_store = use_context_provider(|| GraphStore::default());
     let mut editor_status = use_context_provider(|| EditorState {
@@ -171,7 +172,6 @@ pub fn GraphEditor(
                 let bounding_box = graph_store.get_bounding_box();
                 let center = bounding_box.center();
                 graph_shift.set(Point2D::new(-center.x, 250.0 - center.y));
-                println!("Graph double click");
             },
             div {
                 class: "zoom-shift-container",
