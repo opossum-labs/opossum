@@ -21,7 +21,6 @@ pub fn AnalyzersMenu(analyzer_selected: Signal<AnalyzerType>) -> Element {
             .iter()
             .map(|n| (n.to_owned(), format!("{n}")))
             .collect::<Vec<(AnalyzerType, String)>>(),
-        Some(None) => vec![],
         _ => vec![],
     };
     rsx! {

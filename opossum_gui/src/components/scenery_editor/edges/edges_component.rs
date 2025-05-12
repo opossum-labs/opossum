@@ -47,7 +47,7 @@ impl EdgeCreation {
         Self {
             start_port: EdgePort {
                 node_id: src_node,
-                port_name: src_port.clone(),
+                port_name: src_port,
                 port_type: src_port_type,
             },
             end_port: None,
@@ -83,15 +83,15 @@ impl EdgeCreation {
             if end_port.port_type == self.start_port.port_type {
                 return false;
             }
-            return true;
+            true
         } else {
-            return false;
+            false
         }
     }
-    pub fn start_port(&self) -> &EdgePort {
+    pub const fn start_port(&self) -> &EdgePort {
         &self.start_port
     }
-    pub fn end_port(&self) -> Option<&EdgePort> {
+    pub const fn end_port(&self) -> Option<&EdgePort> {
         self.end_port.as_ref()
     }
 }
@@ -100,7 +100,7 @@ pub fn EdgesComponent() -> Element {
     let graph_store = use_context::<GraphStore>();
     rsx! {
         for edge in graph_store.edges()() {
-            EdgeComponent { edge: edge.clone() }
+            EdgeComponent { edge: edge }
         }
     }
 }

@@ -15,8 +15,8 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
             let optic_nodes = optic_nodes();
             let src_node = optic_nodes.get(&edge.src_uuid()).unwrap();
             let target_node = optic_nodes.get(&edge.target_uuid()).unwrap();
-            start_position.set(src_node.abs_port_position(&PortType::Output, &edge.src_port()));
-            end_position.set(target_node.abs_port_position(&PortType::Input, &edge.target_port()));
+            start_position.set(src_node.abs_port_position(&PortType::Output, edge.src_port()));
+            end_position.set(target_node.abs_port_position(&PortType::Input, edge.target_port()));
         }
     });
 

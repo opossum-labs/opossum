@@ -44,10 +44,6 @@ impl GraphStore {
     pub const fn nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
         &mut self.nodes
     }
-    #[must_use]
-    pub fn nr_of_optic_nodes(&self) -> usize {
-        self.nodes().read().len()
-    }
     pub fn shift_node_position(&mut self, node_id: &Uuid, shift: Point2D<f64>) {
         if let Some(node) = self.nodes_mut().write().get_mut(node_id) {
             node.shift_position(shift);
@@ -92,7 +88,7 @@ impl GraphStore {
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
     }
-    pub async fn delete_edge(&mut self, edge: ConnectInfo) {
+    pub async fn delete_edge(&self, edge: ConnectInfo) {
         match api::delete_connection(&HTTP_API_CLIENT(), edge.clone()).await {
             Ok(_connect_info) => {
                 let i = self.edges()().iter().position(|e| {
@@ -156,22 +152,22 @@ impl GraphStore {
             let x = node.1.pos().x;
             let y = node.1.pos().y;
             if min_x > x {
-                min_x = x
+                min_x = x;
             }
             if min_y > y {
-                min_y = y
+                min_y = y;
             }
             if max_x < x {
-                max_x = x
+                max_x = x;
             }
             if max_y < y {
-                max_y = y
+                max_y = y;
             }
         }
-        return Rect::new(
+        Rect::new(
             Point2D::new(min_x, min_y),
             Size2D::new(max_x - min_y, max_y - min_y),
-        );
+        )
     }
     // #[must_use]
     // pub fn find_position(&self) -> Point2D<f64> {
@@ -220,9 +216,7 @@ impl GraphStore {
                             Point2D::new(100.0, 100.0),
                             Ports::new(input_ports, output_ports),
                         );
-                        self.nodes_mut()
-                            .write()
-                            .insert(new_node.id(), new_node.clone());
+                        self.nodes_mut().write().insert(new_node.id(), new_node);
                         self.set_node_active(node_info.uuid());
                     }
                     Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),

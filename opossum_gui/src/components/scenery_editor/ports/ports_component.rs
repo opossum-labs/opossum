@@ -69,12 +69,9 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
                 }
             },
             onmouseenter: {
-                let port_name = port_name.clone();
-                let port_type = port_type.clone();
                 move |event: MouseEvent| {
                     let edge_increation = editor_status.edge_in_creation.read().clone();
                     if let Some(mut edge_in_creation) = edge_increation {
-                        println!("Port mouse enter: {port_type:?}, {}", port_name);
                         edge_in_creation
                             .set_end_port(
                                 Some(EdgePort {
@@ -89,12 +86,9 @@ pub fn NodePort(node: NodeElement, port_name: String, port_type: PortType) -> El
                 }
             },
             onmouseleave: {
-                let port_name = port_name.clone();
-                let port_type = port_type.clone();
                 move |event: MouseEvent| {
                     let edge_increation = editor_status.edge_in_creation.read().clone();
                     if let Some(mut edge_in_creation) = edge_increation {
-                        println!("Port mouse enter: {port_type:?}, {}", port_name);
                         edge_in_creation.set_end_port(None);
                         editor_status.edge_in_creation.set(Some(edge_in_creation));
                         event.stop_propagation();

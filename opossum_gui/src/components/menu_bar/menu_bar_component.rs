@@ -30,7 +30,7 @@ pub enum MenuSelection {
 #[component]
 pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
     let mut about_window = use_signal(|| false);
-    let node_selected = use_signal(|| String::new());
+    let node_selected = use_signal(String::new);
     let analyzer_selected = use_signal(|| AnalyzerType::Energy);
     // let window = use_window();
     // let is_dragging = use_signal(|| false);
@@ -43,7 +43,7 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
     // });
     use_effect(move || menu_item_selected.set(Some(MenuSelection::AddNode(node_selected()))));
     use_effect(move || {
-        menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_selected())))
+        menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_selected())));
     });
     rsx! {
         nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",

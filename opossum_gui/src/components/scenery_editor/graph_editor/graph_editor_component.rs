@@ -39,7 +39,7 @@ pub fn GraphEditor(
 ) -> Element {
     // use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
     // use_context_provider(|| Signal::new(None::<EdgeCreation>));
-    let mut graph_store = use_context_provider(|| GraphStore::default());
+    let mut graph_store = use_context_provider(GraphStore::default);
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
         edge_in_creation: Signal::new(None),
@@ -65,8 +65,7 @@ pub fn GraphEditor(
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
                     let analyzer_type = analyzer_type.clone();
-                    let new_analyzer_info =
-                        NewAnalyzerInfo::new(analyzer_type.clone(), (100, 100, 0));
+                    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type, (100, 100, 0));
                     spawn(async move { graph_store.add_analyzer(new_analyzer_info).await });
                 }
             }
@@ -80,7 +79,7 @@ pub fn GraphEditor(
             // onresize: use_on_resize(),
             onwheel: move |event| {
                 let delta = event.delta().strip_units().y;
-                if delta > 0.0 { graph_zoom *= 1.1 } else { graph_zoom /= 1.1 };
+                if delta > 0.0 { graph_zoom *= 1.1 } else { graph_zoom /= 1.1 }
             },
             onmousedown: move |event| {
                 current_mouse_pos
@@ -165,7 +164,7 @@ pub fn GraphEditor(
                             editor_status.edge_in_creation.set(Some(edge_in_creation));
                         }
                     }
-                    _ => {}
+                    DragStatus::None => {}
                 }
             },
             ondoubleclick: move |_| {

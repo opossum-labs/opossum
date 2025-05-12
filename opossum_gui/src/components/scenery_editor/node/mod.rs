@@ -68,7 +68,7 @@ impl NodeElement {
         self.z_index
     }
     #[must_use]
-    pub fn pos(&self) -> Point2D<f64> {
+    pub const fn pos(&self) -> Point2D<f64> {
         self.pos
     }
     #[must_use]
@@ -86,6 +86,7 @@ impl NodeElement {
         self.pos.x += shift.x;
         self.pos.y += shift.y;
     }
+    #[must_use]
     pub fn rel_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
         let (x_pos, port_list) = match port_type {
             PortType::Input => (0.0, self.input_ports()),
@@ -95,9 +96,10 @@ impl NodeElement {
             .iter()
             .position(|port| port == port_name)
             .unwrap_or(0);
-        let y_pos = PORT_VER_PADDING + PORT_VER_SPACING * port_index as f64;
+        let y_pos = PORT_VER_SPACING.mul_add(port_index as f64, PORT_VER_PADDING);
         Point2D::new(x_pos, y_pos)
     }
+    #[must_use]
     pub fn abs_port_position(&self, port_type: &PortType, port_name: &str) -> Point2D<f64> {
         let rel_pos = self.rel_port_position(port_type, port_name);
         Point2D::new(
@@ -105,15 +107,18 @@ impl NodeElement {
             self.pos.y + rel_pos.y + HEADER_HEIGHT,
         )
     }
+    #[must_use]
     pub fn node_body_height(&self) -> f64 {
         let max_vert_number_of_ports =
             usize_to_f64(self.output_ports().len().max(self.input_ports().len()));
-        let necessary_body_height =
-            2.0 * PORT_VER_PADDING + PORT_VER_SPACING * (max_vert_number_of_ports - 1.0);
+        let necessary_body_height = 2.0f64.mul_add(
+            PORT_VER_PADDING,
+            PORT_VER_SPACING * (max_vert_number_of_ports - 1.0),
+        );
         necessary_body_height.max(MIN_NODE_BODY_HEIGHT)
     }
-
-    pub fn node_type(&self) -> &NodeType {
+    #[must_use]
+    pub const fn node_type(&self) -> &NodeType {
         &self.node_type
     }
 }
