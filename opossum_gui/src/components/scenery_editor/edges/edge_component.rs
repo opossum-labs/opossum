@@ -50,12 +50,26 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
         foreignObject {
             x: distance_field_position.x,
             y: distance_field_position.y,
-            width: distance_field_width,
-            height: distance_field_height,
+            width: distance_field_width + 50.0,
+            height: distance_field_height + 10.0,
             input {
-                style: format!("width: {}pt; height: {}pt", distance_field_width, distance_field_height),
+                class: "form-control",
+                style: format!("text-align: right; width: {}pt; height: {}pt", distance_field_width, distance_field_height),
                 r#type: "number",
                 value: edge.distance(),
+                onchange: {
+                    let mut edge = edge.clone();
+                    move |event: Event<FormData>| {
+                        if let Ok(new_distance) = event.data.parsed::<f64>() {
+                            println!("new number {new_distance}");
+                            edge.set_distance(new_distance);
+                            graph_store.update_edge(edge.clone());
+                        }
+                    }
+                },
+                ondoubleclick: |event| {
+                    event.stop_propagation(); // avoid recentering of the entire graph...
+                },
             }
         }
     }

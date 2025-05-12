@@ -109,6 +109,18 @@ impl GraphStore {
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
     }
+    pub fn update_edge(&mut self, edge: ConnectInfo) {
+        let i = self.edges()().iter().position(|e| {
+            e.src_uuid() == edge.src_uuid()
+                && e.src_port() == edge.src_port()
+                && e.target_uuid() == edge.target_uuid()
+                && e.target_port() == edge.target_port()
+        });
+        if let Some(index) = i {
+            let mut edges=self.edges_mut().write();
+            edges[index]=edge;
+        }
+    }
     pub async fn delete_all_nodes(&mut self) {
         match api::delete_scenery(&HTTP_API_CLIENT()).await {
             Ok(_) => {

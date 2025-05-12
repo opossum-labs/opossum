@@ -317,6 +317,9 @@ impl ConnectInfo {
     pub const fn distance(&self) -> f64 {
         self.distance
     }
+    pub fn set_distance(&mut self, distance: f64) {
+        self.distance = distance;
+    }
 }
 /// Connect two nodes
 ///
