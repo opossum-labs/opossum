@@ -54,21 +54,25 @@ pub fn EdgeComponent(edge: ConnectInfo) -> Element {
             height: distance_field_height + 10.0,
             input {
                 class: "form-control",
-                style: format!("text-align: right; width: {}pt; height: {}pt", distance_field_width, distance_field_height),
+                style: format!(
+                    "text-align: right; width: {}pt; height: {}pt",
+                    distance_field_width,
+                    distance_field_height,
+                ),
                 r#type: "number",
                 value: edge.distance(),
                 onchange: {
-                    let mut edge = edge.clone();
                     move |event: Event<FormData>| {
                         if let Ok(new_distance) = event.data.parsed::<f64>() {
                             println!("new number {new_distance}");
                             edge.set_distance(new_distance);
-                            graph_store.update_edge(edge.clone());
+                            let edge = edge.clone();
+                            spawn(async move { graph_store.update_edge(&edge).await });
                         }
                     }
                 },
                 ondoubleclick: |event| {
-                    event.stop_propagation(); // avoid recentering of the entire graph...
+                    event.stop_propagation();
                 },
             }
         }

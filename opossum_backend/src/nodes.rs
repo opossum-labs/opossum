@@ -1,6 +1,6 @@
 use crate::{app_state::AppState, error::ErrorResponse, utils::update_node_attr};
 use actix_web::{
-    delete, get, patch, post,
+    delete, get, patch, post, put,
     web::{self, Json, PathConfig},
 };
 use nalgebra::Point3;
@@ -355,7 +355,23 @@ async fn delete_connection(
     drop(document);
     Ok(connect_info)
 }
-
+/// Update a connection distance
+#[utoipa::path(tag = "node")]
+#[put("/connection")]
+async fn update_distance(
+    data: web::Data<AppState>,
+    connect_info: Json<ConnectInfo>,
+) -> Result<Json<ConnectInfo>, ErrorResponse> {
+    let mut document = data.document.lock().unwrap();
+    let scenery = document.scenery_mut();
+    scenery.update_connection_distance(
+        connect_info.src_uuid,
+        &connect_info.src_port,
+        meter!(connect_info.distance),
+    )?;
+    drop(document);
+    Ok(connect_info)
+}
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_subnodes);
     cfg.service(post_subnode);
@@ -366,6 +382,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 
     cfg.service(post_connection);
     cfg.service(delete_connection);
+    cfg.service(update_distance);
 
     cfg.app_data(PathConfig::default().error_handler(|err, _req| {
         ErrorResponse::new(400, "parse error", &err.to_string()).into()

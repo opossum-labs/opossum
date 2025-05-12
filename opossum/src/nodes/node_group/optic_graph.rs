@@ -308,6 +308,43 @@ impl OpticGraph {
             )))
         }
     }
+    /// Update the distance of an already existing connection.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the connection does not exist.
+    pub fn update_connection_distance(
+        &mut self,
+        src_id: Uuid,
+        src_port: &str,
+        distance: Length,
+    ) -> OpmResult<()> {
+        let src_idx = self.node_idx_by_uuid(src_id).ok_or_else(|| {
+            OpossumError::OpticScenery("node with given index does not exist".into())
+        })?;
+        let edges = self.g.edges_directed(src_idx, Direction::Outgoing);
+        let edge_ref = edges
+            .into_iter()
+            .filter(|idx| idx.weight().src_port() == src_port)
+            .last();
+        if let Some(edge_ref) = edge_ref {
+            let edge_id = edge_ref.id();
+            let edge = self.g.edge_weight_mut(edge_id);
+            if let Some(edge) = edge {
+                edge.set_distance(distance);
+            }
+            Ok(())
+        } else {
+            let node_ref = self.node(src_id)?;
+            let node_info = node_ref
+                .optical_ref
+                .lock()
+                .map_err(|_| OpossumError::Other("Mutex lock failed".to_string()))?;
+            Err(OpossumError::OpticScenery(format!(
+                "source node {node_info} with port <{src_port}> is not connected"
+            )))
+        }
+    }
     /// Returns a reference to the input port map of this [`OpticGraph`].
     #[must_use]
     pub const fn port_map(&self, port_type: &PortType) -> &PortMap {

@@ -95,8 +95,7 @@ impl GraphStore {
     pub async fn delete_edge(&mut self, edge: ConnectInfo) {
         match api::delete_connection(&HTTP_API_CLIENT(), edge.clone()).await {
             Ok(_connect_info) => {
-                let edges = self.edges()();
-                let i = edges.iter().position(|e| {
+                let i = self.edges()().iter().position(|e| {
                     e.src_uuid() == edge.src_uuid()
                         && e.src_port() == edge.src_port()
                         && e.target_uuid() == edge.target_uuid()
@@ -109,16 +108,21 @@ impl GraphStore {
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
     }
-    pub fn update_edge(&mut self, edge: ConnectInfo) {
-        let i = self.edges()().iter().position(|e| {
-            e.src_uuid() == edge.src_uuid()
-                && e.src_port() == edge.src_port()
-                && e.target_uuid() == edge.target_uuid()
-                && e.target_port() == edge.target_port()
-        });
-        if let Some(index) = i {
-            let mut edges=self.edges_mut().write();
-            edges[index]=edge;
+    pub async fn update_edge(&mut self, edge: &ConnectInfo) {
+        match api::update_distance(&HTTP_API_CLIENT(), edge.clone()).await {
+            Ok(_) => {
+                let i = self.edges()().iter().position(|e| {
+                    e.src_uuid() == edge.src_uuid()
+                        && e.src_port() == edge.src_port()
+                        && e.target_uuid() == edge.target_uuid()
+                        && e.target_port() == edge.target_port()
+                });
+                if let Some(index) = i {
+                    let mut edges = self.edges_mut().write();
+                    edges[index] = edge.clone();
+                }
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
     }
     pub async fn delete_all_nodes(&mut self) {
