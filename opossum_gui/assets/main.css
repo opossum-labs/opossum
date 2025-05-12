@@ -84,6 +84,12 @@
     white-space: nowrap; /* Kein Zeilenumbruch */
 }
 
+.optical-node {
+    background-color: rgb(85, 85, 85);
+}
+.analyzer-node {
+    background-color: #4d1818;
+}
 .node-header:active {
     cursor: grabbing;
 }

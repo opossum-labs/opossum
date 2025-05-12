@@ -10,29 +10,28 @@ use dioxus::{
 use opossum_backend::{
     nodes::{ConnectInfo, NewNode},
     scenery::NewAnalyzerInfo,
-    AnalyzerType, PortType,
+    PortType,
 };
 use uuid::Uuid;
 
 use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
 
 use super::{
-    node::{NodeElement, HEADER_HEIGHT, NODE_WIDTH},
+    node::{NodeElement, NodeType, HEADER_HEIGHT, NODE_WIDTH},
     ports::ports_component::Ports,
 };
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct GraphStore {
-    optic_nodes: Signal<HashMap<Uuid, NodeElement>>,
+    nodes: Signal<HashMap<Uuid, NodeElement>>,
     edges: Signal<Vec<ConnectInfo>>,
-    analyzer_nodes: Signal<HashMap<Uuid, AnalyzerType>>,
     active_node: Signal<Option<Uuid>>,
 }
 
 impl GraphStore {
     #[must_use]
-    pub const fn optic_nodes(&self) -> Signal<HashMap<Uuid, NodeElement>> {
-        self.optic_nodes
+    pub const fn nodes(&self) -> Signal<HashMap<Uuid, NodeElement>> {
+        self.nodes
     }
     #[must_use]
     pub const fn edges(&self) -> Signal<Vec<ConnectInfo>> {
@@ -42,15 +41,15 @@ impl GraphStore {
     pub const fn edges_mut(&mut self) -> &mut Signal<Vec<ConnectInfo>> {
         &mut self.edges
     }
-    pub const fn optic_nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
-        &mut self.optic_nodes
+    pub const fn nodes_mut(&mut self) -> &mut Signal<HashMap<Uuid, NodeElement>> {
+        &mut self.nodes
     }
     #[must_use]
     pub fn nr_of_optic_nodes(&self) -> usize {
-        self.optic_nodes().read().len()
+        self.nodes().read().len()
     }
     pub fn shift_node_position(&mut self, node_id: &Uuid, shift: Point2D<f64>) {
-        if let Some(node) = self.optic_nodes_mut().write().get_mut(node_id) {
+        if let Some(node) = self.nodes_mut().write().get_mut(node_id) {
             node.shift_position(shift);
         }
     }
@@ -58,20 +57,37 @@ impl GraphStore {
     pub fn active_node(&self) -> Option<Uuid> {
         self.active_node.read().clone()
     }
-    pub fn set_node_active(&mut self, id: Uuid, z_index: usize) {
+    pub fn set_node_active(&mut self, id: Uuid) {
         let mut active_node = self.active_node.write();
         *active_node = Some(id);
     }
     pub async fn delete_node(&mut self, node_id: Uuid) {
+        let nodes = self.nodes()();
+        if let Some(node_element) = nodes.get(&node_id) {
+            match node_element.node_type() {
+                NodeType::Optical(_) => self.delete_optical_node(node_id).await,
+                NodeType::Analyzer(_) => self.delete_analyzer_node(node_id).await,
+            }
+        }
+    }
+    async fn delete_optical_node(&mut self, node_id: Uuid) {
         match api::delete_node(&HTTP_API_CLIENT(), node_id).await {
             Ok(deleted_ids) => {
                 for node_id in deleted_ids {
-                    self.optic_nodes_mut().write().remove(&node_id);
+                    self.nodes_mut().write().remove(&node_id);
                     // remove all edges no longer valid
                     let mut edges = self.edges()();
                     edges.retain_mut(|e| e.src_uuid() != node_id && e.target_uuid() != node_id);
                     *self.edges().write() = edges;
                 }
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+        }
+    }
+    async fn delete_analyzer_node(&mut self, node_id: Uuid) {
+        match api::delete_analyzer(&HTTP_API_CLIENT(), node_id).await {
+            Ok(_) => {
+                self.nodes_mut().write().remove(&node_id);
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
@@ -96,7 +112,7 @@ impl GraphStore {
     pub async fn delete_all_nodes(&mut self) {
         match api::delete_scenery(&HTTP_API_CLIENT()).await {
             Ok(_) => {
-                self.optic_nodes_mut().write().clear();
+                self.nodes_mut().write().clear();
                 self.edges_mut().write().clear();
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
@@ -111,7 +127,7 @@ impl GraphStore {
         }
     }
     pub fn get_bounding_box(&self) -> Rect<f64> {
-        let optic_nodes = self.optic_nodes()();
+        let optic_nodes = self.nodes()();
         if optic_nodes.is_empty() {
             return Rect::new(Point2D::zero(), Size2D::zero());
         }
@@ -165,7 +181,7 @@ impl GraphStore {
     //     new_pos
     // }
 
-    pub async fn add_node(&mut self, new_node_info: NewNode) {
+    pub async fn add_optic_node(&mut self, new_node_info: NewNode) {
         match api::post_add_node(&HTTP_API_CLIENT(), new_node_info, Uuid::nil()).await {
             Ok(node_info) => {
                 match api::get_node_properties(&HTTP_API_CLIENT(), node_info.uuid()).await {
@@ -183,16 +199,15 @@ impl GraphStore {
                             .cloned()
                             .collect::<Vec<String>>();
                         let new_node = NodeElement::new(
-                            node_info.name().to_string(),
+                            NodeType::Optical(node_info.name().to_string()),
                             node_info.uuid(),
                             Point2D::new(100.0, 100.0),
-                            self.nr_of_optic_nodes(),
                             Ports::new(input_ports, output_ports),
                         );
-                        self.optic_nodes_mut()
+                        self.nodes_mut()
                             .write()
                             .insert(new_node.id(), new_node.clone());
-                        self.set_node_active(node_info.uuid(), new_node.z_index());
+                        self.set_node_active(node_info.uuid());
                     }
                     Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                 }
@@ -205,16 +220,15 @@ impl GraphStore {
         match api::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer_info.clone()).await {
             Ok(analyzer_id) => {
                 let new_node = NodeElement::new(
-                    format!("{}", new_analyzer_info.analyzer_type),
+                    NodeType::Analyzer(new_analyzer_info.analyzer_type.clone()),
                     analyzer_id,
                     Point2D::new(
                         new_analyzer_info.clone().gui_position.0 as f64,
                         new_analyzer_info.gui_position.1 as f64,
                     ),
-                    self.nr_of_optic_nodes(),
                     Ports::new(vec![], vec![]),
                 );
-                self.optic_nodes_mut().write().insert(analyzer_id, new_node);
+                self.nodes_mut().write().insert(analyzer_id, new_node);
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }

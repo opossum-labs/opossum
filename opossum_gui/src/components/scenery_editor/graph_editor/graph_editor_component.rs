@@ -59,7 +59,7 @@ pub fn GraphEditor(
                 NodeEditorCommand::AddNode(node_type) => {
                     let new_node_info = NewNode::new(node_type.to_owned(), (100, 100, 0));
                     spawn(async move {
-                        graph_store.add_node(new_node_info).await;
+                        graph_store.add_optic_node(new_node_info).await;
                     });
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {

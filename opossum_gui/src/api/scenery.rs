@@ -35,11 +35,8 @@ pub async fn post_add_analyzer(
         .post::<NewAnalyzerInfo, Uuid>("/api/scenery/analyzers", new_analyzer_info)
         .await
 }
-// pub async fn get_analyzer_at_index(&self, index: usize) -> Result<AnalyzerType, String> {
-//     self.get::<AnalyzerType>(&format!("/api/scenery/analyzers/{}", index))
-//         .await
-// }
-// pub async fn delete_analyzer_at_index(&self, index: usize) -> Result<String, String> {
-//     self.delete::<String>(&format!("/api/scenery/analyzers/{}", index), index)
-//         .await
-// }
+pub async fn delete_analyzer(client: &HTTPClient, id: Uuid) -> Result<String, String> {
+    client
+        .delete::<String, String>(&format!("/api/scenery/analyzers/{}", id), String::new())
+        .await
+}

@@ -5,7 +5,7 @@ use opossum_backend::{nodes::ConnectInfo, PortType};
 #[component]
 pub fn EdgeComponent(edge: ConnectInfo) -> Element {
     let mut graph_store = use_context::<GraphStore>();
-    let optic_nodes = graph_store.optic_nodes();
+    let optic_nodes = graph_store.nodes();
     let mut start_position = use_signal(|| Point2D::new(0.0, 0.0));
     let mut end_position = use_signal(|| Point2D::new(0.0, 0.0));
 

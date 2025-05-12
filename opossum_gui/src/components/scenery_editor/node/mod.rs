@@ -25,10 +25,10 @@ pub const PORT_VER_SPACING: f64 = 16.0;
 pub const PORT_HEIGHT: f64 = 12.0;
 pub const PORT_WIDTH: f64 = 12.0;
 
-#[derive(Clone,PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum NodeType {
     Optical(String),
-    Analyzer(AnalyzerType)
+    Analyzer(AnalyzerType),
 }
 impl Default for NodeType {
     fn default() -> Self {
@@ -46,18 +46,12 @@ pub struct NodeElement {
 
 impl NodeElement {
     #[must_use]
-    pub const fn new(
-        name: String,
-        id: Uuid,
-        pos: Point2D<f64>,
-        z_index: usize,
-        ports: Ports,
-    ) -> Self {
+    pub const fn new(node_type: NodeType, id: Uuid, pos: Point2D<f64>, ports: Ports) -> Self {
         Self {
-            node_type: NodeType::Optical(name),
+            node_type,
             pos,
             id,
-            z_index,
+            z_index: 0,
             ports,
         }
     }
@@ -117,5 +111,9 @@ impl NodeElement {
         let necessary_body_height =
             2.0 * PORT_VER_PADDING + PORT_VER_SPACING * (max_vert_number_of_ports - 1.0);
         necessary_body_height.max(MIN_NODE_BODY_HEIGHT)
+    }
+
+    pub fn node_type(&self) -> &NodeType {
+        &self.node_type
     }
 }

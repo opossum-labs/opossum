@@ -38,7 +38,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
             ),
             onmousedown: move |event: MouseEvent| {
                 editor_status.drag_status.set(DragStatus::Node(id));
-                graph_store.set_node_active(id, z_index);
+                graph_store.set_node_active(id);
                 node_activated.set(Some(id));
                 event.stop_propagation();
             },
@@ -50,6 +50,7 @@ pub fn Node(node: NodeElement, node_activated: Signal<Option<Uuid>>) -> Element 
             },
             GraphNodeContent {
                 node_name: node.name(),
+                node_type: node.node_type().clone(),
                 node_body: rsx! {
                     div {
                         class: "node-body",
