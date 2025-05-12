@@ -8,6 +8,7 @@
     padding: 0;
     height: 500px;
     overflow: hidden;
+    outline: none;
 }
 
 .context-menu-item {
@@ -163,7 +164,12 @@ path:hover {
     cursor: pointer;
     filter: drop-shadow(0px 0px 4px rgba(47, 197, 10, 0.5));
 }
-
+.zoom-shift-container {
+    outline-color: red;
+}
+svg {
+    outline: none;
+}
 /* Three3D.js */
 /* .canvas-container {
     width: 100%;

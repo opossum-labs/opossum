@@ -11,6 +11,7 @@ pub fn NodeEditor(node: ReadOnlySignal<Option<Uuid>>) -> Element {
             }
         },
         |uuid| {
+            println!("Selected node: {}", uuid);
             rsx!(
                 div {
                     h5 { "Node Properties" }
