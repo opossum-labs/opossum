@@ -54,6 +54,9 @@ impl LightFlow {
     pub const fn distance(&self) -> &Length {
         &self.distance
     }
+    pub fn set_distance(&mut self, distance: Length) {
+        self.distance = distance;
+    }
 }
 
 #[cfg(test)]

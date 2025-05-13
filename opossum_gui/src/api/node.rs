@@ -92,6 +92,14 @@ pub async fn delete_connection(
         .delete::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
         .await
 }
+pub async fn update_distance(
+    client: &HTTPClient,
+    connection: ConnectInfo,
+) -> Result<ConnectInfo, String> {
+    client
+        .put::<ConnectInfo, ConnectInfo>("/api/scenery/connection", connection)
+        .await
+}
 // pub async fn put_node_properties(&self, uuid: Uuid, props: NodeAttr) -> Result<NodeAttr, String> {
 //     self.put::<NodeAttr, NodeAttr>(&format!("/api/scenery/nodes/{}", uuid.as_simple().to_string()), props.serialize(serializer)).await
 // }

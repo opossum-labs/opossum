@@ -1,23 +1,18 @@
-use crate::{
-    api,
-    components::scenery_editor::{
-        edges::edges_component::{
-            EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
-        },
-        nodes::{Nodes, NodesStore},
+use crate::components::scenery_editor::{
+    edges::edges_component::{
+        EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
     },
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+    graph_store::GraphStore,
+    node::NodeElement,
+    nodes::Nodes,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use opossum_backend::scenery::NewAnalyzerInfo;
-use opossum_backend::{nodes::NewNode, AnalyzerType};
-use std::rc::Rc;
+use opossum_backend::{
+    nodes::{ConnectInfo, NewNode},
+    AnalyzerType,
+};
+use opossum_backend::{scenery::NewAnalyzerInfo, PortType};
 use uuid::Uuid;
-
-fn use_init_signals() {
-    use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
-    use_context_provider(|| Signal::new(None::<EdgeCreation>));
-}
 
 #[derive(Debug)]
 pub enum NodeEditorCommand {
@@ -25,7 +20,6 @@ pub enum NodeEditorCommand {
     AddNode(String),
     AddAnalyzer(AnalyzerType),
 }
-
 #[derive(Clone, Copy)]
 pub struct EditorState {
     pub drag_status: Signal<DragStatus>,
@@ -41,15 +35,16 @@ pub enum DragStatus {
 #[component]
 pub fn GraphEditor(
     command: ReadOnlySignal<Option<NodeEditorCommand>>,
-    node_selected: Signal<Option<Uuid>>,
+    node_selected: Signal<Option<NodeElement>>,
 ) -> Element {
-    use_init_signals();
-    let mut node_store = use_context_provider(|| NodesStore::default());
+    // use_context_provider(|| Signal::new(None::<Rc<MountedData>>));
+    // use_context_provider(|| Signal::new(None::<EdgeCreation>));
+    let mut graph_store = use_context_provider(GraphStore::default);
     let mut editor_status = use_context_provider(|| EditorState {
         drag_status: Signal::new(DragStatus::None),
         edge_in_creation: Signal::new(None),
     });
-    let mut graph_shift = use_signal(|| (0, 0));
+    let mut graph_shift = use_signal(|| Point2D::<f64>::new(0.0, 0.0));
     let mut graph_zoom = use_signal(|| 1.0);
     let mut current_mouse_pos = use_signal(|| (0, 0));
 
@@ -58,43 +53,20 @@ pub fn GraphEditor(
         if let Some(command) = &*(command) {
             match command {
                 NodeEditorCommand::DeleteAll => {
-                    println!("NodeEditor: Delete all nodes");
-                    // delete_scenery();
+                    spawn(async move {
+                        graph_store.delete_all_nodes().await;
+                    });
                 }
                 NodeEditorCommand::AddNode(node_type) => {
-                    println!("NodeEditor: AddNode: {:?}", node_type);
-                    let new_node_info = NewNode::new(node_type.to_owned(), (0, 0, 0));
+                    let new_node_info = NewNode::new(node_type.to_owned(), (100, 100, 0));
                     spawn(async move {
-                        match api::post_add_node(&HTTP_API_CLIENT(), new_node_info, Uuid::nil())
-                            .await
-                        {
-                            Ok(node_info) => {
-                                match api::get_node_properties(&HTTP_API_CLIENT(), node_info.uuid())
-                                    .await
-                                {
-                                    Ok(node_attr) => node_store.add_node(&node_info, &node_attr),
-                                    Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                                }
-                            }
-                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                        }
+                        graph_store.add_optic_node(new_node_info).await;
                     });
                 }
                 NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                    println!("NodeEditor: AddAnalyzer: {:?}", analyzer_type);
                     let analyzer_type = analyzer_type.clone();
-                    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type.clone(), (0, 0, 0));
-                    spawn(async move {
-                        match api::post_add_analyzer(&HTTP_API_CLIENT(), new_analyzer_info).await {
-                            Ok(_) => {
-                                OPOSSUM_UI_LOGS
-                                    .write()
-                                    .add_log(&format!("Added analyzer: {analyzer_type}"));
-                                node_store.add_analyzer(&analyzer_type);
-                            }
-                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                        }
-                    });
+                    let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type, (100, 100, 0));
+                    spawn(async move { graph_store.add_analyzer(new_analyzer_info).await });
                 }
             }
         }
@@ -102,14 +74,14 @@ pub fn GraphEditor(
     rsx! {
         div {
             class: "graph-editor",
+            draggable: false,
             // onmounted: use_on_mounted(),
             // onresize: use_on_resize(),
             onwheel: move |event| {
                 let delta = event.delta().strip_units().y;
-                if delta > 0.0 { graph_zoom *= 1.1 } else { graph_zoom /= 1.1 };
+                if delta > 0.0 { graph_zoom *= 1.1 } else { graph_zoom /= 1.1 }
             },
             onmousedown: move |event| {
-                println!("Graph mouse down");
                 current_mouse_pos
                     .set((
                         event.client_coordinates().x as i32,
@@ -119,12 +91,32 @@ pub fn GraphEditor(
             },
             onmouseup: move |_| {
                 editor_status.drag_status.set(DragStatus::None);
-                editor_status.edge_in_creation.set(None);
+                let edge_in_creation = editor_status.edge_in_creation.read().clone();
+                if let Some(edge_in_creation) = edge_in_creation {
+                    if edge_in_creation.is_valid() {
+                        let mut start_port = edge_in_creation.start_port();
+                        let mut end_port = edge_in_creation.end_port().unwrap();
+                        if start_port.port_type == PortType::Input {
+                            (start_port, end_port) = (end_port, start_port);
+                        }
+                        let new_edge = ConnectInfo::new(
+                            start_port.node_id,
+                            start_port.port_name.clone(),
+                            end_port.node_id,
+                            end_port.port_name.clone(),
+                            0.0,
+                        );
+                        spawn(async move {
+                            graph_store.add_edge(new_edge).await;
+                        });
+                    }
+                    editor_status.edge_in_creation.set(None);
+                }
             },
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());
-                let rel_shift_x = event.client_coordinates().x as i32 - current_mouse_pos().0;
-                let rel_shift_y = event.client_coordinates().y as i32 - current_mouse_pos().1;
+                let rel_shift_x = event.client_coordinates().x - current_mouse_pos().0 as f64;
+                let rel_shift_y = event.client_coordinates().y - current_mouse_pos().1 as f64;
                 current_mouse_pos
                     .set((
                         event.client_coordinates().x as i32,
@@ -133,13 +125,18 @@ pub fn GraphEditor(
                 match drag_status {
                     DragStatus::Graph => {
                         graph_shift
-                            .set((graph_shift().0 + rel_shift_x, graph_shift().1 + rel_shift_y));
+                            .set(
+                                Point2D::new(
+                                    graph_shift().x + rel_shift_x,
+                                    graph_shift().y + rel_shift_y,
+                                ),
+                            );
                     }
                     DragStatus::Node(id) => {
-                        node_store
+                        graph_store
                             .shift_node_position(
                                 id,
-                                (
+                                Point2D::new(
                                     rel_shift_x as f64 / graph_zoom(),
                                     rel_shift_y as f64 / graph_zoom(),
                                 ),
@@ -153,44 +150,42 @@ pub fn GraphEditor(
                                 edge_creation_start.src_port.clone(),
                                 edge_creation_start.src_port_type.clone(),
                                 edge_creation_start.start_pos,
-                                edge_creation_start.start_pos,
                             );
                             editor_status.edge_in_creation.set(Some(edge_creation));
                         } else {
-                            let edge_in_creation = edge_in_creation.unwrap();
-                            let new_edge_creation = EdgeCreation::new(
-                                edge_creation_start.src_node,
-                                edge_creation_start.src_port.clone(),
-                                edge_creation_start.src_port_type.clone(),
-                                edge_in_creation.start(),
-                                Point2D::new(
-                                    edge_in_creation.end().x + rel_shift_x as f64 / graph_zoom(),
-                                    edge_in_creation.end().y + rel_shift_y as f64 / graph_zoom(),
-                                ),
-                            );
-                            editor_status.edge_in_creation.set(Some(new_edge_creation));
+                            let mut edge_in_creation = edge_in_creation.unwrap();
+                            edge_in_creation
+                                .shift_end(
+                                    Point2D::new(
+                                        rel_shift_x as f64 / graph_zoom(),
+                                        rel_shift_y as f64 / graph_zoom(),
+                                    ),
+                                );
+                            editor_status.edge_in_creation.set(Some(edge_in_creation));
                         }
                     }
-                    _ => {}
+                    DragStatus::None => {}
                 }
             },
             ondoubleclick: move |_| {
-                println!("Graph double click");
+                let bounding_box = graph_store.get_bounding_box();
+                let center = bounding_box.center();
+                graph_shift.set(Point2D::new(-center.x, 250.0 - center.y));
             },
             div {
                 class: "zoom-shift-container",
+                draggable: false,
                 style: format!(
                     "transform: translate({}px, {}px) scale({graph_zoom});",
-                    graph_shift().0,
-                    graph_shift().1,
+                    graph_shift().x,
+                    graph_shift().y,
                 ),
                 Nodes { node_activated: node_selected }
-                svg { width: "100%", height: "100%", overflow: "visible",
-                    path {
-                        class: "edge",
-                        d: "M10 10 L20 10 L20 20 L10 20 L10 10",
-                        style: "stroke:rgb(255, 0, 0); fill: none; stroke-width: 2px;",
-                    }
+                svg {
+                    width: "100%",
+                    height: "100%",
+                    overflow: "visible",
+                    tabindex: 0,
                     {
                         rsx! {
                             EdgesComponent {}

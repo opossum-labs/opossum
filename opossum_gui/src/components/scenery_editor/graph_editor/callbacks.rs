@@ -26,11 +26,11 @@ use std::rc::Rc;
 //     }
 // }
 
-pub fn use_on_mounted() -> impl FnMut(Event<MountedData>) {
-    let mut drop_area = use_context::<Signal<Option<Rc<MountedData>>>>();
+// pub fn use_on_mounted() -> impl FnMut(Event<MountedData>) {
+//     let mut drop_area = use_context::<Signal<Option<Rc<MountedData>>>>();
 
-    move |e: Event<MountedData>| drop_area.set(Some(e.data()))
-}
+//     move |e: Event<MountedData>| drop_area.set(Some(e.data()))
+// }
 
 // pub fn use_on_key_down() -> impl FnMut(Event<KeyboardData>) {
 //     move |e: Event<KeyboardData>| {

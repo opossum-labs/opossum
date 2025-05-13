@@ -1,21 +1,16 @@
-use dioxus::prelude::*;
-use uuid::Uuid;
-
 use crate::components::{
     logger::logger_component::Logger,
     menu_bar::menu_bar_component::{MenuBar, MenuSelection},
     node_editor::NodeEditor,
-    scenery_editor::{graph_editor::NodeEditorCommand, GraphEditor},
+    scenery_editor::{graph_editor::NodeEditorCommand, node::NodeElement, GraphEditor},
 };
-
-use super::file_callbacks::use_save_project;
+use dioxus::prelude::*;
 
 #[component]
 pub fn App() -> Element {
-    use_context_provider(|| Signal::new(Uuid::nil()));
     let menu_item_selected = use_signal(|| None::<MenuSelection>);
     let mut node_editor_command = use_signal(|| None::<NodeEditorCommand>);
-    let selected_node = use_signal(|| None::<Uuid>);
+    let selected_node = use_signal(|| None::<NodeElement>);
     // let mut main_window = use_signal(|| None::<Rc<MountedData>>);
 
     use_effect(move || {
@@ -42,7 +37,6 @@ pub fn App() -> Element {
                 }
                 MenuSelection::SaveProject => {
                     println!("App::Save project selected");
-                    // use_save_project();
                 }
                 MenuSelection::WinMaximize => {
                     println!("App::Window maximize selected");
@@ -56,27 +50,32 @@ pub fn App() -> Element {
             }
         }
     });
-
     rsx! {
-        div { class: "d-flex flex-column text-bg-dark vh-100",
-            div {
-                MenuBar { menu_item_selected }
+        div { class: "container-fluid text-bg-dark",
+            div { class: "row",
+                div { class: "col",
+                    MenuBar { menu_item_selected }
+                }
             }
-            div { class: "d-flex flex-row",
-                div { class: "p-1",
+            div { class: "row",
+                div { class: "col-2",
                     NodeEditor { node: selected_node }
                 }
-                div { class: "p-1 flex-grow-1",
+                div { class: "col",
                     GraphEditor {
                         command: node_editor_command,
                         node_selected: selected_node,
                     }
                 }
             }
-            footer {
-                class: "footer p-1",
-                style: "background-color:rgb(119, 119, 119);",
-                Logger {}
+            div { class: "row",
+                div { class: "col",
+                    footer {
+                        class: "footer p-1",
+                        style: "background-color:rgb(119, 119, 119);",
+                        Logger {}
+                    }
+                }
             }
         }
     }

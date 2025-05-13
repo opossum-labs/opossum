@@ -4,6 +4,7 @@ use dioxus_free_icons::{
     Icon,
 };
 use opossum_backend::AnalyzerType;
+use rfd::FileDialog;
 
 use crate::components::menu_bar::{
     // callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
@@ -29,7 +30,7 @@ pub enum MenuSelection {
 #[component]
 pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
     let mut about_window = use_signal(|| false);
-    let node_selected = use_signal(|| String::new());
+    let node_selected = use_signal(String::new);
     let analyzer_selected = use_signal(|| AnalyzerType::Energy);
     // let window = use_window();
     // let is_dragging = use_signal(|| false);
@@ -42,9 +43,8 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
     // });
     use_effect(move || menu_item_selected.set(Some(MenuSelection::AddNode(node_selected()))));
     use_effect(move || {
-        menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_selected())))
+        menu_item_selected.set(Some(MenuSelection::AddAnalyzer(analyzer_selected())));
     });
-
     rsx! {
         nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",
             div { class: "container-fluid",
@@ -92,7 +92,14 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                     a {
                                         class: "dropdown-item",
                                         role: "button",
-                                        onclick: move |_| { menu_item_selected.set(Some(MenuSelection::SaveProject)) },
+                                        onclick: move |_| {
+                                            let _path = FileDialog::new()
+                                                .set_directory("/")
+                                                .set_title("Save OPOSSUM setup file")
+                                                .add_filter("Opossum setup file", &["opm"])
+                                                .save_file();
+                                        },
+                                        // menu_item_selected.set(Some(MenuSelection::SaveProject)) },
                                         "Save Project"
                                     }
                                 }

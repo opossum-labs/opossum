@@ -8,6 +8,7 @@
     padding: 0;
     height: 500px;
     overflow: hidden;
+    outline: none;
 }
 
 .context-menu-item {
@@ -37,10 +38,10 @@
     z-index: 100000000000000;
 }
 
-#node_drop_down_menu {
+/* #node_drop_down_menu {
     max-height: 500px;
     overflow-y: scroll;
-}
+} */
 
 /* width */
 ::-webkit-scrollbar {
@@ -64,18 +65,14 @@
 
 .node-content {
     position: relative;
-    display: flex;
-    flex-direction: column;
 }
 
 .node-body {
     position: relative;
-    width: 100%;
 }
 
 .node-header {
     position: relative;
-    width: 100%;
     border-bottom: 1px solid rgb(120, 120, 120);
     display: flex;
     align-items: center;
@@ -85,22 +82,31 @@
     border-radius: 9px 9px 0px 0px;
     color: white;
     overflow: hidden;
-    white-space: nowrap;
-    white-space: nowrap;
-    /* Kein Zeilenumbruch */
+    white-space: nowrap; /* Kein Zeilenumbruch */
 }
 
+.optical-node {
+    background-color: rgb(85, 85, 85);
+}
+.analyzer-node {
+    background-color: #4d1818;
+}
 .node-header:active {
     cursor: grabbing;
 }
 
+.unselectable {
+    user-select: none;
+  }
+
 .node {
     position: absolute;
+    outline: none; /* prevents a white frame if node receives keyboard focus */
     border: 1px solid rgb(120, 120, 120);
     box-shadow: 10px 5px 5px rgba(0, 0, 0, 0.3);
     border-radius: 10px 10px 4px 4px;
     background-color: rgb(39, 39, 39);
-    ;
+    user-select: none;
 }
 
 .node:not(.active-node):hover {
@@ -117,6 +123,7 @@
     border-radius: 30%;
     border: 1px solid rgb(120, 120, 120);
     cursor: pointer;
+    transform: translate(-50%, -50%);
 }
 .port:hover {
     box-shadow: 0 0 10px #e68c05;
@@ -149,16 +156,22 @@
 path {
     /* stroke-width: 2; */
     transition: stroke-width 0.1s, filter 0.1s;
+    outline: none; /* prevents a white frame if node receives keyboard focus */
 }
 
 path:hover {
     /* stroke-width: 3; */
     cursor: pointer;
-    filter: drop-shadow(0px 0px 4px rgba(0, 0, 0, 0.5));
+    filter: drop-shadow(0px 0px 4px rgba(47, 197, 10, 0.5));
 }
-
+.zoom-shift-container {
+    outline-color: red;
+}
+svg {
+    outline: none;
+}
 /* Three3D.js */
-.canvas-container {
+/* .canvas-container {
     width: 100%;
     height: 100%;
     background-color: red;
@@ -168,4 +181,4 @@ canvas {
     width: 100%;
     height: 100%;
     display: block;
-}
+} */

@@ -262,6 +262,20 @@ impl NodeGroup {
     pub fn disconnect_nodes(&mut self, src_id: Uuid, src_port: &str) -> OpmResult<()> {
         self.graph.disconnect_nodes(src_id, src_port)
     }
+    /// Update the distance of an already existing connection.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the connection cannot be found.
+    pub fn update_connection_distance(
+        &mut self,
+        src_id: Uuid,
+        src_port: &str,
+        distance: Length,
+    ) -> OpmResult<()> {
+        self.graph
+            .update_connection_distance(src_id, src_port, distance)
+    }
     /// Map an input port of an internal node to an external port of the group.
     ///
     /// In oder to use a [`NodeGroup`] from the outside, internal nodes / ports must be mapped to be visible. The
