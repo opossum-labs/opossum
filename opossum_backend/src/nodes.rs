@@ -3,7 +3,7 @@ use actix_web::{
     delete, get, patch, post, put,
     web::{self, Json, PathConfig},
 };
-use nalgebra::Point3;
+use nalgebra::{Point2, Point3};
 use opossum::{
     meter,
     nodes::{create_node_ref, NodeAttr},
@@ -18,15 +18,17 @@ pub struct NodeInfo {
     uuid: Uuid,
     name: String,
     node_type: String,
+    gui_position: Option<(f64,f64)>
 }
 
 impl NodeInfo {
     #[must_use]
-    pub const fn new(uuid: Uuid, name: String, node_type: String) -> Self {
+    pub const fn new(uuid: Uuid, name: String, node_type: String, gui_position: Option<(f64,f64)>) -> Self {
         Self {
             uuid,
             name,
             node_type,
+            gui_position
         }
     }
     #[must_use]
@@ -42,6 +44,10 @@ impl NodeInfo {
     #[allow(clippy::missing_const_for_fn)]
     pub fn node_type(&self) -> &str {
         &self.node_type
+    }
+     #[must_use]
+    pub fn gui_position(&self) -> Option<(f64, f64)> {
+        self.gui_position
     }
 }
 /// Get all nodes of a group node
@@ -75,11 +81,13 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
+                let gui_position= if let Some(position)=node.gui_position() {Some((position.x, position.y))} else {None};
                 drop(node);
                 NodeInfo {
                     uuid: n.uuid(),
                     name,
                     node_type,
+                    gui_position
                 }
             })
             .collect()
@@ -96,11 +104,13 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
+                let gui_position= if let Some(position)=node.gui_position() {Some((position.x, position.y))} else {None};
                 drop(node);
                 NodeInfo {
                     uuid: n.uuid(),
                     name,
                     node_type,
+                    gui_position
                 }
             })
             .collect()
@@ -111,12 +121,12 @@ async fn get_subnodes(
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 pub struct NewNode {
     node_type: String,
-    gui_position: (i32, i32, i32),
+    gui_position: (f64, f64),
 }
 
 impl NewNode {
     #[must_use]
-    pub const fn new(node_type: String, gui_position: (i32, i32, i32)) -> Self {
+    pub const fn new(node_type: String, gui_position: (f64, f64)) -> Self {
         Self {
             node_type,
             gui_position,
@@ -153,10 +163,9 @@ async fn post_subnode(
     let new_node_ref = create_node_ref(&new_node_info.node_type)?;
     let mut node = new_node_ref.optical_ref.lock().unwrap();
     let node_attr = node.node_attr_mut();
-    node_attr.set_gui_position(Some(Point3::new(
+    node_attr.set_gui_position(Some(Point2::new(
         new_node_info.gui_position.0,
         new_node_info.gui_position.1,
-        new_node_info.gui_position.2,
     )));
     drop(node);
     let mut document = data.document.lock().unwrap();
@@ -175,10 +184,12 @@ async fn post_subnode(
     };
     drop(document);
     let node = new_node_ref.optical_ref.lock().unwrap();
+    let gui_position= if let Some(position)=node.gui_position() {Some((position.x, position.y))} else {None};
     let node_info = NodeInfo {
         uuid: new_node_uuid,
         name: node.name(),
         node_type: node.node_type(),
+        gui_position 
     };
     drop(node);
     Ok(Json(node_info))

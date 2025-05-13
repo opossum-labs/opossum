@@ -1,4 +1,11 @@
-use std::{collections::HashMap, fs, path::Path};
+use super::{
+    node::{NodeElement, NodeType, HEADER_HEIGHT, NODE_WIDTH},
+    ports::ports_component::{NodePorts, Ports},
+};
+use crate::{
+    api::{self, http_client::HTTPClient},
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+};
 use dioxus::{
     html::geometry::euclid::{
         default::{Point2D, Rect},
@@ -11,15 +18,8 @@ use opossum_backend::{
     scenery::NewAnalyzerInfo,
     PortType,
 };
+use std::{collections::HashMap, fs, path::Path};
 use uuid::Uuid;
-use crate::{
-    api::{self},
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
-};
-use super::{
-    node::{NodeElement, NodeType, HEADER_HEIGHT, NODE_WIDTH},
-    ports::ports_component::Ports,
-};
 
 #[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub struct GraphStore {
@@ -31,22 +31,48 @@ impl GraphStore {
     pub async fn load_from_opm_file(&mut self, path: &Path) {
         let opm_string = fs::read_to_string(path);
         match opm_string {
-            Ok(opm_string) => 
-            {
+            Ok(opm_string) => {
                 match api::post_opm_file(&HTTP_API_CLIENT(), opm_string).await {
-                Ok(_) => {
-                    // Update graph store
+                    Ok(_) => {
+                        match api::get_nodes(&HTTP_API_CLIENT()).await {
+                            Ok(nodes) => {
+                                self.nodes()().clear();
+                                self.edges()().clear();
+                                // let mut active_node = self.active_node.write();
+                                // *active_node = None;
+                                let node_elements: Vec<NodeElement> = nodes.iter().map(|node| {  
+                                    let position = if let Some(position) = node.gui_position() {
+                                        Point2D::new(position.0, position.1)
+                                    } else {
+                                        Point2D::zero()
+                                    };
+                                    //let ports=self.get_ports(node.uuid()).await;
+                                    NodeElement::new(
+                                        NodeType::Optical(node.node_type().to_string()),
+                                        node.uuid(),
+                                        position,
+                                        Ports::default(),
+                                    )
+                                }).collect();
+                                for node_element in node_elements {
+                                    self.nodes()().insert(node_element.id(), node_element);
+                                }
+                            }
+                            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                        }
+                        // Update graph store
+                    }
+                    Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
                 }
-                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-            }},
+            }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string()),
         }
     }
     pub async fn save_to_opm_file(&self, path: &Path) {
         match api::get_opm_file(&HTTP_API_CLIENT()).await {
             Ok(opm_string) => {
-                if let Err(err_str)=fs::write(path, opm_string) {
-                   OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string())
+                if let Err(err_str) = fs::write(path, opm_string) {
+                    OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string())
                 }
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
@@ -215,35 +241,41 @@ impl GraphStore {
     //     }
     //     new_pos
     // }
-
+    async fn get_ports(&self, node_id: Uuid) -> Ports {
+        match api::get_node_properties(&HTTP_API_CLIENT(), node_id).await {
+            Ok(node_attr) => {
+                let input_ports = node_attr
+                    .ports()
+                    .ports(&PortType::Input)
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<String>>();
+                let output_ports = node_attr
+                    .ports()
+                    .ports(&PortType::Output)
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<String>>();
+                Ports::new(input_ports, output_ports)
+            }
+            Err(err_str) => {
+                OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                Ports::default()
+            }
+        }
+    }
     pub async fn add_optic_node(&mut self, new_node_info: NewNode) {
         match api::post_add_node(&HTTP_API_CLIENT(), new_node_info, Uuid::nil()).await {
             Ok(node_info) => {
-                match api::get_node_properties(&HTTP_API_CLIENT(), node_info.uuid()).await {
-                    Ok(node_attr) => {
-                        let input_ports = node_attr
-                            .ports()
-                            .ports(&PortType::Input)
-                            .keys()
-                            .cloned()
-                            .collect::<Vec<String>>();
-                        let output_ports = node_attr
-                            .ports()
-                            .ports(&PortType::Output)
-                            .keys()
-                            .cloned()
-                            .collect::<Vec<String>>();
-                        let new_node = NodeElement::new(
-                            NodeType::Optical(node_info.name().to_string()),
-                            node_info.uuid(),
-                            Point2D::new(100.0, 100.0),
-                            Ports::new(input_ports, output_ports),
-                        );
-                        self.nodes_mut().write().insert(new_node.id(), new_node);
-                        self.set_node_active(node_info.uuid());
-                    }
-                    Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
-                }
+                let ports = self.get_ports(node_info.uuid()).await;
+                let new_node = NodeElement::new(
+                    NodeType::Optical(node_info.name().to_string()),
+                    node_info.uuid(),
+                    Point2D::new(100.0, 100.0),
+                    ports,
+                );
+                self.nodes_mut().write().insert(new_node.id(), new_node);
+                self.set_node_active(node_info.uuid());
             }
             Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
         }
