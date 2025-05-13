@@ -123,7 +123,6 @@ pub fn GraphEditor(
             },
             onmousemove: move |event| {
                 let drag_status = &*(editor_status.drag_status.read());
-                println!("drag_status: {:?}", drag_status);
                 let rel_shift_x = event.client_coordinates().x as i32 - current_mouse_pos().0;
                 let rel_shift_y = event.client_coordinates().y as i32 - current_mouse_pos().1;
                 current_mouse_pos

@@ -10,6 +10,7 @@ const MAIN_CSS: Asset = asset!("./assets/main.css");
 const MDB_CSS: Asset = asset!("./assets/mdb.min.css");
 const MDB_JS: Asset = asset!("./assets/mdb.umd.min.js");
 const MDB_SUB_CSS: Asset = asset!("./assets/mdb_submenu.css");
+const MDB_ACC_CSS: Asset = asset!("./assets/mdb_accordion.css");
 fn main() {
     #[cfg(feature = "desktop")]
     fn launch_app() {
@@ -48,6 +49,7 @@ fn app() -> Element {
         document::Stylesheet { href: MAIN_CSS }
         document::Stylesheet { href: MDB_CSS }
         document::Stylesheet { href: MDB_SUB_CSS }
+        document::Stylesheet { href: MDB_ACC_CSS }
         document::Script { src: MDB_JS }
         App {}
     }
