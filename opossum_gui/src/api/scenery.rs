@@ -1,8 +1,8 @@
 //! Scenery api calls
 
+use super::http_client::HTTPClient;
 use opossum_backend::scenery::NewAnalyzerInfo;
 use uuid::Uuid;
-use super::http_client::HTTPClient;
 
 /// Send a request to delete the current scenery.
 ///
@@ -57,7 +57,5 @@ pub async fn get_opm_file(client: &HTTPClient) -> Result<String, String> {
 /// - the `OPM` file cannot be parsed
 /// - the scenery cannot be constructed from the file data.
 pub async fn post_opm_file(client: &HTTPClient, opm_string: String) -> Result<String, String> {
-    client
-        .post::<String, String>("/api/scenery/opmfile", opm_string)
-        .await
+    client.post_string("/api/scenery/opmfile", opm_string).await
 }

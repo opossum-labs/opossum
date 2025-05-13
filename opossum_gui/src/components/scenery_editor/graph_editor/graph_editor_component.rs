@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use crate::components::scenery_editor::{
     edges::edges_component::{
         EdgeCreation, EdgeCreationComponent, EdgesComponent, NewEdgeCreationStart,
@@ -19,6 +20,8 @@ pub enum NodeEditorCommand {
     DeleteAll,
     AddNode(String),
     AddAnalyzer(AnalyzerType),
+    LoadFile(PathBuf),
+    SaveFile(PathBuf)
 }
 #[derive(Clone, Copy)]
 pub struct EditorState {
@@ -67,6 +70,14 @@ pub fn GraphEditor(
                     let analyzer_type = analyzer_type.clone();
                     let new_analyzer_info = NewAnalyzerInfo::new(analyzer_type, (100, 100, 0));
                     spawn(async move { graph_store.add_analyzer(new_analyzer_info).await });
+                }
+                NodeEditorCommand::LoadFile(path) => {
+                    let path=path.to_owned();
+                    spawn(async move { graph_store.load_from_opm_file(&path).await});
+                }
+                NodeEditorCommand::SaveFile(path) => {
+                     let path=path.to_owned();
+                    spawn(async move { graph_store.save_to_opm_file(&path).await});
                 }
             }
         }

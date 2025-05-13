@@ -52,6 +52,23 @@ impl HTTPClient {
             Err(format!("Error on post request on route: \"{route}\""))
         }
     }
+    /// Send a POST reqeust to the given route with the provided body.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the request fails or if the response cannot be deserialized into the expected type.
+    pub async fn post_string(
+        &self,
+        route: &str,
+        body: String,
+    ) -> Result<String, String> {
+        let res = self.client().post(self.url(route)).body(body).send().await;
+        if let Ok(response) = res {
+            self.process_response::<String>(response).await
+        } else {
+            Err(format!("Error on post request on route: \"{route}\""))
+        }
+    }
     /// Send a PUT request to the given route with the provided body.
     ///
     /// # Errors
@@ -181,19 +198,17 @@ impl HTTPClient {
             Err("Error deserializing response to ErrorResponse struct!".to_string())
         }
     }
-pub async fn process_response_raw(
-        &self,
-        res: Response,
-    ) -> Result<String, String> {
-    if res.status().is_success() {
-        if res.content_length().map_or_else(|| 0, |n| n) > 0 {
-            Ok(res.text().await.unwrap())
+    pub async fn process_response_raw(&self, res: Response) -> Result<String, String> {
+        if res.status().is_success() {
+            if res.content_length().map_or_else(|| 0, |n| n) > 0 {
+                Ok(res.text().await.unwrap())
+            } else {
+                // just to receive a value i nothing has been sent back
+                let json_val = json!("");
+                serde_json::from_value(json_val).map_or_else(|_| Err("Error deserializing default string if no content returns!".to_string()), |deserialized| Ok(deserialized))
+            }
         } else {
-            // just to receive a value i nothing has been sent back
-            let json_val = json!("");
-            serde_json::from_value(json_val).map_or_else(|_| Err("Error deserializing default string if no content returns!".to_string()), |deserialized| Ok(deserialized))
+            Err("Error deserializing response to ErrorResponse struct!".to_string())
         }
-    } else {
-     Err("Error deserializing response to ErrorResponse struct!".to_string())
     }
-}}
+}

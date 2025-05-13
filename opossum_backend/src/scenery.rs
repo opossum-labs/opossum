@@ -166,7 +166,10 @@ async fn get_opmfile(data: web::Data<AppState>) -> Result<String, ErrorResponse>
     let document = data.document.lock().unwrap();
     Ok(document.to_opm_file_string()?)
 }
-#[utoipa::path(tag = "scenery",
+#[utoipa::path(tag = "scenery", request_body(content = String,
+    description = "OPM file as string",
+    content_type = "text/plain",
+),
     responses((status = 200, description = "OPM file sucessfully parsed"),
     (status = 400, description = "Error parsing OPM file"))
 )]

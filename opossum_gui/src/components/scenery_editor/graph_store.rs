@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use std::{collections::HashMap, fs, path::Path};
 use dioxus::{
     html::geometry::euclid::{
         default::{Point2D, Rect},
@@ -13,9 +12,10 @@ use opossum_backend::{
     PortType,
 };
 use uuid::Uuid;
-
-use crate::{api, HTTP_API_CLIENT, OPOSSUM_UI_LOGS};
-
+use crate::{
+    api::{self},
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
+};
 use super::{
     node::{NodeElement, NodeType, HEADER_HEIGHT, NODE_WIDTH},
     ports::ports_component::Ports,
@@ -27,8 +27,31 @@ pub struct GraphStore {
     edges: Signal<Vec<ConnectInfo>>,
     active_node: Signal<Option<Uuid>>,
 }
-
 impl GraphStore {
+    pub async fn load_from_opm_file(&mut self, path: &Path) {
+        let opm_string = fs::read_to_string(path);
+        match opm_string {
+            Ok(opm_string) => 
+            {
+                match api::post_opm_file(&HTTP_API_CLIENT(), opm_string).await {
+                Ok(_) => {
+                    // Update graph store
+                }
+                Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+            }},
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string()),
+        }
+    }
+    pub async fn save_to_opm_file(&self, path: &Path) {
+        match api::get_opm_file(&HTTP_API_CLIENT()).await {
+            Ok(opm_string) => {
+                if let Err(err_str)=fs::write(path, opm_string) {
+                   OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string())
+                }
+            }
+            Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+        }
+    }
     #[must_use]
     pub const fn nodes(&self) -> Signal<HashMap<Uuid, NodeElement>> {
         self.nodes
