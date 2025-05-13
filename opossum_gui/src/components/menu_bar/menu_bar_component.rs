@@ -1,3 +1,5 @@
+use std::fs;
+
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaPowerOff, FaWindowMaximize, FaWindowMinimize},
@@ -6,12 +8,16 @@ use dioxus_free_icons::{
 use opossum_backend::AnalyzerType;
 use rfd::FileDialog;
 
-use crate::components::menu_bar::{
-    // callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
-    // controls::controls_menu::ControlsMenu,
-    edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
-    // file::callbacks::{use_new_project, use_open_project, use_save_project},
-    help::about::About,
+use crate::{
+    api,
+    components::menu_bar::{
+        // callbacks::{use_on_double_click, use_on_mouse_down, use_on_mouse_move, use_on_mouse_up},
+        // controls::controls_menu::ControlsMenu,
+        edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+        // file::callbacks::{use_new_project, use_open_project, use_save_project},
+        help::about::About,
+    },
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
 };
 
 const FAVICON: Asset = asset!("./assets/favicon.ico");
@@ -93,13 +99,24 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                         class: "dropdown-item",
                                         role: "button",
                                         onclick: move |_| {
-                                            let _path = FileDialog::new()
+                                            let path = FileDialog::new()
                                                 .set_directory("/")
                                                 .set_title("Save OPOSSUM setup file")
                                                 .add_filter("Opossum setup file", &["opm"])
                                                 .save_file();
+                                            if let Some(path) = path {
+                                                spawn(async move {
+                                                    match api::get_opm_file(&HTTP_API_CLIENT()).await {
+                                                        Ok(opm_file) => {
+                                                            if let Err(e) = fs::write(path, opm_file) {
+                                                                OPOSSUM_UI_LOGS.write().add_log(&e.to_string())
+                                                            }
+                                                        }
+                                                        Err(err_str) => OPOSSUM_UI_LOGS.write().add_log(&err_str),
+                                                    }
+                                                });
+                                            }
                                         },
-                                        // menu_item_selected.set(Some(MenuSelection::SaveProject)) },
                                         "Save Project"
                                     }
                                 }
