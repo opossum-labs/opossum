@@ -140,6 +140,15 @@ impl HTTPClient {
         }
     }
 
+    pub async fn get_raw(&self, route: &str) -> Result<String, String> {
+        let res = self.client().get(self.url(route)).send().await;
+        if let Ok(response) = res {
+            self.process_response_raw(response).await
+        } else {
+            Err(format!("Error on get request from route: \"{route}\""))
+        }
+    }
+
     /// Process the response from the server.
     ///
     /// # Errors
@@ -172,4 +181,19 @@ impl HTTPClient {
             Err("Error deserializing response to ErrorResponse struct!".to_string())
         }
     }
-}
+pub async fn process_response_raw(
+        &self,
+        res: Response,
+    ) -> Result<String, String> {
+    if res.status().is_success() {
+        if res.content_length().map_or_else(|| 0, |n| n) > 0 {
+            Ok(res.text().await.unwrap())
+        } else {
+            // just to receive a value i nothing has been sent back
+            let json_val = json!("");
+            serde_json::from_value(json_val).map_or_else(|_| Err("Error deserializing default string if no content returns!".to_string()), |deserialized| Ok(deserialized))
+        }
+    } else {
+     Err("Error deserializing response to ErrorResponse struct!".to_string())
+    }
+}}

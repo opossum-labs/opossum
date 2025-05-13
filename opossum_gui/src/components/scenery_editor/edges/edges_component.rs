@@ -100,7 +100,7 @@ pub fn EdgesComponent() -> Element {
     let graph_store = use_context::<GraphStore>();
     rsx! {
         for edge in graph_store.edges()() {
-            EdgeComponent { edge: edge }
+            EdgeComponent { edge }
         }
     }
 }
