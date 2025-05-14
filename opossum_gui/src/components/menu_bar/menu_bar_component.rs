@@ -89,8 +89,8 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                                 .add_filter("Opossum setup file", &["opm"])
                                                 .pick_file();
                                             if let Some(path) = path {
-                                                        menu_item_selected.set(Some(MenuSelection::OpenProject(path)))
-                                                }
+                                                menu_item_selected.set(Some(MenuSelection::OpenProject(path)))
+                                            }
                                         },
                                         "Open Project"
                                     }
@@ -108,7 +108,7 @@ pub fn MenuBar(menu_item_selected: Signal<Option<MenuSelection>>) -> Element {
                                             if let Some(path) = path {
                                                 menu_item_selected.set(Some(MenuSelection::SaveProject(path)))
                                             }
-                                            },
+                                        },
                                         "Save Project"
                                     }
                                 }

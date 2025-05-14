@@ -100,13 +100,13 @@ pub fn GraphEditor(
                 editor_status.drag_status.set(DragStatus::Graph);
             },
             onmouseup: move |_| {
-                let drag_status=editor_status.drag_status.read().clone();
+                let drag_status = editor_status.drag_status.read().clone();
                 match drag_status {
                     DragStatus::Node(uuid) => {
                         spawn(async move {
                             graph_store.sync_node_position(uuid).await;
                         });
-                    },
+                    }
                     DragStatus::Edge(_) => {
                         let edge_in_creation = editor_status.edge_in_creation.read().clone();
                         if let Some(edge_in_creation) = edge_in_creation {
@@ -129,7 +129,7 @@ pub fn GraphEditor(
                             }
                             editor_status.edge_in_creation.set(None);
                         }
-                    },
+                    }
                     _ => {}
                 }
                 editor_status.drag_status.set(DragStatus::None);

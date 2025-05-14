@@ -6,9 +6,10 @@ use actix_web::{
 use nalgebra::Point2;
 use opossum::{
     meter,
-    nodes::{create_node_ref, NodeAttr},
+    nodes::{create_node_ref, NodeAttr}, optic_ports::PortType,
 };
 use serde::{Deserialize, Serialize};
+use uom::si::length::meter;
 use utoipa::ToSchema;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -18,6 +19,8 @@ pub struct NodeInfo {
     uuid: Uuid,
     name: String,
     node_type: String,
+    input_ports: Vec<String>,
+    output_ports: Vec<String>,
     gui_position: Option<(f64, f64)>,
 }
 
@@ -27,12 +30,16 @@ impl NodeInfo {
         uuid: Uuid,
         name: String,
         node_type: String,
+        input_ports: Vec<String>,
+        output_ports: Vec<String>,
         gui_position: Option<(f64, f64)>,
     ) -> Self {
         Self {
             uuid,
             name,
             node_type,
+            input_ports,
+            output_ports,
             gui_position,
         }
     }
@@ -53,6 +60,14 @@ impl NodeInfo {
     #[must_use]
     pub fn gui_position(&self) -> Option<(f64, f64)> {
         self.gui_position
+    }
+    
+    pub fn input_ports(&self) -> Vec<String> {
+        self.input_ports.clone()
+    }
+    
+    pub fn output_ports(&self) -> Vec<String> {
+        self.output_ports.clone()
     }
 }
 /// Get all nodes of a group node
@@ -86,6 +101,8 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
+                let input_ports=node.ports().names(&PortType::Input);
+                let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = if let Some(position) = node.gui_position() {
                     Some((position.x, position.y))
                 } else {
@@ -96,6 +113,8 @@ async fn get_subnodes(
                     uuid: n.uuid(),
                     name,
                     node_type,
+                    input_ports,
+                    output_ports,
                     gui_position,
                 }
             })
@@ -113,6 +132,8 @@ async fn get_subnodes(
                 let node = n.optical_ref.lock().unwrap();
                 let name = node.name();
                 let node_type = node.node_type();
+                let input_ports=node.ports().names(&PortType::Input);
+                let output_ports = node.ports().names(&PortType::Output);
                 let gui_position = if let Some(position) = node.gui_position() {
                     Some((position.x, position.y))
                 } else {
@@ -123,6 +144,8 @@ async fn get_subnodes(
                     uuid: n.uuid(),
                     name,
                     node_type,
+                    input_ports,
+                    output_ports,
                     gui_position,
                 }
             })
@@ -130,7 +153,46 @@ async fn get_subnodes(
     };
     Ok(Json(nodes_info))
 }
-
+#[utoipa::path(tag = "node",
+    params(
+        ("uuid" = Uuid, Path, description = "UUID of the group node"),
+    ),
+    responses(
+        (status = OK, description = "all connections of the group", body= Vec<ConnectInfo>, content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
+    )
+)]
+#[get("/{uuid}/connections")]
+pub async fn get_connections(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<Json<Vec<ConnectInfo>>, ErrorResponse> {
+    let document = data.document.lock().unwrap();
+    let scenery = document.scenery().clone();
+    drop(document);
+    let uuid = path.into_inner();
+    let connect_infos: Vec<ConnectInfo> = if uuid.is_nil() {
+        // toplevel group
+        scenery
+            .connections()
+            .iter()
+            .map(|c| ConnectInfo::new(c.0, c.1.clone(), c.2, c.3.clone(), c.4.get::<meter>()))
+            .collect::<Vec<ConnectInfo>>()
+    } else {
+        // subgroup
+        scenery
+            .node_recursive(uuid)?
+            .optical_ref
+            .lock()
+            .unwrap()
+            .as_group_mut()?
+            .connections()
+            .iter()
+            .map(|c| ConnectInfo::new(c.0, c.1.clone(), c.2, c.3.clone(), c.4.get::<meter>()))
+            .collect::<Vec<ConnectInfo>>()
+    };
+    Ok(Json(connect_infos))
+}
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 pub struct NewNode {
     node_type: String,
@@ -206,6 +268,8 @@ async fn post_subnode(
         uuid: new_node_uuid,
         name: node.name(),
         node_type: node.node_type(),
+        input_ports: node.ports().names(&PortType::Input),
+        output_ports: node.ports().names(&PortType::Output),
         gui_position,
     };
     drop(node);
@@ -231,13 +295,16 @@ async fn post_node_position(
     position: web::Json<(f64, f64)>,
 ) -> Result<(), ErrorResponse> {
     let uuid = path.into_inner();
-    let position=position.into_inner();
+    let position = position.into_inner();
     let document = data.document.lock().unwrap();
-    document.scenery().node_recursive(uuid)?
-    .optical_ref
+    document
+        .scenery()
+        .node_recursive(uuid)?
+        .optical_ref
         .lock()
         .unwrap()
-        .node_attr_mut().set_gui_position(Some(Point2::new(position.0, position.1)));
+        .node_attr_mut()
+        .set_gui_position(Some(Point2::new(position.0, position.1)));
     Ok(())
 }
 /// Delete a node
@@ -440,6 +507,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 
     cfg.service(post_connection);
     cfg.service(delete_connection);
+    cfg.service(get_connections);
     cfg.service(update_distance);
 
     cfg.app_data(PathConfig::default().error_handler(|err, _req| {

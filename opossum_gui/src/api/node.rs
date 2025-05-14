@@ -14,9 +14,20 @@ use super::http_client::HTTPClient;
 /// This function will return an error if
 /// - the request fails (e.g. the scenery is not valid)
 /// - the response cannot be deserialized into a vector of [`NodeInfo`] structs
-pub async fn get_nodes(client: &HTTPClient) -> Result<Vec<NodeInfo>, String> {
+pub async fn get_nodes(client: &HTTPClient, group_id: Uuid) -> Result<Vec<NodeInfo>, String> {
     client
-        .get::<Vec<NodeInfo>>("/api/scenery/00000000-0000-0000-0000-000000000000/nodes")
+        .get::<Vec<NodeInfo>>(&format!("/api/scenery/{}/nodes", group_id.as_simple()))
+        .await
+}
+pub async fn get_connections(
+    client: &HTTPClient,
+    group_id: Uuid,
+) -> Result<Vec<ConnectInfo>, String> {
+    client
+        .get::<Vec<ConnectInfo>>(&format!(
+            "/api/scenery/{}/connections",
+            group_id.as_simple()
+        ))
         .await
 }
 /// Send a request to add a node to the scenery.

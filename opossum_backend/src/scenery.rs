@@ -1,5 +1,9 @@
 //! Routes for managing the scenery (top-level `NodeGroup`)
-use crate::{app_state::AppState, error::ErrorResponse, nodes::{self}};
+use crate::{
+    app_state::AppState,
+    error::ErrorResponse,
+    nodes::{self},
+};
 use actix_web::{
     delete, get,
     http::StatusCode,
