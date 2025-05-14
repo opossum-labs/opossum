@@ -43,7 +43,6 @@ clap = { version = "4", features = ["derive", "string"] } # command line argumen
 
 rprompt = "2"
 strum = { version = "0.27", features = ["derive"] }
-strum_macros = "0.27"
 
 uuid = { version = "1", features = ["v4", "fast-rng", "serde", "js"] }
 libm = {version="0.2"}
